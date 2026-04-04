@@ -14,12 +14,12 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { LinearGradient } from "expo-linear-gradient";
-import { ArrowLeft, Send, Paperclip, X, Video } from "lucide-react-native";
+import { ArrowLeft, Send, Paperclip, X, Video, Camera, ImageIcon } from "lucide-react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
 import { uploadFile } from "@/lib/upload";
-import { pickMedia } from "@/lib/file-picker";
+import { pickMedia, takePhoto } from "@/lib/file-picker";
 import { ChatMessage } from "@/components/ChatMessage";
 import type { Message, Team, MessageReaction } from "@/lib/types";
 
@@ -62,6 +62,7 @@ export default function TeamChatScreen() {
   const [reactionView, setReactionView] = useState<MessageReaction[] | null>(null);
   const [mediaPreview, setMediaPreview] = useState<{ uri: string; mimeType: string; filename: string } | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [showMediaPicker, setShowMediaPicker] = useState(false);
   const flatListRef = useRef<FlatList>(null);
   const currentUserId = session?.user?.id ?? "";
 
@@ -143,6 +144,11 @@ export default function TeamChatScreen() {
     if (file) setMediaPreview(file);
   };
 
+  const handleTakePhoto = async () => {
+    const file = await takePhoto();
+    if (file) setMediaPreview(file);
+  };
+
   const handleLongPress = useCallback((msg: Message) => {
     setEmojiTarget(msg);
   }, []);
@@ -185,6 +191,30 @@ export default function TeamChatScreen() {
           </TouchableOpacity>
         </View>
       </LinearGradient>
+
+      {/* Media picker sheet */}
+      <Modal visible={showMediaPicker} transparent animationType="slide" onRequestClose={() => setShowMediaPicker(false)}>
+        <TouchableOpacity style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "flex-end" }} activeOpacity={1} onPress={() => setShowMediaPicker(false)}>
+          <TouchableOpacity activeOpacity={1} onPress={() => {}}>
+            <View style={{ backgroundColor: "white", marginHorizontal: 12, marginBottom: 32, borderRadius: 16, overflow: "hidden" }}>
+              <TouchableOpacity
+                onPress={() => { setShowMediaPicker(false); setTimeout(handleTakePhoto, 300); }}
+                style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 20, paddingVertical: 18, borderBottomWidth: 0.5, borderBottomColor: "#F1F5F9" }}
+              >
+                <Camera size={20} color="#4361EE" style={{ marginRight: 14 }} />
+                <Text style={{ fontSize: 16, color: "#1E293B", fontWeight: "500" }}>Take Photo</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => { setShowMediaPicker(false); setTimeout(handlePickMedia, 300); }}
+                style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 20, paddingVertical: 18 }}
+              >
+                <ImageIcon size={20} color="#4361EE" style={{ marginRight: 14 }} />
+                <Text style={{ fontSize: 16, color: "#1E293B", fontWeight: "500" }}>Photo Library</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
 
       {/* Who reacted modal */}
       <Modal visible={!!reactionView} transparent animationType="fade" onRequestClose={() => setReactionView(null)}>
@@ -390,7 +420,7 @@ export default function TeamChatScreen() {
         {/* Input bar */}
         <View testID="team-chat-input-bar" className="flex-row items-end px-3 py-2 bg-white dark:bg-slate-800 border-t border-slate-100 dark:border-slate-700">
           <TouchableOpacity
-            onPress={handlePickMedia}
+            onPress={() => setShowMediaPicker(true)}
             className="w-10 h-10 rounded-full items-center justify-center mr-2"
             style={{ backgroundColor: "#F1F5F9" }}
           >
