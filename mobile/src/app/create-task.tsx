@@ -46,6 +46,8 @@ export default function CreateTaskScreen() {
   const [recurrenceInterval, setRecurrenceInterval] = useState("1");
   const [selectedDayOfWeek, setSelectedDayOfWeek] = useState<number | null>(null);
   const [selectedDayOfMonth, setSelectedDayOfMonth] = useState<number | null>(null);
+  const [dueDate, setDueDate] = useState<Date | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const { data: team } = useQuery({
@@ -72,11 +74,16 @@ export default function CreateTaskScreen() {
       setError("Please enter a task title");
       return;
     }
+    if (!dueDate) {
+      setError("Please select a due date");
+      return;
+    }
     setError(null);
     createMutation.mutate({
       title: title.trim(),
       description: description.trim() || undefined,
       priority,
+      dueDate: dueDate.toISOString(),
       assigneeIds: selectedAssignees,
       recurrence: isRecurring
         ? {
@@ -163,6 +170,49 @@ export default function CreateTaskScreen() {
           {error ? (
             <Text className="text-red-500 text-sm mt-2">{error}</Text>
           ) : null}
+
+          {/* Due Date */}
+          <View className="py-4 border-b border-slate-100 dark:border-slate-800">
+            <Text className="text-sm font-semibold text-slate-500 mb-3">
+              Due Date <Text className="text-red-500">*</Text>
+            </Text>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+              {[
+                { label: "Today", days: 0 },
+                { label: "Tomorrow", days: 1 },
+                { label: "3 days", days: 3 },
+                { label: "1 week", days: 7 },
+                { label: "2 weeks", days: 14 },
+                { label: "1 month", days: 30 },
+              ].map((opt) => {
+                const optDate = new Date();
+                optDate.setDate(optDate.getDate() + opt.days);
+                optDate.setHours(23, 59, 0, 0);
+                const isSelected = dueDate !== null && dueDate.toDateString() === optDate.toDateString();
+                return (
+                  <TouchableOpacity
+                    key={opt.label}
+                    onPress={() => { setDueDate(optDate); setError(null); }}
+                    className="px-4 py-2 rounded-full border"
+                    style={{
+                      borderColor: isSelected ? "#4361EE" : "#E2E8F0",
+                      backgroundColor: isSelected ? "#4361EE0D" : "transparent",
+                    }}
+                    testID={`due-date-${opt.label.toLowerCase().replace(" ", "-")}`}
+                  >
+                    <Text className="text-sm font-medium" style={{ color: isSelected ? "#4361EE" : "#64748B" }}>
+                      {opt.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            {dueDate ? (
+              <Text className="text-xs text-slate-400 mt-2">
+                Due: {dueDate.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })}
+              </Text>
+            ) : null}
+          </View>
 
           {/* Priority */}
           <View className="py-4 border-b border-slate-100 dark:border-slate-800">
