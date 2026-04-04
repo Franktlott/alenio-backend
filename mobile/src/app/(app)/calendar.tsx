@@ -15,10 +15,11 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { ChevronLeft, ChevronRight, Plus, X, Calendar, Trash2 } from "lucide-react-native";
+import { ChevronLeft, ChevronRight, Plus, X, Calendar, Trash2, CheckCircle2, Circle, Clock } from "lucide-react-native";
 import { api } from "@/lib/api/api";
 import { useTeamStore } from "@/lib/state/team-store";
 import { useSession } from "@/lib/auth/use-session";
+import { router } from "expo-router";
 import type { Task, Team } from "@/lib/types";
 
 type CalendarEvent = {
@@ -187,6 +188,15 @@ export default function CalendarScreen() {
   const myTasks = tasks.filter((t) =>
     t.assignments?.some((a) => a.userId === currentUserId)
   );
+
+  const upcomingTasks = [...myTasks]
+    .filter((t) => t.status !== "done")
+    .sort((a, b) => {
+      if (!a.dueDate && !b.dueDate) return 0;
+      if (!a.dueDate) return 1;
+      if (!b.dueDate) return -1;
+      return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+    });
 
   const createMutation = useMutation({
     mutationFn: (data: object) =>
@@ -509,6 +519,63 @@ export default function CalendarScreen() {
             )}
           </View>
         ) : null}
+
+        {/* Upcoming Tasks */}
+        <View style={{ marginHorizontal: 12, marginTop: 24, marginBottom: 110 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10, paddingHorizontal: 4 }}>
+            <Text style={{ fontSize: 14, fontWeight: "700", color: "#0F172A" }}>Upcoming Tasks</Text>
+            <Text style={{ fontSize: 12, color: "#94A3B8" }}>{upcomingTasks.length} remaining</Text>
+          </View>
+
+          {tasksLoading ? (
+            <View style={{ alignItems: "center", paddingVertical: 24 }}>
+              <ActivityIndicator color="#10B981" />
+            </View>
+          ) : upcomingTasks.length === 0 ? (
+            <View style={{ backgroundColor: "white", borderRadius: 14, padding: 24, alignItems: "center", shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 4, shadowOffset: { width: 0, height: 1 }, elevation: 1 }}>
+              <CheckCircle2 size={28} color="#CBD5E1" />
+              <Text style={{ color: "#94A3B8", marginTop: 8, fontSize: 14 }}>All caught up!</Text>
+            </View>
+          ) : (
+            <View style={{ gap: 8 }}>
+              {upcomingTasks.map((task) => {
+                const isOverdue = task.dueDate && new Date(task.dueDate) < new Date() && task.status !== "done";
+                const dueDateLabel = task.dueDate
+                  ? new Date(task.dueDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+                  : null;
+                const priorityColor = task.priority === "urgent" ? "#EF4444" : task.priority === "high" ? "#F97316" : task.priority === "medium" ? "#EAB308" : "#94A3B8";
+
+                return (
+                  <Pressable
+                    key={task.id}
+                    onPress={() => router.push({ pathname: "/task-detail", params: { taskId: task.id, teamId: task.teamId } })}
+                    style={{ backgroundColor: "white", borderRadius: 14, padding: 14, borderLeftWidth: 4, borderLeftColor: priorityColor, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 4, shadowOffset: { width: 0, height: 1 }, elevation: 1 }}
+                    testID={`upcoming-task-${task.id}`}
+                  >
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                      <Circle size={18} color="#CBD5E1" />
+                      <Text style={{ fontSize: 14, fontWeight: "600", color: "#0F172A", flex: 1 }} numberOfLines={1}>{task.title}</Text>
+                    </View>
+                    <View style={{ flexDirection: "row", alignItems: "center", marginTop: 8, gap: 8, marginLeft: 28 }}>
+                      {dueDateLabel ? (
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: isOverdue ? "#FEF2F2" : "#F8FAFC", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
+                          <Clock size={11} color={isOverdue ? "#EF4444" : "#94A3B8"} />
+                          <Text style={{ fontSize: 11, fontWeight: "500", color: isOverdue ? "#EF4444" : "#64748B" }}>{dueDateLabel}</Text>
+                        </View>
+                      ) : null}
+                      <View style={{ backgroundColor: priorityColor + "15", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
+                        <Text style={{ fontSize: 11, fontWeight: "600", color: priorityColor, textTransform: "capitalize" }}>{task.priority}</Text>
+                      </View>
+                      {task.team ? (
+                        <Text style={{ fontSize: 11, color: "#94A3B8" }} numberOfLines={1}>{task.team.name}</Text>
+                      ) : null}
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </View>
+          )}
+        </View>
       </ScrollView>
 
       {/* FAB */}
