@@ -99,6 +99,7 @@ export default function TeamScreen() {
   const [editImage, setEditImage] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
 
   const { data: team, isLoading } = useQuery({
     queryKey: ["team", activeTeamId],
@@ -363,17 +364,31 @@ export default function TeamScreen() {
       </Modal>
 
       {/* Delete confirmation modal */}
-      <Modal visible={showDeleteConfirm} transparent animationType="fade" onRequestClose={() => setShowDeleteConfirm(false)}>
+      <Modal visible={showDeleteConfirm} transparent animationType="fade" onRequestClose={() => { setShowDeleteConfirm(false); setDeleteConfirmText(""); }}>
         <View className="flex-1 bg-black/50 items-center justify-center px-6">
           <View className="bg-white dark:bg-slate-800 rounded-3xl p-6 w-full">
             <Text className="text-lg font-bold text-slate-900 dark:text-white mb-2">Delete Team?</Text>
-            <Text className="text-sm text-slate-500 dark:text-slate-400 mb-6">
+            <Text className="text-sm text-slate-500 dark:text-slate-400 mb-4">
               This will permanently delete <Text className="font-semibold text-slate-700 dark:text-slate-200">{team?.name}</Text> and all its tasks, messages, and members. This cannot be undone.
             </Text>
+            <Text className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
+              Type <Text className="text-slate-800 dark:text-slate-200">{team?.name}</Text> to confirm
+            </Text>
+            <TextInput
+              className="bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white rounded-xl px-4 py-3 text-base mb-4 border border-slate-200 dark:border-slate-600"
+              value={deleteConfirmText}
+              onChangeText={setDeleteConfirmText}
+              placeholder={team?.name ?? ""}
+              placeholderTextColor="#94A3B8"
+              autoCapitalize="none"
+              autoCorrect={false}
+              testID="delete-confirm-input"
+            />
             <TouchableOpacity
-              onPress={() => deleteMutation.mutate()}
-              disabled={deleteMutation.isPending}
-              className="rounded-2xl py-4 items-center mb-3 bg-red-500"
+              onPress={() => { deleteMutation.mutate(); setDeleteConfirmText(""); }}
+              disabled={deleteMutation.isPending || deleteConfirmText !== team?.name}
+              className="rounded-2xl py-4 items-center mb-3"
+              style={{ backgroundColor: deleteConfirmText === team?.name ? "#EF4444" : "#CBD5E1" }}
               testID="confirm-delete-team"
             >
               {deleteMutation.isPending ? (
@@ -383,7 +398,7 @@ export default function TeamScreen() {
               )}
             </TouchableOpacity>
             <TouchableOpacity
-              onPress={() => setShowDeleteConfirm(false)}
+              onPress={() => { setShowDeleteConfirm(false); setDeleteConfirmText(""); }}
               className="rounded-2xl py-4 items-center bg-slate-100 dark:bg-slate-700"
               testID="cancel-delete-team"
             >
