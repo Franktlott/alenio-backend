@@ -320,6 +320,10 @@ tasksRouter.post("/:taskId/assign", async (c) => {
   const membership = await getMembership(user.id, teamId);
   if (!membership) return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
 
+  const task = await prisma.task.findFirst({ where: { id: taskId, teamId } });
+  if (!task) return c.json({ error: { message: "Task not found", code: "NOT_FOUND" } }, 404);
+  if (task.status === "done") return c.json({ error: { message: "Task is completed. Recall it before making edits.", code: "TASK_COMPLETED" } }, 400);
+
   const body = await c.req.json();
   const { userIds } = body;
 
@@ -332,7 +336,7 @@ tasksRouter.post("/:taskId/assign", async (c) => {
     });
   }
 
-  const task = await prisma.task.findFirst({
+  const updated = await prisma.task.findFirst({
     where: { id: taskId },
     include: {
       assignments: { include: { user: { select: { id: true, name: true, email: true, image: true } } } },
@@ -342,7 +346,7 @@ tasksRouter.post("/:taskId/assign", async (c) => {
     },
   });
 
-  return c.json({ data: task });
+  return c.json({ data: updated });
 });
 
 // DELETE /api/teams/:teamId/tasks/:taskId/assign/:userId
@@ -353,6 +357,10 @@ tasksRouter.delete("/:taskId/assign/:userId", async (c) => {
 
   const membership = await getMembership(user.id, teamId);
   if (!membership) return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
+
+  const task = await prisma.task.findFirst({ where: { id: taskId, teamId } });
+  if (!task) return c.json({ error: { message: "Task not found", code: "NOT_FOUND" } }, 404);
+  if (task.status === "done") return c.json({ error: { message: "Task is completed. Recall it before making edits.", code: "TASK_COMPLETED" } }, 400);
 
   await prisma.taskAssignment.deleteMany({ where: { taskId, userId } });
   return c.body(null, 204);
