@@ -173,8 +173,6 @@ export default function TasksScreen() {
   const activeCount = allTasks.filter((t) => t.status !== "done").length;
   const completedCount = allTasks.filter((t) => t.status === "done").length;
 
-  const currentTeam = teams?.find((t: Team) => t.id === activeTeamId);
-
   if (!teamsLoading && (!teams || teams.length === 0)) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: "white" }} testID="no-teams-screen">
@@ -227,15 +225,8 @@ export default function TasksScreen() {
         end={{ x: 1, y: 0 }}
       >
         <View style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 16 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-            <TouchableOpacity onPress={() => router.push("/select-team")}>
-              <Text style={{ color: "white", fontSize: 20, fontWeight: "700" }}>
-                {currentTeam?.name ?? "Alenio"}
-              </Text>
-              {teams && teams.length > 1 ? (
-                <Text style={{ color: "rgba(255,255,255,0.7)", fontSize: 12 }}>tap to switch ›</Text>
-              ) : null}
-            </TouchableOpacity>
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+            <Text style={{ color: "white", fontSize: 26, fontWeight: "700" }}>Tasks</Text>
             <TouchableOpacity
               onPress={() => router.push("/(app)/profile")}
               style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(255,255,255,0.2)", alignItems: "center", justifyContent: "center" }}
@@ -243,7 +234,6 @@ export default function TasksScreen() {
               <User size={18} color="white" />
             </TouchableOpacity>
           </View>
-          <Text style={{ color: "white", fontSize: 26, fontWeight: "700" }}>Tasks</Text>
         </View>
       </LinearGradient>
 

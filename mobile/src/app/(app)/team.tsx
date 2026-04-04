@@ -15,7 +15,7 @@ import {
   ScrollView,
 } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Copy, UserPlus, MessageCircle, Pencil, X, Camera } from "lucide-react-native";
+import { Copy, UserPlus, MessageCircle, Pencil, X, Camera, ChevronDown } from "lucide-react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Clipboard from "expo-clipboard";
@@ -105,6 +105,12 @@ export default function TeamScreen() {
     queryKey: ["team", activeTeamId],
     queryFn: () => api.get<Team>(`/api/teams/${activeTeamId}`),
     enabled: !!activeTeamId,
+  });
+
+  const { data: teams = [] } = useQuery({
+    queryKey: ["teams"],
+    queryFn: () => api.get<Team[]>("/api/teams"),
+    enabled: !!session?.user,
   });
 
   const { data: memberStats } = useQuery({
@@ -214,18 +220,28 @@ export default function TeamScreen() {
     <SafeAreaView className="flex-1 bg-slate-50 dark:bg-slate-900" edges={["top"]} testID="team-screen">
       <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
         <View className="px-4 pt-2 pb-4 flex-row items-center" style={{ gap: 12 }}>
-          {/* Team photo */}
-          <View className="w-12 h-12 rounded-full bg-white/20 items-center justify-center overflow-hidden">
-            {team?.image ? (
-              <Image source={{ uri: team.image }} style={{ width: 48, height: 48 }} resizeMode="cover" />
-            ) : (
-              <Text className="text-white font-bold text-xl">{team?.name?.[0]?.toUpperCase() ?? "T"}</Text>
-            )}
-          </View>
-          <View className="flex-1">
-            <Text className="text-white text-xl font-bold">{team?.name}</Text>
-            <Text className="text-white/70 text-sm">{team?.members?.length ?? 0} members</Text>
-          </View>
+          <TouchableOpacity
+            className="flex-row items-center flex-1"
+            style={{ gap: 12 }}
+            onPress={() => teams.length > 1 ? router.push("/select-team") : null}
+            activeOpacity={teams.length > 1 ? 0.7 : 1}
+            testID="switch-team-button"
+          >
+            <View className="w-12 h-12 rounded-full bg-white/20 items-center justify-center overflow-hidden">
+              {team?.image ? (
+                <Image source={{ uri: team.image }} style={{ width: 48, height: 48 }} resizeMode="cover" />
+              ) : (
+                <Text className="text-white font-bold text-xl">{team?.name?.[0]?.toUpperCase() ?? "T"}</Text>
+              )}
+            </View>
+            <View className="flex-1">
+              <View className="flex-row items-center" style={{ gap: 4 }}>
+                <Text className="text-white text-xl font-bold">{team?.name}</Text>
+                {teams.length > 1 ? <ChevronDown size={16} color="rgba(255,255,255,0.8)" /> : null}
+              </View>
+              <Text className="text-white/70 text-sm">{team?.members?.length ?? 0} members</Text>
+            </View>
+          </TouchableOpacity>
           {canEdit ? (
             <TouchableOpacity
               onPress={openEditModal}
