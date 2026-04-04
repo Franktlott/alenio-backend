@@ -256,31 +256,31 @@ export default function TasksScreen() {
       </LinearGradient>
 
       {/* Stats cards */}
-      <View style={{ flexDirection: "row", paddingHorizontal: 16, paddingVertical: 12, gap: 12 }}>
+      <View style={{ flexDirection: "row", paddingHorizontal: 16, paddingTop: 10, paddingBottom: 4, gap: 10 }}>
         {isOwner ? (
           <View style={{
-            flex: 1, backgroundColor: "white", borderRadius: 16, padding: 12, flexDirection: "row", alignItems: "center",
-            shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 4, shadowOffset: { width: 0, height: 1 }, elevation: 1,
+            flex: 1, backgroundColor: "white", borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8, flexDirection: "row", alignItems: "center",
+            shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 1,
           }}>
-            <View style={{ width: 36, height: 36, borderRadius: 18, borderWidth: 2, borderColor: "#60A5FA", alignItems: "center", justifyContent: "center", marginRight: 12 }}>
-              <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: "#60A5FA" }} />
+            <View style={{ width: 28, height: 28, borderRadius: 14, borderWidth: 2, borderColor: "#60A5FA", alignItems: "center", justifyContent: "center", marginRight: 8 }}>
+              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: "#60A5FA" }} />
             </View>
             <View>
-              <Text style={{ fontSize: 12, color: "#94A3B8" }}>Assigned</Text>
-              <Text style={{ fontSize: 24, fontWeight: "700", color: "#0F172A" }}>{assignedCount}</Text>
+              <Text style={{ fontSize: 10, color: "#94A3B8" }}>Assigned</Text>
+              <Text style={{ fontSize: 18, fontWeight: "700", color: "#0F172A", lineHeight: 22 }}>{assignedCount}</Text>
             </View>
           </View>
         ) : null}
         <View style={{
-          flex: 1, backgroundColor: "white", borderRadius: 16, padding: 12, flexDirection: "row", alignItems: "center",
-          shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 4, shadowOffset: { width: 0, height: 1 }, elevation: 1,
+          flex: 1, backgroundColor: "white", borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8, flexDirection: "row", alignItems: "center",
+          shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 1,
         }}>
-          <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#10B981", alignItems: "center", justifyContent: "center", marginRight: 12 }}>
-            <Text style={{ color: "white", fontSize: 14, fontWeight: "700" }}>✓</Text>
+          <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: "#10B981", alignItems: "center", justifyContent: "center", marginRight: 8 }}>
+            <Text style={{ color: "white", fontSize: 11, fontWeight: "700" }}>✓</Text>
           </View>
           <View>
-            <Text style={{ fontSize: 12, color: "#94A3B8" }}>Completed</Text>
-            <Text style={{ fontSize: 24, fontWeight: "700", color: "#10B981" }}>{completedCount}</Text>
+            <Text style={{ fontSize: 10, color: "#94A3B8" }}>Completed</Text>
+            <Text style={{ fontSize: 18, fontWeight: "700", color: "#10B981", lineHeight: 22 }}>{completedCount}</Text>
           </View>
         </View>
       </View>
