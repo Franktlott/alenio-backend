@@ -16,7 +16,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { ArrowLeft, Camera, LogOut, Pencil, Check, X, ChevronRight, Plus, Trash2, Bell } from "lucide-react-native";
+import { ArrowLeft, Camera, LogOut, Pencil, X, ChevronRight, Plus, Trash2, Bell } from "lucide-react-native";
 import { authClient } from "@/lib/auth/auth-client";
 import { useInvalidateSession, useSession } from "@/lib/auth/use-session";
 import { router } from "expo-router";
@@ -39,8 +39,6 @@ export default function ProfileScreen() {
 
   // Profile state
   const [localImage, setLocalImage] = useState<string | null>(null);
-  const [editingName, setEditingName] = useState(false);
-  const [nameValue, setNameValue] = useState(user?.name ?? "");
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
 
   // Team edit state
@@ -95,11 +93,6 @@ export default function ProfileScreen() {
     },
   });
 
-  const nameMutation = useMutation({
-    mutationFn: (name: string) => api.patch("/api/profile", { name }),
-    onSuccess: async () => { await invalidateSession(); setEditingName(false); },
-  });
-
   // ── Team mutations ─────────────────────────────────────────────
   const updateTeamMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: { name?: string; image?: string | null } }) =>
@@ -145,12 +138,6 @@ export default function ProfileScreen() {
     } else {
       uploadMutation.mutate("library");
     }
-  };
-
-  const handleSaveName = () => {
-    const trimmed = nameValue.trim();
-    if (!trimmed || trimmed === user?.name) { setEditingName(false); return; }
-    nameMutation.mutate(trimmed);
   };
 
   const openEditModal = (team: Team) => {
@@ -249,42 +236,7 @@ export default function ProfileScreen() {
             </TouchableOpacity>
 
             {/* Name */}
-            {editingName ? (
-              <View className="flex-row items-center border-b-2 border-indigo-500 mb-1" style={{ gap: 8 }}>
-                <TextInput
-                  value={nameValue}
-                  onChangeText={setNameValue}
-                  autoFocus
-                  className="text-xl font-bold text-slate-900 dark:text-white text-center"
-                  style={{ minWidth: 120 }}
-                  returnKeyType="done"
-                  onSubmitEditing={handleSaveName}
-                  testID="name-input"
-                />
-                {nameMutation.isPending ? (
-                  <ActivityIndicator size="small" color="#4361EE" />
-                ) : (
-                  <>
-                    <TouchableOpacity onPress={handleSaveName} testID="save-name-button">
-                      <Check size={18} color="#10B981" />
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={() => { setEditingName(false); setNameValue(user?.name ?? ""); }} testID="cancel-name-button">
-                      <X size={18} color="#94A3B8" />
-                    </TouchableOpacity>
-                  </>
-                )}
-              </View>
-            ) : (
-              <TouchableOpacity
-                className="flex-row items-center mb-1"
-                style={{ gap: 6 }}
-                onPress={() => { setNameValue(user?.name ?? ""); setEditingName(true); }}
-                testID="edit-name-button"
-              >
-                <Text className="text-xl font-bold text-slate-900 dark:text-white">{user?.name}</Text>
-                <Pencil size={14} color="#94A3B8" />
-              </TouchableOpacity>
-            )}
+            <Text className="text-xl font-bold text-slate-900 dark:text-white mb-1">{user?.name}</Text>
 
             <Text className="text-sm text-slate-400">{user?.email}</Text>
           </View>

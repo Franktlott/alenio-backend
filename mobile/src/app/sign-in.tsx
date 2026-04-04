@@ -16,13 +16,14 @@ import { LinearGradient } from "expo-linear-gradient";
 import { StatusBar } from "expo-status-bar";
 
 export default function SignIn() {
+  const [isNew, setIsNew] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleSendOTP = async () => {
-    if (!name.trim()) {
+    if (isNew && !name.trim()) {
       setError("Please enter your name");
       return;
     }
@@ -47,10 +48,16 @@ export default function SignIn() {
     }
   };
 
+  const switchMode = (newMode: boolean) => {
+    setIsNew(newMode);
+    setError(null);
+    setName("");
+    setEmail("");
+  };
+
   return (
     <SafeAreaView className="flex-1 bg-white dark:bg-slate-900" edges={["top"]}>
       <StatusBar style="light" />
-      {/* Gradient top area with logo */}
       <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
         <View className="items-center py-10 px-6">
           <View className="bg-white rounded-2xl p-4 mb-4">
@@ -64,32 +71,54 @@ export default function SignIn() {
         </View>
       </LinearGradient>
 
-      {/* Form area */}
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        className="flex-1"
-      >
+      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} className="flex-1">
         <View className="flex-1 px-6 pt-8">
-          {/* Form */}
-          <View>
-            <Text className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-              Your name
-            </Text>
-            <TextInput
-              className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3.5 text-base text-slate-900 dark:text-white mb-4"
-              placeholder="Jane Smith"
-              placeholderTextColor="#94A3B8"
-              autoCapitalize="words"
-              autoComplete="name"
-              value={name}
-              onChangeText={(t) => { setName(t); setError(null); }}
-              returnKeyType="next"
-              testID="name-input"
-            />
 
-            <Text className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-              Email address
-            </Text>
+          {/* Mode toggle */}
+          <View className="flex-row bg-slate-100 dark:bg-slate-800 rounded-xl p-1 mb-6">
+            <TouchableOpacity
+              onPress={() => switchMode(false)}
+              className="flex-1 py-2.5 rounded-lg items-center"
+              style={{ backgroundColor: !isNew ? "white" : "transparent" }}
+              testID="sign-in-tab"
+            >
+              <Text className="text-sm font-semibold" style={{ color: !isNew ? "#0F172A" : "#94A3B8" }}>
+                Sign in
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => switchMode(true)}
+              className="flex-1 py-2.5 rounded-lg items-center"
+              style={{ backgroundColor: isNew ? "white" : "transparent" }}
+              testID="new-here-tab"
+            >
+              <Text className="text-sm font-semibold" style={{ color: isNew ? "#0F172A" : "#94A3B8" }}>
+                New here? Join
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Name field — only for new users */}
+          {isNew ? (
+            <View className="mb-4">
+              <Text className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Your name</Text>
+              <TextInput
+                className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3.5 text-base text-slate-900 dark:text-white"
+                placeholder="Jane Smith"
+                placeholderTextColor="#94A3B8"
+                autoCapitalize="words"
+                autoComplete="name"
+                value={name}
+                onChangeText={(t) => { setName(t); setError(null); }}
+                returnKeyType="next"
+                testID="name-input"
+              />
+            </View>
+          ) : null}
+
+          {/* Email field */}
+          <View className="mb-2">
+            <Text className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Email address</Text>
             <TextInput
               className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3.5 text-base text-slate-900 dark:text-white"
               placeholder="you@example.com"
@@ -103,25 +132,23 @@ export default function SignIn() {
               returnKeyType="send"
               testID="email-input"
             />
-
-            {error ? (
-              <Text className="text-red-500 text-sm mt-2">{error}</Text>
-            ) : null}
-
-            <TouchableOpacity
-              className="bg-indigo-600 rounded-xl py-4 items-center mt-4"
-              onPress={handleSendOTP}
-              disabled={loading}
-              activeOpacity={0.8}
-              testID="send-otp-button"
-            >
-              {loading ? (
-                <ActivityIndicator color="white" />
-              ) : (
-                <Text className="text-white font-semibold text-base">Continue with email</Text>
-              )}
-            </TouchableOpacity>
           </View>
+
+          {error ? <Text className="text-red-500 text-sm mt-2">{error}</Text> : null}
+
+          <TouchableOpacity
+            className="bg-indigo-600 rounded-xl py-4 items-center mt-4"
+            onPress={handleSendOTP}
+            disabled={loading}
+            activeOpacity={0.8}
+            testID="send-otp-button"
+          >
+            {loading ? (
+              <ActivityIndicator color="white" />
+            ) : (
+              <Text className="text-white font-semibold text-base">Continue with email</Text>
+            )}
+          </TouchableOpacity>
 
           <Text className="text-center text-slate-400 dark:text-slate-500 text-xs mt-8">
             We'll send a 6-digit code to verify your identity
