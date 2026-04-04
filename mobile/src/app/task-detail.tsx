@@ -7,15 +7,19 @@ import {
   ActivityIndicator,
   Modal,
   Image,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams } from "expo-router";
-import { ArrowLeft, Trash2, RefreshCw, UserPlus, X, Check } from "lucide-react-native";
+import { ArrowLeft, Trash2, RefreshCw, UserPlus, X, Check, Plus, Square, CheckSquare } from "lucide-react-native";
 import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
-import type { Task, TaskStatus, Team } from "@/lib/types";
+import { toast } from "burnt";
+import type { Task, TaskStatus, Team, Subtask } from "@/lib/types";
 
 const STATUS_OPTIONS: { label: string; value: TaskStatus; color: string }[] = [
   { label: "To Do", value: "todo", color: "#64748B" },
@@ -36,6 +40,7 @@ export default function TaskDetailScreen() {
   const queryClient = useQueryClient();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showAssignModal, setShowAssignModal] = useState(false);
+  const [newSubtaskTitle, setNewSubtaskTitle] = useState<string>("");
 
   const { data: task, isLoading } = useQuery({
     queryKey: ["task", taskId, teamId],
@@ -56,6 +61,9 @@ export default function TaskDetailScreen() {
       queryClient.setQueryData(["task", taskId, teamId], updated);
       queryClient.invalidateQueries({ queryKey: ["tasks", teamId] });
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
+    },
+    onError: (error: Error) => {
+      toast({ title: error.message, preset: "error" });
     },
   });
 
@@ -83,6 +91,31 @@ export default function TaskDetailScreen() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["task", taskId, teamId] });
       queryClient.invalidateQueries({ queryKey: ["tasks", teamId] });
+    },
+  });
+
+  const createSubtaskMutation = useMutation({
+    mutationFn: (title: string) =>
+      api.post<Subtask>(`/api/teams/${teamId}/tasks/${taskId}/subtasks`, { title }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["task", taskId, teamId] });
+      setNewSubtaskTitle("");
+    },
+  });
+
+  const toggleSubtaskMutation = useMutation({
+    mutationFn: ({ subtaskId, completed }: { subtaskId: string; completed: boolean }) =>
+      api.patch<Subtask>(`/api/teams/${teamId}/tasks/${taskId}/subtasks/${subtaskId}`, { completed }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["task", taskId, teamId] });
+    },
+  });
+
+  const deleteSubtaskMutation = useMutation({
+    mutationFn: (subtaskId: string) =>
+      api.delete(`/api/teams/${teamId}/tasks/${taskId}/subtasks/${subtaskId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["task", taskId, teamId] });
     },
   });
 
@@ -189,6 +222,82 @@ export default function TaskDetailScreen() {
             })}
           </View>
         </View>
+
+        {/* Subtasks */}
+        {(() => {
+          const subtasks = task.subtasks ?? [];
+          const completedCount = subtasks.filter((s) => s.completed).length;
+          const totalCount = subtasks.length;
+          return (
+            <View className="mb-4">
+              <View className="flex-row items-center justify-between mb-2">
+                <Text className="text-sm font-semibold text-slate-500">
+                  Subtasks{totalCount > 0 ? ` (${completedCount}/${totalCount})` : ""}
+                </Text>
+              </View>
+              {subtasks.length > 0 && (
+                <View className="mb-2" style={{ gap: 4 }}>
+                  {subtasks.map((subtask) => (
+                    <View key={subtask.id} className="flex-row items-center py-1" style={{ gap: 8 }}>
+                      <TouchableOpacity
+                        onPress={() => toggleSubtaskMutation.mutate({ subtaskId: subtask.id, completed: !subtask.completed })}
+                        disabled={toggleSubtaskMutation.isPending}
+                        testID={`subtask-toggle-${subtask.id}`}
+                      >
+                        {subtask.completed ? (
+                          <CheckSquare size={20} color="#10B981" />
+                        ) : (
+                          <Square size={20} color="#94A3B8" />
+                        )}
+                      </TouchableOpacity>
+                      <Text
+                        className="flex-1 text-sm text-slate-900 dark:text-white"
+                        style={subtask.completed ? { textDecorationLine: "line-through", color: "#94A3B8" } : undefined}
+                      >
+                        {subtask.title}
+                      </Text>
+                      <TouchableOpacity
+                        onPress={() => deleteSubtaskMutation.mutate(subtask.id)}
+                        disabled={deleteSubtaskMutation.isPending}
+                        className="w-6 h-6 rounded-full items-center justify-center bg-slate-100 dark:bg-slate-700"
+                        testID={`subtask-delete-${subtask.id}`}
+                      >
+                        <X size={12} color="#94A3B8" />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </View>
+              )}
+              <View className="flex-row items-center border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2" style={{ gap: 8 }}>
+                <TextInput
+                  value={newSubtaskTitle}
+                  onChangeText={setNewSubtaskTitle}
+                  placeholder="Add a subtask..."
+                  placeholderTextColor="#94A3B8"
+                  className="flex-1 text-sm text-slate-900 dark:text-white"
+                  onSubmitEditing={() => {
+                    if (newSubtaskTitle.trim()) createSubtaskMutation.mutate(newSubtaskTitle.trim());
+                  }}
+                  returnKeyType="done"
+                  testID="new-subtask-input"
+                />
+                <TouchableOpacity
+                  onPress={() => {
+                    if (newSubtaskTitle.trim()) createSubtaskMutation.mutate(newSubtaskTitle.trim());
+                  }}
+                  disabled={!newSubtaskTitle.trim() || createSubtaskMutation.isPending}
+                  testID="add-subtask-button"
+                >
+                  {createSubtaskMutation.isPending ? (
+                    <ActivityIndicator size="small" color="#4361EE" />
+                  ) : (
+                    <Plus size={18} color={newSubtaskTitle.trim() ? "#4361EE" : "#CBD5E1"} />
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          );
+        })()}
 
         {/* Assignees */}
         <View className="mb-4">

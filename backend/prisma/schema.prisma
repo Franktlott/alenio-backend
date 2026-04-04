@@ -109,6 +109,17 @@ model Task {
 
   assignments    TaskAssignment[]
   recurrenceRule RecurrenceRule?
+  subtasks       Subtask[]
+}
+
+model Subtask {
+  id          String   @id @default(cuid())
+  title       String
+  completed   Boolean  @default(false)
+  taskId      String
+  task        Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  order       Int      @default(0)
 }
 
 model TaskAssignment {

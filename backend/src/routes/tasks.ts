@@ -73,6 +73,7 @@ tasksRouter.get("/", async (c) => {
       assignments: {
         include: { user: { select: { id: true, name: true, email: true, image: true } } },
       },
+      subtasks: { orderBy: { order: 'asc' } },
       recurrenceRule: true,
       creator: { select: { id: true, name: true, email: true } },
     },
@@ -126,6 +127,7 @@ tasksRouter.post("/", async (c) => {
     },
     include: {
       assignments: { include: { user: { select: { id: true, name: true, email: true, image: true } } } },
+      subtasks: { orderBy: { order: 'asc' } },
       recurrenceRule: true,
       creator: { select: { id: true, name: true, email: true } },
     },
@@ -188,6 +190,7 @@ tasksRouter.get("/:taskId", async (c) => {
     where: { id: taskId, teamId },
     include: {
       assignments: { include: { user: { select: { id: true, name: true, email: true, image: true } } } },
+      subtasks: { orderBy: { order: 'asc' } },
       recurrenceRule: true,
       creator: { select: { id: true, name: true, email: true } },
     },
@@ -213,6 +216,15 @@ tasksRouter.patch("/:taskId", async (c) => {
   const body = await c.req.json();
   const { title, description, priority, dueDate, status } = body;
 
+  if (status === "done") {
+    const incompleteSubtasks = await prisma.subtask.count({
+      where: { taskId, completed: false },
+    });
+    if (incompleteSubtasks > 0) {
+      return c.json({ error: { message: `Complete all subtasks first (${incompleteSubtasks} remaining)`, code: "SUBTASKS_INCOMPLETE" } }, 400);
+    }
+  }
+
   const updated = await prisma.task.update({
     where: { id: taskId },
     data: {
@@ -224,6 +236,7 @@ tasksRouter.patch("/:taskId", async (c) => {
     },
     include: {
       assignments: { include: { user: { select: { id: true, name: true, email: true, image: true } } } },
+      subtasks: { orderBy: { order: 'asc' } },
       recurrenceRule: true,
       creator: { select: { id: true, name: true, email: true } },
     },
@@ -307,6 +320,7 @@ tasksRouter.post("/:taskId/assign", async (c) => {
     where: { id: taskId },
     include: {
       assignments: { include: { user: { select: { id: true, name: true, email: true, image: true } } } },
+      subtasks: { orderBy: { order: 'asc' } },
       recurrenceRule: true,
       creator: { select: { id: true, name: true, email: true } },
     },
@@ -325,6 +339,58 @@ tasksRouter.delete("/:taskId/assign/:userId", async (c) => {
   if (!membership) return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
 
   await prisma.taskAssignment.deleteMany({ where: { taskId, userId } });
+  return c.body(null, 204);
+});
+
+// POST /api/teams/:teamId/tasks/:taskId/subtasks
+tasksRouter.post("/:taskId/subtasks", async (c) => {
+  const user = c.get("user")!;
+  const teamId = c.req.param("teamId") as string;
+  const { taskId } = c.req.param();
+
+  const membership = await getMembership(user.id, teamId);
+  if (!membership) return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
+
+  const body = await c.req.json();
+  if (!body.title?.trim()) return c.json({ error: { message: "Title required", code: "VALIDATION_ERROR" } }, 400);
+
+  const count = await prisma.subtask.count({ where: { taskId } });
+  const subtask = await prisma.subtask.create({
+    data: { title: body.title.trim(), taskId, order: count },
+  });
+  return c.json({ data: subtask }, 201);
+});
+
+// PATCH /api/teams/:teamId/tasks/:taskId/subtasks/:subtaskId
+tasksRouter.patch("/:taskId/subtasks/:subtaskId", async (c) => {
+  const user = c.get("user")!;
+  const teamId = c.req.param("teamId") as string;
+  const { taskId, subtaskId } = c.req.param();
+
+  const membership = await getMembership(user.id, teamId);
+  if (!membership) return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
+
+  const body = await c.req.json();
+  const subtask = await prisma.subtask.update({
+    where: { id: subtaskId },
+    data: {
+      ...(body.title !== undefined ? { title: body.title.trim() } : {}),
+      ...(body.completed !== undefined ? { completed: body.completed } : {}),
+    },
+  });
+  return c.json({ data: subtask });
+});
+
+// DELETE /api/teams/:teamId/tasks/:taskId/subtasks/:subtaskId
+tasksRouter.delete("/:taskId/subtasks/:subtaskId", async (c) => {
+  const user = c.get("user")!;
+  const teamId = c.req.param("teamId") as string;
+  const { subtaskId } = c.req.param();
+
+  const membership = await getMembership(user.id, teamId);
+  if (!membership) return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
+
+  await prisma.subtask.delete({ where: { id: subtaskId } });
   return c.body(null, 204);
 });
 
