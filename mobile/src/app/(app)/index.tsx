@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
-import { Plus, User } from "lucide-react-native";
+import { Plus, User, ArrowUpDown } from "lucide-react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { api } from "@/lib/api/api";
@@ -20,6 +20,7 @@ import { useTeamStore } from "@/lib/state/team-store";
 import type { Task, Team } from "@/lib/types";
 
 type FilterTab = "all" | "assigned" | "completed";
+type SortMode = "due" | "priority";
 
 const PRIORITY_CONFIG = {
   urgent: { label: "Urgent", bg: "#FEE2E2", text: "#DC2626", flagColor: "#DC2626" },
@@ -141,6 +142,7 @@ function TaskRow({ task, onToggle, onPress }: { task: Task; onToggle: () => void
 
 export default function TasksScreen() {
   const [filter, setFilter] = useState<FilterTab>("all");
+  const [sort, setSort] = useState<SortMode>("due");
   const { data: session } = useSession();
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
   const setActiveTeamId = useTeamStore((s) => s.setActiveTeamId);
@@ -193,6 +195,16 @@ export default function TasksScreen() {
     );
     if (filter === "completed") return t.status === "done" && isMyTask(t);
     return t.status !== "done" && isMyTask(t);
+  }).sort((a, b) => {
+    if (sort === "priority") {
+      const order = { urgent: 0, high: 1, medium: 2, low: 3 };
+      return (order[a.priority as keyof typeof order] ?? 2) - (order[b.priority as keyof typeof order] ?? 2);
+    }
+    // due date: tasks with no due date go last
+    if (!a.dueDate && !b.dueDate) return 0;
+    if (!a.dueDate) return 1;
+    if (!b.dueDate) return -1;
+    return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
   });
 
   const assignedCount = allTasks.filter((t) =>
@@ -295,26 +307,47 @@ export default function TasksScreen() {
         </View>
       </View>
 
-      {/* Filter tabs */}
-      <View style={{ marginHorizontal: 16, marginBottom: 12, flexDirection: "row", backgroundColor: "#E2E8F0", borderRadius: 12, padding: 4 }}>
-        {(["all", "completed", ...(isOwner ? ["assigned"] : [])] as FilterTab[]).map((f) => (
-          <TouchableOpacity
-            key={f}
-            onPress={() => setFilter(f)}
-            style={{
-              flex: 1, paddingVertical: 8, borderRadius: 10, alignItems: "center",
-              backgroundColor: filter === f ? "white" : "transparent",
-            }}
-            testID={`filter-${f}`}
-          >
-            <Text style={{
-              fontSize: 13, fontWeight: "600",
-              color: filter === f ? "#0F172A" : "#94A3B8",
-            }}>
-              {f === "all" ? "All" : f === "assigned" ? "Assigned" : "Completed"}
-            </Text>
-          </TouchableOpacity>
-        ))}
+      {/* Filter tabs + sort */}
+      <View style={{ paddingHorizontal: 16, marginBottom: 10 }}>
+        <View style={{ flexDirection: "row", backgroundColor: "#E2E8F0", borderRadius: 12, padding: 4, marginBottom: 8 }}>
+          {(["all", "completed", ...(isOwner ? ["assigned"] : [])] as FilterTab[]).map((f) => (
+            <TouchableOpacity
+              key={f}
+              onPress={() => setFilter(f)}
+              style={{
+                flex: 1, paddingVertical: 8, borderRadius: 10, alignItems: "center",
+                backgroundColor: filter === f ? "white" : "transparent",
+              }}
+              testID={`filter-${f}`}
+            >
+              <Text style={{
+                fontSize: 13, fontWeight: "600",
+                color: filter === f ? "#0F172A" : "#94A3B8",
+              }}>
+                {f === "all" ? "All" : f === "assigned" ? "Assigned" : "Completed"}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 6 }}>
+          <ArrowUpDown size={12} color="#94A3B8" />
+          <Text style={{ fontSize: 12, color: "#94A3B8", marginRight: 6 }}>Sort:</Text>
+          {(["due", "priority"] as SortMode[]).map((s) => (
+            <TouchableOpacity
+              key={s}
+              onPress={() => setSort(s)}
+              style={{
+                paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8,
+                backgroundColor: sort === s ? "#4361EE" : "#F1F5F9",
+              }}
+              testID={`sort-${s}`}
+            >
+              <Text style={{ fontSize: 12, fontWeight: "600", color: sort === s ? "white" : "#64748B" }}>
+                {s === "due" ? "Due Date" : "Priority"}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
       </View>
 
       {/* Task list */}
