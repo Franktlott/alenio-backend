@@ -165,21 +165,31 @@ export default function TasksScreen() {
   });
 
   const currentUserId = session?.user?.id ?? null;
+  const activeTeam = teams?.find((t) => t.id === activeTeamId);
+  const isOwner = (activeTeam as (Team & { role?: string }) | undefined)?.role === "owner";
+
+  React.useEffect(() => {
+    if (filter === "assigned" && !isOwner) setFilter("all");
+  }, [isOwner, filter]);
+
+  const isMyTask = (t: Task) =>
+    t.creator?.id === currentUserId ||
+    (t.assignments ?? []).some((a) => a.userId === currentUserId);
 
   const tasks = allTasks.filter((t) => {
     if (filter === "assigned") return (
       t.creator?.id === currentUserId &&
       (t.assignments ?? []).some((a) => a.userId !== currentUserId)
     );
-    if (filter === "completed") return t.status === "done";
-    return t.status !== "done";
+    if (filter === "completed") return t.status === "done" && isMyTask(t);
+    return t.status !== "done" && isMyTask(t);
   });
 
   const assignedCount = allTasks.filter((t) =>
     t.creator?.id === currentUserId &&
     (t.assignments ?? []).some((a) => a.userId !== currentUserId)
   ).length;
-  const completedCount = allTasks.filter((t) => t.status === "done").length;
+  const completedCount = allTasks.filter((t) => t.status === "done" && isMyTask(t)).length;
 
   if (!teamsLoading && (!teams || teams.length === 0)) {
     return (
@@ -247,18 +257,20 @@ export default function TasksScreen() {
 
       {/* Stats cards */}
       <View style={{ flexDirection: "row", paddingHorizontal: 16, paddingVertical: 12, gap: 12 }}>
-        <View style={{
-          flex: 1, backgroundColor: "white", borderRadius: 16, padding: 12, flexDirection: "row", alignItems: "center",
-          shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 4, shadowOffset: { width: 0, height: 1 }, elevation: 1,
-        }}>
-          <View style={{ width: 36, height: 36, borderRadius: 18, borderWidth: 2, borderColor: "#60A5FA", alignItems: "center", justifyContent: "center", marginRight: 12 }}>
-            <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: "#60A5FA" }} />
+        {isOwner ? (
+          <View style={{
+            flex: 1, backgroundColor: "white", borderRadius: 16, padding: 12, flexDirection: "row", alignItems: "center",
+            shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 4, shadowOffset: { width: 0, height: 1 }, elevation: 1,
+          }}>
+            <View style={{ width: 36, height: 36, borderRadius: 18, borderWidth: 2, borderColor: "#60A5FA", alignItems: "center", justifyContent: "center", marginRight: 12 }}>
+              <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: "#60A5FA" }} />
+            </View>
+            <View>
+              <Text style={{ fontSize: 12, color: "#94A3B8" }}>Assigned</Text>
+              <Text style={{ fontSize: 24, fontWeight: "700", color: "#0F172A" }}>{assignedCount}</Text>
+            </View>
           </View>
-          <View>
-            <Text style={{ fontSize: 12, color: "#94A3B8" }}>Assigned</Text>
-            <Text style={{ fontSize: 24, fontWeight: "700", color: "#0F172A" }}>{assignedCount}</Text>
-          </View>
-        </View>
+        ) : null}
         <View style={{
           flex: 1, backgroundColor: "white", borderRadius: 16, padding: 12, flexDirection: "row", alignItems: "center",
           shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 4, shadowOffset: { width: 0, height: 1 }, elevation: 1,
@@ -275,7 +287,7 @@ export default function TasksScreen() {
 
       {/* Filter tabs */}
       <View style={{ marginHorizontal: 16, marginBottom: 12, flexDirection: "row", backgroundColor: "#E2E8F0", borderRadius: 12, padding: 4 }}>
-        {(["all", "completed", "assigned"] as FilterTab[]).map((f) => (
+        {(["all", "completed", ...(isOwner ? ["assigned"] : [])] as FilterTab[]).map((f) => (
           <TouchableOpacity
             key={f}
             onPress={() => setFilter(f)}
