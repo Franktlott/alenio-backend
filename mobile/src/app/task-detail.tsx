@@ -126,7 +126,6 @@ export default function TaskDetailScreen() {
   const isCreator = !!currentUserId && task?.creator?.id === currentUserId;
   const isCompleted = task?.status === "done";
   const isEditable = isCreator && !isCompleted;
-  const canManageAssignees = !isCompleted;
 
   const handleToggleMember = (userId: string) => {
     if (assignedIds.has(userId)) {
@@ -350,7 +349,7 @@ export default function TaskDetailScreen() {
               <TouchableOpacity
                 testID="assign-to-me-button"
                 onPress={() => currentUserId && handleToggleMember(currentUserId)}
-                disabled={!currentUserId || !canManageAssignees || assignMutation.isPending || unassignMutation.isPending}
+                disabled={!currentUserId || !isEditable || assignMutation.isPending || unassignMutation.isPending}
                 className={`flex-row items-center px-3 py-1 rounded-full ${isSelfAssigned ? "bg-red-50 dark:bg-red-900/30" : "bg-indigo-50 dark:bg-indigo-900/40"}`}
                 style={{ gap: 4 }}
               >
@@ -371,7 +370,7 @@ export default function TaskDetailScreen() {
               <TouchableOpacity
                 testID="manage-assignees-button"
                 onPress={() => setShowAssignModal(true)}
-                disabled={!canManageAssignees}
+                disabled={!isEditable}
                 className="flex-row items-center px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-700"
                 style={{ gap: 4 }}
               >
