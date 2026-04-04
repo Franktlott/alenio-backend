@@ -21,7 +21,7 @@ import { useSession } from "@/lib/auth/use-session";
 import { uploadFile } from "@/lib/upload";
 import { pickMedia } from "@/lib/file-picker";
 import { ChatMessage } from "@/components/ChatMessage";
-import type { Message } from "@/lib/types";
+import type { Message, Team } from "@/lib/types";
 
 const REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🔥'];
 
@@ -70,6 +70,13 @@ export default function TeamChatScreen() {
     refetchInterval: 3000,
   });
 
+  const { data: team } = useQuery({
+    queryKey: ["team", teamId],
+    queryFn: () => api.get<Team>(`/api/teams/${teamId}`),
+    enabled: !!teamId,
+  });
+  const currentUserRole = team?.members?.find((m) => m.userId === currentUserId)?.role;
+
   const sendMutation = useMutation({
     mutationFn: (payload: { content?: string; mediaUrl?: string; mediaType?: string; replyToId?: string }) =>
       api.post<Message>(`/api/teams/${teamId}/messages`, payload),
@@ -85,6 +92,20 @@ export default function TeamChatScreen() {
       api.post<Message>(`/api/teams/${teamId}/messages/${messageId}/reactions`, { emoji }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["messages", teamId] }),
   });
+
+  const deleteMutation = useMutation({
+    mutationFn: (messageId: string) =>
+      api.delete(`/api/teams/${teamId}/messages/${messageId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["messages", teamId] });
+      setEmojiTarget(null);
+    },
+  });
+
+  const canDelete = (msg: Message) =>
+    msg.senderId === currentUserId ||
+    currentUserRole === "owner" ||
+    currentUserRole === "admin";
 
   const handleSend = async () => {
     const content = input.trim();
@@ -182,6 +203,16 @@ export default function TeamChatScreen() {
             >
               <Text className="text-indigo-600 font-semibold text-sm">↩ Reply</Text>
             </TouchableOpacity>
+            {emojiTarget && canDelete(emojiTarget) ? (
+              <TouchableOpacity
+                onPress={() => {
+                  if (emojiTarget) deleteMutation.mutate(emojiTarget.id);
+                }}
+                className="flex-row items-center justify-center py-2 border-t border-slate-100 dark:border-slate-700"
+              >
+                <Text className="text-red-500 font-semibold text-sm">🗑 Delete message</Text>
+              </TouchableOpacity>
+            ) : null}
           </View>
         </TouchableOpacity>
       </Modal>
