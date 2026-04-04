@@ -58,6 +58,7 @@ export default function TeamChatScreen() {
   const [input, setInput] = useState("");
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const [emojiTarget, setEmojiTarget] = useState<Message | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Message | null>(null);
   const [mediaPreview, setMediaPreview] = useState<{ uri: string; mimeType: string; filename: string } | null>(null);
   const [uploading, setUploading] = useState(false);
   const flatListRef = useRef<FlatList>(null);
@@ -98,7 +99,7 @@ export default function TeamChatScreen() {
       api.delete(`/api/teams/${teamId}/messages/${messageId}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["messages", teamId] });
-      setEmojiTarget(null);
+      setDeleteTarget(null);
     },
   });
 
@@ -206,7 +207,9 @@ export default function TeamChatScreen() {
             {emojiTarget && canDelete(emojiTarget) ? (
               <TouchableOpacity
                 onPress={() => {
-                  if (emojiTarget) deleteMutation.mutate(emojiTarget.id);
+                  const target = emojiTarget;
+                  setEmojiTarget(null);
+                  setDeleteTarget(target);
                 }}
                 className="flex-row items-center justify-center py-2 border-t border-slate-100 dark:border-slate-700"
               >
@@ -214,6 +217,49 @@ export default function TeamChatScreen() {
               </TouchableOpacity>
             ) : null}
           </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Delete confirmation modal */}
+      <Modal
+        visible={!!deleteTarget}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setDeleteTarget(null)}
+      >
+        <TouchableOpacity
+          className="flex-1 bg-black/40 items-center justify-center px-8"
+          activeOpacity={1}
+          onPress={() => setDeleteTarget(null)}
+        >
+          <TouchableOpacity activeOpacity={1} className="w-full bg-white dark:bg-slate-800 rounded-2xl overflow-hidden">
+            <View className="px-5 pt-5 pb-4 items-center">
+              <Text className="text-lg font-bold text-slate-900 dark:text-white mb-1">Delete message?</Text>
+              <Text className="text-sm text-slate-500 dark:text-slate-400 text-center">
+                This message will be permanently removed.
+              </Text>
+            </View>
+            <View className="flex-row border-t border-slate-100 dark:border-slate-700">
+              <TouchableOpacity
+                onPress={() => setDeleteTarget(null)}
+                className="flex-1 py-3.5 items-center border-r border-slate-100 dark:border-slate-700"
+              >
+                <Text className="text-base font-medium text-slate-600 dark:text-slate-300">Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                testID="confirm-delete-button"
+                onPress={() => { if (deleteTarget) deleteMutation.mutate(deleteTarget.id); }}
+                disabled={deleteMutation.isPending}
+                className="flex-1 py-3.5 items-center"
+              >
+                {deleteMutation.isPending ? (
+                  <ActivityIndicator size="small" color="#EF4444" />
+                ) : (
+                  <Text className="text-base font-semibold text-red-500">Delete</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
 
