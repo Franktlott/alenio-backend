@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import {
   View,
   Text,
@@ -147,6 +147,7 @@ export default function CalendarScreen() {
 
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(new Date());
+  const [weekRowWidth, setWeekRowWidth] = useState(0);
   const [showEventModal, setShowEventModal] = useState(false);
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
 
@@ -308,6 +309,9 @@ export default function CalendarScreen() {
             return (
               <View
                 key={weekIndex}
+                onLayout={(e) => {
+                  if (weekRowWidth === 0) setWeekRowWidth(e.nativeEvent.layout.width);
+                }}
                 style={{
                   flexDirection: "column",
                   borderTopWidth: weekIndex === 0 ? 0 : 0.5,
@@ -392,13 +396,33 @@ export default function CalendarScreen() {
                             justifyContent: "center",
                             overflow: "hidden",
                           }}
+                        />
+                      );
+                    })}
+                    {/* Title overlays — one per bar, spanning full bar width */}
+                    {track.map((bar) => {
+                      if (weekRowWidth === 0) return null;
+                      const colWidth = weekRowWidth / 7;
+                      const left = bar.startCol * colWidth + 2; // +2 for marginLeft
+                      const width = (bar.endCol - bar.startCol + 1) * colWidth - 4; // -4 for margins
+                      return (
+                        <View
+                          key={`title-${bar.id}`}
+                          pointerEvents="none"
+                          style={{
+                            position: "absolute",
+                            left,
+                            width,
+                            top: 0,
+                            height: 14,
+                            justifyContent: "center",
+                            overflow: "hidden",
+                          }}
                         >
-                          {isBarStart ? (
-                            <Text style={{ color: "white", fontSize: 9, fontWeight: "600", paddingHorizontal: 4, lineHeight: 13 }} numberOfLines={1}>
-                              {bar.title}
-                            </Text>
-                          ) : null}
-                        </Pressable>
+                          <Text style={{ color: "white", fontSize: 9, fontWeight: "600", paddingHorizontal: 4, lineHeight: 13 }} numberOfLines={1}>
+                            {bar.title}
+                          </Text>
+                        </View>
                       );
                     })}
                   </View>
