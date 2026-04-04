@@ -129,7 +129,10 @@ teamsRouter.patch("/:teamId", async (c) => {
 
   const team = await prisma.team.update({
     where: { id: teamId },
-    data: { name: body.name?.trim() },
+    data: {
+      ...(body.name?.trim() ? { name: body.name.trim() } : {}),
+      ...(body.image !== undefined ? { image: body.image } : {}),
+    },
   });
 
   return c.json({ data: team });

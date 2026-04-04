@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -7,17 +7,27 @@ import {
   TouchableOpacity,
   Share,
   ActivityIndicator,
+  Modal,
+  TextInput,
+  Pressable,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
 } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Copy, UserPlus, MessageCircle } from "lucide-react-native";
+import { Copy, UserPlus, MessageCircle, Pencil, X, Camera } from "lucide-react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Clipboard from "expo-clipboard";
+import * as ImagePicker from "expo-image-picker";
 import { api } from "@/lib/api/api";
 import { useTeamStore } from "@/lib/state/team-store";
 import { useSession } from "@/lib/auth/use-session";
 import { router } from "expo-router";
+import { toast } from "burnt";
 import type { Team, TeamMember } from "@/lib/types";
+
+const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL!;
 
 function MemberRow({
   member,
@@ -37,15 +47,9 @@ function MemberRow({
     >
       <View className="w-10 h-10 rounded-full bg-indigo-600 items-center justify-center mr-3 overflow-hidden">
         {member.user.image ? (
-          <Image
-            source={{ uri: member.user.image }}
-            style={{ width: 40, height: 40 }}
-            resizeMode="cover"
-          />
+          <Image source={{ uri: member.user.image }} style={{ width: 40, height: 40 }} resizeMode="cover" />
         ) : (
-          <Text className="text-white font-bold text-sm">
-            {member.user.name?.[0]?.toUpperCase() ?? "?"}
-          </Text>
+          <Text className="text-white font-bold text-sm">{member.user.name?.[0]?.toUpperCase() ?? "?"}</Text>
         )}
       </View>
       <View className="flex-1">
@@ -55,21 +59,15 @@ function MemberRow({
         <Text className="text-slate-500 text-xs mb-1">{member.user.email}</Text>
         <View className="flex-row" style={{ gap: 6 }}>
           <View className="flex-row items-center bg-indigo-50 dark:bg-indigo-900/40 rounded-full px-2 py-0.5">
-            <Text className="text-indigo-600 dark:text-indigo-400 text-xs font-medium">
-              {stats?.activeTasks ?? 0} active
-            </Text>
+            <Text className="text-indigo-600 dark:text-indigo-400 text-xs font-medium">{stats?.activeTasks ?? 0} active</Text>
           </View>
           {(stats?.overdueTasks ?? 0) > 0 ? (
             <View className="flex-row items-center bg-red-50 dark:bg-red-900/40 rounded-full px-2 py-0.5">
-              <Text className="text-red-600 dark:text-red-400 text-xs font-medium">
-                {stats?.overdueTasks} overdue
-              </Text>
+              <Text className="text-red-600 dark:text-red-400 text-xs font-medium">{stats?.overdueTasks} overdue</Text>
             </View>
           ) : null}
           <View className="flex-row items-center bg-emerald-50 dark:bg-emerald-900/40 rounded-full px-2 py-0.5">
-            <Text className="text-emerald-600 dark:text-emerald-400 text-xs font-medium">
-              {stats?.onTimeCompletions ?? 0} on time
-            </Text>
+            <Text className="text-emerald-600 dark:text-emerald-400 text-xs font-medium">{stats?.onTimeCompletions ?? 0} on time</Text>
           </View>
         </View>
       </View>
@@ -83,20 +81,8 @@ function MemberRow({
           <MessageCircle size={16} color="#4361EE" />
         </TouchableOpacity>
       ) : null}
-      <View
-        className={`px-2 py-0.5 rounded-full ${
-          member.role === "owner"
-            ? "bg-amber-100"
-            : "bg-slate-100 dark:bg-slate-700"
-        }`}
-      >
-        <Text
-          className={`text-xs font-medium capitalize ${
-            member.role === "owner"
-              ? "text-amber-700"
-              : "text-slate-600 dark:text-slate-400"
-          }`}
-        >
+      <View className={`px-2 py-0.5 rounded-full ${member.role === "owner" ? "bg-amber-100" : "bg-slate-100 dark:bg-slate-700"}`}>
+        <Text className={`text-xs font-medium capitalize ${member.role === "owner" ? "text-amber-700" : "text-slate-600 dark:text-slate-400"}`}>
           {member.role}
         </Text>
       </View>
@@ -109,6 +95,11 @@ export default function TeamScreen() {
   const { data: session } = useSession();
   const queryClient = useQueryClient();
 
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editImage, setEditImage] = useState<string | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
+
   const { data: team, isLoading } = useQuery({
     queryKey: ["team", activeTeamId],
     queryFn: () => api.get<Team>(`/api/teams/${activeTeamId}`),
@@ -117,38 +108,84 @@ export default function TeamScreen() {
 
   const { data: memberStats } = useQuery({
     queryKey: ["member-stats", activeTeamId],
-    queryFn: () => api.get<Record<string, { activeTasks: number; overdueTasks: number; onTimeCompletions: number }>>(`/api/teams/${activeTeamId}/tasks/member-stats`),
+    queryFn: () =>
+      api.get<Record<string, { activeTasks: number; overdueTasks: number; onTimeCompletions: number }>>(
+        `/api/teams/${activeTeamId}/tasks/member-stats`
+      ),
     enabled: !!activeTeamId,
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: (data: { name?: string; image?: string | null }) =>
+      api.patch<Team>(`/api/teams/${activeTeamId}`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["team", activeTeamId] });
+      queryClient.invalidateQueries({ queryKey: ["teams"] });
+      setShowEditModal(false);
+      toast({ title: "Team updated", preset: "done" });
+    },
+    onError: () => toast({ title: "Failed to update team", preset: "error" }),
   });
 
   const dmMutation = useMutation({
     mutationFn: (recipientId: string) =>
-      api.post<{ id: string; recipient: { name: string } | null }>("/api/dms/find-or-create", {
-        recipientId,
-      }),
+      api.post<{ id: string; recipient: { name: string } | null }>("/api/dms/find-or-create", { recipientId }),
     onSuccess: (conv) => {
       queryClient.invalidateQueries({ queryKey: ["conversations"] });
-      router.push({
-        pathname: "/dm-chat",
-        params: {
-          conversationId: conv.id,
-          recipientName: conv.recipient?.name ?? "Direct Message",
-        },
-      });
+      router.push({ pathname: "/dm-chat", params: { conversationId: conv.id, recipientName: conv.recipient?.name ?? "Direct Message" } });
     },
   });
 
-  const handleCopyCode = async () => {
-    if (team?.inviteCode) {
-      await Clipboard.setStringAsync(team.inviteCode);
+  const currentMember = team?.members?.find((m) => m.userId === session?.user?.id);
+  const canEdit = currentMember?.role === "owner" || currentMember?.role === "admin";
+
+  const openEditModal = () => {
+    setEditName(team?.name ?? "");
+    setEditImage(team?.image ?? null);
+    setShowEditModal(true);
+  };
+
+  const pickTeamPhoto = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+    if (result.canceled || !result.assets[0]) return;
+    const asset = result.assets[0];
+    setUploadingImage(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", { uri: asset.uri, name: "team-photo.jpg", type: "image/jpeg" } as never);
+      const authClient = (await import("@/lib/auth/auth-client")).authClient;
+      const res = await fetch(`${BACKEND_URL}/api/upload`, {
+        method: "POST",
+        body: formData,
+        headers: { Cookie: authClient.getCookie() },
+        credentials: "include",
+      });
+      const data = await res.json();
+      setEditImage(data.url);
+    } catch {
+      toast({ title: "Failed to upload photo", preset: "error" });
+    } finally {
+      setUploadingImage(false);
     }
+  };
+
+  const handleSave = () => {
+    if (!editName.trim()) return;
+    updateMutation.mutate({ name: editName.trim(), image: editImage });
+  };
+
+  const handleCopyCode = async () => {
+    if (team?.inviteCode) await Clipboard.setStringAsync(team.inviteCode);
   };
 
   const handleShareCode = () => {
     if (team?.inviteCode) {
-      Share.share({
-        message: `Join my team "${team.name}" on Alenio! Use invite code: ${team.inviteCode}`,
-      });
+      Share.share({ message: `Join my team "${team.name}" on Alenio! Use invite code: ${team.inviteCode}` });
     }
   };
 
@@ -156,10 +193,7 @@ export default function TeamScreen() {
     return (
       <SafeAreaView className="flex-1 bg-slate-50 dark:bg-slate-900 items-center justify-center">
         <Text className="text-slate-500">No team selected</Text>
-        <TouchableOpacity
-          className="mt-4 bg-indigo-600 rounded-xl px-6 py-3"
-          onPress={() => router.push("/onboarding")}
-        >
+        <TouchableOpacity className="mt-4 bg-indigo-600 rounded-xl px-6 py-3" onPress={() => router.push("/onboarding")}>
           <Text className="text-white font-semibold">Create or join a team</Text>
         </TouchableOpacity>
       </SafeAreaView>
@@ -168,37 +202,46 @@ export default function TeamScreen() {
 
   if (isLoading) {
     return (
-      <SafeAreaView
-        className="flex-1 bg-slate-50 dark:bg-slate-900 items-center justify-center"
-        testID="loading-indicator"
-      >
+      <SafeAreaView className="flex-1 bg-slate-50 dark:bg-slate-900 items-center justify-center" testID="loading-indicator">
         <ActivityIndicator color="#4361EE" />
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView
-      className="flex-1 bg-slate-50 dark:bg-slate-900"
-      edges={["top"]}
-      testID="team-screen"
-    >
+    <SafeAreaView className="flex-1 bg-slate-50 dark:bg-slate-900" edges={["top"]} testID="team-screen">
       <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
-        <View className="px-4 pt-2 pb-4">
-          <Text className="text-white text-xl font-bold">{team?.name}</Text>
-          <Text className="text-white/70 text-sm">{team?.members?.length ?? 0} members</Text>
+        <View className="px-4 pt-2 pb-4 flex-row items-center" style={{ gap: 12 }}>
+          {/* Team photo */}
+          <View className="w-12 h-12 rounded-full bg-white/20 items-center justify-center overflow-hidden">
+            {team?.image ? (
+              <Image source={{ uri: team.image }} style={{ width: 48, height: 48 }} resizeMode="cover" />
+            ) : (
+              <Text className="text-white font-bold text-xl">{team?.name?.[0]?.toUpperCase() ?? "T"}</Text>
+            )}
+          </View>
+          <View className="flex-1">
+            <Text className="text-white text-xl font-bold">{team?.name}</Text>
+            <Text className="text-white/70 text-sm">{team?.members?.length ?? 0} members</Text>
+          </View>
+          {canEdit ? (
+            <TouchableOpacity
+              onPress={openEditModal}
+              className="w-9 h-9 rounded-full items-center justify-center"
+              style={{ backgroundColor: "rgba(255,255,255,0.2)" }}
+              testID="edit-team-button"
+            >
+              <Pencil size={16} color="white" />
+            </TouchableOpacity>
+          ) : null}
         </View>
       </LinearGradient>
 
       {/* Invite code card */}
-      <View className="mx-4 mb-4 rounded-2xl p-4" style={{ backgroundColor: "#4361EE15" }}>
-        <Text className="text-xs font-semibold text-indigo-600 uppercase tracking-wide mb-2">
-          Invite Code
-        </Text>
+      <View className="mx-4 mb-4 mt-4 rounded-2xl p-4" style={{ backgroundColor: "#4361EE15" }}>
+        <Text className="text-xs font-semibold text-indigo-600 uppercase tracking-wide mb-2">Invite Code</Text>
         <View className="flex-row items-center justify-between">
-          <Text className="text-2xl font-bold text-indigo-600 tracking-widest">
-            {team?.inviteCode}
-          </Text>
+          <Text className="text-2xl font-bold text-indigo-600 tracking-widest">{team?.inviteCode}</Text>
           <View className="flex-row" style={{ gap: 8 }}>
             <TouchableOpacity
               onPress={handleCopyCode}
@@ -217,15 +260,11 @@ export default function TeamScreen() {
             </TouchableOpacity>
           </View>
         </View>
-        <Text className="text-xs mt-1" style={{ color: "#4361EEb3" }}>
-          Share this code to invite team members
-        </Text>
+        <Text className="text-xs mt-1" style={{ color: "#4361EEb3" }}>Share this code to invite team members</Text>
       </View>
 
       {/* Members list */}
-      <Text className="px-4 text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
-        Members
-      </Text>
+      <Text className="px-4 text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Members</Text>
       <FlatList
         data={team?.members ?? []}
         keyExtractor={(item) => item.id}
@@ -240,6 +279,76 @@ export default function TeamScreen() {
         showsVerticalScrollIndicator={false}
         testID="members-list"
       />
+
+      {/* Edit team modal */}
+      <Modal visible={showEditModal} transparent animationType="slide" onRequestClose={() => setShowEditModal(false)}>
+        <Pressable className="flex-1 bg-black/40 justify-end" onPress={() => setShowEditModal(false)}>
+          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"}>
+            <Pressable onPress={(e) => e.stopPropagation()}>
+              <View className="bg-white dark:bg-slate-800 rounded-t-3xl px-4 pt-4 pb-10">
+                {/* Header */}
+                <View className="flex-row items-center justify-between mb-6">
+                  <Text className="text-lg font-bold text-slate-900 dark:text-white">Edit Team</Text>
+                  <TouchableOpacity onPress={() => setShowEditModal(false)} testID="close-edit-modal">
+                    <X size={20} color="#94A3B8" />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Team photo */}
+                <View className="items-center mb-6">
+                  <TouchableOpacity onPress={pickTeamPhoto} disabled={uploadingImage} testID="pick-team-photo">
+                    <View className="w-24 h-24 rounded-full bg-indigo-100 items-center justify-center overflow-hidden">
+                      {uploadingImage ? (
+                        <ActivityIndicator color="#4361EE" />
+                      ) : editImage ? (
+                        <Image source={{ uri: editImage }} style={{ width: 96, height: 96 }} resizeMode="cover" />
+                      ) : (
+                        <Text className="text-indigo-600 font-bold text-3xl">{editName?.[0]?.toUpperCase() ?? "T"}</Text>
+                      )}
+                    </View>
+                    <View
+                      className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-indigo-600 items-center justify-center"
+                      style={{ shadowColor: "#000", shadowOpacity: 0.15, shadowRadius: 4, shadowOffset: { width: 0, height: 2 } }}
+                    >
+                      <Camera size={14} color="white" />
+                    </View>
+                  </TouchableOpacity>
+                  <Text className="text-xs text-slate-400 mt-2">Tap to change photo</Text>
+                </View>
+
+                {/* Team name */}
+                <View className="mb-6">
+                  <Text className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Team Name</Text>
+                  <TextInput
+                    className="bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white rounded-xl px-4 py-3 text-base"
+                    value={editName}
+                    onChangeText={setEditName}
+                    placeholder="Enter team name"
+                    placeholderTextColor="#94A3B8"
+                    testID="team-name-input"
+                    returnKeyType="done"
+                  />
+                </View>
+
+                {/* Save button */}
+                <TouchableOpacity
+                  onPress={handleSave}
+                  disabled={updateMutation.isPending || !editName.trim()}
+                  className="rounded-2xl py-4 items-center"
+                  style={{ backgroundColor: editName.trim() ? "#4361EE" : "#CBD5E1" }}
+                  testID="save-team-button"
+                >
+                  {updateMutation.isPending ? (
+                    <ActivityIndicator color="white" />
+                  ) : (
+                    <Text className="text-white font-bold text-base">Save Changes</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </Pressable>
+          </KeyboardAvoidingView>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }

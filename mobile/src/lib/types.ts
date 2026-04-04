@@ -13,6 +13,7 @@ export interface User {
 export interface Team {
   id: string;
   name: string;
+  image?: string | null;
   inviteCode: string;
   role: TeamRole;
   createdAt: string;
