@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Copy, UserPlus, MessageCircle } from "lucide-react-native";
+import { Copy, UserPlus, MessageCircle, AlertCircle } from "lucide-react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Clipboard from "expo-clipboard";
@@ -119,6 +119,10 @@ export default function TeamScreen() {
     }
   };
 
+  const totalOverdue = memberStats
+    ? Object.values(memberStats).reduce((sum, s) => sum + s.overdueTasks, 0)
+    : 0;
+
   if (!activeTeamId) {
     return (
       <SafeAreaView className="flex-1 bg-slate-50 dark:bg-slate-900 items-center justify-center">
@@ -181,6 +185,16 @@ export default function TeamScreen() {
         </View>
         <Text className="text-xs mt-1" style={{ color: "#4361EEb3" }}>Share this code to invite team members</Text>
       </View>
+
+      {/* Overdue tasks pill */}
+      {totalOverdue > 0 ? (
+        <View className="mx-4 mb-3 flex-row items-center rounded-2xl px-4 py-3" style={{ backgroundColor: "#FEF2F2", gap: 10 }}>
+          <AlertCircle size={18} color="#EF4444" />
+          <Text className="flex-1 text-sm font-semibold text-red-600">
+            {totalOverdue} overdue {totalOverdue === 1 ? "task" : "tasks"} across the team
+          </Text>
+        </View>
+      ) : null}
 
       {/* Members list */}
       <Text className="px-4 text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Members</Text>
