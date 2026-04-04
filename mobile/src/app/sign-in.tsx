@@ -7,6 +7,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  Image,
 } from "react-native";
 import { router } from "expo-router";
 import { authClient } from "@/lib/auth/auth-client";
@@ -47,13 +48,12 @@ export default function SignIn() {
         <View className="flex-1 justify-center px-6">
           {/* Logo */}
           <View className="items-center mb-12">
-            <View className="w-16 h-16 rounded-2xl bg-primary items-center justify-center mb-4">
-              <Text className="text-white text-2xl font-bold">A</Text>
-            </View>
-            <Text className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
-              Alenio
-            </Text>
-            <Text className="text-slate-500 dark:text-slate-400 text-base mt-1">
+            <Image
+              source={require("@/assets/alenio-logo.png")}
+              style={{ width: 220, height: 80 }}
+              resizeMode="contain"
+            />
+            <Text className="text-slate-500 dark:text-slate-400 text-base mt-3">
               Team task management
             </Text>
           </View>

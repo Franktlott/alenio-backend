@@ -7,6 +7,7 @@ import {
   RefreshControl,
   ActivityIndicator,
   Pressable,
+  Image,
 } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import { router } from "expo-router";
@@ -182,9 +183,11 @@ export default function TasksScreen() {
         testID="no-teams-screen"
       >
         <View className="flex-1 items-center justify-center px-6">
-          <View className="w-16 h-16 rounded-2xl bg-primary items-center justify-center mb-4">
-            <Text className="text-white text-2xl font-bold">A</Text>
-          </View>
+          <Image
+            source={require("@/assets/alenio-logo.png")}
+            style={{ width: 180, height: 68, marginBottom: 16 }}
+            resizeMode="contain"
+          />
           <Text className="text-xl font-bold text-slate-900 dark:text-white mb-2 text-center">
             Welcome to Alenio
           </Text>

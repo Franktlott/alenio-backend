@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -75,6 +76,11 @@ export default function OnboardingScreen() {
         className="flex-1"
       >
         <View className="flex-1 px-6 justify-center">
+          <Image
+            source={require("@/assets/alenio-logo.png")}
+            style={{ width: 160, height: 60, marginBottom: 24 }}
+            resizeMode="contain"
+          />
           <Text className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
             Set up your team
           </Text>
