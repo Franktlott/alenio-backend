@@ -7,11 +7,12 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
+import { ArrowLeft } from "lucide-react-native";
 import { api } from "@/lib/api/api";
 import { useTeamStore } from "@/lib/state/team-store";
 import type { Team } from "@/lib/types";
@@ -69,25 +70,25 @@ export default function OnboardingScreen() {
   return (
     <SafeAreaView
       className="flex-1 bg-slate-50 dark:bg-slate-900"
+      edges={["top"]}
       testID="onboarding-screen"
     >
+      <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+        <View className="px-4 pt-2 pb-4 flex-row items-center">
+          <TouchableOpacity onPress={() => router.back()} className="mr-3">
+            <ArrowLeft size={22} color="white" />
+          </TouchableOpacity>
+          <View>
+            <Text className="text-white text-xl font-bold">Set up your team</Text>
+            <Text className="text-white/70 text-sm">Create or join a workspace</Text>
+          </View>
+        </View>
+      </LinearGradient>
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         className="flex-1"
       >
         <View className="flex-1 px-6 justify-center">
-          <Image
-            source={require("@/assets/alenio-logo.png")}
-            style={{ width: 160, height: 60, marginBottom: 24 }}
-            resizeMode="contain"
-          />
-          <Text className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
-            Set up your team
-          </Text>
-          <Text className="text-slate-500 mb-8">
-            Create a new team or join an existing one with an invite code
-          </Text>
-
           {/* Mode toggle */}
           <View className="flex-row bg-slate-200 dark:bg-slate-700 rounded-xl p-1 mb-6">
             {(["create", "join"] as const).map((m) => (

@@ -8,6 +8,7 @@ import {
   Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams } from "expo-router";
 import { ArrowLeft, Trash2, RefreshCw } from "lucide-react-native";
@@ -80,10 +81,20 @@ export default function TaskDetailScreen() {
   if (isLoading) {
     return (
       <SafeAreaView
-        className="flex-1 bg-white dark:bg-slate-900 items-center justify-center"
+        className="flex-1 bg-white dark:bg-slate-900"
+        edges={["top"]}
         testID="loading-indicator"
       >
-        <ActivityIndicator color="#4361EE" />
+        <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+          <View className="px-4 pt-2 pb-4 flex-row items-center">
+            <TouchableOpacity onPress={() => router.back()} testID="back-button">
+              <ArrowLeft size={22} color="white" />
+            </TouchableOpacity>
+          </View>
+        </LinearGradient>
+        <View className="flex-1 items-center justify-center">
+          <ActivityIndicator color="#4361EE" />
+        </View>
       </SafeAreaView>
     );
   }
@@ -99,25 +110,29 @@ export default function TaskDetailScreen() {
   return (
     <SafeAreaView
       className="flex-1 bg-white dark:bg-slate-900"
+      edges={["top"]}
       testID="task-detail-screen"
     >
       {/* Header */}
-      <View className="flex-row items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-800">
-        <TouchableOpacity onPress={() => router.back()} testID="back-button">
-          <ArrowLeft size={22} color="#64748B" />
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={handleDelete}
-          disabled={deleteMutation.isPending}
-          testID="delete-button"
-        >
-          {deleteMutation.isPending ? (
-            <ActivityIndicator size="small" color="#EF4444" />
-          ) : (
-            <Trash2 size={20} color="#EF4444" />
-          )}
-        </TouchableOpacity>
-      </View>
+      <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+        <View className="px-4 pt-2 pb-4 flex-row items-center justify-between">
+          <TouchableOpacity onPress={() => router.back()} testID="back-button">
+            <ArrowLeft size={22} color="white" />
+          </TouchableOpacity>
+          <Text className="text-white text-lg font-bold flex-1 ml-3" numberOfLines={1}>{task?.title ?? "Task"}</Text>
+          <TouchableOpacity
+            onPress={handleDelete}
+            disabled={deleteMutation.isPending}
+            testID="delete-button"
+          >
+            {deleteMutation.isPending ? (
+              <ActivityIndicator size="small" color="white" />
+            ) : (
+              <Trash2 size={20} color="white" />
+            )}
+          </TouchableOpacity>
+        </View>
+      </LinearGradient>
 
       <ScrollView className="flex-1 px-4" showsVerticalScrollIndicator={false}>
         {/* Priority indicator */}

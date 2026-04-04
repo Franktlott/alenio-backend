@@ -1,6 +1,7 @@
 import React from "react";
 import { View, Text, TouchableOpacity, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
 import { LogOut, ChevronRight, Users } from "lucide-react-native";
 import { authClient } from "@/lib/auth/auth-client";
 import { useInvalidateSession, useSession } from "@/lib/auth/use-session";
@@ -28,33 +29,23 @@ export default function ProfileScreen() {
   return (
     <SafeAreaView
       className="flex-1 bg-slate-50 dark:bg-slate-900"
+      edges={["top"]}
       testID="profile-screen"
     >
-      <View className="px-4 pt-2 pb-4">
-        <Text className="text-2xl font-bold text-slate-900 dark:text-white">
-          Profile
-        </Text>
-      </View>
-
-      {/* User card */}
-      <View className="mx-4 mb-6 bg-white dark:bg-slate-800 rounded-2xl p-4">
-        <View className="flex-row items-center">
-          <View className="w-14 h-14 rounded-full bg-indigo-600 items-center justify-center mr-4">
-            <Text className="text-white text-xl font-bold">
-              {user?.name?.[0]?.toUpperCase() ?? "?"}
-            </Text>
+      <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+        <View className="px-4 pt-2 pb-6 flex-row items-center">
+          <View className="w-14 h-14 rounded-full bg-white/20 items-center justify-center mr-4">
+            <Text className="text-white text-xl font-bold">{user?.name?.[0]?.toUpperCase() ?? "?"}</Text>
           </View>
           <View>
-            <Text className="text-lg font-bold text-slate-900 dark:text-white">
-              {user?.name}
-            </Text>
-            <Text className="text-slate-500 text-sm">{user?.email}</Text>
+            <Text className="text-white text-xl font-bold">{user?.name}</Text>
+            <Text className="text-white/70 text-sm">{user?.email}</Text>
           </View>
         </View>
-      </View>
+      </LinearGradient>
 
       {/* Actions */}
-      <View className="mx-4 bg-white dark:bg-slate-800 rounded-2xl overflow-hidden mb-4">
+      <View className="mx-4 mt-6 bg-white dark:bg-slate-800 rounded-2xl overflow-hidden mb-4">
         <TouchableOpacity
           className="flex-row items-center px-4 py-4 border-b border-slate-100 dark:border-slate-700"
           onPress={() => router.push("/onboarding")}

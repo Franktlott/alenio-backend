@@ -11,6 +11,7 @@ import {
   Switch,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams } from "expo-router";
 import { X } from "lucide-react-native";
@@ -101,25 +102,25 @@ export default function CreateTaskScreen() {
         className="flex-1"
       >
         {/* Header */}
-        <View className="flex-row items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-800">
-          <TouchableOpacity onPress={() => router.back()} testID="close-button">
-            <X size={22} color="#64748B" />
-          </TouchableOpacity>
-          <Text className="text-base font-semibold text-slate-900 dark:text-white">
-            New Task
-          </Text>
-          <TouchableOpacity
-            onPress={handleCreate}
-            disabled={createMutation.isPending}
-            testID="create-button"
-          >
-            {createMutation.isPending ? (
-              <ActivityIndicator size="small" color="#4361EE" />
-            ) : (
-              <Text className="text-indigo-600 font-semibold text-base">Create</Text>
-            )}
-          </TouchableOpacity>
-        </View>
+        <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+          <View className="px-4 pt-3 pb-4 flex-row items-center justify-between">
+            <TouchableOpacity onPress={() => router.back()} testID="close-button">
+              <X size={22} color="white" />
+            </TouchableOpacity>
+            <Text className="text-white text-lg font-bold">New Task</Text>
+            <TouchableOpacity
+              onPress={handleCreate}
+              disabled={createMutation.isPending}
+              testID="create-button"
+            >
+              {createMutation.isPending ? (
+                <ActivityIndicator color="white" size="small" />
+              ) : (
+                <Text className="text-white font-semibold text-base">Create</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </LinearGradient>
 
         <ScrollView className="flex-1 px-4" showsVerticalScrollIndicator={false}>
           {/* Title */}

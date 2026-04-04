@@ -10,6 +10,7 @@ import {
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Copy, UserPlus, MessageCircle } from "lucide-react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
 import * as Clipboard from "expo-clipboard";
 import { api } from "@/lib/api/api";
 import { useTeamStore } from "@/lib/state/team-store";
@@ -143,16 +144,15 @@ export default function TeamScreen() {
   return (
     <SafeAreaView
       className="flex-1 bg-slate-50 dark:bg-slate-900"
+      edges={["top"]}
       testID="team-screen"
     >
-      <View className="px-4 pt-2 pb-4">
-        <Text className="text-2xl font-bold text-slate-900 dark:text-white">
-          {team?.name}
-        </Text>
-        <Text className="text-slate-500 text-sm">
-          {team?.members?.length ?? 0} members
-        </Text>
-      </View>
+      <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+        <View className="px-4 pt-2 pb-4">
+          <Text className="text-white text-xl font-bold">{team?.name}</Text>
+          <Text className="text-white/70 text-sm">{team?.members?.length ?? 0} members</Text>
+        </View>
+      </LinearGradient>
 
       {/* Invite code card */}
       <View className="mx-4 mb-4 rounded-2xl p-4" style={{ backgroundColor: "#4361EE15" }}>

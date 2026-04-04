@@ -12,6 +12,7 @@ import {
 import { router } from "expo-router";
 import { authClient } from "@/lib/auth/auth-client";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
 import { StatusBar } from "expo-status-bar";
 
 export default function SignIn() {
@@ -39,25 +40,28 @@ export default function SignIn() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-slate-50 dark:bg-slate-900">
-      <StatusBar style="dark" />
+    <SafeAreaView className="flex-1 bg-white dark:bg-slate-900" edges={["top"]}>
+      <StatusBar style="light" />
+      {/* Gradient top area with logo */}
+      <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+        <View className="items-center py-10 px-6">
+          <View className="bg-white rounded-2xl p-4 mb-4">
+            <Image
+              source={require("@/assets/alenio-logo.png")}
+              style={{ width: 180, height: 65 }}
+              resizeMode="contain"
+            />
+          </View>
+          <Text className="text-white/80 text-base mt-2">Team task management</Text>
+        </View>
+      </LinearGradient>
+
+      {/* Form area */}
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         className="flex-1"
       >
-        <View className="flex-1 justify-center px-6">
-          {/* Logo */}
-          <View className="items-center mb-12">
-            <Image
-              source={require("@/assets/alenio-logo.png")}
-              style={{ width: 220, height: 80 }}
-              resizeMode="contain"
-            />
-            <Text className="text-slate-500 dark:text-slate-400 text-base mt-3">
-              Team task management
-            </Text>
-          </View>
-
+        <View className="flex-1 px-6 pt-8">
           {/* Form */}
           <View>
             <Text className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
