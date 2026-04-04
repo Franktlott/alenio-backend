@@ -16,10 +16,10 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams } from "expo-router";
-import { X } from "lucide-react-native";
+import { X, BookOpen, Check as CheckIcon } from "lucide-react-native";
 import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
-import type { Task, TaskPriority, RecurrenceType, Team, TeamMember } from "@/lib/types";
+import type { Task, TaskPriority, RecurrenceType, Team, TeamMember, TaskTemplate } from "@/lib/types";
 
 const PRIORITIES: { label: string; value: TaskPriority; color: string }[] = [
   { label: "Low", value: "low", color: "#94A3B8" },
@@ -49,7 +49,9 @@ export default function CreateTaskScreen() {
   const [selectedDayOfWeek, setSelectedDayOfWeek] = useState<number | null>(null);
   const [selectedDayOfMonth, setSelectedDayOfMonth] = useState<number | null>(null);
   const [dueDate, setDueDate] = useState<Date | null>(null);
-  const [showDatePicker, setShowDatePicker] = useState(false);  const [error, setError] = useState<string | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTemplatePicker, setShowTemplatePicker] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const { data: team } = useQuery({
     queryKey: ["team", teamId],
@@ -58,6 +60,19 @@ export default function CreateTaskScreen() {
   });
 
   const members = team?.members ?? [];
+
+  const { data: templates = [] } = useQuery({
+    queryKey: ["templates", teamId],
+    queryFn: () => api.get<TaskTemplate[]>(`/api/teams/${teamId}/templates`),
+    enabled: !!teamId,
+  });
+
+  const applyTemplate = (t: TaskTemplate) => {
+    setTitle(t.title);
+    setDescription(t.description ?? "");
+    setPriority(t.priority);
+    setShowTemplatePicker(false);
+  };
 
   const createMutation = useMutation({
     mutationFn: (input: unknown) =>
@@ -126,17 +141,24 @@ export default function CreateTaskScreen() {
               <X size={22} color="white" />
             </TouchableOpacity>
             <Text className="text-white text-lg font-bold">New Task</Text>
-            <TouchableOpacity
-              onPress={handleCreate}
-              disabled={createMutation.isPending}
-              testID="create-button"
-            >
-              {createMutation.isPending ? (
-                <ActivityIndicator color="white" size="small" />
-              ) : (
-                <Text className="text-white font-semibold text-base">Create</Text>
-              )}
-            </TouchableOpacity>
+            <View className="flex-row items-center" style={{ gap: 14 }}>
+              {templates.length > 0 ? (
+                <TouchableOpacity onPress={() => setShowTemplatePicker(true)} testID="use-template-button">
+                  <BookOpen size={20} color="white" />
+                </TouchableOpacity>
+              ) : null}
+              <TouchableOpacity
+                onPress={handleCreate}
+                disabled={createMutation.isPending}
+                testID="create-button"
+              >
+                {createMutation.isPending ? (
+                  <ActivityIndicator color="white" size="small" />
+                ) : (
+                  <Text className="text-white font-semibold text-base">Create</Text>
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
         </LinearGradient>
 
@@ -441,6 +463,44 @@ export default function CreateTaskScreen() {
           <View style={{ height: 32 }} />
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Template picker modal */}
+      <Modal visible={showTemplatePicker} transparent animationType="slide" onRequestClose={() => setShowTemplatePicker(false)}>
+        <TouchableOpacity className="flex-1 bg-black/40 justify-end" activeOpacity={1} onPress={() => setShowTemplatePicker(false)}>
+          <TouchableOpacity activeOpacity={1} className="bg-white dark:bg-slate-800 rounded-t-3xl px-4 pt-4 pb-10">
+            <View className="flex-row items-center justify-between mb-4">
+              <Text className="text-base font-bold text-slate-900 dark:text-white">Use Template</Text>
+              <TouchableOpacity onPress={() => setShowTemplatePicker(false)}>
+                <X size={20} color="#94A3B8" />
+              </TouchableOpacity>
+            </View>
+            {templates.length === 0 ? (
+              <Text className="text-sm text-slate-400 text-center py-6">No templates saved yet</Text>
+            ) : (
+              <View style={{ gap: 8 }}>
+                {templates.map((t) => (
+                  <TouchableOpacity
+                    key={t.id}
+                    onPress={() => applyTemplate(t)}
+                    className="flex-row items-center p-3 rounded-xl border border-slate-100 dark:border-slate-700"
+                    testID={`template-${t.id}`}
+                  >
+                    <View className="flex-1">
+                      <Text className="font-semibold text-slate-900 dark:text-white" numberOfLines={1}>{t.title}</Text>
+                      {t.description ? (
+                        <Text className="text-xs text-slate-400 mt-0.5" numberOfLines={1}>{t.description}</Text>
+                      ) : null}
+                    </View>
+                    <View className="ml-2 px-2 py-0.5 rounded-full" style={{ backgroundColor: "#4361EE20" }}>
+                      <Text className="text-xs font-semibold text-indigo-600 capitalize">{t.priority}</Text>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 }

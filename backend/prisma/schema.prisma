@@ -25,6 +25,7 @@ model User {
   directMessages DirectMessage[]
   messageReactions MessageReaction[]
   directMessageReactions DirectMessageReaction[]
+  templatesCreated TaskTemplate[] @relation("TemplateCreator")
 }
 
 model Session {
@@ -74,6 +75,7 @@ model Team {
   members     TeamMember[]
   tasks       Task[]
   messages    Message[]
+  templates   TaskTemplate[]
 }
 
 model TeamMember {
@@ -128,6 +130,18 @@ model RecurrenceRule {
   daysOfWeek String?
   dayOfMonth Int?
   nextDueAt  DateTime?
+}
+
+model TaskTemplate {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  priority    String   @default("medium")
+  teamId      String
+  team        Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  createdById String
+  createdBy   User     @relation("TemplateCreator", fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
 }
 
 model Message {

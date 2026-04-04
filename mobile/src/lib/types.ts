@@ -107,6 +107,16 @@ export interface Conversation {
   } | null;
 }
 
+export interface TaskTemplate {
+  id: string;
+  title: string;
+  description?: string | null;
+  priority: TaskPriority;
+  teamId: string;
+  createdById: string;
+  createdAt: string;
+}
+
 export interface CreateTaskInput {
   title: string;
   description?: string;

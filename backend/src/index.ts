@@ -11,6 +11,7 @@ import { tasksRouter } from "./routes/tasks";
 import { myTasksRouter } from "./routes/my-tasks";
 import { messagesRouter } from "./routes/messages";
 import { dmsRouter } from "./routes/dms";
+import { templatesRouter } from "./routes/templates";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -144,6 +145,7 @@ app.route("/api/teams/:teamId/tasks", tasksRouter);
 app.route("/api/tasks/mine", myTasksRouter);
 app.route("/api/teams/:teamId/messages", messagesRouter);
 app.route("/api/dms", dmsRouter);
+app.route("/api/teams/:teamId/templates", templatesRouter);
 
 const port = Number(process.env.PORT) || 3000;
 
