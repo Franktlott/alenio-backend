@@ -160,9 +160,11 @@ export default function ChatScreen() {
                   elevation: 1,
                 }}
               >
-                <View className="w-12 h-12 rounded-full bg-indigo-500 items-center justify-center mr-3">
+                <View className="w-12 h-12 rounded-full bg-indigo-500 items-center justify-center mr-3 overflow-hidden">
                   {conv.isGroup ? (
                     <Users size={22} color="white" />
+                  ) : conv.recipient?.image ? (
+                    <Image source={{ uri: conv.recipient.image }} style={{ width: 48, height: 48 }} resizeMode="cover" />
                   ) : (
                     <Text className="text-white font-bold text-lg">
                       {conv.recipient?.name?.[0]?.toUpperCase() ?? "?"}
