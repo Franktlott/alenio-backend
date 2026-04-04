@@ -8,7 +8,8 @@
     "ios": "expo start --ios",
     "web": "DARK_MODE=class expo start --web",
     "lint": "expo lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "postinstall": "node -e \"const fs=require('fs');const f='node_modules/@better-auth/expo/dist/client.js';let c=fs.readFileSync(f,'utf8');c=c.replace('import(\\\"expo-network\\\")','Promise.resolve(__require(\\\"expo-network\\\"))');fs.writeFileSync(f,c);\""
   },
   "dependencies": {
     "@babel/plugin-proposal-export-namespace-from": "^7.18.9",
