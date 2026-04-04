@@ -120,6 +120,35 @@ app.post("/api/push-token", async (c) => {
   await prisma.user.update({ where: { id: user.id }, data: { pushToken: token } });
   return c.json({ data: { ok: true } });
 });
+// Get notification preferences
+app.get("/api/notification-preferences", async (c) => {
+  const user = c.get("user");
+  if (!user) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
+  const prefs = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { notifMessages: true, notifTaskAssigned: true, notifTaskDue: true },
+  });
+  return c.json({ data: prefs });
+});
+
+// Update notification preferences
+app.patch("/api/notification-preferences", async (c) => {
+  const user = c.get("user");
+  if (!user) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
+  const body = await c.req.json();
+  const { notifMessages, notifTaskAssigned, notifTaskDue } = body;
+  const updated = await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      ...(notifMessages !== undefined ? { notifMessages } : {}),
+      ...(notifTaskAssigned !== undefined ? { notifTaskAssigned } : {}),
+      ...(notifTaskDue !== undefined ? { notifTaskDue } : {}),
+    },
+    select: { notifMessages: true, notifTaskAssigned: true, notifTaskDue: true },
+  });
+  return c.json({ data: updated });
+});
+
 app.get("/api/users/search", async (c) => {
   const user = c.get("user");
   if (!user) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);

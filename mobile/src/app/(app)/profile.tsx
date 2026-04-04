@@ -12,10 +12,11 @@ import {
   Pressable,
   Modal,
   KeyboardAvoidingView,
+  Switch,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { ArrowLeft, Camera, LogOut, Pencil, Check, X, ChevronRight, Plus, Trash2 } from "lucide-react-native";
+import { ArrowLeft, Camera, LogOut, Pencil, Check, X, ChevronRight, Plus, Trash2, Bell } from "lucide-react-native";
 import { authClient } from "@/lib/auth/auth-client";
 import { useInvalidateSession, useSession } from "@/lib/auth/use-session";
 import { router } from "expo-router";
@@ -54,6 +55,27 @@ export default function ProfileScreen() {
     queryKey: ["teams"],
     queryFn: () => api.get<Team[]>("/api/teams"),
     enabled: !!user,
+  });
+
+  type NotifPrefs = { notifMessages: boolean; notifTaskAssigned: boolean; notifTaskDue: boolean };
+
+  const { data: notifPrefs } = useQuery({
+    queryKey: ["notification-preferences"],
+    queryFn: () => api.get<NotifPrefs>("/api/notification-preferences"),
+    enabled: !!user,
+  });
+
+  const notifMutation = useMutation({
+    mutationFn: (patch: Partial<NotifPrefs>) => api.patch<NotifPrefs>("/api/notification-preferences", patch),
+    onMutate: async (patch) => {
+      await queryClient.cancelQueries({ queryKey: ["notification-preferences"] });
+      const prev = queryClient.getQueryData<NotifPrefs>(["notification-preferences"]);
+      queryClient.setQueryData<NotifPrefs>(["notification-preferences"], (old) => old ? { ...old, ...patch } : old);
+      return { prev };
+    },
+    onError: (_err, _patch, ctx) => {
+      if (ctx?.prev) queryClient.setQueryData(["notification-preferences"], ctx.prev);
+    },
   });
 
   // ── Profile mutations ──────────────────────────────────────────
@@ -336,6 +358,40 @@ export default function ProfileScreen() {
                 );
               })
             )}
+          </View>
+        </View>
+
+        {/* Notifications */}
+        <View className="mx-4 mt-5">
+          <View className="flex-row items-center mb-3" style={{ gap: 6 }}>
+            <Bell size={13} color="#94A3B8" />
+            <Text className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Notifications</Text>
+          </View>
+          <View className="bg-white dark:bg-slate-800 rounded-2xl overflow-hidden"
+            style={{ shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 2 }}>
+            {[
+              { key: "notifMessages" as const, label: "New messages", description: "Team and direct messages" },
+              { key: "notifTaskAssigned" as const, label: "Task assigned", description: "When a task is assigned to you" },
+              { key: "notifTaskDue" as const, label: "Task due reminders", description: "Reminders for upcoming due dates" },
+            ].map((item, index, arr) => (
+              <View
+                key={item.key}
+                className="flex-row items-center px-4 py-3.5"
+                style={index < arr.length - 1 ? { borderBottomWidth: 1, borderBottomColor: "#F1F5F9" } : undefined}
+              >
+                <View className="flex-1">
+                  <Text className="text-sm font-semibold text-slate-900 dark:text-white">{item.label}</Text>
+                  <Text className="text-xs text-slate-400 mt-0.5">{item.description}</Text>
+                </View>
+                <Switch
+                  value={notifPrefs?.[item.key] ?? true}
+                  onValueChange={(val) => notifMutation.mutate({ [item.key]: val })}
+                  trackColor={{ false: "#E2E8F0", true: "#6B8EF6" }}
+                  thumbColor="white"
+                  testID={`notif-toggle-${item.key}`}
+                />
+              </View>
+            ))}
           </View>
         </View>
 

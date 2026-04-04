@@ -27,6 +27,9 @@ model User {
   directMessageReactions DirectMessageReaction[]
   templatesCreated TaskTemplate[] @relation("TemplateCreator")
   pushToken     String?
+  notifMessages     Boolean @default(true)
+  notifTaskAssigned Boolean @default(true)
+  notifTaskDue      Boolean @default(true)
 }
 
 model Session {

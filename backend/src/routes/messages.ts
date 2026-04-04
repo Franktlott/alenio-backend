@@ -84,7 +84,7 @@ messagesRouter.post("/", async (c) => {
   });
   const memberIds = members.map((m: any) => m.userId);
   const senderName = user.name ?? "Someone";
-  await sendPushToUsers(prisma, memberIds, senderName, content?.trim() || "Sent a photo", { teamId });
+  await sendPushToUsers(memberIds, senderName, content?.trim() || "Sent a photo", { teamId }, "notifMessages");
 
   return c.json({ data: message }, 201);
 });

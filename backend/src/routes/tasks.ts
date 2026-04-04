@@ -353,7 +353,7 @@ tasksRouter.post("/:taskId/assign", async (c) => {
   const assignedUserIds = (userIds as string[]).filter((id) => id !== user.id);
   if (assignedUserIds.length > 0) {
     const taskForNotif = await prisma.task.findFirst({ where: { id: taskId }, select: { title: true } });
-    await sendPushToUsers(prisma, assignedUserIds, "New task assigned", taskForNotif?.title ?? "You have a new task", { taskId, teamId });
+    await sendPushToUsers(assignedUserIds, "New task assigned", taskForNotif?.title ?? "You have a new task", { taskId, teamId }, "notifTaskAssigned");
   }
 
   return c.json({ data: updated });
