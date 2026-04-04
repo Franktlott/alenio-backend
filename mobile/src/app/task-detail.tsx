@@ -124,6 +124,8 @@ export default function TaskDetailScreen() {
   const assignedIds = new Set((task?.assignments ?? []).map((a) => a.userId));
   const isSelfAssigned = !!currentUserId && assignedIds.has(currentUserId);
   const isCreator = !!currentUserId && task?.creator?.id === currentUserId;
+  const isCompleted = task?.status === "done";
+  const isEditable = isCreator && !isCompleted;
 
   const handleToggleMember = (userId: string) => {
     if (assignedIds.has(userId)) {
@@ -204,6 +206,29 @@ export default function TaskDetailScreen() {
           <Text className="text-base text-slate-600 dark:text-slate-400 mb-4 leading-relaxed">{task.description}</Text>
         ) : null}
 
+        {/* Completed banner */}
+        {isCompleted ? (
+          <View className="flex-row items-center bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl px-4 py-3 mb-4" style={{ gap: 8 }}>
+            <Text style={{ fontSize: 16 }}>🔒</Text>
+            <Text className="flex-1 text-sm text-emerald-700 dark:text-emerald-400">
+              Task is completed. Recall it to make edits.
+            </Text>
+            {isCreator ? (
+              <TouchableOpacity
+                onPress={() => updateMutation.mutate({ status: "todo" })}
+                disabled={updateMutation.isPending}
+                className="px-3 py-1 rounded-full bg-emerald-600"
+              >
+                {updateMutation.isPending ? (
+                  <ActivityIndicator size="small" color="white" />
+                ) : (
+                  <Text className="text-xs font-semibold text-white">Recall</Text>
+                )}
+              </TouchableOpacity>
+            ) : null}
+          </View>
+        ) : null}
+
         {/* Status */}
         <View className="mb-4">
           <Text className="text-sm font-semibold text-slate-500 mb-2">Status</Text>
@@ -213,8 +238,8 @@ export default function TaskDetailScreen() {
               return (
                 <TouchableOpacity
                   key={s.value}
-                  onPress={() => isCreator && updateMutation.mutate({ status: s.value })}
-                  disabled={!isCreator || updateMutation.isPending}
+                  onPress={() => isEditable && updateMutation.mutate({ status: s.value })}
+                  disabled={!isEditable || updateMutation.isPending}
                   className="px-3 py-1.5 rounded-full border"
                   style={isActive ? { backgroundColor: s.color + "20", borderColor: s.color } : { borderColor: "#E2E8F0" }}
                   testID={`status-${s.value}`}
@@ -246,7 +271,7 @@ export default function TaskDetailScreen() {
                     <View key={subtask.id} className="flex-row items-center py-1" style={{ gap: 8 }}>
                       <TouchableOpacity
                         onPress={() => toggleSubtaskMutation.mutate({ subtaskId: subtask.id, completed: !subtask.completed })}
-                        disabled={toggleSubtaskMutation.isPending}
+                        disabled={!isEditable || toggleSubtaskMutation.isPending}
                         testID={`subtask-toggle-${subtask.id}`}
                       >
                         {subtask.completed ? (
@@ -263,7 +288,7 @@ export default function TaskDetailScreen() {
                       </Text>
                       <TouchableOpacity
                         onPress={() => deleteSubtaskMutation.mutate(subtask.id)}
-                        disabled={deleteSubtaskMutation.isPending}
+                        disabled={!isEditable || deleteSubtaskMutation.isPending}
                         className="w-6 h-6 rounded-full items-center justify-center bg-slate-100 dark:bg-slate-700"
                         testID={`subtask-delete-${subtask.id}`}
                       >
@@ -284,10 +309,10 @@ export default function TaskDetailScreen() {
                     if (newSubtaskTitle.trim()) createSubtaskMutation.mutate(newSubtaskTitle.trim());
                   }}
                   returnKeyType="done"
-                  editable={isCreator}
+                  editable={isEditable}
                   testID="new-subtask-input"
                 />
-                {isCreator ? (
+                {isEditable ? (
                   <TouchableOpacity
                     onPress={() => {
                       if (newSubtaskTitle.trim()) createSubtaskMutation.mutate(newSubtaskTitle.trim());
@@ -315,7 +340,7 @@ export default function TaskDetailScreen() {
               <TouchableOpacity
                 testID="assign-to-me-button"
                 onPress={() => currentUserId && handleToggleMember(currentUserId)}
-                disabled={!currentUserId || assignMutation.isPending || unassignMutation.isPending}
+                disabled={!currentUserId || !isEditable || assignMutation.isPending || unassignMutation.isPending}
                 className={`flex-row items-center px-3 py-1 rounded-full ${isSelfAssigned ? "bg-red-50 dark:bg-red-900/30" : "bg-indigo-50 dark:bg-indigo-900/40"}`}
                 style={{ gap: 4 }}
               >
@@ -336,6 +361,7 @@ export default function TaskDetailScreen() {
               <TouchableOpacity
                 testID="manage-assignees-button"
                 onPress={() => setShowAssignModal(true)}
+                disabled={!isEditable}
                 className="flex-row items-center px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-700"
                 style={{ gap: 4 }}
               >
