@@ -21,7 +21,7 @@ import { useSession } from "@/lib/auth/use-session";
 import { uploadFile } from "@/lib/upload";
 import { pickMedia } from "@/lib/file-picker";
 import { ChatMessage } from "@/components/ChatMessage";
-import type { DirectMessage } from "@/lib/types";
+import type { DirectMessage, MessageReaction } from "@/lib/types";
 import * as Clipboard from "expo-clipboard";
 import ReanimatedSwipeable from "react-native-gesture-handler/ReanimatedSwipeable";
 import Reanimated, { useAnimatedStyle, interpolate } from "react-native-reanimated";
@@ -88,7 +88,7 @@ export default function DMChatScreen() {
   const [input, setInput] = useState("");
   const [replyTo, setReplyTo] = useState<DirectMessage | null>(null);
   const [emojiTarget, setEmojiTarget] = useState<DirectMessage | null>(null);
-  const [reactionView, setReactionView] = useState<{ emoji: string; reactors: { id: string; name: string }[] } | null>(null);
+  const [reactionView, setReactionView] = useState<MessageReaction[] | null>(null);
   const [mediaPreview, setMediaPreview] = useState<{ uri: string; mimeType: string; filename: string } | null>(null);
   const [uploading, setUploading] = useState(false);
   const flatListRef = useRef<FlatList>(null);
@@ -234,15 +234,15 @@ export default function DMChatScreen() {
           <TouchableOpacity activeOpacity={1} onPress={() => {}}>
             <View style={{ backgroundColor: "white", marginHorizontal: 12, marginBottom: 32, borderRadius: 16, overflow: "hidden" }}>
               <View style={{ paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 0.5, borderBottomColor: "#E2E8F0", alignItems: "center" }}>
-                <Text style={{ fontSize: 28 }}>{reactionView?.emoji}</Text>
-                <Text style={{ fontSize: 13, color: "#64748B", marginTop: 2 }}>{reactionView?.reactors.length} {reactionView?.reactors.length === 1 ? "person" : "people"} reacted</Text>
+                <Text style={{ fontSize: 15, fontWeight: "600", color: "#1E293B" }}>Reactions</Text>
               </View>
-              {reactionView?.reactors.map((r) => (
+              {reactionView?.map((r) => (
                 <View key={r.id} style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 0.5, borderBottomColor: "#F1F5F9" }}>
-                  <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: "#4361EE", alignItems: "center", justifyContent: "center", marginRight: 12 }}>
-                    <Text style={{ color: "white", fontWeight: "700", fontSize: 13 }}>{r.name?.[0]?.toUpperCase() ?? "?"}</Text>
+                  <Text style={{ fontSize: 22, marginRight: 14 }}>{r.emoji}</Text>
+                  <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: "#4361EE", alignItems: "center", justifyContent: "center", marginRight: 10 }}>
+                    <Text style={{ color: "white", fontWeight: "700", fontSize: 13 }}>{r.user.name?.[0]?.toUpperCase() ?? "?"}</Text>
                   </View>
-                  <Text style={{ fontSize: 15, color: "#1E293B", fontWeight: "500" }}>{r.name}</Text>
+                  <Text style={{ fontSize: 15, color: "#1E293B", fontWeight: "500" }}>{r.user.name}</Text>
                 </View>
               ))}
             </View>
@@ -402,7 +402,7 @@ export default function DMChatScreen() {
                     isOwn={isOwn}
                     currentUserId={currentUserId}
                     onLongPress={() => handleLongPress(msg)}
-                    onReactionTap={(emoji, reactors) => setReactionView({ emoji, reactors })}
+                    onReactionTap={(reactions) => setReactionView(reactions)}
                   />
                 </ReanimatedSwipeable>
               );

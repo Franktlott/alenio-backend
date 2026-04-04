@@ -24,7 +24,7 @@ interface ChatMessageProps {
   isOwn: boolean;
   currentUserId: string;
   onLongPress: () => void;
-  onReactionTap: (emoji: string, reactors: { id: string; name: string }[]) => void;
+  onReactionTap: (reactions: MessageReaction[]) => void;
 }
 
 function groupReactions(reactions: MessageReaction[]) {
@@ -146,7 +146,7 @@ export function ChatMessage({
               {grouped.map(({ emoji, count, userIds, users }) => (
                 <TouchableOpacity
                   key={emoji}
-                  onPress={() => onReactionTap(emoji, users)}
+                  onPress={() => onReactionTap(reactions)}
                   className={`flex-row items-center px-2 py-0.5 rounded-full border ${
                     userIds.includes(currentUserId)
                       ? "bg-indigo-100 border-indigo-300"
