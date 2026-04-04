@@ -23,10 +23,12 @@ function MemberRow({
   member,
   isCurrentUser,
   onMessage,
+  stats,
 }: {
   member: TeamMember;
   isCurrentUser: boolean;
   onMessage: () => void;
+  stats?: { activeTasks: number; overdueTasks: number; onTimeCompletions: number };
 }) {
   return (
     <View
@@ -50,7 +52,26 @@ function MemberRow({
         <Text className="text-slate-900 dark:text-white font-semibold">
           {member.user.name} {isCurrentUser ? "(you)" : ""}
         </Text>
-        <Text className="text-slate-500 text-xs">{member.user.email}</Text>
+        <Text className="text-slate-500 text-xs mb-1">{member.user.email}</Text>
+        <View className="flex-row" style={{ gap: 6 }}>
+          <View className="flex-row items-center bg-indigo-50 dark:bg-indigo-900/40 rounded-full px-2 py-0.5">
+            <Text className="text-indigo-600 dark:text-indigo-400 text-xs font-medium">
+              {stats?.activeTasks ?? 0} active
+            </Text>
+          </View>
+          {(stats?.overdueTasks ?? 0) > 0 ? (
+            <View className="flex-row items-center bg-red-50 dark:bg-red-900/40 rounded-full px-2 py-0.5">
+              <Text className="text-red-600 dark:text-red-400 text-xs font-medium">
+                {stats?.overdueTasks} overdue
+              </Text>
+            </View>
+          ) : null}
+          <View className="flex-row items-center bg-emerald-50 dark:bg-emerald-900/40 rounded-full px-2 py-0.5">
+            <Text className="text-emerald-600 dark:text-emerald-400 text-xs font-medium">
+              {stats?.onTimeCompletions ?? 0} on time
+            </Text>
+          </View>
+        </View>
       </View>
       {!isCurrentUser ? (
         <TouchableOpacity
@@ -91,6 +112,12 @@ export default function TeamScreen() {
   const { data: team, isLoading } = useQuery({
     queryKey: ["team", activeTeamId],
     queryFn: () => api.get<Team>(`/api/teams/${activeTeamId}`),
+    enabled: !!activeTeamId,
+  });
+
+  const { data: memberStats } = useQuery({
+    queryKey: ["member-stats", activeTeamId],
+    queryFn: () => api.get<Record<string, { activeTasks: number; overdueTasks: number; onTimeCompletions: number }>>(`/api/teams/${activeTeamId}/tasks/member-stats`),
     enabled: !!activeTeamId,
   });
 
@@ -207,6 +234,7 @@ export default function TeamScreen() {
             member={item}
             isCurrentUser={item.userId === session?.user?.id}
             onMessage={() => dmMutation.mutate(item.userId)}
+            stats={memberStats?.[item.userId]}
           />
         )}
         showsVerticalScrollIndicator={false}
