@@ -12,7 +12,13 @@ const tasksRouter = new Hono<{ Variables: Variables }>();
 tasksRouter.use("*", authGuard);
 
 // Helper: compute next due date for recurrence
-function getNextDueDate(type: string, interval: number, fromDate: Date): Date {
+function getNextDueDate(
+  type: string,
+  interval: number,
+  fromDate: Date,
+  daysOfWeek?: string | null,
+  dayOfMonth?: number | null
+): Date {
   const next = new Date(fromDate);
   switch (type) {
     case "daily":
@@ -20,9 +26,18 @@ function getNextDueDate(type: string, interval: number, fromDate: Date): Date {
       break;
     case "weekly":
       next.setDate(next.getDate() + 7 * interval);
+      if (daysOfWeek != null && daysOfWeek !== "") {
+        const targetDay = parseInt(daysOfWeek);
+        const diff = (targetDay - next.getDay() + 7) % 7;
+        next.setDate(next.getDate() + diff);
+      }
       break;
     case "monthly":
       next.setMonth(next.getMonth() + interval);
+      if (dayOfMonth != null) {
+        const daysInMonth = new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate();
+        next.setDate(Math.min(dayOfMonth, daysInMonth));
+      }
       break;
     default:
       next.setDate(next.getDate() + interval);
@@ -102,7 +117,7 @@ tasksRouter.post("/", async (c) => {
                 daysOfWeek: recurrence.daysOfWeek,
                 dayOfMonth: recurrence.dayOfMonth,
                 nextDueAt: dueDate
-                  ? getNextDueDate(recurrence.type, recurrence.interval || 1, new Date(dueDate))
+                  ? getNextDueDate(recurrence.type, recurrence.interval || 1, new Date(dueDate), recurrence.daysOfWeek, recurrence.dayOfMonth)
                   : null,
               },
             },
@@ -219,7 +234,7 @@ tasksRouter.patch("/:taskId", async (c) => {
     const rule = await prisma.recurrenceRule.findUnique({ where: { taskId } });
     if (rule) {
       const baseDue = task.dueDate || new Date();
-      const nextDue = getNextDueDate(rule.type, rule.interval, baseDue);
+      const nextDue = getNextDueDate(rule.type, rule.interval, baseDue, rule.daysOfWeek, rule.dayOfMonth);
       const currentAssignees = await prisma.taskAssignment.findMany({ where: { taskId } });
 
       await prisma.task.create({
@@ -240,7 +255,7 @@ tasksRouter.patch("/:taskId", async (c) => {
               interval: rule.interval,
               daysOfWeek: rule.daysOfWeek,
               dayOfMonth: rule.dayOfMonth,
-              nextDueAt: getNextDueDate(rule.type, rule.interval, nextDue),
+              nextDueAt: getNextDueDate(rule.type, rule.interval, nextDue, rule.daysOfWeek, rule.dayOfMonth),
             },
           },
         },

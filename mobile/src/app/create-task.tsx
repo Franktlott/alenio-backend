@@ -42,6 +42,8 @@ export default function CreateTaskScreen() {
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurrenceType, setRecurrenceType] = useState<RecurrenceType>("weekly");
   const [recurrenceInterval, setRecurrenceInterval] = useState("1");
+  const [selectedDayOfWeek, setSelectedDayOfWeek] = useState<number | null>(null);
+  const [selectedDayOfMonth, setSelectedDayOfMonth] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const { data: team } = useQuery({
@@ -78,6 +80,12 @@ export default function CreateTaskScreen() {
         ? {
             type: recurrenceType,
             interval: parseInt(recurrenceInterval) || 1,
+            daysOfWeek: recurrenceType === "weekly" && selectedDayOfWeek !== null
+              ? String(selectedDayOfWeek)
+              : undefined,
+            dayOfMonth: recurrenceType === "monthly" && selectedDayOfMonth !== null
+              ? selectedDayOfMonth
+              : undefined,
           }
         : undefined,
     });
@@ -296,6 +304,60 @@ export default function CreateTaskScreen() {
                       : "month(s)"}
                   </Text>
                 </View>
+
+                {/* Day of week picker for weekly */}
+                {recurrenceType === "weekly" ? (
+                  <View>
+                    <Text className="text-xs text-slate-500 mb-2">On</Text>
+                    <View className="flex-row flex-wrap" style={{ gap: 6 }}>
+                      {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day, i) => (
+                        <TouchableOpacity
+                          key={i}
+                          testID={`day-of-week-${i}`}
+                          onPress={() => setSelectedDayOfWeek(selectedDayOfWeek === i ? null : i)}
+                          className="w-10 h-10 rounded-full items-center justify-center"
+                          style={{
+                            backgroundColor: selectedDayOfWeek === i ? "#4361EE" : "#F1F5F9",
+                          }}
+                        >
+                          <Text
+                            className="text-xs font-semibold"
+                            style={{ color: selectedDayOfWeek === i ? "white" : "#64748B" }}
+                          >
+                            {day}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+                ) : null}
+
+                {/* Day of month picker for monthly */}
+                {recurrenceType === "monthly" ? (
+                  <View>
+                    <Text className="text-xs text-slate-500 mb-2">On day</Text>
+                    <View className="flex-row flex-wrap" style={{ gap: 6 }}>
+                      {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
+                        <TouchableOpacity
+                          key={day}
+                          testID={`day-of-month-${day}`}
+                          onPress={() => setSelectedDayOfMonth(selectedDayOfMonth === day ? null : day)}
+                          className="w-9 h-9 rounded-full items-center justify-center"
+                          style={{
+                            backgroundColor: selectedDayOfMonth === day ? "#4361EE" : "#F1F5F9",
+                          }}
+                        >
+                          <Text
+                            className="text-xs font-semibold"
+                            style={{ color: selectedDayOfMonth === day ? "white" : "#64748B" }}
+                          >
+                            {day}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+                ) : null}
               </View>
             ) : null}
           </View>
