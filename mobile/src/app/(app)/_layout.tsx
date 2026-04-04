@@ -1,10 +1,32 @@
 import { Tabs } from "expo-router";
 import { CheckSquare, Users, User, MessageCircle, CalendarDays } from "lucide-react-native";
 import { useColorScheme } from "react-native";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "@/lib/api/api";
+import { useSession } from "@/lib/auth/use-session";
+import { useUnreadStore } from "@/lib/state/unread-store";
+import type { Conversation } from "@/lib/types";
 
 export default function AppLayout() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
+  const { data: session } = useSession();
+  const lastReadIds = useUnreadStore((s) => s.lastReadIds);
+
+  const { data: conversations = [] } = useQuery({
+    queryKey: ["conversations"],
+    queryFn: () => api.get<Conversation[]>("/api/dms"),
+    enabled: !!session?.user,
+    refetchInterval: 5000,
+  });
+
+  const currentUserId = session?.user?.id ?? "";
+  const unreadCount = conversations.filter(
+    (conv) =>
+      conv.lastMessage &&
+      conv.lastMessage.sender.id !== currentUserId &&
+      lastReadIds[conv.id] !== conv.lastMessage.id
+  ).length;
 
   return (
     <Tabs
@@ -30,6 +52,8 @@ export default function AppLayout() {
         name="chat"
         options={{
           title: "Chat",
+          tabBarBadge: unreadCount > 0 ? unreadCount : undefined,
+          tabBarBadgeStyle: { backgroundColor: "#EF4444", fontSize: 10 },
           tabBarIcon: ({ color, size }: { color: string; size: number }) => (
             <MessageCircle size={size} color={color} />
           ),
