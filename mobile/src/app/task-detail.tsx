@@ -12,10 +12,9 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams } from "expo-router";
-import { ArrowLeft, Trash2, RefreshCw, UserPlus, X, Check, BookmarkPlus } from "lucide-react-native";
+import { ArrowLeft, Trash2, RefreshCw, UserPlus, X, Check } from "lucide-react-native";
 import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
-import { toast } from "burnt";
 import type { Task, TaskStatus, Team } from "@/lib/types";
 
 const STATUS_OPTIONS: { label: string; value: TaskStatus; color: string }[] = [
@@ -37,7 +36,6 @@ export default function TaskDetailScreen() {
   const queryClient = useQueryClient();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showAssignModal, setShowAssignModal] = useState(false);
-  const [savingTemplate, setSavingTemplate] = useState(false);
 
   const { data: task, isLoading } = useQuery({
     queryKey: ["task", taskId, teamId],
@@ -88,23 +86,6 @@ export default function TaskDetailScreen() {
     },
   });
 
-  const handleSaveAsTemplate = async () => {
-    if (!task) return;
-    setSavingTemplate(true);
-    try {
-      await api.post(`/api/teams/${teamId}/templates`, {
-        title: task.title,
-        description: task.description,
-        priority: task.priority,
-      });
-      toast({ title: "Saved as template", preset: "done" });
-    } catch {
-      toast({ title: "Failed to save template", preset: "error" });
-    } finally {
-      setSavingTemplate(false);
-    }
-  };
-
   const currentUserId = session?.user?.id ?? null;
   const members = team?.members ?? [];
   const assignedIds = new Set((task?.assignments ?? []).map((a) => a.userId));
@@ -152,22 +133,13 @@ export default function TaskDetailScreen() {
             <ArrowLeft size={22} color="white" />
           </TouchableOpacity>
           <Text className="text-white text-lg font-bold flex-1 ml-3" numberOfLines={1}>{task.title}</Text>
-          <View className="flex-row items-center" style={{ gap: 12 }}>
-            <TouchableOpacity onPress={handleSaveAsTemplate} disabled={savingTemplate} testID="save-template-button">
-              {savingTemplate ? (
-                <ActivityIndicator size="small" color="white" />
-              ) : (
-                <BookmarkPlus size={20} color="white" />
-              )}
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => setShowDeleteConfirm(true)} disabled={deleteMutation.isPending} testID="delete-button">
-              {deleteMutation.isPending ? (
-                <ActivityIndicator size="small" color="white" />
-              ) : (
-                <Trash2 size={20} color="white" />
-              )}
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity onPress={() => setShowDeleteConfirm(true)} disabled={deleteMutation.isPending} testID="delete-button">
+            {deleteMutation.isPending ? (
+              <ActivityIndicator size="small" color="white" />
+            ) : (
+              <Trash2 size={20} color="white" />
+            )}
+          </TouchableOpacity>
         </View>
       </LinearGradient>
 

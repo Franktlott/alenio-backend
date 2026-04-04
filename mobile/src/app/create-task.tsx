@@ -16,7 +16,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams } from "expo-router";
-import { X, BookOpen, Check as CheckIcon } from "lucide-react-native";
+import { X, BookOpen, Bookmark } from "lucide-react-native";
 import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
 import type { Task, TaskPriority, RecurrenceType, Team, TeamMember, TaskTemplate } from "@/lib/types";
@@ -51,6 +51,7 @@ export default function CreateTaskScreen() {
   const [dueDate, setDueDate] = useState<Date | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
+  const [savingTemplate, setSavingTemplate] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const { data: team } = useQuery({
@@ -72,6 +73,28 @@ export default function CreateTaskScreen() {
     setDescription(t.description ?? "");
     setPriority(t.priority);
     setShowTemplatePicker(false);
+  };
+
+  const handleSaveAsTemplate = async () => {
+    if (!title.trim()) {
+      setError("Please enter a task title before saving as template");
+      return;
+    }
+    setSavingTemplate(true);
+    try {
+      await api.post(`/api/teams/${teamId}/templates`, {
+        title: title.trim(),
+        description: description.trim() || undefined,
+        priority,
+      });
+      queryClient.invalidateQueries({ queryKey: ["templates", teamId] });
+      setError(null);
+      // Show a brief visual cue via the icon
+    } catch {
+      setError("Failed to save template");
+    } finally {
+      setSavingTemplate(false);
+    }
   };
 
   const createMutation = useMutation({
@@ -147,6 +170,13 @@ export default function CreateTaskScreen() {
                   <BookOpen size={20} color="white" />
                 </TouchableOpacity>
               ) : null}
+              <TouchableOpacity onPress={handleSaveAsTemplate} disabled={savingTemplate} testID="save-template-button">
+                {savingTemplate ? (
+                  <ActivityIndicator color="white" size="small" />
+                ) : (
+                  <Bookmark size={20} color="white" />
+                )}
+              </TouchableOpacity>
               <TouchableOpacity
                 onPress={handleCreate}
                 disabled={createMutation.isPending}
