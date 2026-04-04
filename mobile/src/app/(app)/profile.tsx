@@ -16,11 +16,11 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { ArrowLeft, Camera, LogOut, Pencil, X, ChevronRight, Plus, Trash2, Bell } from "lucide-react-native";
+import { ArrowLeft, Camera, LogOut, Pencil, X, ChevronRight, Plus, Trash2, Bell, Check } from "lucide-react-native";
 import { authClient } from "@/lib/auth/auth-client";
 import { useInvalidateSession, useSession } from "@/lib/auth/use-session";
 import { router } from "expo-router";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, useQueries } from "@tanstack/react-query";
 import { api } from "@/lib/api/api";
 import { uploadFile } from "@/lib/upload";
 import { pickImage, takePhoto } from "@/lib/file-picker";
@@ -28,6 +28,13 @@ import * as ImagePicker from "expo-image-picker";
 import { useTeamStore } from "@/lib/state/team-store";
 import { toast } from "burnt";
 import type { Team } from "@/lib/types";
+
+type JoinRequestItem = {
+  id: string;
+  status: string;
+  createdAt: string;
+  user: { id: string; name: string; email: string; image: string | null };
+};
 
 export default function ProfileScreen() {
   const { data: session } = useSession();
@@ -73,6 +80,48 @@ export default function ProfileScreen() {
     },
     onError: (_err, _patch, ctx) => {
       if (ctx?.prev) queryClient.setQueryData(["notification-preferences"], ctx.prev);
+    },
+  });
+
+  // Join requests for the team being edited (owner only)
+  const { data: joinRequests = [], refetch: refetchRequests } = useQuery({
+    queryKey: ["join-requests", editingTeam?.id],
+    queryFn: () => api.get<JoinRequestItem[]>(`/api/teams/${editingTeam!.id}/join-requests`),
+    enabled: !!editingTeam && (editingTeam as Team & { role?: string }).role === "owner",
+  });
+
+  // Fetch join request counts for all owned teams (for badges)
+  const ownedTeamIds = teams
+    .filter((t) => (t as Team & { role?: string }).role === "owner")
+    .map((t) => t.id);
+
+  const joinRequestCounts = useQueries({
+    queries: ownedTeamIds.map((id) => ({
+      queryKey: ["join-requests", id],
+      queryFn: () => api.get<JoinRequestItem[]>(`/api/teams/${id}/join-requests`),
+      enabled: ownedTeamIds.length > 0,
+    })),
+  });
+
+  const pendingCountMap = Object.fromEntries(
+    ownedTeamIds.map((id, i) => [id, joinRequestCounts[i]?.data?.length ?? 0])
+  );
+
+  // Approve / reject mutations
+  const approveMutation = useMutation({
+    mutationFn: ({ teamId, requestId }: { teamId: string; requestId: string }) =>
+      api.post(`/api/teams/${teamId}/join-requests/${requestId}/approve`, {}),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["join-requests", editingTeam?.id] });
+      queryClient.invalidateQueries({ queryKey: ["teams"] });
+    },
+  });
+
+  const rejectMutation = useMutation({
+    mutationFn: ({ teamId, requestId }: { teamId: string; requestId: string }) =>
+      api.post(`/api/teams/${teamId}/join-requests/${requestId}/reject`, {}),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["join-requests", editingTeam?.id] });
     },
   });
 
@@ -271,6 +320,7 @@ export default function ProfileScreen() {
               teams.map((team, index) => {
                 const isActive = team.id === activeTeamId;
                 const isOwner = (team as Team & { role?: string }).role === "owner";
+                const pendingCount = pendingCountMap[team.id] ?? 0;
                 return (
                   <Pressable
                     key={team.id}
@@ -294,15 +344,22 @@ export default function ProfileScreen() {
                       <View className="w-2 h-2 rounded-full bg-indigo-500 mr-3" />
                     ) : null}
                     {isOwner ? (
-                      <TouchableOpacity
-                        onPress={() => openEditModal(team)}
-                        className="w-8 h-8 rounded-full items-center justify-center"
-                        style={{ backgroundColor: "#4361EE12" }}
-                        testID={`edit-team-${team.id}`}
-                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                      >
-                        <Pencil size={14} color="#4361EE" />
-                      </TouchableOpacity>
+                      <View className="flex-row items-center" style={{ gap: 6 }}>
+                        {pendingCount > 0 ? (
+                          <View className="w-5 h-5 rounded-full bg-red-500 items-center justify-center">
+                            <Text style={{ color: "white", fontSize: 10, fontWeight: "bold" }}>{pendingCount}</Text>
+                          </View>
+                        ) : null}
+                        <TouchableOpacity
+                          onPress={() => openEditModal(team)}
+                          className="w-8 h-8 rounded-full items-center justify-center"
+                          style={{ backgroundColor: "#4361EE12" }}
+                          testID={`edit-team-${team.id}`}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          <Pencil size={14} color="#4361EE" />
+                        </TouchableOpacity>
+                      </View>
                     ) : (
                       <ChevronRight size={16} color="#CBD5E1" />
                     )}
@@ -398,6 +455,46 @@ export default function ProfileScreen() {
                         <X size={20} color="#94A3B8" />
                       </TouchableOpacity>
                     </View>
+
+                    {/* Pending join requests section */}
+                    {joinRequests.length > 0 ? (
+                      <View className="mb-6">
+                        <Text className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">
+                          Pending Requests ({joinRequests.length})
+                        </Text>
+                        {joinRequests.map((req) => (
+                          <View key={req.id} className="flex-row items-center bg-slate-50 dark:bg-slate-700 rounded-xl px-3 py-2.5 mb-2">
+                            <View className="w-9 h-9 rounded-full bg-indigo-100 items-center justify-center mr-3 overflow-hidden">
+                              {req.user.image ? (
+                                <Image source={{ uri: req.user.image }} style={{ width: 36, height: 36 }} resizeMode="cover" />
+                              ) : (
+                                <Text className="text-indigo-600 font-bold text-sm">{req.user.name?.[0]?.toUpperCase() ?? "?"}</Text>
+                              )}
+                            </View>
+                            <View className="flex-1">
+                              <Text className="text-sm font-semibold text-slate-900 dark:text-white">{req.user.name}</Text>
+                              <Text className="text-xs text-slate-400">{req.user.email}</Text>
+                            </View>
+                            <TouchableOpacity
+                              onPress={() => rejectMutation.mutate({ teamId: editingTeam!.id, requestId: req.id })}
+                              className="w-7 h-7 rounded-full bg-red-100 items-center justify-center mr-1.5"
+                              disabled={rejectMutation.isPending || approveMutation.isPending}
+                              testID={`reject-request-${req.id}`}
+                            >
+                              <X size={13} color="#EF4444" />
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              onPress={() => approveMutation.mutate({ teamId: editingTeam!.id, requestId: req.id })}
+                              className="w-7 h-7 rounded-full bg-green-100 items-center justify-center"
+                              disabled={approveMutation.isPending || rejectMutation.isPending}
+                              testID={`approve-request-${req.id}`}
+                            >
+                              <Check size={13} color="#22C55E" />
+                            </TouchableOpacity>
+                          </View>
+                        ))}
+                      </View>
+                    ) : null}
 
                     {/* Team photo */}
                     <View className="items-center mb-6">

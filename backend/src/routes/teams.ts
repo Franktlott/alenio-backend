@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { prisma } from "../prisma";
 import { auth } from "../auth";
 import { authGuard } from "../middleware/auth-guard";
+import { sendPushToUsers } from "../lib/push";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -63,7 +64,7 @@ teamsRouter.post("/", async (c) => {
   return c.json({ data: { ...team, role: "owner" } }, 201);
 });
 
-// POST /api/teams/join - join team by invite code
+// POST /api/teams/join - join team by invite code (creates a pending join request)
 teamsRouter.post("/join", async (c) => {
   const user = c.get("user")!;
   const body = await c.req.json();
@@ -78,17 +79,38 @@ teamsRouter.post("/join", async (c) => {
     where: { userId_teamId: { userId: user.id, teamId: team.id } },
   });
   if (existing) {
-    return c.json({ error: { message: "Already a member of this team", code: "CONFLICT" } }, 409);
+    return c.json({ error: { message: "Already a member", code: "CONFLICT" } }, 409);
   }
 
-  await prisma.teamMember.create({ data: { userId: user.id, teamId: team.id, role: "member" } });
-
-  const fullTeam = await prisma.team.findUnique({
-    where: { id: team.id },
-    include: { _count: { select: { members: true, tasks: true } } },
+  const existingRequest = await prisma.joinRequest.findUnique({
+    where: { teamId_userId: { teamId: team.id, userId: user.id } },
   });
+  if (existingRequest && existingRequest.status === "pending") {
+    return c.json({ error: { message: "Request already pending", code: "CONFLICT" } }, 409);
+  }
 
-  return c.json({ data: { ...fullTeam, role: "member" } });
+  let joinRequest;
+  if (existingRequest) {
+    // Reuse record if previously rejected
+    joinRequest = await prisma.joinRequest.update({
+      where: { id: existingRequest.id },
+      data: { status: "pending" },
+    });
+  } else {
+    joinRequest = await prisma.joinRequest.create({
+      data: { teamId: team.id, userId: user.id, status: "pending" },
+    });
+  }
+
+  // Notify team owners
+  const owners = await prisma.teamMember.findMany({
+    where: { teamId: team.id, role: "owner" },
+    select: { userId: true },
+  });
+  const ownerIds = owners.map((o) => o.userId);
+  await sendPushToUsers(ownerIds, "Join Request", `${user.name} wants to join ${team.name}`);
+
+  return c.json({ data: { status: "pending", teamName: team.name, requestId: joinRequest.id } });
 });
 
 // GET /api/teams/:teamId - get team details
@@ -165,6 +187,105 @@ teamsRouter.delete("/:teamId", async (c) => {
   await prisma.team.delete({ where: { id: teamId } });
 
   return c.body(null, 204);
+});
+
+// GET /api/teams/:teamId/join-requests - list pending join requests (owner only)
+teamsRouter.get("/:teamId/join-requests", async (c) => {
+  const user = c.get("user")!;
+  const { teamId } = c.req.param();
+
+  const membership = await prisma.teamMember.findUnique({
+    where: { userId_teamId: { userId: user.id, teamId } },
+  });
+  if (!membership || membership.role !== "owner") {
+    return c.json({ error: { message: "Only team owners can view join requests", code: "FORBIDDEN" } }, 403);
+  }
+
+  const requests = await prisma.joinRequest.findMany({
+    where: { teamId, status: "pending" },
+    include: {
+      user: { select: { id: true, name: true, email: true, image: true } },
+    },
+    orderBy: { createdAt: "asc" },
+  });
+
+  return c.json({ data: requests });
+});
+
+// POST /api/teams/:teamId/join-requests/:requestId/approve - approve a join request (owner only)
+teamsRouter.post("/:teamId/join-requests/:requestId/approve", async (c) => {
+  const user = c.get("user")!;
+  const { teamId, requestId } = c.req.param();
+
+  const membership = await prisma.teamMember.findUnique({
+    where: { userId_teamId: { userId: user.id, teamId } },
+  });
+  if (!membership || membership.role !== "owner") {
+    return c.json({ error: { message: "Only team owners can approve join requests", code: "FORBIDDEN" } }, 403);
+  }
+
+  const joinRequest = await prisma.joinRequest.findUnique({
+    where: { id: requestId },
+    include: { team: { select: { name: true } } },
+  });
+  if (!joinRequest || joinRequest.teamId !== teamId) {
+    return c.json({ error: { message: "Join request not found", code: "NOT_FOUND" } }, 404);
+  }
+
+  // Create team member and update request status in a transaction
+  await prisma.$transaction([
+    prisma.teamMember.create({
+      data: { userId: joinRequest.userId, teamId, role: "member" },
+    }),
+    prisma.joinRequest.update({
+      where: { id: requestId },
+      data: { status: "approved" },
+    }),
+  ]);
+
+  // Notify the requesting user
+  await sendPushToUsers(
+    [joinRequest.userId],
+    "Request Approved!",
+    `You've been approved to join ${joinRequest.team.name}`
+  );
+
+  return c.json({ data: { success: true } });
+});
+
+// POST /api/teams/:teamId/join-requests/:requestId/reject - reject a join request (owner only)
+teamsRouter.post("/:teamId/join-requests/:requestId/reject", async (c) => {
+  const user = c.get("user")!;
+  const { teamId, requestId } = c.req.param();
+
+  const membership = await prisma.teamMember.findUnique({
+    where: { userId_teamId: { userId: user.id, teamId } },
+  });
+  if (!membership || membership.role !== "owner") {
+    return c.json({ error: { message: "Only team owners can reject join requests", code: "FORBIDDEN" } }, 403);
+  }
+
+  const joinRequest = await prisma.joinRequest.findUnique({
+    where: { id: requestId },
+    include: { team: { select: { name: true } } },
+  });
+  if (!joinRequest || joinRequest.teamId !== teamId) {
+    return c.json({ error: { message: "Join request not found", code: "NOT_FOUND" } }, 404);
+  }
+
+  await prisma.joinRequest.update({
+    where: { id: requestId },
+    data: { status: "rejected" },
+  });
+
+  // Notify the requesting user
+  await sendPushToUsers(
+    [joinRequest.userId],
+    "Request Update",
+    `Your request to join ${joinRequest.team.name} was not approved`
+  );
+
+  return c.json({ data: { success: true } });
 });
 
 export { teamsRouter };
