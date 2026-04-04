@@ -372,6 +372,12 @@ tasksRouter.delete("/:taskId/assign/:userId", async (c) => {
   if (!task) return c.json({ error: { message: "Task not found", code: "NOT_FOUND" } }, 404);
   if (task.status === "done") return c.json({ error: { message: "Task is completed. Recall it before making edits.", code: "TASK_COMPLETED" } }, 400);
 
+  const isCreator = task.creatorId === user.id;
+  const isAdmin = membership.role === "owner" || membership.role === "admin";
+  if (!isCreator && !isAdmin) {
+    return c.json({ error: { message: "Only the task creator or an admin can unassign members", code: "FORBIDDEN" } }, 403);
+  }
+
   await prisma.taskAssignment.deleteMany({ where: { taskId, userId } });
   return c.body(null, 204);
 });

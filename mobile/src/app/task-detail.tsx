@@ -397,6 +397,7 @@ export default function TaskDetailScreen() {
                     </Text>
                     <Text className="text-xs text-slate-500">{a.user.email}</Text>
                   </View>
+                  {isCreator ? (
                   <TouchableOpacity
                     onPress={() => unassignMutation.mutate(a.userId)}
                     disabled={unassignMutation.isPending}
@@ -405,6 +406,7 @@ export default function TaskDetailScreen() {
                   >
                     <X size={12} color="#94A3B8" />
                   </TouchableOpacity>
+                  ) : null}
                 </View>
               ))}
             </View>
