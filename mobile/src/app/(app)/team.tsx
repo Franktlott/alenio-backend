@@ -98,7 +98,7 @@ export default function TeamScreen() {
   const [editName, setEditName] = useState("");
   const [editImage, setEditImage] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
 
   const { data: team, isLoading } = useQuery({
@@ -350,7 +350,7 @@ export default function TeamScreen() {
                 {/* Delete team (owner only) */}
                 {currentMember?.role === "owner" ? (
                   <TouchableOpacity
-                    onPress={() => setShowDeleteConfirm(true)}
+                    onPress={() => setConfirmingDelete(true)}
                     className="mt-3 rounded-2xl py-4 items-center border border-red-200"
                     testID="delete-team-button"
                   >
@@ -364,7 +364,7 @@ export default function TeamScreen() {
       </Modal>
 
       {/* Delete confirmation modal */}
-      <Modal visible={showDeleteConfirm} transparent animationType="fade" onRequestClose={() => { setShowDeleteConfirm(false); setDeleteConfirmText(""); }}>
+      <Modal visible={confirmingDelete} transparent animationType="fade" onRequestClose={() => { setConfirmingDelete(false); setDeleteConfirmText(""); }}>
         <View className="flex-1 bg-black/50 items-center justify-center px-6">
           <View className="bg-white dark:bg-slate-800 rounded-3xl p-6 w-full">
             <Text className="text-lg font-bold text-slate-900 dark:text-white mb-2">Delete Team?</Text>
@@ -398,7 +398,7 @@ export default function TeamScreen() {
               )}
             </TouchableOpacity>
             <TouchableOpacity
-              onPress={() => { setShowDeleteConfirm(false); setDeleteConfirmText(""); }}
+              onPress={() => { setConfirmingDelete(false); setDeleteConfirmText(""); }}
               className="rounded-2xl py-4 items-center bg-slate-100 dark:bg-slate-700"
               testID="cancel-delete-team"
             >
