@@ -14,7 +14,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { LinearGradient } from "expo-linear-gradient";
-import { ArrowLeft, Send, Paperclip, X, Users, Video, Trash2 } from "lucide-react-native";
+import { ArrowLeft, Send, Paperclip, X, Users, Video, Trash2, Download } from "lucide-react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
@@ -24,6 +24,10 @@ import { ChatMessage } from "@/components/ChatMessage";
 import type { DirectMessage } from "@/lib/types";
 import ReanimatedSwipeable from "react-native-gesture-handler/ReanimatedSwipeable";
 import Reanimated, { useAnimatedStyle, interpolate } from "react-native-reanimated";
+import * as FileSystem from "expo-file-system";
+import * as MediaLibrary from "expo-media-library";
+import * as Haptics from "expo-haptics";
+import { toast } from "burnt";
 
 const REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🔥'];
 
@@ -156,6 +160,26 @@ export default function DMChatScreen() {
 
   const { mutate: deleteMessage } = deleteMutation;
 
+  const handleSaveMedia = useCallback(async (mediaUrl: string, mediaType: string) => {
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      const { status } = await MediaLibrary.requestPermissionsAsync();
+      if (status !== "granted") {
+        toast({ title: "Permission denied", preset: "error" });
+        return;
+      }
+      const ext = mediaType === "video" ? "mp4" : "jpg";
+      const localUri = `${FileSystem.cacheDirectory}download_${Date.now()}.${ext}`;
+      const { uri } = await FileSystem.downloadAsync(mediaUrl, localUri);
+      await MediaLibrary.saveToLibraryAsync(uri);
+      await FileSystem.deleteAsync(uri, { idempotent: true });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      toast({ title: mediaType === "video" ? "Video saved" : "Photo saved", preset: "done" });
+    } catch {
+      toast({ title: "Failed to save", preset: "error" });
+    }
+  }, []);
+
   const handleLongPress = useCallback((msg: DirectMessage) => {
     setEmojiTarget(msg);
   }, []);
@@ -235,6 +259,22 @@ export default function DMChatScreen() {
             >
               <Text className="text-indigo-600 font-semibold text-sm">↩ Reply</Text>
             </TouchableOpacity>
+            {emojiTarget?.mediaUrl && emojiTarget?.mediaType ? (
+              <TouchableOpacity
+                onPress={() => {
+                  if (emojiTarget.mediaUrl && emojiTarget.mediaType) {
+                    handleSaveMedia(emojiTarget.mediaUrl, emojiTarget.mediaType);
+                  }
+                  setEmojiTarget(null);
+                }}
+                className="flex-row items-center justify-center py-2 border-t border-slate-100 dark:border-slate-700 gap-1"
+              >
+                <Download size={14} color="#6366F1" />
+                <Text className="text-indigo-600 font-semibold text-sm">
+                  {emojiTarget.mediaType === "video" ? "Save Video" : "Save Photo"}
+                </Text>
+              </TouchableOpacity>
+            ) : null}
           </View>
         </TouchableOpacity>
       </Modal>
