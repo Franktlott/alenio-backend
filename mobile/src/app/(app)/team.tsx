@@ -298,130 +298,137 @@ export default function TeamScreen() {
         testID="members-list"
       />
 
-      {/* Edit team modal */}
-      <Modal visible={showEditModal} transparent animationType="slide" onRequestClose={() => setShowEditModal(false)}>
-        <Pressable className="flex-1 bg-black/40 justify-end" onPress={() => setShowEditModal(false)}>
+      {/* Edit / Delete team modal — single modal, content swaps */}
+      <Modal visible={showEditModal} transparent animationType="slide" onRequestClose={() => { setShowEditModal(false); setConfirmingDelete(false); setDeleteConfirmText(""); }}>
+        <Pressable className="flex-1 bg-black/40 justify-end" onPress={() => { setShowEditModal(false); setConfirmingDelete(false); setDeleteConfirmText(""); }}>
           <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"}>
             <Pressable onPress={(e) => e.stopPropagation()}>
               <View className="bg-white dark:bg-slate-800 rounded-t-3xl px-4 pt-4 pb-10">
-                {/* Header */}
-                <View className="flex-row items-center justify-between mb-6">
-                  <Text className="text-lg font-bold text-slate-900 dark:text-white">Edit Team</Text>
-                  <TouchableOpacity onPress={() => setShowEditModal(false)} testID="close-edit-modal">
-                    <X size={20} color="#94A3B8" />
-                  </TouchableOpacity>
-                </View>
 
-                {/* Team photo */}
-                <View className="items-center mb-6">
-                  <TouchableOpacity onPress={pickTeamPhoto} disabled={uploadingImage} testID="pick-team-photo">
-                    <View className="w-24 h-24 rounded-full bg-indigo-100 items-center justify-center overflow-hidden">
-                      {uploadingImage ? (
-                        <ActivityIndicator color="#4361EE" />
-                      ) : editImage ? (
-                        <Image source={{ uri: editImage }} style={{ width: 96, height: 96 }} resizeMode="cover" />
-                      ) : (
-                        <Text className="text-indigo-600 font-bold text-3xl">{editName?.[0]?.toUpperCase() ?? "T"}</Text>
-                      )}
+                {!confirmingDelete ? (
+                  <>
+                    {/* Header */}
+                    <View className="flex-row items-center justify-between mb-6">
+                      <Text className="text-lg font-bold text-slate-900 dark:text-white">Edit Team</Text>
+                      <TouchableOpacity onPress={() => setShowEditModal(false)} testID="close-edit-modal">
+                        <X size={20} color="#94A3B8" />
+                      </TouchableOpacity>
                     </View>
-                    <View
-                      className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-indigo-600 items-center justify-center"
-                      style={{ shadowColor: "#000", shadowOpacity: 0.15, shadowRadius: 4, shadowOffset: { width: 0, height: 2 } }}
+
+                    {/* Team photo */}
+                    <View className="items-center mb-6">
+                      <TouchableOpacity onPress={pickTeamPhoto} disabled={uploadingImage} testID="pick-team-photo">
+                        <View className="w-24 h-24 rounded-full bg-indigo-100 items-center justify-center overflow-hidden">
+                          {uploadingImage ? (
+                            <ActivityIndicator color="#4361EE" />
+                          ) : editImage ? (
+                            <Image source={{ uri: editImage }} style={{ width: 96, height: 96 }} resizeMode="cover" />
+                          ) : (
+                            <Text className="text-indigo-600 font-bold text-3xl">{editName?.[0]?.toUpperCase() ?? "T"}</Text>
+                          )}
+                        </View>
+                        <View
+                          className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-indigo-600 items-center justify-center"
+                          style={{ shadowColor: "#000", shadowOpacity: 0.15, shadowRadius: 4, shadowOffset: { width: 0, height: 2 } }}
+                        >
+                          <Camera size={14} color="white" />
+                        </View>
+                      </TouchableOpacity>
+                      <Text className="text-xs text-slate-400 mt-2">Tap to change photo</Text>
+                    </View>
+
+                    {/* Team name */}
+                    <View className="mb-6">
+                      <Text className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Team Name</Text>
+                      <TextInput
+                        className="bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white rounded-xl px-4 py-3 text-base"
+                        value={editName}
+                        onChangeText={setEditName}
+                        placeholder="Enter team name"
+                        placeholderTextColor="#94A3B8"
+                        testID="team-name-input"
+                        returnKeyType="done"
+                      />
+                    </View>
+
+                    {/* Save button */}
+                    <TouchableOpacity
+                      onPress={handleSave}
+                      disabled={updateMutation.isPending || !editName.trim()}
+                      className="rounded-2xl py-4 items-center"
+                      style={{ backgroundColor: editName.trim() ? "#4361EE" : "#CBD5E1" }}
+                      testID="save-team-button"
                     >
-                      <Camera size={14} color="white" />
+                      {updateMutation.isPending ? (
+                        <ActivityIndicator color="white" />
+                      ) : (
+                        <Text className="text-white font-bold text-base">Save Changes</Text>
+                      )}
+                    </TouchableOpacity>
+
+                    {/* Delete team (owner only) */}
+                    {currentMember?.role === "owner" ? (
+                      <TouchableOpacity
+                        onPress={() => setConfirmingDelete(true)}
+                        className="mt-3 rounded-2xl py-4 items-center border border-red-200"
+                        testID="delete-team-button"
+                      >
+                        <Text className="text-red-500 font-semibold text-base">Delete Team</Text>
+                      </TouchableOpacity>
+                    ) : null}
+                  </>
+                ) : (
+                  <>
+                    {/* Delete confirmation — shown inside same modal */}
+                    <View className="flex-row items-center justify-between mb-4">
+                      <Text className="text-lg font-bold text-slate-900 dark:text-white">Delete Team?</Text>
+                      <TouchableOpacity onPress={() => { setConfirmingDelete(false); setDeleteConfirmText(""); }} testID="back-from-delete">
+                        <X size={20} color="#94A3B8" />
+                      </TouchableOpacity>
                     </View>
-                  </TouchableOpacity>
-                  <Text className="text-xs text-slate-400 mt-2">Tap to change photo</Text>
-                </View>
+                    <Text className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+                      This will permanently delete <Text className="font-semibold text-slate-700 dark:text-slate-200">{team?.name}</Text> and all its tasks, messages, and members. This cannot be undone.
+                    </Text>
+                    <Text className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
+                      Type <Text className="text-slate-800 dark:text-slate-200">{team?.name}</Text> to confirm
+                    </Text>
+                    <TextInput
+                      className="bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white rounded-xl px-4 py-3 text-base mb-4 border border-slate-200 dark:border-slate-600"
+                      value={deleteConfirmText}
+                      onChangeText={setDeleteConfirmText}
+                      placeholder={team?.name ?? ""}
+                      placeholderTextColor="#94A3B8"
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      testID="delete-confirm-input"
+                    />
+                    <TouchableOpacity
+                      onPress={() => deleteMutation.mutate()}
+                      disabled={deleteMutation.isPending || deleteConfirmText !== team?.name}
+                      className="rounded-2xl py-4 items-center mb-3"
+                      style={{ backgroundColor: deleteConfirmText === team?.name ? "#EF4444" : "#CBD5E1" }}
+                      testID="confirm-delete-team"
+                    >
+                      {deleteMutation.isPending ? (
+                        <ActivityIndicator color="white" />
+                      ) : (
+                        <Text className="text-white font-bold text-base">Delete Forever</Text>
+                      )}
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => { setConfirmingDelete(false); setDeleteConfirmText(""); }}
+                      className="rounded-2xl py-4 items-center bg-slate-100 dark:bg-slate-700"
+                      testID="cancel-delete-team"
+                    >
+                      <Text className="text-slate-700 dark:text-slate-200 font-semibold text-base">Cancel</Text>
+                    </TouchableOpacity>
+                  </>
+                )}
 
-                {/* Team name */}
-                <View className="mb-6">
-                  <Text className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Team Name</Text>
-                  <TextInput
-                    className="bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white rounded-xl px-4 py-3 text-base"
-                    value={editName}
-                    onChangeText={setEditName}
-                    placeholder="Enter team name"
-                    placeholderTextColor="#94A3B8"
-                    testID="team-name-input"
-                    returnKeyType="done"
-                  />
-                </View>
-
-                {/* Save button */}
-                <TouchableOpacity
-                  onPress={handleSave}
-                  disabled={updateMutation.isPending || !editName.trim()}
-                  className="rounded-2xl py-4 items-center"
-                  style={{ backgroundColor: editName.trim() ? "#4361EE" : "#CBD5E1" }}
-                  testID="save-team-button"
-                >
-                  {updateMutation.isPending ? (
-                    <ActivityIndicator color="white" />
-                  ) : (
-                    <Text className="text-white font-bold text-base">Save Changes</Text>
-                  )}
-                </TouchableOpacity>
-
-                {/* Delete team (owner only) */}
-                {currentMember?.role === "owner" ? (
-                  <TouchableOpacity
-                    onPress={() => setConfirmingDelete(true)}
-                    className="mt-3 rounded-2xl py-4 items-center border border-red-200"
-                    testID="delete-team-button"
-                  >
-                    <Text className="text-red-500 font-semibold text-base">Delete Team</Text>
-                  </TouchableOpacity>
-                ) : null}
               </View>
             </Pressable>
           </KeyboardAvoidingView>
         </Pressable>
-      </Modal>
-
-      {/* Delete confirmation modal */}
-      <Modal visible={confirmingDelete} transparent animationType="fade" onRequestClose={() => { setConfirmingDelete(false); setDeleteConfirmText(""); }}>
-        <View className="flex-1 bg-black/50 items-center justify-center px-6">
-          <View className="bg-white dark:bg-slate-800 rounded-3xl p-6 w-full">
-            <Text className="text-lg font-bold text-slate-900 dark:text-white mb-2">Delete Team?</Text>
-            <Text className="text-sm text-slate-500 dark:text-slate-400 mb-4">
-              This will permanently delete <Text className="font-semibold text-slate-700 dark:text-slate-200">{team?.name}</Text> and all its tasks, messages, and members. This cannot be undone.
-            </Text>
-            <Text className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
-              Type <Text className="text-slate-800 dark:text-slate-200">{team?.name}</Text> to confirm
-            </Text>
-            <TextInput
-              className="bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white rounded-xl px-4 py-3 text-base mb-4 border border-slate-200 dark:border-slate-600"
-              value={deleteConfirmText}
-              onChangeText={setDeleteConfirmText}
-              placeholder={team?.name ?? ""}
-              placeholderTextColor="#94A3B8"
-              autoCapitalize="none"
-              autoCorrect={false}
-              testID="delete-confirm-input"
-            />
-            <TouchableOpacity
-              onPress={() => { deleteMutation.mutate(); setDeleteConfirmText(""); }}
-              disabled={deleteMutation.isPending || deleteConfirmText !== team?.name}
-              className="rounded-2xl py-4 items-center mb-3"
-              style={{ backgroundColor: deleteConfirmText === team?.name ? "#EF4444" : "#CBD5E1" }}
-              testID="confirm-delete-team"
-            >
-              {deleteMutation.isPending ? (
-                <ActivityIndicator color="white" />
-              ) : (
-                <Text className="text-white font-bold text-base">Delete Forever</Text>
-              )}
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => { setConfirmingDelete(false); setDeleteConfirmText(""); }}
-              className="rounded-2xl py-4 items-center bg-slate-100 dark:bg-slate-700"
-              testID="cancel-delete-team"
-            >
-              <Text className="text-slate-700 dark:text-slate-200 font-semibold text-base">Cancel</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
       </Modal>
     </SafeAreaView>
   );
