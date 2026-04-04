@@ -281,52 +281,26 @@ export default function TasksScreen() {
               <User size={18} color="white" />
             </TouchableOpacity>
           </View>
-          <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "rgba(255,255,255,0.2)", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 }}>
-              <ListTodo size={13} color="white" />
-              <Text style={{ color: "white", fontSize: 12, fontWeight: "600" }}>{totalCount} total</Text>
-            </View>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "rgba(255,255,255,0.2)", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 }}>
-              <Clock size={13} color="white" />
-              <Text style={{ color: "white", fontSize: 12, fontWeight: "600" }}>{dueTodayCount} due today</Text>
-            </View>
-            {overdueCount > 0 ? (
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "#EF444440", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 }}>
-                <AlertTriangle size={13} color="#FCA5A5" />
-                <Text style={{ color: "#FCA5A5", fontSize: 12, fontWeight: "700" }}>{overdueCount} overdue</Text>
-              </View>
-            ) : null}
-          </View>
         </View>
       </LinearGradient>
 
-      {/* Stats cards */}
-      <View style={{ flexDirection: "row", paddingHorizontal: 16, paddingTop: 10, paddingBottom: 4, gap: 10 }}>
-        {isOwner ? (
-          <View style={{
-            flex: 1, backgroundColor: "white", borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8, flexDirection: "row", alignItems: "center",
-            shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 1,
-          }}>
-            <View style={{ width: 28, height: 28, borderRadius: 14, borderWidth: 2, borderColor: "#60A5FA", alignItems: "center", justifyContent: "center", marginRight: 8 }}>
-              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: "#60A5FA" }} />
-            </View>
-            <View>
-              <Text style={{ fontSize: 10, color: "#94A3B8" }}>Assigned</Text>
-              <Text style={{ fontSize: 18, fontWeight: "700", color: "#0F172A", lineHeight: 22 }}>{assignedCount}</Text>
-            </View>
-          </View>
-        ) : null}
-        <View style={{
-          flex: 1, backgroundColor: "white", borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8, flexDirection: "row", alignItems: "center",
-          shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 1,
-        }}>
-          <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: "#10B981", alignItems: "center", justifyContent: "center", marginRight: 8 }}>
-            <Text style={{ color: "white", fontSize: 11, fontWeight: "700" }}>✓</Text>
-          </View>
-          <View>
-            <Text style={{ fontSize: 10, color: "#94A3B8" }}>Completed</Text>
-            <Text style={{ fontSize: 18, fontWeight: "700", color: "#10B981", lineHeight: 22 }}>{completedCount}</Text>
-          </View>
+      {/* Stats pills */}
+      <View style={{ flexDirection: "row", paddingHorizontal: 16, paddingTop: 10, paddingBottom: 4, gap: 8, flexWrap: "wrap" }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "white", paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 1 }}>
+          <ListTodo size={13} color="#4361EE" />
+          <Text style={{ fontSize: 12, fontWeight: "600", color: "#4361EE" }}>{totalCount} total</Text>
+        </View>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "white", paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 1 }}>
+          <Clock size={13} color="#F59E0B" />
+          <Text style={{ fontSize: 12, fontWeight: "600", color: "#F59E0B" }}>{dueTodayCount} due today</Text>
+        </View>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: overdueCount > 0 ? "#FEF2F2" : "white", paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 1 }}>
+          <AlertTriangle size={13} color={overdueCount > 0 ? "#EF4444" : "#CBD5E1"} />
+          <Text style={{ fontSize: 12, fontWeight: "600", color: overdueCount > 0 ? "#EF4444" : "#CBD5E1" }}>{overdueCount} overdue</Text>
+        </View>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "white", paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 1 }}>
+          <Text style={{ fontSize: 12, color: "#10B981" }}>✓</Text>
+          <Text style={{ fontSize: 12, fontWeight: "600", color: "#10B981" }}>{completedCount} done</Text>
         </View>
       </View>
 
