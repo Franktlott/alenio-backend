@@ -119,6 +119,47 @@ tasksRouter.post("/", async (c) => {
   return c.json({ data: task }, 201);
 });
 
+// GET /api/teams/:teamId/tasks/member-stats - task stats per team member
+// MUST be before /:taskId routes so Hono doesn't match "member-stats" as a taskId
+tasksRouter.get("/member-stats", async (c) => {
+  const user = c.get("user")!;
+  const teamId = c.req.param("teamId") as string;
+
+  const membership = await getMembership(user.id, teamId);
+  if (!membership) return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
+
+  const now = new Date();
+
+  // Fetch all assigned tasks for this team in one query
+  const assignments = await prisma.taskAssignment.findMany({
+    where: { task: { teamId } },
+    include: {
+      task: { select: { status: true, dueDate: true, completedAt: true } },
+    },
+  });
+
+  // Group stats by userId
+  const statsMap: Record<string, { activeTasks: number; overdueTasks: number; onTimeCompletions: number }> = {};
+
+  for (const a of assignments) {
+    if (!statsMap[a.userId]) {
+      statsMap[a.userId] = { activeTasks: 0, overdueTasks: 0, onTimeCompletions: 0 };
+    }
+    const s = statsMap[a.userId]!;
+    const { status, dueDate, completedAt } = a.task;
+
+    if (status !== "done") {
+      s.activeTasks++;
+      if (dueDate && dueDate < now) s.overdueTasks++;
+    } else {
+      // On time: completed before or on the due date
+      if (dueDate && completedAt && completedAt <= dueDate) s.onTimeCompletions++;
+    }
+  }
+
+  return c.json({ data: statsMap });
+});
+
 // GET /api/teams/:teamId/tasks/:taskId
 tasksRouter.get("/:taskId", async (c) => {
   const user = c.get("user")!;
@@ -270,46 +311,6 @@ tasksRouter.delete("/:taskId/assign/:userId", async (c) => {
 
   await prisma.taskAssignment.deleteMany({ where: { taskId, userId } });
   return c.body(null, 204);
-});
-
-// GET /api/teams/:teamId/tasks/member-stats - task stats per team member
-tasksRouter.get("/member-stats", async (c) => {
-  const user = c.get("user")!;
-  const teamId = c.req.param("teamId") as string;
-
-  const membership = await getMembership(user.id, teamId);
-  if (!membership) return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
-
-  const now = new Date();
-
-  // Fetch all assigned tasks for this team in one query
-  const assignments = await prisma.taskAssignment.findMany({
-    where: { task: { teamId } },
-    include: {
-      task: { select: { status: true, dueDate: true, completedAt: true } },
-    },
-  });
-
-  // Group stats by userId
-  const statsMap: Record<string, { activeTasks: number; overdueTasks: number; onTimeCompletions: number }> = {};
-
-  for (const a of assignments) {
-    if (!statsMap[a.userId]) {
-      statsMap[a.userId] = { activeTasks: 0, overdueTasks: 0, onTimeCompletions: 0 };
-    }
-    const s = statsMap[a.userId]!;
-    const { status, dueDate, completedAt } = a.task;
-
-    if (status !== "done") {
-      s.activeTasks++;
-      if (dueDate && dueDate < now) s.overdueTasks++;
-    } else {
-      // On time: completed before or on the due date
-      if (dueDate && completedAt && completedAt <= dueDate) s.onTimeCompletions++;
-    }
-  }
-
-  return c.json({ data: statsMap });
 });
 
 export { tasksRouter };
