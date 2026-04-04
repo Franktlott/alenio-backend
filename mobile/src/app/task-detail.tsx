@@ -222,19 +222,17 @@ export default function TaskDetailScreen() {
             <Text className="flex-1 text-sm text-emerald-700 dark:text-emerald-400">
               Task is completed. Recall it to make edits.
             </Text>
-            {isCreator ? (
-              <TouchableOpacity
-                onPress={() => updateMutation.mutate({ status: "todo" })}
-                disabled={updateMutation.isPending}
-                className="px-3 py-1 rounded-full bg-emerald-600"
-              >
-                {updateMutation.isPending ? (
-                  <ActivityIndicator size="small" color="white" />
-                ) : (
-                  <Text className="text-xs font-semibold text-white">Recall</Text>
-                )}
-              </TouchableOpacity>
-            ) : null}
+            <TouchableOpacity
+              onPress={() => updateMutation.mutate({ status: "todo" })}
+              disabled={updateMutation.isPending}
+              className="px-3 py-1 rounded-full bg-emerald-600"
+            >
+              {updateMutation.isPending ? (
+                <ActivityIndicator size="small" color="white" />
+              ) : (
+                <Text className="text-xs font-semibold text-white">Recall</Text>
+              )}
+            </TouchableOpacity>
           </View>
         ) : null}
 
@@ -247,8 +245,11 @@ export default function TaskDetailScreen() {
               return (
                 <TouchableOpacity
                   key={s.value}
-                  onPress={() => isEditable && updateMutation.mutate({ status: s.value })}
-                  disabled={!isEditable || updateMutation.isPending}
+                  onPress={() => {
+                    const canChange = s.value === "done" ? !isCompleted : isEditable;
+                    if (canChange) updateMutation.mutate({ status: s.value });
+                  }}
+                  disabled={s.value === "done" ? (isCompleted || updateMutation.isPending) : (!isEditable || updateMutation.isPending)}
                   className="px-3 py-1.5 rounded-full border"
                   style={isActive ? { backgroundColor: s.color + "20", borderColor: s.color } : { borderColor: "#E2E8F0" }}
                   testID={`status-${s.value}`}
@@ -346,37 +347,41 @@ export default function TaskDetailScreen() {
           <View className="flex-row items-center justify-between mb-2">
             <Text className="text-sm font-semibold text-slate-500">Assignees</Text>
             <View className="flex-row" style={{ gap: 8 }}>
-              <TouchableOpacity
-                testID="assign-to-me-button"
-                onPress={() => currentUserId && handleToggleMember(currentUserId)}
-                disabled={!currentUserId || !isEditable || assignMutation.isPending || unassignMutation.isPending}
-                className={`flex-row items-center px-3 py-1 rounded-full ${isSelfAssigned ? "bg-red-50 dark:bg-red-900/30" : "bg-indigo-50 dark:bg-indigo-900/40"}`}
-                style={{ gap: 4 }}
-              >
-                {(assignMutation.isPending || unassignMutation.isPending) ? (
-                  <ActivityIndicator size="small" color={isSelfAssigned ? "#EF4444" : "#4361EE"} />
-                ) : isSelfAssigned ? (
-                  <>
-                    <X size={12} color="#EF4444" />
-                    <Text className="text-xs font-semibold text-red-500 dark:text-red-400">Remove me</Text>
-                  </>
-                ) : (
-                  <>
-                    <Check size={12} color="#4361EE" />
-                    <Text className="text-xs font-semibold text-indigo-600 dark:text-indigo-400">Assign to me</Text>
-                  </>
-                )}
-              </TouchableOpacity>
-              <TouchableOpacity
-                testID="manage-assignees-button"
-                onPress={() => setShowAssignModal(true)}
-                disabled={!isEditable}
-                className="flex-row items-center px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-700"
-                style={{ gap: 4 }}
-              >
-                <UserPlus size={12} color="#64748B" />
-                <Text className="text-xs font-semibold text-slate-500">Manage</Text>
-              </TouchableOpacity>
+              {isCreator ? (
+                <TouchableOpacity
+                  testID="assign-to-me-button"
+                  onPress={() => currentUserId && handleToggleMember(currentUserId)}
+                  disabled={!currentUserId || !isEditable || assignMutation.isPending || unassignMutation.isPending}
+                  className={`flex-row items-center px-3 py-1 rounded-full ${isSelfAssigned ? "bg-red-50 dark:bg-red-900/30" : "bg-indigo-50 dark:bg-indigo-900/40"}`}
+                  style={{ gap: 4 }}
+                >
+                  {(assignMutation.isPending || unassignMutation.isPending) ? (
+                    <ActivityIndicator size="small" color={isSelfAssigned ? "#EF4444" : "#4361EE"} />
+                  ) : isSelfAssigned ? (
+                    <>
+                      <X size={12} color="#EF4444" />
+                      <Text className="text-xs font-semibold text-red-500 dark:text-red-400">Remove me</Text>
+                    </>
+                  ) : (
+                    <>
+                      <Check size={12} color="#4361EE" />
+                      <Text className="text-xs font-semibold text-indigo-600 dark:text-indigo-400">Assign to me</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              ) : null}
+              {isCreator ? (
+                <TouchableOpacity
+                  testID="manage-assignees-button"
+                  onPress={() => setShowAssignModal(true)}
+                  disabled={!isEditable}
+                  className="flex-row items-center px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-700"
+                  style={{ gap: 4 }}
+                >
+                  <UserPlus size={12} color="#64748B" />
+                  <Text className="text-xs font-semibold text-slate-500">Manage</Text>
+                </TouchableOpacity>
+              ) : null}
             </View>
           </View>
 
