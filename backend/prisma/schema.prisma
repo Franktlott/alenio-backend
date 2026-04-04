@@ -31,6 +31,7 @@ model User {
   notifTaskAssigned Boolean @default(true)
   notifTaskDue      Boolean @default(true)
   joinRequests  JoinRequest[]
+  calendarEvents CalendarEvent[]
 }
 
 model Session {
@@ -83,6 +84,7 @@ model Team {
   messages    Message[]
   templates   TaskTemplate[]
   joinRequests JoinRequest[]
+  calendarEvents CalendarEvent[]
 }
 
 model TeamMember {
@@ -250,4 +252,21 @@ model JoinRequest {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([teamId, userId])
+}
+
+model CalendarEvent {
+  id          String    @id @default(cuid())
+  title       String
+  description String?
+  startDate   DateTime
+  endDate     DateTime?
+  allDay      Boolean   @default(true)
+  color       String    @default("#4361EE")
+  teamId      String
+  createdById String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  team      Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  createdBy User @relation(fields: [createdById], references: [id], onDelete: Cascade)
 }

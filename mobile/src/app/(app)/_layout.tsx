@@ -1,5 +1,5 @@
 import { Tabs } from "expo-router";
-import { CheckSquare, Users, User, MessageCircle } from "lucide-react-native";
+import { CheckSquare, Users, User, MessageCircle, CalendarDays } from "lucide-react-native";
 import { useColorScheme } from "react-native";
 
 export default function AppLayout() {
@@ -50,6 +50,15 @@ export default function AppLayout() {
           title: "Chat",
           tabBarIcon: ({ color, size }: { color: string; size: number }) => (
             <MessageCircle size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="calendar"
+        options={{
+          title: "Calendar",
+          tabBarIcon: ({ color, size }: { color: string; size: number }) => (
+            <CalendarDays size={size} color={color} />
           ),
         }}
       />
