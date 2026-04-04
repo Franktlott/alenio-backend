@@ -4,6 +4,7 @@ import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import "./env";
 import { auth } from "./auth";
+import { prisma } from "./prisma";
 import { sampleRouter } from "./routes/sample";
 import { teamsRouter } from "./routes/teams";
 import { tasksRouter } from "./routes/tasks";
@@ -59,6 +60,55 @@ app.all("/api/auth/**", (c) => auth.handler(c.req.raw));
 
 // Health check endpoint
 app.get("/health", (c) => c.json({ status: "ok" }));
+
+// File upload endpoint - proxies to Vibecode storage
+app.post("/api/upload", async (c) => {
+  const user = c.get("user");
+  if (!user) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
+
+  const formData = await c.req.formData();
+  const file = formData.get("file");
+
+  if (!file || !(file instanceof File)) {
+    return c.json({ error: { message: "No file provided", code: "VALIDATION_ERROR" } }, 400);
+  }
+
+  const storageForm = new FormData();
+  storageForm.append("file", file);
+
+  const response = await fetch("https://storage.vibecodeapp.com/v1/files/upload", {
+    method: "POST",
+    body: storageForm,
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    return c.json({ error: { message: (error as any).error || "Upload failed", code: "UPLOAD_ERROR" } }, 500);
+  }
+
+  const result = await response.json() as { file: { id: string; url: string; originalFilename: string; contentType: string; sizeBytes: number } };
+  return c.json({ data: result.file });
+});
+
+// Update profile (name and/or image)
+app.patch("/api/profile", async (c) => {
+  const user = c.get("user");
+  if (!user) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
+
+  const body = await c.req.json();
+  const { name, image } = body;
+
+  const updated = await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      ...(name !== undefined ? { name: name.trim() } : {}),
+      ...(image !== undefined ? { image } : {}),
+    },
+    select: { id: true, name: true, email: true, image: true },
+  });
+
+  return c.json({ data: updated });
+});
 
 // Routes
 app.route("/api/sample", sampleRouter);
