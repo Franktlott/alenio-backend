@@ -20,6 +20,7 @@ model User {
   teamMembers   TeamMember[]
   tasksCreated  Task[]           @relation("TaskCreator")
   assignments   TaskAssignment[]
+  messagesSent  Message[]
 }
 
 model Session {
@@ -68,6 +69,7 @@ model Team {
   updatedAt   DateTime     @updatedAt
   members     TeamMember[]
   tasks       Task[]
+  messages    Message[]
 }
 
 model TeamMember {
@@ -122,4 +124,14 @@ model RecurrenceRule {
   daysOfWeek String?
   dayOfMonth Int?
   nextDueAt  DateTime?
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  content   String
+  createdAt DateTime @default(now())
+  teamId    String
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  senderId  String
+  sender    User     @relation(fields: [senderId], references: [id])
 }

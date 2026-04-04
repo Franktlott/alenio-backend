@@ -56,6 +56,15 @@ export interface Task {
   team?: { id: string; name: string };
 }
 
+export interface Message {
+  id: string;
+  content: string;
+  createdAt: string;
+  teamId: string;
+  senderId: string;
+  sender: User;
+}
+
 export interface CreateTaskInput {
   title: string;
   description?: string;

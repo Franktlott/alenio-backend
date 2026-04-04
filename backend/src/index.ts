@@ -8,6 +8,7 @@ import { sampleRouter } from "./routes/sample";
 import { teamsRouter } from "./routes/teams";
 import { tasksRouter } from "./routes/tasks";
 import { myTasksRouter } from "./routes/my-tasks";
+import { messagesRouter } from "./routes/messages";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -63,6 +64,7 @@ app.route("/api/sample", sampleRouter);
 app.route("/api/teams", teamsRouter);
 app.route("/api/teams/:teamId/tasks", tasksRouter);
 app.route("/api/tasks/mine", myTasksRouter);
+app.route("/api/teams/:teamId/messages", messagesRouter);
 
 const port = Number(process.env.PORT) || 3000;
 
