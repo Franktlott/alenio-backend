@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Modal,
+  Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
@@ -90,8 +91,12 @@ export default function ChatScreen() {
                 elevation: 1,
               }}
             >
-              <View className="w-12 h-12 rounded-full bg-indigo-100 dark:bg-indigo-900 items-center justify-center mr-3">
-                <Users size={22} color="#4361EE" />
+              <View className="w-12 h-12 rounded-full bg-indigo-100 dark:bg-indigo-900 items-center justify-center mr-3 overflow-hidden">
+                {currentTeam?.image ? (
+                  <Image source={{ uri: currentTeam.image }} style={{ width: 48, height: 48 }} resizeMode="cover" />
+                ) : (
+                  <Users size={22} color="#4361EE" />
+                )}
               </View>
               <View className="flex-1">
                 <Text className="font-semibold text-slate-900 dark:text-white">
