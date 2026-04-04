@@ -40,6 +40,7 @@ export default function TaskDetailScreen() {
   const queryClient = useQueryClient();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showAssignModal, setShowAssignModal] = useState(false);
+  const [showRecallConfirm, setShowRecallConfirm] = useState(false);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState<string>("");
 
   const { data: task, isLoading } = useQuery({
@@ -223,7 +224,7 @@ export default function TaskDetailScreen() {
               Task is completed. Recall it to make edits.
             </Text>
             <TouchableOpacity
-              onPress={() => updateMutation.mutate({ status: "todo" })}
+              onPress={() => setShowRecallConfirm(true)}
               disabled={updateMutation.isPending}
               className="px-3 py-1 rounded-full bg-emerald-600"
             >
@@ -501,6 +502,36 @@ export default function TaskDetailScreen() {
                 className="flex-1 py-3.5 items-center"
               >
                 <Text className="text-base font-semibold text-red-500">Delete</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Recall confirmation modal */}
+      <Modal visible={showRecallConfirm} transparent animationType="fade" onRequestClose={() => setShowRecallConfirm(false)}>
+        <TouchableOpacity className="flex-1 bg-black/40 items-center justify-center px-8" activeOpacity={1} onPress={() => setShowRecallConfirm(false)}>
+          <TouchableOpacity activeOpacity={1} className="w-full bg-white dark:bg-slate-800 rounded-2xl overflow-hidden">
+            <View className="px-5 pt-5 pb-4 items-center">
+              <Text style={{ fontSize: 28, marginBottom: 8 }}>⚠️</Text>
+              <Text className="text-lg font-bold text-slate-900 dark:text-white mb-1">Recall this task?</Text>
+              <Text className="text-sm text-slate-500 dark:text-slate-400 text-center">
+                {task?.dueDate && new Date(task.dueDate) < new Date()
+                  ? "This task is past its due date and will be marked as overdue once recalled."
+                  : "This will move the task back to active and allow edits to be made."}
+              </Text>
+            </View>
+            <View className="flex-row border-t border-slate-100 dark:border-slate-700">
+              <TouchableOpacity onPress={() => setShowRecallConfirm(false)} className="flex-1 py-3.5 items-center border-r border-slate-100 dark:border-slate-700">
+                <Text className="text-base font-medium text-slate-600 dark:text-slate-300">Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                testID="confirm-recall-button"
+                onPress={() => { setShowRecallConfirm(false); updateMutation.mutate({ status: "todo" }); }}
+                disabled={updateMutation.isPending}
+                className="flex-1 py-3.5 items-center"
+              >
+                <Text className="text-base font-semibold text-amber-500">Recall</Text>
               </TouchableOpacity>
             </View>
           </TouchableOpacity>
