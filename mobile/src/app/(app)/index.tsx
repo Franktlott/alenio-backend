@@ -74,7 +74,7 @@ function TaskRow({ task, onToggle, onPress }: { task: Task; onToggle: () => void
         <Text
           numberOfLines={2}
           style={{
-            fontSize: 15,
+            fontSize: 14,
             fontWeight: "700",
             marginBottom: 2,
             color: isDone ? "#94A3B8" : "#0F172A",
@@ -84,7 +84,7 @@ function TaskRow({ task, onToggle, onPress }: { task: Task; onToggle: () => void
           {task.title}
         </Text>
         {task.description ? (
-          <Text numberOfLines={1} style={{ fontSize: 13, color: "#94A3B8", marginBottom: 8 }}>
+          <Text numberOfLines={1} style={{ fontSize: 12, color: "#94A3B8", marginBottom: 8 }}>
             {task.description}
           </Text>
         ) : null}
@@ -234,7 +234,7 @@ export default function TasksScreen() {
       >
         <View style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 16 }}>
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-            <Text style={{ color: "white", fontSize: 26, fontWeight: "700" }}>Tasks</Text>
+            <Text style={{ color: "white", fontSize: 20, fontWeight: "700" }}>Tasks</Text>
             <TouchableOpacity
               onPress={() => router.push("/(app)/profile")}
               style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(255,255,255,0.2)", alignItems: "center", justifyContent: "center" }}
