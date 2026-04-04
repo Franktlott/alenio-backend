@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
-import { Plus, User, ArrowUpDown, Clock, AlertTriangle, ListTodo } from "lucide-react-native";
+import { Plus, User, ArrowUpDown, Clock, AlertTriangle } from "lucide-react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { api } from "@/lib/api/api";
@@ -216,7 +216,6 @@ export default function TasksScreen() {
   const myActiveTasks = allTasks.filter((t) => t.status !== "done" && isMyTask(t));
   const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
   const todayEnd = new Date(); todayEnd.setHours(23, 59, 59, 999);
-  const totalCount = myActiveTasks.length;
   const dueTodayCount = myActiveTasks.filter((t) => t.dueDate && new Date(t.dueDate) >= todayStart && new Date(t.dueDate) <= todayEnd).length;
   const overdueCount = myActiveTasks.filter((t) => t.dueDate && new Date(t.dueDate) < todayStart).length;
 
@@ -286,10 +285,6 @@ export default function TasksScreen() {
 
       {/* Stats pills */}
       <View style={{ flexDirection: "row", paddingHorizontal: 16, paddingTop: 10, paddingBottom: 4, gap: 8, flexWrap: "wrap" }}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "white", paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 1 }}>
-          <ListTodo size={13} color="#4361EE" />
-          <Text style={{ fontSize: 12, fontWeight: "600", color: "#4361EE" }}>{totalCount} total</Text>
-        </View>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "white", paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 1 }}>
           <Clock size={13} color="#F59E0B" />
           <Text style={{ fontSize: 12, fontWeight: "600", color: "#F59E0B" }}>{dueTodayCount} due today</Text>
