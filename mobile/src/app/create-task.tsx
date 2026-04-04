@@ -9,7 +9,9 @@ import {
   KeyboardAvoidingView,
   Platform,
   Switch,
+  Modal,
 } from "react-native";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -47,8 +49,7 @@ export default function CreateTaskScreen() {
   const [selectedDayOfWeek, setSelectedDayOfWeek] = useState<number | null>(null);
   const [selectedDayOfMonth, setSelectedDayOfMonth] = useState<number | null>(null);
   const [dueDate, setDueDate] = useState<Date | null>(null);
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);  const [error, setError] = useState<string | null>(null);
 
   const { data: team } = useQuery({
     queryKey: ["team", teamId],
@@ -176,42 +177,66 @@ export default function CreateTaskScreen() {
             <Text className="text-sm font-semibold text-slate-500 mb-3">
               Due Date <Text className="text-red-500">*</Text>
             </Text>
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-              {[
-                { label: "Today", days: 0 },
-                { label: "Tomorrow", days: 1 },
-                { label: "3 days", days: 3 },
-                { label: "1 week", days: 7 },
-                { label: "2 weeks", days: 14 },
-                { label: "1 month", days: 30 },
-              ].map((opt) => {
-                const optDate = new Date();
-                optDate.setDate(optDate.getDate() + opt.days);
-                optDate.setHours(23, 59, 0, 0);
-                const isSelected = dueDate !== null && dueDate.toDateString() === optDate.toDateString();
-                return (
-                  <TouchableOpacity
-                    key={opt.label}
-                    onPress={() => { setDueDate(optDate); setError(null); }}
-                    className="px-4 py-2 rounded-full border"
-                    style={{
-                      borderColor: isSelected ? "#4361EE" : "#E2E8F0",
-                      backgroundColor: isSelected ? "#4361EE0D" : "transparent",
-                    }}
-                    testID={`due-date-${opt.label.toLowerCase().replace(" ", "-")}`}
-                  >
-                    <Text className="text-sm font-medium" style={{ color: isSelected ? "#4361EE" : "#64748B" }}>
-                      {opt.label}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-            {dueDate ? (
-              <Text className="text-xs text-slate-400 mt-2">
-                Due: {dueDate.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })}
+            <TouchableOpacity
+              onPress={() => setShowDatePicker(true)}
+              className="flex-row items-center px-4 py-3 rounded-xl border"
+              style={{ borderColor: dueDate ? "#4361EE" : "#E2E8F0", backgroundColor: dueDate ? "#4361EE0D" : "#F8FAFC" }}
+              testID="due-date-picker-button"
+            >
+              <Text className="text-lg mr-3">📅</Text>
+              <Text className="flex-1 text-sm font-medium" style={{ color: dueDate ? "#4361EE" : "#94A3B8" }}>
+                {dueDate
+                  ? dueDate.toLocaleDateString("en-US", { weekday: "short", month: "long", day: "numeric", year: "numeric" })
+                  : "Select a due date"}
               </Text>
-            ) : null}
+              {dueDate ? (
+                <TouchableOpacity onPress={(e) => { e.stopPropagation(); setDueDate(null); }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Text className="text-slate-400 text-base">✕</Text>
+                </TouchableOpacity>
+              ) : (
+                <Text className="text-slate-400">›</Text>
+              )}
+            </TouchableOpacity>
+
+            {/* iOS inline picker shown in modal */}
+            {Platform.OS === "ios" ? (
+              <Modal visible={showDatePicker} transparent animationType="slide">
+                <View className="flex-1 justify-end">
+                  <View className="bg-white dark:bg-slate-900 rounded-t-3xl" style={{ shadowColor: "#000", shadowOpacity: 0.15, shadowRadius: 20 }}>
+                    <View className="flex-row items-center justify-between px-5 pt-4 pb-2">
+                      <TouchableOpacity onPress={() => { setShowDatePicker(false); setDueDate(null); }}>
+                        <Text className="text-slate-500 text-base">Cancel</Text>
+                      </TouchableOpacity>
+                      <Text className="text-base font-semibold text-slate-900 dark:text-white">Due Date</Text>
+                      <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+                        <Text className="text-indigo-600 font-semibold text-base">Done</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <DateTimePicker
+                      value={dueDate ?? new Date()}
+                      mode="date"
+                      display="spinner"
+                      minimumDate={new Date()}
+                      onChange={(_e, date) => { if (date) { setDueDate(date); setError(null); } }}
+                      style={{ height: 200 }}
+                      testID="date-time-picker"
+                    />
+                    <View style={{ height: 20 }} />
+                  </View>
+                </View>
+              </Modal>
+            ) : (
+              showDatePicker ? (
+                <DateTimePicker
+                  value={dueDate ?? new Date()}
+                  mode="date"
+                  display="default"
+                  minimumDate={new Date()}
+                  onChange={(_e, date) => { setShowDatePicker(false); if (date) { setDueDate(date); setError(null); } }}
+                  testID="date-time-picker"
+                />
+              ) : null
+            )}
           </View>
 
           {/* Priority */}
