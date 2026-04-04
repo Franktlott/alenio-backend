@@ -195,24 +195,27 @@ export default function TaskDetailScreen() {
           <View className="flex-row items-center justify-between mb-2">
             <Text className="text-sm font-semibold text-slate-500">Assignees</Text>
             <View className="flex-row" style={{ gap: 8 }}>
-              {!isSelfAssigned ? (
-                <TouchableOpacity
-                  testID="assign-to-me-button"
-                  onPress={() => currentUserId && handleToggleMember(currentUserId)}
-                  disabled={!currentUserId || assignMutation.isPending}
-                  className="flex-row items-center px-3 py-1 rounded-full bg-indigo-50 dark:bg-indigo-900/40"
-                  style={{ gap: 4 }}
-                >
-                  {assignMutation.isPending ? (
-                    <ActivityIndicator size="small" color="#4361EE" />
-                  ) : (
-                    <>
-                      <Check size={12} color="#4361EE" />
-                      <Text className="text-xs font-semibold text-indigo-600 dark:text-indigo-400">Assign to me</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-              ) : null}
+              <TouchableOpacity
+                testID="assign-to-me-button"
+                onPress={() => currentUserId && handleToggleMember(currentUserId)}
+                disabled={!currentUserId || assignMutation.isPending || unassignMutation.isPending}
+                className={`flex-row items-center px-3 py-1 rounded-full ${isSelfAssigned ? "bg-red-50 dark:bg-red-900/30" : "bg-indigo-50 dark:bg-indigo-900/40"}`}
+                style={{ gap: 4 }}
+              >
+                {(assignMutation.isPending || unassignMutation.isPending) ? (
+                  <ActivityIndicator size="small" color={isSelfAssigned ? "#EF4444" : "#4361EE"} />
+                ) : isSelfAssigned ? (
+                  <>
+                    <X size={12} color="#EF4444" />
+                    <Text className="text-xs font-semibold text-red-500 dark:text-red-400">Remove me</Text>
+                  </>
+                ) : (
+                  <>
+                    <Check size={12} color="#4361EE" />
+                    <Text className="text-xs font-semibold text-indigo-600 dark:text-indigo-400">Assign to me</Text>
+                  </>
+                )}
+              </TouchableOpacity>
               <TouchableOpacity
                 testID="manage-assignees-button"
                 onPress={() => setShowAssignModal(true)}

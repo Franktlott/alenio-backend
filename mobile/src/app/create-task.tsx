@@ -16,6 +16,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams } from "expo-router";
 import { X } from "lucide-react-native";
 import { api } from "@/lib/api/api";
+import { useSession } from "@/lib/auth/use-session";
 import type { Task, TaskPriority, RecurrenceType, Team, TeamMember } from "@/lib/types";
 
 const PRIORITIES: { label: string; value: TaskPriority; color: string }[] = [
@@ -34,6 +35,7 @@ const RECURRENCE_TYPES: { label: string; value: RecurrenceType }[] = [
 export default function CreateTaskScreen() {
   const { teamId } = useLocalSearchParams<{ teamId: string }>();
   const queryClient = useQueryClient();
+  const { data: session } = useSession();
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -218,14 +220,14 @@ export default function CreateTaskScreen() {
                     >
                       <View className="w-8 h-8 rounded-full bg-indigo-600 items-center justify-center mr-3">
                         <Text className="text-white text-xs font-bold">
-                          {m.user.name?.[0]?.toUpperCase() ?? "?"}
+                          {m.user.name?.[0]?.toUpperCase() ?? m.user.email?.[0]?.toUpperCase() ?? "?"}
                         </Text>
                       </View>
                       <Text
                         className="flex-1 font-medium"
                         style={{ color: isSelected ? "#4361EE" : "#334155" }}
                       >
-                        {m.user.name}
+                        {m.user.name ?? m.user.email ?? "Unknown"}{m.userId === session?.user?.id ? " (You)" : ""}
                       </Text>
                       {isSelected ? (
                         <View className="w-5 h-5 rounded-full bg-indigo-600 items-center justify-center">
