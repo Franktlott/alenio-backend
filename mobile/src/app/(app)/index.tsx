@@ -19,7 +19,7 @@ import { useSession } from "@/lib/auth/use-session";
 import { useTeamStore } from "@/lib/state/team-store";
 import type { Task, Team } from "@/lib/types";
 
-type FilterTab = "all" | "active" | "completed";
+type FilterTab = "all" | "assigned" | "completed";
 
 const PRIORITY_CONFIG = {
   urgent: { label: "Urgent", bg: "#FEE2E2", text: "#DC2626", flagColor: "#DC2626" },
@@ -164,13 +164,21 @@ export default function TasksScreen() {
     },
   });
 
+  const currentUserId = session?.user?.id ?? null;
+
   const tasks = allTasks.filter((t) => {
-    if (filter === "active") return t.status !== "done";
+    if (filter === "assigned") return (
+      t.creator?.id === currentUserId &&
+      (t.assignments ?? []).some((a) => a.userId !== currentUserId)
+    );
     if (filter === "completed") return t.status === "done";
     return true;
   });
 
-  const activeCount = allTasks.filter((t) => t.status !== "done").length;
+  const assignedCount = allTasks.filter((t) =>
+    t.creator?.id === currentUserId &&
+    (t.assignments ?? []).some((a) => a.userId !== currentUserId)
+  ).length;
   const completedCount = allTasks.filter((t) => t.status === "done").length;
 
   if (!teamsLoading && (!teams || teams.length === 0)) {
@@ -247,8 +255,8 @@ export default function TasksScreen() {
             <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: "#60A5FA" }} />
           </View>
           <View>
-            <Text style={{ fontSize: 12, color: "#94A3B8" }}>Active</Text>
-            <Text style={{ fontSize: 24, fontWeight: "700", color: "#0F172A" }}>{activeCount}</Text>
+            <Text style={{ fontSize: 12, color: "#94A3B8" }}>Assigned</Text>
+            <Text style={{ fontSize: 24, fontWeight: "700", color: "#0F172A" }}>{assignedCount}</Text>
           </View>
         </View>
         <View style={{
@@ -267,7 +275,7 @@ export default function TasksScreen() {
 
       {/* Filter tabs */}
       <View style={{ marginHorizontal: 16, marginBottom: 12, flexDirection: "row", backgroundColor: "#E2E8F0", borderRadius: 12, padding: 4 }}>
-        {(["all", "active", "completed"] as FilterTab[]).map((f) => (
+        {(["all", "assigned", "completed"] as FilterTab[]).map((f) => (
           <TouchableOpacity
             key={f}
             onPress={() => setFilter(f)}
@@ -281,7 +289,7 @@ export default function TasksScreen() {
               fontSize: 13, fontWeight: "600",
               color: filter === f ? "#0F172A" : "#94A3B8",
             }}>
-              {f === "all" ? "All" : f === "active" ? "Active" : "Completed"}
+              {f === "all" ? "All" : f === "assigned" ? "Assigned" : "Completed"}
             </Text>
           </TouchableOpacity>
         ))}
