@@ -1,19 +1,21 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
-  Alert,
+  Modal,
+  Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams } from "expo-router";
-import { ArrowLeft, Trash2, RefreshCw } from "lucide-react-native";
+import { ArrowLeft, Trash2, RefreshCw, UserPlus, X, Check } from "lucide-react-native";
 import { api } from "@/lib/api/api";
-import type { Task, TaskStatus } from "@/lib/types";
+import { useSession } from "@/lib/auth/use-session";
+import type { Task, TaskStatus, Team } from "@/lib/types";
 
 const STATUS_OPTIONS: { label: string; value: TaskStatus; color: string }[] = [
   { label: "To Do", value: "todo", color: "#64748B" },
@@ -29,15 +31,21 @@ const PRIORITY_COLORS: Record<string, string> = {
 };
 
 export default function TaskDetailScreen() {
-  const { taskId, teamId } = useLocalSearchParams<{
-    taskId: string;
-    teamId: string;
-  }>();
+  const { taskId, teamId } = useLocalSearchParams<{ taskId: string; teamId: string }>();
+  const { data: session } = useSession();
   const queryClient = useQueryClient();
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showAssignModal, setShowAssignModal] = useState(false);
 
   const { data: task, isLoading } = useQuery({
     queryKey: ["task", taskId, teamId],
     queryFn: () => api.get<Task>(`/api/teams/${teamId}/tasks/${taskId}`),
+  });
+
+  const { data: team } = useQuery({
+    queryKey: ["team", teamId],
+    queryFn: () => api.get<Team>(`/api/teams/${teamId}`),
+    enabled: !!teamId,
   });
 
   const updateMutation = useMutation({
@@ -59,32 +67,40 @@ export default function TaskDetailScreen() {
     },
   });
 
-  const handleDelete = () => {
-    Alert.alert(
-      "Delete task",
-      "Are you sure? This action cannot be undone.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: () => deleteMutation.mutate(),
-        },
-      ]
-    );
-  };
+  const assignMutation = useMutation({
+    mutationFn: (userIds: string[]) =>
+      api.post(`/api/teams/${teamId}/tasks/${taskId}/assign`, { userIds }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["task", taskId, teamId] });
+      queryClient.invalidateQueries({ queryKey: ["tasks", teamId] });
+    },
+  });
 
-  const handleStatusChange = (status: TaskStatus) => {
-    updateMutation.mutate({ status });
+  const unassignMutation = useMutation({
+    mutationFn: (userId: string) =>
+      api.delete(`/api/teams/${teamId}/tasks/${taskId}/assign/${userId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["task", taskId, teamId] });
+      queryClient.invalidateQueries({ queryKey: ["tasks", teamId] });
+    },
+  });
+
+  const currentUserId = session?.user?.id ?? "";
+  const members = team?.members ?? [];
+  const assignedIds = new Set((task?.assignments ?? []).map((a) => a.userId));
+  const isSelfAssigned = assignedIds.has(currentUserId);
+
+  const handleToggleMember = (userId: string) => {
+    if (assignedIds.has(userId)) {
+      unassignMutation.mutate(userId);
+    } else {
+      assignMutation.mutate([userId]);
+    }
   };
 
   if (isLoading) {
     return (
-      <SafeAreaView
-        className="flex-1 bg-white dark:bg-slate-900"
-        edges={["top"]}
-        testID="loading-indicator"
-      >
+      <SafeAreaView className="flex-1 bg-white dark:bg-slate-900" edges={["top"]} testID="loading-indicator">
         <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
           <View className="px-4 pt-2 pb-4 flex-row items-center">
             <TouchableOpacity onPress={() => router.back()} testID="back-button">
@@ -108,23 +124,15 @@ export default function TaskDetailScreen() {
   }
 
   return (
-    <SafeAreaView
-      className="flex-1 bg-white dark:bg-slate-900"
-      edges={["top"]}
-      testID="task-detail-screen"
-    >
+    <SafeAreaView className="flex-1 bg-white dark:bg-slate-900" edges={["top"]} testID="task-detail-screen">
       {/* Header */}
       <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
         <View className="px-4 pt-2 pb-4 flex-row items-center justify-between">
           <TouchableOpacity onPress={() => router.back()} testID="back-button">
             <ArrowLeft size={22} color="white" />
           </TouchableOpacity>
-          <Text className="text-white text-lg font-bold flex-1 ml-3" numberOfLines={1}>{task?.title ?? "Task"}</Text>
-          <TouchableOpacity
-            onPress={handleDelete}
-            disabled={deleteMutation.isPending}
-            testID="delete-button"
-          >
+          <Text className="text-white text-lg font-bold flex-1 ml-3" numberOfLines={1}>{task.title}</Text>
+          <TouchableOpacity onPress={() => setShowDeleteConfirm(true)} disabled={deleteMutation.isPending} testID="delete-button">
             {deleteMutation.isPending ? (
               <ActivityIndicator size="small" color="white" />
             ) : (
@@ -136,72 +144,43 @@ export default function TaskDetailScreen() {
 
       <ScrollView className="flex-1 px-4" showsVerticalScrollIndicator={false}>
         {/* Priority indicator */}
-        <View
-          className="flex-row items-center mt-4 mb-2"
-          style={{ gap: 8 }}
-        >
-          <View
-            className="w-3 h-3 rounded-full"
-            style={{
-              backgroundColor: PRIORITY_COLORS[task.priority] ?? "#94A3B8",
-            }}
-          />
-          <Text
-            className="text-xs font-semibold uppercase tracking-wide"
-            style={{ color: PRIORITY_COLORS[task.priority] ?? "#94A3B8" }}
-          >
+        <View className="flex-row items-center mt-4 mb-2" style={{ gap: 8 }}>
+          <View className="w-3 h-3 rounded-full" style={{ backgroundColor: PRIORITY_COLORS[task.priority] ?? "#94A3B8" }} />
+          <Text className="text-xs font-semibold uppercase tracking-wide" style={{ color: PRIORITY_COLORS[task.priority] ?? "#94A3B8" }}>
             {task.priority} priority
           </Text>
           {task.recurrenceRule ? (
             <View className="flex-row items-center ml-2" style={{ gap: 4 }}>
               <RefreshCw size={12} color="#64748B" />
-              <Text className="text-xs text-slate-500 capitalize">
-                {task.recurrenceRule.type}
-              </Text>
+              <Text className="text-xs text-slate-500 capitalize">{task.recurrenceRule.type}</Text>
             </View>
           ) : null}
         </View>
 
         {/* Title */}
-        <Text className="text-2xl font-bold text-slate-900 dark:text-white mb-3">
-          {task.title}
-        </Text>
+        <Text className="text-2xl font-bold text-slate-900 dark:text-white mb-3">{task.title}</Text>
 
         {/* Description */}
         {task.description ? (
-          <Text className="text-base text-slate-600 dark:text-slate-400 mb-4 leading-relaxed">
-            {task.description}
-          </Text>
+          <Text className="text-base text-slate-600 dark:text-slate-400 mb-4 leading-relaxed">{task.description}</Text>
         ) : null}
 
         {/* Status */}
         <View className="mb-4">
-          <Text className="text-sm font-semibold text-slate-500 mb-2">
-            Status
-          </Text>
+          <Text className="text-sm font-semibold text-slate-500 mb-2">Status</Text>
           <View className="flex-row flex-wrap" style={{ gap: 8 }}>
             {STATUS_OPTIONS.map((s) => {
               const isActive = task.status === s.value;
               return (
                 <TouchableOpacity
                   key={s.value}
-                  onPress={() => handleStatusChange(s.value)}
+                  onPress={() => updateMutation.mutate({ status: s.value })}
                   disabled={updateMutation.isPending}
                   className="px-3 py-1.5 rounded-full border"
-                  style={
-                    isActive
-                      ? {
-                          backgroundColor: s.color + "20",
-                          borderColor: s.color,
-                        }
-                      : { borderColor: "#E2E8F0" }
-                  }
+                  style={isActive ? { backgroundColor: s.color + "20", borderColor: s.color } : { borderColor: "#E2E8F0" }}
                   testID={`status-${s.value}`}
                 >
-                  <Text
-                    className="text-xs font-semibold"
-                    style={{ color: isActive ? s.color : "#94A3B8" }}
-                  >
+                  <Text className="text-xs font-semibold" style={{ color: isActive ? s.color : "#94A3B8" }}>
                     {s.label}
                   </Text>
                 </TouchableOpacity>
@@ -211,56 +190,159 @@ export default function TaskDetailScreen() {
         </View>
 
         {/* Assignees */}
-        {task.assignments && task.assignments.length > 0 ? (
-          <View className="mb-4">
-            <Text className="text-sm font-semibold text-slate-500 mb-2">
-              Assignees
-            </Text>
+        <View className="mb-4">
+          <View className="flex-row items-center justify-between mb-2">
+            <Text className="text-sm font-semibold text-slate-500">Assignees</Text>
+            <View className="flex-row" style={{ gap: 8 }}>
+              {!isSelfAssigned ? (
+                <TouchableOpacity
+                  testID="assign-to-me-button"
+                  onPress={() => handleToggleMember(currentUserId)}
+                  disabled={assignMutation.isPending}
+                  className="flex-row items-center px-3 py-1 rounded-full bg-indigo-50 dark:bg-indigo-900/40"
+                  style={{ gap: 4 }}
+                >
+                  {assignMutation.isPending ? (
+                    <ActivityIndicator size="small" color="#4361EE" />
+                  ) : (
+                    <>
+                      <Check size={12} color="#4361EE" />
+                      <Text className="text-xs font-semibold text-indigo-600 dark:text-indigo-400">Assign to me</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              ) : null}
+              <TouchableOpacity
+                testID="manage-assignees-button"
+                onPress={() => setShowAssignModal(true)}
+                className="flex-row items-center px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-700"
+                style={{ gap: 4 }}
+              >
+                <UserPlus size={12} color="#64748B" />
+                <Text className="text-xs font-semibold text-slate-500">Manage</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {task.assignments && task.assignments.length > 0 ? (
             <View style={{ gap: 8 }}>
               {task.assignments.map((a) => (
                 <View key={a.id} className="flex-row items-center">
-                  <View className="w-8 h-8 rounded-full bg-indigo-600 items-center justify-center mr-2">
-                    <Text className="text-white text-xs font-bold">
-                      {a.user.name?.[0]?.toUpperCase() ?? "?"}
-                    </Text>
+                  <View className="w-8 h-8 rounded-full bg-indigo-600 items-center justify-center mr-2 overflow-hidden">
+                    {a.user.image ? (
+                      <Image source={{ uri: a.user.image }} style={{ width: 32, height: 32 }} resizeMode="cover" />
+                    ) : (
+                      <Text className="text-white text-xs font-bold">{a.user.name?.[0]?.toUpperCase() ?? "?"}</Text>
+                    )}
                   </View>
-                  <View>
+                  <View className="flex-1">
                     <Text className="text-sm font-medium text-slate-900 dark:text-white">
-                      {a.user.name}
+                      {a.user.name}{a.userId === currentUserId ? " (you)" : ""}
                     </Text>
-                    <Text className="text-xs text-slate-500">
-                      {a.user.email}
-                    </Text>
+                    <Text className="text-xs text-slate-500">{a.user.email}</Text>
                   </View>
+                  <TouchableOpacity
+                    onPress={() => unassignMutation.mutate(a.userId)}
+                    disabled={unassignMutation.isPending}
+                    className="w-6 h-6 rounded-full items-center justify-center bg-slate-100 dark:bg-slate-700"
+                    testID={`unassign-${a.userId}`}
+                  >
+                    <X size={12} color="#94A3B8" />
+                  </TouchableOpacity>
                 </View>
               ))}
             </View>
-          </View>
-        ) : null}
+          ) : (
+            <Text className="text-sm text-slate-400 italic">No one assigned yet</Text>
+          )}
+        </View>
 
         {/* Meta */}
         <View className="mt-2 pt-4 border-t border-slate-100 dark:border-slate-800">
           <Text className="text-xs text-slate-400">
-            Created{" "}
-            {new Date(task.createdAt).toLocaleDateString("en-US", {
-              month: "long",
-              day: "numeric",
-              year: "numeric",
-            })}
+            Created {new Date(task.createdAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
           </Text>
           {task.completedAt ? (
             <Text className="text-xs text-emerald-500 mt-1">
-              Completed{" "}
-              {new Date(task.completedAt).toLocaleDateString("en-US", {
-                month: "long",
-                day: "numeric",
-              })}
+              Completed {new Date(task.completedAt).toLocaleDateString("en-US", { month: "long", day: "numeric" })}
             </Text>
           ) : null}
         </View>
 
         <View style={{ height: 32 }} />
       </ScrollView>
+
+      {/* Assign members modal */}
+      <Modal visible={showAssignModal} transparent animationType="slide" onRequestClose={() => setShowAssignModal(false)}>
+        <TouchableOpacity className="flex-1 bg-black/40 justify-end" activeOpacity={1} onPress={() => setShowAssignModal(false)}>
+          <TouchableOpacity activeOpacity={1} className="bg-white dark:bg-slate-800 rounded-t-3xl px-4 pt-4 pb-8">
+            <View className="flex-row items-center justify-between mb-4">
+              <Text className="text-base font-bold text-slate-900 dark:text-white">Manage Assignees</Text>
+              <TouchableOpacity onPress={() => setShowAssignModal(false)}>
+                <X size={20} color="#94A3B8" />
+              </TouchableOpacity>
+            </View>
+            {members.map((m) => {
+              const isAssigned = assignedIds.has(m.userId);
+              const isPending = assignMutation.isPending || unassignMutation.isPending;
+              return (
+                <TouchableOpacity
+                  key={m.id}
+                  testID={`assign-member-${m.userId}`}
+                  onPress={() => handleToggleMember(m.userId)}
+                  disabled={isPending}
+                  className="flex-row items-center py-3 border-b border-slate-100 dark:border-slate-700"
+                >
+                  <View className="w-9 h-9 rounded-full bg-indigo-600 items-center justify-center mr-3 overflow-hidden">
+                    {m.user.image ? (
+                      <Image source={{ uri: m.user.image }} style={{ width: 36, height: 36 }} resizeMode="cover" />
+                    ) : (
+                      <Text className="text-white text-sm font-bold">{m.user.name?.[0]?.toUpperCase() ?? "?"}</Text>
+                    )}
+                  </View>
+                  <View className="flex-1">
+                    <Text className="font-semibold text-slate-900 dark:text-white">
+                      {m.user.name}{m.userId === currentUserId ? " (you)" : ""}
+                    </Text>
+                    <Text className="text-xs text-slate-500">{m.user.email}</Text>
+                  </View>
+                  <View
+                    className="w-6 h-6 rounded-full border-2 items-center justify-center"
+                    style={{ backgroundColor: isAssigned ? "#4361EE" : "transparent", borderColor: isAssigned ? "#4361EE" : "#CBD5E1" }}
+                  >
+                    {isAssigned ? <Check size={14} color="white" /> : null}
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Delete confirmation modal */}
+      <Modal visible={showDeleteConfirm} transparent animationType="fade" onRequestClose={() => setShowDeleteConfirm(false)}>
+        <TouchableOpacity className="flex-1 bg-black/40 items-center justify-center px-8" activeOpacity={1} onPress={() => setShowDeleteConfirm(false)}>
+          <TouchableOpacity activeOpacity={1} className="w-full bg-white dark:bg-slate-800 rounded-2xl overflow-hidden">
+            <View className="px-5 pt-5 pb-4 items-center">
+              <Text className="text-lg font-bold text-slate-900 dark:text-white mb-1">Delete task?</Text>
+              <Text className="text-sm text-slate-500 dark:text-slate-400 text-center">This task will be permanently removed.</Text>
+            </View>
+            <View className="flex-row border-t border-slate-100 dark:border-slate-700">
+              <TouchableOpacity onPress={() => setShowDeleteConfirm(false)} className="flex-1 py-3.5 items-center border-r border-slate-100 dark:border-slate-700">
+                <Text className="text-base font-medium text-slate-600 dark:text-slate-300">Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                testID="confirm-delete-button"
+                onPress={() => { setShowDeleteConfirm(false); deleteMutation.mutate(); }}
+                disabled={deleteMutation.isPending}
+                className="flex-1 py-3.5 items-center"
+              >
+                <Text className="text-base font-semibold text-red-500">Delete</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 }
