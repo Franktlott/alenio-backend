@@ -27,6 +27,7 @@ import ReanimatedSwipeable from "react-native-gesture-handler/ReanimatedSwipeabl
 import Reanimated, { useAnimatedStyle, interpolate } from "react-native-reanimated";
 import * as FileSystem from "expo-file-system";
 import * as MediaLibrary from "expo-media-library";
+import { useUnreadStore } from "@/lib/state/unread-store";
 import * as Haptics from "expo-haptics";
 import { toast } from "burnt";
 
@@ -94,6 +95,7 @@ export default function DMChatScreen() {
   const [showMediaPicker, setShowMediaPicker] = useState(false);
   const flatListRef = useRef<FlatList>(null);
   const currentUserId = session?.user?.id ?? "";
+  const markAsRead = useUnreadStore((s) => s.markAsRead);
 
   const { data: messages = [], isLoading } = useQuery({
     queryKey: ["dm-messages", conversationId],
@@ -198,6 +200,13 @@ export default function DMChatScreen() {
       setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
     }
   }, [messages.length]);
+
+  useEffect(() => {
+    if (messages.length > 0) {
+      const lastMsg = messages[messages.length - 1];
+      markAsRead(conversationId, lastMsg.id);
+    }
+  }, [messages, conversationId, markAsRead]);
 
   const items = buildMessageList(messages);
 

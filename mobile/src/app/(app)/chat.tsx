@@ -16,6 +16,7 @@ import { router } from "expo-router";
 import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
 import { useTeamStore } from "@/lib/state/team-store";
+import { useUnreadStore } from "@/lib/state/unread-store";
 import type { Conversation } from "@/lib/types";
 
 function formatTime(dateStr: string) {
@@ -47,6 +48,7 @@ export default function ChatScreen() {
   });
 
   const currentTeam = teams?.find((t: any) => t.id === activeTeamId);
+  const lastReadIds = useUnreadStore((s) => s.lastReadIds);
 
   return (
     <SafeAreaView
@@ -188,13 +190,21 @@ export default function ChatScreen() {
                     <Text className="text-sm text-slate-400 italic">No messages yet</Text>
                   )}
                 </View>
-                <View className="items-end">
+                <View className="items-end" style={{ gap: 4 }}>
                   {conv.lastMessage ? (
                     <Text className="text-xs text-slate-400">
                       {formatTime(conv.lastMessage.createdAt)}
                     </Text>
                   ) : null}
-                  <ChevronRight size={16} color="#94A3B8" style={{ marginTop: 4 }} />
+                  {conv.lastMessage &&
+                   conv.lastMessage.sender.id !== session?.user?.id &&
+                   lastReadIds[conv.id] !== conv.lastMessage.id ? (
+                    <View style={{ backgroundColor: "#4361EE", borderRadius: 10, minWidth: 20, height: 20, alignItems: "center", justifyContent: "center", paddingHorizontal: 6 }}>
+                      <Text style={{ color: "white", fontSize: 11, fontWeight: "700" }}>1</Text>
+                    </View>
+                  ) : (
+                    <ChevronRight size={16} color="#94A3B8" />
+                  )}
                 </View>
               </TouchableOpacity>
             ))}
