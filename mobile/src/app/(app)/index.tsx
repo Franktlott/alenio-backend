@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
-import { Plus, User, ArrowUpDown } from "lucide-react-native";
+import { Plus, User, ArrowUpDown, Clock, AlertTriangle, ListTodo } from "lucide-react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { api } from "@/lib/api/api";
@@ -213,6 +213,13 @@ export default function TasksScreen() {
   ).length;
   const completedCount = allTasks.filter((t) => t.status === "done" && isMyTask(t)).length;
 
+  const myActiveTasks = allTasks.filter((t) => t.status !== "done" && isMyTask(t));
+  const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+  const todayEnd = new Date(); todayEnd.setHours(23, 59, 59, 999);
+  const totalCount = myActiveTasks.length;
+  const dueTodayCount = myActiveTasks.filter((t) => t.dueDate && new Date(t.dueDate) >= todayStart && new Date(t.dueDate) <= todayEnd).length;
+  const overdueCount = myActiveTasks.filter((t) => t.dueDate && new Date(t.dueDate) < todayStart).length;
+
   if (!teamsLoading && (!teams || teams.length === 0)) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: "white" }} testID="no-teams-screen">
@@ -273,6 +280,22 @@ export default function TasksScreen() {
             >
               <User size={18} color="white" />
             </TouchableOpacity>
+          </View>
+          <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "rgba(255,255,255,0.2)", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 }}>
+              <ListTodo size={13} color="white" />
+              <Text style={{ color: "white", fontSize: 12, fontWeight: "600" }}>{totalCount} total</Text>
+            </View>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "rgba(255,255,255,0.2)", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 }}>
+              <Clock size={13} color="white" />
+              <Text style={{ color: "white", fontSize: 12, fontWeight: "600" }}>{dueTodayCount} due today</Text>
+            </View>
+            {overdueCount > 0 ? (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "#EF444440", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 }}>
+                <AlertTriangle size={13} color="#FCA5A5" />
+                <Text style={{ color: "#FCA5A5", fontSize: 12, fontWeight: "700" }}>{overdueCount} overdue</Text>
+              </View>
+            ) : null}
           </View>
         </View>
       </LinearGradient>
