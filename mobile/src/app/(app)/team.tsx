@@ -21,13 +21,12 @@ import { LinearGradient } from "expo-linear-gradient";
 import * as Clipboard from "expo-clipboard";
 import * as ImagePicker from "expo-image-picker";
 import { api } from "@/lib/api/api";
+import { uploadFile } from "@/lib/upload";
 import { useTeamStore } from "@/lib/state/team-store";
 import { useSession } from "@/lib/auth/use-session";
 import { router } from "expo-router";
 import { toast } from "burnt";
 import type { Team, TeamMember } from "@/lib/types";
-
-const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL!;
 
 function MemberRow({
   member,
@@ -156,18 +155,8 @@ export default function TeamScreen() {
     const asset = result.assets[0];
     setUploadingImage(true);
     try {
-      const formData = new FormData();
-      formData.append("file", { uri: asset.uri, name: "team-photo.jpg", type: "image/jpeg" } as never);
-      const authClient = (await import("@/lib/auth/auth-client")).authClient;
-      const res = await fetch(`${BACKEND_URL}/api/upload`, {
-        method: "POST",
-        body: formData,
-        headers: { Cookie: authClient.getCookie() },
-        credentials: "include",
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error("Upload failed");
-      setEditImage(data.data.url);
+      const uploaded = await uploadFile(asset.uri, "team-photo.jpg", "image/jpeg");
+      setEditImage(uploaded.url);
     } catch {
       toast({ title: "Failed to upload photo", preset: "error" });
     } finally {
