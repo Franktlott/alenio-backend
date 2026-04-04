@@ -2,6 +2,7 @@ import React from "react";
 import {
   View,
   Text,
+  Image,
   FlatList,
   TouchableOpacity,
   Share,
@@ -32,10 +33,18 @@ function MemberRow({
       className="flex-row items-center px-4 py-3 bg-white dark:bg-slate-800 border-b border-slate-100 dark:border-slate-700"
       testID="member-row"
     >
-      <View className="w-10 h-10 rounded-full bg-indigo-600 items-center justify-center mr-3">
-        <Text className="text-white font-bold text-sm">
-          {member.user.name?.[0]?.toUpperCase() ?? "?"}
-        </Text>
+      <View className="w-10 h-10 rounded-full bg-indigo-600 items-center justify-center mr-3 overflow-hidden">
+        {member.user.image ? (
+          <Image
+            source={{ uri: member.user.image }}
+            style={{ width: 40, height: 40 }}
+            resizeMode="cover"
+          />
+        ) : (
+          <Text className="text-white font-bold text-sm">
+            {member.user.name?.[0]?.toUpperCase() ?? "?"}
+          </Text>
+        )}
       </View>
       <View className="flex-1">
         <Text className="text-slate-900 dark:text-white font-semibold">
