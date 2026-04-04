@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { prisma } from "../prisma";
 import { auth } from "../auth";
 import { authGuard } from "../middleware/auth-guard";
+import { sendPushToUsers } from "../lib/push";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -75,6 +76,15 @@ messagesRouter.post("/", async (c) => {
       replyTo: { include: { sender: { select: { id: true, name: true } } } },
     },
   });
+
+  // Notify other team members
+  const members = await prisma.teamMember.findMany({
+    where: { teamId, userId: { not: user.id } },
+    select: { userId: true },
+  });
+  const memberIds = members.map((m: any) => m.userId);
+  const senderName = user.name ?? "Someone";
+  await sendPushToUsers(prisma, memberIds, senderName, content?.trim() || "Sent a photo", { teamId });
 
   return c.json({ data: message }, 201);
 });

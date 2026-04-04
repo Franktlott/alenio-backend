@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { prisma } from "../prisma";
 import { auth } from "../auth";
 import { authGuard } from "../middleware/auth-guard";
+import { sendPushToUsers } from "../lib/push";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -347,6 +348,13 @@ tasksRouter.post("/:taskId/assign", async (c) => {
       creator: { select: { id: true, name: true, email: true } },
     },
   });
+
+  // Notify assigned users (except the person doing the assigning)
+  const assignedUserIds = (userIds as string[]).filter((id) => id !== user.id);
+  if (assignedUserIds.length > 0) {
+    const taskForNotif = await prisma.task.findFirst({ where: { id: taskId }, select: { title: true } });
+    await sendPushToUsers(prisma, assignedUserIds, "New task assigned", taskForNotif?.title ?? "You have a new task", { taskId, teamId });
+  }
 
   return c.json({ data: updated });
 });

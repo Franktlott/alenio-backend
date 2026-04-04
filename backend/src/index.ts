@@ -111,7 +111,15 @@ app.patch("/api/profile", async (c) => {
   return c.json({ data: updated });
 });
 
-// GET /api/users/search?q= - search users by name or email
+// Save push token
+app.post("/api/push-token", async (c) => {
+  const user = c.get("user");
+  if (!user) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
+  const { token } = await c.req.json();
+  if (!token || typeof token !== "string") return c.json({ error: { message: "Token required" } }, 400);
+  await prisma.user.update({ where: { id: user.id }, data: { pushToken: token } });
+  return c.json({ data: { ok: true } });
+});
 app.get("/api/users/search", async (c) => {
   const user = c.get("user");
   if (!user) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);

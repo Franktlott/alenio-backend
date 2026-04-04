@@ -8,6 +8,9 @@ import { QueryClient, QueryClientProvider, focusManager } from '@tanstack/react-
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { useSession } from '@/lib/auth/use-session';
+import { useEffect, useRef } from 'react';
+import * as Notifications from 'expo-notifications';
+import { registerForPushNotificationsAsync } from '@/lib/notifications';
 
 export const unstable_settings = {
   initialRouteName: '(app)',
@@ -30,6 +33,23 @@ const queryClient = new QueryClient();
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
   const { data: session, isLoading } = useSession();
+  const notificationListener = useRef<Notifications.EventSubscription | null>(null);
+
+  useEffect(() => {
+    if (!session?.user) return;
+
+    // Register for push notifications once the user is signed in
+    registerForPushNotificationsAsync();
+
+    // Handle notification taps while app is foregrounded
+    notificationListener.current = Notifications.addNotificationReceivedListener(() => {
+      // Notification received while app is open — handler in notifications.ts shows it
+    });
+
+    return () => {
+      notificationListener.current?.remove();
+    };
+  }, [session?.user?.id]);
 
   if (isLoading) return null;
 

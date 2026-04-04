@@ -26,6 +26,7 @@ model User {
   messageReactions MessageReaction[]
   directMessageReactions DirectMessageReaction[]
   templatesCreated TaskTemplate[] @relation("TemplateCreator")
+  pushToken     String?
 }
 
 model Session {
