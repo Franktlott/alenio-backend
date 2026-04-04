@@ -6,10 +6,10 @@ import { useColorScheme } from '@/lib/useColorScheme';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
+import { useSession } from '@/lib/auth/use-session';
 
 export const unstable_settings = {
-  // Ensure that reloading on `/modal` keeps a back button present.
-  initialRouteName: '(tabs)',
+  initialRouteName: '(app)',
 };
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
@@ -17,18 +17,44 @@ SplashScreen.preventAutoHideAsync();
 
 const queryClient = new QueryClient();
 
-function RootLayoutNav({ colorScheme }: { colorScheme: 'light' | 'dark' | null | undefined }) {
+function RootLayoutNav() {
+  const colorScheme = useColorScheme();
+  const { data: session, isLoading } = useSession();
+
+  if (isLoading) return null;
+
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Protected guard={!!session?.user}>
+          <Stack.Screen name="(app)" />
+          <Stack.Screen name="onboarding" />
+          <Stack.Screen
+            name="create-task"
+            options={{
+              presentation: 'formSheet',
+              sheetAllowedDetents: [0.9],
+              sheetGrabberVisible: true,
+            }}
+          />
+          <Stack.Screen name="task-detail" />
+          <Stack.Screen
+            name="select-team"
+            options={{
+              presentation: 'formSheet',
+              sheetAllowedDetents: [0.6],
+              sheetGrabberVisible: true,
+            }}
+          />
+        </Stack.Protected>
+        <Stack.Protected guard={!session?.user}>
+          <Stack.Screen name="sign-in" />
+          <Stack.Screen name="verify-otp" />
+        </Stack.Protected>
       </Stack>
     </ThemeProvider>
   );
 }
-
-
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
@@ -38,9 +64,10 @@ export default function RootLayout() {
       <GestureHandlerRootView style={{ flex: 1 }}>
         <KeyboardProvider>
           <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
-          <RootLayoutNav colorScheme={colorScheme} />
+          <RootLayoutNav />
         </KeyboardProvider>
       </GestureHandlerRootView>
     </QueryClientProvider>
   );
 }
+

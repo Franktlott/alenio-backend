@@ -1,0 +1,275 @@
+import { Hono } from "hono";
+import { prisma } from "../prisma";
+import { auth } from "../auth";
+import { authGuard } from "../middleware/auth-guard";
+
+type Variables = {
+  user: typeof auth.$Infer.Session.user | null;
+  session: typeof auth.$Infer.Session.session | null;
+};
+
+const tasksRouter = new Hono<{ Variables: Variables }>();
+tasksRouter.use("*", authGuard);
+
+// Helper: compute next due date for recurrence
+function getNextDueDate(type: string, interval: number, fromDate: Date): Date {
+  const next = new Date(fromDate);
+  switch (type) {
+    case "daily":
+      next.setDate(next.getDate() + interval);
+      break;
+    case "weekly":
+      next.setDate(next.getDate() + 7 * interval);
+      break;
+    case "monthly":
+      next.setMonth(next.getMonth() + interval);
+      break;
+    default:
+      next.setDate(next.getDate() + interval);
+  }
+  return next;
+}
+
+// Check membership helper
+async function getMembership(userId: string, teamId: string) {
+  return prisma.teamMember.findUnique({
+    where: { userId_teamId: { userId, teamId } },
+  });
+}
+
+// GET /api/teams/:teamId/tasks
+tasksRouter.get("/", async (c) => {
+  const user = c.get("user")!;
+  const teamId = c.req.param("teamId") as string;
+
+  const membership = await getMembership(user.id, teamId);
+  if (!membership) return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
+
+  const { status, priority, assigneeId } = c.req.query();
+
+  const tasks = await prisma.task.findMany({
+    where: {
+      teamId,
+      ...(status ? { status } : {}),
+      ...(priority ? { priority } : {}),
+      ...(assigneeId ? { assignments: { some: { userId: assigneeId } } } : {}),
+    },
+    include: {
+      assignments: {
+        include: { user: { select: { id: true, name: true, email: true, image: true } } },
+      },
+      recurrenceRule: true,
+      creator: { select: { id: true, name: true, email: true } },
+    },
+    orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
+  });
+
+  return c.json({ data: tasks });
+});
+
+// POST /api/teams/:teamId/tasks
+tasksRouter.post("/", async (c) => {
+  const user = c.get("user")!;
+  const teamId = c.req.param("teamId") as string;
+
+  const membership = await getMembership(user.id, teamId);
+  if (!membership) return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
+
+  const body = await c.req.json();
+  const { title, description, priority, dueDate, assigneeIds, recurrence } = body;
+
+  if (!title?.trim()) {
+    return c.json({ error: { message: "Title is required", code: "VALIDATION_ERROR" } }, 400);
+  }
+
+  const task = await prisma.task.create({
+    data: {
+      title: title.trim(),
+      description: description?.trim(),
+      priority: priority || "medium",
+      dueDate: dueDate ? new Date(dueDate) : null,
+      teamId,
+      creatorId: user.id,
+      ...(assigneeIds?.length
+        ? { assignments: { create: (assigneeIds as string[]).map((id) => ({ userId: id })) } }
+        : {}),
+      ...(recurrence
+        ? {
+            recurrenceRule: {
+              create: {
+                type: recurrence.type,
+                interval: recurrence.interval || 1,
+                daysOfWeek: recurrence.daysOfWeek,
+                dayOfMonth: recurrence.dayOfMonth,
+                nextDueAt: dueDate
+                  ? getNextDueDate(recurrence.type, recurrence.interval || 1, new Date(dueDate))
+                  : null,
+              },
+            },
+          }
+        : {}),
+    },
+    include: {
+      assignments: { include: { user: { select: { id: true, name: true, email: true, image: true } } } },
+      recurrenceRule: true,
+      creator: { select: { id: true, name: true, email: true } },
+    },
+  });
+
+  return c.json({ data: task }, 201);
+});
+
+// GET /api/teams/:teamId/tasks/:taskId
+tasksRouter.get("/:taskId", async (c) => {
+  const user = c.get("user")!;
+  const teamId = c.req.param("teamId") as string;
+  const { taskId } = c.req.param();
+
+  const membership = await getMembership(user.id, teamId);
+  if (!membership) return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
+
+  const task = await prisma.task.findFirst({
+    where: { id: taskId, teamId },
+    include: {
+      assignments: { include: { user: { select: { id: true, name: true, email: true, image: true } } } },
+      recurrenceRule: true,
+      creator: { select: { id: true, name: true, email: true } },
+    },
+  });
+
+  if (!task) return c.json({ error: { message: "Task not found", code: "NOT_FOUND" } }, 404);
+
+  return c.json({ data: task });
+});
+
+// PATCH /api/teams/:teamId/tasks/:taskId
+tasksRouter.patch("/:taskId", async (c) => {
+  const user = c.get("user")!;
+  const teamId = c.req.param("teamId") as string;
+  const { taskId } = c.req.param();
+
+  const membership = await getMembership(user.id, teamId);
+  if (!membership) return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
+
+  const task = await prisma.task.findFirst({ where: { id: taskId, teamId } });
+  if (!task) return c.json({ error: { message: "Task not found", code: "NOT_FOUND" } }, 404);
+
+  const body = await c.req.json();
+  const { title, description, priority, dueDate, status } = body;
+
+  const updated = await prisma.task.update({
+    where: { id: taskId },
+    data: {
+      ...(title !== undefined ? { title: title.trim() } : {}),
+      ...(description !== undefined ? { description: description?.trim() } : {}),
+      ...(priority !== undefined ? { priority } : {}),
+      ...(dueDate !== undefined ? { dueDate: dueDate ? new Date(dueDate) : null } : {}),
+      ...(status !== undefined ? { status, completedAt: status === "done" ? new Date() : null } : {}),
+    },
+    include: {
+      assignments: { include: { user: { select: { id: true, name: true, email: true, image: true } } } },
+      recurrenceRule: true,
+      creator: { select: { id: true, name: true, email: true } },
+    },
+  });
+
+  // Handle recurrence: if completed, spawn next occurrence
+  if (status === "done" && task.status !== "done") {
+    const rule = await prisma.recurrenceRule.findUnique({ where: { taskId } });
+    if (rule) {
+      const baseDue = task.dueDate || new Date();
+      const nextDue = getNextDueDate(rule.type, rule.interval, baseDue);
+      const currentAssignees = await prisma.taskAssignment.findMany({ where: { taskId } });
+
+      await prisma.task.create({
+        data: {
+          title: task.title,
+          description: task.description,
+          priority: task.priority,
+          status: "todo",
+          dueDate: nextDue,
+          teamId: task.teamId,
+          creatorId: task.creatorId,
+          assignments: {
+            create: currentAssignees.map((a) => ({ userId: a.userId })),
+          },
+          recurrenceRule: {
+            create: {
+              type: rule.type,
+              interval: rule.interval,
+              daysOfWeek: rule.daysOfWeek,
+              dayOfMonth: rule.dayOfMonth,
+              nextDueAt: getNextDueDate(rule.type, rule.interval, nextDue),
+            },
+          },
+        },
+      });
+    }
+  }
+
+  return c.json({ data: updated });
+});
+
+// DELETE /api/teams/:teamId/tasks/:taskId
+tasksRouter.delete("/:taskId", async (c) => {
+  const user = c.get("user")!;
+  const teamId = c.req.param("teamId") as string;
+  const { taskId } = c.req.param();
+
+  const membership = await getMembership(user.id, teamId);
+  if (!membership) return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
+
+  const task = await prisma.task.findFirst({ where: { id: taskId, teamId } });
+  if (!task) return c.json({ error: { message: "Task not found", code: "NOT_FOUND" } }, 404);
+
+  await prisma.task.delete({ where: { id: taskId } });
+  return c.body(null, 204);
+});
+
+// POST /api/teams/:teamId/tasks/:taskId/assign
+tasksRouter.post("/:taskId/assign", async (c) => {
+  const user = c.get("user")!;
+  const teamId = c.req.param("teamId") as string;
+  const { taskId } = c.req.param();
+
+  const membership = await getMembership(user.id, teamId);
+  if (!membership) return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
+
+  const body = await c.req.json();
+  const { userIds } = body;
+
+  // Upsert each assignment
+  for (const userId of userIds as string[]) {
+    await prisma.taskAssignment.upsert({
+      where: { taskId_userId: { taskId, userId } },
+      create: { taskId, userId },
+      update: {},
+    });
+  }
+
+  const task = await prisma.task.findFirst({
+    where: { id: taskId },
+    include: {
+      assignments: { include: { user: { select: { id: true, name: true, email: true, image: true } } } },
+      recurrenceRule: true,
+      creator: { select: { id: true, name: true, email: true } },
+    },
+  });
+
+  return c.json({ data: task });
+});
+
+// DELETE /api/teams/:teamId/tasks/:taskId/assign/:userId
+tasksRouter.delete("/:taskId/assign/:userId", async (c) => {
+  const user = c.get("user")!;
+  const teamId = c.req.param("teamId") as string;
+  const { taskId, userId } = c.req.param();
+
+  const membership = await getMembership(user.id, teamId);
+  if (!membership) return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
+
+  await prisma.taskAssignment.deleteMany({ where: { taskId, userId } });
+  return c.body(null, 204);
+});
+
+export { tasksRouter };

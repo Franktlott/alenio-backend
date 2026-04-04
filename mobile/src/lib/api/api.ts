@@ -1,9 +1,5 @@
 import { fetch } from "expo/fetch";
-
-// Response envelope type - all app routes return { data: T }
-interface ApiResponse<T> {
-  data: T;
-}
+import { authClient } from "../auth/auth-client";
 
 const baseUrl = process.env.EXPO_PUBLIC_BACKEND_URL!;
 
@@ -13,32 +9,22 @@ const request = async <T>(
 ): Promise<T> => {
   const response = await fetch(`${baseUrl}${url}`, {
     ...options,
-    headers: options.body ? { "Content-Type": "application/json" } : undefined,
+    credentials: "include",
+    headers: {
+      ...(options.body ? { "Content-Type": "application/json" } : {}),
+      Cookie: authClient.getCookie(),
+    },
   });
-
-  // 1. Handle 204 No Content
-  if (response.status === 204) {
-    return undefined as T;
-  }
-
-  // 2. JSON responses: parse and unwrap { data }
-  const contentType = response.headers.get("content-type");
-  if (contentType?.includes("application/json")) {
-    const json: ApiResponse<T> = await response.json();
-    return json.data;
-  }
-
-  // 3. Non-JSON: return undefined
-  return undefined as T;
+  return response.json();
 };
 
 export const api = {
-  get: <T>(url: string) => request<T>(url),
-  post: <T>(url: string, body: any) =>
-    request<T>(url, { method: "POST", body: JSON.stringify(body) }),
-  put: <T>(url: string, body: any) =>
-    request<T>(url, { method: "PUT", body: JSON.stringify(body) }),
+  get: <T>(url: string) => request<{ data: T }>(url).then((r) => r.data),
+  post: <T>(url: string, body: unknown) =>
+    request<{ data: T }>(url, { method: "POST", body: JSON.stringify(body) }).then((r) => r.data),
+  put: <T>(url: string, body: unknown) =>
+    request<{ data: T }>(url, { method: "PUT", body: JSON.stringify(body) }).then((r) => r.data),
   delete: <T>(url: string) => request<T>(url, { method: "DELETE" }),
-  patch: <T>(url: string, body: any) =>
-    request<T>(url, { method: "PATCH", body: JSON.stringify(body) }),
+  patch: <T>(url: string, body: unknown) =>
+    request<{ data: T }>(url, { method: "PATCH", body: JSON.stringify(body) }).then((r) => r.data),
 };

@@ -8,6 +8,12 @@ const envSchema = z.object({
   // Server Configuration
   PORT: z.string().optional().default("3000"),
   NODE_ENV: z.string().optional(),
+  // Database
+  DATABASE_URL: z.string().default("file:./dev.db"),
+  // Better Auth
+  BETTER_AUTH_SECRET: z.string(),
+  // Backend URL
+  BACKEND_URL: z.string().default("http://localhost:3000"),
 });
 
 /**
