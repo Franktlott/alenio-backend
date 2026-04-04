@@ -160,6 +160,8 @@ model MessageReaction {
 
 model Conversation {
   id           String                    @id @default(cuid())
+  name         String?
+  isGroup      Boolean                   @default(false)
   createdAt    DateTime                  @default(now())
   updatedAt    DateTime                  @updatedAt
   participants ConversationParticipant[]

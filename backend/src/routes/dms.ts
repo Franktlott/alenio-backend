@@ -39,14 +39,32 @@ dmsRouter.get("/", async (c) => {
   });
 
   const conversations = participations.map((p) => {
-    const other = p.conversation.participants.find((cp) => cp.userId !== user.id);
-    const lastMessage = p.conversation.messages[0] ?? null;
+    const conv = p.conversation;
+    const lastMessage = conv.messages[0] ?? null;
+
+    if (conv.isGroup) {
+      return {
+        id: conv.id,
+        isGroup: true,
+        name: conv.name,
+        participants: conv.participants.map(cp => cp.user),
+        recipient: null,
+        lastMessage,
+        createdAt: conv.createdAt,
+        updatedAt: conv.updatedAt,
+      };
+    }
+
+    const other = conv.participants.find((cp) => cp.userId !== user.id);
     return {
-      id: p.conversation.id,
-      createdAt: p.conversation.createdAt,
-      updatedAt: p.conversation.updatedAt,
+      id: conv.id,
+      isGroup: false,
+      name: null,
+      participants: conv.participants.map(cp => cp.user),
       recipient: other?.user ?? null,
       lastMessage,
+      createdAt: conv.createdAt,
+      updatedAt: conv.updatedAt,
     };
   });
 
@@ -66,9 +84,10 @@ dmsRouter.post("/find-or-create", async (c) => {
     return c.json({ error: { message: "Cannot DM yourself", code: "VALIDATION_ERROR" } }, 400);
   }
 
-  // Check if conversation already exists between these two users
+  // Check if conversation already exists between these two users (non-group only)
   const existing = await prisma.conversation.findFirst({
     where: {
+      isGroup: false,
       participants: { every: { userId: { in: [user.id, recipientId] } } },
       AND: [
         { participants: { some: { userId: user.id } } },
@@ -94,10 +113,13 @@ dmsRouter.post("/find-or-create", async (c) => {
     return c.json({
       data: {
         id: existing.id,
-        createdAt: existing.createdAt,
-        updatedAt: existing.updatedAt,
+        isGroup: false,
+        name: null,
+        participants: existing.participants.map(cp => cp.user),
         recipient: other?.user ?? null,
         lastMessage: existing.messages[0] ?? null,
+        createdAt: existing.createdAt,
+        updatedAt: existing.updatedAt,
       },
     });
   }
@@ -105,6 +127,7 @@ dmsRouter.post("/find-or-create", async (c) => {
   // Create new conversation
   const conversation = await prisma.conversation.create({
     data: {
+      isGroup: false,
       participants: {
         create: [{ userId: user.id }, { userId: recipientId }],
       },
@@ -122,10 +145,60 @@ dmsRouter.post("/find-or-create", async (c) => {
   return c.json({
     data: {
       id: conversation.id,
-      createdAt: conversation.createdAt,
-      updatedAt: conversation.updatedAt,
+      isGroup: false,
+      name: null,
+      participants: conversation.participants.map(cp => cp.user),
       recipient: other?.user ?? null,
       lastMessage: null,
+      createdAt: conversation.createdAt,
+      updatedAt: conversation.updatedAt,
+    },
+  }, 201);
+});
+
+// POST /api/dms/create-group - create a group conversation
+dmsRouter.post("/create-group", async (c) => {
+  const user = c.get("user")!;
+  const body = await c.req.json();
+  const { name, participantIds } = body;
+
+  if (!name?.trim()) {
+    return c.json({ error: { message: "Group name is required", code: "VALIDATION_ERROR" } }, 400);
+  }
+  if (!Array.isArray(participantIds) || participantIds.length < 1) {
+    return c.json({ error: { message: "At least one participant is required", code: "VALIDATION_ERROR" } }, 400);
+  }
+
+  // Include the creator + all participants (deduplicated)
+  const allIds = Array.from(new Set([user.id, ...participantIds]));
+
+  const conversation = await prisma.conversation.create({
+    data: {
+      name: name.trim(),
+      isGroup: true,
+      participants: {
+        create: allIds.map((userId) => ({ userId })),
+      },
+    },
+    include: {
+      participants: {
+        include: {
+          user: { select: { id: true, name: true, email: true, image: true } },
+        },
+      },
+    },
+  });
+
+  return c.json({
+    data: {
+      id: conversation.id,
+      isGroup: true,
+      name: conversation.name,
+      participants: conversation.participants.map(p => p.user),
+      recipient: null,
+      lastMessage: null,
+      createdAt: conversation.createdAt,
+      updatedAt: conversation.updatedAt,
     },
   }, 201);
 });

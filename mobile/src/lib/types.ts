@@ -93,6 +93,9 @@ export interface DirectMessage {
 
 export interface Conversation {
   id: string;
+  isGroup: boolean;
+  name?: string | null;
+  participants?: User[];
   createdAt: string;
   updatedAt: string;
   recipient: User | null;

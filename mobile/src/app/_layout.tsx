@@ -51,6 +51,15 @@ function RootLayoutNav() {
           <Stack.Screen name="team-chat" />
           <Stack.Screen name="dm-chat" />
           <Stack.Screen
+            name="create-group"
+            options={{
+              presentation: 'formSheet',
+              sheetAllowedDetents: [0.9],
+              sheetGrabberVisible: true,
+              headerShown: false,
+            }}
+          />
+          <Stack.Screen
             name="select-team"
             options={{
               presentation: 'formSheet',

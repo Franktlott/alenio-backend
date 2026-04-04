@@ -14,7 +14,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { LinearGradient } from "expo-linear-gradient";
-import { ArrowLeft, Send, Paperclip, X } from "lucide-react-native";
+import { ArrowLeft, Send, Paperclip, X, Users } from "lucide-react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
@@ -52,10 +52,12 @@ function buildMessageList(messages: DirectMessage[]): MessageItem[] {
 }
 
 export default function DMChatScreen() {
-  const { conversationId, recipientName } = useLocalSearchParams<{
+  const { conversationId, recipientName, isGroup: isGroupParam } = useLocalSearchParams<{
     conversationId: string;
     recipientName: string;
+    isGroup: string;
   }>();
+  const isGroup = isGroupParam === "true";
   const { data: session } = useSession();
   const queryClient = useQueryClient();
   const [input, setInput] = useState("");
@@ -144,11 +146,15 @@ export default function DMChatScreen() {
             <ArrowLeft size={22} color="white" />
           </TouchableOpacity>
           <View className="w-9 h-9 rounded-full bg-white/20 items-center justify-center mr-3">
-            <Text className="text-white font-bold">{recipientName?.[0]?.toUpperCase() ?? "?"}</Text>
+            {isGroup ? (
+              <Users size={18} color="white" />
+            ) : (
+              <Text className="text-white font-bold">{recipientName?.[0]?.toUpperCase() ?? "?"}</Text>
+            )}
           </View>
           <View className="flex-1">
             <Text className="text-white text-lg font-bold">{recipientName}</Text>
-            <Text className="text-white/70 text-xs">Direct message</Text>
+            <Text className="text-white/70 text-xs">{isGroup ? "Group chat" : "Direct message"}</Text>
           </View>
         </View>
       </LinearGradient>

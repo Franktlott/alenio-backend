@@ -110,6 +110,33 @@ app.patch("/api/profile", async (c) => {
   return c.json({ data: updated });
 });
 
+// GET /api/users/search?q= - search users by name or email
+app.get("/api/users/search", async (c) => {
+  const user = c.get("user");
+  if (!user) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
+
+  const q = c.req.query("q")?.trim() ?? "";
+  if (!q) return c.json({ data: [] });
+
+  const users = await prisma.user.findMany({
+    where: {
+      AND: [
+        { id: { not: user.id } }, // exclude self
+        {
+          OR: [
+            { name: { contains: q } },
+            { email: { contains: q } },
+          ],
+        },
+      ],
+    },
+    select: { id: true, name: true, email: true, image: true },
+    take: 20,
+  });
+
+  return c.json({ data: users });
+});
+
 // Routes
 app.route("/api/sample", sampleRouter);
 app.route("/api/teams", teamsRouter);

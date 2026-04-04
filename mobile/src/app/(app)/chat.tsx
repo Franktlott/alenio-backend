@@ -9,7 +9,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
 import { LinearGradient } from "expo-linear-gradient";
-import { MessageCircle, Users, ChevronRight } from "lucide-react-native";
+import { MessageCircle, Users, ChevronRight, Plus } from "lucide-react-native";
 import { router } from "expo-router";
 import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
@@ -107,6 +107,15 @@ export default function ChatScreen() {
               <Text className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
                 Direct Messages
               </Text>
+              <TouchableOpacity
+                testID="new-group-button"
+                onPress={() => router.push("/create-group")}
+                className="flex-row items-center px-3 py-1 rounded-full bg-indigo-600"
+                style={{ gap: 4 }}
+              >
+                <Plus size={14} color="white" />
+                <Text className="text-white text-xs font-semibold">New Group</Text>
+              </TouchableOpacity>
             </View>
 
             {dmsLoading ? (
@@ -137,7 +146,10 @@ export default function ChatScreen() {
                     pathname: "/dm-chat",
                     params: {
                       conversationId: conv.id,
-                      recipientName: conv.recipient?.name ?? "Direct Message",
+                      recipientName: conv.isGroup
+                        ? (conv.name ?? "Group")
+                        : (conv.recipient?.name ?? "Direct Message"),
+                      isGroup: conv.isGroup ? "true" : "false",
                     },
                   })
                 }
@@ -151,13 +163,17 @@ export default function ChatScreen() {
                 }}
               >
                 <View className="w-12 h-12 rounded-full bg-indigo-500 items-center justify-center mr-3">
-                  <Text className="text-white font-bold text-lg">
-                    {conv.recipient?.name?.[0]?.toUpperCase() ?? "?"}
-                  </Text>
+                  {conv.isGroup ? (
+                    <Users size={22} color="white" />
+                  ) : (
+                    <Text className="text-white font-bold text-lg">
+                      {conv.recipient?.name?.[0]?.toUpperCase() ?? "?"}
+                    </Text>
+                  )}
                 </View>
                 <View className="flex-1">
                   <Text className="font-semibold text-slate-900 dark:text-white">
-                    {conv.recipient?.name ?? "Unknown"}
+                    {conv.isGroup ? (conv.name ?? "Group") : (conv.recipient?.name ?? "Unknown")}
                   </Text>
                   {conv.lastMessage ? (
                     <Text
