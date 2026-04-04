@@ -147,6 +147,7 @@ export default function ChatScreen() {
                       recipientName: conv.isGroup
                         ? (conv.name ?? "Group")
                         : (conv.recipient?.name ?? "Direct Message"),
+                      recipientImage: conv.isGroup ? "" : (conv.recipient?.image ?? ""),
                       isGroup: conv.isGroup ? "true" : "false",
                     },
                   })

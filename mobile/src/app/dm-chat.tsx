@@ -75,9 +75,10 @@ function buildMessageList(messages: DirectMessage[]): MessageItem[] {
 }
 
 export default function DMChatScreen() {
-  const { conversationId, recipientName, isGroup: isGroupParam } = useLocalSearchParams<{
+  const { conversationId, recipientName, recipientImage, isGroup: isGroupParam } = useLocalSearchParams<{
     conversationId: string;
     recipientName: string;
+    recipientImage: string;
     isGroup: string;
   }>();
   const isGroup = isGroupParam === "true";
@@ -199,9 +200,11 @@ export default function DMChatScreen() {
           <TouchableOpacity onPress={() => router.back()} className="mr-3" testID="back-button">
             <ArrowLeft size={22} color="white" />
           </TouchableOpacity>
-          <View className="w-9 h-9 rounded-full bg-white/20 items-center justify-center mr-3">
+          <View className="w-9 h-9 rounded-full bg-white/20 items-center justify-center mr-3 overflow-hidden">
             {isGroup ? (
               <Users size={18} color="white" />
+            ) : recipientImage ? (
+              <Image source={{ uri: recipientImage }} style={{ width: 36, height: 36 }} resizeMode="cover" />
             ) : (
               <Text className="text-white font-bold">{recipientName?.[0]?.toUpperCase() ?? "?"}</Text>
             )}
