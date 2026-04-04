@@ -172,7 +172,7 @@ export default function TasksScreen() {
       (t.assignments ?? []).some((a) => a.userId !== currentUserId)
     );
     if (filter === "completed") return t.status === "done";
-    return true;
+    return t.status !== "done";
   });
 
   const assignedCount = allTasks.filter((t) =>
