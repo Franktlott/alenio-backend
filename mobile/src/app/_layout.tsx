@@ -62,7 +62,7 @@ function CustomSplash({ onDone }: { onDone: () => void }) {
       <Animated.View style={animStyle}>
         <Image
           source={require('@/assets/alenio-logo.png')}
-          style={{ width: 200, height: 200 }}
+          style={{ width: 230, height: 230 }}
           resizeMode="contain"
         />
       </Animated.View>
