@@ -16,11 +16,16 @@ import { LinearGradient } from "expo-linear-gradient";
 import { StatusBar } from "expo-status-bar";
 
 export default function SignIn() {
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleSendOTP = async () => {
+    if (!name.trim()) {
+      setError("Please enter your name");
+      return;
+    }
     if (!email.trim()) {
       setError("Please enter your email address");
       return;
@@ -35,7 +40,10 @@ export default function SignIn() {
     if (result.error) {
       setError(result.error.message ?? "Failed to send verification code");
     } else {
-      router.push({ pathname: "/verify-otp", params: { email: email.trim().toLowerCase() } });
+      router.push({
+        pathname: "/verify-otp",
+        params: { email: email.trim().toLowerCase(), name: name.trim() },
+      });
     }
   };
 
@@ -65,6 +73,21 @@ export default function SignIn() {
           {/* Form */}
           <View>
             <Text className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+              Your name
+            </Text>
+            <TextInput
+              className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3.5 text-base text-slate-900 dark:text-white mb-4"
+              placeholder="Jane Smith"
+              placeholderTextColor="#94A3B8"
+              autoCapitalize="words"
+              autoComplete="name"
+              value={name}
+              onChangeText={(t) => { setName(t); setError(null); }}
+              returnKeyType="next"
+              testID="name-input"
+            />
+
+            <Text className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
               Email address
             </Text>
             <TextInput
@@ -75,10 +98,7 @@ export default function SignIn() {
               keyboardType="email-address"
               autoComplete="email"
               value={email}
-              onChangeText={(t) => {
-                setEmail(t);
-                setError(null);
-              }}
+              onChangeText={(t) => { setEmail(t); setError(null); }}
               onSubmitEditing={handleSendOTP}
               returnKeyType="send"
               testID="email-input"

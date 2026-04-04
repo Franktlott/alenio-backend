@@ -7,7 +7,7 @@ import { useInvalidateSession } from "@/lib/auth/use-session";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function VerifyOTP() {
-  const { email } = useLocalSearchParams<{ email: string }>();
+  const { email, name } = useLocalSearchParams<{ email: string; name?: string }>();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const invalidateSession = useInvalidateSession();
@@ -19,13 +19,25 @@ export default function VerifyOTP() {
       email: email.trim(),
       otp,
     });
-    setLoading(false);
     if (result.error) {
+      setLoading(false);
       setError(result.error.message ?? "Invalid verification code. Please try again.");
-    } else {
-      await invalidateSession();
-      // Stack.Protected handles navigation automatically
+      return;
     }
+    // Set name if this is a new user (no name set yet) and a name was provided
+    const currentName = result.data?.user?.name;
+    const needsName = !currentName || currentName === email.trim();
+    if (name?.trim() && needsName) {
+      const baseUrl = process.env.EXPO_PUBLIC_BACKEND_URL!;
+      await fetch(`${baseUrl}/api/profile`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ name: name.trim() }),
+      });
+    }
+    await invalidateSession();
+    // Stack.Protected handles navigation automatically
   };
 
   const handleResend = async () => {
