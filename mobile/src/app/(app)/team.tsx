@@ -7,8 +7,8 @@ import {
   Share,
   ActivityIndicator,
 } from "react-native";
-import { useQuery } from "@tanstack/react-query";
-import { Copy, UserPlus } from "lucide-react-native";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Copy, UserPlus, MessageCircle } from "lucide-react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as Clipboard from "expo-clipboard";
 import { api } from "@/lib/api/api";
@@ -20,9 +20,11 @@ import type { Team, TeamMember } from "@/lib/types";
 function MemberRow({
   member,
   isCurrentUser,
+  onMessage,
 }: {
   member: TeamMember;
   isCurrentUser: boolean;
+  onMessage: () => void;
 }) {
   return (
     <View
@@ -40,6 +42,16 @@ function MemberRow({
         </Text>
         <Text className="text-slate-500 text-xs">{member.user.email}</Text>
       </View>
+      {!isCurrentUser ? (
+        <TouchableOpacity
+          testID={`message-member-${member.userId}`}
+          onPress={onMessage}
+          className="w-8 h-8 rounded-full items-center justify-center mr-2"
+          style={{ backgroundColor: "#4361EE15" }}
+        >
+          <MessageCircle size={16} color="#4361EE" />
+        </TouchableOpacity>
+      ) : null}
       <View
         className={`px-2 py-0.5 rounded-full ${
           member.role === "owner"
@@ -64,11 +76,29 @@ function MemberRow({
 export default function TeamScreen() {
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
   const { data: session } = useSession();
+  const queryClient = useQueryClient();
 
   const { data: team, isLoading } = useQuery({
     queryKey: ["team", activeTeamId],
     queryFn: () => api.get<Team>(`/api/teams/${activeTeamId}`),
     enabled: !!activeTeamId,
+  });
+
+  const dmMutation = useMutation({
+    mutationFn: (recipientId: string) =>
+      api.post<{ id: string; recipient: { name: string } | null }>("/api/dms/find-or-create", {
+        recipientId,
+      }),
+    onSuccess: (conv) => {
+      queryClient.invalidateQueries({ queryKey: ["conversations"] });
+      router.push({
+        pathname: "/dm-chat",
+        params: {
+          conversationId: conv.id,
+          recipientName: conv.recipient?.name ?? "Direct Message",
+        },
+      });
+    },
   });
 
   const handleCopyCode = async () => {
@@ -90,7 +120,7 @@ export default function TeamScreen() {
       <SafeAreaView className="flex-1 bg-slate-50 dark:bg-slate-900 items-center justify-center">
         <Text className="text-slate-500">No team selected</Text>
         <TouchableOpacity
-      className="mt-4 bg-indigo-600 rounded-xl px-6 py-3"
+          className="mt-4 bg-indigo-600 rounded-xl px-6 py-3"
           onPress={() => router.push("/onboarding")}
         >
           <Text className="text-white font-semibold">Create or join a team</Text>
@@ -167,6 +197,7 @@ export default function TeamScreen() {
           <MemberRow
             member={item}
             isCurrentUser={item.userId === session?.user?.id}
+            onMessage={() => dmMutation.mutate(item.userId)}
           />
         )}
         showsVerticalScrollIndicator={false}

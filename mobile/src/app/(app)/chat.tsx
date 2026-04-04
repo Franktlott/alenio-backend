@@ -1,68 +1,34 @@
-import React, { useState, useRef, useEffect } from "react";
+import React from "react";
 import {
   View,
   Text,
   FlatList,
-  TextInput,
   TouchableOpacity,
-  KeyboardAvoidingView,
-  Platform,
   ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { LinearGradient } from "expo-linear-gradient";
-import { Send } from "lucide-react-native";
+import { MessageCircle, Users, ChevronRight } from "lucide-react-native";
+import { router } from "expo-router";
 import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
 import { useTeamStore } from "@/lib/state/team-store";
-import type { Message } from "@/lib/types";
+import type { Conversation } from "@/lib/types";
 
 function formatTime(dateStr: string) {
   const d = new Date(dateStr);
-  return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
-}
-
-function formatDateLabel(dateStr: string) {
-  const d = new Date(dateStr);
-  const today = new Date();
-  const yesterday = new Date(today);
-  yesterday.setDate(today.getDate() - 1);
-  if (d.toDateString() === today.toDateString()) return "Today";
-  if (d.toDateString() === yesterday.toDateString()) return "Yesterday";
+  const now = new Date();
+  const diffDays = Math.floor((now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24));
+  if (diffDays === 0) return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
+  if (diffDays === 1) return "Yesterday";
+  if (diffDays < 7) return d.toLocaleDateString("en-US", { weekday: "short" });
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-}
-
-type MessageItem = Message | { type: "date"; label: string; id: string };
-
-function buildMessageList(messages: Message[]): MessageItem[] {
-  const items: MessageItem[] = [];
-  let lastDate = "";
-  for (const msg of messages) {
-    const dateLabel = formatDateLabel(msg.createdAt);
-    if (dateLabel !== lastDate) {
-      items.push({ type: "date", label: dateLabel, id: `date-${msg.id}` });
-      lastDate = dateLabel;
-    }
-    items.push(msg);
-  }
-  return items;
 }
 
 export default function ChatScreen() {
   const { data: session } = useSession();
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
-  const queryClient = useQueryClient();
-  const [input, setInput] = useState("");
-  const flatListRef = useRef<FlatList>(null);
-  const currentUserId = session?.user?.id;
-
-  const { data: messages = [], isLoading } = useQuery({
-    queryKey: ["messages", activeTeamId],
-    queryFn: () => api.get<Message[]>(`/api/teams/${activeTeamId}/messages`),
-    enabled: !!activeTeamId,
-    refetchInterval: 3000,
-  });
 
   const { data: teams } = useQuery({
     queryKey: ["teams"],
@@ -70,43 +36,14 @@ export default function ChatScreen() {
     enabled: !!session?.user,
   });
 
-  const currentTeam = teams?.find((t: any) => t.id === activeTeamId);
-
-  const sendMutation = useMutation({
-    mutationFn: (content: string) =>
-      api.post<Message>(`/api/teams/${activeTeamId}/messages`, { content }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["messages", activeTeamId] });
-    },
+  const { data: conversations = [], isLoading: dmsLoading } = useQuery({
+    queryKey: ["conversations"],
+    queryFn: () => api.get<Conversation[]>("/api/dms"),
+    enabled: !!session?.user,
+    refetchInterval: 5000,
   });
 
-  const handleSend = () => {
-    const content = input.trim();
-    if (!content || !activeTeamId) return;
-    setInput("");
-    sendMutation.mutate(content);
-  };
-
-  useEffect(() => {
-    if (messages.length > 0) {
-      setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: true });
-      }, 100);
-    }
-  }, [messages.length]);
-
-  const items = buildMessageList(messages);
-
-  if (!activeTeamId) {
-    return (
-      <SafeAreaView
-        testID="chat-no-team-screen"
-        className="flex-1 bg-slate-50 dark:bg-slate-900 items-center justify-center"
-      >
-        <Text className="text-slate-500">No team selected</Text>
-      </SafeAreaView>
-    );
-  }
+  const currentTeam = teams?.find((t: any) => t.id === activeTeamId);
 
   return (
     <SafeAreaView
@@ -121,139 +58,134 @@ export default function ChatScreen() {
         end={{ x: 1, y: 0 }}
       >
         <View className="px-4 pt-2 pb-4">
-          <Text className="text-white text-xl font-bold">{currentTeam?.name ?? "Team"}</Text>
-          <Text className="text-white/70 text-sm">Chat</Text>
+          <Text className="text-white text-xl font-bold">Messages</Text>
+          <Text className="text-white/70 text-sm">Team chat & direct messages</Text>
         </View>
       </LinearGradient>
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        className="flex-1"
-        keyboardVerticalOffset={0}
-      >
-        {/* Messages */}
-        {isLoading ? (
-          <View testID="chat-loading" className="flex-1 items-center justify-center">
-            <ActivityIndicator color="#4361EE" />
-          </View>
-        ) : messages.length === 0 ? (
-          <View testID="chat-empty" className="flex-1 items-center justify-center px-6">
-            <Text className="text-4xl mb-3">💬</Text>
-            <Text className="text-lg font-semibold text-slate-500">No messages yet</Text>
-            <Text className="text-slate-400 text-sm mt-1 text-center">
-              Be the first to say something!
+      <FlatList
+        data={[]}
+        ListHeaderComponent={
+          <View>
+            {/* Team Chat section */}
+            <Text className="px-4 pt-4 pb-2 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+              Team Chat
             </Text>
-          </View>
-        ) : (
-          <FlatList
-            ref={flatListRef}
-            testID="chat-message-list"
-            data={items}
-            keyExtractor={(item) => ("type" in item ? item.id : item.id)}
-            contentContainerStyle={{ paddingVertical: 12, paddingHorizontal: 12 }}
-            showsVerticalScrollIndicator={false}
-            onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
-            renderItem={({ item }) => {
-              if ("type" in item && item.type === "date") {
-                return (
-                  <View className="items-center my-3">
-                    <View className="bg-slate-200 dark:bg-slate-700 rounded-full px-3 py-0.5">
-                      <Text className="text-xs text-slate-500 dark:text-slate-400">
-                        {item.label}
-                      </Text>
-                    </View>
-                  </View>
-                );
+            <TouchableOpacity
+              testID="team-chat-button"
+              onPress={() =>
+                router.push({
+                  pathname: "/team-chat",
+                  params: { teamId: activeTeamId ?? "", teamName: currentTeam?.name ?? "" },
+                })
               }
+              className="mx-4 mb-1 bg-white dark:bg-slate-800 rounded-2xl p-4 flex-row items-center"
+              style={{
+                shadowColor: "#000",
+                shadowOpacity: 0.05,
+                shadowRadius: 4,
+                shadowOffset: { width: 0, height: 1 },
+                elevation: 1,
+              }}
+            >
+              <View className="w-12 h-12 rounded-full bg-indigo-100 dark:bg-indigo-900 items-center justify-center mr-3">
+                <Users size={22} color="#4361EE" />
+              </View>
+              <View className="flex-1">
+                <Text className="font-semibold text-slate-900 dark:text-white">
+                  {currentTeam?.name ?? "Team Chat"}
+                </Text>
+                <Text className="text-sm text-slate-500 dark:text-slate-400">
+                  Team channel
+                </Text>
+              </View>
+              <ChevronRight size={18} color="#94A3B8" />
+            </TouchableOpacity>
 
-              const msg = item as Message;
-              const isOwn = msg.senderId === currentUserId;
+            {/* DMs section */}
+            <View className="flex-row items-center justify-between px-4 pt-5 pb-2">
+              <Text className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                Direct Messages
+              </Text>
+            </View>
 
-              return (
-                <View
-                  testID={`chat-message-${msg.id}`}
-                  className={`flex-row mb-3 ${isOwn ? "justify-end" : "justify-start"}`}
-                >
-                  {!isOwn ? (
-                    <View className="w-8 h-8 rounded-full bg-indigo-500 items-center justify-center mr-2 mt-1 flex-shrink-0">
-                      <Text className="text-white text-xs font-bold">
-                        {msg.sender.name?.[0]?.toUpperCase() ?? "?"}
-                      </Text>
-                    </View>
-                  ) : null}
-                  <View className={`max-w-[75%] ${isOwn ? "items-end" : "items-start"}`}>
-                    {!isOwn ? (
-                      <Text className="text-xs text-slate-500 dark:text-slate-400 mb-1 ml-1">
-                        {msg.sender.name}
-                      </Text>
-                    ) : null}
-                    <View
-                      className={`rounded-2xl px-4 py-2.5 ${isOwn ? "rounded-tr-sm" : "rounded-tl-sm"}`}
-                      style={{
-                        backgroundColor: isOwn ? "#4361EE" : "white",
-                        shadowColor: "#000",
-                        shadowOpacity: 0.06,
-                        shadowRadius: 3,
-                        shadowOffset: { width: 0, height: 1 },
-                        elevation: 1,
-                      }}
-                    >
-                      <Text
-                        className={`text-sm leading-5 ${isOwn ? "text-white" : "text-slate-900 dark:text-slate-100"}`}
-                      >
-                        {msg.content}
-                      </Text>
-                    </View>
-                    <Text className="text-xs text-slate-400 mt-1 mx-1">
-                      {formatTime(msg.createdAt)}
-                    </Text>
-                  </View>
-                  {isOwn ? (
-                    <View className="w-8 h-8 rounded-full bg-indigo-500 items-center justify-center ml-2 mt-1 flex-shrink-0">
-                      <Text className="text-white text-xs font-bold">
-                        {session?.user?.name?.[0]?.toUpperCase() ?? "?"}
-                      </Text>
-                    </View>
-                  ) : null}
-                </View>
-              );
-            }}
-          />
-        )}
+            {dmsLoading ? (
+              <View className="py-8 items-center" testID="dms-loading">
+                <ActivityIndicator color="#4361EE" />
+              </View>
+            ) : null}
 
-        {/* Input bar */}
-        <View
-          testID="chat-input-bar"
-          className="flex-row items-end px-3 py-2 bg-white dark:bg-slate-800 border-t border-slate-100 dark:border-slate-700"
-          style={{ paddingBottom: Platform.OS === "ios" ? 8 : 8 }}
-        >
-          <TextInput
-            testID="chat-text-input"
-            className="flex-1 bg-slate-100 dark:bg-slate-700 rounded-2xl px-4 py-2.5 text-base text-slate-900 dark:text-white mr-2"
-            placeholder="Message..."
-            placeholderTextColor="#94A3B8"
-            value={input}
-            onChangeText={setInput}
-            multiline
-            maxLength={2000}
-            returnKeyType="default"
-            style={{ maxHeight: 120 }}
-          />
-          <TouchableOpacity
-            testID="chat-send-button"
-            onPress={handleSend}
-            disabled={!input.trim() || sendMutation.isPending}
-            className="w-10 h-10 rounded-full items-center justify-center"
-            style={{ backgroundColor: input.trim() ? "#4361EE" : "#E2E8F0" }}
-          >
-            {sendMutation.isPending ? (
-              <ActivityIndicator size="small" color={input.trim() ? "white" : "#94A3B8"} />
-            ) : (
-              <Send size={18} color={input.trim() ? "white" : "#94A3B8"} />
+            {!dmsLoading && conversations.length === 0 && (
+              <View className="mx-4 bg-white dark:bg-slate-800 rounded-2xl p-5 items-center" testID="dms-empty">
+                <MessageCircle size={32} color="#94A3B8" />
+                <Text className="text-slate-500 text-sm mt-2 text-center">
+                  {"No direct messages yet.\nGo to the Team tab to message a member."}
+                </Text>
+              </View>
             )}
-          </TouchableOpacity>
-        </View>
-      </KeyboardAvoidingView>
+          </View>
+        }
+        renderItem={null}
+        ListFooterComponent={
+          <View>
+            {conversations.map((conv) => (
+              <TouchableOpacity
+                key={conv.id}
+                testID={`dm-conversation-${conv.id}`}
+                onPress={() =>
+                  router.push({
+                    pathname: "/dm-chat",
+                    params: {
+                      conversationId: conv.id,
+                      recipientName: conv.recipient?.name ?? "Direct Message",
+                    },
+                  })
+                }
+                className="mx-4 mb-2 bg-white dark:bg-slate-800 rounded-2xl p-4 flex-row items-center"
+                style={{
+                  shadowColor: "#000",
+                  shadowOpacity: 0.05,
+                  shadowRadius: 4,
+                  shadowOffset: { width: 0, height: 1 },
+                  elevation: 1,
+                }}
+              >
+                <View className="w-12 h-12 rounded-full bg-indigo-500 items-center justify-center mr-3">
+                  <Text className="text-white font-bold text-lg">
+                    {conv.recipient?.name?.[0]?.toUpperCase() ?? "?"}
+                  </Text>
+                </View>
+                <View className="flex-1">
+                  <Text className="font-semibold text-slate-900 dark:text-white">
+                    {conv.recipient?.name ?? "Unknown"}
+                  </Text>
+                  {conv.lastMessage ? (
+                    <Text
+                      className="text-sm text-slate-500 dark:text-slate-400"
+                      numberOfLines={1}
+                    >
+                      {conv.lastMessage.sender.id === session?.user?.id ? "You: " : null}
+                      {conv.lastMessage.content}
+                    </Text>
+                  ) : (
+                    <Text className="text-sm text-slate-400 italic">No messages yet</Text>
+                  )}
+                </View>
+                <View className="items-end">
+                  {conv.lastMessage ? (
+                    <Text className="text-xs text-slate-400">
+                      {formatTime(conv.lastMessage.createdAt)}
+                    </Text>
+                  ) : null}
+                  <ChevronRight size={16} color="#94A3B8" style={{ marginTop: 4 }} />
+                </View>
+              </TouchableOpacity>
+            ))}
+            <View style={{ height: 24 }} />
+          </View>
+        }
+        showsVerticalScrollIndicator={false}
+      />
     </SafeAreaView>
   );
 }

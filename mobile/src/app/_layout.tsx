@@ -48,6 +48,8 @@ function RootLayoutNav() {
             }}
           />
           <Stack.Screen name="task-detail" />
+          <Stack.Screen name="team-chat" />
+          <Stack.Screen name="dm-chat" />
           <Stack.Screen
             name="select-team"
             options={{

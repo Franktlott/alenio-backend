@@ -65,6 +65,28 @@ export interface Message {
   sender: User;
 }
 
+export interface DirectMessage {
+  id: string;
+  content: string;
+  createdAt: string;
+  conversationId: string;
+  senderId: string;
+  sender: User;
+}
+
+export interface Conversation {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  recipient: User | null;
+  lastMessage: {
+    id: string;
+    content: string;
+    createdAt: string;
+    sender: { id: string; name: string };
+  } | null;
+}
+
 export interface CreateTaskInput {
   title: string;
   description?: string;
