@@ -203,6 +203,12 @@ export default function CalendarScreen() {
   const days = getDaysInMonth(currentMonth);
   const today = new Date();
 
+  // Group into weeks for row-by-row rendering
+  const weeks: (Date | null)[][] = [];
+  for (let i = 0; i < days.length; i += 7) {
+    weeks.push(days.slice(i, i + 7));
+  }
+
   // Events/tasks for selected day
   const selectedEvents = selectedDate ? getEventsForDay(selectedDate) : [];
   const selectedTasks = selectedDate ? getTasksForDay(selectedDate) : [];
@@ -245,89 +251,106 @@ export default function CalendarScreen() {
 
       <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
         {/* Calendar grid */}
-        <View style={{ backgroundColor: "white", marginHorizontal: 12, marginTop: 12, borderRadius: 16, shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 2, paddingBottom: 8 }}>
+        <View style={{ backgroundColor: "white", marginHorizontal: 12, marginTop: 12, borderRadius: 16, shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 2, overflow: "hidden" }}>
           {/* Day of week headers */}
-          <View style={{ flexDirection: "row", paddingTop: 12, paddingHorizontal: 4 }}>
+          <View style={{ flexDirection: "row", paddingTop: 12, paddingBottom: 6, borderBottomWidth: 1, borderBottomColor: "#F1F5F9" }}>
             {DAYS_OF_WEEK.map((day) => (
-              <View key={day} style={{ flex: 1, alignItems: "center", paddingBottom: 8 }}>
+              <View key={day} style={{ flex: 1, alignItems: "center" }}>
                 <Text style={{ fontSize: 11, fontWeight: "600", color: "#94A3B8" }}>{day}</Text>
               </View>
             ))}
           </View>
 
-          {/* Day cells */}
-          <View style={{ flexDirection: "row", flexWrap: "wrap", paddingHorizontal: 4 }}>
-            {days.map((day, index) => {
-              if (!day) {
-                return <View key={`empty-${index}`} style={{ width: `${100 / 7}%`, aspectRatio: 0.85 }} />;
-              }
+          {/* Week rows */}
+          {weeks.map((week, weekIndex) => (
+            <View key={weekIndex} style={{ flexDirection: "row", borderTopWidth: weekIndex === 0 ? 0 : 0.5, borderTopColor: "#F1F5F9", minHeight: 64 }}>
+              {week.map((day, dayIndex) => {
+                if (!day) {
+                  return <View key={`empty-${dayIndex}`} style={{ flex: 1, borderLeftWidth: dayIndex === 0 ? 0 : 0.5, borderLeftColor: "#F1F5F9", backgroundColor: "#FAFAFA" }} />;
+                }
 
-              const isToday = isSameDay(day, today);
-              const isSelected = selectedDate ? isSameDay(day, selectedDate) : false;
-              const dayEvents = getEventsForDay(day);
-              const dayTasks = getTasksForDay(day);
-              const totalDots = [...dayEvents.map((e) => e.color), ...dayTasks.map(() => "#10B981")];
-              const visibleDots = totalDots.slice(0, 3);
+                const isToday = isSameDay(day, today);
+                const isSelected = selectedDate ? isSameDay(day, selectedDate) : false;
+                const dayEvents = getEventsForDay(day);
+                const dayTasks = getTasksForDay(day);
+                const allItems = [
+                  ...dayEvents.map((e) => ({ type: "event" as const, color: e.color, title: e.title, id: e.id })),
+                  ...dayTasks.map((t) => ({ type: "task" as const, color: "#10B981", title: t.title, id: t.id })),
+                ];
+                const visibleItems = allItems.slice(0, 3);
+                const hiddenCount = allItems.length - visibleItems.length;
 
-              return (
-                <Pressable
-                  key={day.toISOString()}
-                  onPress={() => setSelectedDate(day)}
-                  style={{ width: `${100 / 7}%`, aspectRatio: 0.85, alignItems: "center", justifyContent: "flex-start", paddingTop: 4 }}
-                  testID={`calendar-day-${day.getDate()}`}
-                >
-                  <View
+                return (
+                  <Pressable
+                    key={day.toISOString()}
+                    onPress={() => setSelectedDate(day)}
                     style={{
-                      width: 32,
-                      height: 32,
-                      borderRadius: 16,
-                      alignItems: "center",
-                      justifyContent: "center",
-                      backgroundColor: isToday ? "#4361EE" : isSelected ? "#EEF2FF" : "transparent",
-                      borderWidth: isSelected && !isToday ? 1.5 : 0,
-                      borderColor: "#4361EE",
+                      flex: 1,
+                      borderLeftWidth: dayIndex === 0 ? 0 : 0.5,
+                      borderLeftColor: "#F1F5F9",
+                      paddingHorizontal: 2,
+                      paddingTop: 4,
+                      paddingBottom: 4,
+                      backgroundColor: isSelected && !isToday ? "#F5F7FF" : "white",
                     }}
+                    testID={`calendar-day-${day.getDate()}`}
                   >
-                    <Text
-                      style={{
-                        fontSize: 13,
-                        fontWeight: isToday ? "700" : isSelected ? "600" : "400",
-                        color: isToday ? "white" : isSelected ? "#4361EE" : "#0F172A",
-                      }}
-                    >
-                      {day.getDate()}
-                    </Text>
-                  </View>
-                  {/* Dots */}
-                  {visibleDots.length > 0 ? (
-                    <View style={{ flexDirection: "row", gap: 2, marginTop: 2, height: 6, alignItems: "center" }}>
-                      {visibleDots.map((color, i) => (
-                        <View
-                          key={i}
-                          style={{
-                            width: 5,
-                            height: 5,
-                            borderRadius: 3,
-                            backgroundColor: color,
-                          }}
-                        />
-                      ))}
+                    {/* Day number */}
+                    <View style={{ alignItems: "center", marginBottom: 3 }}>
+                      <View style={{
+                        width: 24, height: 24, borderRadius: 12,
+                        backgroundColor: isToday ? "#4361EE" : "transparent",
+                        alignItems: "center", justifyContent: "center",
+                        borderWidth: isSelected && !isToday ? 1.5 : 0,
+                        borderColor: "#4361EE",
+                      }}>
+                        <Text style={{
+                          fontSize: 12,
+                          fontWeight: isToday || isSelected ? "700" : "400",
+                          color: isToday ? "white" : isSelected ? "#4361EE" : "#334155",
+                        }}>
+                          {day.getDate()}
+                        </Text>
+                      </View>
                     </View>
-                  ) : null}
-                </Pressable>
-              );
-            })}
-          </View>
+
+                    {/* Event / task bars */}
+                    {visibleItems.map((item) => (
+                      <View
+                        key={item.id}
+                        style={{
+                          backgroundColor: item.color,
+                          borderRadius: 3,
+                          paddingHorizontal: 3,
+                          marginBottom: 2,
+                          height: 14,
+                          justifyContent: "center",
+                        }}
+                      >
+                        <Text style={{ color: "white", fontSize: 9, fontWeight: "600", lineHeight: 12 }} numberOfLines={1}>
+                          {item.title}
+                        </Text>
+                      </View>
+                    ))}
+
+                    {hiddenCount > 0 ? (
+                      <Text style={{ fontSize: 9, color: "#94A3B8", paddingHorizontal: 2 }}>+{hiddenCount} more</Text>
+                    ) : null}
+                  </Pressable>
+                );
+              })}
+            </View>
+          ))}
         </View>
 
         {/* Legend */}
         <View style={{ flexDirection: "row", paddingHorizontal: 16, paddingTop: 10, gap: 16 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: "#4361EE" }} />
+            <View style={{ width: 20, height: 8, borderRadius: 2, backgroundColor: "#4361EE" }} />
             <Text style={{ fontSize: 11, color: "#64748B" }}>Team events</Text>
           </View>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: "#10B981" }} />
+            <View style={{ width: 20, height: 8, borderRadius: 2, backgroundColor: "#10B981" }} />
             <Text style={{ fontSize: 11, color: "#64748B" }}>Your tasks</Text>
           </View>
         </View>
