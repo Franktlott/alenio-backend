@@ -143,12 +143,20 @@ export default function TeamScreen() {
     },
   });
 
+  const setActiveTeamId = useTeamStore((s) => s.setActiveTeamId);
+
   const deleteMutation = useMutation({
     mutationFn: () => api.delete(`/api/teams/${activeTeamId}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["teams"] });
       setShowEditModal(false);
-      router.replace("/onboarding");
+      setConfirmingDelete(false);
+      const remaining = teams.filter((t) => t.id !== activeTeamId);
+      if (remaining.length > 0) {
+        setActiveTeamId(remaining[0].id);
+      } else {
+        router.replace("/onboarding");
+      }
     },
     onError: () => toast({ title: "Failed to delete team", preset: "error" }),
   });
