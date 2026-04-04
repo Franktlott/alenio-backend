@@ -215,12 +215,26 @@ tasksRouter.patch("/:taskId", async (c) => {
   const task = await prisma.task.findFirst({ where: { id: taskId, teamId } });
   if (!task) return c.json({ error: { message: "Task not found", code: "NOT_FOUND" } }, 404);
 
-  if (task.creatorId !== user.id) {
-    return c.json({ error: { message: "Only the task creator can edit this task", code: "FORBIDDEN" } }, 403);
+  const isCreator = task.creatorId === user.id;
+
+  if (!isCreator) {
+    // Assignees may only change status (complete or recall)
+    const isAssignee = await prisma.taskAssignment.findFirst({ where: { taskId, userId: user.id } });
+    if (!isAssignee) {
+      return c.json({ error: { message: "Only the task creator can edit this task", code: "FORBIDDEN" } }, 403);
+    }
   }
 
   const body = await c.req.json();
   const { title, description, priority, dueDate, status, attachmentUrl } = body;
+
+  // Non-creators may only update status (complete / recall)
+  if (!isCreator && (title !== undefined || description !== undefined || priority !== undefined || dueDate !== undefined || attachmentUrl !== undefined)) {
+    return c.json({ error: { message: "Only the task creator can edit task details", code: "FORBIDDEN" } }, 403);
+  }
+  if (!isCreator && status !== undefined && status !== "done" && status !== "todo") {
+    return c.json({ error: { message: "Only the task creator can set this status", code: "FORBIDDEN" } }, 403);
+  }
 
   // Completed tasks are locked — only a status change away from "done" (recall) is allowed
   if (task.status === "done" && status === "done") {
