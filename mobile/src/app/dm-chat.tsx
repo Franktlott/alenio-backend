@@ -14,7 +14,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { LinearGradient } from "expo-linear-gradient";
-import { ArrowLeft, Send, Paperclip, X, Users, Video, Trash2, Download } from "lucide-react-native";
+import { ArrowLeft, Send, Paperclip, X, Users, Video, Trash2, Download, Reply, Copy } from "lucide-react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
@@ -22,6 +22,7 @@ import { uploadFile } from "@/lib/upload";
 import { pickMedia } from "@/lib/file-picker";
 import { ChatMessage } from "@/components/ChatMessage";
 import type { DirectMessage } from "@/lib/types";
+import * as Clipboard from "expo-clipboard";
 import ReanimatedSwipeable from "react-native-gesture-handler/ReanimatedSwipeable";
 import Reanimated, { useAnimatedStyle, interpolate } from "react-native-reanimated";
 import * as FileSystem from "expo-file-system";
@@ -226,7 +227,7 @@ export default function DMChatScreen() {
         </View>
       </LinearGradient>
 
-      {/* Emoji picker modal */}
+      {/* Message action sheet */}
       <Modal
         visible={!!emojiTarget}
         transparent
@@ -234,51 +235,85 @@ export default function DMChatScreen() {
         onRequestClose={() => setEmojiTarget(null)}
       >
         <TouchableOpacity
-          className="flex-1 bg-black/40 items-center justify-center"
+          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }}
           activeOpacity={1}
           onPress={() => setEmojiTarget(null)}
         >
-          <View className="bg-white dark:bg-slate-800 rounded-2xl p-3 shadow-xl">
-            <View className="flex-row mb-3" style={{ gap: 8 }}>
-              {REACTION_EMOJIS.map((emoji) => (
+          <TouchableOpacity activeOpacity={1} onPress={() => {}}>
+            <View style={{ marginHorizontal: 12, marginBottom: 32 }}>
+              {/* Reaction row */}
+              <View style={{ backgroundColor: "white", borderRadius: 16, padding: 12, marginBottom: 8, flexDirection: "row", justifyContent: "space-around" }}>
+                {REACTION_EMOJIS.map((emoji) => (
+                  <TouchableOpacity
+                    key={emoji}
+                    onPress={() => {
+                      if (emojiTarget) reactionMutation.mutate({ messageId: emojiTarget.id, emoji });
+                      setEmojiTarget(null);
+                    }}
+                    style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: "#F1F5F9", alignItems: "center", justifyContent: "center" }}
+                  >
+                    <Text style={{ fontSize: 22 }}>{emoji}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Action list */}
+              <View style={{ backgroundColor: "white", borderRadius: 16, overflow: "hidden" }}>
+                {/* Reply */}
                 <TouchableOpacity
-                  key={emoji}
-                  onPress={() => {
-                    if (emojiTarget) reactionMutation.mutate({ messageId: emojiTarget.id, emoji });
-                    setEmojiTarget(null);
-                  }}
-                  className="w-11 h-11 rounded-full bg-slate-100 dark:bg-slate-700 items-center justify-center"
+                  onPress={() => { setReplyTo(emojiTarget); setEmojiTarget(null); }}
+                  style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 0.5, borderBottomColor: "#E2E8F0" }}
                 >
-                  <Text style={{ fontSize: 22 }}>{emoji}</Text>
+                  <Text style={{ fontSize: 16, color: "#1E293B" }}>Reply</Text>
+                  <Reply size={20} color="#64748B" />
                 </TouchableOpacity>
-              ))}
+
+                {/* Copy (text only) */}
+                {emojiTarget?.content ? (
+                  <TouchableOpacity
+                    onPress={() => {
+                      if (emojiTarget.content) Clipboard.setStringAsync(emojiTarget.content);
+                      setEmojiTarget(null);
+                    }}
+                    style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: emojiTarget?.mediaUrl ? 0.5 : 0, borderBottomColor: "#E2E8F0" }}
+                  >
+                    <Text style={{ fontSize: 16, color: "#1E293B" }}>Copy</Text>
+                    <Copy size={20} color="#64748B" />
+                  </TouchableOpacity>
+                ) : null}
+
+                {/* Save Photo / Video */}
+                {emojiTarget?.mediaUrl && emojiTarget?.mediaType ? (
+                  <TouchableOpacity
+                    onPress={() => {
+                      if (emojiTarget.mediaUrl && emojiTarget.mediaType) handleSaveMedia(emojiTarget.mediaUrl, emojiTarget.mediaType);
+                      setEmojiTarget(null);
+                    }}
+                    style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: emojiTarget?.senderId === currentUserId ? 0.5 : 0, borderBottomColor: "#E2E8F0" }}
+                  >
+                    <Text style={{ fontSize: 16, color: "#1E293B" }}>
+                      {emojiTarget.mediaType === "video" ? "Save Video" : "Save Photo"}
+                    </Text>
+                    <Download size={20} color="#64748B" />
+                  </TouchableOpacity>
+                ) : null}
+
+                {/* Delete (own messages only) */}
+                {emojiTarget?.senderId === currentUserId ? (
+                  <TouchableOpacity
+                    onPress={() => {
+                      if (emojiTarget) deleteMessage(emojiTarget.id);
+                      setEmojiTarget(null);
+                    }}
+                    style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 16 }}
+                  >
+                    <Text style={{ fontSize: 16, color: "#EF4444" }}>Delete</Text>
+                    <Trash2 size={20} color="#EF4444" />
+                  </TouchableOpacity>
+                ) : null}
+              </View>
             </View>
-            <TouchableOpacity
-              onPress={() => {
-                setReplyTo(emojiTarget);
-                setEmojiTarget(null);
-              }}
-              className="flex-row items-center justify-center py-2 border-t border-slate-100 dark:border-slate-700"
-            >
-              <Text className="text-indigo-600 font-semibold text-sm">↩ Reply</Text>
-            </TouchableOpacity>
-            {emojiTarget?.mediaUrl && emojiTarget?.mediaType ? (
-              <TouchableOpacity
-                onPress={() => {
-                  if (emojiTarget.mediaUrl && emojiTarget.mediaType) {
-                    handleSaveMedia(emojiTarget.mediaUrl, emojiTarget.mediaType);
-                  }
-                  setEmojiTarget(null);
-                }}
-                className="flex-row items-center justify-center py-2 border-t border-slate-100 dark:border-slate-700 gap-1"
-              >
-                <Download size={14} color="#6366F1" />
-                <Text className="text-indigo-600 font-semibold text-sm">
-                  {emojiTarget.mediaType === "video" ? "Save Video" : "Save Photo"}
-                </Text>
-              </TouchableOpacity>
-            ) : null}
-          </View>
+          </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
 
