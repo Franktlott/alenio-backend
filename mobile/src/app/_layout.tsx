@@ -60,6 +60,15 @@ function RootLayoutNav() {
             }}
           />
           <Stack.Screen
+            name="new-dm"
+            options={{
+              presentation: 'formSheet',
+              sheetAllowedDetents: [0.9],
+              sheetGrabberVisible: true,
+              headerShown: false,
+            }}
+          />
+          <Stack.Screen
             name="select-team"
             options={{
               presentation: 'formSheet',
