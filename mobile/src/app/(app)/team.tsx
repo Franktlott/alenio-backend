@@ -387,7 +387,7 @@ export default function TeamScreen() {
                       </TouchableOpacity>
                     </View>
                     <Text className="text-sm text-slate-500 dark:text-slate-400 mb-4">
-                      This will permanently delete <Text className="font-semibold text-slate-700 dark:text-slate-200">{team?.name}</Text> and all its tasks, messages, and members. This cannot be undone.
+                      This will permanently delete <Text className="font-semibold text-slate-700 dark:text-slate-200">{team?.name}</Text> and all its tasks and messages. Members will keep their accounts and can create or join another team.
                     </Text>
                     <Text className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
                       Type <Text className="text-slate-800 dark:text-slate-200">{team?.name}</Text> to confirm
