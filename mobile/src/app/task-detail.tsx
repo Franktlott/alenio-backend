@@ -123,6 +123,7 @@ export default function TaskDetailScreen() {
   const members = team?.members ?? [];
   const assignedIds = new Set((task?.assignments ?? []).map((a) => a.userId));
   const isSelfAssigned = !!currentUserId && assignedIds.has(currentUserId);
+  const isCreator = !!currentUserId && task?.creator?.id === currentUserId;
 
   const handleToggleMember = (userId: string) => {
     if (assignedIds.has(userId)) {
@@ -166,13 +167,17 @@ export default function TaskDetailScreen() {
             <ArrowLeft size={22} color="white" />
           </TouchableOpacity>
           <Text className="text-white text-lg font-bold flex-1 ml-3" numberOfLines={1}>{task.title}</Text>
-          <TouchableOpacity onPress={() => setShowDeleteConfirm(true)} disabled={deleteMutation.isPending} testID="delete-button">
-            {deleteMutation.isPending ? (
-              <ActivityIndicator size="small" color="white" />
-            ) : (
-              <Trash2 size={20} color="white" />
-            )}
-          </TouchableOpacity>
+          {isCreator ? (
+            <TouchableOpacity onPress={() => setShowDeleteConfirm(true)} disabled={deleteMutation.isPending} testID="delete-button">
+              {deleteMutation.isPending ? (
+                <ActivityIndicator size="small" color="white" />
+              ) : (
+                <Trash2 size={20} color="white" />
+              )}
+            </TouchableOpacity>
+          ) : (
+            <View style={{ width: 20 }} />
+          )}
         </View>
       </LinearGradient>
 
@@ -208,8 +213,8 @@ export default function TaskDetailScreen() {
               return (
                 <TouchableOpacity
                   key={s.value}
-                  onPress={() => updateMutation.mutate({ status: s.value })}
-                  disabled={updateMutation.isPending}
+                  onPress={() => isCreator && updateMutation.mutate({ status: s.value })}
+                  disabled={!isCreator || updateMutation.isPending}
                   className="px-3 py-1.5 rounded-full border"
                   style={isActive ? { backgroundColor: s.color + "20", borderColor: s.color } : { borderColor: "#E2E8F0" }}
                   testID={`status-${s.value}`}
@@ -279,21 +284,24 @@ export default function TaskDetailScreen() {
                     if (newSubtaskTitle.trim()) createSubtaskMutation.mutate(newSubtaskTitle.trim());
                   }}
                   returnKeyType="done"
+                  editable={isCreator}
                   testID="new-subtask-input"
                 />
-                <TouchableOpacity
-                  onPress={() => {
-                    if (newSubtaskTitle.trim()) createSubtaskMutation.mutate(newSubtaskTitle.trim());
-                  }}
-                  disabled={!newSubtaskTitle.trim() || createSubtaskMutation.isPending}
-                  testID="add-subtask-button"
-                >
-                  {createSubtaskMutation.isPending ? (
-                    <ActivityIndicator size="small" color="#4361EE" />
-                  ) : (
-                    <Plus size={18} color={newSubtaskTitle.trim() ? "#4361EE" : "#CBD5E1"} />
-                  )}
-                </TouchableOpacity>
+                {isCreator ? (
+                  <TouchableOpacity
+                    onPress={() => {
+                      if (newSubtaskTitle.trim()) createSubtaskMutation.mutate(newSubtaskTitle.trim());
+                    }}
+                    disabled={!newSubtaskTitle.trim() || createSubtaskMutation.isPending}
+                    testID="add-subtask-button"
+                  >
+                    {createSubtaskMutation.isPending ? (
+                      <ActivityIndicator size="small" color="#4361EE" />
+                    ) : (
+                      <Plus size={18} color={newSubtaskTitle.trim() ? "#4361EE" : "#CBD5E1"} />
+                    )}
+                  </TouchableOpacity>
+                ) : null}
               </View>
             </View>
           );

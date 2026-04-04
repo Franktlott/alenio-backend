@@ -213,6 +213,10 @@ tasksRouter.patch("/:taskId", async (c) => {
   const task = await prisma.task.findFirst({ where: { id: taskId, teamId } });
   if (!task) return c.json({ error: { message: "Task not found", code: "NOT_FOUND" } }, 404);
 
+  if (task.creatorId !== user.id) {
+    return c.json({ error: { message: "Only the task creator can edit this task", code: "FORBIDDEN" } }, 403);
+  }
+
   const body = await c.req.json();
   const { title, description, priority, dueDate, status } = body;
 
@@ -290,6 +294,10 @@ tasksRouter.delete("/:taskId", async (c) => {
 
   const task = await prisma.task.findFirst({ where: { id: taskId, teamId } });
   if (!task) return c.json({ error: { message: "Task not found", code: "NOT_FOUND" } }, 404);
+
+  if (task.creatorId !== user.id) {
+    return c.json({ error: { message: "Only the task creator can delete this task", code: "FORBIDDEN" } }, 403);
+  }
 
   await prisma.task.delete({ where: { id: taskId } });
   return c.body(null, 204);
