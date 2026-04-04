@@ -150,4 +150,21 @@ teamsRouter.delete("/:teamId/leave", async (c) => {
   return c.body(null, 204);
 });
 
+// DELETE /api/teams/:teamId - delete team (owner only)
+teamsRouter.delete("/:teamId", async (c) => {
+  const user = c.get("user")!;
+  const { teamId } = c.req.param();
+
+  const membership = await prisma.teamMember.findUnique({
+    where: { userId_teamId: { userId: user.id, teamId } },
+  });
+  if (!membership || membership.role !== "owner") {
+    return c.json({ error: { message: "Only the team owner can delete the team", code: "FORBIDDEN" } }, 403);
+  }
+
+  await prisma.team.delete({ where: { id: teamId } });
+
+  return c.body(null, 204);
+});
+
 export { teamsRouter };

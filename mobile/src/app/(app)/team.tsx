@@ -98,6 +98,7 @@ export default function TeamScreen() {
   const [editName, setEditName] = useState("");
   const [editImage, setEditImage] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const { data: team, isLoading } = useQuery({
     queryKey: ["team", activeTeamId],
@@ -133,6 +134,16 @@ export default function TeamScreen() {
       queryClient.invalidateQueries({ queryKey: ["conversations"] });
       router.push({ pathname: "/dm-chat", params: { conversationId: conv.id, recipientName: conv.recipient?.name ?? "Direct Message" } });
     },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: () => api.delete(`/api/teams/${activeTeamId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["teams"] });
+      setShowEditModal(false);
+      router.replace("/onboarding");
+    },
+    onError: () => toast({ title: "Failed to delete team", preset: "error" }),
   });
 
   const currentMember = team?.members?.find((m) => m.userId === session?.user?.id);
@@ -334,10 +345,52 @@ export default function TeamScreen() {
                     <Text className="text-white font-bold text-base">Save Changes</Text>
                   )}
                 </TouchableOpacity>
+
+                {/* Delete team (owner only) */}
+                {currentMember?.role === "owner" ? (
+                  <TouchableOpacity
+                    onPress={() => setShowDeleteConfirm(true)}
+                    className="mt-3 rounded-2xl py-4 items-center border border-red-200"
+                    testID="delete-team-button"
+                  >
+                    <Text className="text-red-500 font-semibold text-base">Delete Team</Text>
+                  </TouchableOpacity>
+                ) : null}
               </View>
             </Pressable>
           </KeyboardAvoidingView>
         </Pressable>
+      </Modal>
+
+      {/* Delete confirmation modal */}
+      <Modal visible={showDeleteConfirm} transparent animationType="fade" onRequestClose={() => setShowDeleteConfirm(false)}>
+        <View className="flex-1 bg-black/50 items-center justify-center px-6">
+          <View className="bg-white dark:bg-slate-800 rounded-3xl p-6 w-full">
+            <Text className="text-lg font-bold text-slate-900 dark:text-white mb-2">Delete Team?</Text>
+            <Text className="text-sm text-slate-500 dark:text-slate-400 mb-6">
+              This will permanently delete <Text className="font-semibold text-slate-700 dark:text-slate-200">{team?.name}</Text> and all its tasks, messages, and members. This cannot be undone.
+            </Text>
+            <TouchableOpacity
+              onPress={() => deleteMutation.mutate()}
+              disabled={deleteMutation.isPending}
+              className="rounded-2xl py-4 items-center mb-3 bg-red-500"
+              testID="confirm-delete-team"
+            >
+              {deleteMutation.isPending ? (
+                <ActivityIndicator color="white" />
+              ) : (
+                <Text className="text-white font-bold text-base">Delete Forever</Text>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setShowDeleteConfirm(false)}
+              className="rounded-2xl py-4 items-center bg-slate-100 dark:bg-slate-700"
+              testID="cancel-delete-team"
+            >
+              <Text className="text-slate-700 dark:text-slate-200 font-semibold text-base">Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       </Modal>
     </SafeAreaView>
   );
