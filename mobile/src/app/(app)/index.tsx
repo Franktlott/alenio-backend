@@ -31,7 +31,6 @@ const PRIORITY_CONFIG = {
 function TaskRow({ task, onToggle, onPress }: { task: Task; onToggle: () => void; onPress: () => void }) {
   const isDone = task.status === "done";
   const priority = PRIORITY_CONFIG[task.priority as keyof typeof PRIORITY_CONFIG] ?? PRIORITY_CONFIG.medium;
-  const assigneeName = task.assignments?.[0]?.user?.name ?? null;
 
   const getDueText = () => {
     if (isDone) return "Completed";
@@ -98,10 +97,21 @@ function TaskRow({ task, onToggle, onPress }: { task: Task; onToggle: () => void
           </View>
 
           {/* Assignee */}
-          {assigneeName ? (
-            <View style={{ flexDirection: "row", alignItems: "center" }}>
-              <User size={12} color="#94A3B8" style={{ marginRight: 3 }} />
-              <Text style={{ fontSize: 11, color: "#94A3B8" }}>{assigneeName}</Text>
+          {task.assignments?.[0]?.user ? (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+              <View style={{ width: 16, height: 16, borderRadius: 8, overflow: "hidden", backgroundColor: "#E0E7FF", alignItems: "center", justifyContent: "center" }}>
+                {task.assignments[0].user.image ? (
+                  <Image source={{ uri: task.assignments[0].user.image }} style={{ width: 16, height: 16 }} resizeMode="cover" />
+                ) : (
+                  <Text style={{ fontSize: 8, fontWeight: "700", color: "#4361EE" }}>
+                    {task.assignments[0].user.name?.[0]?.toUpperCase() ?? "?"}
+                  </Text>
+                )}
+              </View>
+              <Text style={{ fontSize: 11, color: "#94A3B8" }}>
+                {task.assignments[0].user.name ?? task.assignments[0].user.email ?? "Unknown"}
+                {task.assignments.length > 1 ? ` +${task.assignments.length - 1}` : ""}
+              </Text>
             </View>
           ) : null}
 

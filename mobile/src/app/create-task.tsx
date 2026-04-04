@@ -378,6 +378,7 @@ export default function CreateTaskScreen() {
               <View style={{ gap: 8 }}>
                 {members.map((m: TeamMember) => {
                   const isSelected = selectedAssignees.includes(m.userId);
+                  const displayName = m.user.name || m.user.email || "Unknown";
                   return (
                     <TouchableOpacity
                       key={m.id}
@@ -389,16 +390,23 @@ export default function CreateTaskScreen() {
                       }}
                       testID={`assignee-${m.userId}`}
                     >
-                      <View className="w-8 h-8 rounded-full bg-indigo-600 items-center justify-center mr-3">
-                        <Text className="text-white text-xs font-bold">
-                          {m.user.name?.[0]?.toUpperCase() ?? m.user.email?.[0]?.toUpperCase() ?? "?"}
-                        </Text>
+                      <View className="w-9 h-9 rounded-full overflow-hidden bg-indigo-100 items-center justify-center mr-3">
+                        {m.user.image ? (
+                          <Image source={{ uri: m.user.image }} style={{ width: 36, height: 36 }} resizeMode="cover" />
+                        ) : (
+                          <View className="w-9 h-9 rounded-full bg-indigo-600 items-center justify-center">
+                            <Text className="text-white text-xs font-bold">
+                              {displayName[0]?.toUpperCase() ?? "?"}
+                            </Text>
+                          </View>
+                        )}
                       </View>
                       <Text
-                        className="flex-1 font-medium"
+                        className="flex-1 font-medium text-sm"
                         style={{ color: isSelected ? "#4361EE" : "#334155" }}
+                        numberOfLines={1}
                       >
-                        {m.user.name ?? m.user.email ?? "Unknown"}{m.userId === session?.user?.id ? " (You)" : ""}
+                        {displayName}{m.userId === session?.user?.id ? " (You)" : ""}
                       </Text>
                       {isSelected ? (
                         <View className="w-5 h-5 rounded-full bg-indigo-600 items-center justify-center">
