@@ -56,9 +56,21 @@ export interface Task {
   team?: { id: string; name: string };
 }
 
+export interface MessageReaction {
+  id: string;
+  emoji: string;
+  userId: string;
+  user: { id: string; name: string };
+}
+
 export interface Message {
   id: string;
-  content: string;
+  content?: string | null;
+  mediaUrl?: string | null;
+  mediaType?: 'image' | 'video' | null;
+  replyToId?: string | null;
+  replyTo?: { id: string; content?: string | null; sender: { id: string; name: string } } | null;
+  reactions: MessageReaction[];
   createdAt: string;
   teamId: string;
   senderId: string;
@@ -67,7 +79,12 @@ export interface Message {
 
 export interface DirectMessage {
   id: string;
-  content: string;
+  content?: string | null;
+  mediaUrl?: string | null;
+  mediaType?: 'image' | 'video' | null;
+  replyToId?: string | null;
+  replyTo?: { id: string; content?: string | null; sender: { id: string; name: string } } | null;
+  reactions: MessageReaction[];
   createdAt: string;
   conversationId: string;
   senderId: string;

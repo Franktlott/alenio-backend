@@ -7,7 +7,7 @@ export async function pickImage(): Promise<PickedFile | null> {
   if (!perm.granted) return null;
 
   const result = await ImagePicker.launchImageLibraryAsync({
-    mediaTypes: ImagePicker.MediaTypeOptions.Images,
+    mediaTypes: ['images'] as ImagePicker.MediaType[],
     quality: 0.8,
     allowsEditing: true,
     aspect: [1, 1],
@@ -38,5 +38,23 @@ export async function takePhoto(): Promise<PickedFile | null> {
     uri: asset.uri,
     filename: asset.fileName ?? `photo-${Date.now()}.jpg`,
     mimeType: asset.mimeType ?? "image/jpeg",
+  };
+}
+
+export async function pickMedia(): Promise<PickedFile | null> {
+  const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+  if (!perm.granted) return null;
+  const result = await ImagePicker.launchImageLibraryAsync({
+    mediaTypes: ['images', 'videos'] as ImagePicker.MediaType[],
+    quality: 0.8,
+    allowsEditing: false,
+  });
+  if (result.canceled) return null;
+  const asset = result.assets[0];
+  const isVideo = asset.type === 'video';
+  return {
+    uri: asset.uri,
+    filename: asset.fileName ?? `media-${Date.now()}.${isVideo ? 'mp4' : 'jpg'}`,
+    mimeType: asset.mimeType ?? (isVideo ? 'video/mp4' : 'image/jpeg'),
   };
 }

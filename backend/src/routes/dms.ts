@@ -146,6 +146,8 @@ dmsRouter.get("/:conversationId/messages", async (c) => {
     where: { conversationId },
     include: {
       sender: { select: { id: true, name: true, email: true, image: true } },
+      reactions: { include: { user: { select: { id: true, name: true } } } },
+      replyTo: { include: { sender: { select: { id: true, name: true } } } },
     },
     orderBy: { createdAt: "asc" },
     take: 100,
@@ -173,15 +175,24 @@ dmsRouter.post("/:conversationId/messages", async (c) => {
   }
 
   const body = await c.req.json();
-  const { content } = body;
-  if (!content?.trim()) {
-    return c.json({ error: { message: "Content is required", code: "VALIDATION_ERROR" } }, 400);
+  const { content, mediaUrl, mediaType, replyToId } = body;
+  if (!content?.trim() && !mediaUrl) {
+    return c.json({ error: { message: "Content or media is required", code: "VALIDATION_ERROR" } }, 400);
   }
 
   const message = await prisma.directMessage.create({
-    data: { content: content.trim(), conversationId, senderId: user.id },
+    data: {
+      content: content?.trim() || null,
+      mediaUrl: mediaUrl || null,
+      mediaType: mediaType || null,
+      replyToId: replyToId || null,
+      conversationId,
+      senderId: user.id,
+    },
     include: {
       sender: { select: { id: true, name: true, email: true, image: true } },
+      reactions: { include: { user: { select: { id: true, name: true } } } },
+      replyTo: { include: { sender: { select: { id: true, name: true } } } },
     },
   });
 
@@ -192,6 +203,42 @@ dmsRouter.post("/:conversationId/messages", async (c) => {
   });
 
   return c.json({ data: message }, 201);
+});
+
+// POST /api/dms/:conversationId/messages/:messageId/reactions - toggle reaction
+dmsRouter.post("/:conversationId/messages/:messageId/reactions", async (c) => {
+  const user = c.get("user")!;
+  const { conversationId, messageId } = c.req.param();
+
+  const participant = await prisma.conversationParticipant.findUnique({
+    where: { conversationId_userId: { conversationId, userId: user.id } },
+  });
+  if (!participant) return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
+
+  const body = await c.req.json();
+  const { emoji } = body;
+  if (!emoji) return c.json({ error: { message: "Emoji is required", code: "VALIDATION_ERROR" } }, 400);
+
+  const existing = await prisma.directMessageReaction.findUnique({
+    where: { directMessageId_userId_emoji: { directMessageId: messageId, userId: user.id, emoji } },
+  });
+
+  if (existing) {
+    await prisma.directMessageReaction.delete({ where: { id: existing.id } });
+  } else {
+    await prisma.directMessageReaction.create({ data: { directMessageId: messageId, userId: user.id, emoji } });
+  }
+
+  const message = await prisma.directMessage.findUnique({
+    where: { id: messageId },
+    include: {
+      sender: { select: { id: true, name: true, email: true, image: true } },
+      reactions: { include: { user: { select: { id: true, name: true } } } },
+      replyTo: { include: { sender: { select: { id: true, name: true } } } },
+    },
+  });
+
+  return c.json({ data: message });
 });
 
 export { dmsRouter };

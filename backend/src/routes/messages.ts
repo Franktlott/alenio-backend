@@ -31,6 +31,10 @@ messagesRouter.get("/", async (c) => {
     where: { teamId },
     include: {
       sender: { select: { id: true, name: true, email: true, image: true } },
+      reactions: { include: { user: { select: { id: true, name: true } } } },
+      replyTo: {
+        include: { sender: { select: { id: true, name: true } } },
+      },
     },
     orderBy: { createdAt: "asc" },
     take: 100,
@@ -50,24 +54,64 @@ messagesRouter.post("/", async (c) => {
   }
 
   const body = await c.req.json();
-  const { content } = body;
+  const { content, mediaUrl, mediaType, replyToId } = body;
 
-  if (!content?.trim()) {
-    return c.json({ error: { message: "Message content is required", code: "VALIDATION_ERROR" } }, 400);
+  if (!content?.trim() && !mediaUrl) {
+    return c.json({ error: { message: "Content or media is required", code: "VALIDATION_ERROR" } }, 400);
   }
 
   const message = await prisma.message.create({
     data: {
-      content: content.trim(),
+      content: content?.trim() || null,
+      mediaUrl: mediaUrl || null,
+      mediaType: mediaType || null,
+      replyToId: replyToId || null,
       teamId,
       senderId: user.id,
     },
     include: {
       sender: { select: { id: true, name: true, email: true, image: true } },
+      reactions: { include: { user: { select: { id: true, name: true } } } },
+      replyTo: { include: { sender: { select: { id: true, name: true } } } },
     },
   });
 
   return c.json({ data: message }, 201);
+});
+
+// POST /api/teams/:teamId/messages/:messageId/reactions - toggle reaction
+messagesRouter.post("/:messageId/reactions", async (c) => {
+  const user = c.get("user")!;
+  const teamId = c.req.param("teamId") as string;
+  const { messageId } = c.req.param();
+
+  const membership = await getMembership(user.id, teamId);
+  if (!membership) return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
+
+  const body = await c.req.json();
+  const { emoji } = body;
+  if (!emoji) return c.json({ error: { message: "Emoji is required", code: "VALIDATION_ERROR" } }, 400);
+
+  const existing = await prisma.messageReaction.findUnique({
+    where: { messageId_userId_emoji: { messageId, userId: user.id, emoji } },
+  });
+
+  if (existing) {
+    await prisma.messageReaction.delete({ where: { id: existing.id } });
+  } else {
+    await prisma.messageReaction.create({ data: { messageId, userId: user.id, emoji } });
+  }
+
+  const message = await prisma.message.findFirst({
+    where: { id: messageId, teamId },
+    include: {
+      sender: { select: { id: true, name: true, email: true, image: true } },
+      reactions: { include: { user: { select: { id: true, name: true } } } },
+      replyTo: { include: { sender: { select: { id: true, name: true } } } },
+    },
+  });
+
+  return c.json({ data: message });
 });
 
 // DELETE /api/teams/:teamId/messages/:messageId - delete own message or admin/owner
