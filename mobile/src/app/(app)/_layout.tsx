@@ -27,6 +27,15 @@ export default function AppLayout() {
       }}
     >
       <Tabs.Screen
+        name="chat"
+        options={{
+          title: "Chat",
+          tabBarIcon: ({ color, size }: { color: string; size: number }) => (
+            <MessageCircle size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="index"
         options={{
           title: "Tasks",
@@ -41,15 +50,6 @@ export default function AppLayout() {
           title: "Team",
           tabBarIcon: ({ color, size }: { color: string; size: number }) => (
             <Users size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="chat"
-        options={{
-          title: "Chat",
-          tabBarIcon: ({ color, size }: { color: string; size: number }) => (
-            <MessageCircle size={size} color={color} />
           ),
         }}
       />
