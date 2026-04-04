@@ -161,6 +161,13 @@ export default function TeamChatScreen() {
           <TouchableOpacity onPress={() => router.back()} className="mr-3" testID="back-button">
             <ArrowLeft size={22} color="white" />
           </TouchableOpacity>
+          <View className="w-9 h-9 rounded-full bg-white/20 items-center justify-center mr-3 overflow-hidden">
+            {team?.image ? (
+              <Image source={{ uri: team.image }} style={{ width: 36, height: 36 }} resizeMode="cover" />
+            ) : (
+              <Text className="text-white font-bold text-base">{(teamName ?? "T")[0].toUpperCase()}</Text>
+            )}
+          </View>
           <View className="flex-1">
             <Text className="text-white text-lg font-bold">{teamName ?? "Team Chat"}</Text>
             <Text className="text-white/70 text-xs">Team channel</Text>
