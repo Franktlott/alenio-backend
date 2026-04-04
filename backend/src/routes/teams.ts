@@ -123,8 +123,8 @@ teamsRouter.patch("/:teamId", async (c) => {
   const membership = await prisma.teamMember.findUnique({
     where: { userId_teamId: { userId: user.id, teamId } },
   });
-  if (!membership || !["owner", "admin"].includes(membership.role)) {
-    return c.json({ error: { message: "Forbidden", code: "FORBIDDEN" } }, 403);
+  if (!membership || membership.role !== "owner") {
+    return c.json({ error: { message: "Only the team owner can edit team info", code: "FORBIDDEN" } }, 403);
   }
 
   const team = await prisma.team.update({

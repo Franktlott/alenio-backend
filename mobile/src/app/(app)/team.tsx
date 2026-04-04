@@ -167,7 +167,7 @@ export default function TeamScreen() {
   });
 
   const currentMember = team?.members?.find((m) => m.userId === session?.user?.id);
-  const canEdit = currentMember?.role === "owner" || currentMember?.role === "admin";
+  const canEdit = currentMember?.role === "owner";
 
   const openEditModal = () => {
     setEditName(team?.name ?? "");
