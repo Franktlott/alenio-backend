@@ -85,7 +85,7 @@ export default function SignIn() {
             ) : null}
 
             <TouchableOpacity
-              className="bg-primary rounded-xl py-4 items-center mt-4"
+              className="bg-indigo-600 rounded-xl py-4 items-center mt-4"
               onPress={handleSendOTP}
               disabled={loading}
               activeOpacity={0.8}

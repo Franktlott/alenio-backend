@@ -104,7 +104,7 @@ export default function OnboardingScreen() {
               >
                 <Text
                   className={`font-semibold text-sm ${
-                    mode === m ? "text-primary" : "text-slate-500"
+                    mode === m ? "text-indigo-600" : "text-slate-500"
                   }`}
                 >
                   {m === "create" ? "Create team" : "Join team"}
@@ -160,7 +160,7 @@ export default function OnboardingScreen() {
           ) : null}
 
           <TouchableOpacity
-            className="bg-primary rounded-xl py-4 items-center mt-4"
+            className="bg-indigo-600 rounded-xl py-4 items-center mt-4"
             onPress={handleSubmit}
             disabled={isLoading}
             testID="submit-button"

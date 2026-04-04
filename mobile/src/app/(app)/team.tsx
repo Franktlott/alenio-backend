@@ -29,7 +29,7 @@ function MemberRow({
       className="flex-row items-center px-4 py-3 bg-white dark:bg-slate-800 border-b border-slate-100 dark:border-slate-700"
       testID="member-row"
     >
-      <View className="w-10 h-10 rounded-full bg-primary items-center justify-center mr-3">
+      <View className="w-10 h-10 rounded-full bg-indigo-600 items-center justify-center mr-3">
         <Text className="text-white font-bold text-sm">
           {member.user.name?.[0]?.toUpperCase() ?? "?"}
         </Text>
@@ -90,7 +90,7 @@ export default function TeamScreen() {
       <SafeAreaView className="flex-1 bg-slate-50 dark:bg-slate-900 items-center justify-center">
         <Text className="text-slate-500">No team selected</Text>
         <TouchableOpacity
-          className="mt-4 bg-primary rounded-xl px-6 py-3"
+      className="mt-4 bg-indigo-600 rounded-xl px-6 py-3"
           onPress={() => router.push("/onboarding")}
         >
           <Text className="text-white font-semibold">Create or join a team</Text>
@@ -105,7 +105,7 @@ export default function TeamScreen() {
         className="flex-1 bg-slate-50 dark:bg-slate-900 items-center justify-center"
         testID="loading-indicator"
       >
-        <ActivityIndicator color="#0F766E" />
+        <ActivityIndicator color="#4361EE" />
       </SafeAreaView>
     );
   }
@@ -125,33 +125,33 @@ export default function TeamScreen() {
       </View>
 
       {/* Invite code card */}
-      <View className="mx-4 mb-4 rounded-2xl p-4" style={{ backgroundColor: "#0F766E20" }}>
-        <Text className="text-xs font-semibold text-primary uppercase tracking-wide mb-2">
+      <View className="mx-4 mb-4 rounded-2xl p-4" style={{ backgroundColor: "#4361EE15" }}>
+        <Text className="text-xs font-semibold text-indigo-600 uppercase tracking-wide mb-2">
           Invite Code
         </Text>
         <View className="flex-row items-center justify-between">
-          <Text className="text-2xl font-bold text-primary tracking-widest">
+          <Text className="text-2xl font-bold text-indigo-600 tracking-widest">
             {team?.inviteCode}
           </Text>
           <View className="flex-row" style={{ gap: 8 }}>
             <TouchableOpacity
               onPress={handleCopyCode}
               className="w-9 h-9 rounded-full items-center justify-center"
-              style={{ backgroundColor: "#0F766E20" }}
+              style={{ backgroundColor: "#4361EE20" }}
               testID="copy-invite-code"
             >
-              <Copy size={16} color="#0F766E" />
+              <Copy size={16} color="#4361EE" />
             </TouchableOpacity>
             <TouchableOpacity
               onPress={handleShareCode}
-              className="w-9 h-9 rounded-full bg-primary items-center justify-center"
+              className="w-9 h-9 rounded-full bg-indigo-600 items-center justify-center"
               testID="share-invite-code"
             >
               <UserPlus size={16} color="white" />
             </TouchableOpacity>
           </View>
         </View>
-        <Text className="text-xs mt-1" style={{ color: "#0F766Eb3" }}>
+        <Text className="text-xs mt-1" style={{ color: "#4361EEb3" }}>
           Share this code to invite team members
         </Text>
       </View>

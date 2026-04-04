@@ -39,7 +39,7 @@ export default function ProfileScreen() {
       {/* User card */}
       <View className="mx-4 mb-6 bg-white dark:bg-slate-800 rounded-2xl p-4">
         <View className="flex-row items-center">
-          <View className="w-14 h-14 rounded-full bg-primary items-center justify-center mr-4">
+          <View className="w-14 h-14 rounded-full bg-indigo-600 items-center justify-center mr-4">
             <Text className="text-white text-xl font-bold">
               {user?.name?.[0]?.toUpperCase() ?? "?"}
             </Text>
@@ -60,7 +60,7 @@ export default function ProfileScreen() {
           onPress={() => router.push("/onboarding")}
           testID="create-join-team-button"
         >
-          <Users size={20} color="#0F766E" />
+          <Users size={20} color="#4361EE" />
           <Text className="flex-1 ml-3 text-slate-900 dark:text-white font-medium">
             Create or join team
           </Text>

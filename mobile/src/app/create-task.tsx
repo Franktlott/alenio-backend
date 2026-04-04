@@ -114,9 +114,9 @@ export default function CreateTaskScreen() {
             testID="create-button"
           >
             {createMutation.isPending ? (
-              <ActivityIndicator size="small" color="#0F766E" />
+              <ActivityIndicator size="small" color="#4361EE" />
             ) : (
-              <Text className="text-primary font-semibold text-base">Create</Text>
+              <Text className="text-indigo-600 font-semibold text-base">Create</Text>
             )}
           </TouchableOpacity>
         </View>
@@ -202,24 +202,24 @@ export default function CreateTaskScreen() {
                       onPress={() => toggleAssignee(m.userId)}
                       className="flex-row items-center p-3 rounded-xl border"
                       style={{
-                        borderColor: isSelected ? "#0F766E" : "#E2E8F0",
-                        backgroundColor: isSelected ? "#0F766E0D" : "transparent",
+                        borderColor: isSelected ? "#4361EE" : "#E2E8F0",
+                        backgroundColor: isSelected ? "#4361EE0D" : "transparent",
                       }}
                       testID={`assignee-${m.userId}`}
                     >
-                      <View className="w-8 h-8 rounded-full bg-primary items-center justify-center mr-3">
+                      <View className="w-8 h-8 rounded-full bg-indigo-600 items-center justify-center mr-3">
                         <Text className="text-white text-xs font-bold">
                           {m.user.name?.[0]?.toUpperCase() ?? "?"}
                         </Text>
                       </View>
                       <Text
                         className="flex-1 font-medium"
-                        style={{ color: isSelected ? "#0F766E" : "#334155" }}
+                        style={{ color: isSelected ? "#4361EE" : "#334155" }}
                       >
                         {m.user.name}
                       </Text>
                       {isSelected ? (
-                        <View className="w-5 h-5 rounded-full bg-primary items-center justify-center">
+                        <View className="w-5 h-5 rounded-full bg-indigo-600 items-center justify-center">
                           <Text className="text-white text-xs">✓</Text>
                         </View>
                       ) : null}
@@ -244,7 +244,7 @@ export default function CreateTaskScreen() {
               <Switch
                 value={isRecurring}
                 onValueChange={setIsRecurring}
-                trackColor={{ false: "#E2E8F0", true: "#14B8A6" }}
+                trackColor={{ false: "#E2E8F0", true: "#6B8EF6" }}
                 thumbColor="white"
                 testID="recurring-switch"
               />
@@ -259,7 +259,7 @@ export default function CreateTaskScreen() {
                       className="px-3 py-1.5 rounded-full"
                       style={{
                         backgroundColor:
-                          recurrenceType === r.value ? "#0F766E" : "#F1F5F9",
+                          recurrenceType === r.value ? "#4361EE" : "#F1F5F9",
                       }}
                       testID={`recurrence-${r.value}`}
                     >

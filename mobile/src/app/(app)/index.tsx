@@ -9,138 +9,120 @@ import {
   Pressable,
   Image,
 } from "react-native";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
-import { Plus, CheckSquare } from "lucide-react-native";
+import { Plus, User } from "lucide-react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
 import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
 import { useTeamStore } from "@/lib/state/team-store";
-import type { Task, TaskStatus, Team } from "@/lib/types";
+import type { Task, Team } from "@/lib/types";
 
-const FILTERS: { label: string; value: TaskStatus | "all" }[] = [
-  { label: "All", value: "all" },
-  { label: "To Do", value: "todo" },
-  { label: "In Progress", value: "in_progress" },
-  { label: "Done", value: "done" },
-];
+type FilterTab = "all" | "active" | "completed";
 
-const PRIORITY_COLORS: Record<string, string> = {
-  urgent: "#EF4444",
-  high: "#F97316",
-  medium: "#3B82F6",
-  low: "#94A3B8",
+const PRIORITY_CONFIG = {
+  urgent: { label: "Urgent", bg: "#FEE2E2", text: "#DC2626", flagColor: "#DC2626" },
+  high: { label: "High", bg: "#FEE2E2", text: "#DC2626", flagColor: "#DC2626" },
+  medium: { label: "Medium", bg: "#FEF9C3", text: "#B45309", flagColor: "#F59E0B" },
+  low: { label: "Low", bg: "#DCFCE7", text: "#15803D", flagColor: "#16A34A" },
 };
 
-const STATUS_COLORS: Record<string, string> = {
-  todo: "#64748B",
-  in_progress: "#3B82F6",
-  done: "#10B981",
-};
-
-function TaskCard({ task, onPress }: { task: Task; onPress: () => void }) {
+function TaskRow({ task, onToggle, onPress }: { task: Task; onToggle: () => void; onPress: () => void }) {
   const isDone = task.status === "done";
-  const hasDueDate = !!task.dueDate;
-  const isOverdue = hasDueDate && !isDone && new Date(task.dueDate!) < new Date();
-  const assignees = task.assignments?.slice(0, 3) ?? [];
+  const priority = PRIORITY_CONFIG[task.priority as keyof typeof PRIORITY_CONFIG] ?? PRIORITY_CONFIG.medium;
+  const assigneeName = task.assignments?.[0]?.user?.name ?? null;
+
+  const getDueText = () => {
+    if (isDone) return "Completed";
+    if (!task.dueDate) return null;
+    const now = new Date();
+    const due = new Date(task.dueDate);
+    const diffMs = due.getTime() - now.getTime();
+    const diffH = Math.round(diffMs / (1000 * 60 * 60));
+    if (diffH < 0) return `${Math.abs(diffH)}h overdue`;
+    if (diffH < 24) return `${diffH}h left`;
+    const diffD = Math.round(diffH / 24);
+    return `${diffD}d left`;
+  };
+
+  const dueText = getDueText();
 
   return (
     <Pressable
       onPress={onPress}
-      className="bg-white dark:bg-slate-800 rounded-2xl p-4 mb-3 mx-4"
-      style={{
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 4,
-        elevation: 2,
-      }}
-      testID="task-card"
+      style={{ paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: "#F1F5F9", backgroundColor: "white", flexDirection: "row", alignItems: "flex-start" }}
+      testID="task-row"
     >
-      <View className="flex-row items-start">
-        {/* Priority dot */}
-        <View
-          className="w-2.5 h-2.5 rounded-full mt-1.5 mr-3 flex-shrink-0"
-          style={{ backgroundColor: PRIORITY_COLORS[task.priority] ?? "#94A3B8" }}
-        />
-        <View className="flex-1">
-          <Text
-            className={`text-base font-semibold mb-1 ${
-              isDone
-                ? "line-through text-slate-400 dark:text-slate-500"
-                : "text-slate-900 dark:text-white"
-            }`}
-            numberOfLines={2}
-          >
-            {task.title}
+      {/* Checkbox */}
+      <TouchableOpacity
+        onPress={onToggle}
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        style={{ marginRight: 12, marginTop: 2 }}
+      >
+        {isDone ? (
+          <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: "#10B981", alignItems: "center", justifyContent: "center" }}>
+            <Text style={{ color: "white", fontSize: 12, fontWeight: "bold" }}>✓</Text>
+          </View>
+        ) : (
+          <View style={{ width: 24, height: 24, borderRadius: 12, borderWidth: 2, borderColor: "#CBD5E1" }} />
+        )}
+      </TouchableOpacity>
+
+      {/* Content */}
+      <View style={{ flex: 1 }}>
+        <Text
+          numberOfLines={2}
+          style={{
+            fontSize: 15,
+            fontWeight: "700",
+            marginBottom: 2,
+            color: isDone ? "#94A3B8" : "#0F172A",
+            textDecorationLine: isDone ? "line-through" : "none",
+          }}
+        >
+          {task.title}
+        </Text>
+        {task.description ? (
+          <Text numberOfLines={1} style={{ fontSize: 13, color: "#94A3B8", marginBottom: 8 }}>
+            {task.description}
           </Text>
-          {task.description ? (
-            <Text
-              className="text-sm text-slate-500 dark:text-slate-400 mb-2"
-              numberOfLines={1}
-            >
-              {task.description}
-            </Text>
+        ) : null}
+
+        {/* Meta row */}
+        <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+          {/* Priority */}
+          <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999, backgroundColor: priority.bg }}>
+            <Text style={{ fontSize: 11, marginRight: 3, color: priority.flagColor }}>⚑</Text>
+            <Text style={{ fontSize: 11, fontWeight: "600", color: priority.text }}>{priority.label}</Text>
+          </View>
+
+          {/* Assignee */}
+          {assigneeName ? (
+            <View style={{ flexDirection: "row", alignItems: "center" }}>
+              <User size={12} color="#94A3B8" style={{ marginRight: 3 }} />
+              <Text style={{ fontSize: 11, color: "#94A3B8" }}>{assigneeName}</Text>
+            </View>
           ) : null}
 
-          <View className="flex-row items-center justify-between mt-1">
-            <View className="flex-row items-center" style={{ gap: 8 }}>
-              {/* Status badge */}
-              <View
-                className="px-2 py-0.5 rounded-full"
-                style={{ backgroundColor: `${STATUS_COLORS[task.status]}20` }}
-              >
-                <Text
-                  className="text-xs font-medium capitalize"
-                  style={{ color: STATUS_COLORS[task.status] }}
-                >
-                  {task.status === "in_progress"
-                    ? "In Progress"
-                    : task.status === "todo"
-                    ? "To Do"
-                    : "Done"}
-                </Text>
-              </View>
-              {/* Recurrence */}
-              {task.recurrenceRule ? (
-                <Text className="text-xs text-slate-400">
-                  ↺ {task.recurrenceRule.type}
-                </Text>
-              ) : null}
+          {/* Time */}
+          {dueText ? (
+            <View style={{ flexDirection: "row", alignItems: "center" }}>
+              <Text style={{ fontSize: 11, marginRight: 2, color: "#94A3B8" }}>⏱</Text>
+              <Text style={{
+                fontSize: 11,
+                color: isDone ? "#94A3B8" : dueText.includes("overdue") ? "#EF4444" : "#64748B",
+                fontWeight: dueText.includes("overdue") ? "600" : "400",
+              }}>
+                {dueText}
+              </Text>
             </View>
+          ) : null}
 
-            <View className="flex-row items-center" style={{ gap: 8 }}>
-              {/* Due date */}
-              {hasDueDate ? (
-                <Text
-                  className={`text-xs ${
-                    isOverdue ? "text-red-500 font-medium" : "text-slate-400"
-                  }`}
-                >
-                  {new Date(task.dueDate!).toLocaleDateString("en-US", {
-                    month: "short",
-                    day: "numeric",
-                  })}
-                </Text>
-              ) : null}
-              {/* Assignee avatars */}
-              {assignees.length > 0 ? (
-                <View className="flex-row">
-                  {assignees.map((a, i) => (
-                    <View
-                      key={a.id}
-                      className="w-6 h-6 rounded-full bg-primary-light items-center justify-center border border-white dark:border-slate-800"
-                      style={{ marginLeft: i > 0 ? -6 : 0 }}
-                    >
-                      <Text className="text-white text-xs font-bold">
-                        {a.user.name?.[0]?.toUpperCase() ?? "?"}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
-              ) : null}
-            </View>
-          </View>
+          {/* Recurrence */}
+          {task.recurrenceRule && !isDone ? (
+            <Text style={{ fontSize: 11, color: "#818CF8" }}>↺ {task.recurrenceRule.type}</Text>
+          ) : null}
         </View>
       </View>
     </Pressable>
@@ -148,10 +130,11 @@ function TaskCard({ task, onPress }: { task: Task; onPress: () => void }) {
 }
 
 export default function TasksScreen() {
-  const [filter, setFilter] = useState<TaskStatus | "all">("all");
+  const [filter, setFilter] = useState<FilterTab>("all");
   const { data: session } = useSession();
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
   const setActiveTeamId = useTeamStore((s) => s.setActiveTeamId);
+  const queryClient = useQueryClient();
 
   const { data: teams, isLoading: teamsLoading } = useQuery({
     queryKey: ["teams"],
@@ -159,47 +142,76 @@ export default function TasksScreen() {
     enabled: !!session?.user,
   });
 
-  // Set active team if none selected
   React.useEffect(() => {
     if (teams && teams.length > 0 && !activeTeamId) {
       setActiveTeamId(teams[0].id);
     }
   }, [teams, activeTeamId, setActiveTeamId]);
 
-  const { data: tasks = [], isLoading, refetch, isRefetching } = useQuery({
-    queryKey: ["tasks", activeTeamId, filter],
-    queryFn: () => {
-      const params = filter !== "all" ? `?status=${filter}` : "";
-      return api.get<Task[]>(`/api/teams/${activeTeamId}/tasks${params}`);
-    },
+  const { data: allTasks = [], isLoading, refetch, isRefetching } = useQuery({
+    queryKey: ["tasks", activeTeamId],
+    queryFn: () => api.get<Task[]>(`/api/teams/${activeTeamId}/tasks`),
     enabled: !!activeTeamId,
   });
 
-  // If no teams, show onboarding prompt
+  const toggleMutation = useMutation({
+    mutationFn: (task: Task) =>
+      api.patch<Task>(`/api/teams/${activeTeamId}/tasks/${task.id}`, {
+        status: task.status === "done" ? "todo" : "done",
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tasks", activeTeamId] });
+    },
+  });
+
+  const tasks = allTasks.filter((t) => {
+    if (filter === "active") return t.status !== "done";
+    if (filter === "completed") return t.status === "done";
+    return true;
+  });
+
+  const activeCount = allTasks.filter((t) => t.status !== "done").length;
+  const completedCount = allTasks.filter((t) => t.status === "done").length;
+
+  const currentTeam = teams?.find((t: Team) => t.id === activeTeamId);
+
   if (!teamsLoading && (!teams || teams.length === 0)) {
     return (
-      <SafeAreaView
-        className="flex-1 bg-slate-50 dark:bg-slate-900"
-        testID="no-teams-screen"
-      >
-        <View className="flex-1 items-center justify-center px-6">
+      <SafeAreaView style={{ flex: 1, backgroundColor: "white" }} testID="no-teams-screen">
+        <LinearGradient
+          colors={["#4361EE", "#7C3AED"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={{ paddingHorizontal: 16, paddingBottom: 16, paddingTop: 8 }}
+        >
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+            <Text style={{ color: "white", fontSize: 20, fontWeight: "700" }}>Alenio</Text>
+            <TouchableOpacity
+              onPress={() => router.push("/(app)/profile")}
+              style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(255,255,255,0.2)", alignItems: "center", justifyContent: "center" }}
+            >
+              <User size={18} color="white" />
+            </TouchableOpacity>
+          </View>
+        </LinearGradient>
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 24 }}>
           <Image
             source={require("@/assets/alenio-logo.png")}
             style={{ width: 180, height: 68, marginBottom: 16 }}
             resizeMode="contain"
           />
-          <Text className="text-xl font-bold text-slate-900 dark:text-white mb-2 text-center">
+          <Text style={{ fontSize: 20, fontWeight: "700", color: "#0F172A", marginBottom: 8, textAlign: "center" }}>
             Welcome to Alenio
           </Text>
-          <Text className="text-slate-500 text-center mb-6">
+          <Text style={{ color: "#64748B", textAlign: "center", marginBottom: 24 }}>
             Create or join a team to start managing tasks together
           </Text>
           <TouchableOpacity
-            className="bg-primary rounded-xl px-6 py-3"
+            style={{ backgroundColor: "#4361EE", borderRadius: 12, paddingHorizontal: 24, paddingVertical: 12 }}
             onPress={() => router.push("/onboarding")}
             testID="get-started-button"
           >
-            <Text className="text-white font-semibold">Get started</Text>
+            <Text style={{ color: "white", fontWeight: "600" }}>Get started</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -207,48 +219,79 @@ export default function TasksScreen() {
   }
 
   return (
-    <SafeAreaView
-      className="flex-1 bg-slate-50 dark:bg-slate-900"
-      testID="tasks-screen"
-    >
-      {/* Header */}
-      <View className="px-4 pt-2 pb-3 flex-row items-center justify-between">
-        <View>
-          <Text className="text-2xl font-bold text-slate-900 dark:text-white">
-            My Tasks
-          </Text>
-          {teams && teams.length > 0 ? (
+    <SafeAreaView style={{ flex: 1, backgroundColor: "#F8FAFC" }} edges={["top"]} testID="tasks-screen">
+      {/* Blue/purple gradient header */}
+      <LinearGradient
+        colors={["#4361EE", "#7C3AED"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+      >
+        <View style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 16 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
             <TouchableOpacity onPress={() => router.push("/select-team")}>
-              <Text className="text-primary text-sm font-medium">
-                {teams.find((t) => t.id === activeTeamId)?.name ?? "Select team"}{" "}
-                ›
+              <Text style={{ color: "white", fontSize: 20, fontWeight: "700" }}>
+                {currentTeam?.name ?? "Alenio"}
               </Text>
+              {teams && teams.length > 1 ? (
+                <Text style={{ color: "rgba(255,255,255,0.7)", fontSize: 12 }}>tap to switch ›</Text>
+              ) : null}
             </TouchableOpacity>
-          ) : null}
+            <TouchableOpacity
+              onPress={() => router.push("/(app)/profile")}
+              style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(255,255,255,0.2)", alignItems: "center", justifyContent: "center" }}
+            >
+              <User size={18} color="white" />
+            </TouchableOpacity>
+          </View>
+          <Text style={{ color: "white", fontSize: 26, fontWeight: "700" }}>Tasks</Text>
+        </View>
+      </LinearGradient>
+
+      {/* Stats cards */}
+      <View style={{ flexDirection: "row", paddingHorizontal: 16, paddingVertical: 12, gap: 12 }}>
+        <View style={{
+          flex: 1, backgroundColor: "white", borderRadius: 16, padding: 12, flexDirection: "row", alignItems: "center",
+          shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 4, shadowOffset: { width: 0, height: 1 }, elevation: 1,
+        }}>
+          <View style={{ width: 36, height: 36, borderRadius: 18, borderWidth: 2, borderColor: "#60A5FA", alignItems: "center", justifyContent: "center", marginRight: 12 }}>
+            <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: "#60A5FA" }} />
+          </View>
+          <View>
+            <Text style={{ fontSize: 12, color: "#94A3B8" }}>Active</Text>
+            <Text style={{ fontSize: 24, fontWeight: "700", color: "#0F172A" }}>{activeCount}</Text>
+          </View>
+        </View>
+        <View style={{
+          flex: 1, backgroundColor: "white", borderRadius: 16, padding: 12, flexDirection: "row", alignItems: "center",
+          shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 4, shadowOffset: { width: 0, height: 1 }, elevation: 1,
+        }}>
+          <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#10B981", alignItems: "center", justifyContent: "center", marginRight: 12 }}>
+            <Text style={{ color: "white", fontSize: 14, fontWeight: "700" }}>✓</Text>
+          </View>
+          <View>
+            <Text style={{ fontSize: 12, color: "#94A3B8" }}>Completed</Text>
+            <Text style={{ fontSize: 24, fontWeight: "700", color: "#10B981" }}>{completedCount}</Text>
+          </View>
         </View>
       </View>
 
       {/* Filter tabs */}
-      <View className="flex-row px-4 mb-3" style={{ gap: 8 }}>
-        {FILTERS.map((f) => (
+      <View style={{ marginHorizontal: 16, marginBottom: 12, flexDirection: "row", backgroundColor: "#E2E8F0", borderRadius: 12, padding: 4 }}>
+        {(["all", "active", "completed"] as FilterTab[]).map((f) => (
           <TouchableOpacity
-            key={f.value}
-            onPress={() => setFilter(f.value)}
-            className={`px-3 py-1.5 rounded-full ${
-              filter === f.value
-                ? "bg-primary"
-                : "bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700"
-            }`}
-            testID={`filter-${f.value}`}
+            key={f}
+            onPress={() => setFilter(f)}
+            style={{
+              flex: 1, paddingVertical: 8, borderRadius: 10, alignItems: "center",
+              backgroundColor: filter === f ? "white" : "transparent",
+            }}
+            testID={`filter-${f}`}
           >
-            <Text
-              className={`text-xs font-semibold ${
-                filter === f.value
-                  ? "text-white"
-                  : "text-slate-600 dark:text-slate-400"
-              }`}
-            >
-              {f.label}
+            <Text style={{
+              fontSize: 13, fontWeight: "600",
+              color: filter === f ? "#0F172A" : "#94A3B8",
+            }}>
+              {f === "all" ? "All" : f === "active" ? "Active" : "Completed"}
             </Text>
           </TouchableOpacity>
         ))}
@@ -256,32 +299,29 @@ export default function TasksScreen() {
 
       {/* Task list */}
       {isLoading ? (
-        <View
-          className="flex-1 items-center justify-center"
-          testID="loading-indicator"
-        >
-          <ActivityIndicator color="#0F766E" />
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }} testID="loading-indicator">
+          <ActivityIndicator color="#4361EE" />
         </View>
       ) : tasks.length === 0 ? (
-        <View
-          className="flex-1 items-center justify-center px-6"
-          testID="empty-state"
-        >
-          <CheckSquare size={48} color="#94A3B8" />
-          <Text className="text-lg font-semibold text-slate-500 mt-4">
-            No tasks yet
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 24 }} testID="empty-state">
+          <Text style={{ fontSize: 40, marginBottom: 12 }}>✓</Text>
+          <Text style={{ fontSize: 17, fontWeight: "600", color: "#94A3B8" }}>
+            {filter === "completed" ? "No completed tasks" : "No tasks yet"}
           </Text>
-          <Text className="text-slate-400 text-sm mt-1 text-center">
-            Tap the + button to create your first task
-          </Text>
+          {filter === "all" ? (
+            <Text style={{ color: "#CBD5E1", fontSize: 13, marginTop: 4, textAlign: "center" }}>
+              Tap the + button to create your first task
+            </Text>
+          ) : null}
         </View>
       ) : (
         <FlatList
           data={tasks}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
-            <TaskCard
+            <TaskRow
               task={item}
+              onToggle={() => toggleMutation.mutate(item)}
               onPress={() =>
                 router.push({
                   pathname: "/task-detail",
@@ -291,14 +331,11 @@ export default function TasksScreen() {
             />
           )}
           refreshControl={
-            <RefreshControl
-              refreshing={isRefetching}
-              onRefresh={refetch}
-              tintColor="#0F766E"
-            />
+            <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#4361EE" />
           }
           contentContainerStyle={{ paddingBottom: 100 }}
           showsVerticalScrollIndicator={false}
+          style={{ backgroundColor: "white" }}
           testID="task-list"
         />
       )}
@@ -306,20 +343,20 @@ export default function TasksScreen() {
       {/* FAB */}
       {activeTeamId ? (
         <TouchableOpacity
-          className="absolute bottom-8 right-6 w-14 h-14 bg-primary rounded-full items-center justify-center"
+          style={{
+            position: "absolute", bottom: 32, right: 24,
+            width: 56, height: 56, borderRadius: 28,
+            backgroundColor: "#4361EE",
+            alignItems: "center", justifyContent: "center",
+            shadowColor: "#4361EE", shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.4, shadowRadius: 8, elevation: 8,
+          }}
           onPress={() =>
             router.push({
               pathname: "/create-task",
               params: { teamId: activeTeamId },
             })
           }
-          style={{
-            shadowColor: "#0F766E",
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.3,
-            shadowRadius: 8,
-            elevation: 8,
-          }}
           testID="create-task-button"
         >
           <Plus size={24} color="white" />

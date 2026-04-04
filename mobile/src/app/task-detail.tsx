@@ -83,7 +83,7 @@ export default function TaskDetailScreen() {
         className="flex-1 bg-white dark:bg-slate-900 items-center justify-center"
         testID="loading-indicator"
       >
-        <ActivityIndicator color="#0F766E" />
+        <ActivityIndicator color="#4361EE" />
       </SafeAreaView>
     );
   }
@@ -204,7 +204,7 @@ export default function TaskDetailScreen() {
             <View style={{ gap: 8 }}>
               {task.assignments.map((a) => (
                 <View key={a.id} className="flex-row items-center">
-                  <View className="w-8 h-8 rounded-full bg-primary items-center justify-center mr-2">
+                  <View className="w-8 h-8 rounded-full bg-indigo-600 items-center justify-center mr-2">
                     <Text className="text-white text-xs font-bold">
                       {a.user.name?.[0]?.toUpperCase() ?? "?"}
                     </Text>

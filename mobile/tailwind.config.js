@@ -14,13 +14,13 @@ module.exports = {
       // For example, you can add a primary or secondary color here.
       colors: {
         primary: {
-          DEFAULT: '#0F766E',
-          light: '#14B8A6',
-          dark: '#0D5953',
-          50: '#F0FDFA',
-          100: '#CCFBF1',
+          DEFAULT: '#4361EE',
+          light: '#6B8EF6',
+          dark: '#2D4ED8',
+          50: '#EEF2FF',
+          100: '#E0E7FF',
         },
-        accent: '#F59E0B',
+        accent: '#7C3AED',
         priority: {
           urgent: '#EF4444',
           high: '#F97316',
