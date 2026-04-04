@@ -54,6 +54,10 @@ export default function VideoCallScreen() {
             startInLoadingState={false}
             style={{ flex: 1, backgroundColor: "#0F172A" }}
             testID="jitsi-webview"
+            onShouldStartLoadWithRequest={(request) => {
+              // Block native app deep links (e.g. org.jitsi.meet://)
+              return request.url.startsWith("http://") || request.url.startsWith("https://");
+            }}
           />
         </View>
       </SafeAreaView>

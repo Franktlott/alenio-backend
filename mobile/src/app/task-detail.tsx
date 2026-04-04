@@ -40,6 +40,7 @@ export default function TaskDetailScreen() {
   const { data: task, isLoading } = useQuery({
     queryKey: ["task", taskId, teamId],
     queryFn: () => api.get<Task>(`/api/teams/${teamId}/tasks/${taskId}`),
+    enabled: !!taskId && !!teamId,
   });
 
   const { data: team } = useQuery({
@@ -85,10 +86,10 @@ export default function TaskDetailScreen() {
     },
   });
 
-  const currentUserId = session?.user?.id ?? "";
+  const currentUserId = session?.user?.id ?? null;
   const members = team?.members ?? [];
   const assignedIds = new Set((task?.assignments ?? []).map((a) => a.userId));
-  const isSelfAssigned = assignedIds.has(currentUserId);
+  const isSelfAssigned = !!currentUserId && assignedIds.has(currentUserId);
 
   const handleToggleMember = (userId: string) => {
     if (assignedIds.has(userId)) {
@@ -197,8 +198,8 @@ export default function TaskDetailScreen() {
               {!isSelfAssigned ? (
                 <TouchableOpacity
                   testID="assign-to-me-button"
-                  onPress={() => handleToggleMember(currentUserId)}
-                  disabled={assignMutation.isPending}
+                  onPress={() => currentUserId && handleToggleMember(currentUserId)}
+                  disabled={!currentUserId || assignMutation.isPending}
                   className="flex-row items-center px-3 py-1 rounded-full bg-indigo-50 dark:bg-indigo-900/40"
                   style={{ gap: 4 }}
                 >
