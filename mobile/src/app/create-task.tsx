@@ -215,10 +215,9 @@ export default function CreateTaskScreen() {
                     <DateTimePicker
                       value={dueDate ?? new Date()}
                       mode="date"
-                      display="spinner"
+                      display="inline"
                       minimumDate={new Date()}
                       onChange={(_e, date) => { if (date) { setDueDate(date); setError(null); } }}
-                      style={{ height: 200 }}
                       testID="date-time-picker"
                     />
                     <View style={{ height: 20 }} />
@@ -230,7 +229,7 @@ export default function CreateTaskScreen() {
                 <DateTimePicker
                   value={dueDate ?? new Date()}
                   mode="date"
-                  display="default"
+                  display="calendar"
                   minimumDate={new Date()}
                   onChange={(_e, date) => { setShowDatePicker(false); if (date) { setDueDate(date); setError(null); } }}
                   testID="date-time-picker"
