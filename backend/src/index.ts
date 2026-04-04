@@ -188,6 +188,36 @@ app.route("/api/teams/:teamId/templates", templatesRouter);
 app.route("/api/join-requests", joinRequestsRouter);
 app.route("/api/teams", calendarRouter);
 
+// ── Auto-cleanup job ────────────────────────────────────────────
+// Deletes calendar events, tasks, and task photos older than 45 days
+async function runCleanup() {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - 45);
+
+  try {
+    // Delete calendar events whose start date is older than 45 days
+    const deletedEvents = await prisma.calendarEvent.deleteMany({
+      where: { startDate: { lt: cutoff } },
+    });
+
+    // Delete tasks whose due date is older than 45 days
+    // (cascades to subtasks, assignments, attachmentUrl reference)
+    const deletedTasks = await prisma.task.deleteMany({
+      where: { dueDate: { lt: cutoff } },
+    });
+
+    if (deletedEvents.count > 0 || deletedTasks.count > 0) {
+      console.log(`[cleanup] Removed ${deletedEvents.count} events, ${deletedTasks.count} tasks older than 45 days`);
+    }
+  } catch (err) {
+    console.error("[cleanup] Error during cleanup:", err);
+  }
+}
+
+// Run once on startup, then every 24 hours
+runCleanup();
+setInterval(runCleanup, 24 * 60 * 60 * 1000);
+
 const port = Number(process.env.PORT) || 3000;
 
 export default {
