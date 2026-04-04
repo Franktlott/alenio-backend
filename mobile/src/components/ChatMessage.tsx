@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useCallback } from "react";
 import {
   View,
   Text,
@@ -8,6 +8,10 @@ import {
 } from "react-native";
 import { MediaViewer } from "@/components/MediaViewer";
 import { Play } from "lucide-react-native";
+import * as FileSystem from "expo-file-system";
+import * as MediaLibrary from "expo-media-library";
+import * as Haptics from "expo-haptics";
+import { toast } from "burnt";
 import type { MessageReaction } from "@/lib/types";
 
 interface ChatMessageProps {
@@ -48,9 +52,40 @@ export function ChatMessage({
   const grouped = groupReactions(reactions);
   const hasReactions = grouped.length > 0;
   const [viewerVisible, setViewerVisible] = useState(false);
+  const mediaLongPressed = useRef(false);
+
+  const handleSaveMedia = useCallback(async () => {
+    if (!mediaUrl) return;
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      const { status } = await MediaLibrary.requestPermissionsAsync();
+      if (status !== "granted") {
+        toast({ title: "Permission denied", preset: "error" });
+        return;
+      }
+      const ext = mediaType === "video" ? "mp4" : "jpg";
+      const localUri = `${FileSystem.cacheDirectory}download_${Date.now()}.${ext}`;
+      const { uri } = await FileSystem.downloadAsync(mediaUrl, localUri);
+      await MediaLibrary.saveToLibraryAsync(uri);
+      await FileSystem.deleteAsync(uri, { idempotent: true });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      toast({ title: mediaType === "video" ? "Video saved" : "Photo saved", preset: "done" });
+    } catch {
+      toast({ title: "Failed to save", preset: "error" });
+    }
+  }, [mediaUrl, mediaType]);
 
   return (
-    <Pressable onLongPress={onLongPress} delayLongPress={300}>
+    <Pressable
+      onLongPress={() => {
+        if (mediaLongPressed.current) {
+          mediaLongPressed.current = false;
+          return;
+        }
+        onLongPress();
+      }}
+      delayLongPress={300}
+    >
       <View className={`flex-row mb-1 ${isOwn ? "justify-end" : "justify-start"}`}>
         {/* Avatar */}
         {!isOwn && (
@@ -95,9 +130,13 @@ export function ChatMessage({
 
             {/* Media */}
             {mediaUrl ? (
-              <TouchableOpacity
-                activeOpacity={0.92}
+              <Pressable
                 onPress={() => setViewerVisible(true)}
+                onLongPress={() => {
+                  mediaLongPressed.current = true;
+                  handleSaveMedia();
+                }}
+                delayLongPress={400}
                 className="overflow-hidden"
                 style={{ maxWidth: 220 }}
                 testID="media-thumbnail"
@@ -122,7 +161,7 @@ export function ChatMessage({
                     resizeMode="cover"
                   />
                 )}
-              </TouchableOpacity>
+              </Pressable>
             ) : null}
 
             {/* Text */}
