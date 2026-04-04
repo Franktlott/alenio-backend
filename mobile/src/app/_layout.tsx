@@ -2,15 +2,23 @@ import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { AppState } from 'react-native';
+import { AppState, Image, View } from 'react-native';
 import { useColorScheme } from '@/lib/useColorScheme';
 import { QueryClient, QueryClientProvider, focusManager } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { useSession } from '@/lib/auth/use-session';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import * as Notifications from 'expo-notifications';
 import { registerForPushNotificationsAsync } from '@/lib/notifications';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  withSequence,
+  withDelay,
+  runOnJS,
+} from 'react-native-reanimated';
 
 export const unstable_settings = {
   initialRouteName: '(app)',
@@ -20,7 +28,6 @@ export const unstable_settings = {
 SplashScreen.preventAutoHideAsync();
 
 // Fix React Query's AppState focus listener for React Native
-// The default implementation uses the old addListener API which is no longer a function
 focusManager.setEventListener((handleFocus) => {
   const subscription = AppState.addEventListener('change', (state) => {
     handleFocus(state === 'active');
@@ -30,28 +37,59 @@ focusManager.setEventListener((handleFocus) => {
 
 const queryClient = new QueryClient();
 
+function CustomSplash({ onDone }: { onDone: () => void }) {
+  const opacity = useSharedValue(0);
+  const scale = useSharedValue(0.85);
+
+  useEffect(() => {
+    opacity.value = withSequence(
+      withTiming(1, { duration: 500 }),
+      withDelay(800, withTiming(0, { duration: 400 }))
+    );
+    scale.value = withSequence(
+      withTiming(1, { duration: 500 }),
+      withDelay(800, withTiming(1.08, { duration: 400, }, () => runOnJS(onDone)()))
+    );
+  }, []);
+
+  const animStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [{ scale: scale.value }],
+  }));
+
+  return (
+    <View style={{ flex: 1, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' }}>
+      <Animated.View style={animStyle}>
+        <Image
+          source={require('@/assets/alenio-logo.png')}
+          style={{ width: 200, height: 200 }}
+          resizeMode="contain"
+        />
+      </Animated.View>
+    </View>
+  );
+}
+
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
   const { data: session, isLoading } = useSession();
   const notificationListener = useRef<Notifications.EventSubscription | null>(null);
+  const [showSplash, setShowSplash] = useState(true);
+
+  useEffect(() => {
+    SplashScreen.hideAsync();
+  }, []);
 
   useEffect(() => {
     if (!session?.user) return;
-
-    // Register for push notifications once the user is signed in
     registerForPushNotificationsAsync();
-
-    // Handle notification taps while app is foregrounded
-    notificationListener.current = Notifications.addNotificationReceivedListener(() => {
-      // Notification received while app is open — handler in notifications.ts shows it
-    });
-
-    return () => {
-      notificationListener.current?.remove();
-    };
+    notificationListener.current = Notifications.addNotificationReceivedListener(() => {});
+    return () => { notificationListener.current?.remove(); };
   }, [session?.user?.id]);
 
-  if (isLoading) return null;
+  if (showSplash || isLoading) {
+    return <CustomSplash onDone={() => setShowSplash(false)} />;
+  }
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
