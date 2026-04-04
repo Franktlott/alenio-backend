@@ -16,7 +16,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams } from "expo-router";
-import { X, BookOpen, Bookmark } from "lucide-react-native";
+import { X, BookOpen, Bookmark, Plus, Square } from "lucide-react-native";
 import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
 import type { Task, TaskPriority, RecurrenceType, Team, TeamMember, TaskTemplate } from "@/lib/types";
@@ -53,6 +53,8 @@ export default function CreateTaskScreen() {
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
   const [savingTemplate, setSavingTemplate] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [subtaskTitles, setSubtaskTitles] = useState<string[]>([]);
+  const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
 
   const { data: team } = useQuery({
     queryKey: ["team", teamId],
@@ -98,8 +100,14 @@ export default function CreateTaskScreen() {
   };
 
   const createMutation = useMutation({
-    mutationFn: (input: unknown) =>
-      api.post<Task>(`/api/teams/${teamId}/tasks`, input),
+    mutationFn: async (input: unknown) => {
+      const task = await api.post<Task>(`/api/teams/${teamId}/tasks`, input);
+      // Create subtasks sequentially
+      for (const title of subtaskTitles) {
+        await api.post(`/api/teams/${teamId}/tasks/${task.id}/subtasks`, { title });
+      }
+      return task;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tasks", teamId] });
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
@@ -145,6 +153,17 @@ export default function CreateTaskScreen() {
         ? prev.filter((id) => id !== userId)
         : [...prev, userId]
     );
+  };
+
+  const addSubtask = () => {
+    const trimmed = newSubtaskTitle.trim();
+    if (!trimmed) return;
+    setSubtaskTitles((prev) => [...prev, trimmed]);
+    setNewSubtaskTitle("");
+  };
+
+  const removeSubtask = (index: number) => {
+    setSubtaskTitles((prev) => prev.filter((_, i) => i !== index));
   };
 
   return (
@@ -488,6 +507,46 @@ export default function CreateTaskScreen() {
                 ) : null}
               </View>
             ) : null}
+          </View>
+
+          {/* Subtasks */}
+          <View className="py-4 border-b border-slate-100 dark:border-slate-800">
+            <Text className="text-sm font-semibold text-slate-500 mb-3">
+              Subtasks{subtaskTitles.length > 0 ? ` (${subtaskTitles.length})` : ""}
+            </Text>
+            {subtaskTitles.length > 0 ? (
+              <View className="mb-3" style={{ gap: 6 }}>
+                {subtaskTitles.map((title, index) => (
+                  <View key={index} className="flex-row items-center" style={{ gap: 8 }}>
+                    <Square size={16} color="#CBD5E1" />
+                    <Text className="flex-1 text-sm text-slate-700 dark:text-slate-300">{title}</Text>
+                    <TouchableOpacity
+                      onPress={() => removeSubtask(index)}
+                      className="w-6 h-6 rounded-full items-center justify-center bg-slate-100 dark:bg-slate-700"
+                      testID={`remove-subtask-${index}`}
+                    >
+                      <X size={12} color="#94A3B8" />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+            <View className="flex-row items-center border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2" style={{ gap: 8 }}>
+              <TextInput
+                value={newSubtaskTitle}
+                onChangeText={setNewSubtaskTitle}
+                placeholder="Add a subtask..."
+                placeholderTextColor="#94A3B8"
+                className="flex-1 text-sm text-slate-900 dark:text-white"
+                onSubmitEditing={addSubtask}
+                returnKeyType="done"
+                blurOnSubmit={false}
+                testID="new-subtask-input"
+              />
+              <TouchableOpacity onPress={addSubtask} disabled={!newSubtaskTitle.trim()} testID="add-subtask-button">
+                <Plus size={18} color={newSubtaskTitle.trim() ? "#4361EE" : "#CBD5E1"} />
+              </TouchableOpacity>
+            </View>
           </View>
 
           <View style={{ height: 32 }} />
