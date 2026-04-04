@@ -220,6 +220,14 @@ tasksRouter.patch("/:taskId", async (c) => {
   const body = await c.req.json();
   const { title, description, priority, dueDate, status } = body;
 
+  // Completed tasks are locked — only a status change away from "done" (recall) is allowed
+  if (task.status === "done" && status === "done") {
+    return c.json({ error: { message: "Task is completed. Recall it before making edits.", code: "TASK_COMPLETED" } }, 400);
+  }
+  if (task.status === "done" && (title !== undefined || description !== undefined || priority !== undefined || dueDate !== undefined)) {
+    return c.json({ error: { message: "Task is completed. Recall it before making edits.", code: "TASK_COMPLETED" } }, 400);
+  }
+
   if (status === "done") {
     const incompleteSubtasks = await prisma.subtask.count({
       where: { taskId, completed: false },
@@ -359,6 +367,10 @@ tasksRouter.post("/:taskId/subtasks", async (c) => {
   const membership = await getMembership(user.id, teamId);
   if (!membership) return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
 
+  const task = await prisma.task.findFirst({ where: { id: taskId, teamId } });
+  if (!task) return c.json({ error: { message: "Task not found", code: "NOT_FOUND" } }, 404);
+  if (task.status === "done") return c.json({ error: { message: "Task is completed. Recall it before making edits.", code: "TASK_COMPLETED" } }, 400);
+
   const body = await c.req.json();
   if (!body.title?.trim()) return c.json({ error: { message: "Title required", code: "VALIDATION_ERROR" } }, 400);
 
@@ -378,6 +390,10 @@ tasksRouter.patch("/:taskId/subtasks/:subtaskId", async (c) => {
   const membership = await getMembership(user.id, teamId);
   if (!membership) return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
 
+  const task = await prisma.task.findFirst({ where: { id: taskId, teamId } });
+  if (!task) return c.json({ error: { message: "Task not found", code: "NOT_FOUND" } }, 404);
+  if (task.status === "done") return c.json({ error: { message: "Task is completed. Recall it before making edits.", code: "TASK_COMPLETED" } }, 400);
+
   const body = await c.req.json();
   const subtask = await prisma.subtask.update({
     where: { id: subtaskId },
@@ -393,10 +409,14 @@ tasksRouter.patch("/:taskId/subtasks/:subtaskId", async (c) => {
 tasksRouter.delete("/:taskId/subtasks/:subtaskId", async (c) => {
   const user = c.get("user")!;
   const teamId = c.req.param("teamId") as string;
-  const { subtaskId } = c.req.param();
+  const { subtaskId, taskId } = c.req.param();
 
   const membership = await getMembership(user.id, teamId);
   if (!membership) return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
+
+  const task = await prisma.task.findFirst({ where: { id: taskId, teamId } });
+  if (!task) return c.json({ error: { message: "Task not found", code: "NOT_FOUND" } }, 404);
+  if (task.status === "done") return c.json({ error: { message: "Task is completed. Recall it before making edits.", code: "TASK_COMPLETED" } }, 400);
 
   await prisma.subtask.delete({ where: { id: subtaskId } });
   return c.body(null, 204);
