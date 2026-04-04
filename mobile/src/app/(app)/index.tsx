@@ -275,7 +275,7 @@ export default function TasksScreen() {
 
       {/* Filter tabs */}
       <View style={{ marginHorizontal: 16, marginBottom: 12, flexDirection: "row", backgroundColor: "#E2E8F0", borderRadius: 12, padding: 4 }}>
-        {(["all", "assigned", "completed"] as FilterTab[]).map((f) => (
+        {(["all", "completed", "assigned"] as FilterTab[]).map((f) => (
           <TouchableOpacity
             key={f}
             onPress={() => setFilter(f)}
