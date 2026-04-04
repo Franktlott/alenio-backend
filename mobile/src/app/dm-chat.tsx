@@ -14,7 +14,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { LinearGradient } from "expo-linear-gradient";
-import { ArrowLeft, Send, Paperclip, X, Users, Video } from "lucide-react-native";
+import { ArrowLeft, Send, Paperclip, X, Users, Video, Trash2 } from "lucide-react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
@@ -22,8 +22,27 @@ import { uploadFile } from "@/lib/upload";
 import { pickMedia } from "@/lib/file-picker";
 import { ChatMessage } from "@/components/ChatMessage";
 import type { DirectMessage } from "@/lib/types";
+import ReanimatedSwipeable from "react-native-gesture-handler/ReanimatedSwipeable";
+import Reanimated, { useAnimatedStyle, interpolate } from "react-native-reanimated";
 
 const REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🔥'];
+
+function DeleteAction({ drag, onDelete }: { drag: Reanimated.SharedValue<number>; onDelete: () => void }) {
+  const styleAnimation = useAnimatedStyle(() => ({
+    opacity: interpolate(drag.value, [-80, -40], [1, 0], "clamp"),
+    transform: [{ scale: interpolate(drag.value, [-80, -40], [1, 0.7], "clamp") }],
+  }));
+  return (
+    <Reanimated.View style={[{ width: 72, justifyContent: "center", alignItems: "center" }, styleAnimation]}>
+      <TouchableOpacity
+        onPress={onDelete}
+        style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: "#EF4444", justifyContent: "center", alignItems: "center" }}
+      >
+        <Trash2 size={18} color="white" />
+      </TouchableOpacity>
+    </Reanimated.View>
+  );
+}
 
 function formatDateLabel(dateStr: string) {
   const d = new Date(dateStr);
@@ -92,6 +111,15 @@ export default function DMChatScreen() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["dm-messages", conversationId] }),
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: (messageId: string) =>
+      api.delete(`/api/dms/${conversationId}/messages/${messageId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["dm-messages", conversationId] });
+      queryClient.invalidateQueries({ queryKey: ["conversations"] });
+    },
+  });
+
   const handleSend = async () => {
     const content = input.trim();
     if (!content && !mediaPreview) return;
@@ -125,6 +153,8 @@ export default function DMChatScreen() {
     const file = await pickMedia();
     if (file) setMediaPreview(file);
   };
+
+  const { mutate: deleteMessage } = deleteMutation;
 
   const handleLongPress = useCallback((msg: DirectMessage) => {
     setEmojiTarget(msg);
@@ -246,24 +276,34 @@ export default function DMChatScreen() {
                 );
               }
               const msg = item as DirectMessage;
+              const isOwn = msg.senderId === currentUserId;
               return (
-                <ChatMessage
+                <ReanimatedSwipeable
                   key={msg.id}
-                  id={msg.id}
-                  content={msg.content}
-                  mediaUrl={msg.mediaUrl}
-                  mediaType={msg.mediaType}
-                  replyTo={msg.replyTo}
-                  reactions={msg.reactions ?? []}
-                  senderName={msg.sender.name}
-                  senderInitial={msg.sender.name?.[0]?.toUpperCase() ?? "?"}
-                  senderImage={msg.sender.image}
-                  createdAt={msg.createdAt}
-                  isOwn={msg.senderId === currentUserId}
-                  currentUserId={currentUserId}
-                  onLongPress={() => handleLongPress(msg)}
-                  onReactionPress={(emoji) => reactionMutation.mutate({ messageId: msg.id, emoji })}
-                />
+                  enabled={isOwn}
+                  renderRightActions={(_prog, drag) => (
+                    <DeleteAction drag={drag} onDelete={() => deleteMessage(msg.id)} />
+                  )}
+                  rightThreshold={40}
+                  overshootRight={false}
+                >
+                  <ChatMessage
+                    id={msg.id}
+                    content={msg.content}
+                    mediaUrl={msg.mediaUrl}
+                    mediaType={msg.mediaType}
+                    replyTo={msg.replyTo}
+                    reactions={msg.reactions ?? []}
+                    senderName={msg.sender.name}
+                    senderInitial={msg.sender.name?.[0]?.toUpperCase() ?? "?"}
+                    senderImage={msg.sender.image}
+                    createdAt={msg.createdAt}
+                    isOwn={isOwn}
+                    currentUserId={currentUserId}
+                    onLongPress={() => handleLongPress(msg)}
+                    onReactionPress={(emoji) => reactionMutation.mutate({ messageId: msg.id, emoji })}
+                  />
+                </ReanimatedSwipeable>
               );
             }}
           />

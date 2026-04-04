@@ -314,4 +314,26 @@ dmsRouter.post("/:conversationId/messages/:messageId/reactions", async (c) => {
   return c.json({ data: message });
 });
 
+// DELETE /api/dms/:conversationId/messages/:messageId
+dmsRouter.delete("/:conversationId/messages/:messageId", async (c) => {
+  const user = c.get("user")!;
+  const { conversationId, messageId } = c.req.param();
+
+  const participant = await prisma.conversationParticipant.findUnique({
+    where: { conversationId_userId: { conversationId, userId: user.id } },
+  });
+  if (!participant) return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
+
+  const message = await prisma.directMessage.findUnique({ where: { id: messageId } });
+  if (!message || message.conversationId !== conversationId) {
+    return c.json({ error: { message: "Message not found", code: "NOT_FOUND" } }, 404);
+  }
+  if (message.senderId !== user.id) {
+    return c.json({ error: { message: "Cannot delete someone else's message", code: "FORBIDDEN" } }, 403);
+  }
+
+  await prisma.directMessage.delete({ where: { id: messageId } });
+  return new Response(null, { status: 204 });
+});
+
 export { dmsRouter };
