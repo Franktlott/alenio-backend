@@ -61,19 +61,41 @@ function startOfDay(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
 }
 
-function getDaysInMonth(date: Date): (Date | null)[] {
+function getDaysInMonth(date: Date): Date[] {
   const year = date.getFullYear();
   const month = date.getMonth();
   const firstDay = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const days: (Date | null)[] = [];
-  for (let i = 0; i < firstDay; i++) days.push(null);
-  for (let d = 1; d <= daysInMonth; d++) days.push(new Date(year, month, d));
+  const days: Date[] = [];
+
+  // Pad start with trailing days from previous month
+  const prevMonthDays = new Date(year, month, 0).getDate();
+  for (let i = firstDay - 1; i >= 0; i--) {
+    days.push(new Date(year, month - 1, prevMonthDays - i));
+  }
+
+  // Current month
+  for (let d = 1; d <= daysInMonth; d++) {
+    days.push(new Date(year, month, d));
+  }
+
+  // Pad end with leading days from next month to complete the last week
+  const remaining = days.length % 7;
+  if (remaining !== 0) {
+    for (let d = 1; d <= 7 - remaining; d++) {
+      days.push(new Date(year, month + 1, d));
+    }
+  }
+
   return days;
 }
 
+function isCurrentMonth(day: Date, month: Date): boolean {
+  return day.getFullYear() === month.getFullYear() && day.getMonth() === month.getMonth();
+}
+
 // Compute spanning event bars for a week row
-function computeWeekBars(week: (Date | null)[], events: CalendarEvent[]): WeekBar[][] {
+function computeWeekBars(week: Date[], events: CalendarEvent[]): WeekBar[][] {
   const bars: WeekBar[] = [];
 
   for (const event of events) {
@@ -239,7 +261,7 @@ export default function CalendarScreen() {
   const today = new Date();
 
   // Group into weeks
-  const weeks: (Date | null)[][] = [];
+  const weeks: Date[][] = [];
   for (let i = 0; i < days.length; i += 7) weeks.push(days.slice(i, i + 7));
 
   const selectedEvents = selectedDate ? getEventsForDay(selectedDate) : [];
@@ -296,14 +318,15 @@ export default function CalendarScreen() {
                 {/* Day number row */}
                 <View style={{ flexDirection: "row" }}>
                   {week.map((day, dayIndex) => {
-                    const isToday = day ? isSameDay(day, today) : false;
-                    const isSelected = day && selectedDate ? isSameDay(day, selectedDate) : false;
-                    const hasTask = day ? getTasksForDay(day).length > 0 : false;
+                    const inMonth = isCurrentMonth(day, currentMonth);
+                    const isToday = isSameDay(day, today);
+                    const isSelected = selectedDate ? isSameDay(day, selectedDate) : false;
+                    const hasTask = inMonth ? getTasksForDay(day).length > 0 : false;
 
                     return (
                       <Pressable
                         key={dayIndex}
-                        onPress={() => day && setSelectedDate(day)}
+                        onPress={() => setSelectedDate(day)}
                         style={{
                           flex: 1,
                           borderLeftWidth: dayIndex === 0 ? 0 : 0.5,
@@ -311,9 +334,9 @@ export default function CalendarScreen() {
                           paddingTop: 4,
                           paddingBottom: 2,
                           alignItems: "center",
-                          backgroundColor: !day ? "#FAFAFA" : isSelected && !isToday ? "#F5F7FF" : "white",
+                          backgroundColor: isSelected && !isToday ? "#F5F7FF" : "white",
                         }}
-                        testID={day ? `calendar-day-${day.getDate()}` : `empty-${weekIndex}-${dayIndex}`}
+                        testID={`calendar-day-${day.getDate()}`}
                       >
                         <View style={{
                           width: 26, height: 26, borderRadius: 13,
@@ -325,9 +348,9 @@ export default function CalendarScreen() {
                           <Text style={{
                             fontSize: 12,
                             fontWeight: isToday || isSelected ? "700" : "400",
-                            color: !day ? "#CBD5E1" : isToday ? "white" : isSelected ? "#4361EE" : "#334155",
+                            color: isToday ? "white" : isSelected ? "#4361EE" : inMonth ? "#334155" : "#CBD5E1",
                           }}>
-                            {day ? day.getDate() : ""}
+                            {day.getDate()}
                           </Text>
                         </View>
                         {/* Task dot */}
