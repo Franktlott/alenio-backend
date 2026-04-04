@@ -14,7 +14,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { LinearGradient } from "expo-linear-gradient";
-import { ArrowLeft, Send, Paperclip, X } from "lucide-react-native";
+import { ArrowLeft, Send, Paperclip, X, Video } from "lucide-react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
@@ -165,6 +165,16 @@ export default function TeamChatScreen() {
             <Text className="text-white text-lg font-bold">{teamName ?? "Team Chat"}</Text>
             <Text className="text-white/70 text-xs">Team channel</Text>
           </View>
+          <TouchableOpacity
+            testID="start-video-call-button"
+            onPress={() => router.push({
+              pathname: "/video-call",
+              params: { roomId: teamId, roomName: `${teamName ?? "Team"} Call` },
+            })}
+            className="w-9 h-9 rounded-full bg-white/20 items-center justify-center"
+          >
+            <Video size={18} color="white" />
+          </TouchableOpacity>
         </View>
       </LinearGradient>
 

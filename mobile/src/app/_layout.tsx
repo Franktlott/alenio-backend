@@ -51,6 +51,13 @@ function RootLayoutNav() {
           <Stack.Screen name="team-chat" />
           <Stack.Screen name="dm-chat" />
           <Stack.Screen
+            name="video-call"
+            options={{
+              headerShown: false,
+              presentation: "fullScreenModal",
+            }}
+          />
+          <Stack.Screen
             name="create-group"
             options={{
               presentation: 'formSheet',
