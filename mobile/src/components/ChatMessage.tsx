@@ -24,15 +24,16 @@ interface ChatMessageProps {
   isOwn: boolean;
   currentUserId: string;
   onLongPress: () => void;
-  onReactionPress: (emoji: string) => void;
+  onReactionTap: (emoji: string, reactors: { id: string; name: string }[]) => void;
 }
 
 function groupReactions(reactions: MessageReaction[]) {
-  const map: Record<string, { count: number; userIds: string[] }> = {};
+  const map: Record<string, { count: number; userIds: string[]; users: { id: string; name: string }[] }> = {};
   for (const r of reactions) {
-    if (!map[r.emoji]) map[r.emoji] = { count: 0, userIds: [] };
+    if (!map[r.emoji]) map[r.emoji] = { count: 0, userIds: [], users: [] };
     map[r.emoji].count++;
     map[r.emoji].userIds.push(r.userId);
+    map[r.emoji].users.push(r.user);
   }
   return Object.entries(map).map(([emoji, data]) => ({ emoji, ...data }));
 }
@@ -43,7 +44,7 @@ export function formatTime(dateStr: string) {
 
 export function ChatMessage({
   content, mediaUrl, mediaType, replyTo, reactions, senderName, senderInitial,
-  senderImage, createdAt, isOwn, currentUserId, onLongPress, onReactionPress,
+  senderImage, createdAt, isOwn, currentUserId, onLongPress, onReactionTap,
 }: ChatMessageProps) {
   const grouped = groupReactions(reactions);
   const hasReactions = grouped.length > 0;
@@ -142,10 +143,10 @@ export function ChatMessage({
           {/* Reactions */}
           {hasReactions ? (
             <View className="flex-row flex-wrap mt-1 mx-1" style={{ gap: 4 }}>
-              {grouped.map(({ emoji, count, userIds }) => (
+              {grouped.map(({ emoji, count, userIds, users }) => (
                 <TouchableOpacity
                   key={emoji}
-                  onPress={() => onReactionPress(emoji)}
+                  onPress={() => onReactionTap(emoji, users)}
                   className={`flex-row items-center px-2 py-0.5 rounded-full border ${
                     userIds.includes(currentUserId)
                       ? "bg-indigo-100 border-indigo-300"

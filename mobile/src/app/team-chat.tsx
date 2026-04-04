@@ -59,6 +59,7 @@ export default function TeamChatScreen() {
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const [emojiTarget, setEmojiTarget] = useState<Message | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Message | null>(null);
+  const [reactionView, setReactionView] = useState<{ emoji: string; reactors: { id: string; name: string }[] } | null>(null);
   const [mediaPreview, setMediaPreview] = useState<{ uri: string; mimeType: string; filename: string } | null>(null);
   const [uploading, setUploading] = useState(false);
   const flatListRef = useRef<FlatList>(null);
@@ -184,6 +185,28 @@ export default function TeamChatScreen() {
           </TouchableOpacity>
         </View>
       </LinearGradient>
+
+      {/* Who reacted modal */}
+      <Modal visible={!!reactionView} transparent animationType="fade" onRequestClose={() => setReactionView(null)}>
+        <TouchableOpacity style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }} activeOpacity={1} onPress={() => setReactionView(null)}>
+          <TouchableOpacity activeOpacity={1} onPress={() => {}}>
+            <View style={{ backgroundColor: "white", marginHorizontal: 12, marginBottom: 32, borderRadius: 16, overflow: "hidden" }}>
+              <View style={{ paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 0.5, borderBottomColor: "#E2E8F0", alignItems: "center" }}>
+                <Text style={{ fontSize: 28 }}>{reactionView?.emoji}</Text>
+                <Text style={{ fontSize: 13, color: "#64748B", marginTop: 2 }}>{reactionView?.reactors.length} {reactionView?.reactors.length === 1 ? "person" : "people"} reacted</Text>
+              </View>
+              {reactionView?.reactors.map((r) => (
+                <View key={r.id} style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 0.5, borderBottomColor: "#F1F5F9" }}>
+                  <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: "#4361EE", alignItems: "center", justifyContent: "center", marginRight: 12 }}>
+                    <Text style={{ color: "white", fontWeight: "700", fontSize: 13 }}>{r.name?.[0]?.toUpperCase() ?? "?"}</Text>
+                  </View>
+                  <Text style={{ fontSize: 15, color: "#1E293B", fontWeight: "500" }}>{r.name}</Text>
+                </View>
+              ))}
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
 
       {/* Emoji picker modal */}
       <Modal
@@ -327,7 +350,7 @@ export default function TeamChatScreen() {
                   isOwn={msg.senderId === currentUserId}
                   currentUserId={currentUserId}
                   onLongPress={() => handleLongPress(msg)}
-                  onReactionPress={(emoji) => reactionMutation.mutate({ messageId: msg.id, emoji })}
+                  onReactionTap={(emoji, reactors) => setReactionView({ emoji, reactors })}
                 />
               );
             }}
