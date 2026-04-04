@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   Pressable,
 } from "react-native";
+import { MediaViewer } from "@/components/MediaViewer";
 import { Play } from "lucide-react-native";
 import type { MessageReaction } from "@/lib/types";
 
@@ -46,6 +47,7 @@ export function ChatMessage({
 }: ChatMessageProps) {
   const grouped = groupReactions(reactions);
   const hasReactions = grouped.length > 0;
+  const [viewerVisible, setViewerVisible] = useState(false);
 
   return (
     <Pressable onLongPress={onLongPress} delayLongPress={300}>
@@ -93,7 +95,13 @@ export function ChatMessage({
 
             {/* Media */}
             {mediaUrl ? (
-              <View className="overflow-hidden" style={{ maxWidth: 220 }}>
+              <TouchableOpacity
+                activeOpacity={0.92}
+                onPress={() => setViewerVisible(true)}
+                className="overflow-hidden"
+                style={{ maxWidth: 220 }}
+                testID="media-thumbnail"
+              >
                 {mediaType === 'video' ? (
                   <View style={{ position: 'relative' }}>
                     <Image
@@ -114,7 +122,7 @@ export function ChatMessage({
                     resizeMode="cover"
                   />
                 )}
-              </View>
+              </TouchableOpacity>
             ) : null}
 
             {/* Text */}
@@ -167,6 +175,14 @@ export function ChatMessage({
           </View>
         ) : null}
       </View>
+      {mediaUrl && mediaType ? (
+        <MediaViewer
+          visible={viewerVisible}
+          mediaUrl={mediaUrl}
+          mediaType={mediaType}
+          onClose={() => setViewerVisible(false)}
+        />
+      ) : null}
     </Pressable>
   );
 }
