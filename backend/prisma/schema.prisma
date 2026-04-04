@@ -98,7 +98,8 @@ model Task {
   status      String   @default("todo")
   priority    String   @default("medium")
   dueDate     DateTime?
-  completedAt DateTime?
+  completedAt   DateTime?
+  attachmentUrl String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

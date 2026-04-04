@@ -92,7 +92,7 @@ tasksRouter.post("/", async (c) => {
   if (!membership) return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
 
   const body = await c.req.json();
-  const { title, description, priority, dueDate, assigneeIds, recurrence } = body;
+  const { title, description, priority, dueDate, assigneeIds, recurrence, attachmentUrl } = body;
 
   if (!title?.trim()) {
     return c.json({ error: { message: "Title is required", code: "VALIDATION_ERROR" } }, 400);
@@ -106,6 +106,7 @@ tasksRouter.post("/", async (c) => {
       dueDate: dueDate ? new Date(dueDate) : null,
       teamId,
       creatorId: user.id,
+      ...(attachmentUrl ? { attachmentUrl } : {}),
       ...(assigneeIds?.length
         ? { assignments: { create: (assigneeIds as string[]).map((id) => ({ userId: id })) } }
         : {}),
@@ -218,13 +219,13 @@ tasksRouter.patch("/:taskId", async (c) => {
   }
 
   const body = await c.req.json();
-  const { title, description, priority, dueDate, status } = body;
+  const { title, description, priority, dueDate, status, attachmentUrl } = body;
 
   // Completed tasks are locked — only a status change away from "done" (recall) is allowed
   if (task.status === "done" && status === "done") {
     return c.json({ error: { message: "Task is completed. Recall it before making edits.", code: "TASK_COMPLETED" } }, 400);
   }
-  if (task.status === "done" && (title !== undefined || description !== undefined || priority !== undefined || dueDate !== undefined)) {
+  if (task.status === "done" && (title !== undefined || description !== undefined || priority !== undefined || dueDate !== undefined || attachmentUrl !== undefined)) {
     return c.json({ error: { message: "Task is completed. Recall it before making edits.", code: "TASK_COMPLETED" } }, 400);
   }
 
@@ -245,6 +246,7 @@ tasksRouter.patch("/:taskId", async (c) => {
       ...(priority !== undefined ? { priority } : {}),
       ...(dueDate !== undefined ? { dueDate: dueDate ? new Date(dueDate) : null } : {}),
       ...(status !== undefined ? { status, completedAt: status === "done" ? new Date() : null } : {}),
+      ...(attachmentUrl !== undefined ? { attachmentUrl } : {}),
     },
     include: {
       assignments: { include: { user: { select: { id: true, name: true, email: true, image: true } } } },

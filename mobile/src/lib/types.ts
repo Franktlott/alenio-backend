@@ -56,6 +56,7 @@ export interface Task {
   priority: TaskPriority;
   dueDate?: string | null;
   completedAt?: string | null;
+  attachmentUrl?: string | null;
   createdAt: string;
   updatedAt: string;
   teamId: string;

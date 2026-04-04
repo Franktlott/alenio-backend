@@ -206,6 +206,15 @@ export default function TaskDetailScreen() {
           <Text className="text-base text-slate-600 dark:text-slate-400 mb-4 leading-relaxed">{task.description}</Text>
         ) : null}
 
+        {/* Attachment photo */}
+        {task.attachmentUrl ? (
+          <Image
+            source={{ uri: task.attachmentUrl }}
+            style={{ width: "100%", height: 200, borderRadius: 12, marginBottom: 16 }}
+            resizeMode="cover"
+          />
+        ) : null}
+
         {/* Completed banner */}
         {isCompleted ? (
           <View className="flex-row items-center bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl px-4 py-3 mb-4" style={{ gap: 8 }}>

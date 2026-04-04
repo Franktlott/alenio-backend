@@ -10,14 +10,17 @@ import {
   Platform,
   Switch,
   Modal,
+  Image,
 } from "react-native";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams } from "expo-router";
-import { X, BookOpen, Bookmark, Plus, Square } from "lucide-react-native";
+import { X, BookOpen, Bookmark, Plus, Square, Camera } from "lucide-react-native";
+import * as ImagePicker from "expo-image-picker";
 import { api } from "@/lib/api/api";
+import { uploadFile } from "@/lib/upload";
 import { useSession } from "@/lib/auth/use-session";
 import type { Task, TaskPriority, RecurrenceType, Team, TeamMember, TaskTemplate } from "@/lib/types";
 
@@ -55,6 +58,8 @@ export default function CreateTaskScreen() {
   const [error, setError] = useState<string | null>(null);
   const [subtaskTitles, setSubtaskTitles] = useState<string[]>([]);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
+  const [attachmentUri, setAttachmentUri] = useState<string | null>(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
   const { data: team } = useQuery({
     queryKey: ["team", teamId],
@@ -100,9 +105,14 @@ export default function CreateTaskScreen() {
   };
 
   const createMutation = useMutation({
-    mutationFn: async (input: unknown) => {
-      const task = await api.post<Task>(`/api/teams/${teamId}/tasks`, input);
-      // Create subtasks sequentially
+    mutationFn: async (input: Record<string, unknown>) => {
+      let attachmentUrl: string | undefined;
+      if (attachmentUri) {
+        const filename = attachmentUri.split("/").pop() ?? "photo.jpg";
+        const uploaded = await uploadFile(attachmentUri, filename, "image/jpeg");
+        attachmentUrl = uploaded.url;
+      }
+      const task = await api.post<Task>(`/api/teams/${teamId}/tasks`, { ...input, attachmentUrl });
       for (const title of subtaskTitles) {
         await api.post(`/api/teams/${teamId}/tasks/${task.id}/subtasks`, { title });
       }
@@ -164,6 +174,22 @@ export default function CreateTaskScreen() {
 
   const removeSubtask = (index: number) => {
     setSubtaskTitles((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const pickPhoto = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      setError("Permission to access photos is required.");
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.8,
+      allowsEditing: true,
+    });
+    if (!result.canceled && result.assets[0]) {
+      setAttachmentUri(result.assets[0].uri);
+    }
   };
 
   return (
@@ -507,6 +533,38 @@ export default function CreateTaskScreen() {
                 ) : null}
               </View>
             ) : null}
+          </View>
+
+          {/* Photo attachment */}
+          <View className="py-4 border-b border-slate-100 dark:border-slate-800">
+            <Text className="text-sm font-semibold text-slate-500 mb-3">Photo</Text>
+            {attachmentUri ? (
+              <View className="relative">
+                <Image
+                  source={{ uri: attachmentUri }}
+                  style={{ width: "100%", height: 180, borderRadius: 12 }}
+                  resizeMode="cover"
+                />
+                <TouchableOpacity
+                  onPress={() => setAttachmentUri(null)}
+                  className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/50 items-center justify-center"
+                  testID="remove-photo-button"
+                >
+                  <X size={14} color="white" />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity
+                onPress={pickPhoto}
+                disabled={uploadingPhoto}
+                className="flex-row items-center justify-center border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl py-6"
+                style={{ gap: 8 }}
+                testID="pick-photo-button"
+              >
+                <Camera size={20} color="#94A3B8" />
+                <Text className="text-sm text-slate-400">Add a photo</Text>
+              </TouchableOpacity>
+            )}
           </View>
 
           {/* Subtasks */}
