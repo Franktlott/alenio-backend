@@ -12,6 +12,7 @@
         "@vibecodeapp/cloud-studio": "^0.2.4",
         "@vibecodeapp/proxy": "^2.0.3",
         "better-auth": "^1.5.6",
+        "done": "^1.1.8",
         "hono": "4.6.0",
         "zod": "4.1.11",
       },
@@ -180,6 +181,8 @@
     "destr": ["destr@2.0.5", "", {}, "sha512-ugFTXCtDZunbzasqBxrK93Ik/DRYsO6S/fedkWEMKqt04xZ4csmnmwGDBAb07QWNaGMAmnTIemsYZCksjATwsA=="],
 
     "detect-node-es": ["detect-node-es@1.1.0", "", {}, "sha512-ypdmJU/TbBby2Dxibuv7ZLW3Bs1QEmM7nHjEANfohJLvE0XVujisn1qPJcZxg+qDucsr+bP6fLD1rPS3AhJ7EQ=="],
+
+    "done": ["done@1.1.8", "", { "bin": { "DONE": "dist/bin.js" } }, "sha512-h5k0Q5R3phSWblWvJvXjDy8Pakk0kU9TXcLt5zLWg5I5DX9djHJ418M/soxVDjB/qK1uXpX4buljDA3znr6TDw=="],
 
     "dotenv": ["dotenv@16.6.1", "", {}, "sha512-uBq4egWHTcTt33a72vpSG0z3HnPuIl6NqYcTrKEg2azoEyl2hpW0zqlxysq2pK9HlDIHyHyakeYaYnSAwd8bow=="],
 
