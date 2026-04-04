@@ -147,14 +147,19 @@ export default function TeamScreen() {
 
   const deleteMutation = useMutation({
     mutationFn: () => api.delete(`/api/teams/${activeTeamId}`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["teams"] });
+    onSuccess: async () => {
       setShowEditModal(false);
       setConfirmingDelete(false);
-      const remaining = teams.filter((t) => t.id !== activeTeamId);
+      setDeleteConfirmText("");
+      const freshTeams = await queryClient.fetchQuery({
+        queryKey: ["teams"],
+        queryFn: () => api.get<Team[]>("/api/teams"),
+      });
+      const remaining = freshTeams.filter((t) => t.id !== activeTeamId);
       if (remaining.length > 0) {
         setActiveTeamId(remaining[0].id);
       } else {
+        setActiveTeamId(null);
         router.replace("/onboarding");
       }
     },
