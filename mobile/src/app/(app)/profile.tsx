@@ -16,7 +16,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { ArrowLeft, Camera, LogOut, Pencil, X, ChevronRight, Plus, Trash2, Bell, Check } from "lucide-react-native";
+import { ArrowLeft, Camera, LogOut, Pencil, X, Plus, Trash2, Bell, Check, LogOut as LeaveIcon } from "lucide-react-native";
 import { authClient } from "@/lib/auth/auth-client";
 import { useInvalidateSession, useSession } from "@/lib/auth/use-session";
 import { router } from "expo-router";
@@ -55,6 +55,7 @@ export default function ProfileScreen() {
   const [uploadingTeamImage, setUploadingTeamImage] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [leavingTeam, setLeavingTeam] = useState<Team | null>(null);
 
   const { data: teams = [], isLoading: teamsLoading } = useQuery({
     queryKey: ["teams"],
@@ -174,7 +175,25 @@ export default function ProfileScreen() {
     onError: () => toast({ title: "Failed to delete team", preset: "error" }),
   });
 
-  // ── Handlers ───────────────────────────────────────────────────
+  const leaveTeamMutation = useMutation({
+    mutationFn: (teamId: string) => api.delete(`/api/teams/${teamId}/leave`),
+    onSuccess: async () => {
+      const freshTeams = await queryClient.fetchQuery({
+        queryKey: ["teams"],
+        queryFn: () => api.get<Team[]>("/api/teams"),
+      });
+      setLeavingTeam(null);
+      const remaining = freshTeams.filter((t) => t.id !== leavingTeam?.id);
+      if (remaining.length > 0) {
+        setActiveTeamId(remaining[0].id);
+      } else {
+        setActiveTeamId(null);
+        router.replace("/onboarding");
+      }
+      toast({ title: "Left team", preset: "done" });
+    },
+    onError: () => toast({ title: "Failed to leave team", preset: "error" }),
+  });
   const handlePhotoPress = () => {
     if (Platform.OS === "ios") {
       ActionSheetIOS.showActionSheetWithOptions(
@@ -361,7 +380,13 @@ export default function ProfileScreen() {
                         </TouchableOpacity>
                       </View>
                     ) : (
-                      <ChevronRight size={16} color="#CBD5E1" />
+                      <TouchableOpacity
+                        onPress={() => setLeavingTeam(team)}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        testID={`leave-team-${team.id}`}
+                      >
+                        <LeaveIcon size={16} color="#EF4444" />
+                      </TouchableOpacity>
                     )}
                   </Pressable>
                 );
@@ -606,6 +631,43 @@ export default function ProfileScreen() {
               </View>
             </Pressable>
           </KeyboardAvoidingView>
+        </Pressable>
+      </Modal>
+
+      {/* Leave team confirmation modal */}
+      <Modal visible={!!leavingTeam} transparent animationType="fade" onRequestClose={() => setLeavingTeam(null)}>
+        <Pressable className="flex-1 bg-black/40 items-center justify-center px-6" onPress={() => setLeavingTeam(null)}>
+          <Pressable onPress={(e) => e.stopPropagation()}>
+            <View className="bg-white dark:bg-slate-800 rounded-2xl p-6 w-full">
+              <Text className="text-lg font-bold text-slate-900 dark:text-white text-center mb-2">Leave Team?</Text>
+              <Text className="text-sm text-slate-500 dark:text-slate-400 text-center mb-6">
+                You'll lose access to{" "}
+                <Text className="font-semibold text-slate-700 dark:text-slate-200">{leavingTeam?.name}</Text>
+                {" "}and all its tasks. The owner can invite you back.
+              </Text>
+              <View className="flex-row" style={{ gap: 10 }}>
+                <TouchableOpacity
+                  onPress={() => setLeavingTeam(null)}
+                  className="flex-1 py-3 rounded-xl bg-slate-100 dark:bg-slate-700 items-center"
+                  testID="cancel-leave-team"
+                >
+                  <Text className="font-semibold text-slate-600 dark:text-slate-300">Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => leavingTeam && leaveTeamMutation.mutate(leavingTeam.id)}
+                  disabled={leaveTeamMutation.isPending}
+                  className="flex-1 py-3 rounded-xl bg-red-500 items-center"
+                  testID="confirm-leave-team"
+                >
+                  {leaveTeamMutation.isPending ? (
+                    <ActivityIndicator color="white" size="small" />
+                  ) : (
+                    <Text className="font-semibold text-white">Leave</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </Pressable>
         </Pressable>
       </Modal>
     </SafeAreaView>
