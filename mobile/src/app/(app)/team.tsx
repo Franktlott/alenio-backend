@@ -166,7 +166,8 @@ export default function TeamScreen() {
         credentials: "include",
       });
       const data = await res.json();
-      setEditImage(data.url);
+      if (!res.ok) throw new Error("Upload failed");
+      setEditImage(data.data.url);
     } catch {
       toast({ title: "Failed to upload photo", preset: "error" });
     } finally {
