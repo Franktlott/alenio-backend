@@ -23,8 +23,10 @@ activityRouter.get("/:teamId/activity", async (c) => {
     return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
   }
 
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
   const activities = await prisma.teamActivity.findMany({
-    where: { teamId },
+    where: { teamId, createdAt: { gte: sevenDaysAgo } },
     include: {
       user: { select: { id: true, name: true, image: true } },
     },
