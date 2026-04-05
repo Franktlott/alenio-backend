@@ -34,6 +34,7 @@ model User {
   calendarEvents CalendarEvent[]
   activities    TeamActivity[]
   createdTopics Topic[] @relation("TopicCreator")
+  activityReactions TeamActivityReaction[]
 }
 
 model Session {
@@ -315,4 +316,17 @@ model TeamActivity {
   type      String
   metadata  String?
   createdAt DateTime @default(now())
+  reactions TeamActivityReaction[]
+}
+
+model TeamActivityReaction {
+  id         String       @id @default(cuid())
+  emoji      String
+  userId     String
+  activityId String
+  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  activity   TeamActivity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  createdAt  DateTime     @default(now())
+
+  @@unique([activityId, userId, emoji])
 }
