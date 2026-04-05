@@ -571,12 +571,12 @@ export default function TasksScreen() {
           colors={["#4361EE", "#7C3AED"]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
-          style={{ paddingHorizontal: 16, paddingBottom: 16, paddingTop: 8 }}
+          style={{ paddingHorizontal: 16, paddingBottom: 14, paddingTop: 10 }}
         >
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-            <Text style={{ color: "white", fontSize: 20, fontWeight: "700" }}>Alenio</Text>
+            <Text style={{ color: "white", fontSize: 18, fontWeight: "700" }}>Alenio</Text>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-              <Image source={require("@/assets/alenio-icon.png")} style={{ width: 28, height: 28, borderRadius: 6 }} />
+              <Image source={require("@/assets/alenio-icon.png")} style={{ width: 30, height: 30, borderRadius: 6 }} />
             </View>
           </View>
         </LinearGradient>
@@ -612,11 +612,11 @@ export default function TasksScreen() {
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
       >
-        <View style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 16 }}>
+        <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 14 }}>
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-            <Text style={{ color: "white", fontSize: 20, fontWeight: "700" }}>Tasks</Text>
+            <Text style={{ color: "white", fontSize: 18, fontWeight: "700" }}>Tasks</Text>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-              <Image source={require("@/assets/alenio-icon.png")} style={{ width: 28, height: 28, borderRadius: 6 }} />
+              <Image source={require("@/assets/alenio-icon.png")} style={{ width: 30, height: 30, borderRadius: 6 }} />
             </View>
           </View>
         </View>

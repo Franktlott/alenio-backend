@@ -208,11 +208,11 @@ export default function CreateTaskScreen() {
       >
         {/* Header */}
         <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
-          <View className="px-4 pt-3 pb-4 flex-row items-center justify-between">
+          <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 14, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
             <TouchableOpacity onPress={() => router.back()} testID="close-button">
               <X size={22} color="white" />
             </TouchableOpacity>
-            <Text className="text-white text-lg font-bold">New Task</Text>
+            <Text style={{ flex: 1, marginLeft: 12, color: "white", fontSize: 18, fontWeight: "700" }}>New Task</Text>
             <View className="flex-row items-center" style={{ gap: 14 }}>
               {templates.length > 0 ? (
                 <TouchableOpacity onPress={() => setShowTemplatePicker(true)} testID="use-template-button">
@@ -237,7 +237,7 @@ export default function CreateTaskScreen() {
                   <Text className="text-white font-semibold text-base">Create</Text>
                 )}
               </TouchableOpacity>
-              <Image source={require("@/assets/alenio-icon.png")} style={{ width: 28, height: 28, borderRadius: 6 }} />
+              <Image source={require("@/assets/alenio-icon.png")} style={{ width: 30, height: 30, borderRadius: 6 }} />
             </View>
           </View>
         </LinearGradient>

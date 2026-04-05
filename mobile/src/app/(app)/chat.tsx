@@ -71,13 +71,13 @@ export default function ChatScreen() {
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
       >
-        <View className="px-4 pt-2 pb-4">
+        <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 14 }}>
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
             <View style={{ flex: 1 }}>
-              <Text className="text-white text-xl font-bold">Messages</Text>
+              <Text style={{ color: "white", fontSize: 18, fontWeight: "700" }}>Messages</Text>
               <Text className="text-white/70 text-sm">Team chat & direct messages</Text>
             </View>
-            <Image source={require("@/assets/alenio-icon.png")} style={{ width: 28, height: 28, borderRadius: 6 }} />
+            <Image source={require("@/assets/alenio-icon.png")} style={{ width: 30, height: 30, borderRadius: 6 }} />
           </View>
         </View>
       </LinearGradient>

@@ -87,16 +87,16 @@ export default function SubscriptionScreen() {
     <SafeAreaView className="flex-1 bg-slate-50 dark:bg-slate-900" edges={["top"]} testID="subscription-screen">
       {/* Header */}
       <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
-        <View className="px-4 pt-2 pb-5 flex-row items-center justify-between">
+        <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 14, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
           <TouchableOpacity onPress={() => router.back()} testID="back-button" hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
             <ArrowLeft size={22} color="white" />
           </TouchableOpacity>
-          <View className="flex-row items-center" style={{ gap: 8 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
             <Crown size={20} color="#FCD34D" />
-            <Text className="text-white text-lg font-bold">Alenio Pro</Text>
+            <Text style={{ color: "white", fontSize: 18, fontWeight: "700" }}>Alenio Pro</Text>
           </View>
-          <View style={{ width: 28 }}>
-            <Image source={require("@/assets/alenio-icon.png")} style={{ width: 28, height: 28, borderRadius: 6 }} />
+          <View style={{ width: 30 }}>
+            <Image source={require("@/assets/alenio-icon.png")} style={{ width: 30, height: 30, borderRadius: 6 }} />
           </View>
         </View>
       </LinearGradient>

@@ -164,7 +164,7 @@ export default function TeamChatScreen() {
   return (
     <SafeAreaView testID="team-chat-screen" className="flex-1 bg-slate-50 dark:bg-slate-900" edges={["top"]}>
       <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
-        <View className="px-4 pt-2 pb-4 flex-row items-center">
+        <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 14, flexDirection: "row", alignItems: "center" }}>
           <TouchableOpacity onPress={() => router.back()} className="mr-3" testID="back-button">
             <ArrowLeft size={22} color="white" />
           </TouchableOpacity>
@@ -176,7 +176,7 @@ export default function TeamChatScreen() {
             )}
           </View>
           <View className="flex-1">
-            <Text className="text-white text-lg font-bold">{teamName ?? "Team Chat"}</Text>
+            <Text style={{ color: "white", fontSize: 18, fontWeight: "700" }}>{teamName ?? "Team Chat"}</Text>
             <Text className="text-white/70 text-xs">Team channel</Text>
           </View>
           <TouchableOpacity
@@ -189,7 +189,7 @@ export default function TeamChatScreen() {
           >
             <Video size={18} color="white" />
           </TouchableOpacity>
-          <Image source={require("@/assets/alenio-icon.png")} style={{ width: 28, height: 28, borderRadius: 6 }} />
+          <Image source={require("@/assets/alenio-icon.png")} style={{ width: 30, height: 30, borderRadius: 6 }} />
         </View>
       </LinearGradient>
 

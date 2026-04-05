@@ -143,7 +143,7 @@ export default function TaskDetailScreen() {
     return (
       <SafeAreaView className="flex-1 bg-white dark:bg-slate-900" edges={["top"]} testID="loading-indicator">
         <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
-          <View className="px-4 pt-2 pb-4 flex-row items-center">
+          <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 14, flexDirection: "row", alignItems: "center" }}>
             <TouchableOpacity onPress={() => router.back()} testID="back-button">
               <ArrowLeft size={22} color="white" />
             </TouchableOpacity>
@@ -168,11 +168,11 @@ export default function TaskDetailScreen() {
     <SafeAreaView className="flex-1 bg-white dark:bg-slate-900" edges={["top"]} testID="task-detail-screen">
       {/* Header */}
       <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
-        <View className="px-4 pt-2 pb-4 flex-row items-center justify-between">
+        <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 14, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
           <TouchableOpacity onPress={() => { setIsEditMode(false); router.back(); }} testID="back-button">
             <ArrowLeft size={22} color="white" />
           </TouchableOpacity>
-          <Text className="text-white text-lg font-bold flex-1 ml-3" numberOfLines={1}>{task.title}</Text>
+          <Text style={{ flex: 1, marginLeft: 12, color: "white", fontSize: 18, fontWeight: "700" }} numberOfLines={1}>{task.title}</Text>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
             {canEdit ? (
               <TouchableOpacity
@@ -196,7 +196,7 @@ export default function TaskDetailScreen() {
               </TouchableOpacity>
             ) : null}
             {!isCreator ? <View style={{ width: 20 }} /> : null}
-            <Image source={require("@/assets/alenio-icon.png")} style={{ width: 28, height: 28, borderRadius: 6 }} />
+            <Image source={require("@/assets/alenio-icon.png")} style={{ width: 30, height: 30, borderRadius: 6 }} />
           </View>
         </View>
       </LinearGradient>
