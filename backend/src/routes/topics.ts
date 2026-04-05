@@ -33,10 +33,21 @@ topicsRouter.get("/:teamId/topics", async (c) => {
     include: {
       createdBy: { select: { id: true, name: true } },
       _count: { select: { messages: true } },
+      messages: {
+        orderBy: { createdAt: "desc" },
+        take: 1,
+        include: { sender: { select: { id: true, name: true } } },
+      },
     },
   });
 
-  return c.json({ data: items });
+  const result = items.map((t) => ({
+    ...t,
+    lastMessage: t.messages[0] ?? null,
+    messages: undefined,
+  }));
+
+  return c.json({ data: result });
 });
 
 // POST /api/teams/:teamId/topics - create a topic (owner/admin only)

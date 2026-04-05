@@ -29,6 +29,8 @@ messagesRouter.get("/", async (c) => {
   }
 
   const topicIdParam = c.req.query("topicId");
+  const limitParam = c.req.query("limit");
+  const take = limitParam ? parseInt(limitParam, 10) : 100;
 
   // Build topicId filter:
   // - no param provided → return all messages (backwards compatible)
@@ -51,7 +53,7 @@ messagesRouter.get("/", async (c) => {
       },
     },
     orderBy: { createdAt: "asc" },
-    take: 100,
+    take,
   });
 
   return c.json({ data: messages });

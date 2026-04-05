@@ -116,7 +116,7 @@ export default function ChatScreen() {
               testID="team-chat-button"
               onPress={() =>
                 router.push({
-                  pathname: "/team-chat",
+                  pathname: "/team-channels",
                   params: { teamId: activeTeamId ?? "", teamName: currentTeam?.name ?? "" },
                 })
               }

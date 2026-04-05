@@ -10,7 +10,6 @@ import {
   ActivityIndicator,
   Modal,
   Image,
-  ScrollView,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -25,8 +24,6 @@ import { ChatMessage } from "@/components/ChatMessage";
 import type { Message, Team, MessageReaction } from "@/lib/types";
 
 const REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🔥'];
-
-type Topic = { id: string; name: string; color: string; description?: string | null; _count?: { messages: number } };
 
 function formatDateLabel(dateStr: string) {
   const d = new Date(dateStr);
@@ -55,7 +52,7 @@ function buildMessageList(messages: Message[]): MessageItem[] {
 }
 
 export default function TeamChatScreen() {
-  const { teamId, teamName } = useLocalSearchParams<{ teamId: string; teamName: string }>();
+  const { teamId, teamName, topicId, topicName } = useLocalSearchParams<{ teamId: string; teamName: string; topicId?: string; topicName?: string }>();
   const { data: session } = useSession();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
@@ -67,23 +64,14 @@ export default function TeamChatScreen() {
   const [mediaPreview, setMediaPreview] = useState<{ uri: string; mimeType: string; filename: string } | null>(null);
   const [uploading, setUploading] = useState(false);
   const [showMediaPicker, setShowMediaPicker] = useState(false);
-  const [selectedTopicId, setSelectedTopicId] = useState<string | null>(null);
-  const [showTopicModal, setShowTopicModal] = useState(false);
-  const [newTopicName, setNewTopicName] = useState("");
-  const [newTopicColor, setNewTopicColor] = useState("#4361EE");
-  const [deleteTopicTarget, setDeleteTopicTarget] = useState<Topic | null>(null);
   const flatListRef = useRef<FlatList>(null);
   const currentUserId = session?.user?.id ?? "";
 
-  const { data: topics = [] } = useQuery({
-    queryKey: ["topics", teamId],
-    queryFn: () => api.get<Topic[]>(`/api/teams/${teamId}/topics`),
-    enabled: !!teamId,
-  });
+  const topicKey = topicId ?? "general";
 
   const { data: messages = [], isLoading } = useQuery({
-    queryKey: ["messages", teamId, selectedTopicId ?? "general"],
-    queryFn: () => api.get<Message[]>(`/api/teams/${teamId}/messages?topicId=${selectedTopicId ?? "general"}`),
+    queryKey: ["messages", teamId, topicKey],
+    queryFn: () => api.get<Message[]>(`/api/teams/${teamId}/messages?topicId=${topicKey}`),
     enabled: !!teamId,
     refetchInterval: 3000,
   });
@@ -95,32 +83,11 @@ export default function TeamChatScreen() {
   });
   const currentUserRole = team?.members?.find((m) => m.userId === currentUserId)?.role;
 
-  const createTopicMutation = useMutation({
-    mutationFn: ({ name, color }: { name: string; color: string }) =>
-      api.post<Topic>(`/api/teams/${teamId}/topics`, { name, color }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["topics", teamId] });
-      setShowTopicModal(false);
-      setNewTopicName("");
-      setNewTopicColor("#4361EE");
-    },
-  });
-
-  const deleteTopicMutation = useMutation({
-    mutationFn: (topicId: string) =>
-      api.delete(`/api/teams/${teamId}/topics/${topicId}`),
-    onSuccess: (_data, deletedId) => {
-      queryClient.invalidateQueries({ queryKey: ["topics", teamId] });
-      if (selectedTopicId === deletedId) setSelectedTopicId(null);
-      setDeleteTopicTarget(null);
-    },
-  });
-
   const sendMutation = useMutation({
     mutationFn: (payload: { content?: string; mediaUrl?: string; mediaType?: string; replyToId?: string; topicId?: string }) =>
       api.post<Message>(`/api/teams/${teamId}/messages`, payload),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["messages", teamId, selectedTopicId ?? "general"] });
+      queryClient.invalidateQueries({ queryKey: ["messages", teamId, topicKey] });
       setReplyTo(null);
       setMediaPreview(null);
     },
@@ -129,14 +96,14 @@ export default function TeamChatScreen() {
   const reactionMutation = useMutation({
     mutationFn: ({ messageId, emoji }: { messageId: string; emoji: string }) =>
       api.post<Message>(`/api/teams/${teamId}/messages/${messageId}/reactions`, { emoji }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["messages", teamId, selectedTopicId ?? "general"] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["messages", teamId, topicKey] }),
   });
 
   const deleteMutation = useMutation({
     mutationFn: (messageId: string) =>
       api.delete(`/api/teams/${teamId}/messages/${messageId}`),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["messages", teamId, selectedTopicId ?? "general"] });
+      queryClient.invalidateQueries({ queryKey: ["messages", teamId, topicKey] });
       setDeleteTarget(null);
     },
   });
@@ -145,10 +112,6 @@ export default function TeamChatScreen() {
     msg.senderId === currentUserId ||
     currentUserRole === "owner" ||
     currentUserRole === "admin";
-
-  useEffect(() => {
-    setReplyTo(null);
-  }, [selectedTopicId]);
 
   const handleSend = async () => {
     const content = input.trim();
@@ -176,7 +139,7 @@ export default function TeamChatScreen() {
       mediaUrl,
       mediaType,
       replyToId: replyTo?.id,
-      topicId: selectedTopicId ?? undefined,
+      topicId: topicId ?? undefined,
     });
   };
 
@@ -218,7 +181,7 @@ export default function TeamChatScreen() {
           </View>
           <View className="flex-1">
             <Text style={{ color: "white", fontSize: 18, fontWeight: "700" }}>{teamName ?? "Team Chat"}</Text>
-            <Text className="text-white/70 text-xs">Team channel</Text>
+            <Text className="text-white/70 text-xs">{topicName ? `# ${topicName}` : "Main chat"}</Text>
           </View>
           <TouchableOpacity
             testID="start-video-call-button"
@@ -233,65 +196,6 @@ export default function TeamChatScreen() {
           <Image source={require("@/assets/alenio-icon.png")} style={{ width: 30, height: 30, borderRadius: 6 }} />
         </View>
       </LinearGradient>
-
-      {/* Topics bar */}
-      <View style={{ backgroundColor: "white", borderBottomWidth: 1, borderBottomColor: "#F1F5F9" }}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={{ flexGrow: 0 }}
-          contentContainerStyle={{ paddingHorizontal: 12, paddingVertical: 10, gap: 8, flexDirection: "row" }}
-        >
-          {/* General tab - always first */}
-          <TouchableOpacity
-            onPress={() => setSelectedTopicId(null)}
-            style={{
-              paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20,
-              backgroundColor: selectedTopicId === null ? "#4361EE" : "#F1F5F9",
-            }}
-          >
-            <Text style={{ fontSize: 13, fontWeight: "600", color: selectedTopicId === null ? "white" : "#64748B" }}>
-              # General
-            </Text>
-          </TouchableOpacity>
-
-          {/* Dynamic topics */}
-          {topics.map((topic) => (
-            <TouchableOpacity
-              key={topic.id}
-              onPress={() => setSelectedTopicId(topic.id)}
-              onLongPress={() => {
-                if (currentUserRole === "owner" || currentUserRole === "admin") {
-                  setDeleteTopicTarget(topic);
-                }
-              }}
-              style={{
-                paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20,
-                backgroundColor: selectedTopicId === topic.id ? topic.color : "#F1F5F9",
-              }}
-            >
-              <Text style={{ fontSize: 13, fontWeight: "600", color: selectedTopicId === topic.id ? "white" : "#64748B" }}>
-                # {topic.name}
-              </Text>
-            </TouchableOpacity>
-          ))}
-
-          {/* + button for owners/admins */}
-          {(currentUserRole === "owner" || currentUserRole === "admin") ? (
-            <TouchableOpacity
-              onPress={() => setShowTopicModal(true)}
-              style={{
-                width: 32, height: 32, borderRadius: 16,
-                backgroundColor: "#F1F5F9",
-                alignItems: "center", justifyContent: "center",
-              }}
-              testID="add-topic-button"
-            >
-              <Text style={{ fontSize: 18, color: "#64748B", lineHeight: 20 }}>+</Text>
-            </TouchableOpacity>
-          ) : null}
-        </ScrollView>
-      </View>
 
       {/* Media picker sheet */}
       <Modal visible={showMediaPicker} transparent animationType="slide" onRequestClose={() => setShowMediaPicker(false)}>
@@ -428,86 +332,6 @@ export default function TeamChatScreen() {
                 ) : (
                   <Text className="text-base font-semibold text-red-500">Delete</Text>
                 )}
-              </TouchableOpacity>
-            </View>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
-
-      {/* Delete Topic confirmation modal */}
-      <Modal visible={!!deleteTopicTarget} transparent animationType="fade" onRequestClose={() => setDeleteTopicTarget(null)}>
-        <TouchableOpacity
-          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)", alignItems: "center", justifyContent: "center", paddingHorizontal: 32 }}
-          activeOpacity={1}
-          onPress={() => setDeleteTopicTarget(null)}
-        >
-          <TouchableOpacity activeOpacity={1} style={{ width: "100%", backgroundColor: "white", borderRadius: 20, overflow: "hidden" }}>
-            <View style={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 16, alignItems: "center" }}>
-              <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: "#FEE2E2", alignItems: "center", justifyContent: "center", marginBottom: 12 }}>
-                <Text style={{ fontSize: 20 }}>🗑</Text>
-              </View>
-              <Text style={{ fontSize: 16, fontWeight: "700", color: "#0F172A", marginBottom: 6 }}>Delete topic?</Text>
-              <Text style={{ fontSize: 13, color: "#64748B", textAlign: "center" }}>
-                Delete <Text style={{ fontWeight: "700" }}>#{deleteTopicTarget?.name}</Text>? All messages in this topic will also be deleted.
-              </Text>
-            </View>
-            <View style={{ flexDirection: "row", borderTopWidth: 1, borderTopColor: "#F1F5F9" }}>
-              <TouchableOpacity
-                onPress={() => setDeleteTopicTarget(null)}
-                style={{ flex: 1, paddingVertical: 14, alignItems: "center", borderRightWidth: 1, borderRightColor: "#F1F5F9" }}
-                testID="cancel-delete-topic-button"
-              >
-                <Text style={{ fontSize: 15, fontWeight: "500", color: "#64748B" }}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => { if (deleteTopicTarget) deleteTopicMutation.mutate(deleteTopicTarget.id); }}
-                disabled={deleteTopicMutation.isPending}
-                style={{ flex: 1, paddingVertical: 14, alignItems: "center" }}
-                testID="confirm-delete-topic-button"
-              >
-                {deleteTopicMutation.isPending ? (
-                  <ActivityIndicator size="small" color="#EF4444" />
-                ) : (
-                  <Text style={{ fontSize: 15, fontWeight: "700", color: "#EF4444" }}>Delete</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
-
-      {/* Create Topic modal */}
-      <Modal visible={showTopicModal} transparent animationType="slide" onRequestClose={() => setShowTopicModal(false)}>
-        <TouchableOpacity style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }} activeOpacity={1} onPress={() => setShowTopicModal(false)}>
-          <TouchableOpacity activeOpacity={1}>
-            <View style={{ backgroundColor: "white", borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 40 }}>
-              <Text style={{ fontSize: 16, fontWeight: "700", color: "#0F172A", marginBottom: 16 }}>New Topic</Text>
-              <TextInput
-                value={newTopicName}
-                onChangeText={setNewTopicName}
-                placeholder="Topic name..."
-                placeholderTextColor="#94A3B8"
-                style={{ borderWidth: 1.5, borderColor: "#E2E8F0", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: "#0F172A", marginBottom: 16 }}
-                testID="topic-name-input"
-              />
-              {/* Color swatches */}
-              <View style={{ flexDirection: "row", gap: 10, marginBottom: 20 }}>
-                {["#4361EE", "#7C3AED", "#10B981", "#F59E0B", "#EF4444", "#EC4899"].map((color) => (
-                  <TouchableOpacity
-                    key={color}
-                    onPress={() => setNewTopicColor(color)}
-                    style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: color, borderWidth: newTopicColor === color ? 3 : 0, borderColor: "white", elevation: newTopicColor === color ? 4 : 0 }}
-                    testID={`topic-color-${color}`}
-                  />
-                ))}
-              </View>
-              <TouchableOpacity
-                onPress={() => { if (newTopicName.trim()) createTopicMutation.mutate({ name: newTopicName.trim(), color: newTopicColor }); }}
-                disabled={!newTopicName.trim() || createTopicMutation.isPending}
-                style={{ height: 48, borderRadius: 14, backgroundColor: "#4361EE", alignItems: "center", justifyContent: "center" }}
-                testID="create-topic-button"
-              >
-                {createTopicMutation.isPending ? <ActivityIndicator color="white" /> : <Text style={{ color: "white", fontWeight: "700", fontSize: 15 }}>Create Topic</Text>}
               </TouchableOpacity>
             </View>
           </TouchableOpacity>
