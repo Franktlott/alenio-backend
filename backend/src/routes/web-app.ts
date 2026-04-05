@@ -1943,7 +1943,7 @@ webRouter.get("/", (c) => {
         '</div>' +
         '<div class="detail-field">' +
           '<div class="detail-label">Description</div>' +
-          '<div class="detail-value' + (!task.description ? ' muted' : '') + '">' + (task.description ? esc(task.description).replace(/\n/g, '<br>') : 'No description') + '</div>' +
+          '<div class="detail-value' + (!task.description ? ' muted' : '') + '">' + (task.description ? esc(task.description).replace(/\\n/g, '<br>') : 'No description') + '</div>' +
         '</div>' +
         '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">' +
           '<div class="detail-field"><div class="detail-label">Status</div><div class="detail-value">' + statusBadge(task.status) + '</div></div>' +
