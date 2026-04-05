@@ -7,11 +7,12 @@ import {
   ActivityIndicator,
   Modal,
   Image,
+  Pressable,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
 import { LinearGradient } from "expo-linear-gradient";
-import { MessageCircle, Users, ChevronRight, Plus } from "lucide-react-native";
+import { MessageCircle, Users, ChevronRight, Plus, Lock } from "lucide-react-native";
 import { router } from "expo-router";
 import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
@@ -33,12 +34,20 @@ export default function ChatScreen() {
   const { data: session } = useSession();
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
   const [fabOpen, setFabOpen] = useState(false);
+  const [showGroupPaywall, setShowGroupPaywall] = useState(false);
 
   const { data: teams } = useQuery({
     queryKey: ["teams"],
     queryFn: () => api.get<any[]>("/api/teams"),
     enabled: !!session?.user,
   });
+
+  const { data: subscription } = useQuery({
+    queryKey: ["subscription", activeTeamId],
+    queryFn: () => api.get<{ plan: string; status: string }>(`/api/teams/${activeTeamId}/subscription`),
+    enabled: !!activeTeamId,
+  });
+  const isPro = subscription?.plan === "pro";
 
   const { data: conversations = [], isLoading: dmsLoading } = useQuery({
     queryKey: ["conversations"],
@@ -246,7 +255,14 @@ export default function ChatScreen() {
             {/* New Group option */}
             <TouchableOpacity
               testID="fab-new-group"
-              onPress={() => { setFabOpen(false); router.push("/create-group"); }}
+              onPress={() => {
+                setFabOpen(false);
+                if (!isPro) {
+                  setShowGroupPaywall(true);
+                } else {
+                  router.push("/create-group");
+                }
+              }}
               className="flex-row items-center self-end bg-white dark:bg-slate-800 rounded-2xl px-4 py-3"
               style={{
                 shadowColor: "#000",
@@ -284,6 +300,64 @@ export default function ChatScreen() {
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
+      </Modal>
+      {/* Group chat paywall modal */}
+      <Modal
+        visible={showGroupPaywall}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowGroupPaywall(false)}
+      >
+        <Pressable
+          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.45)", alignItems: "center", justifyContent: "center", paddingHorizontal: 24 }}
+          onPress={() => setShowGroupPaywall(false)}
+        >
+          <Pressable onPress={(e) => e.stopPropagation()}>
+            <View style={{ backgroundColor: "white", borderRadius: 24, padding: 28, width: "100%", alignItems: "center" }} testID="group-paywall-modal">
+              <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: "#EEF2FF", alignItems: "center", justifyContent: "center", marginBottom: 14 }}>
+                <Lock size={28} color="#4361EE" />
+              </View>
+              <Text style={{ fontSize: 18, fontWeight: "700", color: "#0F172A", textAlign: "center", marginBottom: 8 }}>
+                Group Chats
+              </Text>
+              <Text style={{ fontSize: 14, color: "#64748B", textAlign: "center", marginBottom: 24, lineHeight: 20 }}>
+                Upgrade to Alenio Pro to create group conversations with your team
+              </Text>
+              <TouchableOpacity
+                onPress={() => { setShowGroupPaywall(false); router.push("/subscription"); }}
+                testID="group-paywall-upgrade-button"
+                style={{
+                  borderRadius: 14,
+                  overflow: "hidden",
+                  width: "100%",
+                  shadowColor: "#4361EE",
+                  shadowOpacity: 0.35,
+                  shadowRadius: 10,
+                  shadowOffset: { width: 0, height: 4 },
+                  elevation: 5,
+                  marginBottom: 10,
+                }}
+              >
+                <LinearGradient
+                  colors={["#4361EE", "#7C3AED"]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={{ paddingVertical: 14, alignItems: "center", flexDirection: "row", justifyContent: "center", gap: 8 }}
+                >
+                  <Text style={{ color: "white", fontWeight: "700", fontSize: 15 }}>Upgrade to Pro</Text>
+                  <Text style={{ color: "rgba(255,255,255,0.85)", fontSize: 15 }}>→</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => setShowGroupPaywall(false)}
+                style={{ paddingVertical: 10, width: "100%", alignItems: "center" }}
+                testID="group-paywall-dismiss"
+              >
+                <Text style={{ color: "#94A3B8", fontWeight: "600", fontSize: 14 }}>Not now</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
       </Modal>
     </SafeAreaView>
   );

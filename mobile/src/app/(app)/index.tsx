@@ -16,7 +16,7 @@ import {
 } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
-import { Plus, User, ArrowUpDown, ChevronLeft, ChevronRight, X, CalendarDays, CheckSquare, Calendar } from "lucide-react-native";
+import { Plus, User, ArrowUpDown, ChevronLeft, ChevronRight, X, CalendarDays, CheckSquare, Calendar, Lock } from "lucide-react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -447,6 +447,13 @@ export default function TasksScreen() {
     enabled: !!activeTeamId,
   });
 
+  const { data: subscription } = useQuery({
+    queryKey: ["subscription", activeTeamId],
+    queryFn: () => api.get<{ plan: string; status: string }>(`/api/teams/${activeTeamId}/subscription`),
+    enabled: !!activeTeamId,
+  });
+  const isPro = subscription?.plan === "pro";
+
   const toggleMutation = useMutation({
     mutationFn: (task: Task) =>
       api.patch<Task>(`/api/teams/${activeTeamId}/tasks/${task.id}`, {
@@ -679,8 +686,43 @@ export default function TasksScreen() {
           </View>
         </View>
 
-        {/* Task list */}
-        {isLoading ? (
+        {/* Task list — paywall if not pro */}
+        {activeTeamId && isPro === false ? (
+          <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 32, paddingVertical: 48 }} testID="task-paywall">
+            <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: "#EEF2FF", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>
+              <Lock size={32} color="#4361EE" />
+            </View>
+            <Text style={{ fontSize: 20, fontWeight: "700", color: "#0F172A", textAlign: "center", marginBottom: 8 }}>
+              Task Manager
+            </Text>
+            <Text style={{ fontSize: 14, color: "#64748B", textAlign: "center", marginBottom: 28, lineHeight: 20 }}>
+              Upgrade to Alenio Pro to access the task manager
+            </Text>
+            <TouchableOpacity
+              onPress={() => router.push("/subscription")}
+              testID="task-paywall-upgrade-button"
+              style={{
+                borderRadius: 14,
+                overflow: "hidden",
+                shadowColor: "#4361EE",
+                shadowOpacity: 0.35,
+                shadowRadius: 10,
+                shadowOffset: { width: 0, height: 4 },
+                elevation: 5,
+              }}
+            >
+              <LinearGradient
+                colors={["#4361EE", "#7C3AED"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={{ paddingHorizontal: 28, paddingVertical: 14, flexDirection: "row", alignItems: "center", gap: 8 }}
+              >
+                <Text style={{ color: "white", fontWeight: "700", fontSize: 15 }}>Upgrade Now</Text>
+                <Text style={{ color: "rgba(255,255,255,0.85)", fontSize: 15 }}>→</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        ) : isLoading ? (
           <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: 40 }} testID="loading-indicator">
             <ActivityIndicator color="#4361EE" />
           </View>
@@ -708,7 +750,7 @@ export default function TasksScreen() {
         )}
 
         {/* Team tab: collapsed completed section */}
-        {filter === "assigned" && teamCompletedTasks.length > 0 ? (
+        {filter === "assigned" && teamCompletedTasks.length > 0 && isPro !== false ? (
           <View style={{ marginTop: 8 }}>
             <Pressable
               onPress={() => setTeamCompletedExpanded((v) => !v)}

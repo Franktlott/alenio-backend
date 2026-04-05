@@ -16,7 +16,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { ArrowLeft, Camera, LogOut, Pencil, X, Plus, Trash2, Bell, Check, LogOut as LeaveIcon } from "lucide-react-native";
+import { ArrowLeft, Camera, LogOut, Pencil, X, Plus, Trash2, Bell, Check, LogOut as LeaveIcon, Crown } from "lucide-react-native";
 import { authClient } from "@/lib/auth/auth-client";
 import { useInvalidateSession, useSession } from "@/lib/auth/use-session";
 import { router } from "expo-router";
@@ -426,6 +426,31 @@ export default function ProfileScreen() {
                 />
               </View>
             ))}
+          </View>
+        </View>
+
+        {/* Subscription */}
+        <View className="mx-4 mt-5">
+          <View className="flex-row items-center mb-3" style={{ gap: 6 }}>
+            <Crown size={13} color="#94A3B8" />
+            <Text className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Plan</Text>
+          </View>
+          <View className="bg-white dark:bg-slate-800 rounded-2xl overflow-hidden"
+            style={{ shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 2 }}>
+            <TouchableOpacity
+              className="flex-row items-center px-4 py-4"
+              onPress={() => router.push("/subscription")}
+              testID="subscription-row"
+            >
+              <View className="w-8 h-8 rounded-xl bg-indigo-100 items-center justify-center mr-3">
+                <Crown size={16} color="#4361EE" />
+              </View>
+              <View className="flex-1">
+                <Text className="font-semibold text-slate-900 dark:text-white">Subscription</Text>
+                <Text className="text-xs text-slate-400 mt-0.5">Manage your plan</Text>
+              </View>
+              <Text className="text-slate-300 text-base">›</Text>
+            </TouchableOpacity>
           </View>
         </View>
 

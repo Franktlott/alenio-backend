@@ -169,6 +169,19 @@ dmsRouter.post("/create-group", async (c) => {
     return c.json({ error: { message: "At least one participant is required", code: "VALIDATION_ERROR" } }, 400);
   }
 
+  // Check if user belongs to any pro team
+  const userTeams = await prisma.teamMember.findMany({
+    where: { userId: user.id },
+    select: { teamId: true },
+  });
+  const teamIds = userTeams.map((m) => m.teamId);
+  const proSubscription = await prisma.teamSubscription.findFirst({
+    where: { teamId: { in: teamIds }, plan: "pro" },
+  });
+  if (!proSubscription) {
+    return c.json({ error: { message: "Group chats require Alenio Pro", code: "SUBSCRIPTION_REQUIRED" } }, 403);
+  }
+
   // Include the creator + all participants (deduplicated)
   const allIds = Array.from(new Set([user.id, ...participantIds]));
 

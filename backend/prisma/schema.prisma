@@ -85,6 +85,20 @@ model Team {
   templates   TaskTemplate[]
   joinRequests JoinRequest[]
   calendarEvents CalendarEvent[]
+  subscription  TeamSubscription?
+}
+
+model TeamSubscription {
+  id                   String    @id @default(cuid())
+  teamId               String    @unique
+  team                 Team      @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  plan                 String    @default("free")   // "free" | "pro"
+  status               String    @default("active") // "active" | "canceled" | "past_due"
+  stripeCustomerId     String?
+  stripeSubscriptionId String?
+  currentPeriodEnd     DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 }
 
 model TeamMember {

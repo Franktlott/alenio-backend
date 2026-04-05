@@ -3,6 +3,7 @@ import { prisma } from "../prisma";
 import { auth } from "../auth";
 import { authGuard } from "../middleware/auth-guard";
 import { sendPushToUsers } from "../lib/push";
+import { getTeamSubscription } from "./subscription";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -61,6 +62,11 @@ tasksRouter.get("/", async (c) => {
   const membership = await getMembership(user.id, teamId);
   if (!membership) return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
 
+  const subscription = await getTeamSubscription(teamId);
+  if (subscription.plan !== "pro") {
+    return c.json({ error: { message: "Task manager requires Alenio Pro", code: "SUBSCRIPTION_REQUIRED" } }, 403);
+  }
+
   const { status, priority, assigneeId, creatorId, myTasks } = c.req.query();
 
   const resolvedAssigneeId = assigneeId === "me" ? user.id : assigneeId;
@@ -101,6 +107,11 @@ tasksRouter.post("/", async (c) => {
 
   const membership = await getMembership(user.id, teamId);
   if (!membership) return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
+
+  const subscription = await getTeamSubscription(teamId);
+  if (subscription.plan !== "pro") {
+    return c.json({ error: { message: "Task manager requires Alenio Pro", code: "SUBSCRIPTION_REQUIRED" } }, 403);
+  }
 
   const body = await c.req.json();
   const { title, description, priority, dueDate, assigneeIds, recurrence, attachmentUrl } = body;
