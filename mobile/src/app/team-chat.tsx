@@ -173,7 +173,7 @@ export default function TeamChatScreen() {
             {team?.image ? (
               <Image source={{ uri: team.image }} style={{ width: 36, height: 36 }} resizeMode="cover" />
             ) : (
-              <Text className="text-white font-bold text-base">{(teamName ?? "T")[0].toUpperCase()}</Text>
+              <Text className="text-white font-bold text-base">{(Array.isArray(teamName) ? teamName[0] : (teamName ?? "T"))[0].toUpperCase()}</Text>
             )}
           </View>
           <View className="flex-1">
