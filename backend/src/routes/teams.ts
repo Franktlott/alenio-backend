@@ -3,6 +3,7 @@ import { prisma } from "../prisma";
 import { auth } from "../auth";
 import { authGuard } from "../middleware/auth-guard";
 import { sendPushToUsers } from "../lib/push";
+import { logActivity } from "../lib/activity";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -169,6 +170,13 @@ teamsRouter.delete("/:teamId/leave", async (c) => {
     where: { userId: user.id, teamId },
   });
 
+  await logActivity({
+    teamId,
+    userId: user.id,
+    type: "member_removed",
+    metadata: { userName: user.name },
+  });
+
   return c.body(null, 204);
 });
 
@@ -249,6 +257,18 @@ teamsRouter.post("/:teamId/join-requests/:requestId/approve", async (c) => {
     "Request Approved!",
     `You've been approved to join ${joinRequest.team.name}`
   );
+
+  // Log activity for member joining
+  const joinedUser = await prisma.user.findUnique({
+    where: { id: joinRequest.userId },
+    select: { name: true },
+  });
+  await logActivity({
+    teamId,
+    userId: joinRequest.userId,
+    type: "member_joined",
+    metadata: { userName: joinedUser?.name ?? "" },
+  });
 
   return c.json({ data: { success: true } });
 });

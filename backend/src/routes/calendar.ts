@@ -4,6 +4,7 @@ import { z } from "zod";
 import { prisma } from "../prisma";
 import { auth } from "../auth";
 import { authGuard } from "../middleware/auth-guard";
+import { logActivity } from "../lib/activity";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -76,6 +77,13 @@ calendarRouter.post(
       include: {
         createdBy: { select: { id: true, name: true, image: true } },
       },
+    });
+
+    await logActivity({
+      teamId,
+      userId: user.id,
+      type: "calendar_event_added",
+      metadata: { eventTitle: event.title },
     });
 
     return c.json({ data: event }, 201);

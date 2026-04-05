@@ -1,5 +1,5 @@
 import { Tabs } from "expo-router";
-import { CheckSquare, Users, User, MessageCircle } from "lucide-react-native";
+import { CheckSquare, Users, User, MessageCircle, Activity } from "lucide-react-native";
 import { View, Text, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
@@ -10,6 +10,7 @@ import type { Conversation } from "@/lib/types";
 
 const TABS = [
   { name: "chat", label: "Chat", Icon: MessageCircle },
+  { name: "feed", label: "Feed", Icon: Activity },
   { name: "index", label: "Tasks", Icon: CheckSquare },
   { name: "team", label: "Team", Icon: Users },
   { name: "profile", label: "Profile", Icon: User },
@@ -123,6 +124,7 @@ export default function AppLayout() {
       screenOptions={{ headerShown: false }}
     >
       <Tabs.Screen name="chat" options={{}} />
+      <Tabs.Screen name="feed" options={{}} />
       <Tabs.Screen name="index" options={{ title: "Tasks" }} />
       <Tabs.Screen name="team" options={{ title: "Team" }} />
       <Tabs.Screen name="calendar" options={{ href: null }} />

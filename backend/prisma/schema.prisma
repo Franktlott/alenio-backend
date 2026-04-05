@@ -32,6 +32,7 @@ model User {
   notifTaskDue      Boolean @default(true)
   joinRequests  JoinRequest[]
   calendarEvents CalendarEvent[]
+  activities    TeamActivity[]
 }
 
 model Session {
@@ -86,6 +87,7 @@ model Team {
   joinRequests JoinRequest[]
   calendarEvents CalendarEvent[]
   subscription  TeamSubscription?
+  teamActivities TeamActivity[]
 }
 
 model TeamSubscription {
@@ -283,4 +285,15 @@ model CalendarEvent {
 
   team      Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
   createdBy User @relation(fields: [createdById], references: [id], onDelete: Cascade)
+}
+
+model TeamActivity {
+  id        String   @id @default(cuid())
+  teamId    String
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  type      String
+  metadata  String?
+  createdAt DateTime @default(now())
 }

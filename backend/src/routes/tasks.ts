@@ -4,6 +4,7 @@ import { auth } from "../auth";
 import { authGuard } from "../middleware/auth-guard";
 import { sendPushToUsers } from "../lib/push";
 import { getTeamSubscription } from "./subscription";
+import { logActivity } from "../lib/activity";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -294,6 +295,14 @@ tasksRouter.patch("/:taskId", async (c) => {
 
   // Handle recurrence: if completed, spawn next occurrence
   if (status === "done" && task.status !== "done") {
+    // Log activity for task completion
+    await logActivity({
+      teamId,
+      userId: user.id,
+      type: "task_completed",
+      metadata: { taskTitle: task.title },
+    });
+
     const rule = await prisma.recurrenceRule.findUnique({ where: { taskId } });
     if (rule) {
       const baseDue = task.dueDate || new Date();
