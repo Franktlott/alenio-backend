@@ -412,7 +412,6 @@ export default function TeamChatScreen() {
               style={{ width: 48, height: 48, borderRadius: 8, marginRight: 8 }}
               resizeMode="cover"
             />
-            <Text className="flex-1 text-xs text-slate-600 dark:text-slate-400" numberOfLines={1}>{mediaPreview.filename}</Text>
             <TouchableOpacity onPress={() => setMediaPreview(null)}>
               <X size={16} color="#94A3B8" />
             </TouchableOpacity>
