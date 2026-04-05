@@ -410,17 +410,17 @@ export default function TasksScreen() {
     }
   }, [teams, activeTeamId, setActiveTeamId]);
 
-  // My tasks (creator = me) — used for Active, Completed tabs and calendar dots
+  // My tasks (assigned to me, or created by me with no assignment) — Active & Completed tabs
   const { data: allTasks = [], isLoading } = useQuery({
     queryKey: ["tasks", activeTeamId, "mine"],
-    queryFn: () => api.get<Task[]>(`/api/teams/${activeTeamId}/tasks?creatorId=me`),
+    queryFn: () => api.get<Task[]>(`/api/teams/${activeTeamId}/tasks?myTasks=true`),
     enabled: !!activeTeamId,
   });
 
-  // All team tasks — used for calendar dots and Team tab
+  // Tasks I created — used for Team tab (will filter client-side for assigned-to-others)
   const { data: teamTasks = [] } = useQuery({
     queryKey: ["tasks", activeTeamId, "team"],
-    queryFn: () => api.get<Task[]>(`/api/teams/${activeTeamId}/tasks`),
+    queryFn: () => api.get<Task[]>(`/api/teams/${activeTeamId}/tasks?creatorId=me`),
     enabled: !!activeTeamId && filter === "assigned",
   });
 
@@ -478,12 +478,13 @@ export default function TasksScreen() {
     if (filter === "assigned" && !currentUserId) setFilter("all");
   }, [currentUserId, filter]);
 
-  // Active: my open tasks (server-filtered by creatorId=me)
-  // Completed: my done tasks (server-filtered by creatorId=me)
-  // Team: all team tasks assigned to others by me
+  // Active: tasks assigned to me (or mine with no assignment), open
+  // Completed: same pool, done only
+  // Team: tasks I created that are assigned to someone else, open
   const tasks = (filter === "assigned" ? teamTasks : allTasks).filter((t) => {
     if (filter === "assigned") {
-      if (t.creator?.id !== currentUserId) return false;
+      // Show tasks I created that have at least one assignment to someone other than me
+      if ((t.assignments ?? []).length === 0) return false;
       if (!(t.assignments ?? []).some((a) => a.userId !== currentUserId)) return false;
       if (t.status === "done") return false;
     } else if (filter === "completed") {
