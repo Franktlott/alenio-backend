@@ -261,8 +261,8 @@ function EventRow({ event, onLongPress }: { event: CalendarEvent; onLongPress?: 
           <Text numberOfLines={1} style={{ fontSize: 12, color: "#94A3B8", marginBottom: 4 }}>{event.description}</Text>
         ) : null}
         <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-          <CalendarDays size={11} color="#7C3AED" />
-          <Text style={{ fontSize: 11, color: "#7C3AED", fontWeight: "500" }}>{dateText}</Text>
+          <CalendarDays size={11} color="#64748B" />
+          <Text style={{ fontSize: 11, color: "#64748B", fontWeight: "500" }}>{dateText}</Text>
         </View>
       </View>
     </Pressable>
@@ -720,8 +720,8 @@ export default function TasksScreen() {
         {dayEvents.length > 0 ? (
           <View style={{ backgroundColor: "white", marginTop: 10 }}>
             <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 6, flexDirection: "row", alignItems: "center", gap: 6, borderBottomWidth: 1, borderBottomColor: "#F1F5F9" }}>
-              <CalendarDays size={13} color="#7C3AED" />
-              <Text style={{ fontSize: 11, fontWeight: "700", color: "#7C3AED", textTransform: "uppercase", letterSpacing: 0.5 }}>Events</Text>
+              <CalendarDays size={13} color="#64748B" />
+              <Text style={{ fontSize: 11, fontWeight: "700", color: "#64748B", textTransform: "uppercase", letterSpacing: 0.5 }}>Events</Text>
             </View>
             {dayEvents.map((ev) => (
               <EventRow key={ev.id} event={ev} onLongPress={isOwner ? () => openEditEventModal(ev) : undefined} />
