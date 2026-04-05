@@ -576,12 +576,6 @@ export default function TasksScreen() {
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
             <Text style={{ color: "white", fontSize: 20, fontWeight: "700" }}>Alenio</Text>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-              <TouchableOpacity
-                onPress={() => router.push("/(app)/profile")}
-                style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(255,255,255,0.2)", alignItems: "center", justifyContent: "center" }}
-              >
-                <User size={18} color="white" />
-              </TouchableOpacity>
               <Image source={require("@/assets/alenio-icon.png")} style={{ width: 28, height: 28, borderRadius: 6 }} />
             </View>
           </View>
@@ -622,12 +616,6 @@ export default function TasksScreen() {
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
             <Text style={{ color: "white", fontSize: 20, fontWeight: "700" }}>Tasks</Text>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-              <TouchableOpacity
-                onPress={() => router.push("/(app)/profile")}
-                style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(255,255,255,0.2)", alignItems: "center", justifyContent: "center" }}
-              >
-                <User size={18} color="white" />
-              </TouchableOpacity>
               <Image source={require("@/assets/alenio-icon.png")} style={{ width: 28, height: 28, borderRadius: 6 }} />
             </View>
           </View>
