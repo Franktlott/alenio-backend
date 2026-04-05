@@ -14,6 +14,8 @@ const envSchema = z.object({
   BETTER_AUTH_SECRET: z.string(),
   // Backend URL
   BACKEND_URL: z.string().default("http://localhost:3000"),
+  // Admin Dashboard
+  ADMIN_PASSWORD: z.string().optional().default("admin123"),
 });
 
 /**
