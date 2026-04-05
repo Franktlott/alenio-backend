@@ -235,6 +235,32 @@ const PRIORITY_CONFIG = {
   low: { label: "Low", bg: "#DCFCE7", text: "#15803D", flagColor: "#16A34A" },
 };
 
+function EventRow({ event }: { event: CalendarEvent }) {
+  const start = new Date(event.startDate);
+  const end = event.endDate ? new Date(event.endDate) : start;
+  const isSingleDay = start.toISOString().slice(0, 10) === end.toISOString().slice(0, 10);
+  const dateText = isSingleDay
+    ? start.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+    : `${start.toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${end.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
+
+  return (
+    <View style={{ paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: "#F1F5F9", backgroundColor: "white", flexDirection: "row", alignItems: "center" }}>
+      {/* Color accent bar */}
+      <View style={{ width: 4, borderRadius: 2, alignSelf: "stretch", backgroundColor: event.color, marginRight: 12 }} />
+      <View style={{ flex: 1 }}>
+        <Text style={{ fontSize: 14, fontWeight: "600", color: "#0F172A", marginBottom: 3 }}>{event.title}</Text>
+        {event.description ? (
+          <Text numberOfLines={1} style={{ fontSize: 12, color: "#94A3B8", marginBottom: 4 }}>{event.description}</Text>
+        ) : null}
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+          <CalendarDays size={11} color="#7C3AED" />
+          <Text style={{ fontSize: 11, color: "#7C3AED", fontWeight: "500" }}>{dateText}</Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
 function TaskRow({ task, onToggle, onPress }: { task: Task; onToggle: () => void; onPress: () => void }) {
   const isDone = task.status === "done";
   const priority = PRIORITY_CONFIG[task.priority as keyof typeof PRIORITY_CONFIG] ?? PRIORITY_CONFIG.medium;
@@ -465,6 +491,14 @@ export default function TasksScreen() {
     return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
   });
 
+  const targetIso = selectedDay ?? new Date().toISOString().slice(0, 10);
+  const dayEvents = calendarEvents.filter((ev) => {
+    const evStart = startOfDay(new Date(ev.startDate));
+    const evEnd = ev.endDate ? startOfDay(new Date(ev.endDate)) : evStart;
+    const target = new Date(targetIso);
+    return evStart <= target && target <= evEnd;
+  });
+
   const assignedCount = allTasks.filter((t) =>
     t.creator?.id === currentUserId &&
     (t.assignments ?? []).some((a) => a.userId !== currentUserId)
@@ -601,32 +635,48 @@ export default function TasksScreen() {
           </View>
         </View>
 
-        {/* Task list */}
+        {/* Events + Task list */}
         {isLoading ? (
           <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: 40 }} testID="loading-indicator">
             <ActivityIndicator color="#4361EE" />
           </View>
-        ) : tasks.length === 0 ? (
-          <View style={{ alignItems: "center", justifyContent: "center", paddingHorizontal: 24, paddingVertical: 40 }} testID="empty-state">
-            <Text style={{ fontSize: 40, marginBottom: 12 }}>✓</Text>
-            <Text style={{ fontSize: 17, fontWeight: "600", color: "#94A3B8" }}>
-              {selectedDay ? "No tasks due this day" : filter === "completed" ? "No completed tasks" : "No tasks yet"}
-            </Text>
-            {filter === "all" && !selectedDay ? (
-              <Text style={{ color: "#CBD5E1", fontSize: 13, marginTop: 4, textAlign: "center" }}>
-                Tap the + button to create your first task
-              </Text>
-            ) : null}
-          </View>
         ) : (
-          tasks.map((item) => (
-            <TaskRow
-              key={item.id}
-              task={item}
-              onToggle={() => toggleMutation.mutate(item)}
-              onPress={() => router.push({ pathname: "/task-detail", params: { taskId: item.id, teamId: activeTeamId! } })}
-            />
-          ))
+          <>
+            {dayEvents.length > 0 ? (
+              <>
+                <View style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 6 }}>
+                  <Text style={{ fontSize: 11, fontWeight: "700", color: "#7C3AED", textTransform: "uppercase", letterSpacing: 0.5 }}>Events</Text>
+                </View>
+                {dayEvents.map((ev) => <EventRow key={ev.id} event={ev} />)}
+                {tasks.length > 0 ? (
+                  <View style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 6 }}>
+                    <Text style={{ fontSize: 11, fontWeight: "700", color: "#64748B", textTransform: "uppercase", letterSpacing: 0.5 }}>Tasks</Text>
+                  </View>
+                ) : null}
+              </>
+            ) : null}
+            {tasks.length === 0 && dayEvents.length === 0 ? (
+              <View style={{ alignItems: "center", justifyContent: "center", paddingHorizontal: 24, paddingVertical: 40 }} testID="empty-state">
+                <Text style={{ fontSize: 40, marginBottom: 12 }}>✓</Text>
+                <Text style={{ fontSize: 17, fontWeight: "600", color: "#94A3B8" }}>
+                  {selectedDay ? "Nothing scheduled this day" : filter === "completed" ? "No completed tasks" : "No tasks yet"}
+                </Text>
+                {filter === "all" && !selectedDay ? (
+                  <Text style={{ color: "#CBD5E1", fontSize: 13, marginTop: 4, textAlign: "center" }}>
+                    Tap the + button to create your first task or event
+                  </Text>
+                ) : null}
+              </View>
+            ) : null}
+            {tasks.map((item) => (
+              <TaskRow
+                key={item.id}
+                task={item}
+                onToggle={() => toggleMutation.mutate(item)}
+                onPress={() => router.push({ pathname: "/task-detail", params: { taskId: item.id, teamId: activeTeamId! } })}
+              />
+            ))}
+          </>
         )}
         <View style={{ height: 120 }} />
       </ScrollView>
