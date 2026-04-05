@@ -282,6 +282,14 @@ webRouter.get("/logo.png", async (c) => {
   return c.body(buf, 200, { "Content-Type": "image/png" });
 });
 
+webRouter.get("/logo-full.png", async (c) => {
+  const file = Bun.file("/home/user/workspace/mobile/src/assets/alenio-logo-white.png");
+  const exists = await file.exists();
+  if (!exists) return c.text("Not found", 404);
+  const buf = await file.arrayBuffer();
+  return c.body(buf, 200, { "Content-Type": "image/png" });
+});
+
 // ── SPA ───────────────────────────────────────────────────────────────────────
 webRouter.get("/", (c) => {
   const html = `<!DOCTYPE html>
@@ -1008,8 +1016,7 @@ webRouter.get("/", (c) => {
 <div id="login-screen">
   <div class="auth-left">
     <div class="auth-left-inner">
-      <div class="auth-brand-logo"><img src="/web/logo.png" alt="Alenio" /></div>
-      <div class="auth-brand-wordmark">Alenio</div>
+      <img src="/web/logo-full.png" alt="Alenio" style="width:160px;object-fit:contain;margin-bottom:16px;" />
       <div class="auth-brand-tagline">Team workspace, reimagined</div>
       <div class="auth-dots"><span></span><span></span><span></span></div>
     </div>
@@ -1033,8 +1040,7 @@ webRouter.get("/", (c) => {
 <div id="otp-screen" style="display:none">
   <div class="auth-left">
     <div class="auth-left-inner">
-      <div class="auth-brand-logo"><img src="/web/logo.png" alt="Alenio" /></div>
-      <div class="auth-brand-wordmark">Alenio</div>
+      <img src="/web/logo-full.png" alt="Alenio" style="width:160px;object-fit:contain;margin-bottom:16px;" />
       <div class="auth-brand-tagline">Team workspace, reimagined</div>
       <div class="auth-dots"><span></span><span></span><span></span></div>
     </div>
@@ -1062,8 +1068,7 @@ webRouter.get("/", (c) => {
     <!-- Sidebar -->
     <aside class="sidebar">
       <div class="sidebar-header">
-        <div class="sidebar-logo-img"><img src="/web/logo.png" alt="Alenio" /></div>
-        <span class="sidebar-wordmark">Alenio</span>
+        <img src="/web/logo-full.png" alt="Alenio" style="height:22px;object-fit:contain;" />
       </div>
       <nav class="sidebar-nav">
         <button class="nav-item active" id="nav-tasks" onclick="showPage('tasks', this)">
