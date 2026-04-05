@@ -417,6 +417,7 @@ export default function TasksScreen() {
 
   const [teamCompletedExpanded, setTeamCompletedExpanded] = useState(false);
   const [confirmCompleteTask, setConfirmCompleteTask] = useState<Task | null>(null);
+  const [confirmDeleteEvent, setConfirmDeleteEvent] = useState(false);
   const [milestoneModal, setMilestoneModal] = useState<{ count: number; userName: string } | null>(null);
   // Event modal state
   const [showEventModal, setShowEventModal] = useState(false);
@@ -522,6 +523,17 @@ export default function TasksScreen() {
     },
   });
 
+  const deleteEventMutation = useMutation({
+    mutationFn: (id: string) =>
+      api.delete(`/api/teams/${activeTeamId}/events/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["calendar-events", activeTeamId] });
+      setShowEventModal(false);
+      setEditingEvent(null);
+      setEventTitle(""); setEventDescription(""); setEventColor("#4361EE");
+    },
+  });
+
   const openEventModal = () => {
     setEditingEvent(null);
     const d = selectedDay ? new Date(selectedDay) : new Date();
@@ -539,6 +551,7 @@ export default function TasksScreen() {
     setEventEnd(ev.endDate ? new Date(ev.endDate) : new Date(ev.startDate));
     setEventColor(ev.color);
     setFormError(null);
+    setConfirmDeleteEvent(false);
     setShowEventModal(true);
   };
 
@@ -889,17 +902,55 @@ export default function TasksScreen() {
       ) : null}
 
       {/* New / Edit Event Modal */}
-      <Modal visible={showEventModal} transparent animationType="slide" onRequestClose={() => { setShowEventModal(false); setEditingEvent(null); }}>
+      <Modal visible={showEventModal} transparent animationType="slide" onRequestClose={() => { setShowEventModal(false); setEditingEvent(null); setConfirmDeleteEvent(false); }}>
         <KeyboardAvoidingView style={{ flex: 1, justifyContent: "flex-end" }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
-          <Pressable style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.5)" }} onPress={() => { setShowEventModal(false); setEditingEvent(null); }} />
+          <Pressable style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.5)" }} onPress={() => { setShowEventModal(false); setEditingEvent(null); setConfirmDeleteEvent(false); }} />
           <Pressable style={{ backgroundColor: "white", borderTopLeftRadius: 24, borderTopRightRadius: 24 }} onPress={(e) => e.stopPropagation()}>
             <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: "#E2E8F0", alignSelf: "center", marginTop: 8, marginBottom: 16 }} />
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 20, paddingHorizontal: 20 }}>
               <Text style={{ fontSize: 17, fontWeight: "700", color: "#0F172A" }}>{editingEvent ? "Edit Event" : "New Event"}</Text>
-              <Pressable onPress={() => { setShowEventModal(false); setEditingEvent(null); }} style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "#F1F5F9", alignItems: "center", justifyContent: "center" }}>
-                <X size={16} color="#64748B" />
-              </Pressable>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                {editingEvent ? (
+                  <Pressable
+                    onPress={() => setConfirmDeleteEvent(true)}
+                    style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "#FEF2F2", alignItems: "center", justifyContent: "center" }}
+                    testID="delete-event-button"
+                  >
+                    <Text style={{ fontSize: 15 }}>🗑</Text>
+                  </Pressable>
+                ) : null}
+                <Pressable onPress={() => { setShowEventModal(false); setEditingEvent(null); setConfirmDeleteEvent(false); }} style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "#F1F5F9", alignItems: "center", justifyContent: "center" }}>
+                  <X size={16} color="#64748B" />
+                </Pressable>
+              </View>
             </View>
+
+            {confirmDeleteEvent ? (
+              <View style={{ marginHorizontal: 20, marginBottom: 16, backgroundColor: "#FEF2F2", borderRadius: 14, padding: 16, gap: 12 }}>
+                <Text style={{ fontSize: 14, fontWeight: "600", color: "#991B1B", textAlign: "center" }}>Delete this event?</Text>
+                <Text style={{ fontSize: 13, color: "#EF4444", textAlign: "center" }}>This cannot be undone.</Text>
+                <View style={{ flexDirection: "row", gap: 10 }}>
+                  <Pressable
+                    onPress={() => setConfirmDeleteEvent(false)}
+                    style={{ flex: 1, borderRadius: 10, paddingVertical: 10, alignItems: "center", backgroundColor: "#F1F5F9" }}
+                  >
+                    <Text style={{ fontSize: 14, fontWeight: "600", color: "#64748B" }}>Cancel</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => editingEvent && deleteEventMutation.mutate(editingEvent.id)}
+                    disabled={deleteEventMutation.isPending}
+                    style={{ flex: 1, borderRadius: 10, paddingVertical: 10, alignItems: "center", backgroundColor: "#EF4444" }}
+                    testID="confirm-delete-event-button"
+                  >
+                    {deleteEventMutation.isPending ? (
+                      <ActivityIndicator color="white" size="small" />
+                    ) : (
+                      <Text style={{ fontSize: 14, fontWeight: "700", color: "white" }}>Delete</Text>
+                    )}
+                  </Pressable>
+                </View>
+              </View>
+            ) : null}
 
             <ScrollView
               style={{ paddingHorizontal: 20 }}
