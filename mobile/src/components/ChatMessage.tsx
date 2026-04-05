@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
 } from "react-native";
 import { MediaViewer } from "@/components/MediaViewer";
 import { Play } from "lucide-react-native";
+import * as VideoThumbnails from "expo-video-thumbnails";
 import type { MessageReaction } from "@/lib/types";
 
 interface ChatMessageProps {
@@ -49,6 +50,15 @@ export function ChatMessage({
   const grouped = groupReactions(reactions);
   const hasReactions = grouped.length > 0;
   const [viewerVisible, setViewerVisible] = useState(false);
+  const [videoThumb, setVideoThumb] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (mediaType === "video" && mediaUrl) {
+      VideoThumbnails.getThumbnailAsync(mediaUrl, { time: 0 })
+        .then((r) => setVideoThumb(r.uri))
+        .catch(() => setVideoThumb(null));
+    }
+  }, [mediaUrl, mediaType]);
 
   return (
     <Pressable onLongPress={onLongPress} delayLongPress={300}>
@@ -105,12 +115,14 @@ export function ChatMessage({
                 testID="media-thumbnail"
               >
                 {mediaType === 'video' ? (
-                  <View style={{ position: 'relative' }}>
-                    <Image
-                      source={{ uri: mediaUrl }}
-                      style={{ width: 220, height: 160 }}
-                      resizeMode="cover"
-                    />
+                  <View style={{ position: 'relative', width: 220, height: 160, backgroundColor: "#0F172A" }}>
+                    {videoThumb ? (
+                      <Image
+                        source={{ uri: videoThumb }}
+                        style={{ width: 220, height: 160 }}
+                        resizeMode="cover"
+                      />
+                    ) : null}
                     <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' }}>
                       <View className="w-12 h-12 rounded-full bg-black/50 items-center justify-center">
                         <Play size={20} color="white" fill="white" />
