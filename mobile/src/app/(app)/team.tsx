@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Copy, UserPlus, MessageCircle, AlertCircle } from "lucide-react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Clipboard from "expo-clipboard";
 import { api } from "@/lib/api/api";
@@ -81,6 +81,7 @@ function MemberRow({
 }
 
 export default function TeamScreen() {
+  const insets = useSafeAreaInsets();
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
   const { data: session } = useSession();
   const queryClient = useQueryClient();
@@ -210,7 +211,7 @@ export default function TeamScreen() {
           />
         )}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 100 }}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 88 }}
         testID="members-list"
       />
     </SafeAreaView>

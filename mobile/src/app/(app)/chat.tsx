@@ -9,7 +9,7 @@ import {
   Image,
   Pressable,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
 import { LinearGradient } from "expo-linear-gradient";
 import { MessageCircle, Users, ChevronRight, Plus, Lock } from "lucide-react-native";
@@ -31,6 +31,7 @@ function formatTime(dateStr: string) {
 }
 
 export default function ChatScreen() {
+  const insets = useSafeAreaInsets();
   const { data: session } = useSession();
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
   const [fabOpen, setFabOpen] = useState(false);
@@ -83,7 +84,7 @@ export default function ChatScreen() {
 
       <FlatList
         data={[]}
-        contentContainerStyle={{ paddingBottom: 100 }}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 88 }}
         ListHeaderComponent={
           <View>
             {/* Team Chat section */}

@@ -14,7 +14,7 @@ import {
   KeyboardAvoidingView,
   Switch,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { ArrowLeft, Camera, LogOut, Pencil, X, Plus, Trash2, Bell, Check, LogOut as LeaveIcon, Crown } from "lucide-react-native";
 import { authClient } from "@/lib/auth/auth-client";
@@ -37,6 +37,7 @@ type JoinRequestItem = {
 };
 
 export default function ProfileScreen() {
+  const insets = useSafeAreaInsets();
   const { data: session } = useSession();
   const invalidateSession = useInvalidateSession();
   const queryClient = useQueryClient();
@@ -272,7 +273,7 @@ export default function ProfileScreen() {
         </View>
       </LinearGradient>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 88 }}>
         {/* Avatar + name card */}
         <View className="mx-4 mt-5 bg-white dark:bg-slate-800 rounded-2xl overflow-hidden"
           style={{ shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 2 }}>
