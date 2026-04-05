@@ -65,9 +65,7 @@ const EVENT_CONFIG = {
     bg: "#FFFBEB",
     Icon: Trophy,
     getMessage: (e: ActivityEvent) =>
-      e.metadata?.incognito
-        ? `Someone 🕵️ completed ${e.metadata?.count ?? 10} tasks on time!`
-        : `${e.user?.name ?? "Someone"} completed ${e.metadata?.count ?? 10} tasks on time!`,
+      `${e.user?.name ?? "Someone"} completed ${e.metadata?.count ?? 10} tasks on time!`,
   },
 };
 
@@ -84,8 +82,7 @@ function timeAgo(dateStr: string) {
 
 function CelebrationCard({ item }: { item: ActivityEvent }) {
   const count = item.metadata?.count ?? 10;
-  const isIncognito = item.metadata?.incognito === true;
-  const name = isIncognito ? "Someone 🕵️" : (item.user?.name ?? "Someone");
+  const name = item.user?.name ?? "Someone";
   return (
     <View style={{ marginHorizontal: 16, marginVertical: 8 }} testID={`milestone-card-${item.id}`}>
       <LinearGradient
