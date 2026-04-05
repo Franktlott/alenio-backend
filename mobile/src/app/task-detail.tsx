@@ -15,7 +15,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams } from "expo-router";
-import { ArrowLeft, Trash2, RefreshCw, UserPlus, X, Check, Plus, Square, CheckSquare } from "lucide-react-native";
+import { ArrowLeft, Trash2, RefreshCw, UserPlus, X, Check, Plus, Square, CheckSquare, Pencil } from "lucide-react-native";
 import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
 import { toast } from "burnt";
@@ -42,6 +42,7 @@ export default function TaskDetailScreen() {
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [showRecallConfirm, setShowRecallConfirm] = useState(false);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState<string>("");
+  const [isEditMode, setIsEditMode] = useState(false);
 
   const { data: task, isLoading } = useQuery({
     queryKey: ["task", taskId, teamId],
@@ -126,7 +127,8 @@ export default function TaskDetailScreen() {
   const isSelfAssigned = !!currentUserId && assignedIds.has(currentUserId);
   const isCreator = !!currentUserId && task?.creator?.id === currentUserId;
   const isCompleted = task?.status === "done";
-  const isEditable = isCreator && !isCompleted;
+  const canEdit = isCreator && !isCompleted;
+  const isEditable = canEdit && isEditMode;
 
   const handleToggleMember = (userId: string) => {
     if (assignedIds.has(userId)) {
@@ -166,21 +168,34 @@ export default function TaskDetailScreen() {
       {/* Header */}
       <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
         <View className="px-4 pt-2 pb-4 flex-row items-center justify-between">
-          <TouchableOpacity onPress={() => router.back()} testID="back-button">
+          <TouchableOpacity onPress={() => { setIsEditMode(false); router.back(); }} testID="back-button">
             <ArrowLeft size={22} color="white" />
           </TouchableOpacity>
           <Text className="text-white text-lg font-bold flex-1 ml-3" numberOfLines={1}>{task.title}</Text>
-          {isCreator ? (
-            <TouchableOpacity onPress={() => setShowDeleteConfirm(true)} disabled={deleteMutation.isPending} testID="delete-button">
-              {deleteMutation.isPending ? (
-                <ActivityIndicator size="small" color="white" />
-              ) : (
-                <Trash2 size={20} color="white" />
-              )}
-            </TouchableOpacity>
-          ) : (
-            <View style={{ width: 20 }} />
-          )}
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
+            {canEdit ? (
+              <TouchableOpacity
+                onPress={() => setIsEditMode((v) => !v)}
+                testID="edit-mode-button"
+              >
+                {isEditMode ? (
+                  <Text style={{ color: "white", fontSize: 14, fontWeight: "700" }}>Done</Text>
+                ) : (
+                  <Pencil size={18} color="white" />
+                )}
+              </TouchableOpacity>
+            ) : null}
+            {isCreator && !isEditMode ? (
+              <TouchableOpacity onPress={() => setShowDeleteConfirm(true)} disabled={deleteMutation.isPending} testID="delete-button">
+                {deleteMutation.isPending ? (
+                  <ActivityIndicator size="small" color="white" />
+                ) : (
+                  <Trash2 size={20} color="white" />
+                )}
+              </TouchableOpacity>
+            ) : null}
+            {!isCreator ? <View style={{ width: 20 }} /> : null}
+          </View>
         </View>
       </LinearGradient>
 
@@ -234,6 +249,11 @@ export default function TaskDetailScreen() {
                 <Text className="text-xs font-semibold text-white">Recall</Text>
               )}
             </TouchableOpacity>
+          </View>
+        ) : canEdit && !isEditMode ? (
+          <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "#EFF6FF", borderWidth: 1, borderColor: "#BFDBFE", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, marginBottom: 16, gap: 8 }}>
+            <Pencil size={14} color="#3B82F6" />
+            <Text style={{ flex: 1, fontSize: 13, color: "#1D4ED8" }}>Tap the pencil icon to edit this task.</Text>
           </View>
         ) : null}
 
@@ -297,18 +317,21 @@ export default function TaskDetailScreen() {
                       >
                         {subtask.title}
                       </Text>
-                      <TouchableOpacity
-                        onPress={() => deleteSubtaskMutation.mutate(subtask.id)}
-                        disabled={!isEditable || deleteSubtaskMutation.isPending}
-                        className="w-6 h-6 rounded-full items-center justify-center bg-slate-100 dark:bg-slate-700"
-                        testID={`subtask-delete-${subtask.id}`}
-                      >
-                        <X size={12} color="#94A3B8" />
-                      </TouchableOpacity>
+                      {isEditable ? (
+                        <TouchableOpacity
+                          onPress={() => deleteSubtaskMutation.mutate(subtask.id)}
+                          disabled={deleteSubtaskMutation.isPending}
+                          className="w-6 h-6 rounded-full items-center justify-center bg-slate-100 dark:bg-slate-700"
+                          testID={`subtask-delete-${subtask.id}`}
+                        >
+                          <X size={12} color="#94A3B8" />
+                        </TouchableOpacity>
+                      ) : null}
                     </View>
                   ))}
                 </View>
               )}
+              {isEditable ? (
               <View className="flex-row items-center border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2" style={{ gap: 8 }}>
                 <TextInput
                   value={newSubtaskTitle}
@@ -320,25 +343,23 @@ export default function TaskDetailScreen() {
                     if (newSubtaskTitle.trim()) createSubtaskMutation.mutate(newSubtaskTitle.trim());
                   }}
                   returnKeyType="done"
-                  editable={isEditable}
                   testID="new-subtask-input"
                 />
-                {isEditable ? (
-                  <TouchableOpacity
-                    onPress={() => {
-                      if (newSubtaskTitle.trim()) createSubtaskMutation.mutate(newSubtaskTitle.trim());
-                    }}
-                    disabled={!newSubtaskTitle.trim() || createSubtaskMutation.isPending}
-                    testID="add-subtask-button"
-                  >
-                    {createSubtaskMutation.isPending ? (
-                      <ActivityIndicator size="small" color="#4361EE" />
-                    ) : (
-                      <Plus size={18} color={newSubtaskTitle.trim() ? "#4361EE" : "#CBD5E1"} />
-                    )}
-                  </TouchableOpacity>
-                ) : null}
+                <TouchableOpacity
+                  onPress={() => {
+                    if (newSubtaskTitle.trim()) createSubtaskMutation.mutate(newSubtaskTitle.trim());
+                  }}
+                  disabled={!newSubtaskTitle.trim() || createSubtaskMutation.isPending}
+                  testID="add-subtask-button"
+                >
+                  {createSubtaskMutation.isPending ? (
+                    <ActivityIndicator size="small" color="#4361EE" />
+                  ) : (
+                    <Plus size={18} color={newSubtaskTitle.trim() ? "#4361EE" : "#CBD5E1"} />
+                  )}
+                </TouchableOpacity>
               </View>
+              ) : null}
             </View>
           );
         })()}
@@ -348,11 +369,11 @@ export default function TaskDetailScreen() {
           <View className="flex-row items-center justify-between mb-2">
             <Text className="text-sm font-semibold text-slate-500">Assignees</Text>
             <View className="flex-row" style={{ gap: 8 }}>
-              {isCreator ? (
+              {isCreator && isEditMode ? (
                 <TouchableOpacity
                   testID="assign-to-me-button"
                   onPress={() => currentUserId && handleToggleMember(currentUserId)}
-                  disabled={!currentUserId || !isEditable || assignMutation.isPending || unassignMutation.isPending}
+                  disabled={!currentUserId || assignMutation.isPending || unassignMutation.isPending}
                   className={`flex-row items-center px-3 py-1 rounded-full ${isSelfAssigned ? "bg-red-50 dark:bg-red-900/30" : "bg-indigo-50 dark:bg-indigo-900/40"}`}
                   style={{ gap: 4 }}
                 >
@@ -371,11 +392,10 @@ export default function TaskDetailScreen() {
                   )}
                 </TouchableOpacity>
               ) : null}
-              {isCreator ? (
+              {isCreator && isEditMode ? (
                 <TouchableOpacity
                   testID="manage-assignees-button"
                   onPress={() => setShowAssignModal(true)}
-                  disabled={!isEditable}
                   className="flex-row items-center px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-700"
                   style={{ gap: 4 }}
                 >
@@ -403,7 +423,7 @@ export default function TaskDetailScreen() {
                     </Text>
                     <Text className="text-xs text-slate-500">{a.user.email}</Text>
                   </View>
-                  {isCreator ? (
+                  {isCreator && isEditMode ? (
                   <TouchableOpacity
                     onPress={() => unassignMutation.mutate(a.userId)}
                     disabled={unassignMutation.isPending}
