@@ -141,7 +141,7 @@ export default function ChatScreen() {
                   {currentTeam?.name ?? "Team Chat"}
                 </Text>
                 <Text className="text-sm text-slate-500 dark:text-slate-400">
-                  Team channel
+                  Channels
                 </Text>
               </View>
               <ChevronRight size={18} color="#94A3B8" />

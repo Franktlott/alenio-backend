@@ -157,7 +157,7 @@ export default function TeamChannelsScreen() {
         {/* Topics section */}
         {(topics.length > 0 || isOwnerOrAdmin) ? (
           <View style={{ paddingHorizontal: 16, paddingTop: 20, paddingBottom: 8 }}>
-            <Text style={{ fontSize: 13, fontWeight: "700", color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.5 }}>Topics</Text>
+            <Text style={{ fontSize: 13, fontWeight: "700", color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.5 }}>Channels</Text>
           </View>
         ) : null}
 
@@ -202,7 +202,7 @@ export default function TeamChannelsScreen() {
             style={{ marginHorizontal: 16, marginTop: 16, marginBottom: 8, paddingVertical: 16, borderRadius: 14, backgroundColor: "#F8FAFC", borderWidth: 1.5, borderColor: "#E2E8F0", borderStyle: "dashed", alignItems: "center", flexDirection: "row", justifyContent: "center", gap: 8 }}
           >
             <Text style={{ fontSize: 16, color: "#64748B" }}>+</Text>
-            <Text style={{ fontSize: 15, fontWeight: "600", color: "#64748B" }}>New topic</Text>
+            <Text style={{ fontSize: 15, fontWeight: "600", color: "#64748B" }}>New channel</Text>
           </TouchableOpacity>
         ) : null}
       </ScrollView>
@@ -212,11 +212,11 @@ export default function TeamChannelsScreen() {
         <TouchableOpacity style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }} activeOpacity={1} onPress={() => setShowCreateModal(false)}>
           <TouchableOpacity activeOpacity={1}>
             <View style={{ backgroundColor: "white", borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 40 }}>
-              <Text style={{ fontSize: 16, fontWeight: "700", color: "#0F172A", marginBottom: 16 }}>New Topic</Text>
+              <Text style={{ fontSize: 16, fontWeight: "700", color: "#0F172A", marginBottom: 16 }}>New Channel</Text>
               <TextInput
                 value={newTopicName}
                 onChangeText={setNewTopicName}
-                placeholder="Topic name..."
+                placeholder="Channel name..."
                 placeholderTextColor="#94A3B8"
                 style={{ borderWidth: 1.5, borderColor: "#E2E8F0", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: "#0F172A", marginBottom: 16 }}
                 testID="topic-name-input"
@@ -240,7 +240,7 @@ export default function TeamChannelsScreen() {
                 {createTopicMutation.isPending ? (
                   <ActivityIndicator color="white" />
                 ) : (
-                  <Text style={{ color: "white", fontWeight: "700", fontSize: 15 }}>Create Topic</Text>
+                  <Text style={{ color: "white", fontWeight: "700", fontSize: 15 }}>Create Channel</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -260,9 +260,9 @@ export default function TeamChannelsScreen() {
               <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: "#FEE2E2", alignItems: "center", justifyContent: "center", marginBottom: 12 }}>
                 <Text style={{ fontSize: 20 }}>🗑</Text>
               </View>
-              <Text style={{ fontSize: 16, fontWeight: "700", color: "#0F172A", marginBottom: 6 }}>Delete topic?</Text>
+              <Text style={{ fontSize: 16, fontWeight: "700", color: "#0F172A", marginBottom: 6 }}>Delete channel?</Text>
               <Text style={{ fontSize: 13, color: "#64748B", textAlign: "center" }}>
-                Delete <Text style={{ fontWeight: "700" }}>#{deleteTarget?.name}</Text>? All messages in this topic will also be deleted.
+                Delete <Text style={{ fontWeight: "700" }}>#{deleteTarget?.name}</Text>? All messages in this channel will also be deleted.
               </Text>
             </View>
             <View style={{ flexDirection: "row", borderTopWidth: 1, borderTopColor: "#F1F5F9" }}>
