@@ -725,7 +725,7 @@ export default function TasksScreen() {
         {/* Events section — below calendar, above filter tabs */}
         {dayEvents.length > 0 ? (
           <View style={{ backgroundColor: "white", marginHorizontal: 16, marginTop: 10, borderRadius: 16, shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 2 }}>
-            <View style={{ paddingHorizontal: 14, paddingTop: 10, paddingBottom: 6, flexDirection: "row", alignItems: "center", gap: 6 }}>
+            <View style={{ paddingHorizontal: 14, paddingTop: 10, paddingBottom: 6, flexDirection: "row", alignItems: "center", gap: 6, borderTopLeftRadius: 16, borderTopRightRadius: 16, overflow: "hidden" }}>
               <CalendarDays size={13} color="#7C3AED" />
               <Text style={{ fontSize: 11, fontWeight: "700", color: "#7C3AED", textTransform: "uppercase", letterSpacing: 0.5 }}>Events</Text>
             </View>
