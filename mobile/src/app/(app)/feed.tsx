@@ -90,13 +90,16 @@ function ReactionRow({
   teamId,
   reactions,
   currentUserId,
+  pickerOpen,
+  setPickerOpen,
 }: {
   activityId: string;
   teamId: string | null;
   reactions: Record<string, { count: number; userIds: string[] }>;
   currentUserId: string | undefined;
+  pickerOpen: boolean;
+  setPickerOpen: (v: boolean) => void;
 }) {
-  const [pickerOpen, setPickerOpen] = useState(false);
   const queryClient = useQueryClient();
 
   const { mutate: toggleReaction } = useMutation({
@@ -144,23 +147,6 @@ function ReactionRow({
           );
         })}
 
-        <Pressable
-          onPress={() => setPickerOpen((v) => !v)}
-          testID={`reaction-add-${activityId}`}
-          style={{
-            width: 28,
-            height: 28,
-            borderRadius: 14,
-            backgroundColor: pickerOpen ? "#EEF2FF" : "#F1F5F9",
-            alignItems: "center",
-            justifyContent: "center",
-            borderWidth: 1,
-            borderColor: pickerOpen ? "#4361EE" : "transparent",
-          }}
-        >
-          <Text style={{ fontSize: 14, color: pickerOpen ? "#4361EE" : "#94A3B8", fontWeight: "700", lineHeight: 16 }}>+</Text>
-        </Pressable>
-
         {pickerOpen
           ? EMOJI_OPTIONS.map((emoji) => (
             <Pressable
@@ -188,6 +174,7 @@ function ReactionRow({
 }
 
 function CelebrationCard({ item, activeTeamId, currentUserId }: { item: ActivityEvent; activeTeamId: string | null; currentUserId: string | undefined }) {
+  const [pickerOpen, setPickerOpen] = useState(false);
   const count = item.metadata?.count ?? 10;
   const name = item.user?.name ?? "Someone";
   return (
@@ -237,6 +224,8 @@ function CelebrationCard({ item, activeTeamId, currentUserId }: { item: Activity
             teamId={activeTeamId}
             reactions={item.reactions ?? {}}
             currentUserId={currentUserId}
+            pickerOpen={pickerOpen}
+            setPickerOpen={setPickerOpen}
           />
         </View>
       </LinearGradient>
@@ -245,6 +234,8 @@ function CelebrationCard({ item, activeTeamId, currentUserId }: { item: Activity
 }
 
 function ActivityItem({ item, activeTeamId, currentUserId }: { item: ActivityEvent; activeTeamId: string | null; currentUserId: string | undefined }) {
+  const [pickerOpen, setPickerOpen] = useState(false);
+
   if (item.type === "task_milestone") {
     return <CelebrationCard item={item} activeTeamId={activeTeamId} currentUserId={currentUserId} />;
   }
@@ -259,10 +250,13 @@ function ActivityItem({ item, activeTeamId, currentUserId }: { item: ActivityEve
   const { Icon } = config;
 
   return (
-    <View style={{
-      paddingHorizontal: 20,
-      paddingVertical: 14,
-    }}>
+    <Pressable
+      onLongPress={() => setPickerOpen(!pickerOpen)}
+      style={{
+        paddingHorizontal: 20,
+        paddingVertical: 14,
+      }}
+    >
       <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 12 }}>
         {/* Avatar */}
         <View style={{
@@ -322,9 +316,11 @@ function ActivityItem({ item, activeTeamId, currentUserId }: { item: ActivityEve
           teamId={activeTeamId}
           reactions={item.reactions ?? {}}
           currentUserId={currentUserId}
+          pickerOpen={pickerOpen}
+          setPickerOpen={setPickerOpen}
         />
       </View>
-    </View>
+    </Pressable>
   );
 }
 
