@@ -66,8 +66,27 @@ export default function ChatScreen() {
     refetchInterval: 5000,
   });
 
+  const { data: topics = [] } = useQuery({
+    queryKey: ["topics", activeTeamId],
+    queryFn: () => api.get<any[]>(`/api/teams/${activeTeamId}/topics`),
+    enabled: !!activeTeamId,
+    refetchInterval: 10000,
+  });
+
+  const { data: teamGeneralMessages = [] } = useQuery({
+    queryKey: ["messages", activeTeamId, "general", "preview"],
+    queryFn: () => api.get<any[]>(`/api/teams/${activeTeamId}/messages?topicId=general&limit=1`),
+    enabled: !!activeTeamId,
+    refetchInterval: 10000,
+  });
+
   const currentTeam = teams?.find((t: any) => t.id === activeTeamId);
   const lastReadIds = useUnreadStore((s) => s.lastReadIds);
+  const currentUserId = session?.user?.id ?? "";
+  const teamUnreadCount = [
+    teamGeneralMessages[0] && teamGeneralMessages[0].sender.id !== currentUserId && lastReadIds[`team:${activeTeamId}`] !== teamGeneralMessages[0].id ? 1 : 0,
+    ...topics.map((t: any) => t.lastMessage && t.lastMessage.sender.id !== currentUserId && lastReadIds[`topic:${t.id}`] !== t.lastMessage?.id ? 1 : 0),
+  ].reduce((a: number, b: number) => a + b, 0);
 
   return (
     <SafeAreaView
@@ -144,7 +163,13 @@ export default function ChatScreen() {
                   Channels
                 </Text>
               </View>
-              <ChevronRight size={18} color="#94A3B8" />
+              {teamUnreadCount > 0 ? (
+                <View style={{ backgroundColor: "#4361EE", borderRadius: 10, minWidth: 20, height: 20, alignItems: "center", justifyContent: "center", paddingHorizontal: 6 }}>
+                  <Text style={{ color: "white", fontSize: 11, fontWeight: "700" }}>{teamUnreadCount}</Text>
+                </View>
+              ) : (
+                <ChevronRight size={18} color="#94A3B8" />
+              )}
             </TouchableOpacity>
 
             {/* DMs section */}

@@ -18,6 +18,7 @@ import { ArrowLeft, Send, Paperclip, X, Video, Camera, ImageIcon } from "lucide-
 import { router, useLocalSearchParams } from "expo-router";
 import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
+import { useUnreadStore } from "@/lib/state/unread-store";
 import { uploadFile } from "@/lib/upload";
 import { pickMedia, takePhoto } from "@/lib/file-picker";
 import { ChatMessage } from "@/components/ChatMessage";
@@ -68,6 +69,8 @@ export default function TeamChatScreen() {
   const currentUserId = session?.user?.id ?? "";
 
   const topicKey = topicId ?? "general";
+
+  const markAsRead = useUnreadStore((s) => s.markAsRead);
 
   const { data: messages = [], isLoading } = useQuery({
     queryKey: ["messages", teamId, topicKey],
@@ -162,6 +165,13 @@ export default function TeamChatScreen() {
       setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
     }
   }, [messages.length]);
+
+  useEffect(() => {
+    const lastMsg = messages[messages.length - 1];
+    if (!lastMsg) return;
+    const channelKey = topicId ? `topic:${topicId}` : `team:${teamId}`;
+    markAsRead(channelKey, lastMsg.id);
+  }, [messages, teamId, topicId, markAsRead]);
 
   const items = buildMessageList(messages);
 

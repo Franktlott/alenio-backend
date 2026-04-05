@@ -16,6 +16,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
+import { useUnreadStore } from "@/lib/state/unread-store";
 import type { Message, Team } from "@/lib/types";
 
 type Topic = {
@@ -78,6 +79,7 @@ export default function TeamChannelsScreen() {
   const currentUserId = session?.user?.id ?? "";
   const currentUserRole = team?.members?.find((m: any) => m.userId === currentUserId)?.role;
   const isOwnerOrAdmin = currentUserRole === "owner" || currentUserRole === "admin";
+  const lastReadIds = useUnreadStore((s) => s.lastReadIds);
 
   const createTopicMutation = useMutation({
     mutationFn: ({ name, color }: { name: string; color: string }) =>
@@ -142,16 +144,23 @@ export default function TeamChannelsScreen() {
           <View style={{ flex: 1 }}>
             <Text style={{ fontSize: 16, fontWeight: "700", color: "#0F172A" }}>Main chat</Text>
             {generalMessages[0] ? (
-              <Text style={{ fontSize: 13, color: "#64748B", marginTop: 2 }} numberOfLines={1}>
-                {generalMessages[0].sender.name}: {generalMessages[0].content ?? "Sent a photo"}
-              </Text>
-            ) : (
-              <Text style={{ fontSize: 13, color: "#94A3B8", marginTop: 2 }}>No messages yet</Text>
-            )}
+            <Text style={{ fontSize: 13, color: "#64748B", marginTop: 2 }} numberOfLines={1}>
+              {generalMessages[0].sender.name}: {generalMessages[0].content ?? "Sent a photo"}
+            </Text>
+          ) : (
+            <Text style={{ fontSize: 13, color: "#94A3B8", marginTop: 2 }}>No messages yet</Text>
+          )}
           </View>
-          {generalMessages[0] ? (
-            <Text style={{ fontSize: 12, color: "#94A3B8" }}>{formatTime(generalMessages[0].createdAt)}</Text>
-          ) : null}
+          <View style={{ alignItems: "flex-end", gap: 4 }}>
+            {generalMessages[0] ? (
+              <Text style={{ fontSize: 12, color: "#94A3B8" }}>{formatTime(generalMessages[0].createdAt)}</Text>
+            ) : null}
+            {generalMessages[0] && generalMessages[0].sender.id !== currentUserId && lastReadIds[`team:${teamId}`] !== generalMessages[0].id ? (
+              <View style={{ backgroundColor: "#4361EE", borderRadius: 10, minWidth: 20, height: 20, alignItems: "center", justifyContent: "center", paddingHorizontal: 6 }}>
+                <Text style={{ color: "white", fontSize: 11, fontWeight: "700" }}>1</Text>
+              </View>
+            ) : null}
+          </View>
         </TouchableOpacity>
 
         {/* Topics section */}
@@ -188,9 +197,16 @@ export default function TeamChannelsScreen() {
                 <Text style={{ fontSize: 13, color: "#94A3B8", marginTop: 2 }}>No messages yet</Text>
               )}
             </View>
-            {topic.lastMessage ? (
-              <Text style={{ fontSize: 12, color: "#94A3B8" }}>{formatTime(topic.lastMessage.createdAt)}</Text>
-            ) : null}
+            <View style={{ alignItems: "flex-end", gap: 4 }}>
+              {topic.lastMessage ? (
+                <Text style={{ fontSize: 12, color: "#94A3B8" }}>{formatTime(topic.lastMessage.createdAt)}</Text>
+              ) : null}
+              {topic.lastMessage && topic.lastMessage.sender.id !== currentUserId && lastReadIds[`topic:${topic.id}`] !== topic.lastMessage.id ? (
+                <View style={{ backgroundColor: "#4361EE", borderRadius: 10, minWidth: 20, height: 20, alignItems: "center", justifyContent: "center", paddingHorizontal: 6 }}>
+                  <Text style={{ color: "white", fontSize: 11, fontWeight: "700" }}>1</Text>
+                </View>
+              ) : null}
+            </View>
           </TouchableOpacity>
         ))}
 

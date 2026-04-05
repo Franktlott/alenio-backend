@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
+import { useTeamStore } from "@/lib/state/team-store";
 import { useUnreadStore } from "@/lib/state/unread-store";
 import type { Conversation } from "@/lib/types";
 
@@ -19,6 +20,7 @@ const TABS = [
 function FloatingTabBar({ state, descriptors, navigation }: any) {
   const insets = useSafeAreaInsets();
   const { data: session } = useSession();
+  const activeTeamId = useTeamStore((s) => s.activeTeamId);
   const lastReadIds = useUnreadStore((s) => s.lastReadIds);
 
   const { data: conversations = [] } = useQuery({
@@ -28,6 +30,21 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
     refetchInterval: 5000,
   });
 
+  const { data: topics = [] } = useQuery({
+    queryKey: ["topics", activeTeamId],
+    queryFn: () => api.get<any[]>(`/api/teams/${activeTeamId}/topics`),
+    enabled: !!activeTeamId && !!session?.user,
+    refetchInterval: 15000,
+    staleTime: 10000,
+  });
+  const { data: teamGeneralMessages = [] } = useQuery({
+    queryKey: ["messages", activeTeamId, "general", "preview"],
+    queryFn: () => api.get<any[]>(`/api/teams/${activeTeamId}/messages?topicId=general&limit=1`),
+    enabled: !!activeTeamId && !!session?.user,
+    refetchInterval: 15000,
+    staleTime: 10000,
+  });
+
   const currentUserId = session?.user?.id ?? "";
   const unreadCount = conversations.filter(
     (conv) =>
@@ -35,6 +52,11 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
       conv.lastMessage.sender.id !== currentUserId &&
       lastReadIds[conv.id] !== conv.lastMessage.id
   ).length;
+
+  const teamUnreadCount = [
+    teamGeneralMessages[0] && teamGeneralMessages[0].sender.id !== currentUserId && lastReadIds[`team:${activeTeamId}`] !== teamGeneralMessages[0].id ? 1 : 0,
+    ...topics.map((t: any) => t.lastMessage && t.lastMessage.sender.id !== currentUserId && lastReadIds[`topic:${t.id}`] !== t.lastMessage?.id ? 1 : 0),
+  ].reduce((a: number, b: number) => a + b, 0);
 
   const visibleRoutes = state.routes.filter((r: any) => {
     const opts = descriptors[r.key]?.options;
@@ -65,7 +87,7 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
         if (!tab) return null;
         const { Icon, label, name } = tab;
         const isChat = name === "chat";
-        const badge = isChat && unreadCount > 0 ? unreadCount : null;
+        const badge = isChat && (unreadCount + teamUnreadCount) > 0 ? (unreadCount + teamUnreadCount) : null;
 
         return (
           <Pressable
