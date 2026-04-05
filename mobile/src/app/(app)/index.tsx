@@ -443,13 +443,8 @@ export default function TasksScreen() {
   });
 
   const handleToggleTask = (task: Task) => {
-    if (task.status !== "done") {
-      // Completing — ask for confirmation
-      setConfirmCompleteTask(task);
-    } else {
-      // Un-completing — no confirmation needed
-      toggleMutation.mutate(task);
-    }
+    // Always confirm before toggling either direction
+    setConfirmCompleteTask(task);
   };
 
   const createEventMutation = useMutation({
@@ -735,19 +730,23 @@ export default function TasksScreen() {
       {confirmCompleteTask ? (
         <View style={{ position: "absolute", inset: 0, backgroundColor: "rgba(0,0,0,0.45)", alignItems: "center", justifyContent: "center", zIndex: 100 }} testID="complete-confirm-overlay">
           <View style={{ backgroundColor: "white", borderRadius: 20, marginHorizontal: 32, padding: 24, shadowColor: "#000", shadowOpacity: 0.2, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 12, width: "85%" }}>
-            <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: "#D1FAE5", alignItems: "center", justifyContent: "center", alignSelf: "center", marginBottom: 14 }}>
-              <Text style={{ fontSize: 22 }}>✓</Text>
+            <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: confirmCompleteTask.status === "done" ? "#FEF3C7" : "#D1FAE5", alignItems: "center", justifyContent: "center", alignSelf: "center", marginBottom: 14 }}>
+              <Text style={{ fontSize: 22 }}>{confirmCompleteTask.status === "done" ? "↩" : "✓"}</Text>
             </View>
-            <Text style={{ fontSize: 17, fontWeight: "700", color: "#0F172A", textAlign: "center", marginBottom: 6 }}>Mark as Complete?</Text>
+            <Text style={{ fontSize: 17, fontWeight: "700", color: "#0F172A", textAlign: "center", marginBottom: 6 }}>
+              {confirmCompleteTask.status === "done" ? "Mark as Incomplete?" : "Mark as Complete?"}
+            </Text>
             <Text style={{ fontSize: 14, color: "#64748B", textAlign: "center", marginBottom: 24 }} numberOfLines={2}>
               "{confirmCompleteTask.title}"
             </Text>
             <Pressable
               onPress={() => { toggleMutation.mutate(confirmCompleteTask); setConfirmCompleteTask(null); }}
-              style={{ backgroundColor: "#10B981", borderRadius: 12, paddingVertical: 14, alignItems: "center", marginBottom: 10 }}
+              style={{ backgroundColor: confirmCompleteTask.status === "done" ? "#F59E0B" : "#10B981", borderRadius: 12, paddingVertical: 14, alignItems: "center", marginBottom: 10 }}
               testID="complete-confirm-yes"
             >
-              <Text style={{ color: "white", fontSize: 15, fontWeight: "700" }}>Complete Task</Text>
+              <Text style={{ color: "white", fontSize: 15, fontWeight: "700" }}>
+                {confirmCompleteTask.status === "done" ? "Reopen Task" : "Complete Task"}
+              </Text>
             </Pressable>
             <Pressable
               onPress={() => setConfirmCompleteTask(null)}
