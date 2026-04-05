@@ -14,6 +14,7 @@ import {
 } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { ChevronLeft, ChevronRight, Plus, X, Calendar, Trash2 } from "lucide-react-native";
@@ -145,6 +146,7 @@ export default function CalendarScreen() {
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
   const { data: session } = useSession();
   const queryClient = useQueryClient();
+  const insets = useSafeAreaInsets();
 
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(new Date());
@@ -517,7 +519,7 @@ export default function CalendarScreen() {
 
       {/* FAB */}
       {isOwner && activeTeamId ? (
-        <Pressable onPress={() => openAddModal()} style={{ position: "absolute", bottom: 32, right: 24, width: 56, height: 56, borderRadius: 28, backgroundColor: "#4361EE", alignItems: "center", justifyContent: "center", shadowColor: "#4361EE", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 8, elevation: 8 }} testID="fab-add-event">
+        <Pressable onPress={() => openAddModal()} style={{ position: "absolute", bottom: insets.bottom + 88, right: 24, width: 56, height: 56, borderRadius: 28, backgroundColor: "#4361EE", alignItems: "center", justifyContent: "center", shadowColor: "#4361EE", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 8, elevation: 8 }} testID="fab-add-event">
           <Plus size={24} color="white" />
         </Pressable>
       ) : null}

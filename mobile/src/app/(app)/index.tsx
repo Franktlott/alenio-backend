@@ -821,7 +821,7 @@ export default function TasksScreen() {
 
           {/* FAB menu options */}
           {fabOpen ? (
-            <View style={{ position: "absolute", bottom: 100, right: 24, gap: 12, alignItems: "flex-end" }}>
+            <View style={{ position: "absolute", bottom: insets.bottom + 100, right: 24, gap: 12, alignItems: "flex-end" }}>
               <TouchableOpacity
                 onPress={() => { setFabOpen(false); router.push({ pathname: "/create-task", params: { teamId: activeTeamId } }); }}
                 style={{ flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "white", paddingHorizontal: 16, paddingVertical: 12, borderRadius: 16, shadowColor: "#000", shadowOpacity: 0.12, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 6 }}
@@ -844,7 +844,7 @@ export default function TasksScreen() {
           {/* Main FAB */}
           <TouchableOpacity
             style={{
-              position: "absolute", bottom: 32, right: 24,
+              position: "absolute", bottom: insets.bottom + 88, right: 24,
               width: 56, height: 56, borderRadius: 28,
               backgroundColor: fabOpen ? "#7C3AED" : "#4361EE",
               alignItems: "center", justifyContent: "center",
