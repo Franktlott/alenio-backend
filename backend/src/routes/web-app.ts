@@ -185,9 +185,9 @@ webRouter.get("/", (c) => {
     <h2>Sign in</h2>
     <p>Enter your email to receive a one-time code</p>
     <label class="field-label">Email address</label>
-    <input class="field" type="email" id="email-input" placeholder="you@example.com" />
+    <input class="field" type="text" id="email-input" placeholder="you@example.com" autocapitalize="off" autocorrect="off" autocomplete="email" />
     <div id="login-msg"></div>
-    <button class="btn-primary" id="send-otp-btn" onclick="sendOTP()">Continue</button>
+    <button type="button" class="btn-primary" id="send-otp-btn" onclick="sendOTP()">Continue</button>
   </div>
 </div>
 
@@ -201,7 +201,7 @@ webRouter.get("/", (c) => {
     <label class="field-label">One-time code</label>
     <input class="field" type="text" id="otp-input" placeholder="000000" maxlength="6" inputmode="numeric" />
     <div id="otp-msg"></div>
-    <button class="btn-primary" id="verify-btn" onclick="verifyOTP()">Sign In</button>
+    <button type="button" class="btn-primary" id="verify-btn" onclick="verifyOTP()">Sign In</button>
     <br/><button class="btn-ghost" onclick="backToLogin()">← Use different email</button>
   </div>
 </div>
@@ -307,7 +307,8 @@ webRouter.get("/", (c) => {
       document.getElementById('otp-desc').textContent = 'We sent a 6-digit code to ' + email;
       document.getElementById('otp-screen').style.display = 'flex';
     } catch (e) {
-      setMsg('login-msg', e.message, 'error');
+      const msg = (e && e.message) ? e.message : 'Something went wrong. Please try again.';
+      setMsg('login-msg', msg, 'error');
     } finally {
       btn.disabled = false;
       btn.textContent = 'Continue';
