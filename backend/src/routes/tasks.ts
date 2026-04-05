@@ -317,7 +317,8 @@ tasksRouter.patch("/:taskId", async (c) => {
       AND t.completedAt <= t.dueDate
     `;
     const onTimeCount = Number(onTimeResult[0]?.count ?? 0);
-    if (onTimeCount > 0 && onTimeCount % 10 === 0) {
+    const isMilestone = onTimeCount === 5 || onTimeCount === 15 || (onTimeCount >= 20 && onTimeCount % 10 === 0);
+    if (isMilestone) {
       milestoneCount = onTimeCount;
       await logActivity({
         teamId,
