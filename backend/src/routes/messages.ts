@@ -101,13 +101,16 @@ messagesRouter.post("/", async (c) => {
   }
 
   // Notify other team members
-  const members = await prisma.teamMember.findMany({
-    where: { teamId, userId: { not: user.id } },
-    select: { userId: true },
-  });
+  const [members, team] = await Promise.all([
+    prisma.teamMember.findMany({
+      where: { teamId, userId: { not: user.id } },
+      select: { userId: true },
+    }),
+    prisma.team.findUnique({ where: { id: teamId }, select: { name: true } }),
+  ]);
   const memberIds = members.map((m: any) => m.userId);
   const senderName = user.name ?? "Someone";
-  await sendPushToUsers(memberIds, senderName, notifBody, { teamId, topicId: topicId || undefined }, "notifMessages");
+  await sendPushToUsers(memberIds, senderName, notifBody, { teamId, teamName: team?.name ?? "", topicId: topicId || undefined }, "notifMessages");
 
   return c.json({ data: message }, 201);
 });

@@ -109,7 +109,7 @@ teamsRouter.post("/join", async (c) => {
     select: { userId: true },
   });
   const ownerIds = owners.map((o) => o.userId);
-  await sendPushToUsers(ownerIds, "Join Request", `${user.name} wants to join ${team.name}`);
+  await sendPushToUsers(ownerIds, "Join Request", `${user.name} wants to join ${team.name}`, { teamId: team.id, type: "join_request" });
 
   return c.json({ data: { status: "pending", teamName: team.name, requestId: joinRequest.id } });
 });
@@ -255,7 +255,8 @@ teamsRouter.post("/:teamId/join-requests/:requestId/approve", async (c) => {
   await sendPushToUsers(
     [joinRequest.userId],
     "Request Approved!",
-    `You've been approved to join ${joinRequest.team.name}`
+    `You've been approved to join ${joinRequest.team.name}`,
+    { teamId, type: "join_approved" }
   );
 
   // Log activity for member joining
@@ -302,7 +303,8 @@ teamsRouter.post("/:teamId/join-requests/:requestId/reject", async (c) => {
   await sendPushToUsers(
     [joinRequest.userId],
     "Request Update",
-    `Your request to join ${joinRequest.team.name} was not approved`
+    `Your request to join ${joinRequest.team.name} was not approved`,
+    { teamId, type: "join_rejected" }
   );
 
   return c.json({ data: { success: true } });

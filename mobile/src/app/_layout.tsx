@@ -1,5 +1,5 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { Stack } from 'expo-router';
+import { Stack, router } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { AppState, Image, Text, View } from 'react-native';
@@ -96,7 +96,24 @@ function RootLayoutNav() {
     registerForPushNotificationsAsync();
     initRevenueCat(session.user.id);
     notificationListener.current = Notifications.addNotificationReceivedListener(() => {});
-    return () => { notificationListener.current?.remove(); };
+
+    const responseListener = Notifications.addNotificationResponseReceivedListener((response) => {
+      const data = response.notification.request.content.data as Record<string, string>;
+      if (data?.taskId && data?.teamId) {
+        router.push({ pathname: '/task-detail', params: { taskId: data.taskId, teamId: data.teamId } });
+      } else if (data?.teamId && data?.teamName !== undefined) {
+        // Message notification — go to team chat
+        router.push({ pathname: '/team-chat', params: { teamId: data.teamId, teamName: data.teamName, ...(data.topicId ? { topicId: data.topicId } : {}) } });
+      } else if (data?.teamId) {
+        // Join request or team update — go to team tab
+        router.push('/(app)/team');
+      }
+    });
+
+    return () => {
+      notificationListener.current?.remove();
+      responseListener.remove();
+    };
   }, [session?.user?.id]);
 
   if (showSplash || isLoading) {
