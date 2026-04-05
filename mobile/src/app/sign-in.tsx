@@ -60,13 +60,11 @@ export default function SignIn() {
       <StatusBar style="light" />
       <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
         <View className="items-center py-10 px-6">
-          <View className="bg-white rounded-2xl p-4 mb-4">
-            <Image
-              source={require("@/assets/alenio-logo.png")}
-              style={{ width: 180, height: 65 }}
-              resizeMode="contain"
-            />
-          </View>
+          <Image
+            source={require("@/assets/alenio-logo.png")}
+            style={{ width: 200, height: 72 }}
+            resizeMode="contain"
+          />
           <Text className="text-white/80 text-base mt-2">Team task management</Text>
         </View>
       </LinearGradient>
@@ -79,21 +77,21 @@ export default function SignIn() {
             <TouchableOpacity
               onPress={() => switchMode(false)}
               className="flex-1 py-2.5 rounded-lg items-center"
-              style={{ backgroundColor: !isNew ? "white" : "transparent" }}
+              style={{ backgroundColor: !isNew ? "#4361EE" : "transparent" }}
               testID="sign-in-tab"
             >
-              <Text className="text-sm font-semibold" style={{ color: !isNew ? "#0F172A" : "#94A3B8" }}>
+              <Text className="text-sm font-semibold" style={{ color: !isNew ? "white" : "#94A3B8" }}>
                 Sign in
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={() => switchMode(true)}
               className="flex-1 py-2.5 rounded-lg items-center"
-              style={{ backgroundColor: isNew ? "white" : "transparent" }}
+              style={{ backgroundColor: isNew ? "#4361EE" : "transparent" }}
               testID="new-here-tab"
             >
-              <Text className="text-sm font-semibold" style={{ color: isNew ? "#0F172A" : "#94A3B8" }}>
-                New here? Join
+              <Text className="text-sm font-semibold" style={{ color: isNew ? "white" : "#94A3B8" }}>
+                Join
               </Text>
             </TouchableOpacity>
           </View>
