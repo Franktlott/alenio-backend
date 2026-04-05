@@ -4,14 +4,13 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  ScrollView,
   ActivityIndicator,
-  KeyboardAvoidingView,
   Platform,
   Switch,
   Modal,
   Image,
 } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -204,10 +203,6 @@ export default function CreateTaskScreen() {
       edges={["top"]}
       testID="create-task-screen"
     >
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        className="flex-1"
-      >
         {/* Header */}
         <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
           <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 14, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
@@ -244,7 +239,7 @@ export default function CreateTaskScreen() {
           </View>
         </LinearGradient>
 
-        <ScrollView className="flex-1 px-4" showsVerticalScrollIndicator={false}>
+        <KeyboardAwareScrollView className="flex-1" contentContainerStyle={{ paddingHorizontal: 16 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           {/* Title */}
           <TextInput
             className="text-xl font-semibold text-slate-900 dark:text-white py-4 border-b border-slate-100 dark:border-slate-800"
@@ -646,8 +641,7 @@ export default function CreateTaskScreen() {
           </View>
 
           <View style={{ height: 32 }} />
-        </ScrollView>
-      </KeyboardAvoidingView>
+        </KeyboardAwareScrollView>
 
       {/* Template picker modal */}
       <Modal visible={showTemplatePicker} transparent animationType="slide" onRequestClose={() => setShowTemplatePicker(false)}>
