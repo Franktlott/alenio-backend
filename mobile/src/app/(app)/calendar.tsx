@@ -1,24 +1,19 @@
-import React, { useState, useRef } from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
   ScrollView,
-  TouchableOpacity,
-  ActivityIndicator,
-  Modal,
-  TextInput,
-  Platform,
-  KeyboardAvoidingView,
   Pressable,
+  ActivityIndicator,
   Image,
   RefreshControl,
 } from "react-native";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import DateTimePicker from "@react-native-community/datetimepicker";
-import { ChevronLeft, ChevronRight, Plus, X, Calendar, Trash2 } from "lucide-react-native";
+import { ChevronLeft, ChevronRight, Plus, Calendar } from "lucide-react-native";
+import { router } from "expo-router";
 import { api } from "@/lib/api/api";
 import { useTeamStore } from "@/lib/state/team-store";
 import { useSession } from "@/lib/auth/use-session";
@@ -45,7 +40,6 @@ type WeekBar = {
   endCol: number;
 };
 
-const EVENT_COLORS = ["#4361EE", "#7C3AED", "#10B981", "#F59E0B", "#EF4444", "#EC4899"];
 const DAYS_OF_WEEK = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTHS = [
   "January", "February", "March", "April", "May", "June",
@@ -152,18 +146,6 @@ export default function CalendarScreen() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(new Date());
   const [weekRowWidth, setWeekRowWidth] = useState(0);
-  const [showEventModal, setShowEventModal] = useState(false);
-  const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
-
-  // Form state
-  const [eventTitle, setEventTitle] = useState("");
-  const [eventDescription, setEventDescription] = useState("");
-  const [eventStart, setEventStart] = useState<Date>(new Date());
-  const [eventEnd, setEventEnd] = useState<Date>(new Date());
-  const [eventColor, setEventColor] = useState("#4361EE");
-  const [showStartPicker, setShowStartPicker] = useState(false);
-  const [showEndPicker, setShowEndPicker] = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
 
   const currentUserId = session?.user?.id ?? null;
 
@@ -191,62 +173,6 @@ export default function CalendarScreen() {
   const myTasks = tasks.filter((t) =>
     t.assignments?.some((a) => a.userId === currentUserId)
   );
-
-  const createMutation = useMutation({
-    mutationFn: (data: object) =>
-      api.post<CalendarEvent>(`/api/teams/${activeTeamId}/events`, data),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["calendar-events", activeTeamId] }); closeModal(); },
-  });
-
-  const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: object }) =>
-      api.patch<CalendarEvent>(`/api/teams/${activeTeamId}/events/${id}`, data),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["calendar-events", activeTeamId] }); closeModal(); },
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: (id: string) => api.delete(`/api/teams/${activeTeamId}/events/${id}`),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["calendar-events", activeTeamId] }); closeModal(); },
-  });
-
-  const openAddModal = (date?: Date) => {
-    const d = date ?? selectedDate ?? new Date();
-    setEditingEvent(null);
-    setEventTitle(""); setEventDescription("");
-    setEventStart(d); setEventEnd(d);
-    setEventColor("#4361EE"); setFormError(null);
-    setShowEventModal(true);
-  };
-
-  const openEditModal = (event: CalendarEvent) => {
-    setEditingEvent(event);
-    setEventTitle(event.title);
-    setEventDescription(event.description ?? "");
-    setEventStart(new Date(event.startDate));
-    setEventEnd(event.endDate ? new Date(event.endDate) : new Date(event.startDate));
-    setEventColor(event.color); setFormError(null);
-    setShowEventModal(true);
-  };
-
-  const closeModal = () => {
-    setShowEventModal(false); setEditingEvent(null);
-    setShowStartPicker(false); setShowEndPicker(false); setFormError(null);
-  };
-
-  const handleSave = () => {
-    if (!eventTitle.trim()) { setFormError("Please enter an event title"); return; }
-    const end = eventEnd < eventStart ? eventStart : eventEnd;
-    const payload = {
-      title: eventTitle.trim(),
-      description: eventDescription.trim() || undefined,
-      startDate: eventStart.toISOString(),
-      endDate: end.toISOString(),
-      color: eventColor,
-      allDay: true,
-    };
-    if (editingEvent) updateMutation.mutate({ id: editingEvent.id, data: payload });
-    else createMutation.mutate(payload);
-  };
 
   const prevMonth = () => setCurrentMonth((m) => new Date(m.getFullYear(), m.getMonth() - 1, 1));
   const nextMonth = () => setCurrentMonth((m) => new Date(m.getFullYear(), m.getMonth() + 1, 1));
@@ -298,7 +224,7 @@ export default function CalendarScreen() {
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
               {isOwner && activeTeamId ? (
                 <Pressable
-                  onPress={() => openAddModal(selectedDate ?? undefined)}
+                  onPress={() => router.push({ pathname: "/create-event", params: { teamId: activeTeamId!, startDate: (selectedDate ?? new Date()).toISOString() } })}
                   style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "rgba(255,255,255,0.22)", paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20 }}
                   testID="header-add-event-button"
                 >
@@ -409,7 +335,14 @@ export default function CalendarScreen() {
                       return (
                         <Pressable
                           key={colIndex}
-                          onPress={() => isOwner ? openEditModal(events.find(e => e.id === bar.id)!) : null}
+                          onPress={() => {
+                            if (isOwner) {
+                              const event = events.find((e) => e.id === bar.id);
+                              if (event) {
+                                router.push({ pathname: "/create-event", params: { teamId: activeTeamId!, eventId: event.id, eventTitle: event.title, eventDescription: event.description ?? "", eventColor: event.color, startDate: event.startDate, eventEndDate: event.endDate ?? event.startDate } });
+                              }
+                            }
+                          }}
                           style={{
                             flex: 1,
                             height: 14,
@@ -479,7 +412,11 @@ export default function CalendarScreen() {
                 {selectedDate.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
               </Text>
               {isOwner ? (
-                <Pressable onPress={() => openAddModal(selectedDate)} style={{ flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "#4361EE", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 }} testID="add-event-button">
+                <Pressable
+                  onPress={() => router.push({ pathname: "/create-event", params: { teamId: activeTeamId!, startDate: selectedDate.toISOString() } })}
+                  style={{ flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "#4361EE", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 }}
+                  testID="add-event-button"
+                >
                   <Plus size={14} color="white" />
                   <Text style={{ color: "white", fontSize: 12, fontWeight: "600" }}>Add Event</Text>
                 </Pressable>
@@ -500,7 +437,11 @@ export default function CalendarScreen() {
                 {selectedEvents.map((event) => (
                   <Pressable
                     key={event.id}
-                    onPress={() => isOwner ? openEditModal(event) : null}
+                    onPress={() => {
+                      if (isOwner) {
+                        router.push({ pathname: "/create-event", params: { teamId: activeTeamId!, eventId: event.id, eventTitle: event.title, eventDescription: event.description ?? "", eventColor: event.color, startDate: event.startDate, eventEndDate: event.endDate ?? event.startDate } });
+                      }
+                    }}
                     style={{ backgroundColor: "white", borderRadius: 14, padding: 14, borderLeftWidth: 4, borderLeftColor: event.color, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 4, shadowOffset: { width: 0, height: 1 }, elevation: 1 }}
                     testID={`event-item-${event.id}`}
                   >
@@ -537,128 +478,6 @@ export default function CalendarScreen() {
           </View>
         ) : null}
       </ScrollView>
-
-      {/* Add/Edit Event Modal */}
-      <Modal visible={showEventModal} transparent animationType="slide" onRequestClose={closeModal}>
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
-          <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }} onPress={closeModal} testID="modal-backdrop">
-            <Pressable style={{ backgroundColor: "white", borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 8, paddingBottom: 40 }} onPress={(e) => e.stopPropagation()} testID="event-modal">
-              <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: "#E2E8F0", alignSelf: "center", marginBottom: 16 }} />
-
-              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-                <Text style={{ fontSize: 17, fontWeight: "700", color: "#0F172A" }}>{editingEvent ? "Edit Event" : "New Event"}</Text>
-                <Pressable onPress={closeModal} style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "#F1F5F9", alignItems: "center", justifyContent: "center" }} testID="close-modal-button">
-                  <X size={16} color="#64748B" />
-                </Pressable>
-              </View>
-
-              {/* Title */}
-              <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748B", marginBottom: 6 }}>Title</Text>
-              <TextInput
-                style={{ borderWidth: 1.5, borderColor: "#E2E8F0", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: "#0F172A", marginBottom: 14 }}
-                placeholder="Event title..."
-                placeholderTextColor="#CBD5E1"
-                value={eventTitle}
-                onChangeText={(t) => { setEventTitle(t); setFormError(null); }}
-                testID="event-title-input"
-              />
-
-              {/* Description */}
-              <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748B", marginBottom: 6 }}>Description (optional)</Text>
-              <TextInput
-                style={{ borderWidth: 1.5, borderColor: "#E2E8F0", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: "#0F172A", marginBottom: 14, minHeight: 60, textAlignVertical: "top" }}
-                placeholder="Add a description..."
-                placeholderTextColor="#CBD5E1"
-                value={eventDescription}
-                onChangeText={setEventDescription}
-                multiline
-                numberOfLines={2}
-                testID="event-description-input"
-              />
-
-              {/* Start / End dates */}
-              <View style={{ flexDirection: "row", gap: 10, marginBottom: 14 }}>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748B", marginBottom: 6 }}>Start Date</Text>
-                  <Pressable onPress={() => setShowStartPicker(true)} style={{ borderWidth: 1.5, borderColor: "#4361EE", borderRadius: 12, paddingHorizontal: 10, paddingVertical: 10, flexDirection: "row", alignItems: "center", backgroundColor: "#4361EE0D" }} testID="event-start-date-button">
-                    <Calendar size={13} color="#4361EE" style={{ marginRight: 6 }} />
-                    <Text style={{ fontSize: 12, fontWeight: "500", color: "#4361EE" }}>
-                      {eventStart.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-                    </Text>
-                  </Pressable>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748B", marginBottom: 6 }}>End Date</Text>
-                  <Pressable onPress={() => setShowEndPicker(true)} style={{ borderWidth: 1.5, borderColor: "#7C3AED", borderRadius: 12, paddingHorizontal: 10, paddingVertical: 10, flexDirection: "row", alignItems: "center", backgroundColor: "#7C3AED0D" }} testID="event-end-date-button">
-                    <Calendar size={13} color="#7C3AED" style={{ marginRight: 6 }} />
-                    <Text style={{ fontSize: 12, fontWeight: "500", color: "#7C3AED" }}>
-                      {eventEnd.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-                    </Text>
-                  </Pressable>
-                </View>
-              </View>
-
-              {/* iOS date pickers */}
-              {Platform.OS === "ios" ? (
-                <>
-                  <Modal visible={showStartPicker} transparent animationType="slide">
-                    <View style={{ flex: 1, justifyContent: "flex-end" }}>
-                      <View style={{ backgroundColor: "white", borderTopLeftRadius: 24, borderTopRightRadius: 24 }}>
-                        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 }}>
-                          <Pressable onPress={() => setShowStartPicker(false)}><Text style={{ color: "#64748B", fontSize: 15 }}>Cancel</Text></Pressable>
-                          <Text style={{ fontSize: 15, fontWeight: "600", color: "#0F172A" }}>Start Date</Text>
-                          <Pressable onPress={() => setShowStartPicker(false)}><Text style={{ color: "#4361EE", fontWeight: "600", fontSize: 15 }}>Done</Text></Pressable>
-                        </View>
-                        <DateTimePicker value={eventStart} mode="date" display="inline" onChange={(_e, d) => { if (d) { setEventStart(d); if (d > eventEnd) setEventEnd(d); } }} testID="start-date-picker" />
-                        <View style={{ height: 20 }} />
-                      </View>
-                    </View>
-                  </Modal>
-                  <Modal visible={showEndPicker} transparent animationType="slide">
-                    <View style={{ flex: 1, justifyContent: "flex-end" }}>
-                      <View style={{ backgroundColor: "white", borderTopLeftRadius: 24, borderTopRightRadius: 24 }}>
-                        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 }}>
-                          <Pressable onPress={() => setShowEndPicker(false)}><Text style={{ color: "#64748B", fontSize: 15 }}>Cancel</Text></Pressable>
-                          <Text style={{ fontSize: 15, fontWeight: "600", color: "#0F172A" }}>End Date</Text>
-                          <Pressable onPress={() => setShowEndPicker(false)}><Text style={{ color: "#7C3AED", fontWeight: "600", fontSize: 15 }}>Done</Text></Pressable>
-                        </View>
-                        <DateTimePicker value={eventEnd} mode="date" display="inline" minimumDate={eventStart} onChange={(_e, d) => { if (d) setEventEnd(d); }} testID="end-date-picker" />
-                        <View style={{ height: 20 }} />
-                      </View>
-                    </View>
-                  </Modal>
-                </>
-              ) : (
-                <>
-                  {showStartPicker ? <DateTimePicker value={eventStart} mode="date" display="calendar" onChange={(_e, d) => { setShowStartPicker(false); if (d) { setEventStart(d); if (d > eventEnd) setEventEnd(d); } }} testID="start-date-picker" /> : null}
-                  {showEndPicker ? <DateTimePicker value={eventEnd} mode="date" display="calendar" minimumDate={eventStart} onChange={(_e, d) => { setShowEndPicker(false); if (d) setEventEnd(d); }} testID="end-date-picker" /> : null}
-                </>
-              )}
-
-              {/* Color picker */}
-              <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748B", marginBottom: 10 }}>Color</Text>
-              <View style={{ flexDirection: "row", gap: 10, marginBottom: 20 }}>
-                {EVENT_COLORS.map((color) => (
-                  <Pressable key={color} onPress={() => setEventColor(color)} style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: color, borderWidth: eventColor === color ? 3 : 0, borderColor: "white", shadowColor: color, shadowOpacity: eventColor === color ? 0.5 : 0, shadowRadius: 4, shadowOffset: { width: 0, height: 0 }, elevation: eventColor === color ? 4 : 0 }} testID={`color-swatch-${color}`} />
-                ))}
-              </View>
-
-              {formError ? <Text style={{ color: "#EF4444", fontSize: 13, marginBottom: 12 }} testID="form-error">{formError}</Text> : null}
-
-              <View style={{ flexDirection: "row", gap: 10 }}>
-                {editingEvent ? (
-                  <Pressable onPress={() => deleteMutation.mutate(editingEvent.id)} disabled={deleteMutation.isPending} style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: "#FEE2E2", alignItems: "center", justifyContent: "center" }} testID="delete-event-button">
-                    {deleteMutation.isPending ? <ActivityIndicator size="small" color="#EF4444" /> : <Trash2 size={18} color="#EF4444" />}
-                  </Pressable>
-                ) : null}
-                <Pressable onPress={handleSave} disabled={createMutation.isPending || updateMutation.isPending} style={{ flex: 1, height: 48, borderRadius: 14, backgroundColor: "#4361EE", alignItems: "center", justifyContent: "center" }} testID="save-event-button">
-                  {createMutation.isPending || updateMutation.isPending ? <ActivityIndicator color="white" /> : <Text style={{ color: "white", fontWeight: "700", fontSize: 15 }}>{editingEvent ? "Save Changes" : "Create Event"}</Text>}
-                </Pressable>
-              </View>
-            </Pressable>
-          </Pressable>
-        </KeyboardAvoidingView>
-      </Modal>
     </SafeAreaView>
   );
 }

@@ -109,14 +109,8 @@ function RootLayoutNav() {
         <Stack.Protected guard={!!session?.user}>
           <Stack.Screen name="(app)" />
           <Stack.Screen name="onboarding" />
-          <Stack.Screen
-            name="create-task"
-            options={{
-              presentation: 'formSheet',
-              sheetAllowedDetents: [0.9],
-              sheetGrabberVisible: true,
-            }}
-          />
+          <Stack.Screen name="create-task" />
+          <Stack.Screen name="create-event" />
           <Stack.Screen name="task-detail" />
           <Stack.Screen name="team-chat" />
           <Stack.Screen name="dm-chat" />
