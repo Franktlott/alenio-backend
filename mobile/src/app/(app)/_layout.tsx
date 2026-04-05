@@ -1,5 +1,5 @@
 import { Tabs } from "expo-router";
-import { CheckSquare, Users, User, MessageCircle, CalendarDays } from "lucide-react-native";
+import { CheckSquare, Users, User, MessageCircle } from "lucide-react-native";
 import { useColorScheme } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api/api";
@@ -80,10 +80,7 @@ export default function AppLayout() {
       <Tabs.Screen
         name="calendar"
         options={{
-          title: "Calendar",
-          tabBarIcon: ({ color, size }: { color: string; size: number }) => (
-            <CalendarDays size={size} color={color} />
-          ),
+          href: null,
         }}
       />
       <Tabs.Screen
