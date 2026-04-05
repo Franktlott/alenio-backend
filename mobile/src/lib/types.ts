@@ -57,6 +57,7 @@ export interface Task {
   dueDate?: string | null;
   completedAt?: string | null;
   attachmentUrl?: string | null;
+  incognito?: boolean;
   createdAt: string;
   updatedAt: string;
   teamId: string;

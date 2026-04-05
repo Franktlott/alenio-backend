@@ -172,7 +172,9 @@ export default function TaskDetailScreen() {
           <TouchableOpacity onPress={() => { setIsEditMode(false); router.back(); }} testID="back-button">
             <ArrowLeft size={22} color="white" />
           </TouchableOpacity>
-          <Text style={{ flex: 1, marginLeft: 12, color: "white", fontSize: 18, fontWeight: "700" }} numberOfLines={1}>{task.title}</Text>
+          <Text style={{ flex: 1, marginLeft: 12, color: "white", fontSize: 18, fontWeight: "700" }} numberOfLines={1}>
+            {task.incognito ? "🕵️ " : ""}{task.title}
+          </Text>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
             {canEdit ? (
               <TouchableOpacity
@@ -217,7 +219,10 @@ export default function TaskDetailScreen() {
         </View>
 
         {/* Title */}
-        <Text className="text-2xl font-bold text-slate-900 dark:text-white mb-3">{task.title}</Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 12 }}>
+          {task.incognito ? <Text style={{ fontSize: 20 }}>🕵️</Text> : null}
+          <Text className="text-2xl font-bold text-slate-900 dark:text-white" style={{ flex: 1 }}>{task.title}</Text>
+        </View>
 
         {/* Description */}
         {task.description ? (

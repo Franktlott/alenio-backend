@@ -314,18 +314,21 @@ function TaskRow({ task, onToggle, onPress }: { task: Task; onToggle: () => void
 
       {/* Content */}
       <View style={{ flex: 1 }}>
-        <Text
-          numberOfLines={1}
-          style={{
-            fontSize: 14,
-            fontWeight: "600",
-            color: isDone ? "#94A3B8" : "#0F172A",
-            textDecorationLine: isDone ? "line-through" : "none",
-            marginBottom: 3,
-          }}
-        >
-          {task.title}
-        </Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 3 }}>
+          {task.incognito ? <Text style={{ fontSize: 13 }}>🕵️</Text> : null}
+          <Text
+            numberOfLines={1}
+            style={{
+              fontSize: 14,
+              fontWeight: "600",
+              color: isDone ? "#94A3B8" : "#0F172A",
+              textDecorationLine: isDone ? "line-through" : "none",
+              flex: 1,
+            }}
+          >
+            {task.title}
+          </Text>
+        </View>
 
         {/* Meta row */}
         <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 6 }}>
