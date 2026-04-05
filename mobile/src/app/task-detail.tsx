@@ -441,14 +441,25 @@ export default function TaskDetailScreen() {
         </View>
 
         {/* Meta */}
-        <View className="mt-2 pt-4 border-t border-slate-100 dark:border-slate-800">
+        <View className="mt-2 pt-4 border-t border-slate-100 dark:border-slate-800" style={{ gap: 6 }}>
           <Text className="text-xs text-slate-400">
             Created {new Date(task.createdAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
           </Text>
+          {task.dueDate && isCompleted ? (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+              <Text style={{ fontSize: 11, color: "#94A3B8" }}>⏱</Text>
+              <Text className="text-xs text-slate-400">
+                Due {new Date(task.dueDate).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })}
+              </Text>
+            </View>
+          ) : null}
           {task.completedAt ? (
-            <Text className="text-xs text-emerald-500 mt-1">
-              Completed {new Date(task.completedAt).toLocaleDateString("en-US", { month: "long", day: "numeric" })}
-            </Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+              <Text style={{ fontSize: 11, color: "#10B981" }}>✓</Text>
+              <Text className="text-xs text-emerald-500">
+                Completed {new Date(task.completedAt).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })}
+              </Text>
+            </View>
           ) : null}
         </View>
 

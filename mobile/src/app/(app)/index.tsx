@@ -270,14 +270,16 @@ function TaskRow({ task, onToggle, onPress }: { task: Task; onToggle: () => void
   const isDone = task.status === "done";
   const priority = PRIORITY_CONFIG[task.priority as keyof typeof PRIORITY_CONFIG] ?? PRIORITY_CONFIG.medium;
 
+  const fmt = (d: string | Date) =>
+    new Date(d).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+
+  const completedDate = isDone ? (task.completedAt ?? task.updatedAt) : null;
+  const dueDate = task.dueDate ?? null;
+
   const getDueInfo = (): { date: string; overdue: boolean; today: boolean; completed: boolean } | null => {
-    if (isDone) {
-      const completedDate = task.completedAt ?? task.updatedAt;
-      const date = new Date(completedDate).toLocaleDateString("en-US", { month: "short", day: "numeric" });
-      return { date, overdue: false, today: false, completed: true };
-    }
-    if (!task.dueDate) return null;
-    const due = new Date(task.dueDate);
+    if (isDone) return null; // handled separately below
+    if (!dueDate) return null;
+    const due = new Date(dueDate);
     const now = new Date();
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const dueStart = new Date(due.getFullYear(), due.getMonth(), due.getDate());
@@ -352,18 +354,31 @@ function TaskRow({ task, onToggle, onPress }: { task: Task; onToggle: () => void
             </View>
           ) : null}
 
-          {/* Due / completion date */}
-          {dueInfo ? (
+          {/* Due / completion dates */}
+          {isDone ? (
+            <>
+              {dueDate ? (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
+                  <Text style={{ fontSize: 10, color: "#94A3B8" }}>⏱</Text>
+                  <Text style={{ fontSize: 10, color: "#94A3B8" }}>Due {fmt(dueDate)}</Text>
+                </View>
+              ) : null}
+              {completedDate ? (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
+                  <Text style={{ fontSize: 10, color: "#10B981" }}>✓</Text>
+                  <Text style={{ fontSize: 10, color: "#10B981" }}>Done {fmt(completedDate)}</Text>
+                </View>
+              ) : null}
+            </>
+          ) : dueInfo ? (
             <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
-              <Text style={{ fontSize: 10, color: dueInfo.completed ? "#10B981" : dueInfo.overdue ? "#EF4444" : dueInfo.today ? "#F59E0B" : "#64748B" }}>
-                {dueInfo.completed ? "✓" : "⏱"}
-              </Text>
+              <Text style={{ fontSize: 10, color: dueInfo.overdue ? "#EF4444" : dueInfo.today ? "#F59E0B" : "#64748B" }}>⏱</Text>
               <Text style={{
                 fontSize: 10,
                 fontWeight: dueInfo.overdue ? "600" : "400",
-                color: dueInfo.completed ? "#10B981" : dueInfo.overdue ? "#EF4444" : dueInfo.today ? "#F59E0B" : "#64748B",
+                color: dueInfo.overdue ? "#EF4444" : dueInfo.today ? "#F59E0B" : "#64748B",
               }}>
-                {dueInfo.completed ? `Completed ${dueInfo.date}` : dueInfo.today ? `Today · ${dueInfo.date}` : dueInfo.overdue ? `Overdue · ${dueInfo.date}` : dueInfo.date}
+                {dueInfo.today ? `Today · ${dueInfo.date}` : dueInfo.overdue ? `Overdue · ${dueInfo.date}` : dueInfo.date}
               </Text>
             </View>
           ) : null}
