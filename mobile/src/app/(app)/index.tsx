@@ -425,6 +425,7 @@ export default function TasksScreen() {
   const [milestoneModal, setMilestoneModal] = useState<{ count: number; userName: string } | null>(null);
   // Event modal state
   const [showEventModal, setShowEventModal] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
   const [eventTitle, setEventTitle] = useState("");
   const [eventDescription, setEventDescription] = useState("");
@@ -700,26 +701,24 @@ export default function TasksScreen() {
         <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 14 }}>
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
             <Text style={{ color: "white", fontSize: 18, fontWeight: "700" }}>Tasks</Text>
-            <Image source={require("@/assets/alenio-icon.png")} style={{ width: 30, height: 30, borderRadius: 6 }} />
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+              {activeTeamId ? (
+                <Pressable
+                  onPress={() => setShowAddModal(true)}
+                  style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "rgba(255,255,255,0.22)", paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20 }}
+                  testID="header-add-button"
+                >
+                  <Plus size={15} color="white" />
+                  <Text style={{ color: "white", fontSize: 13, fontWeight: "600" }}>Add</Text>
+                </Pressable>
+              ) : null}
+              <Image source={require("@/assets/alenio-icon.png")} style={{ width: 30, height: 30, borderRadius: 6 }} />
+            </View>
           </View>
         </View>
       </LinearGradient>
 
-      <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} stickyHeaderIndices={[4]} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" colors={["#4361EE"]} />}>
-        {/* Add Event button — above calendar, owners only */}
-        {isOwner && activeTeamId ? (
-          <View style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 2 }}>
-            <Pressable
-              onPress={openEventModal}
-              style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, backgroundColor: "white", borderWidth: 1.5, borderColor: "#7C3AED22", borderRadius: 12, paddingVertical: 11, shadowColor: "#7C3AED", shadowOpacity: 0.07, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 1 }}
-              testID="add-event-button"
-            >
-              <CalendarDays size={15} color="#7C3AED" />
-              <Text style={{ fontSize: 14, fontWeight: "600", color: "#7C3AED" }}>Add Event</Text>
-            </Pressable>
-          </View>
-        ) : null}
-
+      <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} stickyHeaderIndices={[2]} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" colors={["#4361EE"]} />}>
         {/* Mini Calendar */}
         <MiniCalendar tasks={allTasks} events={calendarEvents} selectedDay={selectedDay} onSelectDay={setSelectedDay} />
 
@@ -744,20 +743,6 @@ export default function TasksScreen() {
                 <EventRow event={ev} onLongPress={isOwner ? () => openEditEventModal(ev) : undefined} />
               </View>
             ))}
-          </View>
-        ) : null}
-
-        {/* Add Task button — below calendar/events, above filter tabs */}
-        {activeTeamId ? (
-          <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 2 }}>
-            <Pressable
-              onPress={() => router.push({ pathname: "/create-task", params: { teamId: activeTeamId } })}
-              style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, backgroundColor: "white", borderWidth: 1.5, borderColor: "#4361EE22", borderRadius: 12, paddingVertical: 11, shadowColor: "#4361EE", shadowOpacity: 0.07, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 1 }}
-              testID="add-task-button"
-            >
-              <CheckSquare size={15} color="#4361EE" />
-              <Text style={{ fontSize: 14, fontWeight: "600", color: "#4361EE" }}>Add Task</Text>
-            </Pressable>
           </View>
         ) : null}
 
@@ -929,6 +914,43 @@ export default function TasksScreen() {
           </View>
         </View>
       ) : null}
+
+      {/* Add choice modal */}
+      <Modal visible={showAddModal} transparent animationType="fade" onRequestClose={() => setShowAddModal(false)}>
+        <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }} onPress={() => setShowAddModal(false)}>
+          <Pressable onPress={(e) => e.stopPropagation()} style={{ backgroundColor: "white", borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, gap: 12 }}>
+            <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: "#E2E8F0", alignSelf: "center", marginBottom: 8 }} />
+            <Text style={{ fontSize: 17, fontWeight: "700", color: "#0F172A", marginBottom: 4 }}>What would you like to add?</Text>
+            {isOwner ? (
+              <Pressable
+                onPress={() => { setShowAddModal(false); openEventModal(); }}
+                style={{ flexDirection: "row", alignItems: "center", gap: 14, backgroundColor: "#F5F3FF", borderRadius: 16, padding: 16 }}
+              >
+                <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: "#7C3AED", alignItems: "center", justifyContent: "center" }}>
+                  <CalendarDays size={22} color="white" />
+                </View>
+                <View>
+                  <Text style={{ fontSize: 15, fontWeight: "700", color: "#0F172A" }}>Add Event</Text>
+                  <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 2 }}>Add to the team calendar</Text>
+                </View>
+              </Pressable>
+            ) : null}
+            <Pressable
+              onPress={() => { setShowAddModal(false); router.push({ pathname: "/create-task", params: { teamId: activeTeamId! } }); }}
+              style={{ flexDirection: "row", alignItems: "center", gap: 14, backgroundColor: "#EEF2FF", borderRadius: 16, padding: 16 }}
+            >
+              <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: "#4361EE", alignItems: "center", justifyContent: "center" }}>
+                <CheckSquare size={22} color="white" />
+              </View>
+              <View>
+                <Text style={{ fontSize: 15, fontWeight: "700", color: "#0F172A" }}>Add Task</Text>
+                <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 2 }}>Create a new task for the team</Text>
+              </View>
+            </Pressable>
+            <View style={{ height: 16 }} />
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {/* New / Edit Event Modal */}
       <Modal visible={showEventModal} transparent animationType="slide" onRequestClose={() => { setShowEventModal(false); setEditingEvent(null); setConfirmDeleteEvent(false); }}>
