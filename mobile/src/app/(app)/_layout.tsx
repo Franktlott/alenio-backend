@@ -74,18 +74,16 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
               const event = navigation.emit({ type: "tabPress", target: route.key, canPreventDefault: true });
               if (!isFocused && !event.defaultPrevented) navigation.navigate(route.name);
             }}
-            style={{ flex: 1, alignItems: "center", justifyContent: "center" }}
+            style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 3 }}
             testID={`tab-${name}`}
           >
             <View style={{
-              flexDirection: "row",
               alignItems: "center",
               justifyContent: "center",
               backgroundColor: isFocused ? "#4361EE" : "transparent",
-              borderRadius: 32,
-              paddingHorizontal: isFocused ? 16 : 0,
-              paddingVertical: isFocused ? 10 : 0,
-              gap: 6,
+              borderRadius: 20,
+              paddingHorizontal: isFocused ? 14 : 10,
+              paddingVertical: 6,
             }}>
               <View>
                 <Icon size={20} color={isFocused ? "white" : "#94A3B8"} strokeWidth={isFocused ? 2.5 : 1.8} />
@@ -106,10 +104,8 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
                   </View>
                 ) : null}
               </View>
-              {isFocused ? (
-                <Text style={{ color: "white", fontSize: 11, fontWeight: "700" }}>{label}</Text>
-              ) : null}
             </View>
+            <Text style={{ color: isFocused ? "#4361EE" : "#94A3B8", fontSize: 10, fontWeight: isFocused ? "700" : "500" }}>{label}</Text>
           </Pressable>
         );
       })}
