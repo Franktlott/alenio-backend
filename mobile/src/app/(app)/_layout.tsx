@@ -51,7 +51,7 @@ export default function AppLayout() {
       <Tabs.Screen
         name="chat"
         options={{
-          title: "Chat",
+          tabBarShowLabel: false,
           tabBarBadge: unreadCount > 0 ? unreadCount : undefined,
           tabBarBadgeStyle: { backgroundColor: "#EF4444", fontSize: 10 },
           tabBarIcon: ({ color, size }: { color: string; size: number }) => (
