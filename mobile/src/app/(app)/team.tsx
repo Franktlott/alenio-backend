@@ -31,7 +31,7 @@ function MemberRow({
   member: TeamMember;
   isCurrentUser: boolean;
   onMessage: () => void;
-  stats?: { activeTasks: number; overdueTasks: number; onTimeCompletions: number };
+  stats?: { activeTasks: number; overdueTasks: number; streak: number };
   isOwner?: boolean;
   onRemove?: () => void;
 }) {
@@ -62,7 +62,7 @@ function MemberRow({
             </View>
           ) : null}
           <View className="flex-row items-center bg-emerald-50 dark:bg-emerald-900/40 rounded-full px-2 py-0.5">
-            <Text className="text-emerald-600 dark:text-emerald-400 text-xs font-medium">🔥 {stats?.onTimeCompletions ?? 0}</Text>
+            <Text className="text-emerald-600 dark:text-emerald-400 text-xs font-medium">🔥 {stats?.streak ?? 0}</Text>
           </View>
         </View>
       </View>
@@ -110,7 +110,7 @@ export default function TeamScreen() {
   const { data: memberStats } = useQuery({
     queryKey: ["member-stats", activeTeamId],
     queryFn: () =>
-      api.get<Record<string, { activeTasks: number; overdueTasks: number; onTimeCompletions: number }>>(
+      api.get<Record<string, { activeTasks: number; overdueTasks: number; streak: number }>>(
         `/api/teams/${activeTeamId}/tasks/member-stats`
       ),
     enabled: !!activeTeamId,

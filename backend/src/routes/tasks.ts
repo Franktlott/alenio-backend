@@ -180,23 +180,41 @@ tasksRouter.get("/member-stats", async (c) => {
     },
   });
 
-  // Group stats by userId
-  const statsMap: Record<string, { activeTasks: number; overdueTasks: number; onTimeCompletions: number }> = {};
-
+  // Group by userId
+  const userTasks: Record<string, { status: string; dueDate: Date | null; completedAt: Date | null }[]> = {};
   for (const a of assignments) {
-    if (!statsMap[a.userId]) {
-      statsMap[a.userId] = { activeTasks: 0, overdueTasks: 0, onTimeCompletions: 0 };
-    }
-    const s = statsMap[a.userId]!;
-    const { status, dueDate, completedAt } = a.task;
+    if (!userTasks[a.userId]) userTasks[a.userId] = [];
+    userTasks[a.userId]!.push(a.task);
+  }
 
-    if (status !== "done") {
-      s.activeTasks++;
-      if (dueDate && dueDate < now) s.overdueTasks++;
-    } else {
-      // On time: completed before or on the due date
-      if (dueDate && completedAt && completedAt <= dueDate) s.onTimeCompletions++;
+  const statsMap: Record<string, { activeTasks: number; overdueTasks: number; streak: number }> = {};
+
+  for (const [userId, tasks] of Object.entries(userTasks)) {
+    let activeTasks = 0;
+    let overdueTasks = 0;
+
+    for (const t of tasks) {
+      if (t.status !== "done") {
+        activeTasks++;
+        if (t.dueDate && t.dueDate < now) overdueTasks++;
+      }
     }
+
+    // Streak: consecutive on-time completions from most recent, stopping at first overdue
+    const doneTasks = tasks
+      .filter((t) => t.status === "done" && t.completedAt != null && t.dueDate != null)
+      .sort((a, b) => new Date(b.completedAt!).getTime() - new Date(a.completedAt!).getTime());
+
+    let streak = 0;
+    for (const t of doneTasks) {
+      if (new Date(t.completedAt!) <= new Date(t.dueDate!)) {
+        streak++;
+      } else {
+        break;
+      }
+    }
+
+    statsMap[userId] = { activeTasks, overdueTasks, streak };
   }
 
   return c.json({ data: statsMap });
@@ -305,9 +323,9 @@ tasksRouter.patch("/:taskId", async (c) => {
       metadata: { taskTitle: task.incognito ? null : task.title },
     });
 
-    // Check for on-time completion milestone (every 10 tasks)
-    const onTimeResult = await prisma.$queryRaw<{ count: bigint }[]>`
-      SELECT COUNT(*) as count
+    // Calculate streak: consecutive on-time completions since last overdue (most recent first)
+    const streakRows = await prisma.$queryRaw<{ completedAt: string; dueDate: string }[]>`
+      SELECT t.completedAt, t.dueDate
       FROM Task t
       JOIN TaskAssignment ta ON ta.taskId = t.id
       WHERE t.teamId = ${teamId}
@@ -315,17 +333,24 @@ tasksRouter.patch("/:taskId", async (c) => {
       AND t.status = 'done'
       AND t.completedAt IS NOT NULL
       AND t.dueDate IS NOT NULL
-      AND t.completedAt <= t.dueDate
+      ORDER BY t.completedAt DESC
     `;
-    const onTimeCount = Number(onTimeResult[0]?.count ?? 0);
-    const isMilestone = onTimeCount === 5 || onTimeCount === 10 || onTimeCount === 15 || (onTimeCount >= 20 && onTimeCount % 10 === 0);
+    let streak = 0;
+    for (const row of streakRows) {
+      if (new Date(row.completedAt) <= new Date(row.dueDate)) {
+        streak++;
+      } else {
+        break;
+      }
+    }
+    const isMilestone = streak === 5 || streak === 10 || streak === 15 || (streak >= 20 && streak % 10 === 0);
     if (isMilestone) {
-      milestoneCount = onTimeCount;
+      milestoneCount = streak;
       await logActivity({
         teamId,
         userId: user.id,
         type: "task_milestone",
-        metadata: { count: onTimeCount, userName: user.name, incognito: task.incognito },
+        metadata: { count: streak, userName: user.name, incognito: task.incognito },
       });
     }
 
