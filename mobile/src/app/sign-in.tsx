@@ -153,6 +153,11 @@ export default function SignIn() {
           <Text className="text-center text-slate-400 dark:text-slate-500 text-xs mt-8">
             We'll send a 6-digit code to verify your identity
           </Text>
+
+          <View style={{ alignItems: "center", gap: 6, marginTop: 32, marginBottom: 8 }}>
+            <Text style={{ fontSize: 11, color: "#94A3B8", letterSpacing: 0.3 }}>Alenio is owned and operated by</Text>
+            <Image source={require("@/assets/ventry-logo.png")} style={{ width: 90, height: 28 }} resizeMode="contain" />
+          </View>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
