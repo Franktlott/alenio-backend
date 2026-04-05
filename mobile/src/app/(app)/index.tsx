@@ -292,65 +292,60 @@ function TaskRow({ task, onToggle, onPress }: { task: Task; onToggle: () => void
   return (
     <Pressable
       onPress={onPress}
-      style={{ paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: "#F1F5F9", backgroundColor: "white", flexDirection: "row", alignItems: "flex-start" }}
+      style={{ paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: "#F1F5F9", backgroundColor: "white", flexDirection: "row", alignItems: "center" }}
       testID="task-row"
     >
       {/* Checkbox */}
       <TouchableOpacity
         onPress={onToggle}
         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        style={{ marginRight: 12, marginTop: 2 }}
+        style={{ marginRight: 10 }}
       >
         {isDone ? (
-          <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: "#10B981", alignItems: "center", justifyContent: "center" }}>
-            <Text style={{ color: "white", fontSize: 12, fontWeight: "bold" }}>✓</Text>
+          <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: "#10B981", alignItems: "center", justifyContent: "center" }}>
+            <Text style={{ color: "white", fontSize: 11, fontWeight: "bold" }}>✓</Text>
           </View>
         ) : (
-          <View style={{ width: 24, height: 24, borderRadius: 12, borderWidth: 2, borderColor: "#CBD5E1" }} />
+          <View style={{ width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: "#CBD5E1" }} />
         )}
       </TouchableOpacity>
 
       {/* Content */}
       <View style={{ flex: 1 }}>
         <Text
-          numberOfLines={2}
+          numberOfLines={1}
           style={{
             fontSize: 14,
-            fontWeight: "700",
-            marginBottom: 2,
+            fontWeight: "600",
             color: isDone ? "#94A3B8" : "#0F172A",
             textDecorationLine: isDone ? "line-through" : "none",
+            marginBottom: 3,
           }}
         >
           {task.title}
         </Text>
-        {task.description ? (
-          <Text numberOfLines={1} style={{ fontSize: 12, color: "#94A3B8", marginBottom: 8 }}>
-            {task.description}
-          </Text>
-        ) : null}
 
         {/* Meta row */}
-        <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 6 }}>
           {/* Priority */}
-          <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999, backgroundColor: priority.bg }}>
-            <Text style={{ fontSize: 11, marginRight: 3, color: priority.flagColor }}>⚑</Text>
-            <Text style={{ fontSize: 11, fontWeight: "600", color: priority.text }}>{priority.label}</Text>
+          <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 6, paddingVertical: 1, borderRadius: 999, backgroundColor: priority.bg }}>
+            <Text style={{ fontSize: 10, marginRight: 2, color: priority.flagColor }}>⚑</Text>
+            <Text style={{ fontSize: 10, fontWeight: "600", color: priority.text }}>{priority.label}</Text>
           </View>
 
           {/* Assignee */}
           {task.assignments?.[0]?.user ? (
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-              <View style={{ width: 16, height: 16, borderRadius: 8, overflow: "hidden", backgroundColor: "#E0E7FF", alignItems: "center", justifyContent: "center" }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
+              <View style={{ width: 14, height: 14, borderRadius: 7, overflow: "hidden", backgroundColor: "#E0E7FF", alignItems: "center", justifyContent: "center" }}>
                 {task.assignments[0].user.image ? (
-                  <Image source={{ uri: task.assignments[0].user.image }} style={{ width: 16, height: 16 }} resizeMode="cover" />
+                  <Image source={{ uri: task.assignments[0].user.image }} style={{ width: 14, height: 14 }} resizeMode="cover" />
                 ) : (
-                  <Text style={{ fontSize: 8, fontWeight: "700", color: "#4361EE" }}>
+                  <Text style={{ fontSize: 7, fontWeight: "700", color: "#4361EE" }}>
                     {task.assignments[0].user.name?.[0]?.toUpperCase() ?? "?"}
                   </Text>
                 )}
               </View>
-              <Text style={{ fontSize: 11, color: "#94A3B8" }}>
+              <Text style={{ fontSize: 10, color: "#94A3B8" }}>
                 {task.assignments[0].user.name ?? task.assignments[0].user.email ?? "Unknown"}
                 {task.assignments.length > 1 ? ` +${task.assignments.length - 1}` : ""}
               </Text>
@@ -359,12 +354,12 @@ function TaskRow({ task, onToggle, onPress }: { task: Task; onToggle: () => void
 
           {/* Due / completion date */}
           {dueInfo ? (
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-              <Text style={{ fontSize: 11, color: dueInfo.completed ? "#10B981" : dueInfo.overdue ? "#EF4444" : dueInfo.today ? "#F59E0B" : "#64748B" }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
+              <Text style={{ fontSize: 10, color: dueInfo.completed ? "#10B981" : dueInfo.overdue ? "#EF4444" : dueInfo.today ? "#F59E0B" : "#64748B" }}>
                 {dueInfo.completed ? "✓" : "⏱"}
               </Text>
               <Text style={{
-                fontSize: 11,
+                fontSize: 10,
                 fontWeight: dueInfo.overdue ? "600" : "400",
                 color: dueInfo.completed ? "#10B981" : dueInfo.overdue ? "#EF4444" : dueInfo.today ? "#F59E0B" : "#64748B",
               }}>
@@ -375,7 +370,7 @@ function TaskRow({ task, onToggle, onPress }: { task: Task; onToggle: () => void
 
           {/* Recurrence */}
           {task.recurrenceRule && !isDone ? (
-            <Text style={{ fontSize: 11, color: "#818CF8" }}>↺ {task.recurrenceRule.type}</Text>
+            <Text style={{ fontSize: 10, color: "#818CF8" }}>↺ {task.recurrenceRule.type}</Text>
           ) : null}
         </View>
       </View>
