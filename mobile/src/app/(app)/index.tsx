@@ -249,7 +249,7 @@ function EventRow({ event }: { event: CalendarEvent }) {
     : `${start.toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${end.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
 
   return (
-    <View style={{ paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: "#F1F5F9", backgroundColor: "white", flexDirection: "row", alignItems: "center" }}>
+    <View style={{ paddingHorizontal: 14, paddingVertical: 10, backgroundColor: "white", flexDirection: "row", alignItems: "center" }}>
       {/* Color accent bar */}
       <View style={{ width: 4, borderRadius: 2, alignSelf: "stretch", backgroundColor: event.color, marginRight: 12 }} />
       <View style={{ flex: 1 }}>
@@ -581,14 +581,27 @@ export default function TasksScreen() {
         </View>
       </LinearGradient>
 
-      <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} stickyHeaderIndices={[1]}>
+      <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} stickyHeaderIndices={[2]}>
         {/* Mini Calendar */}
         <MiniCalendar tasks={allTasks} events={calendarEvents} selectedDay={selectedDay} onSelectDay={setSelectedDay} />
 
-        {/* Sticky section: stats + filter tabs */}
-        <View style={{ backgroundColor: "#F8FAFC" }}>
+        {/* Events section — below calendar, above filter tabs */}
+        {dayEvents.length > 0 ? (
+          <View style={{ backgroundColor: "white", marginHorizontal: 16, marginTop: 10, borderRadius: 16, overflow: "hidden", shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 2 }}>
+            <View style={{ paddingHorizontal: 14, paddingTop: 10, paddingBottom: 6, flexDirection: "row", alignItems: "center", gap: 6 }}>
+              <CalendarDays size={13} color="#7C3AED" />
+              <Text style={{ fontSize: 11, fontWeight: "700", color: "#7C3AED", textTransform: "uppercase", letterSpacing: 0.5 }}>Events</Text>
+            </View>
+            {dayEvents.map((ev, i) => (
+              <View key={ev.id} style={{ borderTopWidth: i === 0 ? 0 : 1, borderTopColor: "#F1F5F9" }}>
+                <EventRow event={ev} />
+              </View>
+            ))}
+          </View>
+        ) : null}
 
-          {/* Filter tabs + sort */}
+        {/* Sticky section: filter tabs + sort */}
+        <View style={{ backgroundColor: "#F8FAFC", paddingTop: 10 }}>
           <View style={{ paddingHorizontal: 16, marginBottom: 10 }}>
             <View style={{ flexDirection: "row", backgroundColor: "#E2E8F0", borderRadius: 12, padding: 4, marginBottom: 8 }}>
               {(["all", "completed", "assigned"] as FilterTab[]).map((f) => (
@@ -626,48 +639,32 @@ export default function TasksScreen() {
           </View>
         </View>
 
-        {/* Events + Task list */}
+        {/* Task list */}
         {isLoading ? (
           <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: 40 }} testID="loading-indicator">
             <ActivityIndicator color="#4361EE" />
           </View>
+        ) : tasks.length === 0 ? (
+          <View style={{ alignItems: "center", justifyContent: "center", paddingHorizontal: 24, paddingVertical: 40 }} testID="empty-state">
+            <Text style={{ fontSize: 40, marginBottom: 12 }}>✓</Text>
+            <Text style={{ fontSize: 17, fontWeight: "600", color: "#94A3B8" }}>
+              {selectedDay ? "No tasks this day" : filter === "completed" ? "No completed tasks" : "No tasks yet"}
+            </Text>
+            {filter === "all" && !selectedDay ? (
+              <Text style={{ color: "#CBD5E1", fontSize: 13, marginTop: 4, textAlign: "center" }}>
+                Tap the + button to create your first task or event
+              </Text>
+            ) : null}
+          </View>
         ) : (
-          <>
-            {dayEvents.length > 0 ? (
-              <>
-                <View style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 6 }}>
-                  <Text style={{ fontSize: 11, fontWeight: "700", color: "#7C3AED", textTransform: "uppercase", letterSpacing: 0.5 }}>Events</Text>
-                </View>
-                {dayEvents.map((ev) => <EventRow key={ev.id} event={ev} />)}
-                {tasks.length > 0 ? (
-                  <View style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 6 }}>
-                    <Text style={{ fontSize: 11, fontWeight: "700", color: "#64748B", textTransform: "uppercase", letterSpacing: 0.5 }}>Tasks</Text>
-                  </View>
-                ) : null}
-              </>
-            ) : null}
-            {tasks.length === 0 && dayEvents.length === 0 ? (
-              <View style={{ alignItems: "center", justifyContent: "center", paddingHorizontal: 24, paddingVertical: 40 }} testID="empty-state">
-                <Text style={{ fontSize: 40, marginBottom: 12 }}>✓</Text>
-                <Text style={{ fontSize: 17, fontWeight: "600", color: "#94A3B8" }}>
-                  {selectedDay ? "Nothing scheduled this day" : filter === "completed" ? "No completed tasks" : "No tasks yet"}
-                </Text>
-                {filter === "all" && !selectedDay ? (
-                  <Text style={{ color: "#CBD5E1", fontSize: 13, marginTop: 4, textAlign: "center" }}>
-                    Tap the + button to create your first task or event
-                  </Text>
-                ) : null}
-              </View>
-            ) : null}
-            {tasks.map((item) => (
-              <TaskRow
-                key={item.id}
-                task={item}
-                onToggle={() => toggleMutation.mutate(item)}
-                onPress={() => router.push({ pathname: "/task-detail", params: { taskId: item.id, teamId: activeTeamId! } })}
-              />
-            ))}
-          </>
+          tasks.map((item) => (
+            <TaskRow
+              key={item.id}
+              task={item}
+              onToggle={() => toggleMutation.mutate(item)}
+              onPress={() => router.push({ pathname: "/task-detail", params: { taskId: item.id, teamId: activeTeamId! } })}
+            />
+          ))
         )}
         <View style={{ height: 120 }} />
       </ScrollView>
