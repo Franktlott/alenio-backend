@@ -33,6 +33,7 @@ model User {
   joinRequests  JoinRequest[]
   calendarEvents CalendarEvent[]
   activities    TeamActivity[]
+  createdTopics Topic[] @relation("TopicCreator")
 }
 
 model Session {
@@ -88,6 +89,7 @@ model Team {
   calendarEvents CalendarEvent[]
   subscription  TeamSubscription?
   teamActivities TeamActivity[]
+  topics      Topic[]
 }
 
 model TeamSubscription {
@@ -196,6 +198,8 @@ model Message {
   replyTo   Message?  @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
   replies   Message[] @relation("MessageReplies")
   reactions MessageReaction[]
+  topicId   String?
+  topic     Topic?   @relation(fields: [topicId], references: [id], onDelete: SetNull)
 }
 
 model MessageReaction {
@@ -208,6 +212,20 @@ model MessageReaction {
   createdAt DateTime @default(now())
 
   @@unique([messageId, userId, emoji])
+}
+
+model Topic {
+  id          String    @id @default(cuid())
+  name        String
+  description String?
+  color       String    @default("#4361EE")
+  teamId      String
+  createdById String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  team        Team      @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  createdBy   User      @relation("TopicCreator", fields: [createdById], references: [id])
+  messages    Message[]
 }
 
 model Conversation {

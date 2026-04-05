@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   Modal,
   Image,
+  ScrollView,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -24,6 +25,8 @@ import { ChatMessage } from "@/components/ChatMessage";
 import type { Message, Team, MessageReaction } from "@/lib/types";
 
 const REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🔥'];
+
+type Topic = { id: string; name: string; color: string; description?: string | null; _count?: { messages: number } };
 
 function formatDateLabel(dateStr: string) {
   const d = new Date(dateStr);
@@ -64,12 +67,22 @@ export default function TeamChatScreen() {
   const [mediaPreview, setMediaPreview] = useState<{ uri: string; mimeType: string; filename: string } | null>(null);
   const [uploading, setUploading] = useState(false);
   const [showMediaPicker, setShowMediaPicker] = useState(false);
+  const [selectedTopicId, setSelectedTopicId] = useState<string | null>(null);
+  const [showTopicModal, setShowTopicModal] = useState(false);
+  const [newTopicName, setNewTopicName] = useState("");
+  const [newTopicColor, setNewTopicColor] = useState("#4361EE");
   const flatListRef = useRef<FlatList>(null);
   const currentUserId = session?.user?.id ?? "";
 
+  const { data: topics = [] } = useQuery({
+    queryKey: ["topics", teamId],
+    queryFn: () => api.get<Topic[]>(`/api/teams/${teamId}/topics`),
+    enabled: !!teamId,
+  });
+
   const { data: messages = [], isLoading } = useQuery({
-    queryKey: ["messages", teamId],
-    queryFn: () => api.get<Message[]>(`/api/teams/${teamId}/messages`),
+    queryKey: ["messages", teamId, selectedTopicId ?? "general"],
+    queryFn: () => api.get<Message[]>(`/api/teams/${teamId}/messages?topicId=${selectedTopicId ?? "general"}`),
     enabled: !!teamId,
     refetchInterval: 3000,
   });
@@ -81,11 +94,22 @@ export default function TeamChatScreen() {
   });
   const currentUserRole = team?.members?.find((m) => m.userId === currentUserId)?.role;
 
+  const createTopicMutation = useMutation({
+    mutationFn: ({ name, color }: { name: string; color: string }) =>
+      api.post<Topic>(`/api/teams/${teamId}/topics`, { name, color }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["topics", teamId] });
+      setShowTopicModal(false);
+      setNewTopicName("");
+      setNewTopicColor("#4361EE");
+    },
+  });
+
   const sendMutation = useMutation({
-    mutationFn: (payload: { content?: string; mediaUrl?: string; mediaType?: string; replyToId?: string }) =>
+    mutationFn: (payload: { content?: string; mediaUrl?: string; mediaType?: string; replyToId?: string; topicId?: string }) =>
       api.post<Message>(`/api/teams/${teamId}/messages`, payload),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["messages", teamId] });
+      queryClient.invalidateQueries({ queryKey: ["messages", teamId, selectedTopicId ?? "general"] });
       setReplyTo(null);
       setMediaPreview(null);
     },
@@ -94,14 +118,14 @@ export default function TeamChatScreen() {
   const reactionMutation = useMutation({
     mutationFn: ({ messageId, emoji }: { messageId: string; emoji: string }) =>
       api.post<Message>(`/api/teams/${teamId}/messages/${messageId}/reactions`, { emoji }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["messages", teamId] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["messages", teamId, selectedTopicId ?? "general"] }),
   });
 
   const deleteMutation = useMutation({
     mutationFn: (messageId: string) =>
       api.delete(`/api/teams/${teamId}/messages/${messageId}`),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["messages", teamId] });
+      queryClient.invalidateQueries({ queryKey: ["messages", teamId, selectedTopicId ?? "general"] });
       setDeleteTarget(null);
     },
   });
@@ -110,6 +134,10 @@ export default function TeamChatScreen() {
     msg.senderId === currentUserId ||
     currentUserRole === "owner" ||
     currentUserRole === "admin";
+
+  useEffect(() => {
+    setReplyTo(null);
+  }, [selectedTopicId]);
 
   const handleSend = async () => {
     const content = input.trim();
@@ -137,6 +165,7 @@ export default function TeamChatScreen() {
       mediaUrl,
       mediaType,
       replyToId: replyTo?.id,
+      topicId: selectedTopicId ?? undefined,
     });
   };
 
@@ -193,6 +222,60 @@ export default function TeamChatScreen() {
           <Image source={require("@/assets/alenio-icon.png")} style={{ width: 30, height: 30, borderRadius: 6 }} />
         </View>
       </LinearGradient>
+
+      {/* Topics bar */}
+      <View style={{ backgroundColor: "white", borderBottomWidth: 1, borderBottomColor: "#F1F5F9" }}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={{ flexGrow: 0 }}
+          contentContainerStyle={{ paddingHorizontal: 12, paddingVertical: 10, gap: 8, flexDirection: "row" }}
+        >
+          {/* General tab - always first */}
+          <TouchableOpacity
+            onPress={() => setSelectedTopicId(null)}
+            style={{
+              paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20,
+              backgroundColor: selectedTopicId === null ? "#4361EE" : "#F1F5F9",
+            }}
+          >
+            <Text style={{ fontSize: 13, fontWeight: "600", color: selectedTopicId === null ? "white" : "#64748B" }}>
+              # General
+            </Text>
+          </TouchableOpacity>
+
+          {/* Dynamic topics */}
+          {topics.map((topic) => (
+            <TouchableOpacity
+              key={topic.id}
+              onPress={() => setSelectedTopicId(topic.id)}
+              style={{
+                paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20,
+                backgroundColor: selectedTopicId === topic.id ? topic.color : "#F1F5F9",
+              }}
+            >
+              <Text style={{ fontSize: 13, fontWeight: "600", color: selectedTopicId === topic.id ? "white" : "#64748B" }}>
+                # {topic.name}
+              </Text>
+            </TouchableOpacity>
+          ))}
+
+          {/* + button for owners/admins */}
+          {(currentUserRole === "owner" || currentUserRole === "admin") ? (
+            <TouchableOpacity
+              onPress={() => setShowTopicModal(true)}
+              style={{
+                width: 32, height: 32, borderRadius: 16,
+                backgroundColor: "#F1F5F9",
+                alignItems: "center", justifyContent: "center",
+              }}
+              testID="add-topic-button"
+            >
+              <Text style={{ fontSize: 18, color: "#64748B", lineHeight: 20 }}>+</Text>
+            </TouchableOpacity>
+          ) : null}
+        </ScrollView>
+      </View>
 
       {/* Media picker sheet */}
       <Modal visible={showMediaPicker} transparent animationType="slide" onRequestClose={() => setShowMediaPicker(false)}>
@@ -329,6 +412,44 @@ export default function TeamChatScreen() {
                 ) : (
                   <Text className="text-base font-semibold text-red-500">Delete</Text>
                 )}
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Create Topic modal */}
+      <Modal visible={showTopicModal} transparent animationType="slide" onRequestClose={() => setShowTopicModal(false)}>
+        <TouchableOpacity style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }} activeOpacity={1} onPress={() => setShowTopicModal(false)}>
+          <TouchableOpacity activeOpacity={1}>
+            <View style={{ backgroundColor: "white", borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 40 }}>
+              <Text style={{ fontSize: 16, fontWeight: "700", color: "#0F172A", marginBottom: 16 }}>New Topic</Text>
+              <TextInput
+                value={newTopicName}
+                onChangeText={setNewTopicName}
+                placeholder="Topic name..."
+                placeholderTextColor="#94A3B8"
+                style={{ borderWidth: 1.5, borderColor: "#E2E8F0", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: "#0F172A", marginBottom: 16 }}
+                testID="topic-name-input"
+              />
+              {/* Color swatches */}
+              <View style={{ flexDirection: "row", gap: 10, marginBottom: 20 }}>
+                {["#4361EE", "#7C3AED", "#10B981", "#F59E0B", "#EF4444", "#EC4899"].map((color) => (
+                  <TouchableOpacity
+                    key={color}
+                    onPress={() => setNewTopicColor(color)}
+                    style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: color, borderWidth: newTopicColor === color ? 3 : 0, borderColor: "white", elevation: newTopicColor === color ? 4 : 0 }}
+                    testID={`topic-color-${color}`}
+                  />
+                ))}
+              </View>
+              <TouchableOpacity
+                onPress={() => { if (newTopicName.trim()) createTopicMutation.mutate({ name: newTopicName.trim(), color: newTopicColor }); }}
+                disabled={!newTopicName.trim() || createTopicMutation.isPending}
+                style={{ height: 48, borderRadius: 14, backgroundColor: "#4361EE", alignItems: "center", justifyContent: "center" }}
+                testID="create-topic-button"
+              >
+                {createTopicMutation.isPending ? <ActivityIndicator color="white" /> : <Text style={{ color: "white", fontWeight: "700", fontSize: 15 }}>Create Topic</Text>}
               </TouchableOpacity>
             </View>
           </TouchableOpacity>

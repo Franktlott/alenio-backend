@@ -16,6 +16,7 @@ import { joinRequestsRouter } from "./routes/join-requests";
 import { calendarRouter } from "./routes/calendar";
 import { subscriptionRouter } from "./routes/subscription";
 import { activityRouter } from "./routes/activity";
+import { topicsRouter } from "./routes/topics";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -191,6 +192,7 @@ app.route("/api/join-requests", joinRequestsRouter);
 app.route("/api/teams", calendarRouter);
 app.route("/api/teams/:teamId/subscription", subscriptionRouter);
 app.route("/api/teams", activityRouter);
+app.route("/api/teams", topicsRouter);
 
 // ── Auto-cleanup job ────────────────────────────────────────────
 // Deletes calendar events, tasks, and task photos older than 45 days

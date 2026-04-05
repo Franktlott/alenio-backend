@@ -28,8 +28,21 @@ messagesRouter.get("/", async (c) => {
     return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
   }
 
+  const topicIdParam = c.req.query("topicId");
+
+  // Build topicId filter:
+  // - no param provided → return all messages (backwards compatible)
+  // - "general" → messages with no topic (topicId: null)
+  // - any other value → messages belonging to that topic
+  let topicFilter: { topicId?: string | null } = {};
+  if (topicIdParam === "general") {
+    topicFilter = { topicId: null };
+  } else if (topicIdParam !== undefined) {
+    topicFilter = { topicId: topicIdParam };
+  }
+
   const messages = await prisma.message.findMany({
-    where: { teamId },
+    where: { teamId, ...topicFilter },
     include: {
       sender: { select: { id: true, name: true, email: true, image: true } },
       reactions: { include: { user: { select: { id: true, name: true } } } },
@@ -55,7 +68,7 @@ messagesRouter.post("/", async (c) => {
   }
 
   const body = await c.req.json();
-  const { content, mediaUrl, mediaType, replyToId } = body;
+  const { content, mediaUrl, mediaType, replyToId, topicId } = body;
 
   if (!content?.trim() && !mediaUrl) {
     return c.json({ error: { message: "Content or media is required", code: "VALIDATION_ERROR" } }, 400);
@@ -67,6 +80,7 @@ messagesRouter.post("/", async (c) => {
       mediaUrl: mediaUrl || null,
       mediaType: mediaType || null,
       replyToId: replyToId || null,
+      topicId: topicId || null,
       teamId,
       senderId: user.id,
     },
