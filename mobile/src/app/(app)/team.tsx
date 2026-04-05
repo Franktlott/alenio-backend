@@ -57,7 +57,7 @@ function MemberRow({
             </View>
           ) : null}
           <View className="flex-row items-center bg-emerald-50 dark:bg-emerald-900/40 rounded-full px-2 py-0.5">
-            <Text className="text-emerald-600 dark:text-emerald-400 text-xs font-medium">{stats?.onTimeCompletions ?? 0} on time</Text>
+            <Text className="text-emerald-600 dark:text-emerald-400 text-xs font-medium">🔥 {stats?.onTimeCompletions ?? 0}</Text>
           </View>
         </View>
       </View>
