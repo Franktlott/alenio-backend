@@ -11,12 +11,13 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { ArrowLeft, Crown, Check, X, Zap, Shield, Users, MessageSquare, CheckSquare, Star } from "lucide-react-native";
+import { ArrowLeft, Crown, Check, X, Zap, Shield, Users, MessageSquare, CheckSquare, Star, RotateCcw } from "lucide-react-native";
 import { router } from "expo-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api/api";
 import { useTeamStore } from "@/lib/state/team-store";
 import { toast } from "burnt";
+import { isRevenueCatEnabled, purchasePro, restorePurchases } from "@/lib/revenue-cat";
 
 type Subscription = {
   id: string;
@@ -51,6 +52,7 @@ export default function SubscriptionScreen() {
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
   const queryClient = useQueryClient();
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [restoring, setRestoring] = useState(false);
 
   const { data: subscription, isLoading } = useQuery({
     queryKey: ["subscription", activeTeamId],
@@ -59,13 +61,25 @@ export default function SubscriptionScreen() {
   });
 
   const upgradeMutation = useMutation({
-    mutationFn: () => api.post(`/api/teams/${activeTeamId}/subscription/upgrade`, {}),
+    mutationFn: async () => {
+      if (isRevenueCatEnabled()) {
+        const result = await purchasePro();
+        if (!result.success) {
+          if (result.error !== "cancelled") throw new Error(result.error);
+          return; // user cancelled — silent
+        }
+        // Sync entitlement with backend after successful IAP
+        await api.post(`/api/teams/${activeTeamId}/subscription/upgrade`, {});
+      } else {
+        await api.post(`/api/teams/${activeTeamId}/subscription/upgrade`, {});
+      }
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["subscription", activeTeamId] });
       toast({ title: "Upgraded to Pro!", preset: "done" });
     },
-    onError: () => {
-      toast({ title: "Upgrade failed. Please try again.", preset: "error" });
+    onError: (e: any) => {
+      toast({ title: e?.message ?? "Upgrade failed. Please try again.", preset: "error" });
     },
   });
 
@@ -80,6 +94,26 @@ export default function SubscriptionScreen() {
       toast({ title: "Cancellation failed. Please try again.", preset: "error" });
     },
   });
+
+  const handleRestore = async () => {
+    setRestoring(true);
+    try {
+      if (isRevenueCatEnabled()) {
+        const result = await restorePurchases();
+        if (result.isPro) {
+          await api.post(`/api/teams/${activeTeamId}/subscription/upgrade`, {});
+          queryClient.invalidateQueries({ queryKey: ["subscription", activeTeamId] });
+          toast({ title: "Pro plan restored!", preset: "done" });
+        } else {
+          toast({ title: "No active purchases found.", preset: "error" });
+        }
+      } else {
+        toast({ title: "Restore not available in this environment.", preset: "error" });
+      }
+    } finally {
+      setRestoring(false);
+    }
+  };
 
   const isPro = subscription?.plan === "pro";
 
@@ -275,14 +309,31 @@ export default function SubscriptionScreen() {
                 ) : (
                   <>
                     <Crown size={18} color="#FCD34D" />
-                    <Text style={{ color: "white", fontSize: 16, fontWeight: "700" }}>Upgrade to Pro</Text>
+                    <Text style={{ color: "white", fontSize: 16, fontWeight: "700" }}>Upgrade to Pro — $12/mo</Text>
                   </>
                 )}
               </LinearGradient>
             </TouchableOpacity>
             <Text className="text-center text-xs text-slate-400 mt-3">
-              Cancel anytime. Charged monthly.
+              Cancel anytime · Charged monthly via App Store
             </Text>
+
+            {/* Restore Purchases — required by Apple */}
+            <TouchableOpacity
+              onPress={handleRestore}
+              disabled={restoring}
+              testID="restore-purchases-button"
+              className="mt-4 py-3 items-center"
+            >
+              {restoring ? (
+                <ActivityIndicator size="small" color="#94A3B8" />
+              ) : (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <RotateCcw size={13} color="#94A3B8" />
+                  <Text className="text-slate-400 text-sm">Restore Purchases</Text>
+                </View>
+              )}
+            </TouchableOpacity>
           </View>
         ) : null}
 

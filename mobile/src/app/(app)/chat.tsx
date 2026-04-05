@@ -348,6 +348,13 @@ export default function ChatScreen() {
               >
                 <Text style={{ color: "#94A3B8", fontWeight: "600", fontSize: 14 }}>Not now</Text>
               </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => { setShowGroupPaywall(false); router.push("/subscription"); }}
+                style={{ paddingVertical: 8, width: "100%", alignItems: "center" }}
+                testID="group-paywall-restore"
+              >
+                <Text style={{ color: "#CBD5E1", fontSize: 12 }}>Restore Purchases</Text>
+              </TouchableOpacity>
             </View>
           </Pressable>
         </Pressable>

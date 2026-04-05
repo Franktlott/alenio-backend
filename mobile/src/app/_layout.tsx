@@ -11,6 +11,7 @@ import { useSession } from '@/lib/auth/use-session';
 import { useEffect, useRef, useState } from 'react';
 import * as Notifications from 'expo-notifications';
 import { registerForPushNotificationsAsync } from '@/lib/notifications';
+import { initRevenueCat } from '@/lib/revenue-cat';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -93,6 +94,7 @@ function RootLayoutNav() {
   useEffect(() => {
     if (!session?.user) return;
     registerForPushNotificationsAsync();
+    initRevenueCat(session.user.id);
     notificationListener.current = Notifications.addNotificationReceivedListener(() => {});
     return () => { notificationListener.current?.remove(); };
   }, [session?.user?.id]);
