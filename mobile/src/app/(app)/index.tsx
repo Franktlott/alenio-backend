@@ -41,6 +41,11 @@ function isSameDay(a: Date, b: Date): boolean {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }
 
+// Always use local date parts — toISOString() returns UTC which shifts the date in UTC+ timezones
+function toLocalIso(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 function computeWeekBars(week: (Date | null)[], events: CalendarEvent[]): WeekBar[][] {
   const bars: WeekBar[] = [];
   for (const event of events) {
@@ -96,7 +101,7 @@ function MiniCalendar({
   const taskDays = new Set(
     tasks
       .filter((t) => t.dueDate && t.status !== "done")
-      .map((t) => new Date(t.dueDate!).toISOString().slice(0, 10))
+      .map((t) => toLocalIso(new Date(t.dueDate!)))
   );
 
   // Build day cells padded into full weeks
@@ -148,7 +153,7 @@ function MiniCalendar({
             <View style={{ flexDirection: "row" }}>
               {week.map((day, colIdx) => {
                 if (!day) return <View key={`e-${weekIdx}-${colIdx}`} style={{ flex: 1, height: 34 }} />;
-                const iso = day.toISOString().slice(0, 10);
+                const iso = toLocalIso(day);
                 const isToday = isSameDay(day, today);
                 const isSelected = selectedDay === iso;
                 const hasTasks = taskDays.has(iso);
@@ -238,7 +243,7 @@ const PRIORITY_CONFIG = {
 function EventRow({ event }: { event: CalendarEvent }) {
   const start = new Date(event.startDate);
   const end = event.endDate ? new Date(event.endDate) : start;
-  const isSingleDay = start.toISOString().slice(0, 10) === end.toISOString().slice(0, 10);
+  const isSingleDay = toLocalIso(start) === toLocalIso(end);
   const dateText = isSingleDay
     ? start.toLocaleDateString("en-US", { month: "short", day: "numeric" })
     : `${start.toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${end.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
@@ -475,7 +480,7 @@ export default function TasksScreen() {
     else { if (!(t.status !== "done" && isMyCreatedTask(t))) return false; }
     if (selectedDay) {
       if (!t.dueDate) return false;
-      return new Date(t.dueDate).toISOString().slice(0, 10) === selectedDay;
+      return toLocalIso(new Date(t.dueDate)) === selectedDay;
     }
     return true;
   }).sort((a, b) => {
@@ -490,7 +495,7 @@ export default function TasksScreen() {
     return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
   });
 
-  const targetIso = selectedDay ?? new Date().toISOString().slice(0, 10);
+  const targetIso = selectedDay ?? toLocalIso(new Date());
   const dayEvents = calendarEvents.filter((ev) => {
     const evStart = startOfDay(new Date(ev.startDate));
     const evEnd = ev.endDate ? startOfDay(new Date(ev.endDate)) : evStart;
