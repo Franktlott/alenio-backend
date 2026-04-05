@@ -56,15 +56,17 @@ export default function SignIn() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-white dark:bg-slate-900" edges={["top"]}>
+    <SafeAreaView className="flex-1 bg-white dark:bg-slate-900" edges={["top", "bottom"]}>
       <StatusBar style="light" />
       <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
         <View className="items-center py-10 px-6">
-          <Image
-            source={require("@/assets/alenio-logo.png")}
-            style={{ width: 200, height: 72 }}
-            resizeMode="contain"
-          />
+          <View style={{ backgroundColor: "rgba(255,255,255,0.3)", borderRadius: 20, padding: 12, marginBottom: 8 }}>
+            <Image
+              source={require("@/assets/alenio-logo.png")}
+              style={{ width: 200, height: 72 }}
+              resizeMode="contain"
+            />
+          </View>
           <Text className="text-white/80 text-base mt-2">Team task management</Text>
         </View>
       </LinearGradient>
@@ -151,13 +153,14 @@ export default function SignIn() {
           <Text className="text-center text-slate-400 dark:text-slate-500 text-xs mt-8">
             We'll send a 6-digit code to verify your identity
           </Text>
-
-          <View style={{ alignItems: "center", gap: 6, marginTop: 32, marginBottom: 8 }}>
-            <Text style={{ fontSize: 11, color: "#94A3B8", letterSpacing: 0.3 }}>Powered by</Text>
-            <Image source={require("@/assets/ventry-logo.png")} style={{ width: 90, height: 28 }} resizeMode="contain" />
-          </View>
         </View>
       </KeyboardAvoidingView>
+
+      {/* Powered by — pinned to bottom */}
+      <View style={{ alignItems: "center", gap: 6, paddingBottom: 16 }}>
+        <Text style={{ fontSize: 11, color: "#94A3B8", letterSpacing: 0.3 }}>Powered by</Text>
+        <Image source={require("@/assets/ventry-logo.png")} style={{ width: 90, height: 28 }} resizeMode="contain" />
+      </View>
     </SafeAreaView>
   );
 }
