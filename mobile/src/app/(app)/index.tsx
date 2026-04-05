@@ -384,6 +384,7 @@ export default function TasksScreen() {
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [fabOpen, setFabOpen] = useState(false);
   const [teamCompletedExpanded, setTeamCompletedExpanded] = useState(false);
+  const [confirmCompleteTask, setConfirmCompleteTask] = useState<Task | null>(null);
   // Event modal state
   const [showEventModal, setShowEventModal] = useState(false);
   const [eventTitle, setEventTitle] = useState("");
@@ -440,6 +441,16 @@ export default function TasksScreen() {
       queryClient.invalidateQueries({ queryKey: ["tasks", activeTeamId] });
     },
   });
+
+  const handleToggleTask = (task: Task) => {
+    if (task.status !== "done") {
+      // Completing — ask for confirmation
+      setConfirmCompleteTask(task);
+    } else {
+      // Un-completing — no confirmation needed
+      toggleMutation.mutate(task);
+    }
+  };
 
   const createEventMutation = useMutation({
     mutationFn: (data: object) =>
@@ -680,7 +691,7 @@ export default function TasksScreen() {
             <TaskRow
               key={item.id}
               task={item}
-              onToggle={() => toggleMutation.mutate(item)}
+              onToggle={() => handleToggleTask(item)}
               onPress={() => router.push({ pathname: "/task-detail", params: { taskId: item.id, teamId: activeTeamId! } })}
             />
           ))
@@ -710,7 +721,7 @@ export default function TasksScreen() {
               <TaskRow
                 key={item.id}
                 task={item}
-                onToggle={() => toggleMutation.mutate(item)}
+                onToggle={() => handleToggleTask(item)}
                 onPress={() => router.push({ pathname: "/task-detail", params: { taskId: item.id, teamId: activeTeamId! } })}
               />
             )) : null}
@@ -719,6 +730,35 @@ export default function TasksScreen() {
 
         <View style={{ height: 120 }} />
       </ScrollView>
+
+      {/* Task completion confirmation modal */}
+      {confirmCompleteTask ? (
+        <View style={{ position: "absolute", inset: 0, backgroundColor: "rgba(0,0,0,0.45)", alignItems: "center", justifyContent: "center", zIndex: 100 }} testID="complete-confirm-overlay">
+          <View style={{ backgroundColor: "white", borderRadius: 20, marginHorizontal: 32, padding: 24, shadowColor: "#000", shadowOpacity: 0.2, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 12, width: "85%" }}>
+            <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: "#D1FAE5", alignItems: "center", justifyContent: "center", alignSelf: "center", marginBottom: 14 }}>
+              <Text style={{ fontSize: 22 }}>✓</Text>
+            </View>
+            <Text style={{ fontSize: 17, fontWeight: "700", color: "#0F172A", textAlign: "center", marginBottom: 6 }}>Mark as Complete?</Text>
+            <Text style={{ fontSize: 14, color: "#64748B", textAlign: "center", marginBottom: 24 }} numberOfLines={2}>
+              "{confirmCompleteTask.title}"
+            </Text>
+            <Pressable
+              onPress={() => { toggleMutation.mutate(confirmCompleteTask); setConfirmCompleteTask(null); }}
+              style={{ backgroundColor: "#10B981", borderRadius: 12, paddingVertical: 14, alignItems: "center", marginBottom: 10 }}
+              testID="complete-confirm-yes"
+            >
+              <Text style={{ color: "white", fontSize: 15, fontWeight: "700" }}>Complete Task</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setConfirmCompleteTask(null)}
+              style={{ borderRadius: 12, paddingVertical: 12, alignItems: "center" }}
+              testID="complete-confirm-cancel"
+            >
+              <Text style={{ color: "#94A3B8", fontSize: 15, fontWeight: "600" }}>Cancel</Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
 
       {/* FAB */}
       {activeTeamId ? (
