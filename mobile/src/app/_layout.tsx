@@ -68,7 +68,7 @@ function CustomSplash({ onDone }: { onDone: () => void }) {
       </Animated.View>
       <View style={{ position: 'absolute', bottom: 48, alignItems: 'center', gap: 6 }}>
         <Text style={{ fontSize: 11, color: '#94A3B8', letterSpacing: 0.3 }}>
-          Alenio is owned and operated by
+          Powered by
         </Text>
         <Image
           source={require('@/assets/ventry-logo.png')}
