@@ -285,7 +285,7 @@ function TaskRow({ task, onToggle, onPress }: { task: Task; onToggle: () => void
     const dueStart = new Date(due.getFullYear(), due.getMonth(), due.getDate());
     const overdue = dueStart < todayStart;
     const today = dueStart.getTime() === todayStart.getTime();
-    const date = due.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    const date = fmt(due);
     return { date, overdue, today, completed: false };
   };
 
