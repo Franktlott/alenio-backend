@@ -60,13 +60,11 @@ export default function SignIn() {
       <StatusBar style="light" />
       <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
         <View className="items-center py-10 px-6">
-          <View style={{ backgroundColor: "rgba(255,255,255,0.3)", borderRadius: 20, padding: 12, marginBottom: 8 }}>
-            <Image
-              source={require("@/assets/alenio-logo.png")}
-              style={{ width: 200, height: 72 }}
-              resizeMode="contain"
-            />
-          </View>
+          <Image
+            source={require("@/assets/alenio-logo.png")}
+            style={{ width: 200, height: 72 }}
+            resizeMode="contain"
+          />
           <Text className="text-white/80 text-base mt-2">Team task management</Text>
         </View>
       </LinearGradient>
