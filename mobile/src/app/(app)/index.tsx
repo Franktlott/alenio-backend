@@ -252,12 +252,17 @@ function EventRow({ event, onLongPress }: { event: CalendarEvent; onLongPress?: 
     <Pressable
       onLongPress={onLongPress}
       delayLongPress={400}
-      style={({ pressed }) => ({ paddingHorizontal: 14, paddingVertical: 10, backgroundColor: pressed && onLongPress ? "#F8FAFC" : "white", flexDirection: "row", alignItems: "center" })}
+      style={({ pressed }) => ({
+        paddingHorizontal: 14,
+        paddingVertical: 10,
+        backgroundColor: pressed && onLongPress ? "#F8FAFC" : "white",
+        flexDirection: "row",
+        alignItems: "center",
+      })}
     >
-      {/* Color accent bar */}
       <View style={{ width: 4, borderRadius: 2, alignSelf: "stretch", backgroundColor: event.color, marginRight: 12 }} />
       <View style={{ flex: 1 }}>
-        <Text style={{ fontSize: 14, fontWeight: "600", color: "#0F172A", marginBottom: 3 }}>{event.title}</Text>
+        <Text style={{ fontSize: 14, fontWeight: "600", color: "#0F172A", marginBottom: 3 }} numberOfLines={1}>{event.title}</Text>
         {event.description ? (
           <Text numberOfLines={1} style={{ fontSize: 12, color: "#94A3B8", marginBottom: 4 }}>{event.description}</Text>
         ) : null}
@@ -266,7 +271,6 @@ function EventRow({ event, onLongPress }: { event: CalendarEvent; onLongPress?: 
           <Text style={{ fontSize: 11, color: "#7C3AED", fontWeight: "500" }}>{dateText}</Text>
         </View>
       </View>
-      {onLongPress ? <Text style={{ fontSize: 10, color: "#CBD5E1" }}>hold to edit</Text> : null}
     </Pressable>
   );
 }
