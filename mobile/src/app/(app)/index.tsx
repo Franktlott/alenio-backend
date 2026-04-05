@@ -398,7 +398,7 @@ export default function TasksScreen() {
   const [filter, setFilter] = useState<FilterTab>("all");
   const [sort, setSort] = useState<SortMode>("due");
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
-  const [fabOpen, setFabOpen] = useState(false);
+
   const [teamCompletedExpanded, setTeamCompletedExpanded] = useState(false);
   const [confirmCompleteTask, setConfirmCompleteTask] = useState<Task | null>(null);
   // Event modal state
@@ -485,7 +485,6 @@ export default function TasksScreen() {
     setEventTitle(""); setEventDescription("");
     setEventStart(d); setEventEnd(d);
     setEventColor("#4361EE"); setFormError(null);
-    setFabOpen(false);
     setShowEventModal(true);
   };
 
@@ -616,7 +615,17 @@ export default function TasksScreen() {
         <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 14 }}>
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
             <Text style={{ color: "white", fontSize: 18, fontWeight: "700" }}>Tasks</Text>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              {activeTeamId ? (
+                <Pressable
+                  onPress={() => router.push({ pathname: "/create-task", params: { teamId: activeTeamId } })}
+                  style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "rgba(255,255,255,0.22)", paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20 }}
+                  testID="header-add-task-button"
+                >
+                  <Plus size={15} color="white" />
+                  <Text style={{ color: "white", fontSize: 13, fontWeight: "600" }}>Add Task</Text>
+                </Pressable>
+              ) : null}
               <Image source={require("@/assets/alenio-icon.png")} style={{ width: 30, height: 30, borderRadius: 6 }} />
             </View>
           </View>
@@ -809,54 +818,6 @@ export default function TasksScreen() {
             </Pressable>
           </View>
         </View>
-      ) : null}
-
-      {/* FAB */}
-      {activeTeamId ? (
-        <>
-          {/* Scrim */}
-          {fabOpen ? (
-            <Pressable onPress={() => setFabOpen(false)} style={{ position: "absolute", inset: 0 }} />
-          ) : null}
-
-          {/* FAB menu options */}
-          {fabOpen ? (
-            <View style={{ position: "absolute", bottom: insets.bottom + 100, right: 24, gap: 12, alignItems: "flex-end" }}>
-              <TouchableOpacity
-                onPress={() => { setFabOpen(false); router.push({ pathname: "/create-task", params: { teamId: activeTeamId } }); }}
-                style={{ flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "white", paddingHorizontal: 16, paddingVertical: 12, borderRadius: 16, shadowColor: "#000", shadowOpacity: 0.12, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 6 }}
-                testID="fab-new-task"
-              >
-                <Text style={{ fontSize: 14, fontWeight: "600", color: "#0F172A" }}>New Task</Text>
-                <CheckSquare size={20} color="#4361EE" />
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={openEventModal}
-                style={{ flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "white", paddingHorizontal: 16, paddingVertical: 12, borderRadius: 16, shadowColor: "#000", shadowOpacity: 0.12, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 6 }}
-                testID="fab-new-event"
-              >
-                <Text style={{ fontSize: 14, fontWeight: "600", color: "#0F172A" }}>New Event</Text>
-                <CalendarDays size={20} color="#7C3AED" />
-              </TouchableOpacity>
-            </View>
-          ) : null}
-
-          {/* Main FAB */}
-          <TouchableOpacity
-            style={{
-              position: "absolute", bottom: insets.bottom + 88, right: 24,
-              width: 56, height: 56, borderRadius: 28,
-              backgroundColor: fabOpen ? "#7C3AED" : "#4361EE",
-              alignItems: "center", justifyContent: "center",
-              shadowColor: "#4361EE", shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: 0.4, shadowRadius: 8, elevation: 8,
-            }}
-            onPress={() => setFabOpen((o) => !o)}
-            testID="create-task-button"
-          >
-            <Plus size={24} color="white" style={{ transform: [{ rotate: fabOpen ? "45deg" : "0deg" }] }} />
-          </TouchableOpacity>
-        </>
       ) : null}
 
       {/* New Event Modal */}

@@ -285,6 +285,16 @@ export default function CalendarScreen() {
               {MONTHS[currentMonth.getMonth()]} {currentMonth.getFullYear()}
             </Text>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              {isOwner && activeTeamId ? (
+                <Pressable
+                  onPress={() => openAddModal(selectedDate ?? undefined)}
+                  style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "rgba(255,255,255,0.22)", paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20 }}
+                  testID="header-add-event-button"
+                >
+                  <Plus size={15} color="white" />
+                  <Text style={{ color: "white", fontSize: 13, fontWeight: "600" }}>Add Event</Text>
+                </Pressable>
+              ) : null}
               <Pressable onPress={nextMonth} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(255,255,255,0.2)", alignItems: "center", justifyContent: "center" }} testID="next-month-button">
                 <ChevronRight size={20} color="white" />
               </Pressable>
@@ -516,13 +526,6 @@ export default function CalendarScreen() {
           </View>
         ) : null}
       </ScrollView>
-
-      {/* FAB */}
-      {isOwner && activeTeamId ? (
-        <Pressable onPress={() => openAddModal()} style={{ position: "absolute", bottom: insets.bottom + 88, right: 24, width: 56, height: 56, borderRadius: 28, backgroundColor: "#4361EE", alignItems: "center", justifyContent: "center", shadowColor: "#4361EE", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 8, elevation: 8 }} testID="fab-add-event">
-          <Plus size={24} color="white" />
-        </Pressable>
-      ) : null}
 
       {/* Add/Edit Event Modal */}
       <Modal visible={showEventModal} transparent animationType="slide" onRequestClose={closeModal}>
