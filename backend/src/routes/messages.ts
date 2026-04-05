@@ -91,6 +91,13 @@ messagesRouter.post("/", async (c) => {
     },
   });
 
+  // Fetch topic name if needed
+  let notifBody = content?.trim() || "Sent a photo";
+  if (topicId) {
+    const topic = await prisma.topic.findUnique({ where: { id: topicId }, select: { name: true } });
+    if (topic) notifBody = `#${topic.name}: ${notifBody}`;
+  }
+
   // Notify other team members
   const members = await prisma.teamMember.findMany({
     where: { teamId, userId: { not: user.id } },
@@ -98,7 +105,7 @@ messagesRouter.post("/", async (c) => {
   });
   const memberIds = members.map((m: any) => m.userId);
   const senderName = user.name ?? "Someone";
-  await sendPushToUsers(memberIds, senderName, content?.trim() || "Sent a photo", { teamId }, "notifMessages");
+  await sendPushToUsers(memberIds, senderName, notifBody, { teamId, topicId: topicId || undefined }, "notifMessages");
 
   return c.json({ data: message }, 201);
 });

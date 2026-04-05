@@ -71,6 +71,7 @@ export default function TeamChatScreen() {
   const [showTopicModal, setShowTopicModal] = useState(false);
   const [newTopicName, setNewTopicName] = useState("");
   const [newTopicColor, setNewTopicColor] = useState("#4361EE");
+  const [deleteTopicTarget, setDeleteTopicTarget] = useState<Topic | null>(null);
   const flatListRef = useRef<FlatList>(null);
   const currentUserId = session?.user?.id ?? "";
 
@@ -102,6 +103,16 @@ export default function TeamChatScreen() {
       setShowTopicModal(false);
       setNewTopicName("");
       setNewTopicColor("#4361EE");
+    },
+  });
+
+  const deleteTopicMutation = useMutation({
+    mutationFn: (topicId: string) =>
+      api.delete(`/api/teams/${teamId}/topics/${topicId}`),
+    onSuccess: (_data, deletedId) => {
+      queryClient.invalidateQueries({ queryKey: ["topics", teamId] });
+      if (selectedTopicId === deletedId) setSelectedTopicId(null);
+      setDeleteTopicTarget(null);
     },
   });
 
@@ -249,6 +260,11 @@ export default function TeamChatScreen() {
             <TouchableOpacity
               key={topic.id}
               onPress={() => setSelectedTopicId(topic.id)}
+              onLongPress={() => {
+                if (currentUserRole === "owner" || currentUserRole === "admin") {
+                  setDeleteTopicTarget(topic);
+                }
+              }}
               style={{
                 paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20,
                 backgroundColor: selectedTopicId === topic.id ? topic.color : "#F1F5F9",
@@ -411,6 +427,48 @@ export default function TeamChatScreen() {
                   <ActivityIndicator size="small" color="#EF4444" />
                 ) : (
                   <Text className="text-base font-semibold text-red-500">Delete</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Delete Topic confirmation modal */}
+      <Modal visible={!!deleteTopicTarget} transparent animationType="fade" onRequestClose={() => setDeleteTopicTarget(null)}>
+        <TouchableOpacity
+          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)", alignItems: "center", justifyContent: "center", paddingHorizontal: 32 }}
+          activeOpacity={1}
+          onPress={() => setDeleteTopicTarget(null)}
+        >
+          <TouchableOpacity activeOpacity={1} style={{ width: "100%", backgroundColor: "white", borderRadius: 20, overflow: "hidden" }}>
+            <View style={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 16, alignItems: "center" }}>
+              <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: "#FEE2E2", alignItems: "center", justifyContent: "center", marginBottom: 12 }}>
+                <Text style={{ fontSize: 20 }}>🗑</Text>
+              </View>
+              <Text style={{ fontSize: 16, fontWeight: "700", color: "#0F172A", marginBottom: 6 }}>Delete topic?</Text>
+              <Text style={{ fontSize: 13, color: "#64748B", textAlign: "center" }}>
+                Delete <Text style={{ fontWeight: "700" }}>#{deleteTopicTarget?.name}</Text>? All messages in this topic will also be deleted.
+              </Text>
+            </View>
+            <View style={{ flexDirection: "row", borderTopWidth: 1, borderTopColor: "#F1F5F9" }}>
+              <TouchableOpacity
+                onPress={() => setDeleteTopicTarget(null)}
+                style={{ flex: 1, paddingVertical: 14, alignItems: "center", borderRightWidth: 1, borderRightColor: "#F1F5F9" }}
+                testID="cancel-delete-topic-button"
+              >
+                <Text style={{ fontSize: 15, fontWeight: "500", color: "#64748B" }}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => { if (deleteTopicTarget) deleteTopicMutation.mutate(deleteTopicTarget.id); }}
+                disabled={deleteTopicMutation.isPending}
+                style={{ flex: 1, paddingVertical: 14, alignItems: "center" }}
+                testID="confirm-delete-topic-button"
+              >
+                {deleteTopicMutation.isPending ? (
+                  <ActivityIndicator size="small" color="#EF4444" />
+                ) : (
+                  <Text style={{ fontSize: 15, fontWeight: "700", color: "#EF4444" }}>Delete</Text>
                 )}
               </TouchableOpacity>
             </View>
