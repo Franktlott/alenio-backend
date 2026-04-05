@@ -926,9 +926,7 @@ export default function TasksScreen() {
       {confirmCompleteTask ? (
         <View style={{ position: "absolute", inset: 0, backgroundColor: "rgba(0,0,0,0.45)", alignItems: "center", justifyContent: "center", zIndex: 100 }} testID="complete-confirm-overlay">
           <View style={{ backgroundColor: "white", borderRadius: 20, marginHorizontal: 32, padding: 24, shadowColor: "#000", shadowOpacity: 0.2, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 12, width: "85%" }}>
-            <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: confirmCompleteTask.status === "done" ? "#FEF3C7" : "#D1FAE5", alignItems: "center", justifyContent: "center", alignSelf: "center", marginBottom: 14 }}>
-              <Text style={{ fontSize: 22 }}>{confirmCompleteTask.status === "done" ? "↩" : "✓"}</Text>
-            </View>
+            <Image source={require("@/assets/alenio-icon.png")} style={{ width: 44, height: 44, borderRadius: 10, alignSelf: "center", marginBottom: 14 }} />
             <Text style={{ fontSize: 17, fontWeight: "700", color: "#0F172A", textAlign: "center", marginBottom: 6 }}>
               {confirmCompleteTask.status === "done" ? "Mark as Incomplete?" : "Mark as Complete?"}
             </Text>
@@ -960,7 +958,10 @@ export default function TasksScreen() {
         <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }} onPress={() => setShowAddModal(false)}>
           <Pressable onPress={(e) => e.stopPropagation()} style={{ backgroundColor: "white", borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, gap: 12 }}>
             <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: "#E2E8F0", alignSelf: "center", marginBottom: 8 }} />
-            <Text style={{ fontSize: 17, fontWeight: "700", color: "#0F172A", marginBottom: 4 }}>What would you like to add?</Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 4 }}>
+              <Image source={require("@/assets/alenio-icon.png")} style={{ width: 32, height: 32, borderRadius: 8 }} />
+              <Text style={{ fontSize: 17, fontWeight: "700", color: "#0F172A" }}>What would you like to add?</Text>
+            </View>
             {isOwner ? (
               <Pressable
                 onPress={() => { setShowAddModal(false); openEventModal(); }}
@@ -999,7 +1000,10 @@ export default function TasksScreen() {
           <Pressable style={{ backgroundColor: "white", borderTopLeftRadius: 24, borderTopRightRadius: 24 }} onPress={(e) => e.stopPropagation()}>
             <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: "#E2E8F0", alignSelf: "center", marginTop: 8, marginBottom: 16 }} />
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 20, paddingHorizontal: 20 }}>
-              <Text style={{ fontSize: 17, fontWeight: "700", color: "#0F172A" }}>{editingEvent ? "Edit Event" : "New Event"}</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <Image source={require("@/assets/alenio-icon.png")} style={{ width: 28, height: 28, borderRadius: 7 }} />
+                <Text style={{ fontSize: 17, fontWeight: "700", color: "#0F172A" }}>{editingEvent ? "Edit Event" : "New Event"}</Text>
+              </View>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                 {editingEvent ? (
                   <Pressable
@@ -1171,9 +1175,12 @@ export default function TasksScreen() {
               style={{ borderRadius: 28, padding: 3 }}
             >
               <View style={{ backgroundColor: "#FFFBEB", borderRadius: 26, padding: 28, alignItems: "center", gap: 12 }}>
-                {/* Trophy */}
-                <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: "#FEF3C7", alignItems: "center", justifyContent: "center" }}>
-                  <Text style={{ fontSize: 36 }}>🏆</Text>
+                {/* Logo + Trophy */}
+                <View style={{ alignItems: "center", gap: 4 }}>
+                  <Image source={require("@/assets/alenio-icon.png")} style={{ width: 40, height: 40, borderRadius: 10, marginBottom: 4 }} />
+                  <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: "#FEF3C7", alignItems: "center", justifyContent: "center" }}>
+                    <Text style={{ fontSize: 36 }}>🏆</Text>
+                  </View>
                 </View>
 
                 <Text style={{ fontSize: 13, fontWeight: "700", color: "#D97706", letterSpacing: 1.5, textTransform: "uppercase" }}>Milestone Reached!</Text>
