@@ -283,7 +283,7 @@ export default function CreateTaskScreen() {
               <Text className="text-lg mr-3">📅</Text>
               <Text className="flex-1 text-sm font-medium" style={{ color: dueDate ? "#4361EE" : "#94A3B8" }}>
                 {dueDate
-                  ? dueDate.toLocaleDateString("en-US", { weekday: "short", month: "long", day: "numeric", year: "numeric" })
+                  ? dueDate.toLocaleString("en-US", { weekday: "short", month: "long", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })
                   : "Select a due date"}
               </Text>
               {dueDate ? (
@@ -314,7 +314,7 @@ export default function CreateTaskScreen() {
                       mode="date"
                       display="inline"
                       minimumDate={new Date()}
-                      onChange={(_e, date) => { if (date) { setDueDate(date); setError(null); } }}
+                      onChange={(_e, date) => { if (date) { date.setHours(23, 59, 59, 0); setDueDate(date); setError(null); } }}
                       testID="date-time-picker"
                     />
                     <View style={{ height: 20 }} />
@@ -328,7 +328,7 @@ export default function CreateTaskScreen() {
                   mode="date"
                   display="calendar"
                   minimumDate={new Date()}
-                  onChange={(_e, date) => { setShowDatePicker(false); if (date) { setDueDate(date); setError(null); } }}
+                  onChange={(_e, date) => { setShowDatePicker(false); if (date) { date.setHours(23, 59, 59, 0); setDueDate(date); setError(null); } }}
                   testID="date-time-picker"
                 />
               ) : null
