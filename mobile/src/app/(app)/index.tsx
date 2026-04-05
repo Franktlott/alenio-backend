@@ -613,7 +613,7 @@ export default function TasksScreen() {
                   testID={`filter-${f}`}
                 >
                   <Text style={{ fontSize: 13, fontWeight: "600", color: filter === f ? "#0F172A" : "#94A3B8" }}>
-                    {f === "all" ? "All" : f === "assigned" ? "Team" : "Completed"}
+                    {f === "all" ? "Active" : f === "assigned" ? "Team" : "Completed"}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -646,7 +646,7 @@ export default function TasksScreen() {
           <View style={{ alignItems: "center", justifyContent: "center", paddingHorizontal: 24, paddingVertical: 40 }} testID="empty-state">
             <Text style={{ fontSize: 40, marginBottom: 12 }}>✓</Text>
             <Text style={{ fontSize: 17, fontWeight: "600", color: "#94A3B8" }}>
-              {filter === "completed" ? "No completed tasks" : filter === "assigned" ? "No team tasks" : "No tasks yet"}
+              {filter === "completed" ? "No completed tasks" : filter === "assigned" ? "No team tasks" : "No active tasks"}
             </Text>
             {filter === "all" && !selectedDay ? (
               <Text style={{ color: "#CBD5E1", fontSize: 13, marginTop: 4, textAlign: "center" }}>
