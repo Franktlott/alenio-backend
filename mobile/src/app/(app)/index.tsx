@@ -240,7 +240,7 @@ const PRIORITY_CONFIG = {
   low: { label: "Low", bg: "#DCFCE7", text: "#15803D", flagColor: "#16A34A" },
 };
 
-function EventRow({ event }: { event: CalendarEvent }) {
+function EventRow({ event, onLongPress }: { event: CalendarEvent; onLongPress?: () => void }) {
   const start = new Date(event.startDate);
   const end = event.endDate ? new Date(event.endDate) : start;
   const isSingleDay = toLocalIso(start) === toLocalIso(end);
@@ -249,7 +249,11 @@ function EventRow({ event }: { event: CalendarEvent }) {
     : `${start.toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${end.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
 
   return (
-    <View style={{ paddingHorizontal: 14, paddingVertical: 10, backgroundColor: "white", flexDirection: "row", alignItems: "center" }}>
+    <Pressable
+      onLongPress={onLongPress}
+      delayLongPress={400}
+      style={({ pressed }) => ({ paddingHorizontal: 14, paddingVertical: 10, backgroundColor: pressed && onLongPress ? "#F8FAFC" : "white", flexDirection: "row", alignItems: "center" })}
+    >
       {/* Color accent bar */}
       <View style={{ width: 4, borderRadius: 2, alignSelf: "stretch", backgroundColor: event.color, marginRight: 12 }} />
       <View style={{ flex: 1 }}>
@@ -262,7 +266,8 @@ function EventRow({ event }: { event: CalendarEvent }) {
           <Text style={{ fontSize: 11, color: "#7C3AED", fontWeight: "500" }}>{dateText}</Text>
         </View>
       </View>
-    </View>
+      {onLongPress ? <Text style={{ fontSize: 10, color: "#CBD5E1" }}>hold to edit</Text> : null}
+    </Pressable>
   );
 }
 
@@ -415,6 +420,7 @@ export default function TasksScreen() {
   const [milestoneModal, setMilestoneModal] = useState<{ count: number; userName: string } | null>(null);
   // Event modal state
   const [showEventModal, setShowEventModal] = useState(false);
+  const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
   const [eventTitle, setEventTitle] = useState("");
   const [eventDescription, setEventDescription] = useState("");
   const [eventStart, setEventStart] = useState<Date>(new Date());
@@ -505,7 +511,19 @@ export default function TasksScreen() {
     },
   });
 
+  const updateEventMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: object }) =>
+      api.patch(`/api/teams/${activeTeamId}/events/${id}`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["calendar-events", activeTeamId] });
+      setShowEventModal(false);
+      setEditingEvent(null);
+      setEventTitle(""); setEventDescription(""); setEventColor("#4361EE");
+    },
+  });
+
   const openEventModal = () => {
+    setEditingEvent(null);
     const d = selectedDay ? new Date(selectedDay) : new Date();
     setEventTitle(""); setEventDescription("");
     setEventStart(d); setEventEnd(d);
@@ -513,20 +531,45 @@ export default function TasksScreen() {
     setShowEventModal(true);
   };
 
+  const openEditEventModal = (ev: CalendarEvent) => {
+    setEditingEvent(ev);
+    setEventTitle(ev.title);
+    setEventDescription(ev.description ?? "");
+    setEventStart(new Date(ev.startDate));
+    setEventEnd(ev.endDate ? new Date(ev.endDate) : new Date(ev.startDate));
+    setEventColor(ev.color);
+    setFormError(null);
+    setShowEventModal(true);
+  };
+
   const handleSaveEvent = () => {
     if (!eventTitle.trim()) { setFormError("Please enter a title"); return; }
     const end = eventEnd < eventStart ? eventStart : eventEnd;
-    createEventMutation.mutate({
-      title: eventTitle.trim(),
-      description: eventDescription.trim() || undefined,
-      startDate: eventStart.toISOString(),
-      endDate: end.toISOString(),
-      color: eventColor,
-      allDay: true,
-    });
+    if (editingEvent) {
+      updateEventMutation.mutate({
+        id: editingEvent.id,
+        data: {
+          title: eventTitle.trim(),
+          description: eventDescription.trim() || undefined,
+          startDate: eventStart.toISOString(),
+          endDate: end.toISOString(),
+          color: eventColor,
+        },
+      });
+    } else {
+      createEventMutation.mutate({
+        title: eventTitle.trim(),
+        description: eventDescription.trim() || undefined,
+        startDate: eventStart.toISOString(),
+        endDate: end.toISOString(),
+        color: eventColor,
+        allDay: true,
+      });
+    }
   };
 
   const currentUserId = session?.user?.id ?? null;
+  const isOwner = teams?.find((t) => t.id === activeTeamId)?.role === "owner";
 
   React.useEffect(() => {
     if (filter === "assigned" && !currentUserId) setFilter("all");
@@ -670,7 +713,7 @@ export default function TasksScreen() {
             </View>
             {dayEvents.map((ev, i) => (
               <View key={ev.id} style={{ borderTopWidth: i === 0 ? 0 : 1, borderTopColor: "#F1F5F9" }}>
-                <EventRow event={ev} />
+                <EventRow event={ev} onLongPress={isOwner ? () => openEditEventModal(ev) : undefined} />
               </View>
             ))}
           </View>
@@ -845,15 +888,15 @@ export default function TasksScreen() {
         </View>
       ) : null}
 
-      {/* New Event Modal */}
-      <Modal visible={showEventModal} transparent animationType="slide" onRequestClose={() => setShowEventModal(false)}>
+      {/* New / Edit Event Modal */}
+      <Modal visible={showEventModal} transparent animationType="slide" onRequestClose={() => { setShowEventModal(false); setEditingEvent(null); }}>
         <KeyboardAvoidingView style={{ flex: 1, justifyContent: "flex-end" }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
-          <Pressable style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.5)" }} onPress={() => setShowEventModal(false)} />
+          <Pressable style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.5)" }} onPress={() => { setShowEventModal(false); setEditingEvent(null); }} />
           <Pressable style={{ backgroundColor: "white", borderTopLeftRadius: 24, borderTopRightRadius: 24 }} onPress={(e) => e.stopPropagation()}>
             <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: "#E2E8F0", alignSelf: "center", marginTop: 8, marginBottom: 16 }} />
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 20, paddingHorizontal: 20 }}>
-              <Text style={{ fontSize: 17, fontWeight: "700", color: "#0F172A" }}>New Event</Text>
-              <Pressable onPress={() => setShowEventModal(false)} style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "#F1F5F9", alignItems: "center", justifyContent: "center" }}>
+              <Text style={{ fontSize: 17, fontWeight: "700", color: "#0F172A" }}>{editingEvent ? "Edit Event" : "New Event"}</Text>
+              <Pressable onPress={() => { setShowEventModal(false); setEditingEvent(null); }} style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "#F1F5F9", alignItems: "center", justifyContent: "center" }}>
                 <X size={16} color="#64748B" />
               </Pressable>
             </View>
@@ -943,14 +986,14 @@ export default function TasksScreen() {
 
               <TouchableOpacity
                 onPress={handleSaveEvent}
-                disabled={createEventMutation.isPending}
+                disabled={createEventMutation.isPending || updateEventMutation.isPending}
                 style={{ backgroundColor: "#4361EE", borderRadius: 14, paddingVertical: 14, alignItems: "center" }}
                 testID="save-event-button"
               >
-                {createEventMutation.isPending ? (
+                {createEventMutation.isPending || updateEventMutation.isPending ? (
                   <ActivityIndicator color="white" />
                 ) : (
-                  <Text style={{ color: "white", fontSize: 15, fontWeight: "700" }}>Save Event</Text>
+                  <Text style={{ color: "white", fontSize: 15, fontWeight: "700" }}>{editingEvent ? "Update Event" : "Save Event"}</Text>
                 )}
               </TouchableOpacity>
             </ScrollView>
