@@ -89,6 +89,7 @@ export default function DMChatScreen() {
   const [input, setInput] = useState("");
   const [replyTo, setReplyTo] = useState<DirectMessage | null>(null);
   const [emojiTarget, setEmojiTarget] = useState<DirectMessage | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<DirectMessage | null>(null);
   const [reactionView, setReactionView] = useState<MessageReaction[] | null>(null);
   const [mediaPreview, setMediaPreview] = useState<{ uri: string; mimeType: string; filename: string } | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -364,8 +365,9 @@ export default function DMChatScreen() {
                 {emojiTarget?.senderId === currentUserId ? (
                   <TouchableOpacity
                     onPress={() => {
-                      if (emojiTarget) deleteMessage(emojiTarget.id);
+                      const target = emojiTarget;
                       setEmojiTarget(null);
+                      setDeleteTarget(target);
                     }}
                     style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 16 }}
                   >
@@ -374,6 +376,49 @@ export default function DMChatScreen() {
                   </TouchableOpacity>
                 ) : null}
               </View>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Delete confirmation modal */}
+      <Modal
+        visible={!!deleteTarget}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setDeleteTarget(null)}
+      >
+        <TouchableOpacity
+          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)", alignItems: "center", justifyContent: "center", paddingHorizontal: 32 }}
+          activeOpacity={1}
+          onPress={() => setDeleteTarget(null)}
+        >
+          <TouchableOpacity activeOpacity={1} style={{ width: "100%", backgroundColor: "white", borderRadius: 16, overflow: "hidden" }}>
+            <View style={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 16, alignItems: "center" }}>
+              <Text style={{ fontSize: 17, fontWeight: "700", color: "#0F172A", marginBottom: 4 }}>Delete message?</Text>
+              <Text style={{ fontSize: 13, color: "#64748B", textAlign: "center" }}>
+                This message will be permanently removed.
+              </Text>
+            </View>
+            <View style={{ flexDirection: "row", borderTopWidth: 1, borderTopColor: "#F1F5F9" }}>
+              <TouchableOpacity
+                onPress={() => setDeleteTarget(null)}
+                style={{ flex: 1, paddingVertical: 14, alignItems: "center", borderRightWidth: 1, borderRightColor: "#F1F5F9" }}
+              >
+                <Text style={{ fontSize: 15, fontWeight: "500", color: "#64748B" }}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                testID="confirm-delete-button"
+                onPress={() => { if (deleteTarget) { deleteMessage(deleteTarget.id); setDeleteTarget(null); } }}
+                disabled={deleteMutation.isPending}
+                style={{ flex: 1, paddingVertical: 14, alignItems: "center" }}
+              >
+                {deleteMutation.isPending ? (
+                  <ActivityIndicator size="small" color="#EF4444" />
+                ) : (
+                  <Text style={{ fontSize: 15, fontWeight: "700", color: "#EF4444" }}>Delete</Text>
+                )}
+              </TouchableOpacity>
             </View>
           </TouchableOpacity>
         </TouchableOpacity>
