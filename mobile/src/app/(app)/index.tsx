@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -15,7 +15,7 @@ import {
   KeyboardAvoidingView,
 } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { Plus, User, ArrowUpDown, ChevronLeft, ChevronRight, X, CalendarDays, CheckSquare, Calendar, Lock } from "lucide-react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -449,6 +449,7 @@ function TaskRow({ task, onToggle, onPress }: { task: Task; onToggle: () => void
 
 export default function TasksScreen() {
   const insets = useSafeAreaInsets();
+  const { openModal } = useLocalSearchParams<{ openModal?: string }>();
   const [filter, setFilter] = useState<FilterTab>("all");
   const [sort, setSort] = useState<SortMode>("due");
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
@@ -475,6 +476,14 @@ export default function TasksScreen() {
   const queryClient = useQueryClient();
 
   const [refreshing, setRefreshing] = useState(false);
+
+  // Auto-open event modal when navigated from another tab
+  useEffect(() => {
+    if (openModal === "event") {
+      openEventModal();
+      router.setParams({ openModal: undefined });
+    }
+  }, [openModal]);
 
   const onRefresh = async () => {
     setRefreshing(true);
