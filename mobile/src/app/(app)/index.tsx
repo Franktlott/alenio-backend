@@ -8,10 +8,11 @@ import {
   ActivityIndicator,
   Pressable,
   Image,
+  ScrollView,
 } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
-import { Plus, User, ArrowUpDown, Clock, AlertTriangle } from "lucide-react-native";
+import { Plus, User, ArrowUpDown, Clock, AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { api } from "@/lib/api/api";
@@ -21,6 +22,102 @@ import type { Task, Team } from "@/lib/types";
 
 type FilterTab = "all" | "assigned" | "completed";
 type SortMode = "due" | "priority";
+
+const DAY_LABELS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+
+function MiniCalendar({
+  tasks,
+  selectedDay,
+  onSelectDay,
+}: {
+  tasks: Task[];
+  selectedDay: string | null;
+  onSelectDay: (iso: string | null) => void;
+}) {
+  const today = new Date();
+  const [viewYear, setViewYear] = useState(today.getFullYear());
+  const [viewMonth, setViewMonth] = useState(today.getMonth());
+
+  const firstDay = new Date(viewYear, viewMonth, 1).getDay();
+  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+
+  // Build set of days (YYYY-MM-DD) that have tasks due
+  const taskDays = new Set(
+    tasks
+      .filter((t) => t.dueDate && t.status !== "done")
+      .map((t) => new Date(t.dueDate!).toISOString().slice(0, 10))
+  );
+
+  const cells: (number | null)[] = [
+    ...Array(firstDay).fill(null),
+    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+  ];
+
+  const prevMonth = () => {
+    if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1); }
+    else setViewMonth(m => m - 1);
+  };
+  const nextMonth = () => {
+    if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1); }
+    else setViewMonth(m => m + 1);
+  };
+
+  return (
+    <View style={{ backgroundColor: "white", marginHorizontal: 16, marginTop: 10, marginBottom: 4, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 10, shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 2 }}>
+      {/* Month nav */}
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+        <TouchableOpacity onPress={prevMonth} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <ChevronLeft size={18} color="#64748B" />
+        </TouchableOpacity>
+        <Text style={{ fontSize: 14, fontWeight: "700", color: "#0F172A" }}>
+          {MONTH_NAMES[viewMonth]} {viewYear}
+        </Text>
+        <TouchableOpacity onPress={nextMonth} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <ChevronRight size={18} color="#64748B" />
+        </TouchableOpacity>
+      </View>
+
+      {/* Day headers */}
+      <View style={{ flexDirection: "row", marginBottom: 4 }}>
+        {DAY_LABELS.map((d) => (
+          <Text key={d} style={{ flex: 1, textAlign: "center", fontSize: 11, fontWeight: "600", color: "#94A3B8" }}>{d}</Text>
+        ))}
+      </View>
+
+      {/* Day grid */}
+      <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
+        {cells.map((day, idx) => {
+          if (!day) return <View key={`empty-${idx}`} style={{ width: "14.28%", aspectRatio: 1 }} />;
+          const iso = `${viewYear}-${String(viewMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+          const isToday = today.getFullYear() === viewYear && today.getMonth() === viewMonth && today.getDate() === day;
+          const isSelected = selectedDay === iso;
+          const hasTasks = taskDays.has(iso);
+
+          return (
+            <TouchableOpacity
+              key={iso}
+              onPress={() => onSelectDay(isSelected ? null : iso)}
+              style={{ width: "14.28%", aspectRatio: 1, alignItems: "center", justifyContent: "center" }}
+            >
+              <View style={{
+                width: 30, height: 30, borderRadius: 15, alignItems: "center", justifyContent: "center",
+                backgroundColor: isSelected ? "#4361EE" : isToday ? "#EEF2FF" : "transparent",
+              }}>
+                <Text style={{ fontSize: 13, fontWeight: isToday || isSelected ? "700" : "400", color: isSelected ? "white" : isToday ? "#4361EE" : "#334155" }}>
+                  {day}
+                </Text>
+              </View>
+              {hasTasks && !isSelected ? (
+                <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: "#4361EE", marginTop: 1 }} />
+              ) : <View style={{ width: 4, height: 4 }} />}
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
 
 const PRIORITY_CONFIG = {
   urgent: { label: "Urgent", bg: "#FEE2E2", text: "#DC2626", flagColor: "#DC2626" },
@@ -143,6 +240,7 @@ function TaskRow({ task, onToggle, onPress }: { task: Task; onToggle: () => void
 export default function TasksScreen() {
   const [filter, setFilter] = useState<FilterTab>("all");
   const [sort, setSort] = useState<SortMode>("due");
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const { data: session } = useSession();
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
   const setActiveTeamId = useTeamStore((s) => s.setActiveTeamId);
@@ -189,9 +287,14 @@ export default function TasksScreen() {
     t.creator?.id !== currentUserId;
 
   const tasks = allTasks.filter((t) => {
-    if (filter === "assigned") return isAssignedToMe(t) && t.status !== "done";
-    if (filter === "completed") return t.status === "done" && isMyCreatedTask(t);
-    return t.status !== "done" && isMyCreatedTask(t);
+    if (filter === "assigned") { if (!(isAssignedToMe(t) && t.status !== "done")) return false; }
+    else if (filter === "completed") { if (!(t.status === "done" && isMyCreatedTask(t))) return false; }
+    else { if (!(t.status !== "done" && isMyCreatedTask(t))) return false; }
+    if (selectedDay) {
+      if (!t.dueDate) return false;
+      return new Date(t.dueDate).toISOString().slice(0, 10) === selectedDay;
+    }
+    return true;
   }).sort((a, b) => {
     if (sort === "priority") {
       const order = { urgent: 0, high: 1, medium: 2, low: 3 };
@@ -280,107 +383,95 @@ export default function TasksScreen() {
         </View>
       </LinearGradient>
 
-      {/* Stats pills */}
-      <View style={{ flexDirection: "row", paddingHorizontal: 16, paddingTop: 10, paddingBottom: 4, gap: 8, flexWrap: "wrap" }}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "white", paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 1 }}>
-          <Clock size={13} color="#F59E0B" />
-          <Text style={{ fontSize: 12, fontWeight: "600", color: "#F59E0B" }}>{dueTodayCount} due today</Text>
-        </View>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: overdueCount > 0 ? "#FEF2F2" : "white", paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 1 }}>
-          <AlertTriangle size={13} color={overdueCount > 0 ? "#EF4444" : "#CBD5E1"} />
-          <Text style={{ fontSize: 12, fontWeight: "600", color: overdueCount > 0 ? "#EF4444" : "#CBD5E1" }}>{overdueCount} overdue</Text>
-        </View>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "white", paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 1 }}>
-          <Text style={{ fontSize: 12, color: "#10B981" }}>✓</Text>
-          <Text style={{ fontSize: 12, fontWeight: "600", color: "#10B981" }}>{completedCount} done</Text>
-        </View>
-      </View>
+      <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} stickyHeaderIndices={[1]}>
+        {/* Mini Calendar */}
+        <MiniCalendar tasks={allTasks} selectedDay={selectedDay} onSelectDay={setSelectedDay} />
 
-      {/* Filter tabs + sort */}
-      <View style={{ paddingHorizontal: 16, marginBottom: 10 }}>
-        <View style={{ flexDirection: "row", backgroundColor: "#E2E8F0", borderRadius: 12, padding: 4, marginBottom: 8 }}>
-          {(["all", "completed", "assigned"] as FilterTab[]).map((f) => (
-            <TouchableOpacity
-              key={f}
-              onPress={() => setFilter(f)}
-              style={{
-                flex: 1, paddingVertical: 8, borderRadius: 10, alignItems: "center",
-                backgroundColor: filter === f ? "white" : "transparent",
-              }}
-              testID={`filter-${f}`}
-            >
-              <Text style={{
-                fontSize: 13, fontWeight: "600",
-                color: filter === f ? "#0F172A" : "#94A3B8",
-              }}>
-                {f === "all" ? "All" : f === "assigned" ? "Assigned" : "Completed"}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 6 }}>
-          <ArrowUpDown size={12} color="#94A3B8" />
-          <Text style={{ fontSize: 12, color: "#94A3B8", marginRight: 6 }}>Sort:</Text>
-          {(["due", "priority"] as SortMode[]).map((s) => (
-            <TouchableOpacity
-              key={s}
-              onPress={() => setSort(s)}
-              style={{
-                paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8,
-                backgroundColor: sort === s ? "#4361EE" : "#F1F5F9",
-              }}
-              testID={`sort-${s}`}
-            >
-              <Text style={{ fontSize: 12, fontWeight: "600", color: sort === s ? "white" : "#64748B" }}>
-                {s === "due" ? "Due Date" : "Priority"}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
+        {/* Sticky section: stats + filter tabs */}
+        <View style={{ backgroundColor: "#F8FAFC" }}>
+          {/* Stats pills */}
+          <View style={{ flexDirection: "row", paddingHorizontal: 16, paddingTop: 10, paddingBottom: 4, gap: 8, flexWrap: "wrap" }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "white", paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 1 }}>
+              <Clock size={13} color="#F59E0B" />
+              <Text style={{ fontSize: 12, fontWeight: "600", color: "#F59E0B" }}>{dueTodayCount} due today</Text>
+            </View>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: overdueCount > 0 ? "#FEF2F2" : "white", paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 1 }}>
+              <AlertTriangle size={13} color={overdueCount > 0 ? "#EF4444" : "#CBD5E1"} />
+              <Text style={{ fontSize: 12, fontWeight: "600", color: overdueCount > 0 ? "#EF4444" : "#CBD5E1" }}>{overdueCount} overdue</Text>
+            </View>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "white", paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 1 }}>
+              <Text style={{ fontSize: 12, color: "#10B981" }}>✓</Text>
+              <Text style={{ fontSize: 12, fontWeight: "600", color: "#10B981" }}>{completedCount} done</Text>
+            </View>
+          </View>
 
-      {/* Task list */}
-      {isLoading ? (
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }} testID="loading-indicator">
-          <ActivityIndicator color="#4361EE" />
+          {/* Filter tabs + sort */}
+          <View style={{ paddingHorizontal: 16, marginBottom: 10 }}>
+            <View style={{ flexDirection: "row", backgroundColor: "#E2E8F0", borderRadius: 12, padding: 4, marginBottom: 8 }}>
+              {(["all", "completed", "assigned"] as FilterTab[]).map((f) => (
+                <TouchableOpacity
+                  key={f}
+                  onPress={() => setFilter(f)}
+                  style={{
+                    flex: 1, paddingVertical: 8, borderRadius: 10, alignItems: "center",
+                    backgroundColor: filter === f ? "white" : "transparent",
+                  }}
+                  testID={`filter-${f}`}
+                >
+                  <Text style={{ fontSize: 13, fontWeight: "600", color: filter === f ? "#0F172A" : "#94A3B8" }}>
+                    {f === "all" ? "All" : f === "assigned" ? "Assigned" : "Completed"}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 6 }}>
+              <ArrowUpDown size={12} color="#94A3B8" />
+              <Text style={{ fontSize: 12, color: "#94A3B8", marginRight: 6 }}>Sort:</Text>
+              {(["due", "priority"] as SortMode[]).map((s) => (
+                <TouchableOpacity
+                  key={s}
+                  onPress={() => setSort(s)}
+                  style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, backgroundColor: sort === s ? "#4361EE" : "#F1F5F9" }}
+                  testID={`sort-${s}`}
+                >
+                  <Text style={{ fontSize: 12, fontWeight: "600", color: sort === s ? "white" : "#64748B" }}>
+                    {s === "due" ? "Due Date" : "Priority"}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
         </View>
-      ) : tasks.length === 0 ? (
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 24 }} testID="empty-state">
-          <Text style={{ fontSize: 40, marginBottom: 12 }}>✓</Text>
-          <Text style={{ fontSize: 17, fontWeight: "600", color: "#94A3B8" }}>
-            {filter === "completed" ? "No completed tasks" : "No tasks yet"}
-          </Text>
-          {filter === "all" ? (
-            <Text style={{ color: "#CBD5E1", fontSize: 13, marginTop: 4, textAlign: "center" }}>
-              Tap the + button to create your first task
+
+        {/* Task list */}
+        {isLoading ? (
+          <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: 40 }} testID="loading-indicator">
+            <ActivityIndicator color="#4361EE" />
+          </View>
+        ) : tasks.length === 0 ? (
+          <View style={{ alignItems: "center", justifyContent: "center", paddingHorizontal: 24, paddingVertical: 40 }} testID="empty-state">
+            <Text style={{ fontSize: 40, marginBottom: 12 }}>✓</Text>
+            <Text style={{ fontSize: 17, fontWeight: "600", color: "#94A3B8" }}>
+              {selectedDay ? "No tasks due this day" : filter === "completed" ? "No completed tasks" : "No tasks yet"}
             </Text>
-          ) : null}
-        </View>
-      ) : (
-        <FlatList
-          data={tasks}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
+            {filter === "all" && !selectedDay ? (
+              <Text style={{ color: "#CBD5E1", fontSize: 13, marginTop: 4, textAlign: "center" }}>
+                Tap the + button to create your first task
+              </Text>
+            ) : null}
+          </View>
+        ) : (
+          tasks.map((item) => (
             <TaskRow
+              key={item.id}
               task={item}
               onToggle={() => toggleMutation.mutate(item)}
-              onPress={() =>
-                router.push({
-                  pathname: "/task-detail",
-                  params: { taskId: item.id, teamId: activeTeamId! },
-                })
-              }
+              onPress={() => router.push({ pathname: "/task-detail", params: { taskId: item.id, teamId: activeTeamId! } })}
             />
-          )}
-          refreshControl={
-            <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#4361EE" />
-          }
-          contentContainerStyle={{ paddingBottom: 100 }}
-          showsVerticalScrollIndicator={false}
-          style={{ backgroundColor: "white" }}
-          testID="task-list"
-        />
-      )}
+          ))
+        )}
+        <View style={{ height: 120 }} />
+      </ScrollView>
 
       {/* FAB */}
       {activeTeamId ? (
