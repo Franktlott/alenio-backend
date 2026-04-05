@@ -275,6 +275,9 @@ function TaskRow({ task, onToggle, onPress }: { task: Task; onToggle: () => void
 
   const completedDate = isDone ? (task.completedAt ?? task.updatedAt) : null;
   const dueDate = task.dueDate ?? null;
+  const wasLate = isDone && dueDate && task.completedAt
+    ? new Date(task.completedAt) > new Date(dueDate)
+    : false;
 
   const getDueInfo = (): { date: string; overdue: boolean; today: boolean; completed: boolean } | null => {
     if (isDone) return null; // handled separately below
@@ -360,6 +363,11 @@ function TaskRow({ task, onToggle, onPress }: { task: Task; onToggle: () => void
           {/* Due / completion dates */}
           {isDone ? (
             <>
+              {wasLate ? (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: "#FEF2F2", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                  <Text style={{ fontSize: 10, color: "#EF4444", fontWeight: "600" }}>⚠ Late</Text>
+                </View>
+              ) : null}
               {dueDate ? (
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
                   <Text style={{ fontSize: 10, color: "#94A3B8" }}>⏱</Text>
@@ -368,8 +376,8 @@ function TaskRow({ task, onToggle, onPress }: { task: Task; onToggle: () => void
               ) : null}
               {completedDate ? (
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
-                  <Text style={{ fontSize: 10, color: "#10B981" }}>✓</Text>
-                  <Text style={{ fontSize: 10, color: "#10B981" }}>Done {fmt(completedDate)}</Text>
+                  <Text style={{ fontSize: 10, color: wasLate ? "#EF4444" : "#10B981" }}>✓</Text>
+                  <Text style={{ fontSize: 10, color: wasLate ? "#EF4444" : "#10B981" }}>Done {fmt(completedDate)}</Text>
                 </View>
               ) : null}
             </>
