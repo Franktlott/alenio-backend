@@ -80,7 +80,7 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
               flexDirection: "row",
               alignItems: "center",
               justifyContent: "center",
-              backgroundColor: isFocused ? "#0F172A" : "transparent",
+              backgroundColor: isFocused ? "#4361EE" : "transparent",
               borderRadius: 32,
               paddingHorizontal: isFocused ? 16 : 0,
               paddingVertical: isFocused ? 10 : 0,
