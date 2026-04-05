@@ -75,7 +75,6 @@ export default function ChatScreen() {
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
             <View style={{ flex: 1 }}>
               <Text style={{ color: "white", fontSize: 18, fontWeight: "700" }}>Messages</Text>
-              <Text className="text-white/70 text-sm">Team chat & direct messages</Text>
             </View>
             <Image source={require("@/assets/alenio-icon.png")} style={{ width: 30, height: 30, borderRadius: 6 }} />
           </View>
