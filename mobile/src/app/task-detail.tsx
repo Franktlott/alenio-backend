@@ -250,11 +250,6 @@ export default function TaskDetailScreen() {
               )}
             </TouchableOpacity>
           </View>
-        ) : canEdit && !isEditMode ? (
-          <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "#EFF6FF", borderWidth: 1, borderColor: "#BFDBFE", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, marginBottom: 16, gap: 8 }}>
-            <Pencil size={14} color="#3B82F6" />
-            <Text style={{ flex: 1, fontSize: 13, color: "#1D4ED8" }}>Tap the pencil icon to edit this task.</Text>
-          </View>
         ) : null}
 
         {/* Status */}
