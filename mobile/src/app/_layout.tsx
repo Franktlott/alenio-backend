@@ -2,7 +2,7 @@ import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { AppState, Image, View } from 'react-native';
+import { AppState, Image, Text, View } from 'react-native';
 import { useColorScheme } from '@/lib/useColorScheme';
 import { QueryClient, QueryClientProvider, focusManager } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -59,13 +59,23 @@ function CustomSplash({ onDone }: { onDone: () => void }) {
 
   return (
     <View style={{ flex: 1, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' }}>
-      <Animated.View style={animStyle}>
+      <Animated.View style={[animStyle, { alignItems: 'center' }]}>
         <Image
           source={require('@/assets/alenio-logo.png')}
           style={{ width: 230, height: 230 }}
           resizeMode="contain"
         />
       </Animated.View>
+      <View style={{ position: 'absolute', bottom: 48, alignItems: 'center', gap: 6 }}>
+        <Text style={{ fontSize: 11, color: '#94A3B8', letterSpacing: 0.3 }}>
+          Alenio is owned and operated by
+        </Text>
+        <Image
+          source={require('@/assets/ventry-logo.png')}
+          style={{ width: 100, height: 32 }}
+          resizeMode="contain"
+        />
+      </View>
     </View>
   );
 }
