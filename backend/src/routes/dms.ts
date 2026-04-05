@@ -386,4 +386,34 @@ dmsRouter.delete("/:conversationId", async (c) => {
   return new Response(null, { status: 204 });
 });
 
+// POST /api/dms/unread-counts - returns unread message counts for DM conversations
+dmsRouter.post("/unread-counts", async (c) => {
+  const user = c.get("user")!;
+  const { lastReadIds } = await c.req.json<{ lastReadIds: Record<string, string> }>();
+
+  const counts: Record<string, number> = {};
+
+  await Promise.all(
+    Object.entries(lastReadIds).map(async ([convId, lastReadId]) => {
+      let afterDate: Date | null = null;
+      if (lastReadId) {
+        const msg = await prisma.directMessage.findUnique({
+          where: { id: lastReadId },
+          select: { createdAt: true },
+        });
+        if (msg) afterDate = msg.createdAt;
+      }
+      counts[convId] = await prisma.directMessage.count({
+        where: {
+          conversationId: convId,
+          senderId: { not: user.id },
+          ...(afterDate ? { createdAt: { gt: afterDate } } : {}),
+        },
+      });
+    })
+  );
+
+  return c.json({ data: counts });
+});
+
 export { dmsRouter };

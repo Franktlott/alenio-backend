@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -82,21 +82,29 @@ export default function ChatScreen() {
 
   const currentTeam = teams?.find((t: any) => t.id === activeTeamId);
   const lastReadIds = useUnreadStore((s) => s.lastReadIds);
-  const updateSeen = useUnreadStore((s) => s.updateSeen);
-  const unreadCounts = useUnreadStore((s) => s.unreadCounts);
   const currentUserId = session?.user?.id ?? "";
 
-  useEffect(() => {
-    conversations.forEach((conv) => {
-      if (conv.lastMessage) {
-        updateSeen(conv.id, conv.lastMessage.id, conv.lastMessage.sender.id !== currentUserId);
-      }
-    });
-  }, [conversations, currentUserId]);
-  const teamUnreadCount = [
-    teamGeneralMessages[0] && teamGeneralMessages[0].sender.id !== currentUserId && lastReadIds[`team:${activeTeamId}`] !== teamGeneralMessages[0].id ? 1 : 0,
-    ...topics.map((t: any) => t.lastMessage && t.lastMessage.sender.id !== currentUserId && lastReadIds[`topic:${t.id}`] !== t.lastMessage?.id ? 1 : 0),
-  ].reduce((a: number, b: number) => a + b, 0);
+  const dmUnreadLastReadIds = Object.fromEntries(
+    conversations.map((conv) => [conv.id, lastReadIds[conv.id] ?? ""])
+  );
+  const { data: dmUnreadCounts = {} } = useQuery({
+    queryKey: ["dm-unread-counts", dmUnreadLastReadIds],
+    queryFn: () => api.post<Record<string, number>>("/api/dms/unread-counts", { lastReadIds: dmUnreadLastReadIds }),
+    enabled: !!session?.user && conversations.length > 0,
+    refetchInterval: 5000,
+  });
+
+  const teamChannelLastReadIds: Record<string, string> = {
+    [`team:${activeTeamId}`]: lastReadIds[`team:${activeTeamId}`] ?? "",
+    ...Object.fromEntries(topics.map((t: any) => [`topic:${t.id}`, lastReadIds[`topic:${t.id}`] ?? ""])),
+  };
+  const { data: teamUnreadCounts = {} } = useQuery({
+    queryKey: ["team-unread-counts", activeTeamId, teamChannelLastReadIds],
+    queryFn: () => api.post<Record<string, number>>(`/api/teams/${activeTeamId}/messages/unread-counts`, { lastReadIds: teamChannelLastReadIds }),
+    enabled: !!activeTeamId && !!session?.user,
+    refetchInterval: 10000,
+  });
+  const teamUnreadCount = Object.values(teamUnreadCounts).reduce((a, b) => a + b, 0);
 
   return (
     <SafeAreaView
@@ -271,7 +279,7 @@ export default function ChatScreen() {
                    conv.lastMessage.sender.id !== session?.user?.id &&
                    lastReadIds[conv.id] !== conv.lastMessage.id ? (
                     <View style={{ backgroundColor: "#4361EE", borderRadius: 10, minWidth: 20, height: 20, alignItems: "center", justifyContent: "center", paddingHorizontal: 6 }}>
-                      <Text style={{ color: "white", fontSize: 11, fontWeight: "700" }}>{unreadCounts[conv.id] || 1}</Text>
+                      <Text style={{ color: "white", fontSize: 11, fontWeight: "700" }}>{dmUnreadCounts[conv.id] ?? 1}</Text>
                     </View>
                   ) : (
                     <ChevronRight size={16} color="#94A3B8" />

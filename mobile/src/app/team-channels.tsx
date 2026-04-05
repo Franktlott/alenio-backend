@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -80,19 +80,17 @@ export default function TeamChannelsScreen() {
   const currentUserRole = team?.members?.find((m: any) => m.userId === currentUserId)?.role;
   const isOwnerOrAdmin = currentUserRole === "owner" || currentUserRole === "admin";
   const lastReadIds = useUnreadStore((s) => s.lastReadIds);
-  const updateSeen = useUnreadStore((s) => s.updateSeen);
-  const unreadCounts = useUnreadStore((s) => s.unreadCounts);
 
-  useEffect(() => {
-    if (generalMessages[0]) {
-      updateSeen(`team:${teamId}`, generalMessages[0].id, generalMessages[0].sender.id !== currentUserId);
-    }
-    topics.forEach((topic) => {
-      if (topic.lastMessage) {
-        updateSeen(`topic:${topic.id}`, topic.lastMessage.id, topic.lastMessage.sender.id !== currentUserId);
-      }
-    });
-  }, [generalMessages, topics, teamId, currentUserId]);
+  const channelLastReadIds: Record<string, string> = {
+    [`team:${teamId}`]: lastReadIds[`team:${teamId}`] ?? "",
+    ...Object.fromEntries(topics.map((t) => [`topic:${t.id}`, lastReadIds[`topic:${t.id}`] ?? ""])),
+  };
+  const { data: channelUnreadCounts = {} } = useQuery({
+    queryKey: ["team-unread-counts", teamId, channelLastReadIds],
+    queryFn: () => api.post<Record<string, number>>(`/api/teams/${teamId}/messages/unread-counts`, { lastReadIds: channelLastReadIds }),
+    enabled: !!teamId && topics.length >= 0,
+    refetchInterval: 5000,
+  });
 
   const createTopicMutation = useMutation({
     mutationFn: ({ name, color }: { name: string; color: string }) =>
@@ -170,7 +168,7 @@ export default function TeamChannelsScreen() {
             ) : null}
             {generalMessages[0] && generalMessages[0].sender.id !== currentUserId && lastReadIds[`team:${teamId}`] !== generalMessages[0].id ? (
               <View style={{ backgroundColor: "#4361EE", borderRadius: 10, minWidth: 20, height: 20, alignItems: "center", justifyContent: "center", paddingHorizontal: 6 }}>
-                <Text style={{ color: "white", fontSize: 11, fontWeight: "700" }}>{unreadCounts[`team:${teamId}`] || 1}</Text>
+                <Text style={{ color: "white", fontSize: 11, fontWeight: "700" }}>{channelUnreadCounts[`team:${teamId}`] ?? 1}</Text>
               </View>
             ) : null}
           </View>
@@ -216,7 +214,7 @@ export default function TeamChannelsScreen() {
               ) : null}
               {topic.lastMessage && topic.lastMessage.sender.id !== currentUserId && lastReadIds[`topic:${topic.id}`] !== topic.lastMessage.id ? (
                 <View style={{ backgroundColor: "#4361EE", borderRadius: 10, minWidth: 20, height: 20, alignItems: "center", justifyContent: "center", paddingHorizontal: 6 }}>
-                  <Text style={{ color: "white", fontSize: 11, fontWeight: "700" }}>{unreadCounts[`topic:${topic.id}`] || 1}</Text>
+                  <Text style={{ color: "white", fontSize: 11, fontWeight: "700" }}>{channelUnreadCounts[`topic:${topic.id}`] ?? 1}</Text>
                 </View>
               ) : null}
             </View>

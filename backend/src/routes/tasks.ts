@@ -220,6 +220,25 @@ tasksRouter.get("/member-stats", async (c) => {
   return c.json({ data: statsMap });
 });
 
+// GET /api/teams/:teamId/tasks/count - returns count of todo/in-progress tasks assigned to current user
+// MUST be before /:taskId routes so Hono doesn't match "count" as a taskId
+tasksRouter.get("/count", async (c) => {
+  const user = c.get("user")!;
+  const teamId = c.req.param("teamId") as string;
+
+  const count = await prisma.taskAssignment.count({
+    where: {
+      userId: user.id,
+      task: {
+        teamId,
+        status: { in: ["todo", "in-progress"] },
+      },
+    },
+  });
+
+  return c.json({ data: count });
+});
+
 // GET /api/teams/:teamId/tasks/:taskId
 tasksRouter.get("/:taskId", async (c) => {
   const user = c.get("user")!;

@@ -175,4 +175,46 @@ messagesRouter.delete("/:messageId", async (c) => {
   return c.body(null, 204);
 });
 
+// POST /api/teams/:teamId/messages/unread-counts - returns unread message counts for team channels
+messagesRouter.post("/unread-counts", async (c) => {
+  const user = c.get("user")!;
+  const teamId = c.req.param("teamId") as string;
+  const { lastReadIds } = await c.req.json<{ lastReadIds: Record<string, string> }>();
+
+  const counts: Record<string, number> = {};
+
+  await Promise.all(
+    Object.entries(lastReadIds).map(async ([key, lastReadId]) => {
+      let topicFilter: { topicId?: string | null } = {};
+      if (key === `team:${teamId}`) {
+        topicFilter = { topicId: null };
+      } else if (key.startsWith("topic:")) {
+        topicFilter = { topicId: key.replace("topic:", "") };
+      } else {
+        return;
+      }
+
+      let afterDate: Date | null = null;
+      if (lastReadId) {
+        const msg = await prisma.message.findUnique({
+          where: { id: lastReadId },
+          select: { createdAt: true },
+        });
+        if (msg) afterDate = msg.createdAt;
+      }
+
+      counts[key] = await prisma.message.count({
+        where: {
+          teamId,
+          ...topicFilter,
+          senderId: { not: user.id },
+          ...(afterDate ? { createdAt: { gt: afterDate } } : {}),
+        },
+      });
+    })
+  );
+
+  return c.json({ data: counts });
+});
+
 export { messagesRouter };
