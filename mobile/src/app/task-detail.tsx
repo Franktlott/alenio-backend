@@ -41,6 +41,7 @@ export default function TaskDetailScreen() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [showRecallConfirm, setShowRecallConfirm] = useState(false);
+  const [showDoneConfirm, setShowDoneConfirm] = useState(false);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState<string>("");
   const [isEditMode, setIsEditMode] = useState(false);
 
@@ -262,8 +263,11 @@ export default function TaskDetailScreen() {
                 <TouchableOpacity
                   key={s.value}
                   onPress={() => {
-                    const canChange = s.value === "done" ? !isCompleted : isEditable;
-                    if (canChange) updateMutation.mutate({ status: s.value });
+                    if (s.value === "done" && !isCompleted) {
+                      setShowDoneConfirm(true);
+                    } else if (s.value !== "done" && isEditable) {
+                      updateMutation.mutate({ status: s.value });
+                    }
                   }}
                   disabled={s.value === "done" ? (isCompleted || updateMutation.isPending) : (!isEditable || updateMutation.isPending)}
                   className="px-3 py-1.5 rounded-full border"
@@ -547,6 +551,36 @@ export default function TaskDetailScreen() {
                 className="flex-1 py-3.5 items-center"
               >
                 <Text className="text-base font-semibold text-amber-500">Recall</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Done confirmation modal */}
+      <Modal visible={showDoneConfirm} transparent animationType="fade" onRequestClose={() => setShowDoneConfirm(false)}>
+        <TouchableOpacity className="flex-1 bg-black/40 items-center justify-center px-8" activeOpacity={1} onPress={() => setShowDoneConfirm(false)}>
+          <TouchableOpacity activeOpacity={1} className="w-full bg-white dark:bg-slate-800 rounded-2xl overflow-hidden">
+            <View className="px-5 pt-5 pb-4 items-center">
+              <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: "#D1FAE5", alignItems: "center", justifyContent: "center", marginBottom: 12 }}>
+                <Text style={{ fontSize: 24 }}>✓</Text>
+              </View>
+              <Text className="text-lg font-bold text-slate-900 dark:text-white mb-1">Mark as Done?</Text>
+              <Text className="text-sm text-slate-500 dark:text-slate-400 text-center">
+                This will complete the task and lock it from further edits.
+              </Text>
+            </View>
+            <View className="flex-row border-t border-slate-100 dark:border-slate-700">
+              <TouchableOpacity onPress={() => setShowDoneConfirm(false)} className="flex-1 py-3.5 items-center border-r border-slate-100 dark:border-slate-700">
+                <Text className="text-base font-medium text-slate-600 dark:text-slate-300">Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                testID="confirm-done-button"
+                onPress={() => { setShowDoneConfirm(false); updateMutation.mutate({ status: "done" }); }}
+                disabled={updateMutation.isPending}
+                className="flex-1 py-3.5 items-center"
+              >
+                <Text className="text-base font-semibold text-emerald-500">Complete</Text>
               </TouchableOpacity>
             </View>
           </TouchableOpacity>
