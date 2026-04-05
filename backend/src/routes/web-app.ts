@@ -398,7 +398,7 @@ webRouter.get("/", (c) => {
     container.innerHTML = '<div class="task-list">' + filtered.map(t => {
       const done = t.status === 'done';
       return '<div class="task-item" id="task-' + t.id + '">' +
-        '<div class="task-check ' + (done ? 'done' : '') + '" onclick="toggleTask(\'' + t.id + '\',\'' + t.status + '\')"></div>' +
+        '<div class="task-check ' + (done ? 'done' : '') + '" data-id="' + t.id + '" data-status="' + t.status + '" onclick="toggleTask(this.dataset.id,this.dataset.status)"></div>' +
         '<div class="task-info">' +
           '<div class="task-title ' + (done ? 'done' : '') + '">' + esc(t.title) + '</div>' +
           '<div class="task-meta">' +
