@@ -9,8 +9,8 @@ import { useUnreadStore } from "@/lib/state/unread-store";
 import type { Conversation } from "@/lib/types";
 
 const TABS = [
-  { name: "chat", label: "Chat", Icon: MessageCircle },
   { name: "feed", label: "Feed", Icon: Activity },
+  { name: "chat", label: "Chat", Icon: MessageCircle },
   { name: "index", label: "Tasks", Icon: CheckSquare },
   { name: "team", label: "Team", Icon: Users },
   { name: "profile", label: "Profile", Icon: User },
@@ -123,8 +123,8 @@ export default function AppLayout() {
       tabBar={(props) => <FloatingTabBar {...props} />}
       screenOptions={{ headerShown: false }}
     >
-      <Tabs.Screen name="chat" options={{}} />
       <Tabs.Screen name="feed" options={{}} />
+      <Tabs.Screen name="chat" options={{}} />
       <Tabs.Screen name="index" options={{ title: "Tasks" }} />
       <Tabs.Screen name="team" options={{ title: "Team" }} />
       <Tabs.Screen name="calendar" options={{ href: null }} />

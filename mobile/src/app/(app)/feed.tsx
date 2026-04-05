@@ -1,5 +1,6 @@
 import { View, Text, FlatList, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api/api";
 import { useTeamStore } from "@/lib/state/team-store";
@@ -215,22 +216,11 @@ export default function FeedScreen() {
   });
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#F8FAFC" }} testID="feed-screen">
+    <SafeAreaView style={{ flex: 1, backgroundColor: "#F8FAFC" }} edges={["top"]} testID="feed-screen">
       {/* Header */}
-      <LinearGradient
-        colors={["#FFFFFF", "#F8FAFC"]}
-        style={{
-          paddingTop: insets.top + 16,
-          paddingBottom: 16,
-          paddingHorizontal: 20,
-          borderBottomWidth: 1,
-          borderBottomColor: "#F1F5F9",
-        }}
-      >
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-          <Text style={{ fontSize: 24, fontWeight: "800", color: "#0F172A", letterSpacing: -0.5 }}>
-            Feed
-          </Text>
+      <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+        <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 14, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+          <Text style={{ color: "white", fontSize: 18, fontWeight: "700" }}>Feed</Text>
           <ExpoImage
             source={require("@/assets/alenio-icon.png")}
             style={{ width: 30, height: 30, borderRadius: 6 }}
@@ -270,6 +260,6 @@ export default function FeedScreen() {
           testID="activity-list"
         />
       )}
-    </View>
+    </SafeAreaView>
   );
 }
