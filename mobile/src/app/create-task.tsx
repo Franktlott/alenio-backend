@@ -135,6 +135,10 @@ export default function CreateTaskScreen() {
       setError("Please enter a task title");
       return;
     }
+    if (selectedAssignees.length === 0) {
+      setError("Please assign this task to at least one person");
+      return;
+    }
     setError(null);
     createMutation.mutate({
       title: title.trim(),
@@ -372,9 +376,10 @@ export default function CreateTaskScreen() {
           {/* Assignees */}
           {members.length > 0 ? (
             <View className="py-4 border-b border-slate-100 dark:border-slate-800">
-              <Text className="text-sm font-semibold text-slate-500 mb-3">
-                Assign to
-              </Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 12 }}>
+                <Text className="text-sm font-semibold text-slate-500">Assign to</Text>
+                <Text style={{ fontSize: 12, color: "#EF4444", fontWeight: "600" }}>*</Text>
+              </View>
               <View style={{ gap: 8 }}>
                 {members.map((m: TeamMember) => {
                   const isSelected = selectedAssignees.includes(m.userId);
