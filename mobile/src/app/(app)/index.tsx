@@ -31,6 +31,48 @@ type SortMode = "due" | "priority";
 const DAY_LABELS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 
+type WeekBar ={ id: string; title: string; color: string; startCol: number; endCol: number };
+
+function startOfDay(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+function isSameDay(a: Date, b: Date): boolean {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+
+function computeWeekBars(week: (Date | null)[], events: CalendarEvent[]): WeekBar[][] {
+  const bars: WeekBar[] = [];
+  for (const event of events) {
+    const evStart = startOfDay(new Date(event.startDate));
+    const evEnd = event.endDate ? startOfDay(new Date(event.endDate)) : evStart;
+    let startCol = -1, endCol = -1;
+    for (let i = 0; i < week.length; i++) {
+      const day = week[i];
+      if (!day) continue;
+      const d = startOfDay(day);
+      if (d >= evStart && d <= evEnd) {
+        if (startCol === -1) startCol = i;
+        endCol = i;
+      }
+    }
+    if (startCol === -1) continue;
+    bars.push({ id: event.id, title: event.title, color: event.color, startCol, endCol });
+  }
+  bars.sort((a, b) => (b.endCol - b.startCol) - (a.endCol - a.startCol) || a.startCol - b.startCol);
+  const tracks: WeekBar[][] = [];
+  for (const bar of bars) {
+    let placed = false;
+    for (const track of tracks) {
+      if (!track.some((b) => b.startCol <= bar.endCol && b.endCol >= bar.startCol)) {
+        track.push(bar); placed = true; break;
+      }
+    }
+    if (!placed) tracks.push([bar]);
+  }
+  return tracks;
+}
+
 function MiniCalendar({
   tasks,
   events,
@@ -45,35 +87,26 @@ function MiniCalendar({
   const today = new Date();
   const [viewYear, setViewYear] = useState(today.getFullYear());
   const [viewMonth, setViewMonth] = useState(today.getMonth());
+  const [weekRowWidth, setWeekRowWidth] = useState(0);
 
   const firstDay = new Date(viewYear, viewMonth, 1).getDay();
   const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
 
-  // Build set of days (YYYY-MM-DD) that have tasks due
+  // Build set of days that have tasks due
   const taskDays = new Set(
     tasks
       .filter((t) => t.dueDate && t.status !== "done")
       .map((t) => new Date(t.dueDate!).toISOString().slice(0, 10))
   );
 
-  // Build set of days (YYYY-MM-DD) covered by events
-  const eventDays = new Set<string>();
-  for (const ev of events) {
-    const start = new Date(ev.startDate);
-    const end = ev.endDate ? new Date(ev.endDate) : start;
-    const cursor = new Date(start);
-    cursor.setHours(0, 0, 0, 0);
-    end.setHours(0, 0, 0, 0);
-    while (cursor <= end) {
-      eventDays.add(cursor.toISOString().slice(0, 10));
-      cursor.setDate(cursor.getDate() + 1);
-    }
-  }
-
-  const cells: (number | null)[] = [
+  // Build day cells padded into full weeks
+  const allCells: (Date | null)[] = [
     ...Array(firstDay).fill(null),
-    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+    ...Array.from({ length: daysInMonth }, (_, i) => new Date(viewYear, viewMonth, i + 1)),
   ];
+  while (allCells.length % 7 !== 0) allCells.push(null);
+  const weeks: (Date | null)[][] = [];
+  for (let i = 0; i < allCells.length; i += 7) weeks.push(allCells.slice(i, i + 7));
 
   const prevMonth = () => {
     if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1); }
@@ -100,45 +133,97 @@ function MiniCalendar({
       </View>
 
       {/* Day headers */}
-      <View style={{ flexDirection: "row", marginBottom: 4 }}>
+      <View style={{ flexDirection: "row", marginBottom: 2 }}>
         {DAY_LABELS.map((d) => (
           <Text key={d} style={{ flex: 1, textAlign: "center", fontSize: 11, fontWeight: "600", color: "#94A3B8" }}>{d}</Text>
         ))}
       </View>
 
-      {/* Day grid */}
-      <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
-        {cells.map((day, idx) => {
-          if (!day) return <View key={`empty-${idx}`} style={{ width: "14.28%", aspectRatio: 1 }} />;
-          const iso = `${viewYear}-${String(viewMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-          const isToday = today.getFullYear() === viewYear && today.getMonth() === viewMonth && today.getDate() === day;
-          const isSelected = selectedDay === iso;
-          const hasTasks = taskDays.has(iso);
-          const hasEvents = eventDays.has(iso);
+      {/* Week rows */}
+      {weeks.map((week, weekIdx) => {
+        const tracks = computeWeekBars(week, events);
+        return (
+          <View key={weekIdx}>
+            {/* Day numbers */}
+            <View style={{ flexDirection: "row" }}>
+              {week.map((day, colIdx) => {
+                if (!day) return <View key={`e-${weekIdx}-${colIdx}`} style={{ flex: 1, height: 34 }} />;
+                const iso = day.toISOString().slice(0, 10);
+                const isToday = isSameDay(day, today);
+                const isSelected = selectedDay === iso;
+                const hasTasks = taskDays.has(iso);
+                return (
+                  <TouchableOpacity
+                    key={iso}
+                    onPress={() => onSelectDay(isSelected ? null : iso)}
+                    style={{ flex: 1, height: 34, alignItems: "center", justifyContent: "center" }}
+                  >
+                    <View style={{
+                      width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center",
+                      backgroundColor: isSelected ? "#4361EE" : isToday ? "#EEF2FF" : "transparent",
+                    }}>
+                      <Text style={{ fontSize: 12, fontWeight: isToday || isSelected ? "700" : "400", color: isSelected ? "white" : isToday ? "#4361EE" : "#334155" }}>
+                        {day.getDate()}
+                      </Text>
+                    </View>
+                    {hasTasks && !isSelected ? (
+                      <View style={{ position: "absolute", bottom: 3, width: 3, height: 3, borderRadius: 1.5, backgroundColor: "#4361EE" }} />
+                    ) : null}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
 
-          return (
-            <TouchableOpacity
-              key={iso}
-              onPress={() => onSelectDay(isSelected ? null : iso)}
-              style={{ width: "14.28%", aspectRatio: 1, alignItems: "center", justifyContent: "center" }}
-            >
-              <View style={{
-                width: 30, height: 30, borderRadius: 15, alignItems: "center", justifyContent: "center",
-                backgroundColor: isSelected ? "#4361EE" : isToday ? "#EEF2FF" : "transparent",
-              }}>
-                <Text style={{ fontSize: 13, fontWeight: isToday || isSelected ? "700" : "400", color: isSelected ? "white" : isToday ? "#4361EE" : "#334155" }}>
-                  {day}
-                </Text>
+            {/* Event bars */}
+            {tracks.length > 0 ? (
+              <View
+                onLayout={(e) => setWeekRowWidth(e.nativeEvent.layout.width)}
+                style={{ position: "relative", marginBottom: 3 }}
+              >
+                {tracks.map((track, trackIdx) => (
+                  <View key={trackIdx} style={{ flexDirection: "row", height: 15, marginBottom: 2 }}>
+                    {week.map((_, colIdx) => {
+                      const bar = track.find((b) => b.startCol <= colIdx && b.endCol >= colIdx);
+                      if (!bar) return <View key={colIdx} style={{ flex: 1 }} />;
+                      const isStart = colIdx === bar.startCol;
+                      const isEnd = colIdx === bar.endCol;
+                      return (
+                        <View
+                          key={colIdx}
+                          style={{
+                            flex: 1, height: 15,
+                            backgroundColor: bar.color,
+                            borderTopLeftRadius: isStart ? 4 : 0,
+                            borderBottomLeftRadius: isStart ? 4 : 0,
+                            borderTopRightRadius: isEnd ? 4 : 0,
+                            borderBottomRightRadius: isEnd ? 4 : 0,
+                            marginLeft: isStart ? 2 : 0,
+                            marginRight: isEnd ? 2 : 0,
+                          }}
+                        />
+                      );
+                    })}
+                    {weekRowWidth > 0 && track.map((bar) => {
+                      const colWidth = weekRowWidth / 7;
+                      return (
+                        <View
+                          key={`t-${bar.id}`}
+                          pointerEvents="none"
+                          style={{ position: "absolute", left: bar.startCol * colWidth + 2, width: (bar.endCol - bar.startCol + 1) * colWidth - 4, top: 0, height: 15, justifyContent: "center", overflow: "hidden" }}
+                        >
+                          <Text style={{ color: "white", fontSize: 9, fontWeight: "600", paddingHorizontal: 4, lineHeight: 14 }} numberOfLines={1}>
+                            {bar.title}
+                          </Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+                ))}
               </View>
-              <View style={{ flexDirection: "row", gap: 2, height: 5, alignItems: "center", marginTop: 1 }}>
-                {hasTasks && !isSelected ? <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: "#4361EE" }} /> : null}
-                {hasEvents && !isSelected ? <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: "#7C3AED" }} /> : null}
-                {(!hasTasks && !hasEvents) || isSelected ? <View style={{ width: 4, height: 4 }} /> : null}
-              </View>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
+            ) : <View style={{ height: 2 }} />}
+          </View>
+        );
+      })}
     </View>
   );
 }
