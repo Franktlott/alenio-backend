@@ -12,7 +12,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { LinearGradient } from "expo-linear-gradient";
-import { MessageCircle, Users, ChevronRight, Plus, Lock, CalendarDays, CheckSquare } from "lucide-react-native";
+import { MessageCircle, Users, ChevronRight, Lock, Plus } from "lucide-react-native";
 import { router } from "expo-router";
 import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
@@ -252,118 +252,42 @@ export default function ChatScreen() {
         refreshing={refreshing}
       />
 
-      {/* FAB */}
-      <TouchableOpacity
-        testID="fab-new-conversation"
-        onPress={() => setFabOpen(true)}
-        className="absolute bottom-6 right-5 w-14 h-14 rounded-full bg-indigo-600 items-center justify-center"
-        style={{
-          shadowColor: "#4361EE",
-          shadowOpacity: 0.4,
-          shadowRadius: 12,
-          shadowOffset: { width: 0, height: 4 },
-          elevation: 8,
-        }}
-      >
-        <Plus size={26} color="white" />
-      </TouchableOpacity>
-
-      {/* FAB popup menu */}
-      <Modal
-        visible={fabOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setFabOpen(false)}
-      >
-        <TouchableOpacity
-          className="flex-1 bg-black/30"
-          activeOpacity={1}
-          onPress={() => setFabOpen(false)}
-        >
-          <View className="absolute bottom-24 right-5" style={{ gap: 10 }}>
-            {/* New Group option */}
-            <TouchableOpacity
-              testID="fab-new-group"
-              onPress={() => {
-                setFabOpen(false);
-                if (!isPro) {
-                  setShowGroupPaywall(true);
-                } else {
-                  router.push("/create-group");
-                }
-              }}
-              className="flex-row items-center self-end bg-white dark:bg-slate-800 rounded-2xl px-4 py-3"
-              style={{
-                shadowColor: "#000",
-                shadowOpacity: 0.12,
-                shadowRadius: 8,
-                shadowOffset: { width: 0, height: 2 },
-                elevation: 4,
-                gap: 10,
-              }}
-            >
-              <Text className="text-slate-900 dark:text-white font-semibold text-sm">New Group</Text>
-              <View className="w-9 h-9 rounded-full bg-indigo-600 items-center justify-center">
-                <Users size={18} color="white" />
-              </View>
-            </TouchableOpacity>
-
-            {/* New Direct Message option */}
-            <TouchableOpacity
-              testID="fab-new-dm"
-              onPress={() => { setFabOpen(false); router.push("/new-dm"); }}
-              className="flex-row items-center self-end bg-white dark:bg-slate-800 rounded-2xl px-4 py-3"
-              style={{
-                shadowColor: "#000",
-                shadowOpacity: 0.12,
-                shadowRadius: 8,
-                shadowOffset: { width: 0, height: 2 },
-                elevation: 4,
-                gap: 10,
-              }}
-            >
-              <Text className="text-slate-900 dark:text-white font-semibold text-sm">Direct Message</Text>
-              <View className="w-9 h-9 rounded-full bg-indigo-600 items-center justify-center">
-                <MessageCircle size={18} color="white" />
-              </View>
-            </TouchableOpacity>
-          </View>
-        </TouchableOpacity>
-      </Modal>
-      {/* Add Event / Add Task choice modal */}
+      {/* Add / New Conversation choice modal */}
       <Modal visible={showAddModal} transparent animationType="fade" onRequestClose={() => setShowAddModal(false)}>
         <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }} onPress={() => setShowAddModal(false)}>
           <Pressable onPress={(e) => e.stopPropagation()} style={{ backgroundColor: "white", borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, gap: 12 }}>
             <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: "#E2E8F0", alignSelf: "center", marginBottom: 8 }} />
             <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 4 }}>
               <Image source={require("@/assets/alenio-icon.png")} style={{ width: 32, height: 32, borderRadius: 8 }} />
-              <Text style={{ fontSize: 17, fontWeight: "700", color: "#0F172A" }}>What would you like to add?</Text>
+              <Text style={{ fontSize: 17, fontWeight: "700", color: "#0F172A" }}>New Conversation</Text>
             </View>
             <Pressable
+              testID="add-modal-new-dm"
+              onPress={() => { setShowAddModal(false); router.push("/new-dm"); }}
+              style={{ flexDirection: "row", alignItems: "center", gap: 14, backgroundColor: "#EEF2FF", borderRadius: 16, padding: 16 }}
+            >
+              <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: "#4361EE", alignItems: "center", justifyContent: "center" }}>
+                <MessageCircle size={22} color="white" />
+              </View>
+              <View>
+                <Text style={{ fontSize: 15, fontWeight: "700", color: "#0F172A" }}>Direct Message</Text>
+                <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 2 }}>Send a private message to a teammate</Text>
+              </View>
+            </Pressable>
+            <Pressable
+              testID="add-modal-new-group"
               onPress={() => {
                 setShowAddModal(false);
-                router.navigate({ pathname: "/(app)", params: { openModal: "event" } });
+                if (!isPro) { setShowGroupPaywall(true); } else { router.push("/create-group"); }
               }}
               style={{ flexDirection: "row", alignItems: "center", gap: 14, backgroundColor: "#F5F3FF", borderRadius: 16, padding: 16 }}
             >
               <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: "#7C3AED", alignItems: "center", justifyContent: "center" }}>
-                <CalendarDays size={22} color="white" />
+                <Users size={22} color="white" />
               </View>
               <View>
-                <Text style={{ fontSize: 15, fontWeight: "700", color: "#0F172A" }}>Add Event</Text>
-                <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 2 }}>Add to the team calendar</Text>
-              </View>
-            </Pressable>
-            <Pressable
-              onPress={() => { setShowAddModal(false); router.push({ pathname: "/create-task", params: { teamId: activeTeamId ?? "" } }); }}
-              style={{ flexDirection: "row", alignItems: "center", gap: 14, backgroundColor: "#EEF2FF", borderRadius: 16, padding: 16 }}
-            >
-              <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: "#4361EE", alignItems: "center", justifyContent: "center" }}>
-                <CheckSquare size={22} color="white" />
-              </View>
-              <View>
-                <Text style={{ fontSize: 15, fontWeight: "700", color: "#0F172A" }}>Add Task</Text>
-                <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 2 }}>Create a new task for the team</Text>
+                <Text style={{ fontSize: 15, fontWeight: "700", color: "#0F172A" }}>New Group</Text>
+                <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 2 }}>Create a group conversation</Text>
               </View>
             </Pressable>
           </Pressable>
