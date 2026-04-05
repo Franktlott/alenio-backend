@@ -3,15 +3,15 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api/api";
 import { useTeamStore } from "@/lib/state/team-store";
-import { CheckCircle, UserPlus, UserMinus, Calendar, Activity, UserCheck } from "lucide-react-native";
+import { CheckCircle, UserPlus, UserMinus, Calendar, Activity, UserCheck, Trophy } from "lucide-react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Image as ExpoImage } from "expo-image";
 
 type ActivityEvent = {
   id: string;
-  type: "task_completed" | "member_joined" | "member_removed" | "calendar_event_added" | "task_assigned";
+  type: "task_completed" | "member_joined" | "member_removed" | "calendar_event_added" | "task_assigned" | "task_milestone";
   createdAt: string;
-  metadata: { taskTitle?: string; userName?: string; eventTitle?: string } | null;
+  metadata: { taskTitle?: string; userName?: string; eventTitle?: string; count?: number } | null;
   user: { id: string; name: string; image: string | null } | null;
 };
 
@@ -56,6 +56,14 @@ const EVENT_CONFIG = {
     getMessage: (e: ActivityEvent) =>
       `${e.user?.name ?? "Someone"} was assigned "${e.metadata?.taskTitle ?? "a task"}"`,
   },
+  task_milestone: {
+    label: "Milestone",
+    color: "#F59E0B",
+    bg: "#FFFBEB",
+    Icon: Trophy,
+    getMessage: (e: ActivityEvent) =>
+      `${e.user?.name ?? "Someone"} completed ${e.metadata?.count ?? 10} tasks on time!`,
+  },
 };
 
 function timeAgo(dateStr: string) {
@@ -69,7 +77,61 @@ function timeAgo(dateStr: string) {
   return `${days}d ago`;
 }
 
+function CelebrationCard({ item }: { item: ActivityEvent }) {
+  const count = item.metadata?.count ?? 10;
+  const name = item.user?.name ?? "Someone";
+  return (
+    <View style={{ marginHorizontal: 16, marginVertical: 8 }} testID={`milestone-card-${item.id}`}>
+      <LinearGradient
+        colors={["#F59E0B", "#EF4444"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={{ borderRadius: 18, padding: 2 }}
+      >
+        <View style={{ backgroundColor: "#FFFBEB", borderRadius: 16, padding: 16, gap: 10 }}>
+          {/* Top row: trophy + time */}
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#FEF3C7", alignItems: "center", justifyContent: "center" }}>
+                <Trophy size={18} color="#F59E0B" />
+              </View>
+              <View style={{ backgroundColor: "#FEF3C7", borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 }}>
+                <Text style={{ fontSize: 11, fontWeight: "700", color: "#D97706", letterSpacing: 0.3 }}>MILESTONE</Text>
+              </View>
+            </View>
+            <Text style={{ fontSize: 12, color: "#94A3B8" }}>{timeAgo(item.createdAt)}</Text>
+          </View>
+
+          {/* Count badge */}
+          <View style={{ alignItems: "center", paddingVertical: 8 }}>
+            <Text style={{ fontSize: 48, fontWeight: "800", color: "#F59E0B", lineHeight: 52 }}>{count}</Text>
+            <Text style={{ fontSize: 13, fontWeight: "600", color: "#92400E", marginTop: 2 }}>tasks completed on time</Text>
+          </View>
+
+          {/* Avatar + name */}
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "#FEF3C7", borderRadius: 12, padding: 10 }}>
+            <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "#FDE68A", overflow: "hidden", alignItems: "center", justifyContent: "center" }}>
+              {item.user?.image ? (
+                <ExpoImage source={{ uri: item.user.image }} style={{ width: 32, height: 32 }} contentFit="cover" />
+              ) : (
+                <Text style={{ fontSize: 14, fontWeight: "700", color: "#D97706" }}>{name[0].toUpperCase()}</Text>
+              )}
+            </View>
+            <Text style={{ fontSize: 14, fontWeight: "700", color: "#92400E", flex: 1 }}>
+              {name} is on a roll! 🎉
+            </Text>
+          </View>
+        </View>
+      </LinearGradient>
+    </View>
+  );
+}
+
 function ActivityItem({ item }: { item: ActivityEvent }) {
+  if (item.type === "task_milestone") {
+    return <CelebrationCard item={item} />;
+  }
+
   const config = EVENT_CONFIG[item.type] ?? {
     label: item.type,
     color: "#64748B",
@@ -196,9 +258,11 @@ export default function FeedScreen() {
           data={activities}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => <ActivityItem item={item} />}
-          ItemSeparatorComponent={() => (
-            <View style={{ height: 1, backgroundColor: "#F1F5F9", marginLeft: 72 }} />
-          )}
+          ItemSeparatorComponent={({ leadingItem }: { leadingItem: ActivityEvent }) =>
+            leadingItem.type === "task_milestone" ? null : (
+              <View style={{ height: 1, backgroundColor: "#F1F5F9", marginLeft: 72 }} />
+            )
+          }
           onRefresh={refetch}
           refreshing={isLoading}
           contentContainerStyle={{ paddingBottom: insets.bottom + 88 }}

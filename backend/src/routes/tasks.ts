@@ -303,6 +303,28 @@ tasksRouter.patch("/:taskId", async (c) => {
       metadata: { taskTitle: task.title },
     });
 
+    // Check for on-time completion milestone (every 10 tasks)
+    const onTimeResult = await prisma.$queryRaw<{ count: bigint }[]>`
+      SELECT COUNT(*) as count
+      FROM Task t
+      JOIN TaskAssignment ta ON ta.taskId = t.id
+      WHERE t.teamId = ${teamId}
+      AND ta.userId = ${user.id}
+      AND t.status = 'done'
+      AND t.completedAt IS NOT NULL
+      AND t.dueDate IS NOT NULL
+      AND t.completedAt <= t.dueDate
+    `;
+    const onTimeCount = Number(onTimeResult[0]?.count ?? 0);
+    if (onTimeCount > 0 && onTimeCount % 10 === 0) {
+      await logActivity({
+        teamId,
+        userId: user.id,
+        type: "task_milestone",
+        metadata: { count: onTimeCount, userName: user.name },
+      });
+    }
+
     const rule = await prisma.recurrenceRule.findUnique({ where: { taskId } });
     if (rule) {
       const baseDue = task.dueDate || new Date();
