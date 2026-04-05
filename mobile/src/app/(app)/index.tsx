@@ -401,6 +401,7 @@ export default function TasksScreen() {
 
   const [teamCompletedExpanded, setTeamCompletedExpanded] = useState(false);
   const [confirmCompleteTask, setConfirmCompleteTask] = useState<Task | null>(null);
+  const [milestoneModal, setMilestoneModal] = useState<{ count: number; userName: string } | null>(null);
   // Event modal state
   const [showEventModal, setShowEventModal] = useState(false);
   const [eventTitle, setEventTitle] = useState("");
@@ -457,11 +458,14 @@ export default function TasksScreen() {
 
   const toggleMutation = useMutation({
     mutationFn: (task: Task) =>
-      api.patch<Task>(`/api/teams/${activeTeamId}/tasks/${task.id}`, {
+      api.patchFull<Task>(`/api/teams/${activeTeamId}/tasks/${task.id}`, {
         status: task.status === "done" ? "todo" : "done",
       }),
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["tasks", activeTeamId] });
+      if (result.milestone) {
+        setMilestoneModal({ count: result.milestone, userName: session?.user?.name ?? "You" });
+      }
     },
   });
 
@@ -931,6 +935,52 @@ export default function TasksScreen() {
             </ScrollView>
           </Pressable>
         </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Milestone Celebration Modal */}
+      <Modal visible={!!milestoneModal} transparent animationType="fade" onRequestClose={() => setMilestoneModal(null)}>
+        <Pressable
+          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center", paddingHorizontal: 32 }}
+          onPress={() => setMilestoneModal(null)}
+          testID="milestone-modal-backdrop"
+        >
+          <Pressable onPress={(e) => e.stopPropagation()} testID="milestone-modal">
+            <LinearGradient
+              colors={["#F59E0B", "#EF4444"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={{ borderRadius: 28, padding: 3 }}
+            >
+              <View style={{ backgroundColor: "#FFFBEB", borderRadius: 26, padding: 28, alignItems: "center", gap: 12 }}>
+                {/* Trophy */}
+                <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: "#FEF3C7", alignItems: "center", justifyContent: "center" }}>
+                  <Text style={{ fontSize: 36 }}>🏆</Text>
+                </View>
+
+                <Text style={{ fontSize: 13, fontWeight: "700", color: "#D97706", letterSpacing: 1.5, textTransform: "uppercase" }}>Milestone Reached!</Text>
+
+                <Text style={{ fontSize: 44, fontWeight: "800", color: "#F59E0B", lineHeight: 48 }}>
+                  {milestoneModal?.count}
+                </Text>
+                <Text style={{ fontSize: 16, fontWeight: "600", color: "#92400E", textAlign: "center", lineHeight: 22 }}>
+                  {milestoneModal?.userName} completed{"\n"}{milestoneModal?.count} tasks on time!
+                </Text>
+
+                <Text style={{ fontSize: 13, color: "#B45309", textAlign: "center" }}>
+                  Keep up the incredible streak 🔥
+                </Text>
+
+                <Pressable
+                  onPress={() => setMilestoneModal(null)}
+                  style={{ marginTop: 8, backgroundColor: "#F59E0B", paddingHorizontal: 40, paddingVertical: 14, borderRadius: 24 }}
+                  testID="milestone-modal-close"
+                >
+                  <Text style={{ color: "white", fontWeight: "700", fontSize: 16 }}>Let's go! 🎉</Text>
+                </Pressable>
+              </View>
+            </LinearGradient>
+          </Pressable>
+        </Pressable>
       </Modal>
     </SafeAreaView>
   );

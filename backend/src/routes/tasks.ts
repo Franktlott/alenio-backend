@@ -294,6 +294,7 @@ tasksRouter.patch("/:taskId", async (c) => {
   });
 
   // Handle recurrence: if completed, spawn next occurrence
+  let milestoneCount: number | null = null;
   if (status === "done" && task.status !== "done") {
     // Log activity for task completion
     await logActivity({
@@ -317,6 +318,7 @@ tasksRouter.patch("/:taskId", async (c) => {
     `;
     const onTimeCount = Number(onTimeResult[0]?.count ?? 0);
     if (onTimeCount > 0 && onTimeCount % 10 === 0) {
+      milestoneCount = onTimeCount;
       await logActivity({
         teamId,
         userId: user.id,
@@ -357,7 +359,7 @@ tasksRouter.patch("/:taskId", async (c) => {
     }
   }
 
-  return c.json({ data: updated });
+  return c.json({ data: updated, ...(milestoneCount !== null ? { milestone: milestoneCount } : {}) });
 });
 
 // DELETE /api/teams/:teamId/tasks/:taskId
