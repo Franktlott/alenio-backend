@@ -383,6 +383,7 @@ export default function TasksScreen() {
   const [sort, setSort] = useState<SortMode>("due");
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [fabOpen, setFabOpen] = useState(false);
+  const [teamCompletedExpanded, setTeamCompletedExpanded] = useState(false);
   // Event modal state
   const [showEventModal, setShowEventModal] = useState(false);
   const [eventTitle, setEventTitle] = useState("");
@@ -513,6 +514,14 @@ export default function TasksScreen() {
     const [ty, tm, td] = targetIso.split("-").map(Number);
     const target = new Date(ty, tm - 1, td);
     return evStart <= target && target <= evEnd;
+  });
+
+  // Completed tasks delegated to others (for Team tab collapsed section)
+  const teamCompletedTasks = teamTasks.filter((t) => {
+    if (t.status !== "done") return false;
+    if ((t.assignments ?? []).length === 0) return false;
+    if (!(t.assignments ?? []).some((a) => a.userId !== currentUserId)) return false;
+    return true;
   });
 
   const assignedCount = allTasks.filter((t) =>
@@ -676,6 +685,38 @@ export default function TasksScreen() {
             />
           ))
         )}
+
+        {/* Team tab: collapsed completed section */}
+        {filter === "assigned" && teamCompletedTasks.length > 0 ? (
+          <View style={{ marginTop: 8 }}>
+            <Pressable
+              onPress={() => setTeamCompletedExpanded((v) => !v)}
+              style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12, gap: 8 }}
+              testID="team-completed-toggle"
+            >
+              <View style={{ flex: 1, height: 1, backgroundColor: "#E2E8F0" }} />
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: "#10B981", alignItems: "center", justifyContent: "center" }}>
+                  <Text style={{ color: "white", fontSize: 10, fontWeight: "bold" }}>✓</Text>
+                </View>
+                <Text style={{ fontSize: 13, fontWeight: "600", color: "#64748B" }}>
+                  Completed ({teamCompletedTasks.length})
+                </Text>
+                <Text style={{ fontSize: 12, color: "#94A3B8" }}>{teamCompletedExpanded ? "▲" : "▼"}</Text>
+              </View>
+              <View style={{ flex: 1, height: 1, backgroundColor: "#E2E8F0" }} />
+            </Pressable>
+            {teamCompletedExpanded ? teamCompletedTasks.map((item) => (
+              <TaskRow
+                key={item.id}
+                task={item}
+                onToggle={() => toggleMutation.mutate(item)}
+                onPress={() => router.push({ pathname: "/task-detail", params: { taskId: item.id, teamId: activeTeamId! } })}
+              />
+            )) : null}
+          </View>
+        ) : null}
+
         <View style={{ height: 120 }} />
       </ScrollView>
 
