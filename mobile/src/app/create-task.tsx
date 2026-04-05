@@ -51,7 +51,11 @@ export default function CreateTaskScreen() {
   const [recurrenceInterval, setRecurrenceInterval] = useState("1");
   const [selectedDayOfWeek, setSelectedDayOfWeek] = useState<number | null>(null);
   const [selectedDayOfMonth, setSelectedDayOfMonth] = useState<number | null>(null);
-  const [dueDate, setDueDate] = useState<Date | null>(null);
+  const [dueDate, setDueDate] = useState<Date | null>(() => {
+    const d = new Date();
+    d.setHours(23, 59, 59, 0);
+    return d;
+  });
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
   const [savingTemplate, setSavingTemplate] = useState(false);
@@ -131,16 +135,12 @@ export default function CreateTaskScreen() {
       setError("Please enter a task title");
       return;
     }
-    if (!dueDate) {
-      setError("Please select a due date");
-      return;
-    }
     setError(null);
     createMutation.mutate({
       title: title.trim(),
       description: description.trim() || undefined,
       priority,
-      dueDate: dueDate.toISOString(),
+      dueDate: dueDate!.toISOString(),
       assigneeIds: selectedAssignees,
       recurrence: isRecurring
         ? {
