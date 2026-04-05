@@ -477,9 +477,18 @@ export default function TasksScreen() {
     t.creator?.id !== currentUserId;
 
   const tasks = allTasks.filter((t) => {
-    if (filter === "assigned") { if (t.status === "done") return false; }
-    else if (filter === "completed") { if (!(t.status === "done" && isMyCreatedTask(t))) return false; }
-    else { if (!(t.status !== "done" && isMyCreatedTask(t))) return false; }
+    if (filter === "assigned") {
+      // Team tab: tasks created by the logged-in user that are assigned to others
+      if (t.creator?.id !== currentUserId) return false;
+      if (!(t.assignments ?? []).some((a) => a.userId !== currentUserId)) return false;
+      if (t.status === "done") return false;
+    } else if (filter === "completed") {
+      // Completed tab: logged-in user's own completed tasks
+      if (!(t.status === "done" && isMyCreatedTask(t))) return false;
+    } else {
+      // Active tab: logged-in user's own open tasks
+      if (!(t.status !== "done" && isMyCreatedTask(t))) return false;
+    }
     return true;
   }).sort((a, b) => {
     if (sort === "priority") {
@@ -646,7 +655,7 @@ export default function TasksScreen() {
           <View style={{ alignItems: "center", justifyContent: "center", paddingHorizontal: 24, paddingVertical: 40 }} testID="empty-state">
             <Text style={{ fontSize: 40, marginBottom: 12 }}>✓</Text>
             <Text style={{ fontSize: 17, fontWeight: "600", color: "#94A3B8" }}>
-              {filter === "completed" ? "No completed tasks" : filter === "assigned" ? "No team tasks" : "No active tasks"}
+              {filter === "completed" ? "No completed tasks" : filter === "assigned" ? "No tasks assigned to others" : "No active tasks"}
             </Text>
             {filter === "all" && !selectedDay ? (
               <Text style={{ color: "#CBD5E1", fontSize: 13, marginTop: 4, textAlign: "center" }}>
