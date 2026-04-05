@@ -61,7 +61,7 @@ tasksRouter.get("/", async (c) => {
   const membership = await getMembership(user.id, teamId);
   if (!membership) return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
 
-  const { status, priority, assigneeId } = c.req.query();
+  const { status, priority, assigneeId, creatorId } = c.req.query();
 
   const tasks = await prisma.task.findMany({
     where: {
@@ -69,6 +69,8 @@ tasksRouter.get("/", async (c) => {
       ...(status ? { status } : {}),
       ...(priority ? { priority } : {}),
       ...(assigneeId ? { assignments: { some: { userId: assigneeId } } } : {}),
+      // "me" is a shorthand that resolves to the authenticated user's ID
+      ...(creatorId ? { creatorId: creatorId === "me" ? user.id : creatorId } : {}),
     },
     include: {
       assignments: {

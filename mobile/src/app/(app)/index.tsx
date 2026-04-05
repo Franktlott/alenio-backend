@@ -410,10 +410,18 @@ export default function TasksScreen() {
     }
   }, [teams, activeTeamId, setActiveTeamId]);
 
-  const { data: allTasks = [], isLoading, refetch, isRefetching } = useQuery({
-    queryKey: ["tasks", activeTeamId],
-    queryFn: () => api.get<Task[]>(`/api/teams/${activeTeamId}/tasks`),
+  // My tasks (creator = me) — used for Active, Completed tabs and calendar dots
+  const { data: allTasks = [], isLoading } = useQuery({
+    queryKey: ["tasks", activeTeamId, "mine"],
+    queryFn: () => api.get<Task[]>(`/api/teams/${activeTeamId}/tasks?creatorId=me`),
     enabled: !!activeTeamId,
+  });
+
+  // All team tasks — used for calendar dots and Team tab
+  const { data: teamTasks = [] } = useQuery({
+    queryKey: ["tasks", activeTeamId, "team"],
+    queryFn: () => api.get<Task[]>(`/api/teams/${activeTeamId}/tasks`),
+    enabled: !!activeTeamId && filter === "assigned",
   });
 
   const { data: calendarEvents = [] } = useQuery({
@@ -465,29 +473,23 @@ export default function TasksScreen() {
   };
 
   const currentUserId = session?.user?.id ?? null;
-  const activeTeam = teams?.find((t) => t.id === activeTeamId);
 
   React.useEffect(() => {
     if (filter === "assigned" && !currentUserId) setFilter("all");
   }, [currentUserId, filter]);
 
-  const isMyCreatedTask = (t: Task) => t.creator?.id === currentUserId;
-  const isAssignedToMe = (t: Task) =>
-    (t.assignments ?? []).some((a) => a.userId === currentUserId) &&
-    t.creator?.id !== currentUserId;
-
-  const tasks = allTasks.filter((t) => {
+  // Active: my open tasks (server-filtered by creatorId=me)
+  // Completed: my done tasks (server-filtered by creatorId=me)
+  // Team: all team tasks assigned to others by me
+  const tasks = (filter === "assigned" ? teamTasks : allTasks).filter((t) => {
     if (filter === "assigned") {
-      // Team tab: tasks created by the logged-in user that are assigned to others
       if (t.creator?.id !== currentUserId) return false;
       if (!(t.assignments ?? []).some((a) => a.userId !== currentUserId)) return false;
       if (t.status === "done") return false;
     } else if (filter === "completed") {
-      // Completed tab: logged-in user's own completed tasks
-      if (!(t.status === "done" && isMyCreatedTask(t))) return false;
+      if (t.status !== "done") return false;
     } else {
-      // Active tab: logged-in user's own open tasks
-      if (!(t.status !== "done" && isMyCreatedTask(t))) return false;
+      if (t.status === "done") return false;
     }
     return true;
   }).sort((a, b) => {
@@ -516,9 +518,9 @@ export default function TasksScreen() {
     t.creator?.id === currentUserId &&
     (t.assignments ?? []).some((a) => a.userId !== currentUserId)
   ).length;
-  const completedCount = allTasks.filter((t) => t.status === "done" && isMyCreatedTask(t)).length;
+  const completedCount = allTasks.filter((t) => t.status === "done").length;
 
-  const myActiveTasks = allTasks.filter((t) => t.status !== "done" && isMyCreatedTask(t));
+  const myActiveTasks = allTasks.filter((t) => t.status !== "done");
   const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
   const todayEnd = new Date(); todayEnd.setHours(23, 59, 59, 999);
   const dueTodayCount = myActiveTasks.filter((t) => t.dueDate && new Date(t.dueDate) >= todayStart && new Date(t.dueDate) <= todayEnd).length;
