@@ -9,12 +9,17 @@ import {
   Pressable,
   Image,
   ScrollView,
+  Modal,
+  TextInput,
+  Platform,
+  KeyboardAvoidingView,
 } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
-import { Plus, User, ArrowUpDown, Clock, AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react-native";
+import { Plus, User, ArrowUpDown, Clock, AlertTriangle, ChevronLeft, ChevronRight, X, CalendarDays, CheckSquare, Calendar } from "lucide-react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
 import { useTeamStore } from "@/lib/state/team-store";
@@ -241,6 +246,17 @@ export default function TasksScreen() {
   const [filter, setFilter] = useState<FilterTab>("all");
   const [sort, setSort] = useState<SortMode>("due");
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const [fabOpen, setFabOpen] = useState(false);
+  // Event modal state
+  const [showEventModal, setShowEventModal] = useState(false);
+  const [eventTitle, setEventTitle] = useState("");
+  const [eventDescription, setEventDescription] = useState("");
+  const [eventStart, setEventStart] = useState<Date>(new Date());
+  const [eventEnd, setEventEnd] = useState<Date>(new Date());
+  const [eventColor, setEventColor] = useState("#4361EE");
+  const [showStartPicker, setShowStartPicker] = useState(false);
+  const [showEndPicker, setShowEndPicker] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
   const { data: session } = useSession();
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
   const setActiveTeamId = useTeamStore((s) => s.setActiveTeamId);
@@ -273,6 +289,38 @@ export default function TasksScreen() {
       queryClient.invalidateQueries({ queryKey: ["tasks", activeTeamId] });
     },
   });
+
+  const createEventMutation = useMutation({
+    mutationFn: (data: object) =>
+      api.post(`/api/teams/${activeTeamId}/events`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["calendar-events", activeTeamId] });
+      setShowEventModal(false);
+      setEventTitle(""); setEventDescription(""); setEventColor("#4361EE");
+    },
+  });
+
+  const openEventModal = () => {
+    const d = selectedDay ? new Date(selectedDay) : new Date();
+    setEventTitle(""); setEventDescription("");
+    setEventStart(d); setEventEnd(d);
+    setEventColor("#4361EE"); setFormError(null);
+    setFabOpen(false);
+    setShowEventModal(true);
+  };
+
+  const handleSaveEvent = () => {
+    if (!eventTitle.trim()) { setFormError("Please enter a title"); return; }
+    const end = eventEnd < eventStart ? eventStart : eventEnd;
+    createEventMutation.mutate({
+      title: eventTitle.trim(),
+      description: eventDescription.trim() || undefined,
+      startDate: eventStart.toISOString(),
+      endDate: end.toISOString(),
+      color: eventColor,
+      allDay: true,
+    });
+  };
 
   const currentUserId = session?.user?.id ?? null;
   const activeTeam = teams?.find((t) => t.id === activeTeamId);
@@ -475,26 +523,158 @@ export default function TasksScreen() {
 
       {/* FAB */}
       {activeTeamId ? (
-        <TouchableOpacity
-          style={{
-            position: "absolute", bottom: 32, right: 24,
-            width: 56, height: 56, borderRadius: 28,
-            backgroundColor: "#4361EE",
-            alignItems: "center", justifyContent: "center",
-            shadowColor: "#4361EE", shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.4, shadowRadius: 8, elevation: 8,
-          }}
-          onPress={() =>
-            router.push({
-              pathname: "/create-task",
-              params: { teamId: activeTeamId },
-            })
-          }
-          testID="create-task-button"
-        >
-          <Plus size={24} color="white" />
-        </TouchableOpacity>
+        <>
+          {/* Scrim */}
+          {fabOpen ? (
+            <Pressable onPress={() => setFabOpen(false)} style={{ position: "absolute", inset: 0 }} />
+          ) : null}
+
+          {/* FAB menu options */}
+          {fabOpen ? (
+            <View style={{ position: "absolute", bottom: 100, right: 24, gap: 12, alignItems: "flex-end" }}>
+              <TouchableOpacity
+                onPress={() => { setFabOpen(false); router.push({ pathname: "/create-task", params: { teamId: activeTeamId } }); }}
+                style={{ flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "white", paddingHorizontal: 16, paddingVertical: 12, borderRadius: 16, shadowColor: "#000", shadowOpacity: 0.12, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 6 }}
+                testID="fab-new-task"
+              >
+                <Text style={{ fontSize: 14, fontWeight: "600", color: "#0F172A" }}>New Task</Text>
+                <CheckSquare size={20} color="#4361EE" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={openEventModal}
+                style={{ flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "white", paddingHorizontal: 16, paddingVertical: 12, borderRadius: 16, shadowColor: "#000", shadowOpacity: 0.12, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 6 }}
+                testID="fab-new-event"
+              >
+                <Text style={{ fontSize: 14, fontWeight: "600", color: "#0F172A" }}>New Event</Text>
+                <CalendarDays size={20} color="#7C3AED" />
+              </TouchableOpacity>
+            </View>
+          ) : null}
+
+          {/* Main FAB */}
+          <TouchableOpacity
+            style={{
+              position: "absolute", bottom: 32, right: 24,
+              width: 56, height: 56, borderRadius: 28,
+              backgroundColor: fabOpen ? "#7C3AED" : "#4361EE",
+              alignItems: "center", justifyContent: "center",
+              shadowColor: "#4361EE", shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.4, shadowRadius: 8, elevation: 8,
+            }}
+            onPress={() => setFabOpen((o) => !o)}
+            testID="create-task-button"
+          >
+            <Plus size={24} color="white" style={{ transform: [{ rotate: fabOpen ? "45deg" : "0deg" }] }} />
+          </TouchableOpacity>
+        </>
       ) : null}
+
+      {/* New Event Modal */}
+      <Modal visible={showEventModal} transparent animationType="slide" onRequestClose={() => setShowEventModal(false)}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+          <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }} onPress={() => setShowEventModal(false)}>
+            <Pressable style={{ backgroundColor: "white", borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 8, paddingBottom: 48 }} onPress={(e) => e.stopPropagation()}>
+              <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: "#E2E8F0", alignSelf: "center", marginBottom: 16 }} />
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+                <Text style={{ fontSize: 17, fontWeight: "700", color: "#0F172A" }}>New Event</Text>
+                <Pressable onPress={() => setShowEventModal(false)} style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "#F1F5F9", alignItems: "center", justifyContent: "center" }}>
+                  <X size={16} color="#64748B" />
+                </Pressable>
+              </View>
+
+              <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748B", marginBottom: 6 }}>Title</Text>
+              <TextInput
+                style={{ borderWidth: 1.5, borderColor: "#E2E8F0", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: "#0F172A", marginBottom: 14 }}
+                placeholder="Event title..."
+                placeholderTextColor="#CBD5E1"
+                value={eventTitle}
+                onChangeText={(t) => { setEventTitle(t); setFormError(null); }}
+                testID="event-title-input"
+              />
+
+              <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748B", marginBottom: 6 }}>Description (optional)</Text>
+              <TextInput
+                style={{ borderWidth: 1.5, borderColor: "#E2E8F0", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: "#0F172A", marginBottom: 14, minHeight: 60, textAlignVertical: "top" }}
+                placeholder="Add a description..."
+                placeholderTextColor="#CBD5E1"
+                value={eventDescription}
+                onChangeText={setEventDescription}
+                multiline
+              />
+
+              <View style={{ flexDirection: "row", gap: 10, marginBottom: 20 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748B", marginBottom: 6 }}>Start Date</Text>
+                  <Pressable onPress={() => setShowStartPicker(true)} style={{ borderWidth: 1.5, borderColor: "#4361EE", borderRadius: 12, paddingHorizontal: 10, paddingVertical: 10, flexDirection: "row", alignItems: "center", backgroundColor: "#4361EE0D" }}>
+                    <Calendar size={13} color="#4361EE" />
+                    <Text style={{ fontSize: 12, fontWeight: "500", color: "#4361EE", marginLeft: 6 }}>
+                      {eventStart.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                    </Text>
+                  </Pressable>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748B", marginBottom: 6 }}>End Date</Text>
+                  <Pressable onPress={() => setShowEndPicker(true)} style={{ borderWidth: 1.5, borderColor: "#7C3AED", borderRadius: 12, paddingHorizontal: 10, paddingVertical: 10, flexDirection: "row", alignItems: "center", backgroundColor: "#7C3AED0D" }}>
+                    <Calendar size={13} color="#7C3AED" />
+                    <Text style={{ fontSize: 12, fontWeight: "500", color: "#7C3AED", marginLeft: 6 }}>
+                      {eventEnd.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                    </Text>
+                  </Pressable>
+                </View>
+              </View>
+
+              {showStartPicker && Platform.OS === "ios" ? (
+                <Modal visible transparent animationType="slide">
+                  <View style={{ flex: 1, justifyContent: "flex-end" }}>
+                    <View style={{ backgroundColor: "white", borderTopLeftRadius: 24, borderTopRightRadius: 24 }}>
+                      <View style={{ flexDirection: "row", justifyContent: "space-between", paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 }}>
+                        <Pressable onPress={() => setShowStartPicker(false)}><Text style={{ color: "#64748B", fontSize: 15 }}>Cancel</Text></Pressable>
+                        <Pressable onPress={() => setShowStartPicker(false)}><Text style={{ color: "#4361EE", fontWeight: "600", fontSize: 15 }}>Done</Text></Pressable>
+                      </View>
+                      <DateTimePicker value={eventStart} mode="date" display="inline" onChange={(_e, d) => { if (d) { setEventStart(d); if (d > eventEnd) setEventEnd(d); } }} />
+                      <View style={{ height: 20 }} />
+                    </View>
+                  </View>
+                </Modal>
+              ) : showStartPicker ? (
+                <DateTimePicker value={eventStart} mode="date" display="default" onChange={(_e, d) => { setShowStartPicker(false); if (d) { setEventStart(d); if (d > eventEnd) setEventEnd(d); } }} />
+              ) : null}
+
+              {showEndPicker && Platform.OS === "ios" ? (
+                <Modal visible transparent animationType="slide">
+                  <View style={{ flex: 1, justifyContent: "flex-end" }}>
+                    <View style={{ backgroundColor: "white", borderTopLeftRadius: 24, borderTopRightRadius: 24 }}>
+                      <View style={{ flexDirection: "row", justifyContent: "space-between", paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 }}>
+                        <Pressable onPress={() => setShowEndPicker(false)}><Text style={{ color: "#64748B", fontSize: 15 }}>Cancel</Text></Pressable>
+                        <Pressable onPress={() => setShowEndPicker(false)}><Text style={{ color: "#7C3AED", fontWeight: "600", fontSize: 15 }}>Done</Text></Pressable>
+                      </View>
+                      <DateTimePicker value={eventEnd} mode="date" display="inline" onChange={(_e, d) => { if (d) setEventEnd(d); }} />
+                      <View style={{ height: 20 }} />
+                    </View>
+                  </View>
+                </Modal>
+              ) : showEndPicker ? (
+                <DateTimePicker value={eventEnd} mode="date" display="default" onChange={(_e, d) => { setShowEndPicker(false); if (d) setEventEnd(d); }} />
+              ) : null}
+
+              {formError ? <Text style={{ color: "#EF4444", fontSize: 13, marginBottom: 12 }}>{formError}</Text> : null}
+
+              <TouchableOpacity
+                onPress={handleSaveEvent}
+                disabled={createEventMutation.isPending}
+                style={{ backgroundColor: "#4361EE", borderRadius: 14, paddingVertical: 14, alignItems: "center" }}
+                testID="save-event-button"
+              >
+                {createEventMutation.isPending ? (
+                  <ActivityIndicator color="white" />
+                ) : (
+                  <Text style={{ color: "white", fontSize: 15, fontWeight: "700" }}>Save Event</Text>
+                )}
+              </TouchableOpacity>
+            </Pressable>
+          </Pressable>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 }
