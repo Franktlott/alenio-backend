@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -82,7 +82,17 @@ export default function ChatScreen() {
 
   const currentTeam = teams?.find((t: any) => t.id === activeTeamId);
   const lastReadIds = useUnreadStore((s) => s.lastReadIds);
+  const updateSeen = useUnreadStore((s) => s.updateSeen);
+  const unreadCounts = useUnreadStore((s) => s.unreadCounts);
   const currentUserId = session?.user?.id ?? "";
+
+  useEffect(() => {
+    conversations.forEach((conv) => {
+      if (conv.lastMessage) {
+        updateSeen(conv.id, conv.lastMessage.id, conv.lastMessage.sender.id !== currentUserId);
+      }
+    });
+  }, [conversations, currentUserId]);
   const teamUnreadCount = [
     teamGeneralMessages[0] && teamGeneralMessages[0].sender.id !== currentUserId && lastReadIds[`team:${activeTeamId}`] !== teamGeneralMessages[0].id ? 1 : 0,
     ...topics.map((t: any) => t.lastMessage && t.lastMessage.sender.id !== currentUserId && lastReadIds[`topic:${t.id}`] !== t.lastMessage?.id ? 1 : 0),
@@ -261,7 +271,7 @@ export default function ChatScreen() {
                    conv.lastMessage.sender.id !== session?.user?.id &&
                    lastReadIds[conv.id] !== conv.lastMessage.id ? (
                     <View style={{ backgroundColor: "#4361EE", borderRadius: 10, minWidth: 20, height: 20, alignItems: "center", justifyContent: "center", paddingHorizontal: 6 }}>
-                      <Text style={{ color: "white", fontSize: 11, fontWeight: "700" }}>1</Text>
+                      <Text style={{ color: "white", fontSize: 11, fontWeight: "700" }}>{unreadCounts[conv.id] || 1}</Text>
                     </View>
                   ) : (
                     <ChevronRight size={16} color="#94A3B8" />
