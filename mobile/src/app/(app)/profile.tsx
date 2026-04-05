@@ -13,10 +13,12 @@ import {
   Modal,
   KeyboardAvoidingView,
   Switch,
+  Share,
 } from "react-native";
+import * as Clipboard from "expo-clipboard";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { ArrowLeft, Camera, LogOut, Pencil, X, Plus, Trash2, Bell, Check, LogOut as LeaveIcon, Crown } from "lucide-react-native";
+import { ArrowLeft, Camera, LogOut, Pencil, X, Plus, Trash2, Bell, Check, LogOut as LeaveIcon, Crown, Copy } from "lucide-react-native";
 import { authClient } from "@/lib/auth/auth-client";
 import { useInvalidateSession, useSession } from "@/lib/auth/use-session";
 import { router } from "expo-router";
@@ -356,6 +358,25 @@ export default function ProfileScreen() {
                     <View className="flex-1">
                       <Text className="font-semibold text-slate-900 dark:text-white">{team.name}</Text>
                       <Text className="text-xs text-slate-400 capitalize">{(team as Team & { role?: string }).role ?? "member"}</Text>
+                      {team.inviteCode ? (
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 }}>
+                          <Text style={{ fontSize: 11, fontWeight: "700", color: "#4361EE", letterSpacing: 1.5 }}>{team.inviteCode}</Text>
+                          <TouchableOpacity
+                            onPress={async () => { await Clipboard.setStringAsync(team.inviteCode); }}
+                            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                            testID={`copy-code-${team.id}`}
+                          >
+                            <Copy size={12} color="#4361EE" />
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            onPress={() => Share.share({ message: `Join my team "${team.name}" on Alenio! Use invite code: ${team.inviteCode}` })}
+                            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                            testID={`share-code-${team.id}`}
+                          >
+                            <Text style={{ fontSize: 10, color: "#4361EE", fontWeight: "600" }}>Share</Text>
+                          </TouchableOpacity>
+                        </View>
+                      ) : null}
                     </View>
                     {isActive ? (
                       <View className="w-2 h-2 rounded-full bg-indigo-500 mr-3" />
