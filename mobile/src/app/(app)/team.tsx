@@ -145,18 +145,8 @@ export default function TeamScreen() {
   return (
     <SafeAreaView className="flex-1 bg-slate-50 dark:bg-slate-900" edges={["top"]} testID="team-screen">
       <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
-        <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 14, flexDirection: "row", alignItems: "center", gap: 12 }}>
-          <View className="w-12 h-12 rounded-full bg-white/20 items-center justify-center overflow-hidden">
-            {team?.image ? (
-              <Image source={{ uri: team.image }} style={{ width: 48, height: 48 }} resizeMode="cover" />
-            ) : (
-              <Text className="text-white font-bold text-xl">{team?.name?.[0]?.toUpperCase() ?? "T"}</Text>
-            )}
-          </View>
-          <View className="flex-1">
-            <Text style={{ color: "white", fontSize: 18, fontWeight: "700" }}>{team?.name}</Text>
-            <Text className="text-white/70 text-sm">{team?.members?.length ?? 0} members</Text>
-          </View>
+        <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 14, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+          <Text style={{ color: "white", fontSize: 18, fontWeight: "700" }}>{team?.name ?? "Team"}</Text>
           <Image source={require("@/assets/alenio-icon.png")} style={{ width: 30, height: 30, borderRadius: 6 }} />
         </View>
       </LinearGradient>
