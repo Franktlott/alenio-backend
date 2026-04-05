@@ -336,4 +336,41 @@ dmsRouter.delete("/:conversationId/messages/:messageId", async (c) => {
   return new Response(null, { status: 204 });
 });
 
+// POST /api/dms/:conversationId/leave — leave a conversation (removes self from participants)
+dmsRouter.post("/:conversationId/leave", async (c) => {
+  const user = c.get("user")!;
+  const { conversationId } = c.req.param();
+
+  const participant = await prisma.conversationParticipant.findUnique({
+    where: { conversationId_userId: { conversationId, userId: user.id } },
+  });
+  if (!participant) return c.json({ error: { message: "Not a participant", code: "FORBIDDEN" } }, 403);
+
+  await prisma.conversationParticipant.delete({
+    where: { conversationId_userId: { conversationId, userId: user.id } },
+  });
+
+  // If no participants remain, delete the whole conversation
+  const remaining = await prisma.conversationParticipant.count({ where: { conversationId } });
+  if (remaining === 0) {
+    await prisma.conversation.delete({ where: { id: conversationId } });
+  }
+
+  return new Response(null, { status: 204 });
+});
+
+// DELETE /api/dms/:conversationId — delete entire conversation for all participants
+dmsRouter.delete("/:conversationId", async (c) => {
+  const user = c.get("user")!;
+  const { conversationId } = c.req.param();
+
+  const participant = await prisma.conversationParticipant.findUnique({
+    where: { conversationId_userId: { conversationId, userId: user.id } },
+  });
+  if (!participant) return c.json({ error: { message: "Not a participant", code: "FORBIDDEN" } }, 403);
+
+  await prisma.conversation.delete({ where: { id: conversationId } });
+  return new Response(null, { status: 204 });
+});
+
 export { dmsRouter };

@@ -14,7 +14,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { LinearGradient } from "expo-linear-gradient";
-import { ArrowLeft, Send, Paperclip, X, Users, Video, Trash2, Download, Reply, Copy, Camera, ImageIcon } from "lucide-react-native";
+import { ArrowLeft, Send, Paperclip, X, Users, Video, Trash2, Download, Reply, Copy, Camera, ImageIcon, MoreVertical, LogOut } from "lucide-react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
@@ -90,6 +90,8 @@ export default function DMChatScreen() {
   const [replyTo, setReplyTo] = useState<DirectMessage | null>(null);
   const [emojiTarget, setEmojiTarget] = useState<DirectMessage | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DirectMessage | null>(null);
+  const [showOptions, setShowOptions] = useState(false);
+  const [showConvDeleteConfirm, setShowConvDeleteConfirm] = useState(false);
   const [reactionView, setReactionView] = useState<MessageReaction[] | null>(null);
   const [mediaPreview, setMediaPreview] = useState<{ uri: string; mimeType: string; filename: string } | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -128,6 +130,22 @@ export default function DMChatScreen() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["dm-messages", conversationId] });
       queryClient.invalidateQueries({ queryKey: ["conversations"] });
+    },
+  });
+
+  const leaveConversationMutation = useMutation({
+    mutationFn: () => api.post(`/api/dms/${conversationId}/leave`, {}),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["conversations"] });
+      router.replace("/(app)/chat");
+    },
+  });
+
+  const deleteConversationMutation = useMutation({
+    mutationFn: () => api.delete(`/api/dms/${conversationId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["conversations"] });
+      router.replace("/(app)/chat");
     },
   });
 
@@ -237,9 +255,16 @@ export default function DMChatScreen() {
               pathname: "/video-call",
               params: { roomId: conversationId, roomName: `${recipientName ?? "Call"}` },
             })}
-            className="w-9 h-9 rounded-full bg-white/20 items-center justify-center"
+            className="w-9 h-9 rounded-full bg-white/20 items-center justify-center mr-2"
           >
             <Video size={18} color="white" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            testID="conversation-options-button"
+            onPress={() => setShowOptions(true)}
+            className="w-9 h-9 rounded-full bg-white/20 items-center justify-center"
+          >
+            <MoreVertical size={18} color="white" />
           </TouchableOpacity>
         </View>
       </LinearGradient>
@@ -414,6 +439,86 @@ export default function DMChatScreen() {
                 style={{ flex: 1, paddingVertical: 14, alignItems: "center" }}
               >
                 {deleteMutation.isPending ? (
+                  <ActivityIndicator size="small" color="#EF4444" />
+                ) : (
+                  <Text style={{ fontSize: 15, fontWeight: "700", color: "#EF4444" }}>Delete</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Conversation options sheet */}
+      <Modal visible={showOptions} transparent animationType="slide" onRequestClose={() => setShowOptions(false)}>
+        <TouchableOpacity style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "flex-end" }} activeOpacity={1} onPress={() => setShowOptions(false)}>
+          <TouchableOpacity activeOpacity={1} onPress={() => {}}>
+            <View style={{ backgroundColor: "white", marginHorizontal: 12, marginBottom: 32, borderRadius: 16, overflow: "hidden" }}>
+              <View style={{ paddingVertical: 10, alignItems: "center" }}>
+                <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: "#E2E8F0" }} />
+              </View>
+              <Text style={{ fontSize: 13, fontWeight: "600", color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.5, paddingHorizontal: 20, paddingBottom: 8 }}>
+                {isGroup ? "Group Options" : "Conversation Options"}
+              </Text>
+              {isGroup ? (
+                <TouchableOpacity
+                  onPress={() => { setShowOptions(false); setTimeout(() => setShowConvDeleteConfirm(true), 300); }}
+                  style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 16, borderTopWidth: 1, borderTopColor: "#F1F5F9" }}
+                >
+                  <Text style={{ fontSize: 16, color: "#EF4444" }}>Delete Group</Text>
+                  <Trash2 size={20} color="#EF4444" />
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  onPress={() => { setShowOptions(false); setTimeout(() => setShowConvDeleteConfirm(true), 300); }}
+                  style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 16, borderTopWidth: 1, borderTopColor: "#F1F5F9" }}
+                >
+                  <Text style={{ fontSize: 16, color: "#EF4444" }}>Delete Conversation</Text>
+                  <Trash2 size={20} color="#EF4444" />
+                </TouchableOpacity>
+              )}
+              {isGroup ? (
+                <TouchableOpacity
+                  onPress={() => { setShowOptions(false); leaveConversationMutation.mutate(); }}
+                  style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 16, borderTopWidth: 1, borderTopColor: "#F1F5F9" }}
+                >
+                  <Text style={{ fontSize: 16, color: "#F59E0B" }}>Leave Group</Text>
+                  <LogOut size={20} color="#F59E0B" />
+                </TouchableOpacity>
+              ) : null}
+              <TouchableOpacity
+                onPress={() => setShowOptions(false)}
+                style={{ paddingVertical: 16, alignItems: "center", borderTopWidth: 1, borderTopColor: "#F1F5F9" }}
+              >
+                <Text style={{ fontSize: 16, fontWeight: "600", color: "#64748B" }}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Delete conversation confirmation */}
+      <Modal visible={showConvDeleteConfirm} transparent animationType="fade" onRequestClose={() => setShowConvDeleteConfirm(false)}>
+        <TouchableOpacity style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)", alignItems: "center", justifyContent: "center", paddingHorizontal: 32 }} activeOpacity={1} onPress={() => setShowConvDeleteConfirm(false)}>
+          <TouchableOpacity activeOpacity={1} style={{ width: "100%", backgroundColor: "white", borderRadius: 16, overflow: "hidden" }}>
+            <View style={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 16, alignItems: "center" }}>
+              <Text style={{ fontSize: 17, fontWeight: "700", color: "#0F172A", marginBottom: 4 }}>
+                {isGroup ? "Delete Group?" : "Delete Conversation?"}
+              </Text>
+              <Text style={{ fontSize: 13, color: "#64748B", textAlign: "center" }}>
+                {isGroup ? "This will permanently delete the group and all messages for everyone." : "This will permanently delete this conversation for both you and the other person."}
+              </Text>
+            </View>
+            <View style={{ flexDirection: "row", borderTopWidth: 1, borderTopColor: "#F1F5F9" }}>
+              <TouchableOpacity onPress={() => setShowConvDeleteConfirm(false)} style={{ flex: 1, paddingVertical: 14, alignItems: "center", borderRightWidth: 1, borderRightColor: "#F1F5F9" }}>
+                <Text style={{ fontSize: 15, fontWeight: "500", color: "#64748B" }}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => deleteConversationMutation.mutate()}
+                disabled={deleteConversationMutation.isPending}
+                style={{ flex: 1, paddingVertical: 14, alignItems: "center" }}
+              >
+                {deleteConversationMutation.isPending ? (
                   <ActivityIndicator size="small" color="#EF4444" />
                 ) : (
                   <Text style={{ fontSize: 15, fontWeight: "700", color: "#EF4444" }}>Delete</Text>
