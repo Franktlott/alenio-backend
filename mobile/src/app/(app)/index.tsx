@@ -33,6 +33,42 @@ const MONTH_NAMES = ["January","February","March","April","May","June","July","A
 
 type WeekBar ={ id: string; title: string; color: string; startCol: number; endCol: number };
 
+// Returns the date of the Nth weekday in a given month/year
+// weekday: 0=Sun, 1=Mon ... 6=Sat; nth: 1-based (use -1 for last)
+function nthWeekday(year: number, month: number, weekday: number, nth: number): Date {
+  if (nth > 0) {
+    const d = new Date(year, month, 1);
+    let count = 0;
+    while (true) {
+      if (d.getDay() === weekday) { count++; if (count === nth) return new Date(d); }
+      d.setDate(d.getDate() + 1);
+    }
+  } else {
+    // last occurrence
+    const d = new Date(year, month + 1, 0);
+    while (d.getDay() !== weekday) d.setDate(d.getDate() - 1);
+    return new Date(d);
+  }
+}
+
+interface Holiday { name: string; date: Date }
+
+function getUSHolidays(year: number): Holiday[] {
+  return [
+    { name: "New Year's Day", date: new Date(year, 0, 1) },
+    { name: "MLK Day", date: nthWeekday(year, 0, 1, 3) },
+    { name: "Presidents' Day", date: nthWeekday(year, 1, 1, 3) },
+    { name: "Memorial Day", date: nthWeekday(year, 4, 1, -1) },
+    { name: "Juneteenth", date: new Date(year, 5, 19) },
+    { name: "Independence Day", date: new Date(year, 6, 4) },
+    { name: "Labor Day", date: nthWeekday(year, 8, 1, 1) },
+    { name: "Columbus Day", date: nthWeekday(year, 9, 1, 2) },
+    { name: "Veterans Day", date: new Date(year, 10, 11) },
+    { name: "Thanksgiving", date: nthWeekday(year, 10, 4, 4) },
+    { name: "Christmas Day", date: new Date(year, 11, 25) },
+  ];
+}
+
 function startOfDay(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
 }
@@ -81,11 +117,13 @@ function computeWeekBars(week: (Date | null)[], events: CalendarEvent[]): WeekBa
 function MiniCalendar({
   tasks,
   events,
+  holidays,
   selectedDay,
   onSelectDay,
 }: {
   tasks: Task[];
   events: CalendarEvent[];
+  holidays: Holiday[];
   selectedDay: string | null;
   onSelectDay: (iso: string | null) => void;
 }) {
@@ -157,6 +195,7 @@ function MiniCalendar({
                 const isToday = isSameDay(day, today);
                 const isSelected = selectedDay === iso;
                 const hasTasks = taskDays.has(iso);
+                const isHoliday = holidays.some((h) => isSameDay(h.date, day));
                 return (
                   <TouchableOpacity
                     key={iso}
@@ -171,9 +210,10 @@ function MiniCalendar({
                         {day.getDate()}
                       </Text>
                     </View>
-                    {hasTasks && !isSelected ? (
-                      <View style={{ position: "absolute", bottom: 3, width: 3, height: 3, borderRadius: 1.5, backgroundColor: "#4361EE" }} />
-                    ) : null}
+                    <View style={{ position: "absolute", bottom: 3, flexDirection: "row", gap: 2, alignItems: "center" }}>
+                      {hasTasks && !isSelected ? <View style={{ width: 3, height: 3, borderRadius: 1.5, backgroundColor: "#4361EE" }} /> : null}
+                      {isHoliday && !isSelected ? <View style={{ width: 3, height: 3, borderRadius: 1.5, backgroundColor: "#EF4444" }} /> : null}
+                    </View>
                   </TouchableOpacity>
                 );
               })}
@@ -614,6 +654,9 @@ export default function TasksScreen() {
     return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
   });
 
+  const currentYear = new Date().getFullYear();
+  const holidays = [...getUSHolidays(currentYear), ...getUSHolidays(currentYear + 1)];
+
   const targetIso = selectedDay ?? toLocalIso(new Date());
   const dayEvents = calendarEvents.filter((ev) => {
     const evStart = startOfDay(new Date(ev.startDate));
@@ -622,6 +665,11 @@ export default function TasksScreen() {
     const [ty, tm, td] = targetIso.split("-").map(Number);
     const target = new Date(ty, tm - 1, td);
     return evStart <= target && target <= evEnd;
+  });
+
+  const dayHolidays = holidays.filter((h) => {
+    const [ty, tm, td] = targetIso.split("-").map(Number);
+    return isSameDay(h.date, new Date(ty, tm - 1, td));
   });
 
   // Completed tasks delegated to others (for Team tab collapsed section)
@@ -714,15 +762,24 @@ export default function TasksScreen() {
 
       <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} stickyHeaderIndices={[2]} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" colors={["#4361EE"]} />}>
         {/* Mini Calendar */}
-        <MiniCalendar tasks={allTasks} events={calendarEvents} selectedDay={selectedDay} onSelectDay={setSelectedDay} />
+        <MiniCalendar tasks={allTasks} events={calendarEvents} holidays={holidays} selectedDay={selectedDay} onSelectDay={setSelectedDay} />
 
         {/* Events section — below calendar, above filter tabs */}
-        {dayEvents.length > 0 ? (
+        {(dayEvents.length > 0 || dayHolidays.length > 0) ? (
           <View style={{ backgroundColor: "white", marginTop: 10 }}>
             <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 6, flexDirection: "row", alignItems: "center", gap: 6, borderBottomWidth: 1, borderBottomColor: "#F1F5F9" }}>
               <CalendarDays size={13} color="#64748B" />
               <Text style={{ fontSize: 11, fontWeight: "700", color: "#64748B", textTransform: "uppercase", letterSpacing: 0.5 }}>Events</Text>
             </View>
+            {dayHolidays.map((h) => (
+              <View key={h.name} style={{ paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: "#F1F5F9", backgroundColor: "white", flexDirection: "row", alignItems: "center" }}>
+                <View style={{ width: 4, borderRadius: 2, alignSelf: "stretch", backgroundColor: "#EF4444", marginRight: 12 }} />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 14, fontWeight: "600", color: "#0F172A" }}>{h.name}</Text>
+                  <Text style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>Federal Holiday 🇺🇸</Text>
+                </View>
+              </View>
+            ))}
             {dayEvents.map((ev) => (
               <EventRow key={ev.id} event={ev} onLongPress={isOwner ? () => openEditEventModal(ev) : undefined} />
             ))}
