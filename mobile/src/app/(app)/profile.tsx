@@ -267,10 +267,7 @@ export default function ProfileScreen() {
       {/* Header */}
       <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
         <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 14, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-          <TouchableOpacity onPress={() => router.back()} testID="back-button">
-            <ArrowLeft size={22} color="white" />
-          </TouchableOpacity>
-          <Text style={{ flex: 1, marginLeft: 12, color: "white", fontSize: 18, fontWeight: "700" }}>Profile</Text>
+          <Text style={{ flex: 1, color: "white", fontSize: 18, fontWeight: "700" }}>Profile</Text>
           <Image source={require("@/assets/alenio-icon.png")} style={{ width: 30, height: 30, borderRadius: 6 }} />
         </View>
       </LinearGradient>
