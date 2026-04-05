@@ -61,7 +61,7 @@ export default function SignIn() {
       <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
         <View className="items-center py-10 px-6">
           <Image
-            source={require("@/assets/alenio-logo.png")}
+            source={require("@/assets/alenio-logo-white.png")}
             style={{ width: 200, height: 72 }}
             resizeMode="contain"
           />
