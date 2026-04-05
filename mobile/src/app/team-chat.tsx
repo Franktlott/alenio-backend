@@ -11,7 +11,7 @@ import {
   Modal,
   Image,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { LinearGradient } from "expo-linear-gradient";
 import { ArrowLeft, Send, Paperclip, X, Video, Camera, ImageIcon } from "lucide-react-native";
@@ -54,6 +54,7 @@ function buildMessageList(messages: Message[]): MessageItem[] {
 export default function TeamChatScreen() {
   const { teamId, teamName } = useLocalSearchParams<{ teamId: string; teamName: string }>();
   const { data: session } = useSession();
+  const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const [input, setInput] = useState("");
   const [replyTo, setReplyTo] = useState<Message | null>(null);
@@ -419,7 +420,7 @@ export default function TeamChatScreen() {
         ) : null}
 
         {/* Input bar */}
-        <View testID="team-chat-input-bar" className="flex-row items-end px-3 py-2 bg-white dark:bg-slate-800 border-t border-slate-100 dark:border-slate-700">
+        <View testID="team-chat-input-bar" className="flex-row items-end px-3 bg-white dark:bg-slate-800 border-t border-slate-100 dark:border-slate-700" style={{ paddingTop: 8, paddingBottom: insets.bottom + 8 }}>
           <TouchableOpacity
             onPress={() => setShowMediaPicker(true)}
             className="w-10 h-10 rounded-full items-center justify-center mr-2"
