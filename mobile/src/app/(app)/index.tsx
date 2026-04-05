@@ -478,10 +478,6 @@ export default function TasksScreen() {
     if (filter === "assigned") { if (!(isAssignedToMe(t) && t.status !== "done")) return false; }
     else if (filter === "completed") { if (!(t.status === "done" && isMyCreatedTask(t))) return false; }
     else { if (!(t.status !== "done" && isMyCreatedTask(t))) return false; }
-    if (selectedDay) {
-      if (!t.dueDate) return false;
-      return toLocalIso(new Date(t.dueDate)) === selectedDay;
-    }
     return true;
   }).sort((a, b) => {
     if (sort === "priority") {
@@ -648,7 +644,7 @@ export default function TasksScreen() {
           <View style={{ alignItems: "center", justifyContent: "center", paddingHorizontal: 24, paddingVertical: 40 }} testID="empty-state">
             <Text style={{ fontSize: 40, marginBottom: 12 }}>✓</Text>
             <Text style={{ fontSize: 17, fontWeight: "600", color: "#94A3B8" }}>
-              {selectedDay ? "No tasks this day" : filter === "completed" ? "No completed tasks" : "No tasks yet"}
+              {filter === "completed" ? "No completed tasks" : "No tasks yet"}
             </Text>
             {filter === "all" && !selectedDay ? (
               <Text style={{ color: "#CBD5E1", fontSize: 13, marginTop: 4, textAlign: "center" }}>
