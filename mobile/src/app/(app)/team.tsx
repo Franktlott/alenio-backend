@@ -146,7 +146,16 @@ export default function TeamScreen() {
     <SafeAreaView className="flex-1 bg-slate-50 dark:bg-slate-900" edges={["top"]} testID="team-screen">
       <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
         <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 14, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-          <Text style={{ color: "white", fontSize: 18, fontWeight: "700" }}>{team?.name ?? "Team"}</Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+            <View style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: "rgba(255,255,255,0.2)", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+              {team?.image ? (
+                <Image source={{ uri: team.image }} style={{ width: 30, height: 30 }} resizeMode="cover" />
+              ) : (
+                <Text style={{ color: "white", fontWeight: "700", fontSize: 13 }}>{team?.name?.[0]?.toUpperCase() ?? "T"}</Text>
+              )}
+            </View>
+            <Text style={{ color: "white", fontSize: 18, fontWeight: "700" }}>{team?.name ?? "Team"}</Text>
+          </View>
           <Image source={require("@/assets/alenio-icon.png")} style={{ width: 30, height: 30, borderRadius: 6 }} />
         </View>
       </LinearGradient>
