@@ -571,17 +571,23 @@ export default function TasksScreen() {
 
       {/* New Event Modal */}
       <Modal visible={showEventModal} transparent animationType="slide" onRequestClose={() => setShowEventModal(false)}>
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
-          <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }} onPress={() => setShowEventModal(false)}>
-            <Pressable style={{ backgroundColor: "white", borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 8, paddingBottom: 48 }} onPress={(e) => e.stopPropagation()}>
-              <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: "#E2E8F0", alignSelf: "center", marginBottom: 16 }} />
-              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-                <Text style={{ fontSize: 17, fontWeight: "700", color: "#0F172A" }}>New Event</Text>
-                <Pressable onPress={() => setShowEventModal(false)} style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "#F1F5F9", alignItems: "center", justifyContent: "center" }}>
-                  <X size={16} color="#64748B" />
-                </Pressable>
-              </View>
+        <KeyboardAvoidingView style={{ flex: 1, justifyContent: "flex-end" }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+          <Pressable style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.5)" }} onPress={() => setShowEventModal(false)} />
+          <Pressable style={{ backgroundColor: "white", borderTopLeftRadius: 24, borderTopRightRadius: 24 }} onPress={(e) => e.stopPropagation()}>
+            <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: "#E2E8F0", alignSelf: "center", marginTop: 8, marginBottom: 16 }} />
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 20, paddingHorizontal: 20 }}>
+              <Text style={{ fontSize: 17, fontWeight: "700", color: "#0F172A" }}>New Event</Text>
+              <Pressable onPress={() => setShowEventModal(false)} style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "#F1F5F9", alignItems: "center", justifyContent: "center" }}>
+                <X size={16} color="#64748B" />
+              </Pressable>
+            </View>
 
+            <ScrollView
+              style={{ paddingHorizontal: 20 }}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={{ paddingBottom: 40 }}
+            >
               <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748B", marginBottom: 6 }}>Title</Text>
               <TextInput
                 style={{ borderWidth: 1.5, borderColor: "#E2E8F0", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: "#0F172A", marginBottom: 14 }}
@@ -671,7 +677,7 @@ export default function TasksScreen() {
                   <Text style={{ color: "white", fontSize: 15, fontWeight: "700" }}>Save Event</Text>
                 )}
               </TouchableOpacity>
-            </Pressable>
+            </ScrollView>
           </Pressable>
         </KeyboardAvoidingView>
       </Modal>
