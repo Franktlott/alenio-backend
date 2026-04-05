@@ -7,9 +7,10 @@ import {
   TouchableOpacity,
   Share,
   ActivityIndicator,
+  Alert,
 } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Copy, UserPlus, MessageCircle, AlertCircle } from "lucide-react-native";
+import { Copy, UserPlus, MessageCircle, AlertCircle, UserMinus } from "lucide-react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Clipboard from "expo-clipboard";
@@ -24,11 +25,15 @@ function MemberRow({
   isCurrentUser,
   onMessage,
   stats,
+  isOwner,
+  onRemove,
 }: {
   member: TeamMember;
   isCurrentUser: boolean;
   onMessage: () => void;
   stats?: { activeTasks: number; overdueTasks: number; onTimeCompletions: number };
+  isOwner?: boolean;
+  onRemove?: () => void;
 }) {
   return (
     <View
@@ -71,6 +76,16 @@ function MemberRow({
           <MessageCircle size={16} color="#4361EE" />
         </TouchableOpacity>
       ) : null}
+      {isOwner && !isCurrentUser && member.role !== "owner" ? (
+        <TouchableOpacity
+          onPress={onRemove}
+          className="w-8 h-8 rounded-full items-center justify-center mr-2"
+          style={{ backgroundColor: "#EF444415" }}
+          testID={`remove-member-${member.userId}`}
+        >
+          <UserMinus size={16} color="#EF4444" />
+        </TouchableOpacity>
+      ) : null}
       <View className={`px-2 py-0.5 rounded-full ${member.role === "owner" ? "bg-amber-100" : "bg-slate-100 dark:bg-slate-700"}`}>
         <Text className={`text-xs font-medium capitalize ${member.role === "owner" ? "text-amber-700" : "text-slate-600 dark:text-slate-400"}`}>
           {member.role}
@@ -109,6 +124,33 @@ export default function TeamScreen() {
       router.push({ pathname: "/dm-chat", params: { conversationId: conv.id, recipientName: conv.recipient?.name ?? "Direct Message" } });
     },
   });
+
+  const removeMutation = useMutation({
+    mutationFn: (userId: string) =>
+      api.delete(`/api/teams/${activeTeamId}/members/${userId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["team", activeTeamId] });
+      queryClient.invalidateQueries({ queryKey: ["member-stats", activeTeamId] });
+    },
+  });
+
+  const handleRemove = (member: TeamMember) => {
+    Alert.alert(
+      "Remove Member",
+      `Remove ${member.user.name} from the team?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Remove",
+          style: "destructive",
+          onPress: () => removeMutation.mutate(member.userId),
+        },
+      ]
+    );
+  };
+
+  const currentMembership = team?.members?.find((m) => m.userId === session?.user?.id);
+  const isOwner = currentMembership?.role === "owner";
 
   const [refreshing, setRefreshing] = useState(false);
 
@@ -217,6 +259,8 @@ export default function TeamScreen() {
             isCurrentUser={item.userId === session?.user?.id}
             onMessage={() => dmMutation.mutate(item.userId)}
             stats={memberStats?.[item.userId]}
+            isOwner={isOwner}
+            onRemove={() => handleRemove(item)}
           />
         )}
         showsVerticalScrollIndicator={false}

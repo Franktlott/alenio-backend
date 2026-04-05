@@ -308,4 +308,45 @@ teamsRouter.post("/:teamId/join-requests/:requestId/reject", async (c) => {
   return c.json({ data: { success: true } });
 });
 
+// DELETE /api/teams/:teamId/members/:memberId - remove a member (owner only)
+teamsRouter.delete("/:teamId/members/:memberId", async (c) => {
+  const user = c.get("user")!;
+  const { teamId, memberId } = c.req.param();
+
+  const membership = await prisma.teamMember.findUnique({
+    where: { userId_teamId: { userId: user.id, teamId } },
+  });
+  if (!membership || membership.role !== "owner") {
+    return c.json({ error: { message: "Only team owners can remove members", code: "FORBIDDEN" } }, 403);
+  }
+
+  if (memberId === user.id) {
+    return c.json({ error: { message: "You cannot remove yourself", code: "BAD_REQUEST" } }, 400);
+  }
+
+  const targetMembership = await prisma.teamMember.findUnique({
+    where: { userId_teamId: { userId: memberId, teamId } },
+    include: { user: { select: { name: true } } },
+  });
+  if (!targetMembership) {
+    return c.json({ error: { message: "Member not found", code: "NOT_FOUND" } }, 404);
+  }
+  if (targetMembership.role === "owner") {
+    return c.json({ error: { message: "Cannot remove another owner", code: "FORBIDDEN" } }, 403);
+  }
+
+  await prisma.teamMember.delete({
+    where: { userId_teamId: { userId: memberId, teamId } },
+  });
+
+  await logActivity({
+    teamId,
+    userId: memberId,
+    type: "member_removed",
+    metadata: { userName: targetMembership.user.name ?? "" },
+  });
+
+  return c.body(null, 204);
+});
+
 export { teamsRouter };
