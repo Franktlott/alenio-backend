@@ -613,7 +613,7 @@ export default function TasksScreen() {
                   testID={`filter-${f}`}
                 >
                   <Text style={{ fontSize: 13, fontWeight: "600", color: filter === f ? "#0F172A" : "#94A3B8" }}>
-                    {f === "all" ? "All" : f === "assigned" ? "Assigned" : "Completed"}
+                    {f === "all" ? "All" : f === "assigned" ? "Team" : "Completed"}
                   </Text>
                 </TouchableOpacity>
               ))}
