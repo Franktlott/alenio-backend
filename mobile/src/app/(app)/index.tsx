@@ -16,7 +16,7 @@ import {
 } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
-import { Plus, User, ArrowUpDown, Clock, AlertTriangle, ChevronLeft, ChevronRight, X, CalendarDays, CheckSquare, Calendar } from "lucide-react-native";
+import { Plus, User, ArrowUpDown, ChevronLeft, ChevronRight, X, CalendarDays, CheckSquare, Calendar } from "lucide-react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -587,21 +587,6 @@ export default function TasksScreen() {
 
         {/* Sticky section: stats + filter tabs */}
         <View style={{ backgroundColor: "#F8FAFC" }}>
-          {/* Stats pills */}
-          <View style={{ flexDirection: "row", paddingHorizontal: 16, paddingTop: 10, paddingBottom: 4, gap: 8, flexWrap: "wrap" }}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "white", paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 1 }}>
-              <Clock size={13} color="#F59E0B" />
-              <Text style={{ fontSize: 12, fontWeight: "600", color: "#F59E0B" }}>{dueTodayCount} due today</Text>
-            </View>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: overdueCount > 0 ? "#FEF2F2" : "white", paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 1 }}>
-              <AlertTriangle size={13} color={overdueCount > 0 ? "#EF4444" : "#CBD5E1"} />
-              <Text style={{ fontSize: 12, fontWeight: "600", color: overdueCount > 0 ? "#EF4444" : "#CBD5E1" }}>{overdueCount} overdue</Text>
-            </View>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "white", paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 1 }}>
-              <Text style={{ fontSize: 12, color: "#10B981" }}>✓</Text>
-              <Text style={{ fontSize: 12, fontWeight: "600", color: "#10B981" }}>{completedCount} done</Text>
-            </View>
-          </View>
 
           {/* Filter tabs + sort */}
           <View style={{ paddingHorizontal: 16, marginBottom: 10 }}>
