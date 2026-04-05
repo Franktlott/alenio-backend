@@ -47,6 +47,7 @@ export default function CreateTaskScreen() {
   const [priority, setPriority] = useState<TaskPriority>("medium");
   const [selectedAssignees, setSelectedAssignees] = useState<string[]>([]);
   const [isRecurring, setIsRecurring] = useState(false);
+  const [isIncognito, setIsIncognito] = useState(false);
   const [recurrenceType, setRecurrenceType] = useState<RecurrenceType>("weekly");
   const [recurrenceInterval, setRecurrenceInterval] = useState("1");
   const [selectedDayOfWeek, setSelectedDayOfWeek] = useState<number | null>(null);
@@ -146,6 +147,7 @@ export default function CreateTaskScreen() {
       priority,
       dueDate: dueDate!.toISOString(),
       assigneeIds: selectedAssignees,
+      incognito: isIncognito,
       recurrence: isRecurring
         ? {
             type: recurrenceType,
@@ -547,6 +549,28 @@ export default function CreateTaskScreen() {
                 ) : null}
               </View>
             ) : null}
+          </View>
+
+          {/* Incognito */}
+          <View className="py-4 border-b border-slate-100 dark:border-slate-800">
+            <View className="flex-row items-center justify-between">
+              <View style={{ flex: 1, marginRight: 12 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <Text style={{ fontSize: 16 }}>🕵️</Text>
+                  <Text className="text-sm font-semibold text-slate-500">Incognito task</Text>
+                </View>
+                <Text className="text-xs text-slate-400 mt-0.5">
+                  Counts toward your streak, but shows as anonymous on the team feed
+                </Text>
+              </View>
+              <Switch
+                value={isIncognito}
+                onValueChange={setIsIncognito}
+                trackColor={{ false: "#E2E8F0", true: "#6B8EF6" }}
+                thumbColor="white"
+                testID="incognito-switch"
+              />
+            </View>
           </View>
 
           {/* Photo attachment */}

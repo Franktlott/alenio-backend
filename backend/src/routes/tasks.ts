@@ -115,7 +115,7 @@ tasksRouter.post("/", async (c) => {
   }
 
   const body = await c.req.json();
-  const { title, description, priority, dueDate, assigneeIds, recurrence, attachmentUrl } = body;
+  const { title, description, priority, dueDate, assigneeIds, recurrence, attachmentUrl, incognito } = body;
 
   if (!title?.trim()) {
     return c.json({ error: { message: "Title is required", code: "VALIDATION_ERROR" } }, 400);
@@ -127,6 +127,7 @@ tasksRouter.post("/", async (c) => {
       description: description?.trim(),
       priority: priority || "medium",
       dueDate: dueDate ? new Date(dueDate) : null,
+      incognito: incognito === true,
       teamId,
       creatorId: user.id,
       ...(attachmentUrl ? { attachmentUrl } : {}),
@@ -301,7 +302,7 @@ tasksRouter.patch("/:taskId", async (c) => {
       teamId,
       userId: user.id,
       type: "task_completed",
-      metadata: { taskTitle: task.title },
+      metadata: { taskTitle: task.incognito ? null : task.title },
     });
 
     // Check for on-time completion milestone (every 10 tasks)
@@ -324,7 +325,7 @@ tasksRouter.patch("/:taskId", async (c) => {
         teamId,
         userId: user.id,
         type: "task_milestone",
-        metadata: { count: onTimeCount, userName: user.name },
+        metadata: { count: onTimeCount, userName: user.name, incognito: task.incognito },
       });
     }
 

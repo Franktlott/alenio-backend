@@ -12,7 +12,7 @@ type ActivityEvent = {
   id: string;
   type: "task_completed" | "member_joined" | "member_removed" | "calendar_event_added" | "task_assigned" | "task_milestone";
   createdAt: string;
-  metadata: { taskTitle?: string; userName?: string; eventTitle?: string; count?: number } | null;
+  metadata: { taskTitle?: string; userName?: string; eventTitle?: string; count?: number; incognito?: boolean } | null;
   user: { id: string; name: string; image: string | null } | null;
 };
 
@@ -23,7 +23,9 @@ const EVENT_CONFIG = {
     bg: "#ECFDF5",
     Icon: CheckCircle,
     getMessage: (e: ActivityEvent) =>
-      `${e.user?.name ?? "Someone"} completed "${e.metadata?.taskTitle ?? "a task"}"`,
+      e.metadata?.taskTitle
+        ? `${e.user?.name ?? "Someone"} completed "${e.metadata.taskTitle}"`
+        : `${e.user?.name ?? "Someone"} completed an incognito task 🕵️`,
   },
   member_joined: {
     label: "Joined",
@@ -63,7 +65,9 @@ const EVENT_CONFIG = {
     bg: "#FFFBEB",
     Icon: Trophy,
     getMessage: (e: ActivityEvent) =>
-      `${e.user?.name ?? "Someone"} completed ${e.metadata?.count ?? 10} tasks on time!`,
+      e.metadata?.incognito
+        ? `Someone 🕵️ completed ${e.metadata?.count ?? 10} tasks on time!`
+        : `${e.user?.name ?? "Someone"} completed ${e.metadata?.count ?? 10} tasks on time!`,
   },
 };
 
@@ -80,7 +84,8 @@ function timeAgo(dateStr: string) {
 
 function CelebrationCard({ item }: { item: ActivityEvent }) {
   const count = item.metadata?.count ?? 10;
-  const name = item.user?.name ?? "Someone";
+  const isIncognito = item.metadata?.incognito === true;
+  const name = isIncognito ? "Someone 🕵️" : (item.user?.name ?? "Someone");
   return (
     <View style={{ marginHorizontal: 16, marginVertical: 8 }} testID={`milestone-card-${item.id}`}>
       <LinearGradient
