@@ -14,6 +14,7 @@ import {
   KeyboardAvoidingView,
   Switch,
   Share,
+  RefreshControl,
 } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -265,6 +266,16 @@ export default function ProfileScreen() {
 
   const avatarUri = localImage ?? user?.image ?? null;
 
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await queryClient.invalidateQueries({ queryKey: ["teams"] });
+    await queryClient.invalidateQueries({ queryKey: ["notification-preferences"] });
+    await queryClient.invalidateQueries({ queryKey: ["join-requests", editingTeam?.id] });
+    setRefreshing(false);
+  };
+
   return (
     <SafeAreaView className="flex-1 bg-slate-50 dark:bg-slate-900" edges={["top"]} testID="profile-screen">
       {/* Header */}
@@ -275,7 +286,7 @@ export default function ProfileScreen() {
         </View>
       </LinearGradient>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 88 }}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 88 }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" colors={["#4361EE"]} />}>
         {/* Avatar + name card */}
         <View className="mx-4 mt-5 bg-white dark:bg-slate-800 rounded-2xl overflow-hidden"
           style={{ shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 2 }}>

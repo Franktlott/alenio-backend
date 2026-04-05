@@ -10,7 +10,7 @@ import {
   Pressable,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { LinearGradient } from "expo-linear-gradient";
 import { MessageCircle, Users, ChevronRight, Plus, Lock } from "lucide-react-native";
 import { router } from "expo-router";
@@ -34,8 +34,16 @@ export default function ChatScreen() {
   const insets = useSafeAreaInsets();
   const { data: session } = useSession();
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
+  const queryClient = useQueryClient();
   const [fabOpen, setFabOpen] = useState(false);
   const [showGroupPaywall, setShowGroupPaywall] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await queryClient.invalidateQueries({ queryKey: ["conversations"] });
+    setRefreshing(false);
+  };
 
   const { data: teams } = useQuery({
     queryKey: ["teams"],
@@ -227,6 +235,8 @@ export default function ChatScreen() {
           </View>
         }
         showsVerticalScrollIndicator={false}
+        onRefresh={onRefresh}
+        refreshing={refreshing}
       />
 
       {/* FAB */}

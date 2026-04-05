@@ -11,6 +11,7 @@ import {
   KeyboardAvoidingView,
   Pressable,
   Image,
+  RefreshControl,
 } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -272,6 +273,16 @@ export default function CalendarScreen() {
   const selectedTasks = selectedDate ? getTasksForDay(selectedDate) : [];
   const isLoading = eventsLoading || tasksLoading;
 
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await queryClient.invalidateQueries({ queryKey: ["calendar-events", activeTeamId] });
+    await queryClient.invalidateQueries({ queryKey: ["tasks", activeTeamId] });
+    await queryClient.invalidateQueries({ queryKey: ["teams"] });
+    setRefreshing(false);
+  };
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#F8FAFC" }} edges={["top"]} testID="calendar-screen">
       {/* Header */}
@@ -304,7 +315,7 @@ export default function CalendarScreen() {
         </View>
       </LinearGradient>
 
-      <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+      <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" colors={["#4361EE"]} />}>
         {/* Calendar grid */}
         <View style={{ backgroundColor: "white", marginHorizontal: 12, marginTop: 12, borderRadius: 16, shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 2, overflow: "hidden" }}>
           {/* Day of week headers */}

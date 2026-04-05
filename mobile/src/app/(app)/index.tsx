@@ -417,6 +417,16 @@ export default function TasksScreen() {
   const setActiveTeamId = useTeamStore((s) => s.setActiveTeamId);
   const queryClient = useQueryClient();
 
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await queryClient.invalidateQueries({ queryKey: ["tasks", activeTeamId, "mine"] });
+    await queryClient.invalidateQueries({ queryKey: ["tasks", activeTeamId, "team"] });
+    await queryClient.invalidateQueries({ queryKey: ["calendar-events", activeTeamId] });
+    setRefreshing(false);
+  };
+
   const { data: teams, isLoading: teamsLoading } = useQuery({
     queryKey: ["teams"],
     queryFn: () => api.get<Team[]>("/api/teams"),
@@ -636,7 +646,7 @@ export default function TasksScreen() {
         </View>
       </LinearGradient>
 
-      <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} stickyHeaderIndices={[2]}>
+      <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} stickyHeaderIndices={[2]} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" colors={["#4361EE"]} />}>
         {/* Mini Calendar */}
         <MiniCalendar tasks={allTasks} events={calendarEvents} selectedDay={selectedDay} onSelectDay={setSelectedDay} />
 

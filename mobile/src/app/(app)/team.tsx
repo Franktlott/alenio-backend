@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -110,6 +110,15 @@ export default function TeamScreen() {
     },
   });
 
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await queryClient.invalidateQueries({ queryKey: ["team", activeTeamId] });
+    await queryClient.invalidateQueries({ queryKey: ["member-stats", activeTeamId] });
+    setRefreshing(false);
+  };
+
   const handleCopyCode = async () => {
     if (team?.inviteCode) await Clipboard.setStringAsync(team.inviteCode);
   };
@@ -213,6 +222,8 @@ export default function TeamScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: insets.bottom + 88 }}
         testID="members-list"
+        onRefresh={onRefresh}
+        refreshing={refreshing}
       />
     </SafeAreaView>
   );
