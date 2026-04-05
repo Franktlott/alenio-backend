@@ -3,13 +3,13 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api/api";
 import { useTeamStore } from "@/lib/state/team-store";
-import { CheckCircle, UserPlus, UserMinus, Calendar, Activity } from "lucide-react-native";
+import { CheckCircle, UserPlus, UserMinus, Calendar, Activity, UserCheck } from "lucide-react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Image as ExpoImage } from "expo-image";
 
 type ActivityEvent = {
   id: string;
-  type: "task_completed" | "member_joined" | "member_removed" | "calendar_event_added";
+  type: "task_completed" | "member_joined" | "member_removed" | "calendar_event_added" | "task_assigned";
   createdAt: string;
   metadata: { taskTitle?: string; userName?: string; eventTitle?: string } | null;
   user: { id: string; name: string; image: string | null } | null;
@@ -47,6 +47,14 @@ const EVENT_CONFIG = {
     Icon: Calendar,
     getMessage: (e: ActivityEvent) =>
       `${e.user?.name ?? "Someone"} added "${e.metadata?.eventTitle ?? "an event"}"`,
+  },
+  task_assigned: {
+    label: "Assigned",
+    color: "#4361EE",
+    bg: "#EEF2FF",
+    Icon: UserCheck,
+    getMessage: (e: ActivityEvent) =>
+      `${e.user?.name ?? "Someone"} was assigned "${e.metadata?.taskTitle ?? "a task"}"`,
   },
 };
 

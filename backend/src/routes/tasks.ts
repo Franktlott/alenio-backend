@@ -400,6 +400,17 @@ tasksRouter.post("/:taskId/assign", async (c) => {
     await sendPushToUsers(assignedUserIds, "New task assigned", taskForNotif?.title ?? "You have a new task", { taskId, teamId }, "notifTaskAssigned");
   }
 
+  // Log activity for each newly assigned user
+  for (const assignedUserId of userIds as string[]) {
+    const assignedUser = await prisma.user.findUnique({ where: { id: assignedUserId }, select: { name: true } });
+    await logActivity({
+      teamId,
+      userId: assignedUserId,
+      type: "task_assigned",
+      metadata: { taskTitle: task.title, assigneeName: assignedUser?.name ?? "" },
+    });
+  }
+
   return c.json({ data: updated });
 });
 
