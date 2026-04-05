@@ -44,11 +44,11 @@ function CustomSplash({ onDone }: { onDone: () => void }) {
   useEffect(() => {
     opacity.value = withSequence(
       withTiming(1, { duration: 500 }),
-      withDelay(800, withTiming(0, { duration: 400 }))
+      withDelay(1800, withTiming(0, { duration: 500 }))
     );
     scale.value = withSequence(
       withTiming(1, { duration: 500 }),
-      withDelay(800, withTiming(1.08, { duration: 400, }, () => runOnJS(onDone)()))
+      withDelay(1800, withTiming(1.08, { duration: 500 }, () => runOnJS(onDone)()))
     );
   }, []);
 
