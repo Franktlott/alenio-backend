@@ -107,7 +107,7 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
                 ) : null}
               </View>
               {isFocused ? (
-                <Text style={{ color: "white", fontSize: 13, fontWeight: "700" }}>{label}</Text>
+                <Text style={{ color: "white", fontSize: 11, fontWeight: "700" }}>{label}</Text>
               ) : null}
             </View>
           </Pressable>
