@@ -210,6 +210,7 @@ export default function TeamScreen() {
           />
         )}
         showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 100 }}
         testID="members-list"
       />
     </SafeAreaView>

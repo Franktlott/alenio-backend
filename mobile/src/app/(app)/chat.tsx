@@ -83,6 +83,7 @@ export default function ChatScreen() {
 
       <FlatList
         data={[]}
+        contentContainerStyle={{ paddingBottom: 100 }}
         ListHeaderComponent={
           <View>
             {/* Team Chat section */}
