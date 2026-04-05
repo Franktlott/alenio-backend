@@ -265,20 +265,19 @@ function TaskRow({ task, onToggle, onPress }: { task: Task; onToggle: () => void
   const isDone = task.status === "done";
   const priority = PRIORITY_CONFIG[task.priority as keyof typeof PRIORITY_CONFIG] ?? PRIORITY_CONFIG.medium;
 
-  const getDueText = () => {
-    if (isDone) return "Completed";
+  const getDueInfo = (): { date: string; overdue: boolean; today: boolean } | null => {
     if (!task.dueDate) return null;
-    const now = new Date();
     const due = new Date(task.dueDate);
-    const diffMs = due.getTime() - now.getTime();
-    const diffH = Math.round(diffMs / (1000 * 60 * 60));
-    if (diffH < 0) return `${Math.abs(diffH)}h overdue`;
-    if (diffH < 24) return `${diffH}h left`;
-    const diffD = Math.round(diffH / 24);
-    return `${diffD}d left`;
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const dueStart = new Date(due.getFullYear(), due.getMonth(), due.getDate());
+    const overdue = !isDone && dueStart < todayStart;
+    const today = dueStart.getTime() === todayStart.getTime();
+    const date = due.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    return { date, overdue, today };
   };
 
-  const dueText = getDueText();
+  const dueInfo = getDueInfo();
 
   return (
     <Pressable
@@ -348,16 +347,16 @@ function TaskRow({ task, onToggle, onPress }: { task: Task; onToggle: () => void
             </View>
           ) : null}
 
-          {/* Time */}
-          {dueText ? (
-            <View style={{ flexDirection: "row", alignItems: "center" }}>
-              <Text style={{ fontSize: 11, marginRight: 2, color: "#94A3B8" }}>⏱</Text>
+          {/* Due date */}
+          {dueInfo ? (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+              <Text style={{ fontSize: 11, color: isDone ? "#94A3B8" : dueInfo.overdue ? "#EF4444" : dueInfo.today ? "#F59E0B" : "#64748B" }}>⏱</Text>
               <Text style={{
                 fontSize: 11,
-                color: isDone ? "#94A3B8" : dueText.includes("overdue") ? "#EF4444" : "#64748B",
-                fontWeight: dueText.includes("overdue") ? "600" : "400",
+                fontWeight: dueInfo.overdue ? "600" : "400",
+                color: isDone ? "#94A3B8" : dueInfo.overdue ? "#EF4444" : dueInfo.today ? "#F59E0B" : "#64748B",
               }}>
-                {dueText}
+                {isDone ? "Completed" : dueInfo.today ? `Today · ${dueInfo.date}` : dueInfo.overdue ? `Overdue · ${dueInfo.date}` : dueInfo.date}
               </Text>
             </View>
           ) : null}
