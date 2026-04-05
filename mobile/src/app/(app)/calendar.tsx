@@ -10,6 +10,7 @@ import {
   Platform,
   KeyboardAvoidingView,
   Pressable,
+  Image,
 } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -281,9 +282,12 @@ export default function CalendarScreen() {
             <Text style={{ color: "white", fontSize: 18, fontWeight: "700" }}>
               {MONTHS[currentMonth.getMonth()]} {currentMonth.getFullYear()}
             </Text>
-            <Pressable onPress={nextMonth} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(255,255,255,0.2)", alignItems: "center", justifyContent: "center" }} testID="next-month-button">
-              <ChevronRight size={20} color="white" />
-            </Pressable>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <Pressable onPress={nextMonth} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(255,255,255,0.2)", alignItems: "center", justifyContent: "center" }} testID="next-month-button">
+                <ChevronRight size={20} color="white" />
+              </Pressable>
+              <Image source={require("@/assets/alenio-icon.png")} style={{ width: 28, height: 28, borderRadius: 6 }} />
+            </View>
           </View>
         </View>
       </LinearGradient>

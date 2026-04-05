@@ -237,6 +237,7 @@ export default function CreateTaskScreen() {
                   <Text className="text-white font-semibold text-base">Create</Text>
                 )}
               </TouchableOpacity>
+              <Image source={require("@/assets/alenio-icon.png")} style={{ width: 28, height: 28, borderRadius: 6 }} />
             </View>
           </View>
         </LinearGradient>

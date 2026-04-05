@@ -185,10 +185,11 @@ export default function TeamChatScreen() {
               pathname: "/video-call",
               params: { roomId: teamId, roomName: `${teamName ?? "Team"} Call` },
             })}
-            className="w-9 h-9 rounded-full bg-white/20 items-center justify-center"
+            className="w-9 h-9 rounded-full bg-white/20 items-center justify-center mr-2"
           >
             <Video size={18} color="white" />
           </TouchableOpacity>
+          <Image source={require("@/assets/alenio-icon.png")} style={{ width: 28, height: 28, borderRadius: 6 }} />
         </View>
       </LinearGradient>
 

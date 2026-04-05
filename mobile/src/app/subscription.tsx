@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   Modal,
   Pressable,
+  Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -94,7 +95,9 @@ export default function SubscriptionScreen() {
             <Crown size={20} color="#FCD34D" />
             <Text className="text-white text-lg font-bold">Alenio Pro</Text>
           </View>
-          <View style={{ width: 22 }} />
+          <View style={{ width: 28 }}>
+            <Image source={require("@/assets/alenio-icon.png")} style={{ width: 28, height: 28, borderRadius: 6 }} />
+          </View>
         </View>
       </LinearGradient>
 

@@ -271,7 +271,7 @@ export default function ProfileScreen() {
             <ArrowLeft size={22} color="white" />
           </TouchableOpacity>
           <Text className="text-white text-lg font-bold">Profile</Text>
-          <View style={{ width: 22 }} />
+          <Image source={require("@/assets/alenio-icon.png")} style={{ width: 28, height: 28, borderRadius: 6 }} />
         </View>
       </LinearGradient>
 

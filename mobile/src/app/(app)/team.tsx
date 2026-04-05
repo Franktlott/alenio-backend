@@ -157,6 +157,7 @@ export default function TeamScreen() {
             <Text className="text-white text-xl font-bold">{team?.name}</Text>
             <Text className="text-white/70 text-sm">{team?.members?.length ?? 0} members</Text>
           </View>
+          <Image source={require("@/assets/alenio-icon.png")} style={{ width: 28, height: 28, borderRadius: 6 }} />
         </View>
       </LinearGradient>
 

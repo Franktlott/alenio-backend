@@ -196,6 +196,7 @@ export default function TaskDetailScreen() {
               </TouchableOpacity>
             ) : null}
             {!isCreator ? <View style={{ width: 20 }} /> : null}
+            <Image source={require("@/assets/alenio-icon.png")} style={{ width: 28, height: 28, borderRadius: 6 }} />
           </View>
         </View>
       </LinearGradient>
