@@ -495,7 +495,9 @@ export default function TasksScreen() {
   const dayEvents = calendarEvents.filter((ev) => {
     const evStart = startOfDay(new Date(ev.startDate));
     const evEnd = ev.endDate ? startOfDay(new Date(ev.endDate)) : evStart;
-    const target = new Date(targetIso);
+    // Parse as local midnight (not UTC) to match startOfDay output
+    const [ty, tm, td] = targetIso.split("-").map(Number);
+    const target = new Date(ty, tm - 1, td);
     return evStart <= target && target <= evEnd;
   });
 
