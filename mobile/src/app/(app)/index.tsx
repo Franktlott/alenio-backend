@@ -178,23 +178,20 @@ export default function TasksScreen() {
 
   const currentUserId = session?.user?.id ?? null;
   const activeTeam = teams?.find((t) => t.id === activeTeamId);
-  const isOwner = (activeTeam as (Team & { role?: string }) | undefined)?.role === "owner";
 
   React.useEffect(() => {
-    if (filter === "assigned" && !isOwner) setFilter("all");
-  }, [isOwner, filter]);
+    if (filter === "assigned" && !currentUserId) setFilter("all");
+  }, [currentUserId, filter]);
 
-  const isMyTask = (t: Task) =>
-    t.creator?.id === currentUserId ||
-    (t.assignments ?? []).some((a) => a.userId === currentUserId);
+  const isMyCreatedTask = (t: Task) => t.creator?.id === currentUserId;
+  const isAssignedToMe = (t: Task) =>
+    (t.assignments ?? []).some((a) => a.userId === currentUserId) &&
+    t.creator?.id !== currentUserId;
 
   const tasks = allTasks.filter((t) => {
-    if (filter === "assigned") return (
-      t.creator?.id === currentUserId &&
-      (t.assignments ?? []).some((a) => a.userId !== currentUserId)
-    );
-    if (filter === "completed") return t.status === "done" && isMyTask(t);
-    return t.status !== "done" && isMyTask(t);
+    if (filter === "assigned") return isAssignedToMe(t) && t.status !== "done";
+    if (filter === "completed") return t.status === "done" && isMyCreatedTask(t);
+    return t.status !== "done" && isMyCreatedTask(t);
   }).sort((a, b) => {
     if (sort === "priority") {
       const order = { urgent: 0, high: 1, medium: 2, low: 3 };
@@ -211,9 +208,9 @@ export default function TasksScreen() {
     t.creator?.id === currentUserId &&
     (t.assignments ?? []).some((a) => a.userId !== currentUserId)
   ).length;
-  const completedCount = allTasks.filter((t) => t.status === "done" && isMyTask(t)).length;
+  const completedCount = allTasks.filter((t) => t.status === "done" && isMyCreatedTask(t)).length;
 
-  const myActiveTasks = allTasks.filter((t) => t.status !== "done" && isMyTask(t));
+  const myActiveTasks = allTasks.filter((t) => t.status !== "done" && isMyCreatedTask(t));
   const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
   const todayEnd = new Date(); todayEnd.setHours(23, 59, 59, 999);
   const dueTodayCount = myActiveTasks.filter((t) => t.dueDate && new Date(t.dueDate) >= todayStart && new Date(t.dueDate) <= todayEnd).length;
@@ -302,7 +299,7 @@ export default function TasksScreen() {
       {/* Filter tabs + sort */}
       <View style={{ paddingHorizontal: 16, marginBottom: 10 }}>
         <View style={{ flexDirection: "row", backgroundColor: "#E2E8F0", borderRadius: 12, padding: 4, marginBottom: 8 }}>
-          {(["all", "completed", ...(isOwner ? ["assigned"] : [])] as FilterTab[]).map((f) => (
+          {(["all", "completed", "assigned"] as FilterTab[]).map((f) => (
             <TouchableOpacity
               key={f}
               onPress={() => setFilter(f)}
