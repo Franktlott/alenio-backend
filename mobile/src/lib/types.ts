@@ -129,6 +129,19 @@ export interface TaskTemplate {
   createdAt: string;
 }
 
+export interface CalendarEvent {
+  id: string;
+  title: string;
+  description?: string | null;
+  startDate: string;
+  endDate?: string | null;
+  allDay: boolean;
+  color: string;
+  teamId: string;
+  createdAt: string;
+  createdBy?: { id: string; name: string; image?: string | null };
+}
+
 export interface CreateTaskInput {
   title: string;
   description?: string;

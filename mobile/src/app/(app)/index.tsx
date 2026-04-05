@@ -23,7 +23,7 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
 import { useTeamStore } from "@/lib/state/team-store";
-import type { Task, Team } from "@/lib/types";
+import type { Task, Team, CalendarEvent } from "@/lib/types";
 
 type FilterTab = "all" | "assigned" | "completed";
 type SortMode = "due" | "priority";
@@ -33,10 +33,12 @@ const MONTH_NAMES = ["January","February","March","April","May","June","July","A
 
 function MiniCalendar({
   tasks,
+  events,
   selectedDay,
   onSelectDay,
 }: {
   tasks: Task[];
+  events: CalendarEvent[];
   selectedDay: string | null;
   onSelectDay: (iso: string | null) => void;
 }) {
@@ -53,6 +55,20 @@ function MiniCalendar({
       .filter((t) => t.dueDate && t.status !== "done")
       .map((t) => new Date(t.dueDate!).toISOString().slice(0, 10))
   );
+
+  // Build set of days (YYYY-MM-DD) covered by events
+  const eventDays = new Set<string>();
+  for (const ev of events) {
+    const start = new Date(ev.startDate);
+    const end = ev.endDate ? new Date(ev.endDate) : start;
+    const cursor = new Date(start);
+    cursor.setHours(0, 0, 0, 0);
+    end.setHours(0, 0, 0, 0);
+    while (cursor <= end) {
+      eventDays.add(cursor.toISOString().slice(0, 10));
+      cursor.setDate(cursor.getDate() + 1);
+    }
+  }
 
   const cells: (number | null)[] = [
     ...Array(firstDay).fill(null),
@@ -98,6 +114,7 @@ function MiniCalendar({
           const isToday = today.getFullYear() === viewYear && today.getMonth() === viewMonth && today.getDate() === day;
           const isSelected = selectedDay === iso;
           const hasTasks = taskDays.has(iso);
+          const hasEvents = eventDays.has(iso);
 
           return (
             <TouchableOpacity
@@ -113,9 +130,11 @@ function MiniCalendar({
                   {day}
                 </Text>
               </View>
-              {hasTasks && !isSelected ? (
-                <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: "#4361EE", marginTop: 1 }} />
-              ) : <View style={{ width: 4, height: 4 }} />}
+              <View style={{ flexDirection: "row", gap: 2, height: 5, alignItems: "center", marginTop: 1 }}>
+                {hasTasks && !isSelected ? <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: "#4361EE" }} /> : null}
+                {hasEvents && !isSelected ? <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: "#7C3AED" }} /> : null}
+                {(!hasTasks && !hasEvents) || isSelected ? <View style={{ width: 4, height: 4 }} /> : null}
+              </View>
             </TouchableOpacity>
           );
         })}
@@ -280,6 +299,12 @@ export default function TasksScreen() {
     enabled: !!activeTeamId,
   });
 
+  const { data: calendarEvents = [] } = useQuery({
+    queryKey: ["calendar-events", activeTeamId],
+    queryFn: () => api.get<CalendarEvent[]>(`/api/teams/${activeTeamId}/events`),
+    enabled: !!activeTeamId,
+  });
+
   const toggleMutation = useMutation({
     mutationFn: (task: Task) =>
       api.patch<Task>(`/api/teams/${activeTeamId}/tasks/${task.id}`, {
@@ -433,7 +458,7 @@ export default function TasksScreen() {
 
       <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} stickyHeaderIndices={[1]}>
         {/* Mini Calendar */}
-        <MiniCalendar tasks={allTasks} selectedDay={selectedDay} onSelectDay={setSelectedDay} />
+        <MiniCalendar tasks={allTasks} events={calendarEvents} selectedDay={selectedDay} onSelectDay={setSelectedDay} />
 
         {/* Sticky section: stats + filter tabs */}
         <View style={{ backgroundColor: "#F8FAFC" }}>
