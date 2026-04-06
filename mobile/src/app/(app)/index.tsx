@@ -24,7 +24,7 @@ import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
 import { useTeamStore } from "@/lib/state/team-store";
 import { useSubscriptionStore } from "@/lib/state/subscription-store";
-import type { Task, Team, CalendarEvent } from "@/lib/types";
+import type { Task, Team, TeamMember, CalendarEvent } from "@/lib/types";
 import { NoTeamPlaceholder } from "@/components/NoTeamPlaceholder";
 
 type FilterTab = "all" | "assigned" | "completed";
@@ -454,6 +454,7 @@ export default function TasksScreen() {
   const { openModal } = useLocalSearchParams<{ openModal?: string }>();
   const [filter, setFilter] = useState<FilterTab>("all");
   const [sort, setSort] = useState<SortMode>("due");
+  const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
 
   const [teamCompletedExpanded, setTeamCompletedExpanded] = useState(false);
@@ -520,6 +521,16 @@ export default function TasksScreen() {
     queryFn: () => api.get<Task[]>(`/api/teams/${activeTeamId}/tasks?creatorId=me`),
     enabled: !!activeTeamId && filter === "assigned",
   });
+
+  // Team members for the member filter (Team tab only)
+  const { data: teamData } = useQuery({
+    queryKey: ["team", activeTeamId],
+    queryFn: () => api.get<Team>(`/api/teams/${activeTeamId}`),
+    enabled: !!activeTeamId,
+  });
+  const nonOwnerMembers: TeamMember[] = (teamData?.members ?? []).filter(
+    (m) => m.role !== "owner"
+  );
 
   const { data: calendarEvents = [] } = useQuery({
     queryKey: ["calendar-events", activeTeamId],
@@ -640,6 +651,7 @@ export default function TasksScreen() {
 
   React.useEffect(() => {
     if (filter === "assigned" && !currentUserId) setFilter("all");
+    if (filter !== "assigned") setSelectedMemberId(null);
   }, [currentUserId, filter]);
 
   // Active: tasks assigned to me (or mine with no assignment), open
@@ -651,6 +663,8 @@ export default function TasksScreen() {
       if ((t.assignments ?? []).length === 0) return false;
       if (!(t.assignments ?? []).some((a) => a.userId !== currentUserId)) return false;
       if (t.status === "done") return false;
+      // Member filter
+      if (selectedMemberId && !(t.assignments ?? []).some((a) => a.userId === selectedMemberId)) return false;
     } else if (filter === "completed") {
       if (t.status !== "done") return false;
     } else {
@@ -849,6 +863,63 @@ export default function TasksScreen() {
                 </TouchableOpacity>
               ))}
             </View>
+
+            {/* Member filter — Team tab only */}
+            {filter === "assigned" && nonOwnerMembers.length > 0 ? (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={{ flexGrow: 0, marginTop: 8 }}
+                contentContainerStyle={{ flexDirection: "row", gap: 8, paddingVertical: 2 }}
+                testID="member-filter-row"
+              >
+                <TouchableOpacity
+                  onPress={() => setSelectedMemberId(null)}
+                  style={{
+                    flexDirection: "row", alignItems: "center", gap: 6,
+                    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20,
+                    backgroundColor: selectedMemberId === null ? "#4361EE" : "#F1F5F9",
+                  }}
+                  testID="member-filter-all"
+                >
+                  <Text style={{ fontSize: 12, fontWeight: "600", color: selectedMemberId === null ? "white" : "#64748B" }}>
+                    All Members
+                  </Text>
+                </TouchableOpacity>
+                {nonOwnerMembers.map((m) => {
+                  const isSelected = selectedMemberId === m.userId;
+                  return (
+                    <TouchableOpacity
+                      key={m.userId}
+                      onPress={() => setSelectedMemberId(isSelected ? null : m.userId)}
+                      style={{
+                        flexDirection: "row", alignItems: "center", gap: 6,
+                        paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20,
+                        backgroundColor: isSelected ? "#4361EE" : "#F1F5F9",
+                      }}
+                      testID={`member-filter-${m.userId}`}
+                    >
+                      <View style={{
+                        width: 20, height: 20, borderRadius: 10,
+                        backgroundColor: isSelected ? "rgba(255,255,255,0.3)" : "#CBD5E1",
+                        alignItems: "center", justifyContent: "center", overflow: "hidden",
+                      }}>
+                        {m.user.image ? (
+                          <Image source={{ uri: m.user.image }} style={{ width: 20, height: 20 }} resizeMode="cover" />
+                        ) : (
+                          <Text style={{ fontSize: 9, fontWeight: "700", color: isSelected ? "white" : "#64748B" }}>
+                            {m.user.name?.[0]?.toUpperCase() ?? "?"}
+                          </Text>
+                        )}
+                      </View>
+                      <Text style={{ fontSize: 12, fontWeight: "600", color: isSelected ? "white" : "#64748B" }}>
+                        {m.user.name}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            ) : null}
           </View>
         </View>
 
