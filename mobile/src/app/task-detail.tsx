@@ -249,9 +249,9 @@ export default function TaskDetailScreen() {
               Task is completed. Recall it to make edits.
             </Text>
             <TouchableOpacity
-              onPress={() => setShowRecallConfirm(true)}
-              disabled={updateMutation.isPending}
-              className="px-3 py-1 rounded-full bg-emerald-600"
+              onPress={() => { if (!isDemo) setShowRecallConfirm(true); }}
+              disabled={updateMutation.isPending || isDemo}
+              className={`px-3 py-1 rounded-full ${isDemo ? "bg-emerald-300 dark:bg-emerald-800" : "bg-emerald-600"}`}
             >
               {updateMutation.isPending ? (
                 <ActivityIndicator size="small" color="white" />
