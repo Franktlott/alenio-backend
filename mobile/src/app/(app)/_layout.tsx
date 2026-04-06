@@ -1,5 +1,5 @@
 import { Tabs } from "expo-router";
-import { CheckSquare, Users, User, MessageCircle, Activity } from "lucide-react-native";
+import { CheckSquare, Users, User, MessageCircle, Activity, Zap } from "lucide-react-native";
 import { View, Text, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
@@ -10,6 +10,8 @@ import { useUnreadStore } from "@/lib/state/unread-store";
 import { useSubscriptionStore } from "@/lib/state/subscription-store";
 import { useEffect } from "react";
 import type { Conversation } from "@/lib/types";
+
+const DEMO_EMAIL = "demo@alenio.app";
 
 export const unstable_settings = {
   initialRouteName: "team",
@@ -162,6 +164,8 @@ export default function AppLayout() {
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
   const isPro = useSubscriptionStore((s) => s.isPro);
   const setIsPro = useSubscriptionStore((s) => s.setIsPro);
+  const { data: session } = useSession();
+  const isDemo = session?.user?.email === DEMO_EMAIL;
 
   // Keep persisted pro status in sync with the server
   const { data: subscription } = useQuery({
@@ -176,20 +180,41 @@ export default function AppLayout() {
   }, [subscription]);
 
   // isPro is read synchronously from AsyncStorage — no loading state, no flicker
-  const hideProTabs = !isPro;
+  // Demo users get all tabs unlocked so they can explore every feature
+  const hideProTabs = !isPro && !isDemo;
 
   return (
-    <Tabs
-      initialRouteName="team"
-      tabBar={(props) => <FloatingTabBar {...props} />}
-      screenOptions={{ headerShown: false }}
-    >
-      <Tabs.Screen name="feed" options={{ href: hideProTabs ? null : undefined }} />
-      <Tabs.Screen name="chat" options={{}} />
-      <Tabs.Screen name="index" options={{ title: "Tasks", href: hideProTabs ? null : undefined }} />
-      <Tabs.Screen name="team" options={{ title: "Team" }} />
-      <Tabs.Screen name="calendar" options={{ href: null }} />
-      <Tabs.Screen name="profile" options={{ title: "Profile" }} />
-    </Tabs>
+    <>
+      {isDemo ? (
+        <View style={{
+          backgroundColor: "#FFF7ED",
+          borderBottomWidth: 1,
+          borderBottomColor: "#FED7AA",
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 6,
+          paddingVertical: 7,
+          paddingTop: 7,
+        }}>
+          <Zap size={13} color="#EA580C" fill="#EA580C" />
+          <Text style={{ color: "#EA580C", fontSize: 12, fontWeight: "600" }}>
+            Demo Mode — explore Alenio with sample data
+          </Text>
+        </View>
+      ) : null}
+      <Tabs
+        initialRouteName="team"
+        tabBar={(props) => <FloatingTabBar {...props} />}
+        screenOptions={{ headerShown: false }}
+      >
+        <Tabs.Screen name="feed" options={{ href: hideProTabs ? null : undefined }} />
+        <Tabs.Screen name="chat" options={{}} />
+        <Tabs.Screen name="index" options={{ title: "Tasks", href: hideProTabs ? null : undefined }} />
+        <Tabs.Screen name="team" options={{ title: "Team" }} />
+        <Tabs.Screen name="calendar" options={{ href: null }} />
+        <Tabs.Screen name="profile" options={{ title: "Profile" }} />
+      </Tabs>
+    </>
   );
 }
