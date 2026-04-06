@@ -429,7 +429,7 @@ webRouter.get("/", (c) => {
     }
 
     /* ── SPLIT AUTH LAYOUT ── */
-    #login-screen, #otp-screen {
+    #login-screen {
       display: flex;
       min-height: 100vh;
     }
@@ -1161,33 +1161,13 @@ webRouter.get("/", (c) => {
         <input class="field" type="email" id="email-input" placeholder="you@company.com"
           autocapitalize="off" autocorrect="off" autocomplete="email" />
       </div>
-      <div id="login-msg"></div>
-      <button type="button" class="btn-primary" id="send-otp-btn" onclick="sendOTP()">Continue</button>
-    </div>
-  </div>
-</div>
-
-<!-- ── OTP ── -->
-<div id="otp-screen" style="display:none">
-  <div class="auth-left">
-    <div class="auth-left-inner">
-      <img src="/web/logo-full.png" alt="Alenio" style="width:160px;object-fit:contain;margin-bottom:16px;" />
-      <div class="auth-brand-tagline">Team workspace, reimagined</div>
-      <div class="auth-dots"><span></span><span></span><span></span></div>
-    </div>
-  </div>
-  <div class="auth-right">
-    <div class="auth-form-wrap">
-      <h2>Check your inbox</h2>
-      <div class="auth-subtitle" id="otp-desc">We sent a 6-digit code to your email</div>
       <div class="field-group">
-        <label class="field-label" for="otp-input">One-time code</label>
-        <input class="field" type="text" id="otp-input" placeholder="000000"
-          maxlength="6" inputmode="numeric" autocomplete="one-time-code" />
+        <label class="field-label" for="password-input">Password</label>
+        <input class="field" type="password" id="password-input" placeholder="Your password"
+          autocomplete="current-password" />
       </div>
-      <div id="otp-msg"></div>
-      <button type="button" class="btn-primary" id="verify-btn" onclick="verifyOTP()">Sign In</button>
-      <br/><button class="btn-ghost" onclick="backToLogin()">&#8592; Use a different email</button>
+      <div id="login-msg"></div>
+      <button type="button" class="btn-primary" id="sign-in-btn" onclick="signIn()">Sign In</button>
     </div>
   </div>
 </div>
@@ -1503,7 +1483,6 @@ webRouter.get("/", (c) => {
 
 <script>
   // ── State ──────────────────────────────────────────────────────────────────
-  var currentEmail = '';
   var allTasks = [];
   var allTeamTasks = [];
   var allTeams = [];
@@ -1602,68 +1581,41 @@ webRouter.get("/", (c) => {
   }
 
   // ── Auth ───────────────────────────────────────────────────────────────────
-  async function sendOTP() {
+  async function signIn() {
     var email = document.getElementById('email-input').value.trim();
-    if (!email) return;
-    var btn = document.getElementById('send-otp-btn');
-    btn.disabled = true; btn.textContent = 'Sending\u2026';
+    var password = document.getElementById('password-input').value;
+    if (!email || !password) return;
+    var btn = document.getElementById('sign-in-btn');
+    btn.disabled = true; btn.textContent = 'Signing in\u2026';
     clearMsg('login-msg');
     try {
-      var res = await fetch('/api/auth/email-otp/send-verification-otp', {
+      var res = await fetch('/api/auth/sign-in/email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email, type: 'sign-in' }),
+        body: JSON.stringify({ email: email, password: password }),
         credentials: 'include',
       });
-      if (!res.ok) { var d = await res.json().catch(function() { return {}; }); throw new Error(d.message || 'Failed to send code'); }
-      currentEmail = email;
+      var d = await res.json().catch(function() { return {}; });
+      if (!res.ok) throw new Error(d.message || 'Invalid email or password');
       hide('login-screen');
-      document.getElementById('otp-desc').textContent = 'We sent a 6-digit code to ' + email;
-      document.getElementById('otp-screen').style.display = 'flex';
+      await initApp();
     } catch (e) {
       setMsg('login-msg', (e && e.message) ? e.message : 'Something went wrong.', 'error');
     } finally {
-      btn.disabled = false; btn.textContent = 'Continue';
-    }
-  }
-
-  async function verifyOTP() {
-    var otp = document.getElementById('otp-input').value.trim();
-    if (!otp || otp.length < 6) return;
-    var btn = document.getElementById('verify-btn');
-    btn.disabled = true; btn.textContent = 'Verifying\u2026';
-    clearMsg('otp-msg');
-    try {
-      var res = await fetch('/api/auth/sign-in/email-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: currentEmail, otp: otp }),
-        credentials: 'include',
-      });
-      if (!res.ok) { var d = await res.json().catch(function() { return {}; }); throw new Error(d.message || 'Invalid code'); }
-      hide('otp-screen');
-      await initApp();
-    } catch (e) {
-      setMsg('otp-msg', e.message, 'error');
-    } finally {
       btn.disabled = false; btn.textContent = 'Sign In';
     }
-  }
-
-  function backToLogin() {
-    hide('otp-screen'); show('login-screen');
-    document.getElementById('otp-input').value = ''; clearMsg('otp-msg');
   }
 
   async function signOut() {
     await fetch('/api/auth/sign-out', { method: 'POST', credentials: 'include' });
     document.getElementById('app').style.display = 'none';
     document.getElementById('email-input').value = '';
+    document.getElementById('password-input').value = '';
     show('login-screen');
   }
 
-  document.getElementById('email-input').addEventListener('keydown', function(e) { if (e.key === 'Enter') sendOTP(); });
-  document.getElementById('otp-input').addEventListener('keydown', function(e) { if (e.key === 'Enter') verifyOTP(); });
+  document.getElementById('email-input').addEventListener('keydown', function(e) { if (e.key === 'Enter') document.getElementById('password-input').focus(); });
+  document.getElementById('password-input').addEventListener('keydown', function(e) { if (e.key === 'Enter') signIn(); });
 
   // ── App Init ───────────────────────────────────────────────────────────────
   async function initApp() {
