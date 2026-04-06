@@ -351,4 +351,40 @@ teamsRouter.delete("/:teamId/members/:memberId", async (c) => {
   return c.body(null, 204);
 });
 
+// PATCH /api/teams/:teamId/members/:userId/role - change member role
+teamsRouter.patch("/:teamId/members/:userId/role", async (c) => {
+  const user = c.get("user")!;
+  const { teamId, userId } = c.req.param();
+  const { role } = await c.req.json<{ role: string }>();
+
+  // Only allow valid non-owner roles to be assigned
+  if (!["member", "team_leader"].includes(role)) {
+    return c.json({ error: { message: "Invalid role" } }, 400);
+  }
+
+  // Caller must be owner
+  const caller = await prisma.teamMember.findUnique({
+    where: { userId_teamId: { userId: user.id, teamId } },
+  });
+  if (!caller || caller.role !== "owner") {
+    return c.json({ error: { message: "Only owners can change roles" } }, 403);
+  }
+
+  // Target must exist and not be an owner
+  const target = await prisma.teamMember.findUnique({
+    where: { userId_teamId: { userId, teamId } },
+  });
+  if (!target) return c.json({ error: { message: "Member not found" } }, 404);
+  if (target.role === "owner") {
+    return c.json({ error: { message: "Cannot change owner role" } }, 403);
+  }
+
+  const updated = await prisma.teamMember.update({
+    where: { userId_teamId: { userId, teamId } },
+    data: { role },
+  });
+
+  return c.json({ data: updated });
+});
+
 export { teamsRouter };

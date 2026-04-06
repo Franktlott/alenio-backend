@@ -12,7 +12,7 @@ import {
   RefreshControl,
 } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Copy, UserPlus, MessageCircle, AlertCircle, UserMinus, Clock, X, Check, ListChecks, Flame } from "lucide-react-native";
+import { Copy, UserPlus, MessageCircle, AlertCircle, UserMinus, Clock, X, Check, ListChecks, Flame, Crown } from "lucide-react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Clipboard from "expo-clipboard";
@@ -38,6 +38,7 @@ function MemberRow({
   stats,
   isOwner,
   onRemove,
+  onRoleChange,
 }: {
   member: TeamMember;
   isCurrentUser: boolean;
@@ -45,6 +46,7 @@ function MemberRow({
   stats?: { activeTasks: number; overdueTasks: number; streak: number };
   isOwner?: boolean;
   onRemove?: () => void;
+  onRoleChange?: () => void;
 }) {
   return (
     <View
@@ -97,6 +99,16 @@ function MemberRow({
           <UserMinus size={16} color="#EF4444" />
         </TouchableOpacity>
       ) : null}
+      {isOwner && !isCurrentUser && member.role !== "owner" ? (
+        <TouchableOpacity
+          onPress={onRoleChange}
+          className="w-8 h-8 rounded-full items-center justify-center mr-2"
+          style={{ backgroundColor: member.role === "team_leader" ? "#7C3AED15" : "#F59E0B15" }}
+          testID={`role-change-${member.userId}`}
+        >
+          <Crown size={15} color={member.role === "team_leader" ? "#7C3AED" : "#F59E0B"} />
+        </TouchableOpacity>
+      ) : null}
       <View className={`px-2 py-0.5 rounded-full ${member.role === "owner" ? "bg-amber-100" : member.role === "team_leader" ? "bg-purple-100" : "bg-slate-100 dark:bg-slate-700"}`}>
         <Text className={`text-xs font-medium ${member.role === "owner" ? "text-amber-700" : member.role === "team_leader" ? "text-purple-700" : "text-slate-600 dark:text-slate-400"}`}>
           {member.role === "owner" ? "Owner" : member.role === "team_leader" ? "Team Leader" : member.role}
@@ -144,6 +156,32 @@ export default function TeamScreen() {
       queryClient.invalidateQueries({ queryKey: ["member-stats", activeTeamId] });
     },
   });
+
+  const changeRoleMutation = useMutation({
+    mutationFn: ({ userId, role }: { userId: string; role: string }) =>
+      api.patch(`/api/teams/${activeTeamId}/members/${userId}/role`, { role }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["team", activeTeamId] });
+    },
+  });
+
+  const handleRoleChange = (member: TeamMember) => {
+    const isLeader = member.role === "team_leader";
+    Alert.alert(
+      isLeader ? "Remove Team Leader" : "Make Team Leader",
+      isLeader
+        ? `Remove Team Leader role from ${member.user.name}? They will become a regular member.`
+        : `Make ${member.user.name} a Team Leader? They will have owner-level permissions except subscription management.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: isLeader ? "Remove" : "Make Team Leader",
+          style: isLeader ? "destructive" : "default",
+          onPress: () => changeRoleMutation.mutate({ userId: member.userId, role: isLeader ? "member" : "team_leader" }),
+        },
+      ]
+    );
+  };
 
   const handleRemove = (member: TeamMember) => {
     Alert.alert(
@@ -451,6 +489,7 @@ export default function TeamScreen() {
             stats={memberStats?.[item.userId]}
             isOwner={isOwner}
             onRemove={() => handleRemove(item)}
+            onRoleChange={() => handleRoleChange(item)}
           />
         ))}
       </ScrollView>
