@@ -27,4 +27,18 @@ joinRequestsRouter.get("/mine", async (c) => {
   return c.json({ data: requests });
 });
 
+// DELETE /api/join-requests/:requestId - cancel a join request
+joinRequestsRouter.delete("/:requestId", async (c) => {
+  const user = c.get("user")!;
+  const { requestId } = c.req.param();
+
+  const request = await prisma.joinRequest.findUnique({ where: { id: requestId } });
+  if (!request || request.userId !== user.id) {
+    return c.json({ error: { message: "Request not found", code: "NOT_FOUND" } }, 404);
+  }
+
+  await prisma.joinRequest.delete({ where: { id: requestId } });
+  return c.json({ data: { success: true } });
+});
+
 export { joinRequestsRouter };
