@@ -177,15 +177,17 @@ model RecurrenceRule {
 }
 
 model TaskTemplate {
-  id          String   @id @default(cuid())
-  title       String
-  description String?
-  priority    String   @default("medium")
-  teamId      String
-  team        Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  createdById String
-  createdBy   User     @relation("TemplateCreator", fields: [createdById], references: [id])
-  createdAt   DateTime @default(now())
+  id            String   @id @default(cuid())
+  title         String
+  description   String?
+  priority      String   @default("medium")
+  attachmentUrl String?
+  subtasks      String?
+  teamId        String
+  team          Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  createdById   String
+  createdBy     User     @relation("TemplateCreator", fields: [createdById], references: [id])
+  createdAt     DateTime @default(now())
 }
 
 model Message {

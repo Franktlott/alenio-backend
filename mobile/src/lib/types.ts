@@ -128,6 +128,8 @@ export interface TaskTemplate {
   teamId: string;
   createdById: string;
   createdAt: string;
+  attachmentUrl?: string | null;
+  subtasks?: { title: string; order: number }[];
 }
 
 export interface CalendarEvent {

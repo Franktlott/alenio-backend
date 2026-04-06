@@ -38,13 +38,23 @@ templatesRouter.get("/", async (c) => {
     orderBy: { createdAt: "desc" },
   });
 
-  return c.json({ data: templates });
+  return c.json({
+    data: templates.map((t) => ({
+      ...t,
+      subtasks: t.subtasks ? JSON.parse(t.subtasks) : [],
+    })),
+  });
 });
 
 const createTemplateSchema = z.object({
   title: z.string().min(1, "Title is required"),
   description: z.string().optional(),
   priority: z.enum(["low", "medium", "high"]).optional(),
+  attachmentUrl: z.string().url().optional().nullable(),
+  subtasks: z
+    .array(z.object({ title: z.string(), order: z.number() }))
+    .optional()
+    .nullable(),
 });
 
 // POST /api/teams/:teamId/templates
@@ -60,13 +70,15 @@ templatesRouter.post(
       return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
     }
 
-    const { title, description, priority } = c.req.valid("json");
+    const { title, description, priority, attachmentUrl, subtasks } = c.req.valid("json");
 
     const template = await prisma.taskTemplate.create({
       data: {
         title: title.trim(),
         description: description?.trim(),
         priority: priority ?? "medium",
+        attachmentUrl: attachmentUrl ?? null,
+        subtasks: subtasks ? JSON.stringify(subtasks) : null,
         teamId,
         createdById: user.id,
       },
@@ -75,7 +87,7 @@ templatesRouter.post(
       },
     });
 
-    return c.json({ data: template }, 201);
+    return c.json({ data: { ...template, subtasks: template.subtasks ? JSON.parse(template.subtasks) : [] } }, 201);
   }
 );
 

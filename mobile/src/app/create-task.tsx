@@ -83,6 +83,10 @@ export default function CreateTaskScreen() {
     setTitle(t.title);
     setDescription(t.description ?? "");
     setPriority(t.priority);
+    if (t.attachmentUrl) setAttachmentUri(t.attachmentUrl);
+    if (t.subtasks && t.subtasks.length > 0) {
+      setSubtaskTitles(t.subtasks.map((s) => s.title));
+    }
     setShowTemplatePicker(false);
   };
 
@@ -97,6 +101,8 @@ export default function CreateTaskScreen() {
         title: title.trim(),
         description: description.trim() || undefined,
         priority,
+        attachmentUrl: attachmentUri || undefined,
+        subtasks: subtaskTitles.map((s, i) => ({ title: s, order: i })),
       });
       queryClient.invalidateQueries({ queryKey: ["templates", teamId] });
       setError(null);
