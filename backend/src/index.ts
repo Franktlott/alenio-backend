@@ -19,6 +19,7 @@ import { activityRouter } from "./routes/activity";
 import { topicsRouter } from "./routes/topics";
 import { adminRouter } from "./routes/admin";
 import { webRouter } from "./routes/web-app";
+import { pollsRouter } from "./routes/polls";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -195,6 +196,7 @@ app.route("/api/teams", calendarRouter);
 app.route("/api/teams/:teamId/subscription", subscriptionRouter);
 app.route("/api/teams", activityRouter);
 app.route("/api/teams", topicsRouter);
+app.route("/api/teams", pollsRouter);
 app.route("/admin", adminRouter);
 app.route("/web", webRouter);
 

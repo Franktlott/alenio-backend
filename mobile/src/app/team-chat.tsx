@@ -14,7 +14,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { LinearGradient } from "expo-linear-gradient";
-import { ArrowLeft, Send, Paperclip, X, Video, Camera, ImageIcon } from "lucide-react-native";
+import { ArrowLeft, Send, Paperclip, X, Video, Camera, ImageIcon, BarChart2 } from "lucide-react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
@@ -36,20 +36,159 @@ function formatDateLabel(dateStr: string) {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-type MessageItem = Message | { type: "date"; label: string; id: string };
+type PollType = {
+  id: string;
+  question: string;
+  endsAt: string;
+  createdAt: string;
+  createdById: string;
+  createdBy: { id: string; name: string; image: string | null };
+  options: { id: string; text: string; votes: { userId: string }[] }[];
+  votes: { userId: string; optionId: string }[];
+  _isPoll: true;
+};
 
-function buildMessageList(messages: Message[]): MessageItem[] {
-  const items: MessageItem[] = [];
+type ChatItem = Message | PollType | { type: "date"; label: string; id: string };
+
+function buildChatList(messages: Message[], polls: PollType[]): ChatItem[] {
+  const combined: (Message | PollType)[] = [
+    ...messages,
+    ...polls,
+  ].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+
+  const result: ChatItem[] = [];
   let lastDate = "";
-  for (const msg of messages) {
-    const label = formatDateLabel(msg.createdAt);
+  for (const item of combined) {
+    const label = formatDateLabel(item.createdAt);
     if (label !== lastDate) {
-      items.push({ type: "date", label, id: `date-${msg.id}` });
+      result.push({ type: "date", label, id: `date-${item.id}` });
       lastDate = label;
     }
-    items.push(msg);
+    result.push(item);
   }
-  return items;
+  return result;
+}
+
+function PollCard({
+  poll,
+  currentUserId,
+  teamId,
+  onVote,
+  onDelete,
+  canDelete,
+}: {
+  poll: PollType;
+  currentUserId: string;
+  teamId: string;
+  onVote: (pollId: string, optionId: string) => void;
+  onDelete: (pollId: string) => void;
+  canDelete: boolean;
+}) {
+  const isEnded = new Date() > new Date(poll.endsAt);
+  const myVote = poll.votes.find((v) => v.userId === currentUserId);
+  const totalVotes = poll.options.reduce((sum, o) => sum + o.votes.length, 0);
+
+  function timeLeft() {
+    if (isEnded) return "Poll ended";
+    const diff = new Date(poll.endsAt).getTime() - Date.now();
+    const h = Math.floor(diff / 3600000);
+    const m = Math.floor((diff % 3600000) / 60000);
+    if (h > 24) return `${Math.floor(h / 24)}d left`;
+    if (h > 0) return `${h}h ${m}m left`;
+    return `${m}m left`;
+  }
+
+  return (
+    <View style={{ marginVertical: 6, marginHorizontal: 4 }}>
+      <View style={{
+        backgroundColor: "white",
+        borderRadius: 16,
+        padding: 14,
+        borderWidth: 1,
+        borderColor: "#E2E8F0",
+        shadowColor: "#000",
+        shadowOpacity: 0.04,
+        shadowRadius: 6,
+        shadowOffset: { width: 0, height: 2 },
+        elevation: 2,
+      }}>
+        {/* Header row */}
+        <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 10 }}>
+          <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: "#4361EE", alignItems: "center", justifyContent: "center", marginRight: 8 }}>
+            <Text style={{ fontSize: 14 }}>📊</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 11, fontWeight: "700", color: "#4361EE", textTransform: "uppercase", letterSpacing: 0.5 }}>Poll</Text>
+            <Text style={{ fontSize: 10, color: "#94A3B8" }}>{poll.createdBy.name} · {timeLeft()}</Text>
+          </View>
+          {canDelete ? (
+            <TouchableOpacity onPress={() => onDelete(poll.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Text style={{ fontSize: 16, color: "#CBD5E1" }}>✕</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+
+        {/* Question */}
+        <Text style={{ fontSize: 15, fontWeight: "700", color: "#1E293B", marginBottom: 12, lineHeight: 20 }}>
+          {poll.question}
+        </Text>
+
+        {/* Options */}
+        {poll.options.map((option) => {
+          const isSelected = myVote?.optionId === option.id;
+          const voteCount = option.votes.length;
+          const pct = totalVotes > 0 ? (voteCount / totalVotes) * 100 : 0;
+          const showResults = !!myVote || isEnded;
+
+          return (
+            <TouchableOpacity
+              key={option.id}
+              testID={`poll-option-${option.id}`}
+              onPress={() => { if (!isEnded) onVote(poll.id, option.id); }}
+              disabled={isEnded}
+              style={{ marginBottom: 8 }}
+            >
+              <View style={{
+                borderRadius: 10,
+                borderWidth: 1.5,
+                borderColor: isSelected ? "#4361EE" : "#E2E8F0",
+                backgroundColor: isSelected ? "#EEF2FF" : "#F8FAFC",
+                overflow: "hidden",
+              }}>
+                {showResults ? (
+                  <View style={{
+                    position: "absolute", left: 0, top: 0, bottom: 0,
+                    width: `${pct}%` as any,
+                    backgroundColor: isSelected ? "#C7D2FE" : "#F1F5F9",
+                    borderRadius: 8,
+                  }} />
+                ) : null}
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 12, paddingVertical: 10 }}>
+                  <Text style={{ fontSize: 14, fontWeight: isSelected ? "700" : "500", color: isSelected ? "#4361EE" : "#334155", flex: 1 }}>
+                    {option.text}
+                  </Text>
+                  {showResults ? (
+                    <Text style={{ fontSize: 12, fontWeight: "600", color: isSelected ? "#4361EE" : "#94A3B8", marginLeft: 8 }}>
+                      {Math.round(pct)}%
+                    </Text>
+                  ) : null}
+                  {isSelected ? (
+                    <Text style={{ fontSize: 14, marginLeft: 6 }}>✓</Text>
+                  ) : null}
+                </View>
+              </View>
+            </TouchableOpacity>
+          );
+        })}
+
+        {/* Footer */}
+        <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 4 }}>
+          {totalVotes} vote{totalVotes !== 1 ? "s" : ""}
+          {isEnded ? " · Poll ended" : myVote ? " · Tap to change vote" : " · Tap to vote"}
+        </Text>
+      </View>
+    </View>
+  );
 }
 
 export default function TeamChatScreen() {
@@ -65,6 +204,10 @@ export default function TeamChatScreen() {
   const [mediaPreview, setMediaPreview] = useState<{ uri: string; mimeType: string; filename: string } | null>(null);
   const [uploading, setUploading] = useState(false);
   const [showMediaPicker, setShowMediaPicker] = useState(false);
+  const [showPollModal, setShowPollModal] = useState<boolean>(false);
+  const [pollQuestion, setPollQuestion] = useState<string>("");
+  const [pollOptions, setPollOptions] = useState<string[]>(["", ""]);
+  const [pollDuration, setPollDuration] = useState<number>(24);
   const flatListRef = useRef<FlatList>(null);
   const currentUserId = session?.user?.id ?? "";
 
@@ -77,6 +220,14 @@ export default function TeamChatScreen() {
     queryFn: () => api.get<Message[]>(`/api/teams/${teamId}/messages?topicId=${topicKey}`),
     enabled: !!teamId,
     refetchInterval: 3000,
+  });
+
+  const { data: polls = [] } = useQuery<PollType[]>({
+    queryKey: ["polls", teamId],
+    queryFn: () => api.get<PollType[]>(`/api/teams/${teamId}/polls`),
+    enabled: !!teamId,
+    refetchInterval: 5000,
+    select: (data) => data.map((p) => ({ ...p, _isPoll: true as const })),
   });
 
   const { data: team } = useQuery({
@@ -108,6 +259,29 @@ export default function TeamChatScreen() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["messages", teamId, topicKey] });
       setDeleteTarget(null);
+    },
+  });
+
+  const voteMutation = useMutation({
+    mutationFn: ({ pollId, optionId }: { pollId: string; optionId: string }) =>
+      api.post(`/api/teams/${teamId}/polls/${pollId}/vote`, { optionId }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["polls", teamId] }),
+  });
+
+  const deletePollMutation = useMutation({
+    mutationFn: (pollId: string) => api.delete(`/api/teams/${teamId}/polls/${pollId}`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["polls", teamId] }),
+  });
+
+  const createPollMutation = useMutation({
+    mutationFn: (payload: { question: string; options: string[]; durationHours: number }) =>
+      api.post(`/api/teams/${teamId}/polls`, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["polls", teamId] });
+      setShowPollModal(false);
+      setPollQuestion("");
+      setPollOptions(["", ""]);
+      setPollDuration(24);
     },
   });
 
@@ -173,7 +347,7 @@ export default function TeamChatScreen() {
     markAsRead(channelKey, lastMsg.id);
   }, [messages, teamId, topicId, markAsRead]);
 
-  const items = buildMessageList(messages);
+  const items = buildChatList(messages, polls);
 
   return (
     <SafeAreaView testID="team-chat-screen" className="flex-1 bg-slate-50 dark:bg-slate-900" edges={["top"]}>
@@ -193,6 +367,13 @@ export default function TeamChatScreen() {
             <Text style={{ color: "white", fontSize: 18, fontWeight: "700" }}>{teamName ?? "Team Chat"}</Text>
             <Text className="text-white/70 text-xs">{topicName ? `# ${topicName}` : "Main chat"}</Text>
           </View>
+          <TouchableOpacity
+            testID="create-poll-button"
+            onPress={() => setShowPollModal(true)}
+            className="w-9 h-9 rounded-full bg-white/20 items-center justify-center mr-2"
+          >
+            <BarChart2 size={18} color="white" />
+          </TouchableOpacity>
           <TouchableOpacity
             testID="start-video-call-button"
             onPress={() => router.push({
@@ -377,12 +558,167 @@ export default function TeamChatScreen() {
         </TouchableOpacity>
       </Modal>
 
+      {/* Poll creation modal */}
+      <Modal visible={showPollModal} transparent animationType="slide" onRequestClose={() => setShowPollModal(false)}>
+        <TouchableOpacity
+          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }}
+          activeOpacity={1}
+          onPress={() => setShowPollModal(false)}
+        >
+          <TouchableOpacity activeOpacity={1} onPress={() => {}}>
+            <View style={{ backgroundColor: "white", borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 36 }}>
+              {/* Header */}
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+                <Text style={{ fontSize: 18, fontWeight: "700", color: "#1E293B" }}>Create Poll</Text>
+                <TouchableOpacity onPress={() => setShowPollModal(false)}>
+                  <X size={20} color="#94A3B8" />
+                </TouchableOpacity>
+              </View>
+
+              {/* Question */}
+              <Text style={{ fontSize: 13, fontWeight: "600", color: "#64748B", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>Question</Text>
+              <TextInput
+                testID="poll-question-input"
+                value={pollQuestion}
+                onChangeText={setPollQuestion}
+                placeholder="Ask a question..."
+                placeholderTextColor="#CBD5E1"
+                multiline
+                style={{
+                  backgroundColor: "#F8FAFC",
+                  borderWidth: 1,
+                  borderColor: "#E2E8F0",
+                  borderRadius: 12,
+                  paddingHorizontal: 14,
+                  paddingVertical: 12,
+                  fontSize: 15,
+                  color: "#1E293B",
+                  marginBottom: 16,
+                  maxHeight: 100,
+                }}
+              />
+
+              {/* Options */}
+              <Text style={{ fontSize: 13, fontWeight: "600", color: "#64748B", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>Options</Text>
+              {pollOptions.map((opt, i) => (
+                <View key={i} style={{ flexDirection: "row", alignItems: "center", marginBottom: 8, gap: 8 }}>
+                  <TextInput
+                    testID={`poll-option-input-${i}`}
+                    value={opt}
+                    onChangeText={(val) => {
+                      const next = [...pollOptions];
+                      next[i] = val;
+                      setPollOptions(next);
+                    }}
+                    placeholder={`Option ${i + 1}`}
+                    placeholderTextColor="#CBD5E1"
+                    style={{
+                      flex: 1,
+                      backgroundColor: "#F8FAFC",
+                      borderWidth: 1,
+                      borderColor: "#E2E8F0",
+                      borderRadius: 10,
+                      paddingHorizontal: 14,
+                      paddingVertical: 10,
+                      fontSize: 14,
+                      color: "#1E293B",
+                    }}
+                  />
+                  {pollOptions.length > 2 ? (
+                    <TouchableOpacity
+                      onPress={() => setPollOptions(pollOptions.filter((_, idx) => idx !== i))}
+                      style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "#FEE2E2", alignItems: "center", justifyContent: "center" }}
+                    >
+                      <X size={14} color="#EF4444" />
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+              ))}
+              {pollOptions.length < 6 ? (
+                <TouchableOpacity
+                  onPress={() => setPollOptions([...pollOptions, ""])}
+                  style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 8, marginBottom: 16 }}
+                >
+                  <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: "#EEF2FF", alignItems: "center", justifyContent: "center" }}>
+                    <Text style={{ fontSize: 16, color: "#4361EE", lineHeight: 20 }}>+</Text>
+                  </View>
+                  <Text style={{ fontSize: 14, color: "#4361EE", fontWeight: "600" }}>Add option</Text>
+                </TouchableOpacity>
+              ) : <View style={{ marginBottom: 16 }} />}
+
+              {/* Duration */}
+              <Text style={{ fontSize: 13, fontWeight: "600", color: "#64748B", marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>Duration</Text>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 20 }}>
+                {[
+                  { label: "1h", value: 1 },
+                  { label: "6h", value: 6 },
+                  { label: "24h", value: 24 },
+                  { label: "48h", value: 48 },
+                  { label: "3d", value: 72 },
+                  { label: "1 week", value: 168 },
+                ].map(({ label, value }) => (
+                  <TouchableOpacity
+                    key={value}
+                    testID={`poll-duration-${value}`}
+                    onPress={() => setPollDuration(value)}
+                    style={{
+                      paddingHorizontal: 14,
+                      paddingVertical: 7,
+                      borderRadius: 20,
+                      backgroundColor: pollDuration === value ? "#4361EE" : "#F1F5F9",
+                      borderWidth: 1,
+                      borderColor: pollDuration === value ? "#4361EE" : "transparent",
+                    }}
+                  >
+                    <Text style={{ fontSize: 13, fontWeight: "600", color: pollDuration === value ? "white" : "#64748B" }}>{label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Create button */}
+              <TouchableOpacity
+                testID="create-poll-submit"
+                onPress={() => {
+                  const validOptions = pollOptions.filter((o) => o.trim().length > 0);
+                  if (!pollQuestion.trim() || validOptions.length < 2) return;
+                  createPollMutation.mutate({
+                    question: pollQuestion.trim(),
+                    options: validOptions,
+                    durationHours: pollDuration,
+                  });
+                }}
+                disabled={
+                  createPollMutation.isPending ||
+                  !pollQuestion.trim() ||
+                  pollOptions.filter((o) => o.trim()).length < 2
+                }
+                style={{
+                  backgroundColor:
+                    !pollQuestion.trim() || pollOptions.filter((o) => o.trim()).length < 2
+                      ? "#E2E8F0"
+                      : "#4361EE",
+                  borderRadius: 14,
+                  paddingVertical: 14,
+                  alignItems: "center",
+                }}
+              >
+                {createPollMutation.isPending ? (
+                  <ActivityIndicator color="white" />
+                ) : (
+                  <Text style={{ fontSize: 16, fontWeight: "700", color: "white" }}>Create Poll</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} className="flex-1" keyboardVerticalOffset={0}>
         {isLoading ? (
           <View testID="team-chat-loading" className="flex-1 items-center justify-center">
             <ActivityIndicator color="#4361EE" />
           </View>
-        ) : messages.length === 0 ? (
+        ) : messages.length === 0 && polls.length === 0 ? (
           <View testID="team-chat-empty" className="flex-1 items-center justify-center px-6">
             <Text className="text-4xl mb-3">💬</Text>
             <Text className="text-lg font-semibold text-slate-500">No messages yet</Text>
@@ -398,15 +734,35 @@ export default function TeamChatScreen() {
             showsVerticalScrollIndicator={false}
             onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
             renderItem={({ item }) => {
-              if ("type" in item && item.type === "date") {
+              if ("type" in item && (item as any).type === "date") {
                 return (
                   <View className="items-center my-3">
                     <View className="bg-slate-200 dark:bg-slate-700 rounded-full px-3 py-0.5">
-                      <Text className="text-xs text-slate-500 dark:text-slate-400">{item.label}</Text>
+                      <Text className="text-xs text-slate-500 dark:text-slate-400">{(item as any).label}</Text>
                     </View>
                   </View>
                 );
               }
+              // Poll card
+              if ("_isPoll" in item) {
+                const poll = item as PollType;
+                const canDeletePoll =
+                  poll.createdById === currentUserId ||
+                  currentUserRole === "owner" ||
+                  currentUserRole === "team_leader" ||
+                  currentUserRole === "admin";
+                return (
+                  <PollCard
+                    poll={poll}
+                    currentUserId={currentUserId}
+                    teamId={teamId}
+                    onVote={(pollId, optionId) => voteMutation.mutate({ pollId, optionId })}
+                    onDelete={(pollId) => deletePollMutation.mutate(pollId)}
+                    canDelete={canDeletePoll}
+                  />
+                );
+              }
+              // Regular message
               const msg = item as Message;
               return (
                 <ChatMessage
