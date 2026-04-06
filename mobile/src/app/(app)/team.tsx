@@ -12,7 +12,7 @@ import {
   RefreshControl,
 } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Copy, UserPlus, MessageCircle, AlertCircle, UserMinus, Clock, X, Check } from "lucide-react-native";
+import { Copy, UserPlus, MessageCircle, AlertCircle, UserMinus, Clock, X, Check, ListChecks, Flame } from "lucide-react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Clipboard from "expo-clipboard";
@@ -221,6 +221,14 @@ export default function TeamScreen() {
     ? Object.values(memberStats).reduce((sum, s) => sum + s.overdueTasks, 0)
     : 0;
 
+  const totalActive = memberStats
+    ? Object.values(memberStats).reduce((sum, s) => sum + s.activeTasks, 0)
+    : 0;
+
+  const bestStreak = memberStats
+    ? Math.max(0, ...Object.values(memberStats).map((s) => s.streak))
+    : 0;
+
   if (!activeTeamId) {
     const myRequest = myPendingRequests[0] ?? null;
     if (myRequest) {
@@ -352,6 +360,26 @@ export default function TeamScreen() {
         </View>
         <Text className="text-xs mt-1" style={{ color: "#4361EEb3" }}>Share this code to invite team members</Text>
       </View>
+
+      {/* Team stats pill */}
+      {memberStats ? (
+        <View className="mx-4 mb-3 flex-row rounded-2xl overflow-hidden" style={{ gap: 1 }}>
+          <View className="flex-1 flex-row items-center px-4 py-3" style={{ backgroundColor: "#EEF2FF", gap: 8 }}>
+            <ListChecks size={16} color="#4361EE" />
+            <View>
+              <Text style={{ fontSize: 16, fontWeight: "800", color: "#4361EE" }}>{totalActive}</Text>
+              <Text style={{ fontSize: 10, fontWeight: "600", color: "#6B7ECC", letterSpacing: 0.3 }}>active tasks</Text>
+            </View>
+          </View>
+          <View className="flex-1 flex-row items-center px-4 py-3" style={{ backgroundColor: "#FFF7ED", gap: 8 }}>
+            <Flame size={16} color="#F97316" />
+            <View>
+              <Text style={{ fontSize: 16, fontWeight: "800", color: "#F97316" }}>{bestStreak}</Text>
+              <Text style={{ fontSize: 10, fontWeight: "600", color: "#C2600A", letterSpacing: 0.3 }}>on-time streak</Text>
+            </View>
+          </View>
+        </View>
+      ) : null}
 
       {/* Overdue tasks pill */}
       {totalOverdue > 0 ? (
