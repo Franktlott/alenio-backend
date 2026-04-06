@@ -358,23 +358,25 @@ export default function TeamScreen() {
         <Text className="text-xs font-semibold text-indigo-600 uppercase tracking-wide mb-2">Invite Code</Text>
         <View className="flex-row items-center justify-between">
           <Text className="text-2xl font-bold text-indigo-600 tracking-widest">{team?.inviteCode}</Text>
-          <View className="flex-row" style={{ gap: 8 }}>
-            <TouchableOpacity
-              onPress={handleCopyCode}
-              className="w-9 h-9 rounded-full items-center justify-center"
-              style={{ backgroundColor: "#4361EE20" }}
-              testID="copy-invite-code"
-            >
-              <Copy size={16} color="#4361EE" />
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={handleShareCode}
-              className="w-9 h-9 rounded-full bg-indigo-600 items-center justify-center"
-              testID="share-invite-code"
-            >
-              <UserPlus size={16} color="white" />
-            </TouchableOpacity>
-          </View>
+          {!isDemo ? (
+            <View className="flex-row" style={{ gap: 8 }}>
+              <TouchableOpacity
+                onPress={handleCopyCode}
+                className="w-9 h-9 rounded-full items-center justify-center"
+                style={{ backgroundColor: "#4361EE20" }}
+                testID="copy-invite-code"
+              >
+                <Copy size={16} color="#4361EE" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleShareCode}
+                className="w-9 h-9 rounded-full bg-indigo-600 items-center justify-center"
+                testID="share-invite-code"
+              >
+                <UserPlus size={16} color="white" />
+              </TouchableOpacity>
+            </View>
+          ) : null}
         </View>
         <Text className="text-xs mt-1" style={{ color: "#4361EEb3" }}>Share this code to invite team members</Text>
       </View>

@@ -18,6 +18,7 @@ import { api } from "@/lib/api/api";
 import { useTeamStore } from "@/lib/state/team-store";
 import { toast } from "burnt";
 import { isRevenueCatEnabled, purchasePro, restorePurchases } from "@/lib/revenue-cat";
+import { useDemoMode } from "@/lib/useDemo";
 
 type Subscription = {
   id: string;
@@ -52,6 +53,7 @@ function formatDate(iso: string | null): string {
 export default function SubscriptionScreen() {
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
   const queryClient = useQueryClient();
+  const isDemo = useDemoMode();
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [restoring, setRestoring] = useState(false);
 
@@ -283,7 +285,7 @@ export default function SubscriptionScreen() {
         </View>
 
         {/* Upgrade button (free plan) */}
-        {!isPro && !isLoading ? (
+        {!isPro && !isLoading && !isDemo ? (
           <View className="mx-4 mt-6">
             <TouchableOpacity
               onPress={() => upgradeMutation.mutate()}
@@ -339,7 +341,7 @@ export default function SubscriptionScreen() {
         ) : null}
 
         {/* Cancel plan (pro plan) */}
-        {isPro && !isLoading ? (
+        {isPro && !isLoading && !isDemo ? (
           <View className="mx-4 mt-6">
             <TouchableOpacity
               onPress={() => setShowCancelConfirm(true)}
