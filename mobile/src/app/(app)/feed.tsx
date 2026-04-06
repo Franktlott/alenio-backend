@@ -1,4 +1,4 @@
-import { View, Text, FlatList, ActivityIndicator, Pressable, ScrollView } from "react-native";
+import { View, Text, FlatList, ActivityIndicator, Pressable, ScrollView, Modal, TouchableOpacity, Image } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -17,7 +17,7 @@ const REACTION_HINT_KEY = "reaction_hint_shown";
 
 type ActivityEvent = {
   id: string;
-  type: "task_completed" | "member_joined" | "member_removed" | "calendar_event_added" | "task_assigned" | "task_milestone";
+  type: "task_completed" | "member_joined" | "member_removed" | "calendar_event_added" | "task_assigned" | "task_milestone" | "personal_best";
   createdAt: string;
   metadata: { taskTitle?: string; userName?: string; eventTitle?: string; count?: number; incognito?: boolean } | null;
   user: { id: string; name: string; image: string | null } | null;
