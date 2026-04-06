@@ -3,6 +3,7 @@ import {
   View,
   Text,
   Image,
+  ImageBackground,
   TouchableOpacity,
   Share,
   ActivityIndicator,
@@ -310,7 +311,13 @@ export default function TeamScreen() {
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-slate-50 dark:bg-slate-900" edges={["top"]} testID="team-screen">
+    <SafeAreaView className="flex-1" edges={["top"]} testID="team-screen">
+      <ImageBackground
+        source={require("@/assets/brand-bg.png")}
+        style={{ flex: 1 }}
+        resizeMode="cover"
+      >
+        <View style={{ flex: 1, backgroundColor: "rgba(240,242,255,0.82)" }}>
       <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
         <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 14, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
@@ -441,6 +448,8 @@ export default function TeamScreen() {
           />
         ))}
       </ScrollView>
+        </View>
+      </ImageBackground>
     </SafeAreaView>
   );
 }
