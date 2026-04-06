@@ -165,7 +165,7 @@ export default function OnboardingScreen() {
             <Text className="font-semibold text-slate-700 dark:text-slate-200">
               {pendingRequest.teamName}
             </Text>{" "}
-            has been sent. The team owner will review it.
+            has been sent. The Team Leader will review it.
           </Text>
 
           <TouchableOpacity

@@ -459,7 +459,8 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        {/* Subscription */}
+        {/* Subscription — only visible to Team Leaders */}
+        {teams.some((t) => (t as Team & { role?: string }).role === "owner") ? (
         <View className="mx-4 mt-5">
           <View className="flex-row items-center mb-3" style={{ gap: 6 }}>
             <Crown size={13} color="#94A3B8" />
@@ -483,6 +484,7 @@ export default function ProfileScreen() {
             </TouchableOpacity>
           </View>
         </View>
+        ) : null}
 
         {/* Sign out */}
         {showSignOutConfirm ? (
@@ -698,7 +700,7 @@ export default function ProfileScreen() {
               <Text className="text-sm text-slate-500 dark:text-slate-400 text-center mb-6">
                 You'll lose access to{" "}
                 <Text className="font-semibold text-slate-700 dark:text-slate-200">{leavingTeam?.name}</Text>
-                {" "}and all its tasks. The owner can invite you back.
+                {" "}and all its tasks. The Team Leader can invite you back.
               </Text>
               <View className="flex-row" style={{ gap: 10 }}>
                 <TouchableOpacity

@@ -98,8 +98,8 @@ function MemberRow({
         </TouchableOpacity>
       ) : null}
       <View className={`px-2 py-0.5 rounded-full ${member.role === "owner" ? "bg-amber-100" : "bg-slate-100 dark:bg-slate-700"}`}>
-        <Text className={`text-xs font-medium capitalize ${member.role === "owner" ? "text-amber-700" : "text-slate-600 dark:text-slate-400"}`}>
-          {member.role}
+        <Text className={`text-xs font-medium ${member.role === "owner" ? "text-amber-700" : "text-slate-600 dark:text-slate-400"}`}>
+          {member.role === "owner" ? "Team Leader" : member.role}
         </Text>
       </View>
     </View>
@@ -259,7 +259,7 @@ export default function TeamScreen() {
               <View style={{ backgroundColor: "#F8FAFC", borderRadius: 10, padding: 12 }}>
                 <Text style={{ fontSize: 12, color: "#64748B", marginBottom: 2 }}>Requested to join</Text>
                 <Text style={{ fontSize: 15, fontWeight: "700", color: "#1E293B" }}>{myRequest.team.name}</Text>
-                <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 3 }}>Waiting for a team owner to approve</Text>
+                <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 3 }}>Waiting for a Team Leader to approve</Text>
               </View>
             </View>
             <Pressable
