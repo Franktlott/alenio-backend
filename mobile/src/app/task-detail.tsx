@@ -313,7 +313,7 @@ export default function TaskDetailScreen() {
                     <TouchableOpacity
                       key={subtask.id}
                       onPress={() => toggleSubtaskMutation.mutate({ subtaskId: subtask.id, completed: !subtask.completed })}
-                      disabled={!isEditable || toggleSubtaskMutation.isPending}
+                      disabled={isCompleted || toggleSubtaskMutation.isPending}
                       testID={`subtask-toggle-${subtask.id}`}
                       style={{ flexDirection: "row", alignItems: "center", paddingVertical: 10, paddingHorizontal: 4, gap: 10 }}
                       activeOpacity={0.6}
