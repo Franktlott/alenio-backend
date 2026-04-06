@@ -36,6 +36,8 @@ import { useTeamStore } from "@/lib/state/team-store";
 import { toast } from "burnt";
 import type { Team } from "@/lib/types";
 
+const DEMO_EMAIL = "demo@alenio.app";
+
 const TONES = [
   { id: "none",     label: "None",     url: null },
   { id: "chime",    label: "Default",  url: "https://assets.mixkit.co/active_storage/sfx/2013/2013-preview.mp3" },
@@ -102,6 +104,7 @@ export default function ProfileScreen() {
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
   const setActiveTeamId = useTeamStore((s) => s.setActiveTeamId);
   const user = session?.user;
+  const isDemo = user?.email === DEMO_EMAIL;
 
   const overlayColor = "rgba(240,242,255,0.85)";
   const nameColor = "#1E1B4B";
@@ -367,7 +370,7 @@ export default function ProfileScreen() {
           {/* Avatar */}
           <TouchableOpacity
             onPress={handlePhotoPress}
-            disabled={uploadMutation.isPending}
+            disabled={uploadMutation.isPending || isDemo}
             className="mb-4"
             testID="avatar-upload-button"
           >
@@ -382,9 +385,11 @@ export default function ProfileScreen() {
                 </Text>
               )}
             </View>
-            <View className="absolute bottom-0 right-0 w-7 h-7 rounded-full bg-indigo-600 items-center justify-center border-2 border-white">
-              <Camera size={13} color="white" />
-            </View>
+            {!isDemo ? (
+              <View className="absolute bottom-0 right-0 w-7 h-7 rounded-full bg-indigo-600 items-center justify-center border-2 border-white">
+                <Camera size={13} color="white" />
+              </View>
+            ) : null}
           </TouchableOpacity>
 
           {/* Name */}
@@ -397,15 +402,17 @@ export default function ProfileScreen() {
         <View className="mx-4 mt-5">
           <View className="flex-row items-center justify-between mb-3">
             <Text className="text-xs font-semibold text-slate-400 uppercase tracking-wider">My Teams</Text>
-            <TouchableOpacity
-              className="flex-row items-center"
-              style={{ gap: 4 }}
-              onPress={() => router.push("/onboarding")}
-              testID="create-join-team-button"
-            >
-              <Plus size={14} color="#4361EE" />
-              <Text className="text-xs font-semibold text-indigo-600">Add team</Text>
-            </TouchableOpacity>
+            {!isDemo ? (
+              <TouchableOpacity
+                className="flex-row items-center"
+                style={{ gap: 4 }}
+                onPress={() => router.push("/onboarding")}
+                testID="create-join-team-button"
+              >
+                <Plus size={14} color="#4361EE" />
+                <Text className="text-xs font-semibold text-indigo-600">Add team</Text>
+              </TouchableOpacity>
+            ) : null}
           </View>
 
           <GlassCard>
@@ -464,7 +471,7 @@ export default function ProfileScreen() {
                     </View>
                     {isActive ? (
                       <View className="w-2 h-2 rounded-full bg-indigo-500 mr-3" />
-                    ) : isOwner ? (
+                    ) : isOwner && !isDemo ? (
                       <View className="flex-row items-center" style={{ gap: 6 }}>
                         {pendingCount > 0 ? (
                           <View className="w-5 h-5 rounded-full bg-red-500 items-center justify-center">
@@ -481,7 +488,7 @@ export default function ProfileScreen() {
                           <Pencil size={14} color="#4361EE" />
                         </TouchableOpacity>
                       </View>
-                    ) : (
+                    ) : !isOwner && !isDemo ? (
                       <TouchableOpacity
                         onPress={() => setLeavingTeam(team)}
                         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -489,7 +496,7 @@ export default function ProfileScreen() {
                       >
                         <LeaveIcon size={16} color="#EF4444" />
                       </TouchableOpacity>
-                    )}
+                    ) : null}
                   </Pressable>
                 );
               })

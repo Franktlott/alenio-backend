@@ -16,7 +16,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { StatusBar } from "expo-status-bar";
 import { router } from "expo-router";
-import { Zap } from "lucide-react-native";
 
 export default function SignIn() {
   const [isNew, setIsNew] = useState(false);
@@ -25,7 +24,6 @@ export default function SignIn() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [demoLoading, setDemoLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const invalidateSession = useInvalidateSession();
 
@@ -84,30 +82,6 @@ export default function SignIn() {
     }
   };
 
-  const handleDemo = async () => {
-    setError(null);
-    setDemoLoading(true);
-    try {
-      const res = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/api/demo/login`, { method: "POST" });
-      const json = await res.json() as { data?: { email: string; password: string }; error?: { message: string } };
-      if (!res.ok || !json.data) {
-        setError(json.error?.message ?? "Demo setup failed. Please try again.");
-        setDemoLoading(false);
-        return;
-      }
-      const result = await authClient.signIn.email({ email: json.data.email, password: json.data.password });
-      if (result.error) {
-        setError(result.error.message ?? "Demo sign-in failed.");
-        setDemoLoading(false);
-        return;
-      }
-      await invalidateSession();
-    } catch {
-      setError("Demo setup failed. Please try again.");
-      setDemoLoading(false);
-    }
-  };
-
   const switchMode = (newMode: boolean) => {
     setIsNew(newMode);
     setError(null);
@@ -138,42 +112,6 @@ export default function SignIn() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* Try Demo banner */}
-          <TouchableOpacity
-            onPress={handleDemo}
-            disabled={demoLoading || loading}
-            activeOpacity={0.85}
-            testID="try-demo-button"
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 8,
-              backgroundColor: "#FFF7ED",
-              borderWidth: 1.5,
-              borderColor: "#FB923C",
-              borderRadius: 14,
-              paddingVertical: 14,
-              marginBottom: 24,
-            }}
-          >
-            {demoLoading ? (
-              <ActivityIndicator color="#EA580C" size="small" />
-            ) : (
-              <Zap size={18} color="#EA580C" fill="#EA580C" />
-            )}
-            <Text style={{ color: "#EA580C", fontWeight: "700", fontSize: 15 }}>
-              {demoLoading ? "Setting up demo…" : "Try Demo — explore Alenio instantly"}
-            </Text>
-          </TouchableOpacity>
-
-          {/* Divider */}
-          <View className="flex-row items-center mb-6">
-            <View className="flex-1 h-px bg-slate-200 dark:bg-slate-700" />
-            <Text className="text-slate-400 text-xs mx-3">or sign in with your account</Text>
-            <View className="flex-1 h-px bg-slate-200 dark:bg-slate-700" />
-          </View>
-
           {/* Mode toggle */}
           <View className="flex-row bg-slate-100 dark:bg-slate-800 rounded-xl p-1 mb-6">
             <TouchableOpacity

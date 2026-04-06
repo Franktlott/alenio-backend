@@ -1,5 +1,5 @@
 import { Tabs } from "expo-router";
-import { CheckSquare, Users, User, MessageCircle, Activity, Zap } from "lucide-react-native";
+import { CheckSquare, Users, User, MessageCircle, Activity } from "lucide-react-native";
 import { View, Text, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
@@ -185,24 +185,6 @@ export default function AppLayout() {
 
   return (
     <>
-      {isDemo ? (
-        <View style={{
-          backgroundColor: "#FFF7ED",
-          borderBottomWidth: 1,
-          borderBottomColor: "#FED7AA",
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: 6,
-          paddingVertical: 7,
-          paddingTop: 7,
-        }}>
-          <Zap size={13} color="#EA580C" fill="#EA580C" />
-          <Text style={{ color: "#EA580C", fontSize: 12, fontWeight: "600" }}>
-            Demo Mode — explore Alenio with sample data
-          </Text>
-        </View>
-      ) : null}
       <Tabs
         initialRouteName="team"
         tabBar={(props) => <FloatingTabBar {...props} />}
