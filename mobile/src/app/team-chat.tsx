@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   Modal,
   Image,
+  ScrollView,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -560,13 +561,20 @@ export default function TeamChatScreen() {
 
       {/* Poll creation modal */}
       <Modal visible={showPollModal} transparent animationType="slide" onRequestClose={() => setShowPollModal(false)}>
-        <TouchableOpacity
-          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }}
-          activeOpacity={1}
-          onPress={() => setShowPollModal(false)}
-        >
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
+          <TouchableOpacity
+            style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)" }}
+            activeOpacity={1}
+            onPress={() => setShowPollModal(false)}
+          />
           <TouchableOpacity activeOpacity={1} onPress={() => {}}>
-            <View style={{ backgroundColor: "white", borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 36 }}>
+            <ScrollView
+              style={{ backgroundColor: "white", borderTopLeftRadius: 24, borderTopRightRadius: 24 }}
+              contentContainerStyle={{ padding: 20, paddingBottom: 36 }}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+              bounces={false}
+            >
               {/* Header */}
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
                 <Text style={{ fontSize: 18, fontWeight: "700", color: "#1E293B" }}>Create Poll</Text>
@@ -708,9 +716,9 @@ export default function TeamChatScreen() {
                   <Text style={{ fontSize: 16, fontWeight: "700", color: "white" }}>Create Poll</Text>
                 )}
               </TouchableOpacity>
-            </View>
+            </ScrollView>
           </TouchableOpacity>
-        </TouchableOpacity>
+        </KeyboardAvoidingView>
       </Modal>
 
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} className="flex-1" keyboardVerticalOffset={0}>
