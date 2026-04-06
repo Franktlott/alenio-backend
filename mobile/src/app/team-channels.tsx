@@ -166,9 +166,9 @@ export default function TeamChannelsScreen() {
             {generalMessages[0] ? (
               <Text style={{ fontSize: 12, color: "#94A3B8" }}>{formatTime(generalMessages[0].createdAt)}</Text>
             ) : null}
-            {generalMessages[0] && generalMessages[0].sender.id !== currentUserId && lastReadIds[`team:${teamId}`] !== generalMessages[0].id ? (
+            {(channelUnreadCounts[`team:${teamId}`] ?? 0) > 0 ? (
               <View style={{ backgroundColor: "#4361EE", borderRadius: 10, minWidth: 20, height: 20, alignItems: "center", justifyContent: "center", paddingHorizontal: 6 }}>
-                <Text style={{ color: "white", fontSize: 11, fontWeight: "700" }}>{channelUnreadCounts[`team:${teamId}`] ?? 1}</Text>
+                <Text style={{ color: "white", fontSize: 11, fontWeight: "700" }}>{channelUnreadCounts[`team:${teamId}`]}</Text>
               </View>
             ) : null}
           </View>
@@ -212,9 +212,9 @@ export default function TeamChannelsScreen() {
               {topic.lastMessage ? (
                 <Text style={{ fontSize: 12, color: "#94A3B8" }}>{formatTime(topic.lastMessage.createdAt)}</Text>
               ) : null}
-              {topic.lastMessage && topic.lastMessage.sender.id !== currentUserId && lastReadIds[`topic:${topic.id}`] !== topic.lastMessage.id ? (
+              {(channelUnreadCounts[`topic:${topic.id}`] ?? 0) > 0 ? (
                 <View style={{ backgroundColor: "#4361EE", borderRadius: 10, minWidth: 20, height: 20, alignItems: "center", justifyContent: "center", paddingHorizontal: 6 }}>
-                  <Text style={{ color: "white", fontSize: 11, fontWeight: "700" }}>{channelUnreadCounts[`topic:${topic.id}`] ?? 1}</Text>
+                  <Text style={{ color: "white", fontSize: 11, fontWeight: "700" }}>{channelUnreadCounts[`topic:${topic.id}`]}</Text>
                 </View>
               ) : null}
             </View>

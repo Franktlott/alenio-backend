@@ -37,26 +37,36 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
     refetchInterval: 15000,
     staleTime: 10000,
   });
-  const { data: teamGeneralMessages = [] } = useQuery({
-    queryKey: ["messages", activeTeamId, "general", "preview"],
-    queryFn: () => api.get<any[]>(`/api/teams/${activeTeamId}/messages?topicId=general&limit=1`),
+
+  const dmUnreadLastReadIds = Object.fromEntries(
+    conversations.map((conv) => [conv.id, lastReadIds[conv.id] ?? ""])
+  );
+  const { data: dmUnreadCounts = {} } = useQuery({
+    queryKey: ["dm-unread-counts", dmUnreadLastReadIds],
+    queryFn: () => api.post<Record<string, number>>("/api/dms/unread-counts", { lastReadIds: dmUnreadLastReadIds }),
+    enabled: !!session?.user && conversations.length > 0,
+    refetchInterval: 5000,
+  });
+  const unreadCount = Object.values(dmUnreadCounts).reduce((a, b) => a + b, 0);
+
+  const teamChannelLastReadIds: Record<string, string> = {
+    [`team:${activeTeamId}`]: lastReadIds[`team:${activeTeamId}`] ?? "",
+    ...Object.fromEntries(topics.map((t: any) => [`topic:${t.id}`, lastReadIds[`topic:${t.id}`] ?? ""])),
+  };
+  const { data: teamUnreadCountsMap = {} } = useQuery({
+    queryKey: ["team-unread-counts", activeTeamId, teamChannelLastReadIds],
+    queryFn: () => api.post<Record<string, number>>(`/api/teams/${activeTeamId}/messages/unread-counts`, { lastReadIds: teamChannelLastReadIds }),
     enabled: !!activeTeamId && !!session?.user,
     refetchInterval: 15000,
-    staleTime: 10000,
   });
+  const teamUnreadCount = Object.values(teamUnreadCountsMap).reduce((a: number, b: number) => a + b, 0);
 
-  const currentUserId = session?.user?.id ?? "";
-  const unreadCount = conversations.filter(
-    (conv) =>
-      conv.lastMessage &&
-      conv.lastMessage.sender.id !== currentUserId &&
-      lastReadIds[conv.id] !== conv.lastMessage.id
-  ).length;
-
-  const teamUnreadCount = [
-    teamGeneralMessages[0] && teamGeneralMessages[0].sender.id !== currentUserId && lastReadIds[`team:${activeTeamId}`] !== teamGeneralMessages[0].id ? 1 : 0,
-    ...topics.map((t: any) => t.lastMessage && t.lastMessage.sender.id !== currentUserId && lastReadIds[`topic:${t.id}`] !== t.lastMessage?.id ? 1 : 0),
-  ].reduce((a: number, b: number) => a + b, 0);
+  const { data: taskCount = 0 } = useQuery({
+    queryKey: ["tasks-count", activeTeamId],
+    queryFn: () => api.get<number>(`/api/teams/${activeTeamId}/tasks/count`),
+    enabled: !!activeTeamId && !!session?.user,
+    refetchInterval: 30000,
+  });
 
   const visibleRoutes = state.routes.filter((r: any) => {
     const opts = descriptors[r.key]?.options;
@@ -87,7 +97,10 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
         if (!tab) return null;
         const { Icon, label, name } = tab;
         const isChat = name === "chat";
-        const badge = isChat && (unreadCount + teamUnreadCount) > 0 ? (unreadCount + teamUnreadCount) : null;
+        const isTasks = name === "index";
+        const badge = isChat && (unreadCount + teamUnreadCount) > 0 ? (unreadCount + teamUnreadCount)
+          : isTasks && taskCount > 0 ? taskCount
+          : null;
 
         return (
           <Pressable

@@ -275,11 +275,9 @@ export default function ChatScreen() {
                       {formatTime(conv.lastMessage.createdAt)}
                     </Text>
                   ) : null}
-                  {conv.lastMessage &&
-                   conv.lastMessage.sender.id !== session?.user?.id &&
-                   lastReadIds[conv.id] !== conv.lastMessage.id ? (
+                  {(dmUnreadCounts[conv.id] ?? 0) > 0 ? (
                     <View style={{ backgroundColor: "#4361EE", borderRadius: 10, minWidth: 20, height: 20, alignItems: "center", justifyContent: "center", paddingHorizontal: 6 }}>
-                      <Text style={{ color: "white", fontSize: 11, fontWeight: "700" }}>{dmUnreadCounts[conv.id] ?? 1}</Text>
+                      <Text style={{ color: "white", fontSize: 11, fontWeight: "700" }}>{dmUnreadCounts[conv.id]}</Text>
                     </View>
                   ) : (
                     <ChevronRight size={16} color="#94A3B8" />
