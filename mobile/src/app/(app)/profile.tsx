@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -20,6 +20,8 @@ import {
 import * as Clipboard from "expo-clipboard";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
+import { BlurView } from "expo-blur";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ArrowLeft, Camera, LogOut, Pencil, X, Plus, Trash2, Bell, Check, LogOut as LeaveIcon, Crown, Copy } from "lucide-react-native";
 import { authClient } from "@/lib/auth/auth-client";
 import { useInvalidateSession, useSession } from "@/lib/auth/use-session";
@@ -33,12 +35,41 @@ import { useTeamStore } from "@/lib/state/team-store";
 import { toast } from "burnt";
 import type { Team } from "@/lib/types";
 
+const DARK_OVERLAY_KEY = "profile_dark_overlay";
+
 type JoinRequestItem = {
   id: string;
   status: string;
   createdAt: string;
   user: { id: string; name: string; email: string; image: string | null };
 };
+
+// Glass card component using BlurView
+function GlassCard({ children, style }: { children: React.ReactNode; style?: object }) {
+  return (
+    <BlurView
+      intensity={60}
+      tint="light"
+      style={[
+        {
+          borderRadius: 20,
+          overflow: "hidden",
+          borderWidth: 1,
+          borderColor: "rgba(255,255,255,0.6)",
+          shadowColor: "#000",
+          shadowOpacity: 0.06,
+          shadowRadius: 8,
+          shadowOffset: { width: 0, height: 2 },
+        },
+        style,
+      ]}
+    >
+      <View style={{ backgroundColor: "rgba(255,255,255,0.45)" }}>
+        {children}
+      </View>
+    </BlurView>
+  );
+}
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
@@ -48,6 +79,29 @@ export default function ProfileScreen() {
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
   const setActiveTeamId = useTeamStore((s) => s.setActiveTeamId);
   const user = session?.user;
+
+  // Dark overlay preference
+  const [darkOverlay, setDarkOverlay] = useState<boolean>(false);
+
+  useEffect(() => {
+    AsyncStorage.getItem(DARK_OVERLAY_KEY).then((val) => {
+      if (val === "1") setDarkOverlay(true);
+    });
+  }, []);
+
+  const toggleDarkOverlay = (val: boolean) => {
+    setDarkOverlay(val);
+    AsyncStorage.setItem(DARK_OVERLAY_KEY, val ? "1" : "0");
+  };
+
+  const overlayColor = darkOverlay ? "rgba(10,12,30,0.82)" : "rgba(240,242,255,0.85)";
+  const nameColor = "white";
+  const emailColor = "rgba(255,255,255,0.8)";
+  const textShadow = {
+    textShadowColor: "rgba(0,0,0,0.3)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+  };
 
   // Profile state
   const [localImage, setLocalImage] = useState<string | null>(null);
@@ -284,7 +338,7 @@ export default function ProfileScreen() {
         style={{ flex: 1 }}
         resizeMode="cover"
       >
-        <View style={{ flex: 1, backgroundColor: "rgba(240,242,255,0.85)" }}>
+        <View style={{ flex: 1, backgroundColor: overlayColor }}>
       {/* Header */}
       <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
         <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 14, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
@@ -320,9 +374,9 @@ export default function ProfileScreen() {
           </TouchableOpacity>
 
           {/* Name */}
-          <Text className="text-xl font-bold text-slate-900 dark:text-white mb-1">{user?.name}</Text>
+          <Text style={{ fontSize: 20, fontWeight: "700", color: nameColor, marginBottom: 4, ...textShadow }}>{user?.name}</Text>
 
-          <Text className="text-sm text-slate-500">{user?.email}</Text>
+          <Text style={{ fontSize: 14, color: emailColor, ...textShadow }}>{user?.email}</Text>
         </View>
 
         {/* Teams */}
@@ -340,8 +394,7 @@ export default function ProfileScreen() {
             </TouchableOpacity>
           </View>
 
-          <View className="bg-white dark:bg-slate-800 rounded-2xl overflow-hidden"
-            style={{ shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 2 }}>
+          <GlassCard>
             {teamsLoading ? (
               <View className="py-8 items-center">
                 <ActivityIndicator color="#4361EE" />
@@ -360,7 +413,7 @@ export default function ProfileScreen() {
                     key={team.id}
                     onPress={() => { setActiveTeamId(team.id); router.replace("/(app)/team"); }}
                     className="flex-row items-center px-4 py-3.5"
-                    style={index < teams.length - 1 ? { borderBottomWidth: 1, borderBottomColor: "#F1F5F9" } : undefined}
+                    style={index < teams.length - 1 ? { borderBottomWidth: 1, borderBottomColor: "rgba(241,245,249,0.8)" } : undefined}
                     testID={`team-row-${team.id}`}
                   >
                     <View className="w-10 h-10 rounded-xl overflow-hidden bg-indigo-100 items-center justify-center mr-3">
@@ -427,7 +480,7 @@ export default function ProfileScreen() {
                 );
               })
             )}
-          </View>
+          </GlassCard>
         </View>
 
         {/* Notifications */}
@@ -436,8 +489,7 @@ export default function ProfileScreen() {
             <Bell size={13} color="#94A3B8" />
             <Text className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Notifications</Text>
           </View>
-          <View className="bg-white dark:bg-slate-800 rounded-2xl overflow-hidden"
-            style={{ shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 2 }}>
+          <GlassCard>
             {[
               { key: "notifMessages" as const, label: "New messages", description: "Team and direct messages" },
               { key: "notifTaskAssigned" as const, label: "Task assigned", description: "When a task is assigned to you" },
@@ -446,7 +498,7 @@ export default function ProfileScreen() {
               <View
                 key={item.key}
                 className="flex-row items-center px-4 py-3.5"
-                style={index < arr.length - 1 ? { borderBottomWidth: 1, borderBottomColor: "#F1F5F9" } : undefined}
+                style={index < arr.length - 1 ? { borderBottomWidth: 1, borderBottomColor: "rgba(241,245,249,0.8)" } : undefined}
               >
                 <View className="flex-1">
                   <Text className="text-sm font-semibold text-slate-900 dark:text-white">{item.label}</Text>
@@ -461,7 +513,7 @@ export default function ProfileScreen() {
                 />
               </View>
             ))}
-          </View>
+          </GlassCard>
         </View>
 
         {/* Subscription — only visible to Team Leaders */}
@@ -471,8 +523,7 @@ export default function ProfileScreen() {
             <Crown size={13} color="#94A3B8" />
             <Text className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Plan</Text>
           </View>
-          <View className="bg-white dark:bg-slate-800 rounded-2xl overflow-hidden"
-            style={{ shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 2 }}>
+          <GlassCard>
             <TouchableOpacity
               className="flex-row items-center px-4 py-4"
               onPress={() => router.push("/subscription")}
@@ -487,42 +538,66 @@ export default function ProfileScreen() {
               </View>
               <Text className="text-slate-300 text-base">›</Text>
             </TouchableOpacity>
-          </View>
+          </GlassCard>
         </View>
         ) : null}
 
+        {/* Account Settings — Dark Profile Background toggle */}
+        <View className="mx-4 mt-5">
+          <Text className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Account</Text>
+          <GlassCard>
+            <View className="flex-row items-center px-4 py-3.5">
+              <View className="flex-1">
+                <Text className="text-sm font-semibold text-slate-900 dark:text-white">Dark Profile Background</Text>
+                <Text className="text-xs text-slate-400 mt-0.5">Switch the profile overlay to dark</Text>
+              </View>
+              <Switch
+                value={darkOverlay}
+                onValueChange={toggleDarkOverlay}
+                trackColor={{ false: "#E2E8F0", true: "#6B8EF6" }}
+                thumbColor="white"
+                testID="dark-overlay-toggle"
+              />
+            </View>
+          </GlassCard>
+        </View>
+
         {/* Sign out */}
         {showSignOutConfirm ? (
-          <View className="mx-4 mt-5 bg-white dark:bg-slate-800 rounded-2xl overflow-hidden p-4"
-            style={{ shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 2 }}>
-            <Text className="text-sm font-semibold text-slate-700 dark:text-white text-center mb-4">Sign out of your account?</Text>
-            <View className="flex-row" style={{ gap: 10 }}>
-              <TouchableOpacity
-                onPress={() => setShowSignOutConfirm(false)}
-                className="flex-1 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-700 items-center"
-              >
-                <Text className="font-semibold text-slate-600 dark:text-slate-300">Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={handleSignOut}
-                className="flex-1 py-2.5 rounded-xl bg-red-500 items-center"
-                testID="confirm-sign-out-button"
-              >
-                <Text className="font-semibold text-white">Sign out</Text>
-              </TouchableOpacity>
-            </View>
+          <View className="mx-4 mt-5">
+            <GlassCard>
+              <View className="p-4">
+                <Text className="text-sm font-semibold text-slate-700 dark:text-white text-center mb-4">Sign out of your account?</Text>
+                <View className="flex-row" style={{ gap: 10 }}>
+                  <TouchableOpacity
+                    onPress={() => setShowSignOutConfirm(false)}
+                    className="flex-1 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-700 items-center"
+                  >
+                    <Text className="font-semibold text-slate-600 dark:text-slate-300">Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={handleSignOut}
+                    className="flex-1 py-2.5 rounded-xl bg-red-500 items-center"
+                    testID="confirm-sign-out-button"
+                  >
+                    <Text className="font-semibold text-white">Sign out</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </GlassCard>
           </View>
         ) : (
-          <View className="mx-4 mt-5 bg-white dark:bg-slate-800 rounded-2xl overflow-hidden"
-            style={{ shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 2 }}>
-            <TouchableOpacity
-              className="flex-row items-center px-4 py-4"
-              onPress={() => setShowSignOutConfirm(true)}
-              testID="sign-out-button"
-            >
-              <LogOut size={20} color="#EF4444" />
-              <Text className="flex-1 ml-3 text-red-500 font-medium">Sign out</Text>
-            </TouchableOpacity>
+          <View className="mx-4 mt-5">
+            <GlassCard>
+              <TouchableOpacity
+                className="flex-row items-center px-4 py-4"
+                onPress={() => setShowSignOutConfirm(true)}
+                testID="sign-out-button"
+              >
+                <LogOut size={20} color="#EF4444" />
+                <Text className="flex-1 ml-3 text-red-500 font-medium">Sign out</Text>
+              </TouchableOpacity>
+            </GlassCard>
           </View>
         )}
       </ScrollView>

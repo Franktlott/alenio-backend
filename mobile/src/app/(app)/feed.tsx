@@ -7,10 +7,13 @@ import { useTeamStore } from "@/lib/state/team-store";
 import { CheckCircle, UserPlus, UserMinus, Calendar, Activity, UserCheck, Trophy, Flame } from "lucide-react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Image as ExpoImage } from "expo-image";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSession } from "@/lib/auth/use-session";
 import { NoTeamPlaceholder } from "@/components/NoTeamPlaceholder";
 import { router } from "expo-router";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
+const REACTION_HINT_KEY = "reaction_hint_shown";
 
 type ActivityEvent = {
   id: string;
@@ -401,6 +404,26 @@ export default function FeedScreen() {
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
   const { data: session } = useSession();
   const currentUserId = session?.user?.id;
+  const [showReactionHint, setShowReactionHint] = useState<boolean>(false);
+  const hintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    AsyncStorage.getItem(REACTION_HINT_KEY).then((val) => {
+      if (val !== "1") setShowReactionHint(true);
+    });
+    return () => {
+      if (hintTimerRef.current) clearTimeout(hintTimerRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (showReactionHint) {
+      hintTimerRef.current = setTimeout(() => {
+        setShowReactionHint(false);
+        AsyncStorage.setItem(REACTION_HINT_KEY, "1");
+      }, 4000);
+    }
+  }, [showReactionHint]);
 
   const { data: activities = [], isLoading, refetch } = useQuery({
     queryKey: ["activity", activeTeamId],
@@ -449,8 +472,15 @@ export default function FeedScreen() {
         <FlatList
           data={activities}
           keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <ActivityItem item={item} activeTeamId={activeTeamId} currentUserId={currentUserId} />
+          renderItem={({ item, index }) => (
+            <>
+              <ActivityItem item={item} activeTeamId={activeTeamId} currentUserId={currentUserId} />
+              {index === 0 && showReactionHint ? (
+                <Text style={{ fontSize: 10, color: "rgba(100,116,139,0.7)", textAlign: "center", marginTop: 2 }}>
+                  Long press to react
+                </Text>
+              ) : null}
+            </>
           )}
           ItemSeparatorComponent={({ leadingItem }: { leadingItem: ActivityEvent }) =>
             leadingItem.type === "task_milestone" ? null : (

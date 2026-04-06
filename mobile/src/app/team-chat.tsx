@@ -16,6 +16,7 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { LinearGradient } from "expo-linear-gradient";
 import { ArrowLeft, Send, Paperclip, X, Video, Camera, ImageIcon, BarChart2 } from "lucide-react-native";
+import { BlurView } from "expo-blur";
 import { router, useLocalSearchParams } from "expo-router";
 import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
@@ -451,7 +452,8 @@ export default function TeamChatScreen() {
           activeOpacity={1}
           onPress={() => setEmojiTarget(null)}
         >
-          <View className="bg-white dark:bg-slate-800 rounded-2xl p-3 shadow-xl">
+          <BlurView intensity={70} tint="light" style={{ borderRadius: 16, overflow: "hidden", borderWidth: 1, borderColor: "rgba(255,255,255,0.6)" }}>
+            <View style={{ backgroundColor: "rgba(255,255,255,0.5)", padding: 12 }}>
             {(() => {
               const myReaction = emojiTarget
                 ? (emojiTarget.reactions ?? []).find((r: any) => r.userId === currentUserId)?.emoji
@@ -516,7 +518,8 @@ export default function TeamChatScreen() {
                 <Text className="text-red-500 font-semibold text-sm">🗑 Delete message</Text>
               </TouchableOpacity>
             ) : null}
-          </View>
+            </View>
+          </BlurView>
         </TouchableOpacity>
       </Modal>
 

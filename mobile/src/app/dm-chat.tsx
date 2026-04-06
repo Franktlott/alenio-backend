@@ -15,6 +15,7 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { LinearGradient } from "expo-linear-gradient";
 import { ArrowLeft, Send, Paperclip, X, Users, Video, Trash2, Download, Reply, Copy, Camera, ImageIcon, MoreVertical, LogOut } from "lucide-react-native";
+import { BlurView } from "expo-blur";
 import { router, useLocalSearchParams } from "expo-router";
 import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
@@ -337,7 +338,8 @@ export default function DMChatScreen() {
                   ? (emojiTarget.reactions ?? []).find((r: any) => r.userId === currentUserId)?.emoji
                   : undefined;
                 return (
-                  <View style={{ backgroundColor: "white", borderRadius: 16, padding: 12, marginBottom: 8 }}>
+                  <BlurView intensity={70} tint="light" style={{ borderRadius: 16, overflow: "hidden", marginBottom: 8, borderWidth: 1, borderColor: "rgba(255,255,255,0.6)" }}>
+                    <View style={{ backgroundColor: "rgba(255,255,255,0.5)", borderRadius: 16, padding: 12 }}>
                     <View style={{ flexDirection: "row", justifyContent: "space-around" }}>
                       {REACTION_EMOJIS.map((emoji) => {
                         const isMine = emoji === myReaction;
@@ -372,7 +374,8 @@ export default function DMChatScreen() {
                         <Text style={{ fontSize: 14, color: "#EF4444", fontWeight: "600" }}>Remove reaction</Text>
                       </TouchableOpacity>
                     ) : null}
-                  </View>
+                    </View>
+                  </BlurView>
                 );
               })()}
 
