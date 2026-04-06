@@ -8,7 +8,7 @@ import { useSession } from "@/lib/auth/use-session";
 import { useTeamStore } from "@/lib/state/team-store";
 import { useUnreadStore } from "@/lib/state/unread-store";
 import { useSubscriptionStore } from "@/lib/state/subscription-store";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import type { Conversation, Team } from "@/lib/types";
 
 const DEMO_EMAIL = "demo@alenio.app";
@@ -47,8 +47,9 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
     staleTime: 10000,
   });
 
-  const dmUnreadLastReadIds = Object.fromEntries(
-    conversations.map((conv) => [conv.id, lastReadIds[conv.id] ?? ""])
+  const dmUnreadLastReadIds = useMemo(
+    () => Object.fromEntries(conversations.map((conv) => [conv.id, lastReadIds[conv.id] ?? ""])),
+    [conversations, lastReadIds]
   );
   const { data: dmUnreadCounts = {} } = useQuery({
     queryKey: ["dm-unread-counts", dmUnreadLastReadIds],
@@ -58,10 +59,13 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
   });
   const unreadCount = Object.values(dmUnreadCounts).reduce((a, b) => a + b, 0);
 
-  const teamChannelLastReadIds: Record<string, string> = {
-    [`team:${activeTeamId}`]: lastReadIds[`team:${activeTeamId}`] ?? "",
-    ...Object.fromEntries(topics.map((t: any) => [`topic:${t.id}`, lastReadIds[`topic:${t.id}`] ?? ""])),
-  };
+  const teamChannelLastReadIds = useMemo(
+    (): Record<string, string> => ({
+      [`team:${activeTeamId}`]: lastReadIds[`team:${activeTeamId}`] ?? "",
+      ...Object.fromEntries(topics.map((t: any) => [`topic:${t.id}`, lastReadIds[`topic:${t.id}`] ?? ""])),
+    }),
+    [activeTeamId, topics, lastReadIds]
+  );
   const { data: teamUnreadCountsMap = {} } = useQuery({
     queryKey: ["team-unread-counts", activeTeamId, teamChannelLastReadIds],
     queryFn: () => api.post<Record<string, number>>(`/api/teams/${activeTeamId}/messages/unread-counts`, { lastReadIds: teamChannelLastReadIds }),
@@ -202,7 +206,7 @@ export default function AppLayout() {
       <Tabs
         initialRouteName="team"
         tabBar={(props) => <FloatingTabBar {...props} />}
-        screenOptions={{ headerShown: false }}
+        screenOptions={{ headerShown: false, animation: 'fade', sceneStyle: { backgroundColor: '#fff' } }}
       >
         <Tabs.Screen name="feed" options={{ href: hideProTabs ? null : undefined }} />
         <Tabs.Screen name="chat" options={{}} />
