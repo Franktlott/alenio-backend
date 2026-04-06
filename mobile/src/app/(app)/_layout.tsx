@@ -151,6 +151,7 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
 export default function AppLayout() {
   return (
     <Tabs
+      initialRouteName="feed"
       tabBar={(props) => <FloatingTabBar {...props} />}
       screenOptions={{ headerShown: false }}
     >
