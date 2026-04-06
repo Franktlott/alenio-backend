@@ -8,12 +8,12 @@ import {
   Platform,
   ActivityIndicator,
   Image,
+  ImageBackground,
   ScrollView,
 } from "react-native";
 import { authClient } from "@/lib/auth/auth-client";
 import { useInvalidateSession } from "@/lib/auth/use-session";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { LinearGradient } from "expo-linear-gradient";
 import { StatusBar } from "expo-status-bar";
 import { router } from "expo-router";
 
@@ -96,8 +96,12 @@ export default function SignIn() {
   return (
     <SafeAreaView className="flex-1 bg-white dark:bg-slate-900" edges={["top", "bottom"]}>
       <StatusBar style="light" />
-      <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
-        <View className="items-center py-10 px-6">
+      <ImageBackground
+        source={require("@/assets/brand-bg.png")}
+        style={{ width: "100%" }}
+        resizeMode="cover"
+      >
+        <View style={{ backgroundColor: "rgba(30,20,80,0.45)" }} className="items-center py-10 px-6">
           <Image
             source={require("@/assets/alenio-logo-white.png")}
             style={{ width: 200, height: 72 }}
@@ -105,7 +109,7 @@ export default function SignIn() {
           />
           <Text className="text-white/80 text-base mt-2">Team task management</Text>
         </View>
-      </LinearGradient>
+      </ImageBackground>
 
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} className="flex-1">
         <ScrollView
