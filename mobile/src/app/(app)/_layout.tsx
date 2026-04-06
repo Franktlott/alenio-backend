@@ -11,6 +11,10 @@ import { useSubscriptionStore } from "@/lib/state/subscription-store";
 import { useEffect } from "react";
 import type { Conversation } from "@/lib/types";
 
+export const unstable_settings = {
+  initialRouteName: "team",
+};
+
 const ALL_TABS = [
   { name: "feed", label: "Feed", Icon: Activity, proOnly: true },
   { name: "chat", label: "Chat", Icon: MessageCircle, proOnly: false },
