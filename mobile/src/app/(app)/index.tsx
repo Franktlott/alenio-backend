@@ -16,7 +16,7 @@ import {
 } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams, Redirect } from "expo-router";
-import { Plus, User, ArrowUpDown, ChevronLeft, ChevronRight, X, CalendarDays, CheckSquare, Calendar } from "lucide-react-native";
+import { Plus, User, Users, ArrowUpDown, ChevronLeft, ChevronRight, X, CalendarDays, CheckSquare, Calendar, Check } from "lucide-react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -455,6 +455,7 @@ export default function TasksScreen() {
   const [filter, setFilter] = useState<FilterTab>("all");
   const [sort, setSort] = useState<SortMode>("due");
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
+  const [memberDropdownOpen, setMemberDropdownOpen] = useState(false);
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
 
   const [teamCompletedExpanded, setTeamCompletedExpanded] = useState(false);
@@ -866,59 +867,86 @@ export default function TasksScreen() {
 
             {/* Member filter — Team tab only */}
             {filter === "assigned" && nonOwnerMembers.length > 0 ? (
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={{ flexGrow: 0, marginTop: 8 }}
-                contentContainerStyle={{ flexDirection: "row", gap: 8, paddingVertical: 2 }}
-                testID="member-filter-row"
-              >
+              <View style={{ marginTop: 8 }}>
                 <TouchableOpacity
-                  onPress={() => setSelectedMemberId(null)}
+                  onPress={() => setMemberDropdownOpen(true)}
                   style={{
-                    flexDirection: "row", alignItems: "center", gap: 6,
-                    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20,
-                    backgroundColor: selectedMemberId === null ? "#4361EE" : "#F1F5F9",
+                    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+                    backgroundColor: selectedMemberId ? "#EEF2FF" : "#F1F5F9",
+                    borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8,
+                    borderWidth: selectedMemberId ? 1 : 0, borderColor: "#4361EE",
                   }}
-                  testID="member-filter-all"
+                  testID="member-dropdown-trigger"
                 >
-                  <Text style={{ fontSize: 12, fontWeight: "600", color: selectedMemberId === null ? "white" : "#64748B" }}>
-                    All Members
-                  </Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                    {selectedMemberId ? (() => {
+                      const m = nonOwnerMembers.find((m) => m.userId === selectedMemberId);
+                      return m ? (
+                        <>
+                          <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: "#C7D2FE", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                            {m.user.image
+                              ? <Image source={{ uri: m.user.image }} style={{ width: 18, height: 18 }} resizeMode="cover" />
+                              : <Text style={{ fontSize: 8, fontWeight: "700", color: "#4361EE" }}>{m.user.name?.[0]?.toUpperCase()}</Text>}
+                          </View>
+                          <Text style={{ fontSize: 12, fontWeight: "600", color: "#4361EE" }}>{m.user.name}</Text>
+                        </>
+                      ) : null;
+                    })() : (
+                      <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748B" }}>All Members</Text>
+                    )}
+                  </View>
+                  <ChevronRight size={13} color={selectedMemberId ? "#4361EE" : "#94A3B8"} style={{ transform: [{ rotate: "90deg" }] }} />
                 </TouchableOpacity>
-                {nonOwnerMembers.map((m) => {
-                  const isSelected = selectedMemberId === m.userId;
-                  return (
-                    <TouchableOpacity
-                      key={m.userId}
-                      onPress={() => setSelectedMemberId(isSelected ? null : m.userId)}
-                      style={{
-                        flexDirection: "row", alignItems: "center", gap: 6,
-                        paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20,
-                        backgroundColor: isSelected ? "#4361EE" : "#F1F5F9",
-                      }}
-                      testID={`member-filter-${m.userId}`}
-                    >
-                      <View style={{
-                        width: 20, height: 20, borderRadius: 10,
-                        backgroundColor: isSelected ? "rgba(255,255,255,0.3)" : "#CBD5E1",
-                        alignItems: "center", justifyContent: "center", overflow: "hidden",
-                      }}>
-                        {m.user.image ? (
-                          <Image source={{ uri: m.user.image }} style={{ width: 20, height: 20 }} resizeMode="cover" />
-                        ) : (
-                          <Text style={{ fontSize: 9, fontWeight: "700", color: isSelected ? "white" : "#64748B" }}>
-                            {m.user.name?.[0]?.toUpperCase() ?? "?"}
-                          </Text>
-                        )}
+
+                <Modal visible={memberDropdownOpen} transparent animationType="fade" onRequestClose={() => setMemberDropdownOpen(false)}>
+                  <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.35)", justifyContent: "flex-end" }} onPress={() => setMemberDropdownOpen(false)}>
+                    <Pressable onPress={(e) => e.stopPropagation()}>
+                      <View style={{ backgroundColor: "white", borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingTop: 12, paddingBottom: 32 }}>
+                        <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: "#E2E8F0", alignSelf: "center", marginBottom: 16 }} />
+                        <Text style={{ fontSize: 13, fontWeight: "700", color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.8, paddingHorizontal: 20, marginBottom: 8 }}>Filter by Member</Text>
+
+                        {/* All Members option */}
+                        <TouchableOpacity
+                          onPress={() => { setSelectedMemberId(null); setMemberDropdownOpen(false); }}
+                          style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 20, paddingVertical: 14, gap: 12, backgroundColor: !selectedMemberId ? "#F5F7FF" : "transparent" }}
+                          testID="member-option-all"
+                        >
+                          <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#EEF2FF", alignItems: "center", justifyContent: "center" }}>
+                            <Users size={16} color="#4361EE" />
+                          </View>
+                          <Text style={{ fontSize: 15, fontWeight: "600", color: !selectedMemberId ? "#4361EE" : "#0F172A", flex: 1 }}>All Members</Text>
+                          {!selectedMemberId ? <Check size={16} color="#4361EE" /> : null}
+                        </TouchableOpacity>
+
+                        <View style={{ height: 1, backgroundColor: "#F1F5F9", marginHorizontal: 20, marginBottom: 4 }} />
+
+                        {nonOwnerMembers.map((m) => {
+                          const isSelected = selectedMemberId === m.userId;
+                          return (
+                            <TouchableOpacity
+                              key={m.userId}
+                              onPress={() => { setSelectedMemberId(m.userId); setMemberDropdownOpen(false); }}
+                              style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 20, paddingVertical: 12, gap: 12, backgroundColor: isSelected ? "#F5F7FF" : "transparent" }}
+                              testID={`member-option-${m.userId}`}
+                            >
+                              <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#EEF2FF", overflow: "hidden", alignItems: "center", justifyContent: "center" }}>
+                                {m.user.image
+                                  ? <Image source={{ uri: m.user.image }} style={{ width: 36, height: 36 }} resizeMode="cover" />
+                                  : <Text style={{ fontSize: 15, fontWeight: "700", color: "#4361EE" }}>{m.user.name?.[0]?.toUpperCase()}</Text>}
+                              </View>
+                              <View style={{ flex: 1 }}>
+                                <Text style={{ fontSize: 15, fontWeight: "600", color: isSelected ? "#4361EE" : "#0F172A" }}>{m.user.name}</Text>
+                                <Text style={{ fontSize: 12, color: "#94A3B8" }}>{m.user.email}</Text>
+                              </View>
+                              {isSelected ? <Check size={16} color="#4361EE" /> : null}
+                            </TouchableOpacity>
+                          );
+                        })}
                       </View>
-                      <Text style={{ fontSize: 12, fontWeight: "600", color: isSelected ? "white" : "#64748B" }}>
-                        {m.user.name}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
+                    </Pressable>
+                  </Pressable>
+                </Modal>
+              </View>
             ) : null}
           </View>
         </View>
