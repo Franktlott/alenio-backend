@@ -1,7 +1,7 @@
 import { betterAuth } from "better-auth";
 import { expo } from "@better-auth/expo";
 import { prismaAdapter } from "better-auth/adapters/prisma";
-import { emailOTP } from "better-auth/plugins";
+import { username } from "better-auth/plugins";
 import { prisma } from "./prisma";
 import { env } from "./env";
 
@@ -22,25 +22,7 @@ export const auth = betterAuth({
   ],
   plugins: [
     expo(),
-    emailOTP({
-      async sendVerificationOTP({ email, otp, type }) {
-        if (type !== "sign-in") return;
-        const response = await fetch("https://smtp.vibecodeapp.com/v1/send/otp", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            to: email,
-            code: String(otp),
-            fromName: "Alenio",
-            lang: "en",
-          }),
-        });
-        if (!response.ok) {
-          const data = (await response.json().catch(() => null)) as { error?: string } | null;
-          throw new Error(data?.error || `Failed to send OTP (HTTP ${response.status})`);
-        }
-      },
-    }),
+    username(),
   ],
   advanced: {
     trustedProxyHeaders: true,
