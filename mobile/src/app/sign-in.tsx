@@ -18,7 +18,6 @@ import { StatusBar } from "expo-status-bar";
 export default function SignIn() {
   const [isNew, setIsNew] = useState(false);
   const [name, setName] = useState("");
-  const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -28,8 +27,8 @@ export default function SignIn() {
   const handleSubmit = async () => {
     setError(null);
 
-    if (!username.trim()) {
-      setError("Please enter your username");
+    if (!email.trim()) {
+      setError("Please enter your email address");
       return;
     }
     if (!password) {
@@ -40,10 +39,6 @@ export default function SignIn() {
     if (isNew) {
       if (!name.trim()) {
         setError("Please enter your name");
-        return;
-      }
-      if (!email.trim()) {
-        setError("Please enter your email address");
         return;
       }
       if (password !== confirmPassword) {
@@ -60,7 +55,6 @@ export default function SignIn() {
         email: email.trim().toLowerCase(),
         password,
         name: name.trim(),
-        username: username.trim().toLowerCase(),
       });
       setLoading(false);
 
@@ -70,8 +64,8 @@ export default function SignIn() {
       // On success, Stack.Protected in _layout.tsx handles redirect automatically
     } else {
       setLoading(true);
-      const result = await authClient.signIn.username({
-        username: username.trim().toLowerCase(),
+      const result = await authClient.signIn.email({
+        email: email.trim().toLowerCase(),
         password,
       });
       setLoading(false);
@@ -87,7 +81,6 @@ export default function SignIn() {
     setIsNew(newMode);
     setError(null);
     setName("");
-    setUsername("");
     setEmail("");
     setPassword("");
     setConfirmPassword("");
@@ -156,41 +149,22 @@ export default function SignIn() {
             </View>
           ) : null}
 
-          {/* Username field */}
+          {/* Email field */}
           <View className="mb-4">
-            <Text className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Username</Text>
+            <Text className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Email address</Text>
             <TextInput
               className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3.5 text-base text-slate-900 dark:text-white"
-              placeholder="janesmith"
+              placeholder="you@example.com"
               placeholderTextColor="#94A3B8"
               autoCapitalize="none"
-              autoCorrect={false}
-              autoComplete="username"
-              value={username}
-              onChangeText={(t) => { setUsername(t); setError(null); }}
+              keyboardType="email-address"
+              autoComplete="email"
+              value={email}
+              onChangeText={(t) => { setEmail(t); setError(null); }}
               returnKeyType="next"
-              testID="username-input"
+              testID="email-input"
             />
           </View>
-
-          {/* Email field — only for sign up */}
-          {isNew ? (
-            <View className="mb-4">
-              <Text className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Email address</Text>
-              <TextInput
-                className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3.5 text-base text-slate-900 dark:text-white"
-                placeholder="you@example.com"
-                placeholderTextColor="#94A3B8"
-                autoCapitalize="none"
-                keyboardType="email-address"
-                autoComplete="email"
-                value={email}
-                onChangeText={(t) => { setEmail(t); setError(null); }}
-                returnKeyType="next"
-                testID="email-input"
-              />
-            </View>
-          ) : null}
 
           {/* Password field */}
           <View className="mb-4">

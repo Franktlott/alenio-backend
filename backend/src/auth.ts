@@ -1,7 +1,6 @@
 import { betterAuth } from "better-auth";
 import { expo } from "@better-auth/expo";
 import { prismaAdapter } from "better-auth/adapters/prisma";
-import { username } from "better-auth/plugins";
 import { prisma } from "./prisma";
 import { env } from "./env";
 
@@ -22,7 +21,6 @@ export const auth = betterAuth({
   ],
   plugins: [
     expo(),
-    username(),
   ],
   advanced: {
     trustedProxyHeaders: true,
