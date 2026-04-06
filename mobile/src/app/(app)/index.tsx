@@ -526,6 +526,13 @@ export default function TasksScreen() {
     enabled: !!activeTeamId,
   });
 
+  const { data: subscription } = useQuery({
+    queryKey: ["subscription", activeTeamId],
+    queryFn: () => api.get<{ plan: string; status: string }>(`/api/teams/${activeTeamId}/subscription`),
+    enabled: !!activeTeamId,
+  });
+  const isPro = subscription ? subscription.plan === "pro" : null;
+
   const toggleMutation = useMutation({
     mutationFn: (task: Task) =>
       api.patchFull<Task>(`/api/teams/${activeTeamId}/tasks/${task.id}`, {
@@ -699,6 +706,28 @@ export default function TasksScreen() {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: "#F8FAFC" }} edges={["top"]}>
         <NoTeamPlaceholder />
+      </SafeAreaView>
+    );
+  }
+
+  if (isPro === false) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: "#F8FAFC" }} edges={["top"]} testID="tasks-screen-locked">
+        <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+          <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 14, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+            <Text style={{ color: "white", fontSize: 18, fontWeight: "700" }}>Tasks</Text>
+            <Image source={require("@/assets/alenio-icon.png")} style={{ width: 30, height: 30, borderRadius: 6 }} />
+          </View>
+        </LinearGradient>
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 40 }}>
+          <TouchableOpacity
+            onPress={() => router.push("/subscription")}
+            style={{ backgroundColor: "#4361EE", borderRadius: 14, paddingHorizontal: 28, paddingVertical: 14 }}
+            testID="upgrade-button"
+          >
+            <Text style={{ color: "white", fontWeight: "700", fontSize: 15 }}>Upgrade to Pro</Text>
+          </TouchableOpacity>
+        </View>
       </SafeAreaView>
     );
   }
