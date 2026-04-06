@@ -176,7 +176,7 @@ export default function AppLayout() {
 
   return (
     <Tabs
-      initialRouteName={hideProTabs ? "chat" : "feed"}
+      initialRouteName="team"
       tabBar={(props) => <FloatingTabBar {...props} />}
       screenOptions={{ headerShown: false }}
     >
