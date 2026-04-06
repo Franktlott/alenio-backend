@@ -92,17 +92,19 @@ export default function SignIn() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-white dark:bg-slate-900" edges={["top", "bottom"]}>
+    <View className="flex-1 bg-white dark:bg-slate-900">
       <StatusBar style="light" />
       <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
-        <View className="items-center py-10 px-6">
-          <Image
-            source={require("@/assets/alenio-logo-white.png")}
-            style={{ width: 200, height: 72 }}
-            resizeMode="contain"
-          />
-          <Text className="text-white/80 text-base mt-2">Turn communication into execution.</Text>
-        </View>
+        <SafeAreaView edges={["top"]}>
+          <View className="items-center py-10 px-6">
+            <Image
+              source={require("@/assets/alenio-logo-white.png")}
+              style={{ width: 200, height: 72 }}
+              resizeMode="contain"
+            />
+            <Text className="text-white/80 text-base mt-2">Turn communication into execution.</Text>
+          </View>
+        </SafeAreaView>
       </LinearGradient>
 
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} className="flex-1">
@@ -242,6 +244,6 @@ export default function SignIn() {
       <View style={{ alignItems: "center", paddingBottom: 16 }}>
         <Image source={require("@/assets/lotttech-logo.png")} style={{ width: 142, height: 44 }} resizeMode="contain" />
       </View>
-    </SafeAreaView>
+    </View>
   );
 }
