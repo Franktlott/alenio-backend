@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { ArrowLeft, Crown, Check, X, Zap, Shield, Users, MessageSquare, CheckSquare, Star, RotateCcw } from "lucide-react-native";
+import { ArrowLeft, Crown, Check, X, Zap, Shield, Users, MessageSquare, CheckSquare, Star, RotateCcw, Activity, Calendar } from "lucide-react-native";
 import { router } from "expo-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api/api";
@@ -37,7 +37,8 @@ type FeatureRow = {
 const FEATURES: FeatureRow[] = [
   { label: "Team chat", free: true, pro: true, icon: <Users size={15} color="#64748B" /> },
   { label: "Direct messages", free: true, pro: true, icon: <MessageSquare size={15} color="#64748B" /> },
-  { label: "Calendar", free: true, pro: true, icon: <Star size={15} color="#64748B" /> },
+  { label: "Activity Feed", free: false, pro: true, icon: <Activity size={15} color="#64748B" /> },
+  { label: "Calendar", free: false, pro: true, icon: <Calendar size={15} color="#64748B" /> },
   { label: "Task manager", free: false, pro: true, icon: <CheckSquare size={15} color="#64748B" /> },
   { label: "Group chats", free: false, pro: true, icon: <Users size={15} color="#64748B" /> },
   { label: "Priority support", free: false, pro: true, icon: <Shield size={15} color="#64748B" /> },

@@ -4,12 +4,13 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api/api";
 import { useTeamStore } from "@/lib/state/team-store";
-import { CheckCircle, UserPlus, UserMinus, Calendar, Activity, UserCheck, Trophy } from "lucide-react-native";
+import { CheckCircle, UserPlus, UserMinus, Calendar, Activity, UserCheck, Trophy, Flame } from "lucide-react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Image as ExpoImage } from "expo-image";
 import { useState } from "react";
 import { useSession } from "@/lib/auth/use-session";
 import { NoTeamPlaceholder } from "@/components/NoTeamPlaceholder";
+import { router } from "expo-router";
 
 type ActivityEvent = {
   id: string;
@@ -152,45 +153,50 @@ function CelebrationCard({ item, activeTeamId, currentUserId }: { item: Activity
   const count = item.metadata?.count ?? 10;
   const name = item.user?.name ?? "Someone";
   return (
-    <View style={{ marginHorizontal: 16, marginVertical: 8 }} testID={`milestone-card-${item.id}`}>
+    <Pressable
+      onPress={() => router.push("/(app)" as any)}
+      style={{ marginHorizontal: 16, marginVertical: 8 }}
+      testID={`milestone-card-${item.id}`}
+    >
       <LinearGradient
-        colors={["#F59E0B", "#EF4444"]}
+        colors={["#F97316", "#EF4444"]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
         style={{ borderRadius: 18, padding: 2 }}
       >
-        <View style={{ backgroundColor: "#FFFBEB", borderRadius: 16, padding: 16, gap: 10 }}>
-          {/* Top row: trophy + time */}
+        <View style={{ backgroundColor: "#FFF7ED", borderRadius: 16, padding: 16, gap: 10 }}>
+          {/* Top row: flame + streak label + time */}
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-              <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#FEF3C7", alignItems: "center", justifyContent: "center" }}>
-                <Trophy size={18} color="#F59E0B" />
+              <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#FFEDD5", alignItems: "center", justifyContent: "center" }}>
+                <Flame size={20} color="#F97316" />
               </View>
-              <View style={{ backgroundColor: "#FEF3C7", borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 }}>
-                <Text style={{ fontSize: 11, fontWeight: "700", color: "#D97706", letterSpacing: 0.3 }}>MILESTONE</Text>
+              <View style={{ backgroundColor: "#FFEDD5", borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 }}>
+                <Text style={{ fontSize: 11, fontWeight: "800", color: "#C2410C", letterSpacing: 0.5 }}>🔥 STREAK</Text>
               </View>
             </View>
             <Text style={{ fontSize: 12, color: "#94A3B8" }}>{timeAgo(item.createdAt)}</Text>
           </View>
 
-          {/* Count badge */}
-          <View style={{ alignItems: "center", paddingVertical: 8 }}>
-            <Text style={{ fontSize: 48, fontWeight: "800", color: "#F59E0B", lineHeight: 52 }}>{count}</Text>
-            <Text style={{ fontSize: 13, fontWeight: "600", color: "#92400E", marginTop: 2 }}>tasks completed on time</Text>
+          {/* Streak count */}
+          <View style={{ alignItems: "center", paddingVertical: 6 }}>
+            <Text style={{ fontSize: 56, fontWeight: "900", color: "#F97316", lineHeight: 60 }}>{count}</Text>
+            <Text style={{ fontSize: 13, fontWeight: "700", color: "#9A3412", marginTop: 2 }}>tasks completed on time 🔥</Text>
           </View>
 
           {/* Avatar + name */}
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "#FEF3C7", borderRadius: 12, padding: 10 }}>
-            <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "#FDE68A", overflow: "hidden", alignItems: "center", justifyContent: "center" }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "#FFEDD5", borderRadius: 12, padding: 10 }}>
+            <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "#FED7AA", overflow: "hidden", alignItems: "center", justifyContent: "center" }}>
               {item.user?.image ? (
                 <ExpoImage source={{ uri: item.user.image }} style={{ width: 32, height: 32 }} contentFit="cover" />
               ) : (
-                <Text style={{ fontSize: 14, fontWeight: "700", color: "#D97706" }}>{name[0].toUpperCase()}</Text>
+                <Text style={{ fontSize: 14, fontWeight: "700", color: "#C2410C" }}>{name[0].toUpperCase()}</Text>
               )}
             </View>
-            <Text style={{ fontSize: 14, fontWeight: "700", color: "#92400E", flex: 1 }}>
-              {name} is on a roll! 🎉
-            </Text>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 14, fontWeight: "700", color: "#9A3412" }}>{name} is on fire! 🎉</Text>
+              <Text style={{ fontSize: 11, color: "#C2410C", marginTop: 1 }}>Tap to view tasks →</Text>
+            </View>
           </View>
 
           <ReactionRow
@@ -201,7 +207,7 @@ function CelebrationCard({ item, activeTeamId, currentUserId }: { item: Activity
           />
         </View>
       </LinearGradient>
-    </View>
+    </Pressable>
   );
 }
 

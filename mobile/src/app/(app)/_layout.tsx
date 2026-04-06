@@ -1,5 +1,5 @@
 import { Tabs } from "expo-router";
-import { CheckSquare, Users, User, MessageCircle, Activity, CalendarDays } from "lucide-react-native";
+import { CheckSquare, Users, User, MessageCircle, Activity } from "lucide-react-native";
 import { View, Text, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
@@ -19,7 +19,6 @@ const ALL_TABS = [
   { name: "feed", label: "Feed", Icon: Activity, proOnly: true },
   { name: "chat", label: "Chat", Icon: MessageCircle, proOnly: false },
   { name: "index", label: "Tasks", Icon: CheckSquare, proOnly: true },
-  { name: "calendar", label: "Calendar", Icon: CalendarDays, proOnly: true },
   { name: "team", label: "Team", Icon: Users, proOnly: false },
   { name: "profile", label: "Profile", Icon: User, proOnly: false },
 ] as const;
@@ -189,7 +188,7 @@ export default function AppLayout() {
       <Tabs.Screen name="chat" options={{}} />
       <Tabs.Screen name="index" options={{ title: "Tasks", href: hideProTabs ? null : undefined }} />
       <Tabs.Screen name="team" options={{ title: "Team" }} />
-      <Tabs.Screen name="calendar" options={{ title: "Calendar", href: hideProTabs ? null : undefined }} />
+      <Tabs.Screen name="calendar" options={{ href: null }} />
       <Tabs.Screen name="profile" options={{ title: "Profile" }} />
     </Tabs>
   );
