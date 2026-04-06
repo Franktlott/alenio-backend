@@ -51,6 +51,9 @@ subscriptionRouter.post("/upgrade", async (c) => {
   if (!membership) {
     return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
   }
+  if (membership.role !== "owner") {
+    return c.json({ error: { message: "Only the team owner can manage the subscription", code: "FORBIDDEN" } }, 403);
+  }
 
   const currentPeriodEnd = new Date();
   currentPeriodEnd.setDate(currentPeriodEnd.getDate() + 30);
@@ -83,6 +86,9 @@ subscriptionRouter.post("/cancel", async (c) => {
   });
   if (!membership) {
     return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
+  }
+  if (membership.role !== "owner") {
+    return c.json({ error: { message: "Only the team owner can manage the subscription", code: "FORBIDDEN" } }, 403);
   }
 
   const subscription = await prisma.teamSubscription.upsert({

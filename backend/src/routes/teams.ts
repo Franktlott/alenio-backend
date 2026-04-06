@@ -105,7 +105,7 @@ teamsRouter.post("/join", async (c) => {
 
   // Notify team owners
   const owners = await prisma.teamMember.findMany({
-    where: { teamId: team.id, role: "owner" },
+    where: { teamId: team.id, role: { in: ["owner", "team_leader"] } },
     select: { userId: true },
   });
   const ownerIds = owners.map((o) => o.userId);
@@ -146,7 +146,7 @@ teamsRouter.patch("/:teamId", async (c) => {
   const membership = await prisma.teamMember.findUnique({
     where: { userId_teamId: { userId: user.id, teamId } },
   });
-  if (!membership || membership.role !== "owner") {
+  if (!membership || !["owner","team_leader"].includes(membership.role)) {
     return c.json({ error: { message: "Only the team owner can edit team info", code: "FORBIDDEN" } }, 403);
   }
 
@@ -188,7 +188,7 @@ teamsRouter.delete("/:teamId", async (c) => {
   const membership = await prisma.teamMember.findUnique({
     where: { userId_teamId: { userId: user.id, teamId } },
   });
-  if (!membership || membership.role !== "owner") {
+  if (!membership || !["owner","team_leader"].includes(membership.role)) {
     return c.json({ error: { message: "Only the team owner can delete the team", code: "FORBIDDEN" } }, 403);
   }
 
@@ -205,7 +205,7 @@ teamsRouter.get("/:teamId/join-requests", async (c) => {
   const membership = await prisma.teamMember.findUnique({
     where: { userId_teamId: { userId: user.id, teamId } },
   });
-  if (!membership || membership.role !== "owner") {
+  if (!membership || !["owner","team_leader"].includes(membership.role)) {
     return c.json({ error: { message: "Only team owners can view join requests", code: "FORBIDDEN" } }, 403);
   }
 
@@ -228,7 +228,7 @@ teamsRouter.post("/:teamId/join-requests/:requestId/approve", async (c) => {
   const membership = await prisma.teamMember.findUnique({
     where: { userId_teamId: { userId: user.id, teamId } },
   });
-  if (!membership || membership.role !== "owner") {
+  if (!membership || !["owner","team_leader"].includes(membership.role)) {
     return c.json({ error: { message: "Only team owners can approve join requests", code: "FORBIDDEN" } }, 403);
   }
 
@@ -282,7 +282,7 @@ teamsRouter.post("/:teamId/join-requests/:requestId/reject", async (c) => {
   const membership = await prisma.teamMember.findUnique({
     where: { userId_teamId: { userId: user.id, teamId } },
   });
-  if (!membership || membership.role !== "owner") {
+  if (!membership || !["owner","team_leader"].includes(membership.role)) {
     return c.json({ error: { message: "Only team owners can reject join requests", code: "FORBIDDEN" } }, 403);
   }
 
@@ -318,7 +318,7 @@ teamsRouter.delete("/:teamId/members/:memberId", async (c) => {
   const membership = await prisma.teamMember.findUnique({
     where: { userId_teamId: { userId: user.id, teamId } },
   });
-  if (!membership || membership.role !== "owner") {
+  if (!membership || !["owner","team_leader"].includes(membership.role)) {
     return c.json({ error: { message: "Only team owners can remove members", code: "FORBIDDEN" } }, 403);
   }
 
@@ -333,8 +333,8 @@ teamsRouter.delete("/:teamId/members/:memberId", async (c) => {
   if (!targetMembership) {
     return c.json({ error: { message: "Member not found", code: "NOT_FOUND" } }, 404);
   }
-  if (targetMembership.role === "owner") {
-    return c.json({ error: { message: "Cannot remove another owner", code: "FORBIDDEN" } }, 403);
+  if (["owner", "team_leader"].includes(targetMembership.role)) {
+    return c.json({ error: { message: "Cannot remove an owner or team leader", code: "FORBIDDEN" } }, 403);
   }
 
   await prisma.teamMember.delete({

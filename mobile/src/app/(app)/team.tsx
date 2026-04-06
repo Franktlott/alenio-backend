@@ -87,7 +87,7 @@ function MemberRow({
           <MessageCircle size={16} color="#4361EE" />
         </TouchableOpacity>
       ) : null}
-      {isOwner && !isCurrentUser && member.role !== "owner" ? (
+      {isOwner && !isCurrentUser && member.role !== "owner" && member.role !== "team_leader" ? (
         <TouchableOpacity
           onPress={onRemove}
           className="w-8 h-8 rounded-full items-center justify-center mr-2"
@@ -97,9 +97,9 @@ function MemberRow({
           <UserMinus size={16} color="#EF4444" />
         </TouchableOpacity>
       ) : null}
-      <View className={`px-2 py-0.5 rounded-full ${member.role === "owner" ? "bg-amber-100" : "bg-slate-100 dark:bg-slate-700"}`}>
-        <Text className={`text-xs font-medium ${member.role === "owner" ? "text-amber-700" : "text-slate-600 dark:text-slate-400"}`}>
-          {member.role === "owner" ? "Team Leader" : member.role}
+      <View className={`px-2 py-0.5 rounded-full ${member.role === "owner" ? "bg-amber-100" : member.role === "team_leader" ? "bg-purple-100" : "bg-slate-100 dark:bg-slate-700"}`}>
+        <Text className={`text-xs font-medium ${member.role === "owner" ? "text-amber-700" : member.role === "team_leader" ? "text-purple-700" : "text-slate-600 dark:text-slate-400"}`}>
+          {member.role === "owner" ? "Owner" : member.role === "team_leader" ? "Team Leader" : member.role}
         </Text>
       </View>
     </View>
@@ -161,7 +161,7 @@ export default function TeamScreen() {
   };
 
   const currentMembership = team?.members?.find((m) => m.userId === session?.user?.id);
-  const isOwner = currentMembership?.role === "owner";
+  const isOwner = currentMembership?.role === "owner" || currentMembership?.role === "team_leader";
 
   // Pending join requests (owner sees incoming requests; non-member sees their own)
   const { data: myPendingRequests = [] } = useQuery({

@@ -92,12 +92,12 @@ export default function ProfileScreen() {
   const { data: joinRequests = [], refetch: refetchRequests } = useQuery({
     queryKey: ["join-requests", editingTeam?.id],
     queryFn: () => api.get<JoinRequestItem[]>(`/api/teams/${editingTeam!.id}/join-requests`),
-    enabled: !!editingTeam && (editingTeam as Team & { role?: string }).role === "owner",
+    enabled: !!editingTeam && ["owner", "team_leader"].includes((editingTeam as Team & { role?: string }).role ?? ""),
   });
 
   // Fetch join request counts for all owned teams (for badges)
   const ownedTeamIds = teams
-    .filter((t) => (t as Team & { role?: string }).role === "owner")
+    .filter((t) => ["owner", "team_leader"].includes((t as Team & { role?: string }).role ?? ""))
     .map((t) => t.id);
 
   const joinRequestCounts = useQueries({
@@ -349,7 +349,7 @@ export default function ProfileScreen() {
             ) : (
               teams.map((team, index) => {
                 const isActive = team.id === activeTeamId;
-                const isOwner = (team as Team & { role?: string }).role === "owner";
+                const isOwner = ["owner", "team_leader"].includes((team as Team & { role?: string }).role ?? "");
                 const pendingCount = pendingCountMap[team.id] ?? 0;
                 return (
                   <Pressable
@@ -368,7 +368,9 @@ export default function ProfileScreen() {
                     </View>
                     <View className="flex-1">
                       <Text className="font-semibold text-slate-900 dark:text-white">{team.name}</Text>
-                      <Text className="text-xs text-slate-400 capitalize">{(team as Team & { role?: string }).role ?? "member"}</Text>
+                      <Text className="text-xs text-slate-400">
+                        {(team as Team & { role?: string }).role === "owner" ? "Owner" : (team as Team & { role?: string }).role === "team_leader" ? "Team Leader" : (team as Team & { role?: string }).role ?? "member"}
+                      </Text>
                       {team.inviteCode && !isActive ? (
                         <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 }}>
                           <Text style={{ fontSize: 11, fontWeight: "700", color: "#4361EE", letterSpacing: 1.5 }}>{team.inviteCode}</Text>

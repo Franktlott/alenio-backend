@@ -59,7 +59,7 @@ calendarRouter.post(
     const membership = await prisma.teamMember.findUnique({
       where: { userId_teamId: { userId: user.id, teamId } },
     });
-    if (!membership || membership.role !== "owner") {
+    if (!membership || !["owner","team_leader"].includes(membership.role)) {
       return c.json({ error: { message: "Only team owners can create events", code: "FORBIDDEN" } }, 403);
     }
 
@@ -111,7 +111,7 @@ calendarRouter.patch(
     const membership = await prisma.teamMember.findUnique({
       where: { userId_teamId: { userId: user.id, teamId } },
     });
-    if (!membership || membership.role !== "owner") {
+    if (!membership || !["owner","team_leader"].includes(membership.role)) {
       return c.json({ error: { message: "Only team owners can update events", code: "FORBIDDEN" } }, 403);
     }
 
@@ -149,7 +149,7 @@ calendarRouter.delete("/:teamId/events/:eventId", async (c) => {
   const membership = await prisma.teamMember.findUnique({
     where: { userId_teamId: { userId: user.id, teamId } },
   });
-  if (!membership || membership.role !== "owner") {
+  if (!membership || !["owner","team_leader"].includes(membership.role)) {
     return c.json({ error: { message: "Only team owners can delete events", code: "FORBIDDEN" } }, 403);
   }
 
