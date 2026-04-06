@@ -460,6 +460,7 @@ export default function TasksScreen() {
 
   const [teamCompletedExpanded, setTeamCompletedExpanded] = useState(false);
   const [confirmCompleteTask, setConfirmCompleteTask] = useState<Task | null>(null);
+  const [subtaskBlockMessage, setSubtaskBlockMessage] = useState<string | null>(null);
   const [confirmDeleteEvent, setConfirmDeleteEvent] = useState(false);
   const [milestoneModal, setMilestoneModal] = useState<{ count: number; userName: string } | null>(null);
   // Event modal state
@@ -560,6 +561,9 @@ export default function TasksScreen() {
       if (result.milestone) {
         setMilestoneModal({ count: result.milestone, userName: session?.user?.name ?? "You" });
       }
+    },
+    onError: (error: Error) => {
+      setSubtaskBlockMessage(error.message);
     },
   });
 
@@ -1020,6 +1024,26 @@ export default function TasksScreen() {
               testID="complete-confirm-cancel"
             >
               <Text style={{ color: "#94A3B8", fontSize: 15, fontWeight: "600" }}>Cancel</Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
+
+      {/* Subtask block modal */}
+      {subtaskBlockMessage ? (
+        <View style={{ position: "absolute", inset: 0, backgroundColor: "rgba(0,0,0,0.45)", alignItems: "center", justifyContent: "center", zIndex: 101 }} testID="subtask-block-overlay">
+          <View style={{ backgroundColor: "white", borderRadius: 20, marginHorizontal: 32, padding: 24, shadowColor: "#000", shadowOpacity: 0.2, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 12, width: "85%" }}>
+            <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: "#FEF3C7", alignItems: "center", justifyContent: "center", alignSelf: "center", marginBottom: 14 }}>
+              <Text style={{ fontSize: 26 }}>⚠️</Text>
+            </View>
+            <Text style={{ fontSize: 17, fontWeight: "700", color: "#0F172A", textAlign: "center", marginBottom: 6 }}>Subtasks Incomplete</Text>
+            <Text style={{ fontSize: 14, color: "#64748B", textAlign: "center", marginBottom: 24 }}>{subtaskBlockMessage}</Text>
+            <Pressable
+              onPress={() => setSubtaskBlockMessage(null)}
+              style={{ backgroundColor: "#4361EE", borderRadius: 12, paddingVertical: 14, alignItems: "center" }}
+              testID="subtask-block-ok"
+            >
+              <Text style={{ color: "white", fontSize: 15, fontWeight: "700" }}>Got it</Text>
             </Pressable>
           </View>
         </View>
