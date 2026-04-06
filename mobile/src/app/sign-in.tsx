@@ -101,7 +101,7 @@ export default function SignIn() {
             style={{ width: 200, height: 72 }}
             resizeMode="contain"
           />
-          <Text className="text-white/80 text-base mt-2">Team task management</Text>
+          <Text className="text-white/80 text-base mt-2">Turn communication into execution.</Text>
         </View>
       </LinearGradient>
 
