@@ -31,7 +31,7 @@ templatesRouter.get("/", async (c) => {
   }
 
   const templates = await prisma.taskTemplate.findMany({
-    where: { teamId },
+    where: { teamId, createdById: user.id },
     include: {
       createdBy: { select: { id: true, name: true, email: true, image: true } },
     },
