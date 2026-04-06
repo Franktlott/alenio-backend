@@ -35,8 +35,6 @@ import { useTeamStore } from "@/lib/state/team-store";
 import { toast } from "burnt";
 import type { Team } from "@/lib/types";
 
-const DARK_OVERLAY_KEY = "profile_dark_overlay";
-
 type JoinRequestItem = {
   id: string;
   status: string;
@@ -80,21 +78,7 @@ export default function ProfileScreen() {
   const setActiveTeamId = useTeamStore((s) => s.setActiveTeamId);
   const user = session?.user;
 
-  // Dark overlay preference
-  const [darkOverlay, setDarkOverlay] = useState<boolean>(false);
-
-  useEffect(() => {
-    AsyncStorage.getItem(DARK_OVERLAY_KEY).then((val) => {
-      if (val === "1") setDarkOverlay(true);
-    });
-  }, []);
-
-  const toggleDarkOverlay = (val: boolean) => {
-    setDarkOverlay(val);
-    AsyncStorage.setItem(DARK_OVERLAY_KEY, val ? "1" : "0");
-  };
-
-  const overlayColor = darkOverlay ? "rgba(10,12,30,0.82)" : "rgba(240,242,255,0.85)";
+  const overlayColor = "rgba(240,242,255,0.85)";
   const nameColor = "white";
   const emailColor = "rgba(255,255,255,0.8)";
   const textShadow = {
@@ -541,26 +525,6 @@ export default function ProfileScreen() {
           </GlassCard>
         </View>
         ) : null}
-
-        {/* Account Settings — Dark Profile Background toggle */}
-        <View className="mx-4 mt-5">
-          <Text className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Account</Text>
-          <GlassCard>
-            <View className="flex-row items-center px-4 py-3.5">
-              <View className="flex-1">
-                <Text className="text-sm font-semibold text-slate-900 dark:text-white">Dark Profile Background</Text>
-                <Text className="text-xs text-slate-400 mt-0.5">Switch the profile overlay to dark</Text>
-              </View>
-              <Switch
-                value={darkOverlay}
-                onValueChange={toggleDarkOverlay}
-                trackColor={{ false: "#E2E8F0", true: "#6B8EF6" }}
-                thumbColor="white"
-                testID="dark-overlay-toggle"
-              />
-            </View>
-          </GlassCard>
-        </View>
 
         {/* Sign out */}
         {showSignOutConfirm ? (
