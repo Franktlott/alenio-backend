@@ -37,13 +37,13 @@ import { toast } from "burnt";
 import type { Team } from "@/lib/types";
 
 const TONES = [
-  { id: "none",    label: "None",    url: null },
-  { id: "chime",   label: "Default", url: "https://assets.mixkit.co/active_storage/sfx/2013/2013-preview.mp3" },
-  { id: "soft",    label: "Soft",    url: "https://assets.mixkit.co/active_storage/sfx/2018/2018-preview.mp3" },
-  { id: "ding",    label: "Ding",    url: "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" },
-  { id: "pop",     label: "Pop",     url: "https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3" },
-  { id: "ping",    label: "Ping",    url: "https://assets.mixkit.co/active_storage/sfx/2570/2570-preview.mp3" },
-  { id: "bubble",  label: "Bubble",  url: "https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3" },
+  { id: "none",     label: "None",     url: null },
+  { id: "chime",    label: "Default",  url: "https://assets.mixkit.co/active_storage/sfx/2013/2013-preview.mp3" },
+  { id: "soft",     label: "Soft",     url: "https://assets.mixkit.co/active_storage/sfx/2018/2018-preview.mp3" },
+  { id: "ding",     label: "Ding",     url: "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" },
+  { id: "note",     label: "Note",     url: "https://assets.mixkit.co/active_storage/sfx/2015/2015-preview.mp3" },
+  { id: "glass",    label: "Glass",    url: "https://assets.mixkit.co/active_storage/sfx/2308/2308-preview.mp3" },
+  { id: "tritone",  label: "Tri-tone", url: "https://assets.mixkit.co/active_storage/sfx/2016/2016-preview.mp3" },
 ];
 
 export { TONES };
