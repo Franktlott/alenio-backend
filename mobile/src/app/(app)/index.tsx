@@ -23,6 +23,7 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
 import { useTeamStore } from "@/lib/state/team-store";
+import { useSubscriptionStore } from "@/lib/state/subscription-store";
 import type { Task, Team, CalendarEvent } from "@/lib/types";
 import { NoTeamPlaceholder } from "@/components/NoTeamPlaceholder";
 
@@ -531,7 +532,11 @@ export default function TasksScreen() {
     queryFn: () => api.get<{ plan: string; status: string }>(`/api/teams/${activeTeamId}/subscription`),
     enabled: !!activeTeamId,
   });
-  const isPro = subscription ? subscription.plan === "pro" : null;
+  const setIsPro = useSubscriptionStore((s) => s.setIsPro);
+  const isPro = useSubscriptionStore((s) => s.isPro);
+  React.useEffect(() => {
+    if (subscription) setIsPro(subscription.plan === "pro");
+  }, [subscription]);
 
   const toggleMutation = useMutation({
     mutationFn: (task: Task) =>
@@ -710,7 +715,7 @@ export default function TasksScreen() {
     );
   }
 
-  if (isPro === false) {
+  if (!isPro) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: "#F8FAFC" }} edges={["top"]} testID="tasks-screen-locked">
         <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>

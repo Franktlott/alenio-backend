@@ -7,6 +7,8 @@ import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
 import { useTeamStore } from "@/lib/state/team-store";
 import { useUnreadStore } from "@/lib/state/unread-store";
+import { useSubscriptionStore } from "@/lib/state/subscription-store";
+import { useEffect } from "react";
 import type { Conversation } from "@/lib/types";
 
 const ALL_TABS = [
@@ -150,18 +152,23 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
 
 export default function AppLayout() {
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
+  const isPro = useSubscriptionStore((s) => s.isPro);
+  const setIsPro = useSubscriptionStore((s) => s.setIsPro);
 
-  const { data: subscription, isLoading: subLoading } = useQuery({
+  // Keep persisted pro status in sync with the server
+  const { data: subscription } = useQuery({
     queryKey: ["subscription", activeTeamId],
     queryFn: () => api.get<{ plan: string; status: string }>(`/api/teams/${activeTeamId}/subscription`),
     enabled: !!activeTeamId,
     staleTime: 1000 * 60 * 5,
   });
 
-  // Hide pro tabs until we know for certain the user is pro.
-  // null (loading) or false (free) → hide. Only show when explicitly pro.
-  const isPro = subscription?.plan === "pro";
-  const hideProTabs = subLoading || isPro !== true;
+  useEffect(() => {
+    if (subscription) setIsPro(subscription.plan === "pro");
+  }, [subscription]);
+
+  // isPro is read synchronously from AsyncStorage — no loading state, no flicker
+  const hideProTabs = !isPro;
 
   return (
     <Tabs
