@@ -369,7 +369,7 @@ export default function ProfileScreen() {
                     <View className="flex-1">
                       <Text className="font-semibold text-slate-900 dark:text-white">{team.name}</Text>
                       <Text className="text-xs text-slate-400 capitalize">{(team as Team & { role?: string }).role ?? "member"}</Text>
-                      {team.inviteCode ? (
+                      {team.inviteCode && !isActive ? (
                         <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 }}>
                           <Text style={{ fontSize: 11, fontWeight: "700", color: "#4361EE", letterSpacing: 1.5 }}>{team.inviteCode}</Text>
                           <TouchableOpacity
@@ -391,8 +391,7 @@ export default function ProfileScreen() {
                     </View>
                     {isActive ? (
                       <View className="w-2 h-2 rounded-full bg-indigo-500 mr-3" />
-                    ) : null}
-                    {isOwner ? (
+                    ) : isOwner ? (
                       <View className="flex-row items-center" style={{ gap: 6 }}>
                         {pendingCount > 0 ? (
                           <View className="w-5 h-5 rounded-full bg-red-500 items-center justify-center">
