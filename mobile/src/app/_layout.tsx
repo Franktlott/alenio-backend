@@ -157,14 +157,6 @@ function RootLayoutNav() {
               headerShown: false,
             }}
           />
-          <Stack.Screen
-            name="select-team"
-            options={{
-              presentation: 'formSheet',
-              sheetAllowedDetents: [0.6],
-              sheetGrabberVisible: true,
-            }}
-          />
           <Stack.Screen name="subscription" />
         </Stack.Protected>
         <Stack.Protected guard={!session?.user}>

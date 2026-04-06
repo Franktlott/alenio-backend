@@ -16,7 +16,7 @@ export function NoTeamPlaceholder() {
         Join an existing team or create a new one to get started.
       </Text>
       <Pressable
-        onPress={() => router.push("/select-team")}
+        onPress={() => router.push("/onboarding")}
         style={{
           backgroundColor: "#4361EE",
           paddingHorizontal: 28,
