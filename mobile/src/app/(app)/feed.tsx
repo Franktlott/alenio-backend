@@ -211,69 +211,9 @@ function CelebrationCard({ item, activeTeamId, currentUserId }: { item: Activity
   );
 }
 
-function TaskCompletionCard({ item, activeTeamId, currentUserId }: { item: ActivityEvent; activeTeamId: string | null; currentUserId: string | undefined }) {
-  const name = item.user?.name ?? "Someone";
-  const taskTitle = item.metadata?.taskTitle;
-  const isIncognito = item.metadata?.incognito;
-  return (
-    <View style={{ marginHorizontal: 16, marginVertical: 8 }} testID={`task-completion-card-${item.id}`}>
-      <LinearGradient
-        colors={["#10B981", "#059669"]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-        style={{ borderRadius: 18, padding: 2 }}
-      >
-        <View style={{ backgroundColor: "#F0FDF4", borderRadius: 16, padding: 14, gap: 10 }}>
-          {/* Top row */}
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-              <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: "#D1FAE5", alignItems: "center", justifyContent: "center" }}>
-                <CheckCircle size={18} color="#10B981" />
-              </View>
-              <View style={{ backgroundColor: "#D1FAE5", borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 }}>
-                <Text style={{ fontSize: 11, fontWeight: "700", color: "#059669", letterSpacing: 0.3 }}>TASK DONE ✓</Text>
-              </View>
-            </View>
-            <Text style={{ fontSize: 12, color: "#94A3B8" }}>{timeAgo(item.createdAt)}</Text>
-          </View>
-
-          {/* Task title */}
-          <View style={{ backgroundColor: "#DCFCE7", borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10 }}>
-            <Text style={{ fontSize: 15, fontWeight: "700", color: "#065F46" }} numberOfLines={2}>
-              {isIncognito ? "🕵️ Incognito task completed" : `"${taskTitle ?? "A task"}"`}
-            </Text>
-          </View>
-
-          {/* User row */}
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-            <View style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: "#A7F3D0", overflow: "hidden", alignItems: "center", justifyContent: "center" }}>
-              {item.user?.image ? (
-                <ExpoImage source={{ uri: item.user.image }} style={{ width: 30, height: 30 }} contentFit="cover" />
-              ) : (
-                <Text style={{ fontSize: 13, fontWeight: "700", color: "#059669" }}>{name[0].toUpperCase()}</Text>
-              )}
-            </View>
-            <Text style={{ fontSize: 13, fontWeight: "600", color: "#047857", flex: 1 }}>{name} 🎉</Text>
-          </View>
-
-          <ReactionRow
-            activityId={item.id}
-            teamId={activeTeamId}
-            reactions={item.reactions ?? {}}
-            currentUserId={currentUserId}
-          />
-        </View>
-      </LinearGradient>
-    </View>
-  );
-}
-
 function ActivityItem({ item, activeTeamId, currentUserId }: { item: ActivityEvent; activeTeamId: string | null; currentUserId: string | undefined }) {
   if (item.type === "task_milestone") {
     return <CelebrationCard item={item} activeTeamId={activeTeamId} currentUserId={currentUserId} />;
-  }
-  if (item.type === "task_completed") {
-    return <TaskCompletionCard item={item} activeTeamId={activeTeamId} currentUserId={currentUserId} />;
   }
 
   const config = EVENT_CONFIG[item.type] ?? {
