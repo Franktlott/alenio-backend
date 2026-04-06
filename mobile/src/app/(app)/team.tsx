@@ -3,7 +3,6 @@ import {
   View,
   Text,
   Image,
-  ImageBackground,
   TouchableOpacity,
   Share,
   ActivityIndicator,
@@ -227,11 +226,11 @@ export default function TeamScreen() {
     if (myRequest) {
       return (
         <SafeAreaView style={{ flex: 1, backgroundColor: "#F8FAFC" }} edges={["top"]}>
-          <ImageBackground source={require("@/assets/brand-bg.png")} style={{ width: "100%" }} resizeMode="cover">
-            <View style={{ backgroundColor: "rgba(30,20,100,0.55)", paddingHorizontal: 16, paddingTop: 10, paddingBottom: 14 }}>
+          <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+            <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 14 }}>
               <Text style={{ color: "white", fontSize: 18, fontWeight: "700" }}>Team</Text>
             </View>
-          </ImageBackground>
+          </LinearGradient>
           <View style={{ flex: 1, paddingHorizontal: 20, paddingTop: 24 }}>
             <Text style={{ fontSize: 13, fontWeight: "700", color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 12 }}>
               Your Request
@@ -312,8 +311,8 @@ export default function TeamScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-slate-50 dark:bg-slate-900" edges={["top"]} testID="team-screen">
-      <ImageBackground source={require("@/assets/brand-bg.png")} style={{ width: "100%" }} resizeMode="cover">
-        <View style={{ backgroundColor: "rgba(30,20,100,0.55)", paddingHorizontal: 16, paddingTop: 10, paddingBottom: 14, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+      <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+        <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 14, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
             <View style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: "rgba(255,255,255,0.2)", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
               {team?.image ? (
@@ -326,7 +325,7 @@ export default function TeamScreen() {
           </View>
           <Image source={require("@/assets/alenio-icon.png")} style={{ width: 30, height: 30, borderRadius: 6 }} />
         </View>
-      </ImageBackground>
+      </LinearGradient>
 
       {/* Invite code card */}
       <View className="mx-4 mb-4 mt-4 rounded-2xl p-4" style={{ backgroundColor: "#4361EE15" }}>
