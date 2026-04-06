@@ -9,12 +9,12 @@ import { useTeamStore } from "@/lib/state/team-store";
 import { useUnreadStore } from "@/lib/state/unread-store";
 import type { Conversation } from "@/lib/types";
 
-const TABS = [
-  { name: "feed", label: "Feed", Icon: Activity },
-  { name: "chat", label: "Chat", Icon: MessageCircle },
-  { name: "index", label: "Tasks", Icon: CheckSquare },
-  { name: "team", label: "Team", Icon: Users },
-  { name: "profile", label: "Profile", Icon: User },
+const ALL_TABS = [
+  { name: "feed", label: "Feed", Icon: Activity, proOnly: true },
+  { name: "chat", label: "Chat", Icon: MessageCircle, proOnly: false },
+  { name: "index", label: "Tasks", Icon: CheckSquare, proOnly: true },
+  { name: "team", label: "Team", Icon: Users, proOnly: false },
+  { name: "profile", label: "Profile", Icon: User, proOnly: false },
 ] as const;
 
 function FloatingTabBar({ state, descriptors, navigation }: any) {
@@ -93,7 +93,7 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
     }}>
       {visibleRoutes.map((route: any) => {
         const isFocused = state.index === state.routes.indexOf(route);
-        const tab = TABS.find((t) => t.name === route.name);
+        const tab = ALL_TABS.find((t) => t.name === route.name);
         if (!tab) return null;
         const { Icon, label, name } = tab;
         const isChat = name === "chat";
@@ -149,15 +149,29 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
 }
 
 export default function AppLayout() {
+  const activeTeamId = useTeamStore((s) => s.activeTeamId);
+
+  const { data: subscription, isLoading: subLoading } = useQuery({
+    queryKey: ["subscription", activeTeamId],
+    queryFn: () => api.get<{ plan: string; status: string }>(`/api/teams/${activeTeamId}/subscription`),
+    enabled: !!activeTeamId,
+    staleTime: 1000 * 60 * 5,
+  });
+
+  // Hide pro tabs until we know for certain the user is pro.
+  // null (loading) or false (free) → hide. Only show when explicitly pro.
+  const isPro = subscription?.plan === "pro";
+  const hideProTabs = subLoading || isPro !== true;
+
   return (
     <Tabs
-      initialRouteName="feed"
+      initialRouteName={hideProTabs ? "chat" : "feed"}
       tabBar={(props) => <FloatingTabBar {...props} />}
       screenOptions={{ headerShown: false }}
     >
-      <Tabs.Screen name="feed" options={{}} />
+      <Tabs.Screen name="feed" options={{ href: hideProTabs ? null : undefined }} />
       <Tabs.Screen name="chat" options={{}} />
-      <Tabs.Screen name="index" options={{ title: "Tasks" }} />
+      <Tabs.Screen name="index" options={{ title: "Tasks", href: hideProTabs ? null : undefined }} />
       <Tabs.Screen name="team" options={{ title: "Team" }} />
       <Tabs.Screen name="calendar" options={{ href: null }} />
       <Tabs.Screen name="profile" options={{ title: "Profile" }} />
