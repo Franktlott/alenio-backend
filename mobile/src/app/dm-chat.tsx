@@ -241,7 +241,6 @@ export default function DMChatScreen() {
         AsyncStorage.getItem("dm_tone").then(async (toneId) => {
           const id = toneId ?? "chime";
           const URLS: Record<string, string> = {
-            default: "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3",
             chime:   "https://assets.mixkit.co/active_storage/sfx/2013/2013-preview.mp3",
             ping:    "https://assets.mixkit.co/active_storage/sfx/2570/2570-preview.mp3",
             bell:    "https://assets.mixkit.co/active_storage/sfx/1031/1031-preview.mp3",

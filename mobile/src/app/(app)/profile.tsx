@@ -38,8 +38,7 @@ import type { Team } from "@/lib/types";
 
 const TONES = [
   { id: "none",    label: "None",    url: null },
-  { id: "default", label: "Default", url: "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" },
-  { id: "chime",   label: "Chime",   url: "https://assets.mixkit.co/active_storage/sfx/2013/2013-preview.mp3" },
+  { id: "chime",   label: "Default", url: "https://assets.mixkit.co/active_storage/sfx/2013/2013-preview.mp3" },
   { id: "ping",    label: "Ping",    url: "https://assets.mixkit.co/active_storage/sfx/2570/2570-preview.mp3" },
   { id: "bell",    label: "Bell",    url: "https://assets.mixkit.co/active_storage/sfx/1031/1031-preview.mp3" },
   { id: "bubble",  label: "Bubble",  url: "https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3" },
