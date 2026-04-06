@@ -11,6 +11,7 @@ import {
   Pressable,
   RefreshControl,
 } from "react-native";
+import { toast } from "burnt";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Copy, UserPlus, MessageCircle, AlertCircle, UserMinus, Clock, X, Check, ListChecks, Flame, Crown } from "lucide-react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -38,7 +39,7 @@ function MemberRow({
   stats,
   isOwner,
   onRemove,
-  onRoleChange,
+  onSetRole,
 }: {
   member: TeamMember;
   isCurrentUser: boolean;
@@ -46,7 +47,7 @@ function MemberRow({
   stats?: { activeTasks: number; overdueTasks: number; streak: number };
   isOwner?: boolean;
   onRemove?: () => void;
-  onRoleChange?: () => void;
+  onSetRole?: (role: string) => void;
 }) {
   return (
     <View
@@ -101,12 +102,12 @@ function MemberRow({
       ) : null}
       {isOwner && !isCurrentUser && member.role !== "owner" ? (
         <TouchableOpacity
-          onPress={onRoleChange}
+          onPress={() => onSetRole?.(member.role === "team_leader" ? "member" : "team_leader")}
           className="w-8 h-8 rounded-full items-center justify-center mr-2"
-          style={{ backgroundColor: member.role === "team_leader" ? "#7C3AED15" : "#F59E0B15" }}
+          style={{ backgroundColor: member.role === "team_leader" ? "#EDE9FE" : "#F1F5F9" }}
           testID={`role-change-${member.userId}`}
         >
-          <Crown size={15} color={member.role === "team_leader" ? "#7C3AED" : "#F59E0B"} />
+          <Crown size={15} color={member.role === "team_leader" ? "#7C3AED" : "#94A3B8"} />
         </TouchableOpacity>
       ) : null}
       <View className={`px-2 py-0.5 rounded-full ${member.role === "owner" ? "bg-amber-100" : member.role === "team_leader" ? "bg-purple-100" : "bg-slate-100 dark:bg-slate-700"}`}>
@@ -157,31 +158,14 @@ export default function TeamScreen() {
     },
   });
 
-  const changeRoleMutation = useMutation({
+  const setRoleMutation = useMutation({
     mutationFn: ({ userId, role }: { userId: string; role: string }) =>
       api.patch(`/api/teams/${activeTeamId}/members/${userId}/role`, { role }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["team", activeTeamId] });
+      toast({ title: "Role updated", preset: "done" });
     },
   });
-
-  const handleRoleChange = (member: TeamMember) => {
-    const isLeader = member.role === "team_leader";
-    Alert.alert(
-      isLeader ? "Remove Team Leader" : "Make Team Leader",
-      isLeader
-        ? `Remove Team Leader role from ${member.user.name}? They will become a regular member.`
-        : `Make ${member.user.name} a Team Leader? They will have owner-level permissions except subscription management.`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: isLeader ? "Remove" : "Make Team Leader",
-          style: isLeader ? "destructive" : "default",
-          onPress: () => changeRoleMutation.mutate({ userId: member.userId, role: isLeader ? "member" : "team_leader" }),
-        },
-      ]
-    );
-  };
 
   const handleRemove = (member: TeamMember) => {
     Alert.alert(
@@ -489,7 +473,23 @@ export default function TeamScreen() {
             stats={memberStats?.[item.userId]}
             isOwner={isOwner}
             onRemove={() => handleRemove(item)}
-            onRoleChange={() => handleRoleChange(item)}
+            onSetRole={(role) => {
+              const isLeader = item.role === "team_leader";
+              Alert.alert(
+                isLeader ? "Remove Team Leader" : "Make Team Leader",
+                isLeader
+                  ? `Remove team leader role from ${item.user.name}?`
+                  : `Give ${item.user.name} team leader access?`,
+                [
+                  { text: "Cancel", style: "cancel" },
+                  {
+                    text: isLeader ? "Remove" : "Confirm",
+                    style: isLeader ? "destructive" : "default",
+                    onPress: () => setRoleMutation.mutate({ userId: item.userId, role }),
+                  },
+                ]
+              );
+            }}
           />
         ))}
       </ScrollView>

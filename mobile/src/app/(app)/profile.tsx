@@ -104,13 +104,8 @@ export default function ProfileScreen() {
   const user = session?.user;
 
   const overlayColor = "rgba(240,242,255,0.85)";
-  const nameColor = "white";
-  const emailColor = "rgba(255,255,255,0.8)";
-  const textShadow = {
-    textShadowColor: "rgba(0,0,0,0.3)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
-  };
+  const nameColor = "#1E1B4B";
+  const emailColor = "#4361EE";
 
   // Profile state
   const [localImage, setLocalImage] = useState<string | null>(null);
@@ -393,9 +388,9 @@ export default function ProfileScreen() {
           </TouchableOpacity>
 
           {/* Name */}
-          <Text style={{ fontSize: 20, fontWeight: "700", color: nameColor, marginBottom: 4, ...textShadow }}>{user?.name}</Text>
+          <Text style={{ fontSize: 20, fontWeight: "700", color: nameColor, marginBottom: 4 }}>{user?.name}</Text>
 
-          <Text style={{ fontSize: 14, color: emailColor, ...textShadow }}>{user?.email}</Text>
+          <Text style={{ fontSize: 14, color: emailColor }}>{user?.email}</Text>
         </View>
 
         {/* Teams */}
