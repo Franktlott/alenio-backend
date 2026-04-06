@@ -5,6 +5,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Image,
+  ImageBackground,
   ActionSheetIOS,
   Platform,
   TextInput,
@@ -277,7 +278,13 @@ export default function ProfileScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-slate-50 dark:bg-slate-900" edges={["top"]} testID="profile-screen">
+    <SafeAreaView className="flex-1" edges={["top"]} testID="profile-screen">
+      <ImageBackground
+        source={require("@/assets/brand-bg.png")}
+        style={{ flex: 1 }}
+        resizeMode="cover"
+      >
+        <View style={{ flex: 1, backgroundColor: "rgba(240,242,255,0.85)" }}>
       {/* Header */}
       <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
         <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 14, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
@@ -728,6 +735,8 @@ export default function ProfileScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+        </View>
+      </ImageBackground>
     </SafeAreaView>
   );
 }
