@@ -1,6 +1,5 @@
 import { View, Text, Pressable, Image } from "react-native";
 import { router } from "expo-router";
-import { Users, Plus } from "lucide-react-native";
 
 export function NoTeamPlaceholder() {
   return (
@@ -10,17 +9,6 @@ export function NoTeamPlaceholder() {
         style={{ width: 160, height: 60, marginBottom: 32 }}
         resizeMode="contain"
       />
-      <View style={{
-        width: 72,
-        height: 72,
-        borderRadius: 36,
-        backgroundColor: "#EEF2FF",
-        alignItems: "center",
-        justifyContent: "center",
-        marginBottom: 20,
-      }}>
-        <Users size={36} color="#4361EE" strokeWidth={1.5} />
-      </View>
       <Text style={{ fontSize: 22, fontWeight: "700", color: "#1E293B", textAlign: "center", marginBottom: 8 }}>
         Welcome to Alenio
       </Text>
@@ -36,29 +24,10 @@ export function NoTeamPlaceholder() {
           borderRadius: 14,
           width: "100%",
           alignItems: "center",
-          marginBottom: 12,
         }}
-        testID="join-team-button"
+        testID="setup-team-button"
       >
-        <Text style={{ color: "white", fontWeight: "700", fontSize: 15 }}>Join a Team</Text>
-      </Pressable>
-      <Pressable
-        onPress={() => router.push("/onboarding")}
-        style={{
-          backgroundColor: "#EEF2FF",
-          paddingHorizontal: 28,
-          paddingVertical: 14,
-          borderRadius: 14,
-          width: "100%",
-          alignItems: "center",
-          flexDirection: "row",
-          justifyContent: "center",
-          gap: 8,
-        }}
-        testID="create-team-button"
-      >
-        <Plus size={18} color="#4361EE" />
-        <Text style={{ color: "#4361EE", fontWeight: "700", fontSize: 15 }}>Create a Team</Text>
+        <Text style={{ color: "white", fontWeight: "700", fontSize: 15 }}>Set up your team</Text>
       </Pressable>
     </View>
   );
