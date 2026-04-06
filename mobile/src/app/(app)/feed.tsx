@@ -104,6 +104,10 @@ function ReactionRow({
   onClosePicker: () => void;
 }) {
   const existingReactions = Object.entries(reactions ?? {});
+  // Find the emoji this user has already reacted with (at most one)
+  const myReaction = currentUserId
+    ? existingReactions.find(([, { userIds }]) => userIds.includes(currentUserId))?.[0]
+    : undefined;
 
   return (
     <View style={{ marginTop: 4 }}>
@@ -115,14 +119,50 @@ function ReactionRow({
           contentContainerStyle={{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 4 }}
           testID={`emoji-picker-${activityId}`}
         >
-          {EMOJI_OPTIONS.map((emoji) => (
+          {EMOJI_OPTIONS.map((emoji) => {
+            const isMine = emoji === myReaction;
+            return (
+              <Pressable
+                key={emoji}
+                testID={`pick-emoji-${activityId}-${emoji}`}
+                onPress={() => { onToggleReaction(emoji); onClosePicker(); }}
+                style={({ pressed }) => ({
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: isMine ? "#EEF2FF" : pressed ? "#E2E8F0" : "#F1F5F9",
+                  borderRadius: 20,
+                  paddingHorizontal: 10,
+                  paddingVertical: 6,
+                  borderWidth: 1.5,
+                  borderColor: isMine ? "#4361EE" : "#E2E8F0",
+                })}
+              >
+                <Text style={{ fontSize: 18 }}>{emoji}</Text>
+              </Pressable>
+            );
+          })}
+          {/* Remove button — only shown when user has a reaction */}
+          {myReaction ? (
             <Pressable
-              key={emoji}
-              testID={`pick-emoji-${activityId}-${emoji}`}
-              onPress={() => {
-                onToggleReaction(emoji);
-                onClosePicker();
-              }}
+              testID={`remove-reaction-${activityId}`}
+              onPress={() => { onToggleReaction(myReaction); onClosePicker(); }}
+              style={({ pressed }) => ({
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: pressed ? "#FEE2E2" : "#FFF1F2",
+                borderRadius: 20,
+                paddingHorizontal: 10,
+                paddingVertical: 6,
+                borderWidth: 1,
+                borderColor: "#FECDD3",
+              })}
+            >
+              <Text style={{ fontSize: 12, color: "#EF4444", fontWeight: "700" }}>Remove</Text>
+            </Pressable>
+          ) : (
+            <Pressable
+              testID={`close-picker-${activityId}`}
+              onPress={onClosePicker}
               style={({ pressed }) => ({
                 alignItems: "center",
                 justifyContent: "center",
@@ -134,25 +174,9 @@ function ReactionRow({
                 borderColor: "#E2E8F0",
               })}
             >
-              <Text style={{ fontSize: 18 }}>{emoji}</Text>
+              <Text style={{ fontSize: 14, color: "#94A3B8", fontWeight: "600" }}>✕</Text>
             </Pressable>
-          ))}
-          <Pressable
-            testID={`close-picker-${activityId}`}
-            onPress={onClosePicker}
-            style={({ pressed }) => ({
-              alignItems: "center",
-              justifyContent: "center",
-              backgroundColor: pressed ? "#E2E8F0" : "#F1F5F9",
-              borderRadius: 20,
-              paddingHorizontal: 10,
-              paddingVertical: 6,
-              borderWidth: 1,
-              borderColor: "#E2E8F0",
-            })}
-          >
-            <Text style={{ fontSize: 14, color: "#64748B", fontWeight: "600" }}>✕</Text>
-          </Pressable>
+          )}
         </ScrollView>
       ) : null}
       <ScrollView

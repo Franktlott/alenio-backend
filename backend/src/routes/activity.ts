@@ -71,19 +71,25 @@ activityRouter.post(
       return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
     }
 
-    const existing = await prisma.teamActivityReaction.findUnique({
-      where: { activityId_userId_emoji: { activityId, userId: user.id, emoji } },
+    // Find any existing reaction from this user on this activity (one reaction per user max)
+    const existingAny = await prisma.teamActivityReaction.findFirst({
+      where: { activityId, userId: user.id },
     });
 
-    if (existing) {
-      await prisma.teamActivityReaction.delete({ where: { id: existing.id } });
-    } else {
-      await prisma.teamActivityReaction.create({
-        data: { emoji, userId: user.id, activityId },
-      });
+    if (existingAny) {
+      // Always remove the existing reaction first
+      await prisma.teamActivityReaction.delete({ where: { id: existingAny.id } });
+      if (existingAny.emoji !== emoji) {
+        // Different emoji → swap in the new one
+        await prisma.teamActivityReaction.create({ data: { emoji, userId: user.id, activityId } });
+        return c.json({ data: { toggled: true } });
+      }
+      // Same emoji → just removed (toggle off)
+      return c.json({ data: { toggled: false } });
     }
 
-    return c.json({ data: { toggled: !existing } });
+    await prisma.teamActivityReaction.create({ data: { emoji, userId: user.id, activityId } });
+    return c.json({ data: { toggled: true } });
   }
 );
 
