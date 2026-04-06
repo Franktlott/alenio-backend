@@ -9,7 +9,7 @@ import { useTeamStore } from "@/lib/state/team-store";
 import { useUnreadStore } from "@/lib/state/unread-store";
 import { useSubscriptionStore } from "@/lib/state/subscription-store";
 import { useEffect } from "react";
-import type { Conversation } from "@/lib/types";
+import type { Conversation, Team } from "@/lib/types";
 
 const DEMO_EMAIL = "demo@alenio.app";
 
@@ -162,6 +162,7 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
 
 export default function AppLayout() {
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
+  const setActiveTeamId = useTeamStore((s) => s.setActiveTeamId);
   const isPro = useSubscriptionStore((s) => s.isPro);
   const setIsPro = useSubscriptionStore((s) => s.setIsPro);
   const { data: session } = useSession();
@@ -175,9 +176,22 @@ export default function AppLayout() {
     staleTime: 1000 * 60 * 5,
   });
 
+  const { data: teams } = useQuery({
+    queryKey: ["teams"],
+    queryFn: () => api.get<Team[]>("/api/teams"),
+    enabled: !!session?.user,
+    staleTime: 1000 * 60 * 2,
+  });
+
   useEffect(() => {
     if (subscription) setIsPro(subscription.plan === "pro");
   }, [subscription]);
+
+  useEffect(() => {
+    if (teams && teams.length > 0 && !activeTeamId) {
+      setActiveTeamId(teams[0].id);
+    }
+  }, [teams, activeTeamId]);
 
   // isPro is read synchronously from AsyncStorage — no loading state, no flicker
   // Demo users get all tabs unlocked so they can explore every feature

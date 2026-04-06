@@ -125,6 +125,7 @@ function MemberRow({
 export default function TeamScreen() {
   const insets = useSafeAreaInsets();
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
+  const hasHydrated = useTeamStore((s) => s._hasHydrated);
   const { data: session } = useSession();
   const isDemo = useDemoMode();
   const queryClient = useQueryClient();
@@ -246,6 +247,14 @@ export default function TeamScreen() {
   const totalOverdue = memberStats
     ? Object.values(memberStats).reduce((sum, s) => sum + s.overdueTasks, 0)
     : 0;
+
+  if (!hasHydrated) {
+    return (
+      <SafeAreaView className="flex-1 bg-slate-50 items-center justify-center" edges={["top"]}>
+        <ActivityIndicator color="#4361EE" size="large" />
+      </SafeAreaView>
+    );
+  }
 
   if (!activeTeamId) {
     const myRequest = myPendingRequests[0] ?? null;
