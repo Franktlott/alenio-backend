@@ -24,6 +24,7 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
   const { data: session } = useSession();
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
   const lastReadIds = useUnreadStore((s) => s.lastReadIds);
+  const isPro = useSubscriptionStore((s) => s.isPro);
 
   const { data: conversations = [] } = useQuery({
     queryKey: ["conversations"],
@@ -72,8 +73,9 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
 
   const visibleRoutes = state.routes.filter((r: any) => {
     if (r.name === "calendar") return false;
-    const opts = descriptors[r.key]?.options;
-    if (opts?.href === null) return false;
+    const tab = ALL_TABS.find((t) => t.name === r.name);
+    if (!tab) return false;
+    if (tab.proOnly && !isPro) return false;
     return true;
   });
 
