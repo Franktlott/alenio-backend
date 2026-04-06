@@ -221,14 +221,6 @@ export default function TeamScreen() {
     ? Object.values(memberStats).reduce((sum, s) => sum + s.overdueTasks, 0)
     : 0;
 
-  const totalActive = memberStats
-    ? Object.values(memberStats).reduce((sum, s) => sum + s.activeTasks, 0)
-    : 0;
-
-  const bestStreak = memberStats
-    ? Math.max(0, ...Object.values(memberStats).map((s) => s.streak))
-    : 0;
-
   if (!activeTeamId) {
     const myRequest = myPendingRequests[0] ?? null;
     if (myRequest) {
@@ -361,25 +353,18 @@ export default function TeamScreen() {
         <Text className="text-xs mt-1" style={{ color: "#4361EEb3" }}>Share this code to invite team members</Text>
       </View>
 
-      {/* Team stats pill */}
-      {memberStats ? (
-        <View className="mx-4 mb-3 flex-row rounded-2xl overflow-hidden" style={{ gap: 1 }}>
-          <View className="flex-1 flex-row items-center px-4 py-3" style={{ backgroundColor: "#EEF2FF", gap: 8 }}>
-            <ListChecks size={16} color="#4361EE" />
-            <View>
-              <Text style={{ fontSize: 16, fontWeight: "800", color: "#4361EE" }}>{totalActive}</Text>
-              <Text style={{ fontSize: 10, fontWeight: "600", color: "#6B7ECC", letterSpacing: 0.3 }}>active tasks</Text>
-            </View>
-          </View>
-          <View className="flex-1 flex-row items-center px-4 py-3" style={{ backgroundColor: "#FFF7ED", gap: 8 }}>
-            <Flame size={16} color="#F97316" />
-            <View>
-              <Text style={{ fontSize: 16, fontWeight: "800", color: "#F97316" }}>{bestStreak}</Text>
-              <Text style={{ fontSize: 10, fontWeight: "600", color: "#C2600A", letterSpacing: 0.3 }}>on-time streak</Text>
-            </View>
-          </View>
+      {/* Key */}
+      <View className="mx-4 mb-3 flex-row items-center" style={{ gap: 12 }}>
+        <Text style={{ fontSize: 11, fontWeight: "600", color: "#94A3B8", letterSpacing: 0.5 }}>KEY</Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "#EEF2FF", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 }}>
+          <ListChecks size={11} color="#4361EE" />
+          <Text style={{ fontSize: 11, fontWeight: "600", color: "#4361EE" }}>Active tasks</Text>
         </View>
-      ) : null}
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "#FFF7ED", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 }}>
+          <Flame size={11} color="#F97316" />
+          <Text style={{ fontSize: 11, fontWeight: "600", color: "#F97316" }}>On-time streak</Text>
+        </View>
+      </View>
 
       {/* Overdue tasks pill */}
       {totalOverdue > 0 ? (

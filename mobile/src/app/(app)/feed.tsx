@@ -75,6 +75,14 @@ const EVENT_CONFIG = {
     getMessage: (e: ActivityEvent) =>
       `${e.user?.name ?? "Someone"} completed ${e.metadata?.count ?? 10} tasks on time!`,
   },
+  personal_best: {
+    label: "Personal Best",
+    color: "#F59E0B",
+    bg: "#FFFBEB",
+    Icon: Trophy,
+    getMessage: (e: ActivityEvent) =>
+      `${e.user?.name ?? "Someone"} hit a new personal best of ${e.metadata?.count ?? 0} on-time tasks!`,
+  },
 };
 
 const EMOJI_OPTIONS = ["😊", "❤️", "😂", "😮", "🔥", "🎉"];
