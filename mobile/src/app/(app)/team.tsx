@@ -3,14 +3,16 @@ import {
   View,
   Text,
   Image,
-  FlatList,
   TouchableOpacity,
   Share,
   ActivityIndicator,
   Alert,
+  ScrollView,
+  Pressable,
+  RefreshControl,
 } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Copy, UserPlus, MessageCircle, AlertCircle, UserMinus } from "lucide-react-native";
+import { Copy, UserPlus, MessageCircle, AlertCircle, UserMinus, Clock, X, Check } from "lucide-react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Clipboard from "expo-clipboard";
@@ -20,6 +22,14 @@ import { useSession } from "@/lib/auth/use-session";
 import { router } from "expo-router";
 import type { Team, TeamMember } from "@/lib/types";
 import { NoTeamPlaceholder } from "@/components/NoTeamPlaceholder";
+
+type JoinRequest = {
+  id: string;
+  status: string;
+  team: { id: string; name: string; image: string | null };
+  user?: { id: string; name: string; email: string; image: string | null };
+  createdAt: string;
+};
 
 function MemberRow({
   member,
@@ -153,6 +163,41 @@ export default function TeamScreen() {
   const currentMembership = team?.members?.find((m) => m.userId === session?.user?.id);
   const isOwner = currentMembership?.role === "owner";
 
+  // Pending join requests (owner sees incoming requests; non-member sees their own)
+  const { data: myPendingRequests = [] } = useQuery({
+    queryKey: ["join-requests-mine"],
+    queryFn: () => api.get<JoinRequest[]>("/api/join-requests/mine"),
+    enabled: !activeTeamId,
+    refetchInterval: 10000,
+  });
+
+  const { data: incomingRequests = [] } = useQuery({
+    queryKey: ["team-join-requests", activeTeamId],
+    queryFn: () => api.get<JoinRequest[]>(`/api/teams/${activeTeamId}/join-requests`),
+    enabled: !!activeTeamId && isOwner,
+    refetchInterval: 15000,
+  });
+
+  const cancelMutation = useMutation({
+    mutationFn: (requestId: string) => api.delete(`/api/join-requests/${requestId}`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["join-requests-mine"] }),
+  });
+
+  const approveMutation = useMutation({
+    mutationFn: (requestId: string) =>
+      api.post(`/api/teams/${activeTeamId}/join-requests/${requestId}/approve`, {}),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["team-join-requests", activeTeamId] });
+      queryClient.invalidateQueries({ queryKey: ["team", activeTeamId] });
+    },
+  });
+
+  const rejectMutation = useMutation({
+    mutationFn: (requestId: string) =>
+      api.post(`/api/teams/${activeTeamId}/join-requests/${requestId}/reject`, {}),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["team-join-requests", activeTeamId] }),
+  });
+
   const [refreshing, setRefreshing] = useState(false);
 
   const onRefresh = async () => {
@@ -177,6 +222,65 @@ export default function TeamScreen() {
     : 0;
 
   if (!activeTeamId) {
+    const myRequest = myPendingRequests[0] ?? null;
+    if (myRequest) {
+      return (
+        <SafeAreaView style={{ flex: 1, backgroundColor: "#F8FAFC" }} edges={["top"]}>
+          <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+            <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 14 }}>
+              <Text style={{ color: "white", fontSize: 18, fontWeight: "700" }}>Team</Text>
+            </View>
+          </LinearGradient>
+          <View style={{ flex: 1, paddingHorizontal: 20, paddingTop: 24 }}>
+            <Text style={{ fontSize: 13, fontWeight: "700", color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 12 }}>
+              Your Request
+            </Text>
+            {/* User card */}
+            <View style={{ backgroundColor: "white", borderRadius: 16, padding: 16, marginBottom: 12, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 2 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 14 }}>
+                <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: "#EEF2FF", alignItems: "center", justifyContent: "center" }}>
+                  {session?.user?.image ? (
+                    <Image source={{ uri: session.user.image }} style={{ width: 44, height: 44, borderRadius: 22 }} />
+                  ) : (
+                    <Text style={{ fontSize: 18, fontWeight: "700", color: "#4361EE" }}>
+                      {session?.user?.name?.[0]?.toUpperCase() ?? "?"}
+                    </Text>
+                  )}
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 15, fontWeight: "700", color: "#1E293B" }}>{session?.user?.name ?? "You"}</Text>
+                  <Text style={{ fontSize: 13, color: "#94A3B8" }}>{session?.user?.email ?? ""}</Text>
+                </View>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "#FFF7ED", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20, borderWidth: 1, borderColor: "#FED7AA" }}>
+                  <Clock size={12} color="#F59E0B" />
+                  <Text style={{ fontSize: 12, fontWeight: "600", color: "#92400E" }}>Pending</Text>
+                </View>
+              </View>
+              <View style={{ backgroundColor: "#F8FAFC", borderRadius: 10, padding: 12 }}>
+                <Text style={{ fontSize: 12, color: "#64748B", marginBottom: 2 }}>Requested to join</Text>
+                <Text style={{ fontSize: 15, fontWeight: "700", color: "#1E293B" }}>{myRequest.team.name}</Text>
+                <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 3 }}>Waiting for a team owner to approve</Text>
+              </View>
+            </View>
+            <Pressable
+              onPress={() => cancelMutation.mutate(myRequest.id)}
+              disabled={cancelMutation.isPending}
+              style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderWidth: 1.5, borderColor: "#EF4444", paddingVertical: 13, borderRadius: 14 }}
+              testID="cancel-request-button"
+            >
+              {cancelMutation.isPending ? (
+                <ActivityIndicator color="#EF4444" size="small" />
+              ) : (
+                <>
+                  <X size={15} color="#EF4444" />
+                  <Text style={{ color: "#EF4444", fontWeight: "700", fontSize: 15 }}>Cancel Request</Text>
+                </>
+              )}
+            </Pressable>
+          </View>
+        </SafeAreaView>
+      );
+    }
     return (
       <SafeAreaView className="flex-1 bg-slate-50" edges={["top"]}>
         <NoTeamPlaceholder />
@@ -246,13 +350,75 @@ export default function TeamScreen() {
         </View>
       ) : null}
 
+      {/* Pending join requests — owners only */}
+      {isOwner && incomingRequests.length > 0 ? (
+        <View style={{ marginBottom: 4 }}>
+          <Text className="px-4 text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
+            Pending Requests ({incomingRequests.length})
+          </Text>
+          {incomingRequests.map((req) => (
+            <View key={req.id} style={{ backgroundColor: "white", marginHorizontal: 16, marginBottom: 8, borderRadius: 14, padding: 14, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 2 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 12 }}>
+                <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "#EEF2FF", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                  {req.user?.image ? (
+                    <Image source={{ uri: req.user.image }} style={{ width: 40, height: 40 }} resizeMode="cover" />
+                  ) : (
+                    <Text style={{ fontSize: 16, fontWeight: "700", color: "#4361EE" }}>
+                      {req.user?.name?.[0]?.toUpperCase() ?? "?"}
+                    </Text>
+                  )}
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 14, fontWeight: "700", color: "#0F172A" }}>{req.user?.name ?? "Unknown"}</Text>
+                  <Text style={{ fontSize: 12, color: "#94A3B8" }}>{req.user?.email ?? ""}</Text>
+                </View>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "#FFF7ED", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 20, borderWidth: 1, borderColor: "#FED7AA" }}>
+                  <Clock size={11} color="#F59E0B" />
+                  <Text style={{ fontSize: 11, fontWeight: "600", color: "#92400E" }}>Pending</Text>
+                </View>
+              </View>
+              <View style={{ flexDirection: "row", gap: 8 }}>
+                <Pressable
+                  onPress={() => rejectMutation.mutate(req.id)}
+                  disabled={rejectMutation.isPending || approveMutation.isPending}
+                  style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 10, borderRadius: 10, borderWidth: 1.5, borderColor: "#E2E8F0" }}
+                  testID={`reject-request-${req.id}`}
+                >
+                  <X size={14} color="#64748B" />
+                  <Text style={{ fontSize: 13, fontWeight: "600", color: "#64748B" }}>Decline</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => approveMutation.mutate(req.id)}
+                  disabled={approveMutation.isPending || rejectMutation.isPending}
+                  style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 10, borderRadius: 10, backgroundColor: "#4361EE" }}
+                  testID={`approve-request-${req.id}`}
+                >
+                  {approveMutation.isPending ? (
+                    <ActivityIndicator color="white" size="small" />
+                  ) : (
+                    <>
+                      <Check size={14} color="white" />
+                      <Text style={{ fontSize: 13, fontWeight: "700", color: "white" }}>Approve</Text>
+                    </>
+                  )}
+                </Pressable>
+              </View>
+            </View>
+          ))}
+        </View>
+      ) : null}
+
       {/* Members list */}
       <Text className="px-4 text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Members</Text>
-      <FlatList
-        data={team?.members ?? []}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 88 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" colors={["#4361EE"]} />}
+        testID="members-list"
+      >
+        {(team?.members ?? []).map((item) => (
           <MemberRow
+            key={item.id}
             member={item}
             isCurrentUser={item.userId === session?.user?.id}
             onMessage={() => dmMutation.mutate(item.userId)}
@@ -260,13 +426,8 @@ export default function TeamScreen() {
             isOwner={isOwner}
             onRemove={() => handleRemove(item)}
           />
-        )}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: insets.bottom + 88 }}
-        testID="members-list"
-        onRefresh={onRefresh}
-        refreshing={refreshing}
-      />
+        ))}
+      </ScrollView>
     </SafeAreaView>
   );
 }
