@@ -42,6 +42,7 @@ export default function TaskDetailScreen() {
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [showRecallConfirm, setShowRecallConfirm] = useState(false);
   const [showDoneConfirm, setShowDoneConfirm] = useState(false);
+  const [showSubtaskBlock, setShowSubtaskBlock] = useState(false);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState<string>("");
   const [isEditMode, setIsEditMode] = useState(false);
 
@@ -270,7 +271,12 @@ export default function TaskDetailScreen() {
                   key={s.value}
                   onPress={() => {
                     if (s.value === "done" && !isCompleted) {
-                      setShowDoneConfirm(true);
+                      const incomplete = (task.subtasks ?? []).filter((st) => !st.completed);
+                      if (incomplete.length > 0) {
+                        setShowSubtaskBlock(true);
+                      } else {
+                        setShowDoneConfirm(true);
+                      }
                     } else if (s.value !== "done" && isEditable) {
                       updateMutation.mutate({ status: s.value });
                     }
@@ -302,20 +308,21 @@ export default function TaskDetailScreen() {
                 </Text>
               </View>
               {subtasks.length > 0 && (
-                <View className="mb-2" style={{ gap: 4 }}>
+                <View className="mb-2" style={{ gap: 2 }}>
                   {subtasks.map((subtask) => (
-                    <View key={subtask.id} className="flex-row items-center py-1" style={{ gap: 8 }}>
-                      <TouchableOpacity
-                        onPress={() => toggleSubtaskMutation.mutate({ subtaskId: subtask.id, completed: !subtask.completed })}
-                        disabled={!isEditable || toggleSubtaskMutation.isPending}
-                        testID={`subtask-toggle-${subtask.id}`}
-                      >
-                        {subtask.completed ? (
-                          <CheckSquare size={20} color="#10B981" />
-                        ) : (
-                          <Square size={20} color="#94A3B8" />
-                        )}
-                      </TouchableOpacity>
+                    <TouchableOpacity
+                      key={subtask.id}
+                      onPress={() => toggleSubtaskMutation.mutate({ subtaskId: subtask.id, completed: !subtask.completed })}
+                      disabled={!isEditable || toggleSubtaskMutation.isPending}
+                      testID={`subtask-toggle-${subtask.id}`}
+                      style={{ flexDirection: "row", alignItems: "center", paddingVertical: 10, paddingHorizontal: 4, gap: 10 }}
+                      activeOpacity={0.6}
+                    >
+                      {subtask.completed ? (
+                        <CheckSquare size={22} color="#10B981" />
+                      ) : (
+                        <Square size={22} color="#94A3B8" />
+                      )}
                       <Text
                         className="flex-1 text-sm text-slate-900 dark:text-white"
                         style={subtask.completed ? { textDecorationLine: "line-through", color: "#94A3B8" } : undefined}
@@ -326,13 +333,14 @@ export default function TaskDetailScreen() {
                         <TouchableOpacity
                           onPress={() => deleteSubtaskMutation.mutate(subtask.id)}
                           disabled={deleteSubtaskMutation.isPending}
-                          className="w-6 h-6 rounded-full items-center justify-center bg-slate-100 dark:bg-slate-700"
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                          className="w-7 h-7 rounded-full items-center justify-center bg-slate-100 dark:bg-slate-700"
                           testID={`subtask-delete-${subtask.id}`}
                         >
                           <X size={12} color="#94A3B8" />
                         </TouchableOpacity>
                       ) : null}
-                    </View>
+                    </TouchableOpacity>
                   ))}
                 </View>
               )}
@@ -568,6 +576,31 @@ export default function TaskDetailScreen() {
                 className="flex-1 py-3.5 items-center"
               >
                 <Text className="text-base font-semibold text-amber-500">Recall</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Subtask blocker modal */}
+      <Modal visible={showSubtaskBlock} transparent animationType="fade" onRequestClose={() => setShowSubtaskBlock(false)}>
+        <TouchableOpacity className="flex-1 bg-black/40 items-center justify-center px-8" activeOpacity={1} onPress={() => setShowSubtaskBlock(false)}>
+          <TouchableOpacity activeOpacity={1} className="w-full bg-white dark:bg-slate-800 rounded-2xl overflow-hidden">
+            <View className="px-5 pt-5 pb-4 items-center">
+              <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: "#FEF3C7", alignItems: "center", justifyContent: "center", marginBottom: 12 }}>
+                <Text style={{ fontSize: 24 }}>⚠️</Text>
+              </View>
+              <Text className="text-lg font-bold text-slate-900 dark:text-white mb-1">Subtasks Incomplete</Text>
+              <Text className="text-sm text-slate-500 dark:text-slate-400 text-center">
+                Complete all subtasks before marking this task as done.
+              </Text>
+              <Text className="text-xs text-amber-600 font-semibold text-center mt-2">
+                {(task?.subtasks ?? []).filter((s) => !s.completed).length} subtask{(task?.subtasks ?? []).filter((s) => !s.completed).length === 1 ? "" : "s"} remaining
+              </Text>
+            </View>
+            <View className="border-t border-slate-100 dark:border-slate-700">
+              <TouchableOpacity onPress={() => setShowSubtaskBlock(false)} className="py-3.5 items-center" testID="subtask-block-ok">
+                <Text className="text-base font-semibold text-indigo-500">Got it</Text>
               </TouchableOpacity>
             </View>
           </TouchableOpacity>
