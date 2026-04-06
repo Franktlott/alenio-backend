@@ -162,7 +162,7 @@ export default function ResetPassword() {
 
       <View style={{ alignItems: "center", gap: 6, paddingBottom: 16 }}>
         <Text style={{ fontSize: 11, color: "#94A3B8", letterSpacing: 0.3 }}>Powered by</Text>
-        <Image source={require("@/assets/ventry-logo.png")} style={{ width: 90, height: 28 }} resizeMode="contain" />
+        <Image source={require("@/assets/lotttech-logo.png")} style={{ width: 90, height: 28 }} resizeMode="contain" />
       </View>
     </SafeAreaView>
   );

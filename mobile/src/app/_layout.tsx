@@ -72,7 +72,7 @@ function CustomSplash({ onDone }: { onDone: () => void }) {
           Powered by
         </Text>
         <Image
-          source={require('@/assets/ventry-logo.png')}
+          source={require('@/assets/lotttech-logo.png')}
           style={{ width: 100, height: 32 }}
           resizeMode="contain"
         />
