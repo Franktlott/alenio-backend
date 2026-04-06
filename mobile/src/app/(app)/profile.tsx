@@ -294,38 +294,35 @@ export default function ProfileScreen() {
       </LinearGradient>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 88 }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" colors={["#4361EE"]} />}>
-        {/* Avatar + name card */}
-        <View className="mx-4 mt-5 bg-white dark:bg-slate-800 rounded-2xl overflow-hidden"
-          style={{ shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 2 }}>
-          <View className="items-center pt-8 pb-6 px-4">
-            {/* Avatar */}
-            <TouchableOpacity
-              onPress={handlePhotoPress}
-              disabled={uploadMutation.isPending}
-              className="mb-4"
-              testID="avatar-upload-button"
-            >
-              <View className="w-24 h-24 rounded-full overflow-hidden bg-indigo-100 items-center justify-center">
-                {uploadMutation.isPending ? (
-                  <ActivityIndicator color="#4361EE" testID="upload-loading-indicator" />
-                ) : avatarUri ? (
-                  <Image source={{ uri: avatarUri }} style={{ width: 96, height: 96 }} resizeMode="cover" />
-                ) : (
-                  <Text className="text-indigo-600 text-4xl font-bold">
-                    {user?.name?.[0]?.toUpperCase() ?? "?"}
-                  </Text>
-                )}
-              </View>
-              <View className="absolute bottom-0 right-0 w-7 h-7 rounded-full bg-indigo-600 items-center justify-center border-2 border-white">
-                <Camera size={13} color="white" />
-              </View>
-            </TouchableOpacity>
+        {/* Avatar + name */}
+        <View className="items-center pt-8 pb-6 px-4">
+          {/* Avatar */}
+          <TouchableOpacity
+            onPress={handlePhotoPress}
+            disabled={uploadMutation.isPending}
+            className="mb-4"
+            testID="avatar-upload-button"
+          >
+            <View className="w-24 h-24 rounded-full overflow-hidden bg-indigo-100 items-center justify-center">
+              {uploadMutation.isPending ? (
+                <ActivityIndicator color="#4361EE" testID="upload-loading-indicator" />
+              ) : avatarUri ? (
+                <Image source={{ uri: avatarUri }} style={{ width: 96, height: 96 }} resizeMode="cover" />
+              ) : (
+                <Text className="text-indigo-600 text-4xl font-bold">
+                  {user?.name?.[0]?.toUpperCase() ?? "?"}
+                </Text>
+              )}
+            </View>
+            <View className="absolute bottom-0 right-0 w-7 h-7 rounded-full bg-indigo-600 items-center justify-center border-2 border-white">
+              <Camera size={13} color="white" />
+            </View>
+          </TouchableOpacity>
 
-            {/* Name */}
-            <Text className="text-xl font-bold text-slate-900 dark:text-white mb-1">{user?.name}</Text>
+          {/* Name */}
+          <Text className="text-xl font-bold text-slate-900 dark:text-white mb-1">{user?.name}</Text>
 
-            <Text className="text-sm text-slate-400">{user?.email}</Text>
-          </View>
+          <Text className="text-sm text-slate-500">{user?.email}</Text>
         </View>
 
         {/* Teams */}
