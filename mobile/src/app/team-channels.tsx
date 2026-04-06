@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -8,16 +8,22 @@ import {
   TextInput,
   ActivityIndicator,
   Image,
+  Pressable,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { ArrowLeft, MessageCircle } from "lucide-react-native";
+import { ArrowLeft, MessageCircle, Pin } from "lucide-react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Haptics from "expo-haptics";
+import { toast } from "burnt";
 import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
 import { useUnreadStore } from "@/lib/state/unread-store";
 import type { Message, Team } from "@/lib/types";
+
+const PINNED_TOPICS_KEY = "pinned_topics";
 
 type Topic = {
   id: string;
@@ -55,6 +61,50 @@ export default function TeamChannelsScreen() {
   const [newTopicName, setNewTopicName] = useState("");
   const [newTopicColor, setNewTopicColor] = useState("#4361EE");
   const [deleteTarget, setDeleteTarget] = useState<Topic | null>(null);
+  const [actionTarget, setActionTarget] = useState<Topic | null>(null);
+  const [pinnedTopicIds, setPinnedTopicIds] = useState<string[]>([]);
+
+  // Load pinned topics from AsyncStorage on mount
+  useEffect(() => {
+    AsyncStorage.getItem(PINNED_TOPICS_KEY).then((val) => {
+      if (val) {
+        try {
+          const parsed = JSON.parse(val);
+          if (Array.isArray(parsed)) setPinnedTopicIds(parsed);
+        } catch (_) {}
+      }
+    });
+  }, []);
+
+  // Persist pinned topics whenever they change
+  useEffect(() => {
+    AsyncStorage.setItem(PINNED_TOPICS_KEY, JSON.stringify(pinnedTopicIds));
+  }, [pinnedTopicIds]);
+
+  const handleLongPressTopic = async (topic: Topic) => {
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (isOwnerOrAdmin) {
+      // Owners/admins see an action sheet with pin and delete options
+      setActionTarget(topic);
+    } else {
+      // Non-owners just toggle pin
+      togglePinTopic(topic.id);
+    }
+  };
+
+  const togglePinTopic = (topicId: string) => {
+    if (pinnedTopicIds.includes(topicId)) {
+      setPinnedTopicIds((prev) => prev.filter((id) => id !== topicId));
+      toast({ title: "Unpinned", preset: "done" });
+    } else {
+      if (pinnedTopicIds.length >= 5) {
+        toast({ title: "Maximum 5 pins reached", preset: "error" });
+        return;
+      }
+      setPinnedTopicIds((prev) => [topicId, ...prev]);
+      toast({ title: "Pinned", preset: "done" });
+    }
+  };
 
   const { data: topics = [], isLoading: topicsLoading } = useQuery({
     queryKey: ["topics", teamId],
@@ -113,6 +163,51 @@ export default function TeamChannelsScreen() {
   });
 
   const teamNameStr = Array.isArray(teamName) ? teamName[0] : (teamName ?? "Team");
+
+  // Split topics into pinned and unpinned
+  const pinnedTopics = pinnedTopicIds
+    .map((id) => topics.find((t) => t.id === id))
+    .filter((t): t is Topic => !!t);
+  const unpinnedTopics = topics.filter((t) => !pinnedTopicIds.includes(t.id));
+
+  const renderTopicRow = (topic: Topic, isPinned: boolean) => (
+    <TouchableOpacity
+      key={topic.id}
+      testID={`topic-row-${topic.id}`}
+      onPress={() => router.push({ pathname: "/team-chat", params: { teamId, teamName, topicId: topic.id, topicName: topic.name } })}
+      onLongPress={() => handleLongPressTopic(topic)}
+      style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, backgroundColor: "white", borderBottomWidth: 0.5, borderBottomColor: "#F1F5F9" }}
+    >
+      <View style={{ width: 50, height: 50, borderRadius: 14, backgroundColor: topic.color, alignItems: "center", justifyContent: "center", marginRight: 14 }}>
+        <Text style={{ color: "white", fontSize: 22, fontWeight: "700" }}>#</Text>
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={{ fontSize: 16, fontWeight: "700", color: "#0F172A" }}>{topic.name}</Text>
+        {topic.lastMessage ? (
+          <Text style={{ fontSize: 13, color: "#64748B", marginTop: 2 }} numberOfLines={1}>
+            {topic.lastMessage.sender.name}: {topic.lastMessage.content ?? (topic.lastMessage.mediaType ? "Sent a photo" : "")}
+          </Text>
+        ) : (
+          <Text style={{ fontSize: 13, color: "#94A3B8", marginTop: 2 }}>No messages yet</Text>
+        )}
+      </View>
+      <View style={{ alignItems: "flex-end", gap: 4 }}>
+        {topic.lastMessage ? (
+          <Text style={{ fontSize: 12, color: "#94A3B8" }}>{formatTime(topic.lastMessage.createdAt)}</Text>
+        ) : null}
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+          {isPinned ? (
+            <Pin size={12} color="#4361EE" />
+          ) : null}
+          {(channelUnreadCounts[`topic:${topic.id}`] ?? 0) > 0 ? (
+            <View style={{ backgroundColor: "#4361EE", borderRadius: 10, minWidth: 20, height: 20, alignItems: "center", justifyContent: "center", paddingHorizontal: 6 }}>
+              <Text style={{ color: "white", fontSize: 11, fontWeight: "700" }}>{channelUnreadCounts[`topic:${topic.id}`]}</Text>
+            </View>
+          ) : null}
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
 
   return (
     <SafeAreaView testID="team-channels-screen" style={{ flex: 1, backgroundColor: "#F8FAFC" }} edges={["top"]}>
@@ -187,39 +282,18 @@ export default function TeamChannelsScreen() {
           </View>
         ) : null}
 
-        {topics.map((topic) => (
-          <TouchableOpacity
-            key={topic.id}
-            testID={`topic-row-${topic.id}`}
-            onPress={() => router.push({ pathname: "/team-chat", params: { teamId, teamName, topicId: topic.id, topicName: topic.name } })}
-            onLongPress={() => { if (isOwnerOrAdmin) setDeleteTarget(topic); }}
-            style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, backgroundColor: "white", borderBottomWidth: 0.5, borderBottomColor: "#F1F5F9" }}
-          >
-            <View style={{ width: 50, height: 50, borderRadius: 14, backgroundColor: topic.color, alignItems: "center", justifyContent: "center", marginRight: 14 }}>
-              <Text style={{ color: "white", fontSize: 22, fontWeight: "700" }}>#</Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 16, fontWeight: "700", color: "#0F172A" }}>{topic.name}</Text>
-              {topic.lastMessage ? (
-                <Text style={{ fontSize: 13, color: "#64748B", marginTop: 2 }} numberOfLines={1}>
-                  {topic.lastMessage.sender.name}: {topic.lastMessage.content ?? (topic.lastMessage.mediaType ? "Sent a photo" : "")}
-                </Text>
-              ) : (
-                <Text style={{ fontSize: 13, color: "#94A3B8", marginTop: 2 }}>No messages yet</Text>
-              )}
-            </View>
-            <View style={{ alignItems: "flex-end", gap: 4 }}>
-              {topic.lastMessage ? (
-                <Text style={{ fontSize: 12, color: "#94A3B8" }}>{formatTime(topic.lastMessage.createdAt)}</Text>
-              ) : null}
-              {(channelUnreadCounts[`topic:${topic.id}`] ?? 0) > 0 ? (
-                <View style={{ backgroundColor: "#4361EE", borderRadius: 10, minWidth: 20, height: 20, alignItems: "center", justifyContent: "center", paddingHorizontal: 6 }}>
-                  <Text style={{ color: "white", fontSize: 11, fontWeight: "700" }}>{channelUnreadCounts[`topic:${topic.id}`]}</Text>
-                </View>
-              ) : null}
-            </View>
-          </TouchableOpacity>
-        ))}
+        {/* Pinned topics */}
+        {pinnedTopics.length > 0 ? (
+          <View>
+            <Text style={{ marginHorizontal: 16, marginBottom: 4, marginTop: 4, fontSize: 11, color: "#94A3B8", fontWeight: "600", textTransform: "uppercase", letterSpacing: 1 }}>
+              Pinned
+            </Text>
+            {pinnedTopics.map((topic) => renderTopicRow(topic, true))}
+          </View>
+        ) : null}
+
+        {/* Unpinned topics */}
+        {unpinnedTopics.map((topic) => renderTopicRow(topic, false))}
 
         {/* New topic button */}
         {isOwnerOrAdmin ? (
@@ -273,6 +347,47 @@ export default function TeamChannelsScreen() {
             </View>
           </TouchableOpacity>
         </TouchableOpacity>
+      </Modal>
+
+      {/* Owner action sheet (pin or delete) */}
+      <Modal visible={!!actionTarget} transparent animationType="slide" onRequestClose={() => setActionTarget(null)}>
+        <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }} onPress={() => setActionTarget(null)}>
+          <Pressable onPress={(e) => e.stopPropagation()}>
+            <View style={{ backgroundColor: "white", borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 36 }}>
+              <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: "#E2E8F0", alignSelf: "center", marginBottom: 16 }} />
+              <Text style={{ fontSize: 15, fontWeight: "700", color: "#0F172A", marginBottom: 16 }}>
+                #{actionTarget?.name}
+              </Text>
+              {/* Pin / Unpin */}
+              <Pressable
+                onPress={() => {
+                  if (actionTarget) togglePinTopic(actionTarget.id);
+                  setActionTarget(null);
+                }}
+                style={{ flexDirection: "row", alignItems: "center", gap: 14, paddingVertical: 14, borderTopWidth: 0.5, borderTopColor: "#F1F5F9" }}
+                testID="action-sheet-pin-button"
+              >
+                <Pin size={20} color="#4361EE" />
+                <Text style={{ fontSize: 15, fontWeight: "600", color: "#0F172A" }}>
+                  {actionTarget && pinnedTopicIds.includes(actionTarget.id) ? "Unpin channel" : "Pin channel"}
+                </Text>
+              </Pressable>
+              {/* Delete */}
+              <Pressable
+                onPress={() => {
+                  const target = actionTarget;
+                  setActionTarget(null);
+                  if (target) setDeleteTarget(target);
+                }}
+                style={{ flexDirection: "row", alignItems: "center", gap: 14, paddingVertical: 14, borderTopWidth: 0.5, borderTopColor: "#F1F5F9" }}
+                testID="action-sheet-delete-button"
+              >
+                <Text style={{ fontSize: 20, color: "#EF4444" }}>🗑</Text>
+                <Text style={{ fontSize: 15, fontWeight: "600", color: "#EF4444" }}>Delete channel</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
       </Modal>
 
       {/* Delete Topic confirm modal */}

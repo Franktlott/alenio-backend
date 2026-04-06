@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -12,14 +12,19 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { LinearGradient } from "expo-linear-gradient";
-import { MessageCircle, Users, ChevronRight, Lock, Plus } from "lucide-react-native";
+import { MessageCircle, Users, ChevronRight, Lock, Plus, Pin } from "lucide-react-native";
 import { router } from "expo-router";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Haptics from "expo-haptics";
+import { toast } from "burnt";
 import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
 import { useTeamStore } from "@/lib/state/team-store";
 import { useUnreadStore } from "@/lib/state/unread-store";
 import type { Conversation } from "@/lib/types";
 import { NoTeamPlaceholder } from "@/components/NoTeamPlaceholder";
+
+const PINNED_DMS_KEY = "pinned_dms";
 
 function formatTime(dateStr: string) {
   const d = new Date(dateStr);
@@ -40,6 +45,39 @@ export default function ChatScreen() {
   const [showGroupPaywall, setShowGroupPaywall] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [pinnedDmIds, setPinnedDmIds] = useState<string[]>([]);
+
+  // Load pinned DMs from AsyncStorage on mount
+  useEffect(() => {
+    AsyncStorage.getItem(PINNED_DMS_KEY).then((val) => {
+      if (val) {
+        try {
+          const parsed = JSON.parse(val);
+          if (Array.isArray(parsed)) setPinnedDmIds(parsed);
+        } catch (_) {}
+      }
+    });
+  }, []);
+
+  // Persist pinned DMs whenever they change
+  useEffect(() => {
+    AsyncStorage.setItem(PINNED_DMS_KEY, JSON.stringify(pinnedDmIds));
+  }, [pinnedDmIds]);
+
+  const handleLongPressDm = async (convId: string) => {
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (pinnedDmIds.includes(convId)) {
+      setPinnedDmIds((prev) => prev.filter((id) => id !== convId));
+      toast({ title: "Unpinned", preset: "done" });
+    } else {
+      if (pinnedDmIds.length >= 5) {
+        toast({ title: "Maximum 5 pins reached", preset: "error" });
+        return;
+      }
+      setPinnedDmIds((prev) => [convId, ...prev]);
+      toast({ title: "Pinned", preset: "done" });
+    }
+  };
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -107,6 +145,22 @@ export default function ChatScreen() {
   });
   const teamUnreadCount = Object.values(teamUnreadCounts).reduce((a, b) => a + b, 0);
 
+  // Sort and split conversations into pinned/unpinned
+  const sortedUnpinned = [...conversations]
+    .filter((c) => !pinnedDmIds.includes(c.id))
+    .sort((a, b) => {
+      const aTime = a.lastMessage?.createdAt ?? a.updatedAt;
+      const bTime = b.lastMessage?.createdAt ?? b.updatedAt;
+      return new Date(bTime).getTime() - new Date(aTime).getTime();
+    });
+
+  // Pinned DMs ordered by pin order (front of pinnedDmIds = most recently pinned = shown first)
+  const pinnedConversations = pinnedDmIds
+    .map((id) => conversations.find((c) => c.id === id))
+    .filter((c): c is Conversation => !!c);
+
+  const sortedDms = [...pinnedConversations, ...sortedUnpinned];
+
   if (!activeTeamId) {
     return (
       <SafeAreaView className="flex-1 bg-slate-50" edges={["top"]}>
@@ -114,6 +168,82 @@ export default function ChatScreen() {
       </SafeAreaView>
     );
   }
+
+  const renderDmRow = (conv: Conversation, isPinned: boolean) => (
+    <TouchableOpacity
+      key={conv.id}
+      testID={`dm-conversation-${conv.id}`}
+      onPress={() =>
+        router.push({
+          pathname: "/dm-chat",
+          params: {
+            conversationId: conv.id,
+            recipientName: conv.isGroup
+              ? (conv.name ?? "Group")
+              : (conv.recipient?.name ?? "Direct Message"),
+            recipientImage: conv.isGroup ? "" : (conv.recipient?.image ?? ""),
+            isGroup: conv.isGroup ? "true" : "false",
+          },
+        })
+      }
+      onLongPress={() => handleLongPressDm(conv.id)}
+      className="mx-4 mb-2 bg-white dark:bg-slate-800 rounded-2xl p-4 flex-row items-center"
+      style={{
+        shadowColor: "#000",
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+        shadowOffset: { width: 0, height: 1 },
+        elevation: 1,
+      }}
+    >
+      <View className="w-12 h-12 rounded-full bg-indigo-500 items-center justify-center mr-3 overflow-hidden">
+        {conv.isGroup ? (
+          <Users size={22} color="white" />
+        ) : conv.recipient?.image ? (
+          <Image source={{ uri: conv.recipient.image }} style={{ width: 48, height: 48 }} resizeMode="cover" />
+        ) : (
+          <Text className="text-white font-bold text-lg">
+            {conv.recipient?.name?.[0]?.toUpperCase() ?? "?"}
+          </Text>
+        )}
+      </View>
+      <View className="flex-1">
+        <Text className="font-semibold text-slate-900 dark:text-white">
+          {conv.isGroup ? (conv.name ?? "Group") : (conv.recipient?.name ?? "Unknown")}
+        </Text>
+        {conv.lastMessage ? (
+          <Text
+            className="text-sm text-slate-500 dark:text-slate-400"
+            numberOfLines={1}
+          >
+            {conv.lastMessage.sender.id === session?.user?.id ? "You: " : null}
+            {conv.lastMessage.content}
+          </Text>
+        ) : (
+          <Text className="text-sm text-slate-400 italic">No messages yet</Text>
+        )}
+      </View>
+      <View className="items-end" style={{ gap: 4 }}>
+        {conv.lastMessage ? (
+          <Text className="text-xs text-slate-400">
+            {formatTime(conv.lastMessage.createdAt)}
+          </Text>
+        ) : null}
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+          {isPinned ? (
+            <Pin size={12} color="#4361EE" />
+          ) : null}
+          {(dmUnreadCounts[conv.id] ?? 0) > 0 ? (
+            <View style={{ backgroundColor: "#4361EE", borderRadius: 10, minWidth: 20, height: 20, alignItems: "center", justifyContent: "center", paddingHorizontal: 6 }}>
+              <Text style={{ color: "white", fontSize: 11, fontWeight: "700" }}>{dmUnreadCounts[conv.id]}</Text>
+            </View>
+          ) : (
+            !isPinned ? <ChevronRight size={16} color="#94A3B8" /> : null
+          )}
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
 
   return (
     <SafeAreaView
@@ -225,75 +355,19 @@ export default function ChatScreen() {
         renderItem={null}
         ListFooterComponent={
           <View>
-            {conversations.map((conv) => (
-              <TouchableOpacity
-                key={conv.id}
-                testID={`dm-conversation-${conv.id}`}
-                onPress={() =>
-                  router.push({
-                    pathname: "/dm-chat",
-                    params: {
-                      conversationId: conv.id,
-                      recipientName: conv.isGroup
-                        ? (conv.name ?? "Group")
-                        : (conv.recipient?.name ?? "Direct Message"),
-                      recipientImage: conv.isGroup ? "" : (conv.recipient?.image ?? ""),
-                      isGroup: conv.isGroup ? "true" : "false",
-                    },
-                  })
-                }
-                className="mx-4 mb-2 bg-white dark:bg-slate-800 rounded-2xl p-4 flex-row items-center"
-                style={{
-                  shadowColor: "#000",
-                  shadowOpacity: 0.05,
-                  shadowRadius: 4,
-                  shadowOffset: { width: 0, height: 1 },
-                  elevation: 1,
-                }}
-              >
-                <View className="w-12 h-12 rounded-full bg-indigo-500 items-center justify-center mr-3 overflow-hidden">
-                  {conv.isGroup ? (
-                    <Users size={22} color="white" />
-                  ) : conv.recipient?.image ? (
-                    <Image source={{ uri: conv.recipient.image }} style={{ width: 48, height: 48 }} resizeMode="cover" />
-                  ) : (
-                    <Text className="text-white font-bold text-lg">
-                      {conv.recipient?.name?.[0]?.toUpperCase() ?? "?"}
-                    </Text>
-                  )}
-                </View>
-                <View className="flex-1">
-                  <Text className="font-semibold text-slate-900 dark:text-white">
-                    {conv.isGroup ? (conv.name ?? "Group") : (conv.recipient?.name ?? "Unknown")}
-                  </Text>
-                  {conv.lastMessage ? (
-                    <Text
-                      className="text-sm text-slate-500 dark:text-slate-400"
-                      numberOfLines={1}
-                    >
-                      {conv.lastMessage.sender.id === session?.user?.id ? "You: " : null}
-                      {conv.lastMessage.content}
-                    </Text>
-                  ) : (
-                    <Text className="text-sm text-slate-400 italic">No messages yet</Text>
-                  )}
-                </View>
-                <View className="items-end" style={{ gap: 4 }}>
-                  {conv.lastMessage ? (
-                    <Text className="text-xs text-slate-400">
-                      {formatTime(conv.lastMessage.createdAt)}
-                    </Text>
-                  ) : null}
-                  {(dmUnreadCounts[conv.id] ?? 0) > 0 ? (
-                    <View style={{ backgroundColor: "#4361EE", borderRadius: 10, minWidth: 20, height: 20, alignItems: "center", justifyContent: "center", paddingHorizontal: 6 }}>
-                      <Text style={{ color: "white", fontSize: 11, fontWeight: "700" }}>{dmUnreadCounts[conv.id]}</Text>
-                    </View>
-                  ) : (
-                    <ChevronRight size={16} color="#94A3B8" />
-                  )}
-                </View>
-              </TouchableOpacity>
-            ))}
+            {/* Pinned DMs */}
+            {pinnedConversations.length > 0 ? (
+              <View>
+                <Text style={{ marginHorizontal: 16, marginBottom: 4, marginTop: 12, fontSize: 11, color: "#94A3B8", fontWeight: "600", textTransform: "uppercase", letterSpacing: 1 }}>
+                  Pinned
+                </Text>
+                {pinnedConversations.map((conv) => renderDmRow(conv, true))}
+              </View>
+            ) : null}
+
+            {/* Unpinned DMs */}
+            {sortedUnpinned.map((conv) => renderDmRow(conv, false))}
+
             <View style={{ height: 24 }} />
           </View>
         }
