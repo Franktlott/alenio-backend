@@ -11,6 +11,7 @@ import {
   ScrollView,
 } from "react-native";
 import { authClient } from "@/lib/auth/auth-client";
+import { useInvalidateSession } from "@/lib/auth/use-session";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { StatusBar } from "expo-status-bar";
@@ -24,6 +25,7 @@ export default function SignIn() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const invalidateSession = useInvalidateSession();
 
   const handleSubmit = async () => {
     setError(null);
@@ -61,6 +63,8 @@ export default function SignIn() {
 
       if (result.error) {
         setError(result.error.message ?? "Sign up failed. Please try again.");
+      } else {
+        await invalidateSession();
       }
       // On success, Stack.Protected in _layout.tsx handles redirect automatically
     } else {
@@ -73,6 +77,8 @@ export default function SignIn() {
 
       if (result.error) {
         setError(result.error.message ?? "Sign in failed. Please check your credentials.");
+      } else {
+        await invalidateSession();
       }
       // On success, Stack.Protected in _layout.tsx handles redirect automatically
     }
