@@ -83,7 +83,7 @@ calendarRouter.post(
       teamId,
       userId: user.id,
       type: "calendar_event_added",
-      metadata: { eventTitle: event.title },
+      metadata: { eventTitles: [event.title], eventCount: 1 },
     });
 
     return c.json({ data: event }, 201);

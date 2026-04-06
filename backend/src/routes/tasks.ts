@@ -202,7 +202,7 @@ tasksRouter.post("/", async (c) => {
       teamId,
       userId: assigneeId,
       type: "task_assigned",
-      metadata: { taskTitle: incognito ? null : title.trim(), assigneeName: assignedUser?.name ?? "" },
+      metadata: { taskTitles: incognito ? [] : [title.trim()], taskCount: 1, assigneeName: assignedUser?.name ?? "" },
     });
   }
 
@@ -533,7 +533,7 @@ tasksRouter.post("/:taskId/assign", async (c) => {
       teamId,
       userId: assignedUserId,
       type: "task_assigned",
-      metadata: { taskTitle: task.title, assigneeName: assignedUser?.name ?? "" },
+      metadata: { taskTitles: [task.title], taskCount: 1, assigneeName: assignedUser?.name ?? "" },
     });
   }
 

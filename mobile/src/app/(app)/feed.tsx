@@ -20,7 +20,7 @@ type ActivityEvent = {
   id: string;
   type: "task_completed" | "member_joined" | "member_removed" | "calendar_event_added" | "task_assigned" | "task_milestone" | "personal_best";
   createdAt: string;
-  metadata: { taskTitle?: string; userName?: string; eventTitle?: string; count?: number; incognito?: boolean } | null;
+  metadata: { taskTitle?: string; taskTitles?: string[]; taskCount?: number; eventTitle?: string; eventTitles?: string[]; eventCount?: number; userName?: string; count?: number; incognito?: boolean; assigneeName?: string } | null;
   user: { id: string; name: string; image: string | null } | null;
   reactions: Record<string, { count: number; userIds: string[] }>;
 };
@@ -57,16 +57,32 @@ const EVENT_CONFIG = {
     color: "#8B5CF6",
     bg: "#F5F3FF",
     Icon: Calendar,
-    getMessage: (e: ActivityEvent) =>
-      `${e.user?.name ?? "Someone"} added "${e.metadata?.eventTitle ?? "an event"}"`,
+    getMessage: (e: ActivityEvent) => {
+      const count = e.metadata?.eventCount ?? 1;
+      if (count > 1) {
+        return `${e.user?.name ?? "Someone"} added ${count} events to the calendar`;
+      }
+      const title = e.metadata?.eventTitles?.[0] ?? e.metadata?.eventTitle;
+      return title
+        ? `${e.user?.name ?? "Someone"} added "${title}" to the calendar`
+        : `${e.user?.name ?? "Someone"} added an event to the calendar`;
+    },
   },
   task_assigned: {
     label: "Assigned",
     color: "#4361EE",
     bg: "#EEF2FF",
     Icon: UserCheck,
-    getMessage: (e: ActivityEvent) =>
-      `${e.user?.name ?? "Someone"} was assigned "${e.metadata?.taskTitle ?? "a task"}"`,
+    getMessage: (e: ActivityEvent) => {
+      const count = e.metadata?.taskCount ?? 1;
+      if (count > 1) {
+        return `${e.user?.name ?? "Someone"} was assigned ${count} tasks`;
+      }
+      const title = e.metadata?.taskTitles?.[0] ?? e.metadata?.taskTitle;
+      return title
+        ? `${e.user?.name ?? "Someone"} was assigned "${title}"`
+        : `${e.user?.name ?? "Someone"} was assigned a task`;
+    },
   },
   task_milestone: {
     label: "Milestone",
