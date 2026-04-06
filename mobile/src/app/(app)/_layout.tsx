@@ -71,8 +71,10 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
   });
 
   const visibleRoutes = state.routes.filter((r: any) => {
+    if (r.name === "calendar") return false;
     const opts = descriptors[r.key]?.options;
-    return opts?.href !== null && opts?.href !== undefined ? false : r.name !== "calendar";
+    if (opts?.href === null) return false;
+    return true;
   });
 
   return (
