@@ -365,12 +365,12 @@ export default function TeamChatScreen() {
         AsyncStorage.getItem("msg_tone").then(async (toneId) => {
           const id = toneId ?? "chime";
           const URLS: Record<string, string> = {
-            chime:   "https://assets.mixkit.co/active_storage/sfx/2013/2013-preview.mp3",
-            soft:    "https://assets.mixkit.co/active_storage/sfx/2018/2018-preview.mp3",
-            crystal: "https://assets.mixkit.co/active_storage/sfx/2308/2308-preview.mp3",
-            ping:    "https://assets.mixkit.co/active_storage/sfx/2570/2570-preview.mp3",
-            bell:    "https://assets.mixkit.co/active_storage/sfx/1031/1031-preview.mp3",
-            bubble:  "https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3",
+            chime:  "https://assets.mixkit.co/active_storage/sfx/2013/2013-preview.mp3",
+            soft:   "https://assets.mixkit.co/active_storage/sfx/2018/2018-preview.mp3",
+            ding:   "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3",
+            pop:    "https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3",
+            ping:   "https://assets.mixkit.co/active_storage/sfx/2570/2570-preview.mp3",
+            bubble: "https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3",
           };
           const url = URLS[id];
           if (url) {
