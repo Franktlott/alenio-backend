@@ -354,7 +354,7 @@ export default function ProfileScreen() {
                 return (
                   <Pressable
                     key={team.id}
-                    onPress={() => { setActiveTeamId(team.id); router.back(); }}
+                    onPress={() => { setActiveTeamId(team.id); router.replace("/(app)/team"); }}
                     className="flex-row items-center px-4 py-3.5"
                     style={index < teams.length - 1 ? { borderBottomWidth: 1, borderBottomColor: "#F1F5F9" } : undefined}
                     testID={`team-row-${team.id}`}
