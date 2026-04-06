@@ -1,4 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
+import { Audio } from "expo-av";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   View,
   Text,
@@ -101,6 +103,7 @@ export default function DMChatScreen() {
   const flatListRef = useRef<FlatList>(null);
   const currentUserId = session?.user?.id ?? "";
   const markAsRead = useUnreadStore((s) => s.markAsRead);
+  const prevMsgCountRef = useRef<number>(0);
 
   const { data: messages = [], isLoading } = useQuery({
     queryKey: ["dm-messages", conversationId],
@@ -228,6 +231,34 @@ export default function DMChatScreen() {
       markAsRead(conversationId, lastMsg.id);
     }
   }, [messages, conversationId, markAsRead]);
+
+  useEffect(() => {
+    if (!messages) return;
+    const count = messages.length;
+    if (count > prevMsgCountRef.current && prevMsgCountRef.current > 0) {
+      const newest = messages[messages.length - 1];
+      if (newest && newest.senderId !== currentUserId) {
+        AsyncStorage.getItem("dm_tone").then(async (toneId) => {
+          const id = toneId ?? "default";
+          const URLS: Record<string, string> = {
+            default: "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3",
+            chime:   "https://assets.mixkit.co/active_storage/sfx/2013/2013-preview.mp3",
+            ping:    "https://assets.mixkit.co/active_storage/sfx/2570/2570-preview.mp3",
+            bell:    "https://assets.mixkit.co/active_storage/sfx/1031/1031-preview.mp3",
+            bubble:  "https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3",
+          };
+          const url = URLS[id];
+          if (url) {
+            try {
+              const { sound } = await Audio.Sound.createAsync({ uri: url }, { shouldPlay: true, volume: 1 });
+              sound.setOnPlaybackStatusUpdate((s) => { if (s.isLoaded && s.didJustFinish) sound.unloadAsync(); });
+            } catch {}
+          }
+        });
+      }
+    }
+    prevMsgCountRef.current = count;
+  }, [messages, currentUserId]);
 
   const items = buildMessageList(messages);
 

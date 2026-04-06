@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { Audio } from "expo-av";
 import {
   View,
   Text,
@@ -22,7 +23,7 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { ArrowLeft, Camera, LogOut, Pencil, X, Plus, Trash2, Bell, Check, LogOut as LeaveIcon, Crown, Copy } from "lucide-react-native";
+import { ArrowLeft, Camera, LogOut, Pencil, X, Plus, Trash2, Bell, Check, LogOut as LeaveIcon, Crown, Copy, Volume2, ChevronRight } from "lucide-react-native";
 import { authClient } from "@/lib/auth/auth-client";
 import { useInvalidateSession, useSession } from "@/lib/auth/use-session";
 import { router } from "expo-router";
@@ -34,6 +35,29 @@ import * as ImagePicker from "expo-image-picker";
 import { useTeamStore } from "@/lib/state/team-store";
 import { toast } from "burnt";
 import type { Team } from "@/lib/types";
+
+const TONES = [
+  { id: "none",    label: "None",    url: null },
+  { id: "default", label: "Default", url: "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" },
+  { id: "chime",   label: "Chime",   url: "https://assets.mixkit.co/active_storage/sfx/2013/2013-preview.mp3" },
+  { id: "ping",    label: "Ping",    url: "https://assets.mixkit.co/active_storage/sfx/2570/2570-preview.mp3" },
+  { id: "bell",    label: "Bell",    url: "https://assets.mixkit.co/active_storage/sfx/1031/1031-preview.mp3" },
+  { id: "bubble",  label: "Bubble",  url: "https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3" },
+];
+
+export { TONES };
+export const MSG_TONE_KEY = "msg_tone";
+export const DM_TONE_KEY  = "dm_tone";
+
+async function playTonePreview(url: string | null) {
+  if (!url) return;
+  try {
+    const { sound } = await Audio.Sound.createAsync({ uri: url }, { shouldPlay: true, volume: 1 });
+    sound.setOnPlaybackStatusUpdate((status) => {
+      if (status.isLoaded && status.didJustFinish) sound.unloadAsync();
+    });
+  } catch {}
+}
 
 type JoinRequestItem = {
   id: string;
@@ -90,6 +114,16 @@ export default function ProfileScreen() {
   // Profile state
   const [localImage, setLocalImage] = useState<string | null>(null);
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
+
+  // Tone state
+  const [msgToneId, setMsgToneId] = useState<string>("default");
+  const [dmToneId,  setDmToneId]  = useState<string>("default");
+  const [showTonePicker, setShowTonePicker] = useState<"msg" | "dm" | null>(null);
+
+  useEffect(() => {
+    AsyncStorage.getItem(MSG_TONE_KEY).then(v => { if (v) setMsgToneId(v); });
+    AsyncStorage.getItem(DM_TONE_KEY).then(v  => { if (v) setDmToneId(v);  });
+  }, []);
 
   // Team edit state
   const [editingTeam, setEditingTeam] = useState<Team | null>(null);
@@ -497,6 +531,34 @@ export default function ProfileScreen() {
                 />
               </View>
             ))}
+            {/* Tone rows */}
+            <View style={{ borderTopWidth: 1, borderTopColor: "rgba(241,245,249,0.8)" }}>
+              <Pressable
+                onPress={() => setShowTonePicker("msg")}
+                className="flex-row items-center px-4 py-3.5"
+                style={{ borderBottomWidth: 1, borderBottomColor: "rgba(241,245,249,0.8)" }}
+                testID="msg-tone-row"
+              >
+                <Volume2 size={18} color="#4361EE" style={{ marginRight: 10 }} />
+                <Text className="flex-1 text-sm font-semibold text-slate-900 dark:text-white">Message Tone</Text>
+                <Text className="text-sm text-slate-400 mr-1">
+                  {TONES.find(t => t.id === msgToneId)?.label ?? "Default"}
+                </Text>
+                <ChevronRight size={16} color="#94A3B8" />
+              </Pressable>
+              <Pressable
+                onPress={() => setShowTonePicker("dm")}
+                className="flex-row items-center px-4 py-3.5"
+                testID="dm-tone-row"
+              >
+                <Volume2 size={18} color="#4361EE" style={{ marginRight: 10 }} />
+                <Text className="flex-1 text-sm font-semibold text-slate-900 dark:text-white">DM Tone</Text>
+                <Text className="text-sm text-slate-400 mr-1">
+                  {TONES.find(t => t.id === dmToneId)?.label ?? "Default"}
+                </Text>
+                <ChevronRight size={16} color="#94A3B8" />
+              </Pressable>
+            </View>
           </GlassCard>
         </View>
 
@@ -565,6 +627,78 @@ export default function ProfileScreen() {
           </View>
         )}
       </ScrollView>
+
+      {/* Tone picker modal */}
+      <Modal visible={!!showTonePicker} transparent animationType="slide" onRequestClose={() => setShowTonePicker(null)}>
+        <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "flex-end" }} onPress={() => setShowTonePicker(null)}>
+          <Pressable onPress={(e) => e.stopPropagation()}>
+            <BlurView
+              intensity={70}
+              tint="light"
+              style={{
+                borderTopLeftRadius: 24,
+                borderTopRightRadius: 24,
+                overflow: "hidden",
+                borderWidth: 1,
+                borderBottomWidth: 0,
+                borderColor: "rgba(255,255,255,0.6)",
+              }}
+            >
+              <View
+                style={{
+                  backgroundColor: "rgba(255,255,255,0.85)",
+                  paddingHorizontal: 24,
+                  paddingTop: 24,
+                  paddingBottom: insets.bottom + 24,
+                }}
+              >
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+                  <Text style={{ fontSize: 17, fontWeight: "700", color: "#0F172A" }}>
+                    {showTonePicker === "msg" ? "Message Tone" : "DM Tone"}
+                  </Text>
+                  <Pressable onPress={() => setShowTonePicker(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <X size={20} color="#94A3B8" />
+                  </Pressable>
+                </View>
+                <Text style={{ fontSize: 13, color: "#94A3B8", marginBottom: 16 }}>Tap to preview</Text>
+                {TONES.map((tone) => {
+                  const selected = showTonePicker === "msg" ? tone.id === msgToneId : tone.id === dmToneId;
+                  return (
+                    <Pressable
+                      key={tone.id}
+                      testID={`tone-option-${tone.id}`}
+                      onPress={async () => {
+                        await playTonePreview(tone.url);
+                        if (showTonePicker === "msg") {
+                          setMsgToneId(tone.id);
+                          AsyncStorage.setItem(MSG_TONE_KEY, tone.id);
+                        } else {
+                          setDmToneId(tone.id);
+                          AsyncStorage.setItem(DM_TONE_KEY, tone.id);
+                        }
+                      }}
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        paddingVertical: 14,
+                        borderBottomWidth: 1,
+                        borderBottomColor: "rgba(241,245,249,0.9)",
+                      }}
+                    >
+                      <Text style={{ fontSize: 20, marginRight: 6, color: selected ? "#4361EE" : "#CBD5E1" }}>
+                        {selected ? "●" : "○"}
+                      </Text>
+                      <Text style={{ fontSize: 15, fontWeight: selected ? "600" : "400", color: selected ? "#4361EE" : "#1E293B", flex: 1 }}>
+                        {tone.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </BlurView>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {/* Team edit / delete modal */}
       <Modal visible={!!editingTeam} transparent animationType="slide" onRequestClose={closeEditModal}>
