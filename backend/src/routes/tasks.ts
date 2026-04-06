@@ -303,6 +303,14 @@ tasksRouter.patch("/:taskId", async (c) => {
   if (task.status === "done" && (title !== undefined || description !== undefined || priority !== undefined || dueDate !== undefined || attachmentUrl !== undefined)) {
     return c.json({ error: { message: "Task is completed. Recall it before making edits.", code: "TASK_COMPLETED" } }, 400);
   }
+  // Tasks cannot be recalled more than 2 hours after completion
+  if (task.status === "done" && status !== undefined && status !== "done") {
+    const completedAt = task.completedAt ? new Date(task.completedAt).getTime() : 0;
+    const twoHoursMs = 2 * 60 * 60 * 1000;
+    if (Date.now() - completedAt > twoHoursMs) {
+      return c.json({ error: { message: "Tasks cannot be reopened more than 2 hours after completion.", code: "RECALL_WINDOW_EXPIRED" } }, 400);
+    }
+  }
 
   if (status === "done") {
     const incompleteSubtasks = await prisma.subtask.count({
