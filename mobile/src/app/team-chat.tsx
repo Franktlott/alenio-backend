@@ -416,16 +416,18 @@ export default function TeamChatScreen() {
               <BarChart2 size={18} color="white" />
             </TouchableOpacity>
           ) : null}
-          <TouchableOpacity
-            testID="start-video-call-button"
-            onPress={() => router.push({
-              pathname: "/video-call",
-              params: { roomId: teamId, roomName: `${teamName ?? "Team"} Call` },
-            })}
-            className="w-9 h-9 rounded-full bg-white/20 items-center justify-center mr-2"
-          >
-            <Video size={18} color="white" />
-          </TouchableOpacity>
+          {!isDemo ? (
+            <TouchableOpacity
+              testID="start-video-call-button"
+              onPress={() => router.push({
+                pathname: "/video-call",
+                params: { roomId: teamId, roomName: `${teamName ?? "Team"} Call` },
+              })}
+              className="w-9 h-9 rounded-full bg-white/20 items-center justify-center mr-2"
+            >
+              <Video size={18} color="white" />
+            </TouchableOpacity>
+          ) : null}
           <Image source={require("@/assets/alenio-icon.png")} style={{ width: 30, height: 30, borderRadius: 6 }} />
         </View>
       </LinearGradient>

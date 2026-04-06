@@ -24,6 +24,7 @@ import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
 import { useUnreadStore } from "@/lib/state/unread-store";
 import type { Message, Team } from "@/lib/types";
+import { useDemoMode } from "@/lib/useDemo";
 
 const PINNED_TOPICS_KEY = "pinned_topics";
 
@@ -58,6 +59,7 @@ export default function TeamChannelsScreen() {
   const { teamId, teamName } = useLocalSearchParams<{ teamId: string; teamName: string }>();
   const { data: session } = useSession();
   const queryClient = useQueryClient();
+  const isDemo = useDemoMode();
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newTopicName, setNewTopicName] = useState("");
@@ -85,10 +87,10 @@ export default function TeamChannelsScreen() {
 
   const handleLongPressTopic = async (topic: Topic) => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    if (isOwnerOrAdmin) {
+    if (isOwnerOrAdmin && !isDemo) {
       // Owners/admins see an action sheet with pin and delete options
       setActionTarget(topic);
-    } else {
+    } else if (!isDemo) {
       // Non-owners just toggle pin
       togglePinTopic(topic.id);
     }
@@ -298,7 +300,7 @@ export default function TeamChannelsScreen() {
         {unpinnedTopics.map((topic) => renderTopicRow(topic, false))}
 
         {/* New topic button */}
-        {isOwnerOrAdmin ? (
+        {isOwnerOrAdmin && !isDemo ? (
           <TouchableOpacity
             testID="new-topic-button"
             onPress={() => setShowCreateModal(true)}

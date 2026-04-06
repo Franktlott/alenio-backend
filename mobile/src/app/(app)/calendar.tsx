@@ -18,6 +18,7 @@ import { api } from "@/lib/api/api";
 import { useTeamStore } from "@/lib/state/team-store";
 import { useSession } from "@/lib/auth/use-session";
 import type { Task, Team } from "@/lib/types";
+import { useDemoMode } from "@/lib/useDemo";
 
 type CalendarEvent = {
   id: string;
@@ -155,6 +156,7 @@ export default function CalendarScreen() {
     enabled: !!session?.user,
   });
 
+  const isDemo = useDemoMode();
   const activeTeam = teams?.find((t) => t.id === activeTeamId);
   const isOwner = (activeTeam as (Team & { role?: string }) | undefined)?.role === "owner";
 
@@ -222,7 +224,7 @@ export default function CalendarScreen() {
               {MONTHS[currentMonth.getMonth()]} {currentMonth.getFullYear()}
             </Text>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-              {isOwner && activeTeamId ? (
+              {isOwner && activeTeamId && !isDemo ? (
                 <Pressable
                   onPress={() => router.push({ pathname: "/create-event", params: { teamId: activeTeamId!, startDate: (selectedDate ?? new Date()).toISOString() } })}
                   style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "rgba(255,255,255,0.22)", paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20 }}
@@ -411,7 +413,7 @@ export default function CalendarScreen() {
               <Text style={{ fontSize: 14, fontWeight: "700", color: "#0F172A" }}>
                 {selectedDate.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
               </Text>
-              {isOwner ? (
+              {isOwner && !isDemo ? (
                 <Pressable
                   onPress={() => router.push({ pathname: "/create-event", params: { teamId: activeTeamId!, startDate: selectedDate.toISOString() } })}
                   style={{ flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "#4361EE", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 }}
