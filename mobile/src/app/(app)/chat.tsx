@@ -23,6 +23,7 @@ import { useTeamStore } from "@/lib/state/team-store";
 import { useUnreadStore } from "@/lib/state/unread-store";
 import type { Conversation } from "@/lib/types";
 import { NoTeamPlaceholder } from "@/components/NoTeamPlaceholder";
+import { useDemoMode } from "@/lib/useDemo";
 
 const PINNED_DMS_KEY = "pinned_dms";
 
@@ -41,6 +42,7 @@ export default function ChatScreen() {
   const { data: session } = useSession();
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
   const queryClient = useQueryClient();
+  const isDemo = useDemoMode();
   const [fabOpen, setFabOpen] = useState(false);
   const [showGroupPaywall, setShowGroupPaywall] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -263,7 +265,7 @@ export default function ChatScreen() {
               <Text style={{ color: "white", fontSize: 18, fontWeight: "700" }}>Messages</Text>
             </View>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-              {activeTeamId ? (
+              {activeTeamId && !isDemo ? (
                 <Pressable
                   onPress={() => setShowAddModal(true)}
                   style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "rgba(255,255,255,0.22)", paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20 }}

@@ -33,6 +33,7 @@ import * as MediaLibrary from "expo-media-library";
 import { useUnreadStore } from "@/lib/state/unread-store";
 import * as Haptics from "expo-haptics";
 import { toast } from "burnt";
+import { useDemoMode, showDemoAlert } from "@/lib/useDemo";
 
 const REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🔥'];
 
@@ -90,6 +91,7 @@ export default function DMChatScreen() {
   const { data: session } = useSession();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
+  const isDemo = useDemoMode();
   const [input, setInput] = useState("");
   const [replyTo, setReplyTo] = useState<DirectMessage | null>(null);
   const [emojiTarget, setEmojiTarget] = useState<DirectMessage | null>(null);
@@ -696,37 +698,43 @@ export default function DMChatScreen() {
 
         {/* Input bar */}
         <View testID="dm-chat-input-bar" className="flex-row items-end px-3 bg-white dark:bg-slate-800 border-t border-slate-100 dark:border-slate-700" style={{ paddingTop: 8, paddingBottom: insets.bottom + 8 }}>
-          <TouchableOpacity
-            onPress={() => setShowMediaPicker(true)}
-            className="w-10 h-10 rounded-full items-center justify-center mr-2"
-            style={{ backgroundColor: "#F1F5F9" }}
-          >
-            <Paperclip size={18} color="#64748B" />
-          </TouchableOpacity>
+          {!isDemo ? (
+            <TouchableOpacity
+              onPress={() => setShowMediaPicker(true)}
+              className="w-10 h-10 rounded-full items-center justify-center mr-2"
+              style={{ backgroundColor: "#F1F5F9" }}
+            >
+              <Paperclip size={18} color="#64748B" />
+            </TouchableOpacity>
+          ) : null}
           <TextInput
             testID="dm-chat-text-input"
             className="flex-1 bg-slate-100 dark:bg-slate-700 rounded-2xl px-4 py-2.5 text-base text-slate-900 dark:text-white mr-2"
-            placeholder={`Message ${recipientName ?? ""}...`}
+            placeholder={isDemo ? "Read-only demo account" : `Message ${recipientName ?? ""}...`}
             placeholderTextColor="#94A3B8"
             value={input}
             onChangeText={setInput}
             multiline
             maxLength={2000}
             style={{ maxHeight: 120 }}
+            editable={!isDemo}
+            onPressIn={isDemo ? showDemoAlert : undefined}
           />
-          <TouchableOpacity
-            testID="dm-chat-send-button"
-            onPress={handleSend}
-            disabled={(!input.trim() && !mediaPreview) || sendMutation.isPending || uploading}
-            className="w-10 h-10 rounded-full items-center justify-center"
-            style={{ backgroundColor: (input.trim() || mediaPreview) ? "#4361EE" : "#E2E8F0" }}
-          >
-            {sendMutation.isPending || uploading ? (
-              <ActivityIndicator size="small" color={(input.trim() || mediaPreview) ? "white" : "#94A3B8"} />
-            ) : (
-              <Send size={18} color={(input.trim() || mediaPreview) ? "white" : "#94A3B8"} />
-            )}
-          </TouchableOpacity>
+          {!isDemo ? (
+            <TouchableOpacity
+              testID="dm-chat-send-button"
+              onPress={handleSend}
+              disabled={(!input.trim() && !mediaPreview) || sendMutation.isPending || uploading}
+              className="w-10 h-10 rounded-full items-center justify-center"
+              style={{ backgroundColor: (input.trim() || mediaPreview) ? "#4361EE" : "#E2E8F0" }}
+            >
+              {sendMutation.isPending || uploading ? (
+                <ActivityIndicator size="small" color={(input.trim() || mediaPreview) ? "white" : "#94A3B8"} />
+              ) : (
+                <Send size={18} color={(input.trim() || mediaPreview) ? "white" : "#94A3B8"} />
+              )}
+            </TouchableOpacity>
+          ) : null}
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>

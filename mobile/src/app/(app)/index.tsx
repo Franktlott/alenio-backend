@@ -26,6 +26,7 @@ import { useTeamStore } from "@/lib/state/team-store";
 import { useSubscriptionStore } from "@/lib/state/subscription-store";
 import type { Task, Team, TeamMember, CalendarEvent } from "@/lib/types";
 import { NoTeamPlaceholder } from "@/components/NoTeamPlaceholder";
+import { useDemoMode, showDemoAlert } from "@/lib/useDemo";
 
 type FilterTab = "all" | "assigned" | "completed";
 type SortMode = "due" | "priority";
@@ -476,6 +477,7 @@ export default function TasksScreen() {
   const [showEndPicker, setShowEndPicker] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const { data: session } = useSession();
+  const isDemo = useDemoMode();
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
   const setActiveTeamId = useTeamStore((s) => s.setActiveTeamId);
   const queryClient = useQueryClient();
@@ -568,6 +570,7 @@ export default function TasksScreen() {
   });
 
   const handleToggleTask = (task: Task) => {
+    if (isDemo) { showDemoAlert(); return; }
     // Always confirm before toggling either direction
     setConfirmCompleteTask(task);
   };
@@ -790,7 +793,7 @@ export default function TasksScreen() {
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
             <Text style={{ color: "white", fontSize: 18, fontWeight: "700" }}>Tasks</Text>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-              {activeTeamId ? (
+              {activeTeamId && !isDemo ? (
                 <Pressable
                   onPress={() => setShowAddModal(true)}
                   style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "rgba(255,255,255,0.22)", paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20 }}
@@ -827,7 +830,7 @@ export default function TasksScreen() {
               </View>
             ))}
             {dayEvents.map((ev) => (
-              <EventRow key={ev.id} event={ev} onLongPress={isOwner ? () => openEditEventModal(ev) : undefined} />
+              <EventRow key={ev.id} event={ev} onLongPress={isOwner && !isDemo ? () => openEditEventModal(ev) : undefined} />
             ))}
           </View>
         ) : null}

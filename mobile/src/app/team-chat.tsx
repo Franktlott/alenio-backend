@@ -27,6 +27,7 @@ import { uploadFile } from "@/lib/upload";
 import { pickMedia, takePhoto } from "@/lib/file-picker";
 import { ChatMessage } from "@/components/ChatMessage";
 import type { Message, Team, MessageReaction } from "@/lib/types";
+import { useDemoMode, showDemoAlert } from "@/lib/useDemo";
 
 const REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🔥'];
 
@@ -199,6 +200,7 @@ function PollCard({
 export default function TeamChatScreen() {
   const { teamId, teamName, topicId, topicName } = useLocalSearchParams<{ teamId: string; teamName: string; topicId?: string; topicName?: string }>();
   const { data: session } = useSession();
+  const isDemo = useDemoMode();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const [input, setInput] = useState("");
@@ -405,13 +407,15 @@ export default function TeamChatScreen() {
             <Text style={{ color: "white", fontSize: 18, fontWeight: "700" }}>{teamName ?? "Team Chat"}</Text>
             <Text className="text-white/70 text-xs">{topicName ? `# ${topicName}` : "Main chat"}</Text>
           </View>
-          <TouchableOpacity
-            testID="create-poll-button"
-            onPress={() => setShowPollModal(true)}
-            className="w-9 h-9 rounded-full bg-white/20 items-center justify-center mr-2"
-          >
-            <BarChart2 size={18} color="white" />
-          </TouchableOpacity>
+          {!isDemo ? (
+            <TouchableOpacity
+              testID="create-poll-button"
+              onPress={() => setShowPollModal(true)}
+              className="w-9 h-9 rounded-full bg-white/20 items-center justify-center mr-2"
+            >
+              <BarChart2 size={18} color="white" />
+            </TouchableOpacity>
+          ) : null}
           <TouchableOpacity
             testID="start-video-call-button"
             onPress={() => router.push({
@@ -926,37 +930,43 @@ export default function TeamChatScreen() {
 
         {/* Input bar */}
         <View testID="team-chat-input-bar" className="flex-row items-end px-3 bg-white dark:bg-slate-800 border-t border-slate-100 dark:border-slate-700" style={{ paddingTop: 8, paddingBottom: insets.bottom + 8 }}>
-          <TouchableOpacity
-            onPress={() => setShowMediaPicker(true)}
-            className="w-10 h-10 rounded-full items-center justify-center mr-2"
-            style={{ backgroundColor: "#F1F5F9" }}
-          >
-            <Paperclip size={18} color="#64748B" />
-          </TouchableOpacity>
+          {!isDemo ? (
+            <TouchableOpacity
+              onPress={() => setShowMediaPicker(true)}
+              className="w-10 h-10 rounded-full items-center justify-center mr-2"
+              style={{ backgroundColor: "#F1F5F9" }}
+            >
+              <Paperclip size={18} color="#64748B" />
+            </TouchableOpacity>
+          ) : null}
           <TextInput
             testID="team-chat-text-input"
             className="flex-1 bg-slate-100 dark:bg-slate-700 rounded-2xl px-4 py-2.5 text-base text-slate-900 dark:text-white mr-2"
-            placeholder="Message..."
+            placeholder={isDemo ? "Read-only demo account" : "Message..."}
             placeholderTextColor="#94A3B8"
             value={input}
             onChangeText={setInput}
             multiline
             maxLength={2000}
             style={{ maxHeight: 120 }}
+            editable={!isDemo}
+            onPressIn={isDemo ? showDemoAlert : undefined}
           />
-          <TouchableOpacity
-            testID="team-chat-send-button"
-            onPress={handleSend}
-            disabled={(!input.trim() && !mediaPreview) || sendMutation.isPending || uploading}
-            className="w-10 h-10 rounded-full items-center justify-center"
-            style={{ backgroundColor: (input.trim() || mediaPreview) ? "#4361EE" : "#E2E8F0" }}
-          >
-            {sendMutation.isPending || uploading ? (
-              <ActivityIndicator size="small" color={(input.trim() || mediaPreview) ? "white" : "#94A3B8"} />
-            ) : (
-              <Send size={18} color={(input.trim() || mediaPreview) ? "white" : "#94A3B8"} />
-            )}
-          </TouchableOpacity>
+          {!isDemo ? (
+            <TouchableOpacity
+              testID="team-chat-send-button"
+              onPress={handleSend}
+              disabled={(!input.trim() && !mediaPreview) || sendMutation.isPending || uploading}
+              className="w-10 h-10 rounded-full items-center justify-center"
+              style={{ backgroundColor: (input.trim() || mediaPreview) ? "#4361EE" : "#E2E8F0" }}
+            >
+              {sendMutation.isPending || uploading ? (
+                <ActivityIndicator size="small" color={(input.trim() || mediaPreview) ? "white" : "#94A3B8"} />
+              ) : (
+                <Send size={18} color={(input.trim() || mediaPreview) ? "white" : "#94A3B8"} />
+              )}
+            </TouchableOpacity>
+          ) : null}
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>

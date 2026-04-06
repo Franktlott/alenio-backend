@@ -12,6 +12,7 @@ import { useSession } from "@/lib/auth/use-session";
 import { NoTeamPlaceholder } from "@/components/NoTeamPlaceholder";
 import { router } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useDemoMode } from "@/lib/useDemo";
 
 const REACTION_HINT_KEY = "reaction_hint_shown";
 
@@ -229,7 +230,7 @@ function ReactionRow({
   );
 }
 
-function CelebrationCard({ item, activeTeamId, currentUserId }: { item: ActivityEvent; activeTeamId: string | null; currentUserId: string | undefined }) {
+function CelebrationCard({ item, activeTeamId, currentUserId, isDemo }: { item: ActivityEvent; activeTeamId: string | null; currentUserId: string | undefined; isDemo: boolean }) {
   const count = item.metadata?.count ?? 10;
   const name = item.user?.name ?? "Someone";
   const [showPicker, setShowPicker] = useState<boolean>(false);
@@ -247,7 +248,7 @@ function CelebrationCard({ item, activeTeamId, currentUserId }: { item: Activity
   return (
     <Pressable
       onPress={() => router.push("/(app)" as any)}
-      onLongPress={() => setShowPicker(true)}
+      onLongPress={isDemo ? undefined : () => setShowPicker(true)}
       style={{ marginHorizontal: 16, marginVertical: 8 }}
       testID={`milestone-card-${item.id}`}
     >
@@ -307,7 +308,7 @@ function CelebrationCard({ item, activeTeamId, currentUserId }: { item: Activity
   );
 }
 
-function ActivityItem({ item, activeTeamId, currentUserId }: { item: ActivityEvent; activeTeamId: string | null; currentUserId: string | undefined }) {
+function ActivityItem({ item, activeTeamId, currentUserId, isDemo }: { item: ActivityEvent; activeTeamId: string | null; currentUserId: string | undefined; isDemo: boolean }) {
   const [showPicker, setShowPicker] = useState<boolean>(false);
   const queryClient = useQueryClient();
 
@@ -321,7 +322,7 @@ function ActivityItem({ item, activeTeamId, currentUserId }: { item: ActivityEve
   });
 
   if (item.type === "task_milestone") {
-    return <CelebrationCard item={item} activeTeamId={activeTeamId} currentUserId={currentUserId} />;
+    return <CelebrationCard item={item} activeTeamId={activeTeamId} currentUserId={currentUserId} isDemo={isDemo} />;
   }
 
   const config = EVENT_CONFIG[item.type] ?? {
@@ -335,7 +336,7 @@ function ActivityItem({ item, activeTeamId, currentUserId }: { item: ActivityEve
 
   return (
     <Pressable
-      onLongPress={() => setShowPicker(true)}
+      onLongPress={isDemo ? undefined : () => setShowPicker(true)}
       style={{ paddingHorizontal: 20, paddingVertical: 14 }}
       testID={`activity-item-${item.id}`}
     >
@@ -411,6 +412,7 @@ export default function FeedScreen() {
   const insets = useSafeAreaInsets();
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
   const { data: session } = useSession();
+  const isDemo = useDemoMode();
   const currentUserId = session?.user?.id;
   const [showReactionHint, setShowReactionHint] = useState<boolean>(false);
   const hintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -482,7 +484,7 @@ export default function FeedScreen() {
           keyExtractor={(item) => item.id}
           renderItem={({ item, index }) => (
             <>
-              <ActivityItem item={item} activeTeamId={activeTeamId} currentUserId={currentUserId} />
+              <ActivityItem item={item} activeTeamId={activeTeamId} currentUserId={currentUserId} isDemo={isDemo} />
               {index === 0 && showReactionHint ? (
                 <Text style={{ fontSize: 10, color: "rgba(100,116,139,0.7)", textAlign: "center", marginTop: 2 }}>
                   Long press to react

@@ -20,6 +20,7 @@ import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
 import { toast } from "burnt";
 import type { Task, TaskStatus, Team, Subtask } from "@/lib/types";
+import { useDemoMode } from "@/lib/useDemo";
 
 const STATUS_OPTIONS: { label: string; value: TaskStatus; color: string }[] = [
   { label: "To Do", value: "todo", color: "#64748B" },
@@ -37,6 +38,7 @@ const PRIORITY_COLORS: Record<string, string> = {
 export default function TaskDetailScreen() {
   const { taskId, teamId } = useLocalSearchParams<{ taskId: string; teamId: string }>();
   const { data: session } = useSession();
+  const isDemo = useDemoMode();
   const queryClient = useQueryClient();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showAssignModal, setShowAssignModal] = useState(false);
@@ -127,7 +129,7 @@ export default function TaskDetailScreen() {
   const members = team?.members ?? [];
   const assignedIds = new Set((task?.assignments ?? []).map((a) => a.userId));
   const isSelfAssigned = !!currentUserId && assignedIds.has(currentUserId);
-  const isCreator = !!currentUserId && task?.creator?.id === currentUserId;
+  const isCreator = !!currentUserId && task?.creator?.id === currentUserId && !isDemo;
   const isCompleted = task?.status === "done";
   const canEdit = isCreator && !isCompleted;
   const isEditable = canEdit && isEditMode;
@@ -281,7 +283,7 @@ export default function TaskDetailScreen() {
                       updateMutation.mutate({ status: s.value });
                     }
                   }}
-                  disabled={s.value === "done" ? (isCompleted || updateMutation.isPending) : (!isEditable || updateMutation.isPending)}
+                  disabled={s.value === "done" ? (isCompleted || updateMutation.isPending || isDemo) : (!isEditable || updateMutation.isPending || isDemo)}
                   className="px-3 py-1.5 rounded-full border"
                   style={isActive ? { backgroundColor: s.color + "20", borderColor: s.color } : { borderColor: "#E2E8F0" }}
                   testID={`status-${s.value}`}
@@ -313,7 +315,7 @@ export default function TaskDetailScreen() {
                     <TouchableOpacity
                       key={subtask.id}
                       onPress={() => toggleSubtaskMutation.mutate({ subtaskId: subtask.id, completed: !subtask.completed })}
-                      disabled={isCompleted || toggleSubtaskMutation.isPending}
+                      disabled={isCompleted || toggleSubtaskMutation.isPending || isDemo}
                       testID={`subtask-toggle-${subtask.id}`}
                       style={{ flexDirection: "row", alignItems: "center", paddingVertical: 10, paddingHorizontal: 4, gap: 10 }}
                       activeOpacity={0.6}

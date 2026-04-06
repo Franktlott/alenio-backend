@@ -23,6 +23,7 @@ import { useSession } from "@/lib/auth/use-session";
 import { router } from "expo-router";
 import type { Team, TeamMember } from "@/lib/types";
 import { NoTeamPlaceholder } from "@/components/NoTeamPlaceholder";
+import { useDemoMode, showDemoAlert } from "@/lib/useDemo";
 
 type JoinRequest = {
   id: string;
@@ -40,6 +41,7 @@ function MemberRow({
   isOwner,
   onRemove,
   onSetRole,
+  isDemo,
 }: {
   member: TeamMember;
   isCurrentUser: boolean;
@@ -48,6 +50,7 @@ function MemberRow({
   isOwner?: boolean;
   onRemove?: () => void;
   onSetRole?: (role: string) => void;
+  isDemo: boolean;
 }) {
   return (
     <View
@@ -90,7 +93,7 @@ function MemberRow({
           <MessageCircle size={16} color="#4361EE" />
         </TouchableOpacity>
       ) : null}
-      {isOwner && !isCurrentUser && member.role !== "owner" && member.role !== "team_leader" ? (
+      {isOwner && !isCurrentUser && member.role !== "owner" && member.role !== "team_leader" && !isDemo ? (
         <TouchableOpacity
           onPress={onRemove}
           className="w-8 h-8 rounded-full items-center justify-center mr-2"
@@ -100,7 +103,7 @@ function MemberRow({
           <UserMinus size={16} color="#EF4444" />
         </TouchableOpacity>
       ) : null}
-      {isOwner && !isCurrentUser && member.role !== "owner" ? (
+      {isOwner && !isCurrentUser && member.role !== "owner" && !isDemo ? (
         <TouchableOpacity
           onPress={() => onSetRole?.(member.role === "team_leader" ? "member" : "team_leader")}
           className="w-8 h-8 rounded-full items-center justify-center mr-2"
@@ -123,6 +126,7 @@ export default function TeamScreen() {
   const insets = useSafeAreaInsets();
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
   const { data: session } = useSession();
+  const isDemo = useDemoMode();
   const queryClient = useQueryClient();
 
   const { data: team, isLoading } = useQuery({
@@ -472,6 +476,7 @@ export default function TeamScreen() {
             onMessage={() => dmMutation.mutate(item.userId)}
             stats={memberStats?.[item.userId]}
             isOwner={isOwner}
+            isDemo={isDemo}
             onRemove={() => handleRemove(item)}
             onSetRole={(role) => {
               const isLeader = item.role === "team_leader";
