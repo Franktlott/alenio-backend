@@ -74,7 +74,7 @@ const EVENT_CONFIG = {
   },
 };
 
-const EMOJI_OPTIONS = ["👍", "❤️", "😂", "😮", "🔥", "🎉"];
+const EMOJI_OPTIONS = ["😊", "❤️", "😂", "😮", "🔥", "🎉"];
 
 function timeAgo(dateStr: string) {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -89,29 +89,72 @@ function timeAgo(dateStr: string) {
 
 function ReactionRow({
   activityId,
-  teamId,
   reactions,
   currentUserId,
+  onToggleReaction,
+  showPicker,
+  onClosePicker,
 }: {
   activityId: string;
   teamId: string | null;
   reactions: Record<string, { count: number; userIds: string[] }>;
   currentUserId: string | undefined;
+  onToggleReaction: (emoji: string) => void;
+  showPicker: boolean;
+  onClosePicker: () => void;
 }) {
-  const queryClient = useQueryClient();
-
-  const { mutate: addReaction } = useMutation({
-    mutationFn: (emoji: string) =>
-      api.post(`/api/teams/${teamId}/activity/${activityId}/react`, { emoji }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["activity", teamId] });
-    },
-  });
-
   const existingReactions = Object.entries(reactions ?? {});
 
   return (
     <View style={{ marginTop: 4 }}>
+      {showPicker ? (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={{ flexGrow: 0, marginBottom: 6 }}
+          contentContainerStyle={{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 4 }}
+          testID={`emoji-picker-${activityId}`}
+        >
+          {EMOJI_OPTIONS.map((emoji) => (
+            <Pressable
+              key={emoji}
+              testID={`pick-emoji-${activityId}-${emoji}`}
+              onPress={() => {
+                onToggleReaction(emoji);
+                onClosePicker();
+              }}
+              style={({ pressed }) => ({
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: pressed ? "#E2E8F0" : "#F1F5F9",
+                borderRadius: 20,
+                paddingHorizontal: 10,
+                paddingVertical: 6,
+                borderWidth: 1,
+                borderColor: "#E2E8F0",
+              })}
+            >
+              <Text style={{ fontSize: 18 }}>{emoji}</Text>
+            </Pressable>
+          ))}
+          <Pressable
+            testID={`close-picker-${activityId}`}
+            onPress={onClosePicker}
+            style={({ pressed }) => ({
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: pressed ? "#E2E8F0" : "#F1F5F9",
+              borderRadius: 20,
+              paddingHorizontal: 10,
+              paddingVertical: 6,
+              borderWidth: 1,
+              borderColor: "#E2E8F0",
+            })}
+          >
+            <Text style={{ fontSize: 14, color: "#64748B", fontWeight: "600" }}>✕</Text>
+          </Pressable>
+        </ScrollView>
+      ) : null}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -123,9 +166,10 @@ function ReactionRow({
           return (
             <Pressable
               key={emoji}
-              onPress={() => { if (!isActive) addReaction(emoji); }}
-              testID={`reaction-pill-${activityId}-${emoji}`}
-              style={{
+              onPress={() => null}
+              onLongPress={() => onToggleReaction(emoji)}
+              testID={`reaction-long-press-${activityId}-${emoji}`}
+              style={({ pressed }) => ({
                 flexDirection: "row",
                 alignItems: "center",
                 gap: 4,
@@ -135,7 +179,8 @@ function ReactionRow({
                 paddingVertical: 4,
                 borderWidth: 1,
                 borderColor: isActive ? "#4361EE" : "transparent",
-              }}
+                opacity: pressed && isActive ? 0.6 : 1,
+              })}
             >
               <Text style={{ fontSize: 13 }}>{emoji}</Text>
               <Text style={{ fontSize: 12, fontWeight: "600", color: isActive ? "#4361EE" : "#64748B" }}>
@@ -152,9 +197,22 @@ function ReactionRow({
 function CelebrationCard({ item, activeTeamId, currentUserId }: { item: ActivityEvent; activeTeamId: string | null; currentUserId: string | undefined }) {
   const count = item.metadata?.count ?? 10;
   const name = item.user?.name ?? "Someone";
+  const [showPicker, setShowPicker] = useState<boolean>(false);
+  const queryClient = useQueryClient();
+
+  const { mutate: toggleReaction } = useMutation({
+    mutationFn: (emoji: string) =>
+      api.post(`/api/teams/${activeTeamId}/activity/${item.id}/react`, { emoji }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["activity", activeTeamId] });
+      setShowPicker(false);
+    },
+  });
+
   return (
     <Pressable
       onPress={() => router.push("/(app)" as any)}
+      onLongPress={() => setShowPicker(true)}
       style={{ marginHorizontal: 16, marginVertical: 8 }}
       testID={`milestone-card-${item.id}`}
     >
@@ -204,6 +262,9 @@ function CelebrationCard({ item, activeTeamId, currentUserId }: { item: Activity
             teamId={activeTeamId}
             reactions={item.reactions ?? {}}
             currentUserId={currentUserId}
+            onToggleReaction={toggleReaction}
+            showPicker={showPicker}
+            onClosePicker={() => setShowPicker(false)}
           />
         </View>
       </LinearGradient>
@@ -212,6 +273,18 @@ function CelebrationCard({ item, activeTeamId, currentUserId }: { item: Activity
 }
 
 function ActivityItem({ item, activeTeamId, currentUserId }: { item: ActivityEvent; activeTeamId: string | null; currentUserId: string | undefined }) {
+  const [showPicker, setShowPicker] = useState<boolean>(false);
+  const queryClient = useQueryClient();
+
+  const { mutate: toggleReaction } = useMutation({
+    mutationFn: (emoji: string) =>
+      api.post(`/api/teams/${activeTeamId}/activity/${item.id}/react`, { emoji }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["activity", activeTeamId] });
+      setShowPicker(false);
+    },
+  });
+
   if (item.type === "task_milestone") {
     return <CelebrationCard item={item} activeTeamId={activeTeamId} currentUserId={currentUserId} />;
   }
@@ -226,7 +299,11 @@ function ActivityItem({ item, activeTeamId, currentUserId }: { item: ActivityEve
   const { Icon } = config;
 
   return (
-    <View style={{ paddingHorizontal: 20, paddingVertical: 14 }}>
+    <Pressable
+      onLongPress={() => setShowPicker(true)}
+      style={{ paddingHorizontal: 20, paddingVertical: 14 }}
+      testID={`activity-item-${item.id}`}
+    >
       <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 12 }}>
         {/* Avatar */}
         <View style={{
@@ -286,9 +363,12 @@ function ActivityItem({ item, activeTeamId, currentUserId }: { item: ActivityEve
           teamId={activeTeamId}
           reactions={item.reactions ?? {}}
           currentUserId={currentUserId}
+          onToggleReaction={toggleReaction}
+          showPicker={showPicker}
+          onClosePicker={() => setShowPicker(false)}
         />
       </View>
-    </View>
+    </Pressable>
   );
 }
 
