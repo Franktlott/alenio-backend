@@ -43,7 +43,7 @@ const TONES = [
   { id: "ding",     label: "Ding",     url: "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" },
   { id: "note",     label: "Note",     url: "https://assets.mixkit.co/active_storage/sfx/2015/2015-preview.mp3" },
   { id: "glass",    label: "Glass",    url: "https://assets.mixkit.co/active_storage/sfx/2308/2308-preview.mp3" },
-  { id: "tritone",  label: "Tri-tone", url: "https://assets.mixkit.co/active_storage/sfx/2016/2016-preview.mp3" },
+  { id: "bloom",    label: "Bloom",    url: "https://assets.mixkit.co/active_storage/sfx/2017/2017-preview.mp3" },
 ];
 
 export { TONES };

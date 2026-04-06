@@ -370,7 +370,7 @@ export default function TeamChatScreen() {
             ding:    "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3",
             note:    "https://assets.mixkit.co/active_storage/sfx/2015/2015-preview.mp3",
             glass:   "https://assets.mixkit.co/active_storage/sfx/2308/2308-preview.mp3",
-            tritone: "https://assets.mixkit.co/active_storage/sfx/2016/2016-preview.mp3",
+            bloom:   "https://assets.mixkit.co/active_storage/sfx/2017/2017-preview.mp3",
           };
           const url = URLS[id];
           if (url) {
