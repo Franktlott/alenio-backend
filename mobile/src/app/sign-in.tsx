@@ -14,6 +14,7 @@ import { authClient } from "@/lib/auth/auth-client";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { StatusBar } from "expo-status-bar";
+import { router } from "expo-router";
 
 export default function SignIn() {
   const [isNew, setIsNew] = useState(false);
@@ -221,6 +222,16 @@ export default function SignIn() {
               </Text>
             )}
           </TouchableOpacity>
+
+          {!isNew ? (
+            <TouchableOpacity
+              onPress={() => router.push("/forgot-password")}
+              className="items-center mt-4 py-2"
+              testID="forgot-password-link"
+            >
+              <Text className="text-indigo-600 text-sm font-medium">Forgot password?</Text>
+            </TouchableOpacity>
+          ) : null}
         </ScrollView>
       </KeyboardAvoidingView>
 
