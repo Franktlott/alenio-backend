@@ -19,6 +19,7 @@ import { useTeamStore } from "@/lib/state/team-store";
 import { useSession } from "@/lib/auth/use-session";
 import { router } from "expo-router";
 import type { Team, TeamMember } from "@/lib/types";
+import { NoTeamPlaceholder } from "@/components/NoTeamPlaceholder";
 
 function MemberRow({
   member,
@@ -177,11 +178,8 @@ export default function TeamScreen() {
 
   if (!activeTeamId) {
     return (
-      <SafeAreaView className="flex-1 bg-slate-50 dark:bg-slate-900 items-center justify-center">
-        <Text className="text-slate-500">No team selected</Text>
-        <TouchableOpacity className="mt-4 bg-indigo-600 rounded-xl px-6 py-3" onPress={() => router.push("/onboarding")}>
-          <Text className="text-white font-semibold">Create or join a team</Text>
-        </TouchableOpacity>
+      <SafeAreaView className="flex-1 bg-slate-50" edges={["top"]}>
+        <NoTeamPlaceholder />
       </SafeAreaView>
     );
   }

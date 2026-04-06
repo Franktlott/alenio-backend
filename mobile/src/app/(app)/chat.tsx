@@ -19,6 +19,7 @@ import { useSession } from "@/lib/auth/use-session";
 import { useTeamStore } from "@/lib/state/team-store";
 import { useUnreadStore } from "@/lib/state/unread-store";
 import type { Conversation } from "@/lib/types";
+import { NoTeamPlaceholder } from "@/components/NoTeamPlaceholder";
 
 function formatTime(dateStr: string) {
   const d = new Date(dateStr);
@@ -105,6 +106,14 @@ export default function ChatScreen() {
     refetchInterval: 10000,
   });
   const teamUnreadCount = Object.values(teamUnreadCounts).reduce((a, b) => a + b, 0);
+
+  if (!activeTeamId) {
+    return (
+      <SafeAreaView className="flex-1 bg-slate-50" edges={["top"]}>
+        <NoTeamPlaceholder />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView

@@ -9,6 +9,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Image as ExpoImage } from "expo-image";
 import { useState } from "react";
 import { useSession } from "@/lib/auth/use-session";
+import { NoTeamPlaceholder } from "@/components/NoTeamPlaceholder";
 
 type ActivityEvent = {
   id: string;
@@ -297,6 +298,14 @@ export default function FeedScreen() {
     enabled: !!activeTeamId,
     refetchInterval: 15000,
   });
+
+  if (!activeTeamId) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: "#F8FAFC" }} edges={["top"]}>
+        <NoTeamPlaceholder />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#F8FAFC" }} edges={["top"]} testID="feed-screen">

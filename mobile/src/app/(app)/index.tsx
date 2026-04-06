@@ -24,6 +24,7 @@ import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
 import { useTeamStore } from "@/lib/state/team-store";
 import type { Task, Team, CalendarEvent } from "@/lib/types";
+import { NoTeamPlaceholder } from "@/components/NoTeamPlaceholder";
 
 type FilterTab = "all" | "assigned" | "completed";
 type SortMode = "due" | "priority";
@@ -700,6 +701,14 @@ export default function TasksScreen() {
   const todayEnd = new Date(); todayEnd.setHours(23, 59, 59, 999);
   const dueTodayCount = myActiveTasks.filter((t) => t.dueDate && new Date(t.dueDate) >= todayStart && new Date(t.dueDate) <= todayEnd).length;
   const overdueCount = myActiveTasks.filter((t) => t.dueDate && new Date(t.dueDate) < todayStart).length;
+
+  if (!activeTeamId) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: "#F8FAFC" }} edges={["top"]}>
+        <NoTeamPlaceholder />
+      </SafeAreaView>
+    );
+  }
 
   if (!teamsLoading && (!teams || teams.length === 0)) {
     return (
