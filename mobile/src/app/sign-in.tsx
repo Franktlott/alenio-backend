@@ -241,10 +241,8 @@ export default function SignIn() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* Powered by — pinned to bottom */}
-      <View style={{ alignItems: "center", gap: 6, paddingBottom: 16 }}>
-        <Text style={{ fontSize: 11, color: "#94A3B8", letterSpacing: 0.3 }}>Powered by</Text>
-        <Image source={require("@/assets/lotttech-logo.png")} style={{ width: 99, height: 31 }} resizeMode="contain" />
+      <View style={{ alignItems: "center", paddingBottom: 16 }}>
+        <Image source={require("@/assets/lotttech-logo.png")} style={{ width: 109, height: 34 }} resizeMode="contain" />
       </View>
     </SafeAreaView>
   );

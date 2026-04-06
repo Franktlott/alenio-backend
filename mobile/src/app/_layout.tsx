@@ -67,13 +67,10 @@ function CustomSplash({ onDone }: { onDone: () => void }) {
           resizeMode="contain"
         />
       </Animated.View>
-      <View style={{ position: 'absolute', bottom: 48, alignItems: 'center', gap: 6 }}>
-        <Text style={{ fontSize: 11, color: '#94A3B8', letterSpacing: 0.3 }}>
-          Powered by
-        </Text>
+      <View style={{ position: 'absolute', bottom: 48, alignItems: 'center' }}>
         <Image
           source={require('@/assets/lotttech-logo.png')}
-          style={{ width: 110, height: 35 }}
+          style={{ width: 121, height: 39 }}
           resizeMode="contain"
         />
       </View>
