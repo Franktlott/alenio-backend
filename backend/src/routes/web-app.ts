@@ -273,6 +273,125 @@ webRouter.delete("/api/tasks/:id", async (c) => {
   return c.json({ data: { ok: true } });
 });
 
+// ── API: calendar events (all teams) ─────────────────────────────────────────
+webRouter.get("/api/calendar/events", async (c) => {
+  const session = await getWebSession(c);
+  if (!session) return c.json({ error: "Unauthorized" }, 401);
+  const memberships = await prisma.teamMember.findMany({
+    where: { userId: session.user.id },
+    select: { teamId: true },
+  });
+  const teamIds = memberships.map((m) => m.teamId);
+  if (!teamIds.length) return c.json({ data: [] });
+  const events = await prisma.calendarEvent.findMany({
+    where: { teamId: { in: teamIds } },
+    include: {
+      team: { select: { id: true, name: true } },
+      createdBy: { select: { id: true, name: true } },
+    },
+    orderBy: { startDate: "asc" },
+  });
+  return c.json({ data: events });
+});
+
+// ── API: team events ──────────────────────────────────────────────────────────
+webRouter.get("/api/teams/:id/events", async (c) => {
+  const session = await getWebSession(c);
+  if (!session) return c.json({ error: "Unauthorized" }, 401);
+  const { id } = c.req.param();
+  const membership = await prisma.teamMember.findFirst({ where: { teamId: id, userId: session.user.id } });
+  if (!membership) return c.json({ error: "Not found" }, 404);
+  const events = await prisma.calendarEvent.findMany({
+    where: { teamId: id },
+    include: {
+      team: { select: { id: true, name: true } },
+      createdBy: { select: { id: true, name: true } },
+    },
+    orderBy: { startDate: "asc" },
+  });
+  return c.json({ data: events });
+});
+
+// ── API: create team event ────────────────────────────────────────────────────
+webRouter.post("/api/teams/:id/events", async (c) => {
+  const session = await getWebSession(c);
+  if (!session) return c.json({ error: "Unauthorized" }, 401);
+  const { id } = c.req.param();
+  const membership = await prisma.teamMember.findFirst({ where: { teamId: id, userId: session.user.id } });
+  if (!membership) return c.json({ error: { message: "Not a member of this team" } }, 403);
+  const body = await c.req.json().catch(() => ({}));
+  const { title, description, startDate, endDate, allDay, color } = body;
+  if (!title || !title.trim()) return c.json({ error: { message: "Title is required" } }, 400);
+  if (!startDate) return c.json({ error: { message: "Start date is required" } }, 400);
+  const event = await prisma.calendarEvent.create({
+    data: {
+      title: title.trim(),
+      description: description || null,
+      startDate: new Date(startDate),
+      endDate: endDate ? new Date(endDate) : null,
+      allDay: allDay !== undefined ? allDay : true,
+      color: color || "#4361EE",
+      teamId: id,
+      createdById: session.user.id,
+    },
+    include: {
+      team: { select: { id: true, name: true } },
+      createdBy: { select: { id: true, name: true } },
+    },
+  });
+  return c.json({ data: event });
+});
+
+// ── API: update team event ────────────────────────────────────────────────────
+webRouter.patch("/api/teams/:id/events/:eid", async (c) => {
+  const session = await getWebSession(c);
+  if (!session) return c.json({ error: "Unauthorized" }, 401);
+  const { id, eid } = c.req.param();
+  const membership = await prisma.teamMember.findFirst({ where: { teamId: id, userId: session.user.id } });
+  if (!membership) return c.json({ error: { message: "Not a member of this team" } }, 403);
+  const existing = await prisma.calendarEvent.findFirst({ where: { id: eid, teamId: id } });
+  if (!existing) return c.json({ error: "Not found" }, 404);
+  // Creator or owner/admin can update
+  if (existing.createdById !== session.user.id && !["owner", "admin"].includes(membership.role)) {
+    return c.json({ error: { message: "Forbidden" } }, 403);
+  }
+  const body = await c.req.json().catch(() => ({}));
+  const { title, description, startDate, endDate, allDay, color } = body;
+  const updateData: any = {};
+  if (title !== undefined) updateData.title = title.trim();
+  if (description !== undefined) updateData.description = description || null;
+  if (startDate !== undefined) updateData.startDate = new Date(startDate);
+  if (endDate !== undefined) updateData.endDate = endDate ? new Date(endDate) : null;
+  if (allDay !== undefined) updateData.allDay = allDay;
+  if (color !== undefined) updateData.color = color;
+  const event = await prisma.calendarEvent.update({
+    where: { id: eid },
+    data: updateData,
+    include: {
+      team: { select: { id: true, name: true } },
+      createdBy: { select: { id: true, name: true } },
+    },
+  });
+  return c.json({ data: event });
+});
+
+// ── API: delete team event ────────────────────────────────────────────────────
+webRouter.delete("/api/teams/:id/events/:eid", async (c) => {
+  const session = await getWebSession(c);
+  if (!session) return c.json({ error: "Unauthorized" }, 401);
+  const { id, eid } = c.req.param();
+  const membership = await prisma.teamMember.findFirst({ where: { teamId: id, userId: session.user.id } });
+  if (!membership) return c.json({ error: { message: "Not a member of this team" } }, 403);
+  const existing = await prisma.calendarEvent.findFirst({ where: { id: eid, teamId: id } });
+  if (!existing) return c.json({ error: "Not found" }, 404);
+  // Creator or owner/admin can delete
+  if (existing.createdById !== session.user.id && !["owner", "admin"].includes(membership.role)) {
+    return c.json({ error: { message: "Forbidden" } }, 403);
+  }
+  await prisma.calendarEvent.delete({ where: { id: eid } });
+  return c.json({ data: { ok: true } });
+});
+
 // ── Logo asset ────────────────────────────────────────────────────────────────
 webRouter.get("/logo.png", async (c) => {
   const file = Bun.file("/home/user/workspace/mobile/src/assets/alenio-icon.png");
@@ -1008,6 +1127,18 @@ webRouter.get("/", (c) => {
     .detail-value.muted { color: #9CA3AF; font-style: italic; }
     .detail-edit-row { display: flex; gap: 8px; }
     .detail-edit-row .field { flex: 1; }
+
+    /* Calendar */
+    .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; background: var(--border, #E5E7EB); border: 1px solid #E5E7EB; border-radius: 10px; overflow: hidden; }
+    .cal-day-header { background: #F9FAFB; padding: 8px 4px; text-align: center; font-size: 11px; font-weight: 600; color: #6B7280; text-transform: uppercase; letter-spacing: .04em; }
+    .cal-cell { background: #ffffff; min-height: 96px; padding: 6px; cursor: pointer; transition: background .15s; }
+    .cal-cell:hover { background: #F9FAFB; }
+    .cal-empty { background: #F9FAFB; cursor: default; }
+    .cal-today { background: #EFF6FF; }
+    .cal-day-num { font-size: 12px; font-weight: 500; color: #6B7280; margin-bottom: 4px; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; border-radius: 50%; }
+    .cal-day-num.today { background: #4361EE; color: #fff; font-weight: 700; }
+    .cal-event { font-size: 11px; font-weight: 500; color: #fff; padding: 2px 5px; border-radius: 4px; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+    .cal-more { font-size: 10px; color: #6B7280; padding: 1px 4px; }
   </style>
 </head>
 <body>
@@ -1093,6 +1224,13 @@ webRouter.get("/", (c) => {
             <path d="M11 9c1.5 0 3.5.8 3.5 3"/>
           </svg>
           Teams
+        </button>
+        <button class="nav-item" id="nav-calendar" onclick="showPage('calendar', this)">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="2" width="12" height="12" rx="2"/>
+            <path d="M2 6h12M5 2v2M11 2v2"/>
+          </svg>
+          Calendar
         </button>
         <button class="nav-item" id="nav-profile" onclick="showPage('profile', this)">
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
@@ -1185,6 +1323,27 @@ webRouter.get("/", (c) => {
           <div id="profile-container"><div class="loading">Loading&#8230;</div></div>
         </div>
 
+        <!-- Calendar page -->
+        <div class="page" id="page-calendar">
+          <div class="page-header">
+            <div class="page-header-left">
+              <button class="btn-secondary" onclick="calPrevMonth()">&#8249;</button>
+              <div class="page-title" id="cal-month-label">Month</div>
+              <button class="btn-secondary" onclick="calNextMonth()">&#8250;</button>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center">
+              <select class="field" id="cal-team-filter" onchange="renderCalendar()" style="height:32px;padding:4px 8px;font-size:13px;min-width:140px">
+                <option value="all">All Teams</option>
+              </select>
+              <button class="btn-icon" onclick="openEventModal(null)">
+                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" width="14" height="14"><path d="M8 3v10M3 8h10"/></svg>
+                New Event
+              </button>
+            </div>
+          </div>
+          <div id="calendar-container"></div>
+        </div>
+
       </div>
     </div>
   </div>
@@ -1269,6 +1428,65 @@ webRouter.get("/", (c) => {
   </div>
 </div>
 
+<!-- ── MODAL: Calendar Event ── -->
+<div id="event-modal" class="modal-backdrop" style="display:none" onclick="closeEventModal(event)">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div class="modal-title" id="event-modal-title">New Event</div>
+      <button class="modal-close" onclick="closeEventModal(null)">&#10005;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="event-modal-id" />
+      <input type="hidden" id="event-modal-team-id" />
+      <div class="field-group">
+        <label class="field-label">Title <span style="color:#EF4444">*</span></label>
+        <input class="field" type="text" id="event-modal-title-input" placeholder="Event title" />
+      </div>
+      <div class="field-group">
+        <label class="field-label">Description</label>
+        <textarea class="field" id="event-modal-desc" placeholder="Optional description..." rows="2"></textarea>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="field-group">
+          <label class="field-label">Start Date</label>
+          <input class="field" type="date" id="event-modal-start" />
+        </div>
+        <div class="field-group">
+          <label class="field-label">End Date</label>
+          <input class="field" type="date" id="event-modal-end" />
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="field-group">
+          <label class="field-label">Color</label>
+          <select class="field" id="event-modal-color">
+            <option value="#6366F1">Indigo</option>
+            <option value="#3B82F6">Blue</option>
+            <option value="#10B981">Green</option>
+            <option value="#F59E0B">Amber</option>
+            <option value="#EF4444">Red</option>
+            <option value="#8B5CF6">Purple</option>
+          </select>
+        </div>
+        <div class="field-group" id="event-modal-team-wrap">
+          <label class="field-label">Team <span style="color:#EF4444">*</span></label>
+          <select class="field" id="event-modal-team-select">
+            <option value="">Select team...</option>
+          </select>
+        </div>
+      </div>
+      <div id="event-modal-msg" class="modal-msg"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-danger" id="event-modal-delete-btn" onclick="deleteEvent()" style="display:none">Delete</button>
+      <div style="display:flex;gap:8px;margin-left:auto">
+        <button class="btn-secondary" onclick="closeEventModal(null)">Cancel</button>
+        <button class="btn-icon" id="event-modal-save-btn" onclick="saveEvent()">Save Event</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ── PANEL: Task Detail ── -->
 <div id="task-panel-overlay" class="panel-overlay" style="display:none" onclick="closeTaskPanel()"></div>
 <div id="task-detail-panel" class="detail-panel" style="display:none">
@@ -1295,6 +1513,10 @@ webRouter.get("/", (c) => {
   var currentTeamId = null;
   var panelTask = null;
   var panelEditMode = false;
+  var calYear = new Date().getFullYear();
+  var calMonth = new Date().getMonth(); // 0-indexed
+  var allCalEvents = [];
+  var calEventModalData = null; // currently editing event
 
   // ── Helpers ────────────────────────────────────────────────────────────────
   function show(id) { document.getElementById(id).style.display = 'flex'; }
@@ -1459,6 +1681,7 @@ webRouter.get("/", (c) => {
     loadTeams();
     loadTeamTasks();
     loadProfile(me);
+    loadCalendarEvents();
   }
 
   // ── My Tasks ───────────────────────────────────────────────────────────────
@@ -2053,6 +2276,240 @@ webRouter.get("/", (c) => {
       '</div>';
   }
 
+  // ── Calendar ───────────────────────────────────────────────────────────────
+  async function loadCalendarEvents() {
+    try {
+      var events = await apiFetch('calendar/events');
+      allCalEvents = events || [];
+      populateCalTeamFilter();
+      renderCalendar();
+    } catch(e) {
+      var cc = document.getElementById('calendar-container');
+      if (cc) cc.innerHTML = '<div class="empty"><p>Could not load events.</p></div>';
+    }
+  }
+
+  function populateCalTeamFilter() {
+    var sel = document.getElementById('cal-team-filter');
+    if (!sel) return;
+    // Keep "All Teams" option, rebuild rest
+    while (sel.options.length > 1) sel.remove(1);
+    var seen = {};
+    allCalEvents.forEach(function(ev) {
+      if (ev.team && !seen[ev.team.id]) {
+        seen[ev.team.id] = true;
+        var opt = document.createElement('option');
+        opt.value = ev.team.id;
+        opt.textContent = ev.team.name;
+        sel.appendChild(opt);
+      }
+    });
+    // Also add teams from allTeams that might have no events yet
+    (allTeams || []).forEach(function(t) {
+      if (!seen[t.id]) {
+        var opt = document.createElement('option');
+        opt.value = t.id;
+        opt.textContent = t.name;
+        sel.appendChild(opt);
+      }
+    });
+  }
+
+  function calPrevMonth() {
+    calMonth--;
+    if (calMonth < 0) { calMonth = 11; calYear--; }
+    renderCalendar();
+  }
+
+  function calNextMonth() {
+    calMonth++;
+    if (calMonth > 11) { calMonth = 0; calYear++; }
+    renderCalendar();
+  }
+
+  function renderCalendar() {
+    var calContainer = document.getElementById('calendar-container');
+    if (!calContainer) return;
+    var teamFilterEl = document.getElementById('cal-team-filter');
+    var teamFilter = teamFilterEl ? teamFilterEl.value : 'all';
+    var monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    var monthLabelEl = document.getElementById('cal-month-label');
+    if (monthLabelEl) monthLabelEl.textContent = monthNames[calMonth] + ' ' + calYear;
+
+    var events = teamFilter === 'all' ? allCalEvents : allCalEvents.filter(function(ev) { return ev.teamId === teamFilter || (ev.team && ev.team.id === teamFilter); });
+
+    // Build a map of day -> events
+    var evByDay = {};
+    events.forEach(function(ev) {
+      var start = new Date(ev.startDate);
+      var end = ev.endDate ? new Date(ev.endDate) : start;
+      // Mark each day in the range
+      var d = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+      var endD = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+      while (d <= endD) {
+        if (d.getMonth() === calMonth && d.getFullYear() === calYear) {
+          var key = d.getDate();
+          if (!evByDay[key]) evByDay[key] = [];
+          evByDay[key].push(ev);
+        }
+        d.setDate(d.getDate() + 1);
+      }
+    });
+
+    var firstDay = new Date(calYear, calMonth, 1).getDay(); // 0=Sun
+    var daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+    var today = new Date();
+    var todayKey = (today.getFullYear() === calYear && today.getMonth() === calMonth) ? today.getDate() : -1;
+
+    var html = '<div class="cal-grid">';
+    // Header
+    var dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    dayNames.forEach(function(d) { html += '<div class="cal-day-header">' + d + '</div>'; });
+
+    // Blank cells before first day
+    for (var i = 0; i < firstDay; i++) { html += '<div class="cal-cell cal-empty"></div>'; }
+
+    // Day cells
+    for (var day = 1; day <= daysInMonth; day++) {
+      var isToday = day === todayKey;
+      var dayEvs = evByDay[day] || [];
+      html += '<div class="cal-cell' + (isToday ? ' cal-today' : '') + '" data-day="' + day + '">';
+      html += '<div class="cal-day-num' + (isToday ? ' today' : '') + '">' + day + '</div>';
+      dayEvs.slice(0, 3).forEach(function(ev) {
+        var color = ev.color || '#6366F1';
+        html += '<div class="cal-event" style="background:' + color + '" data-id="' + esc(ev.id) + '">' + esc(ev.title) + '</div>';
+      });
+      if (dayEvs.length > 3) html += '<div class="cal-more">+' + (dayEvs.length - 3) + ' more</div>';
+      html += '</div>';
+    }
+
+    html += '</div>';
+    calContainer.innerHTML = html;
+
+    // Attach day cell click handlers (open new event modal with default day)
+    calContainer.querySelectorAll('.cal-cell:not(.cal-empty)').forEach(function(el) {
+      el.addEventListener('click', function(e) {
+        var day = parseInt(el.dataset.day);
+        openEventModal(null, day, e);
+      });
+    });
+
+    // Attach event click handlers after render
+    calContainer.querySelectorAll('.cal-event').forEach(function(el) {
+      el.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var id = el.dataset.id;
+        var ev = allCalEvents.find(function(x) { return x.id === id; });
+        if (ev) openEventModal(ev, null, e);
+      });
+    });
+  }
+
+  function openEventModal(ev, defaultDay, e) {
+    if (e) e.stopPropagation();
+    calEventModalData = ev || null;
+    document.getElementById('event-modal-title').textContent = ev ? 'Edit Event' : 'New Event';
+    document.getElementById('event-modal-id').value = ev ? ev.id : '';
+    document.getElementById('event-modal-team-id').value = ev ? (ev.teamId || '') : '';
+    document.getElementById('event-modal-title-input').value = ev ? ev.title : '';
+    document.getElementById('event-modal-desc').value = ev ? (ev.description || '') : '';
+    document.getElementById('event-modal-color').value = ev ? (ev.color || '#6366F1') : '#6366F1';
+    clearMsg('event-modal-msg');
+
+    // Set dates
+    if (ev) {
+      document.getElementById('event-modal-start').value = toInputDate(ev.startDate);
+      document.getElementById('event-modal-end').value = ev.endDate ? toInputDate(ev.endDate) : toInputDate(ev.startDate);
+    } else if (defaultDay) {
+      var d = new Date(calYear, calMonth, defaultDay);
+      var ds = toInputDate(d.toISOString());
+      document.getElementById('event-modal-start').value = ds;
+      document.getElementById('event-modal-end').value = ds;
+    } else {
+      document.getElementById('event-modal-start').value = '';
+      document.getElementById('event-modal-end').value = '';
+    }
+
+    // Populate team select
+    var sel = document.getElementById('event-modal-team-select');
+    sel.innerHTML = '<option value="">Select team...</option>';
+    (allTeams || []).forEach(function(t) {
+      var opt = document.createElement('option');
+      opt.value = t.id;
+      opt.textContent = t.name;
+      if (ev && ev.teamId === t.id) opt.selected = true;
+      sel.appendChild(opt);
+    });
+    if (ev) {
+      document.getElementById('event-modal-team-wrap').style.display = 'none';
+      document.getElementById('event-modal-delete-btn').style.display = 'block';
+    } else {
+      document.getElementById('event-modal-team-wrap').style.display = '';
+      document.getElementById('event-modal-delete-btn').style.display = 'none';
+    }
+
+    document.getElementById('event-modal').style.display = 'flex';
+    setTimeout(function() { document.getElementById('event-modal-title-input').focus(); }, 50);
+  }
+
+  function closeEventModal(e) {
+    if (e && e.target !== document.getElementById('event-modal')) return;
+    document.getElementById('event-modal').style.display = 'none';
+    calEventModalData = null;
+  }
+
+  async function saveEvent() {
+    var btn = document.getElementById('event-modal-save-btn');
+    btn.disabled = true; btn.textContent = 'Saving\u2026';
+    clearMsg('event-modal-msg');
+    try {
+      var title = document.getElementById('event-modal-title-input').value.trim();
+      var desc = document.getElementById('event-modal-desc').value.trim();
+      var start = document.getElementById('event-modal-start').value;
+      var end = document.getElementById('event-modal-end').value;
+      var color = document.getElementById('event-modal-color').value;
+      var id = document.getElementById('event-modal-id').value;
+      var teamId = id ? document.getElementById('event-modal-team-id').value : document.getElementById('event-modal-team-select').value;
+
+      if (!title) throw new Error('Title is required');
+      if (!teamId) throw new Error('Team is required');
+      if (!start) throw new Error('Start date is required');
+
+      var body = { title: title, description: desc || null, startDate: start, endDate: end || start, color: color };
+
+      if (id) {
+        await apiFetch('teams/' + teamId + '/events/' + id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      } else {
+        await apiFetch('teams/' + teamId + '/events', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      }
+      document.getElementById('event-modal').style.display = 'none';
+      calEventModalData = null;
+      await loadCalendarEvents();
+    } catch(e) {
+      setMsg('event-modal-msg', e.message, 'error');
+    } finally {
+      btn.disabled = false; btn.textContent = 'Save Event';
+    }
+  }
+
+  async function deleteEvent() {
+    if (!calEventModalData) return;
+    if (!confirm('Delete this event?')) return;
+    var btn = document.getElementById('event-modal-delete-btn');
+    btn.disabled = true;
+    try {
+      var teamId = calEventModalData.teamId;
+      var id = calEventModalData.id;
+      await apiFetch('teams/' + teamId + '/events/' + id, { method: 'DELETE' });
+      document.getElementById('event-modal').style.display = 'none';
+      calEventModalData = null;
+      await loadCalendarEvents();
+    } catch(e) {
+      alert('Failed to delete: ' + e.message);
+      btn.disabled = false;
+    }
+  }
+
   // ── Page navigation ────────────────────────────────────────────────────────
   function showPage(name, btn) {
     document.querySelectorAll('.page').forEach(function(p) { p.classList.remove('active'); });
@@ -2064,11 +2521,13 @@ webRouter.get("/", (c) => {
     if (name === 'tasks') { loadTasks(); }
     if (name === 'team-tasks') { loadTeamTasks(); }
     if (name === 'teams') { loadTeams(); }
+    if (name === 'calendar') { loadCalendarEvents(); }
   }
 
   // ── Keyboard shortcuts ─────────────────────────────────────────────────────
   document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') {
+      if (document.getElementById('event-modal').style.display === 'flex') { closeEventModal(null); return; }
       if (document.getElementById('task-modal').style.display === 'flex') { closeTaskModal(null); return; }
       if (document.getElementById('new-team-modal').style.display === 'flex') { closeNewTeamModal(null); return; }
       if (document.getElementById('task-detail-panel').style.display === 'flex') { closeTaskPanel(); return; }
