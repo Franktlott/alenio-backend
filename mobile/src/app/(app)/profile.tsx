@@ -116,8 +116,8 @@ export default function ProfileScreen() {
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
 
   // Tone state
-  const [msgToneId, setMsgToneId] = useState<string>("default");
-  const [dmToneId,  setDmToneId]  = useState<string>("default");
+  const [msgToneId, setMsgToneId] = useState<string>("chime");
+  const [dmToneId,  setDmToneId]  = useState<string>("chime");
   const [showTonePicker, setShowTonePicker] = useState<"msg" | "dm" | null>(null);
 
   useEffect(() => {

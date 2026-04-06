@@ -363,7 +363,7 @@ export default function TeamChatScreen() {
       const newest = messages[messages.length - 1];
       if (newest && newest.senderId !== currentUserId) {
         AsyncStorage.getItem("msg_tone").then(async (toneId) => {
-          const id = toneId ?? "default";
+          const id = toneId ?? "chime";
           const URLS: Record<string, string> = {
             default: "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3",
             chime:   "https://assets.mixkit.co/active_storage/sfx/2013/2013-preview.mp3",
