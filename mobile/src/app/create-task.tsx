@@ -9,6 +9,7 @@ import {
   Switch,
   Modal,
   Image,
+  Alert,
 } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -16,7 +17,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams } from "expo-router";
-import { X, BookOpen, Bookmark, Plus, Square, Camera } from "lucide-react-native";
+import { X, BookOpen, Bookmark, Plus, Square, Camera, Pencil, Trash2 } from "lucide-react-native";
 import * as ImagePicker from "expo-image-picker";
 import { api } from "@/lib/api/api";
 import { uploadFile } from "@/lib/upload";
@@ -65,6 +66,11 @@ export default function CreateTaskScreen() {
   const [attachmentUri, setAttachmentUri] = useState<string | null>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
+  const [editingTemplate, setEditingTemplate] = useState<TaskTemplate | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [editPriority, setEditPriority] = useState<TaskPriority>("medium");
+
   const { data: team } = useQuery({
     queryKey: ["team", teamId],
     queryFn: () => api.get<Team>(`/api/teams/${teamId}`),
@@ -77,6 +83,20 @@ export default function CreateTaskScreen() {
     queryKey: ["templates", teamId],
     queryFn: () => api.get<TaskTemplate[]>(`/api/teams/${teamId}/templates`),
     enabled: !!teamId,
+  });
+
+  const { mutate: deleteTemplate } = useMutation({
+    mutationFn: (id: string) => api.delete(`/api/teams/${teamId}/templates/${id}`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["templates", teamId] }),
+  });
+
+  const { mutate: updateTemplate, isPending: updatingTemplate } = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<TaskTemplate> }) =>
+      api.patch(`/api/teams/${teamId}/templates/${id}`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["templates", teamId] });
+      setEditingTemplate(null);
+    },
   });
 
   const applyTemplate = (t: TaskTemplate) => {
@@ -653,16 +673,93 @@ export default function CreateTaskScreen() {
         </KeyboardAwareScrollView>
 
       {/* Template picker modal */}
-      <Modal visible={showTemplatePicker} transparent animationType="slide" onRequestClose={() => setShowTemplatePicker(false)}>
-        <TouchableOpacity className="flex-1 bg-black/40 justify-end" activeOpacity={1} onPress={() => setShowTemplatePicker(false)}>
+      <Modal visible={showTemplatePicker} transparent animationType="slide" onRequestClose={() => { setShowTemplatePicker(false); setEditingTemplate(null); }}>
+        <TouchableOpacity className="flex-1 bg-black/40 justify-end" activeOpacity={1} onPress={() => { setShowTemplatePicker(false); setEditingTemplate(null); }}>
           <TouchableOpacity activeOpacity={1} className="bg-white dark:bg-slate-800 rounded-t-3xl px-4 pt-4 pb-10">
             <View className="flex-row items-center justify-between mb-4">
-              <Text className="text-base font-bold text-slate-900 dark:text-white">Use Template</Text>
-              <TouchableOpacity onPress={() => setShowTemplatePicker(false)}>
+              <Text className="text-base font-bold text-slate-900 dark:text-white">
+                {editingTemplate ? "Edit Template" : "Use Template"}
+              </Text>
+              <TouchableOpacity onPress={() => { setShowTemplatePicker(false); setEditingTemplate(null); }}>
                 <X size={20} color="#94A3B8" />
               </TouchableOpacity>
             </View>
-            {templates.length === 0 ? (
+
+            {editingTemplate ? (
+              /* Edit form */
+              <View style={{ gap: 12 }}>
+                <TextInput
+                  value={editTitle}
+                  onChangeText={setEditTitle}
+                  placeholder="Template title..."
+                  placeholderTextColor="#94A3B8"
+                  className="text-sm font-semibold text-slate-900 dark:text-white border border-slate-200 dark:border-slate-600 rounded-xl px-3 py-2.5"
+                  testID="edit-template-title-input"
+                />
+                <TextInput
+                  value={editDescription}
+                  onChangeText={setEditDescription}
+                  placeholder="Description (optional)"
+                  placeholderTextColor="#94A3B8"
+                  className="text-sm text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-600 rounded-xl px-3 py-2.5"
+                  multiline
+                  numberOfLines={2}
+                  testID="edit-template-description-input"
+                />
+                <View>
+                  <Text className="text-xs font-semibold text-slate-500 mb-2">Priority</Text>
+                  <View className="flex-row flex-wrap" style={{ gap: 8 }}>
+                    {PRIORITIES.map((p) => (
+                      <TouchableOpacity
+                        key={p.value}
+                        onPress={() => setEditPriority(p.value)}
+                        className="px-3 py-1.5 rounded-full border"
+                        style={
+                          editPriority === p.value
+                            ? { backgroundColor: p.color + "20", borderColor: p.color }
+                            : { borderColor: "#E2E8F0", backgroundColor: "transparent" }
+                        }
+                        testID={`edit-priority-${p.value}`}
+                      >
+                        <Text
+                          className="text-xs font-semibold"
+                          style={{ color: editPriority === p.value ? p.color : "#94A3B8" }}
+                        >
+                          {p.label}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+                <View className="flex-row" style={{ gap: 8, marginTop: 4 }}>
+                  <TouchableOpacity
+                    onPress={() => setEditingTemplate(null)}
+                    className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 items-center"
+                    testID="edit-template-cancel-button"
+                  >
+                    <Text className="text-sm font-semibold text-slate-500">Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() =>
+                      updateTemplate({
+                        id: editingTemplate.id,
+                        data: { title: editTitle, description: editDescription, priority: editPriority },
+                      })
+                    }
+                    disabled={updatingTemplate || !editTitle.trim()}
+                    className="flex-1 py-2.5 rounded-xl items-center"
+                    style={{ backgroundColor: "#4361EE" }}
+                    testID="edit-template-save-button"
+                  >
+                    {updatingTemplate ? (
+                      <ActivityIndicator color="white" size="small" />
+                    ) : (
+                      <Text className="text-sm font-semibold text-white">Save</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : templates.length === 0 ? (
               <Text className="text-sm text-slate-400 text-center py-6">No templates saved yet</Text>
             ) : (
               <View style={{ gap: 8 }}>
@@ -682,6 +779,40 @@ export default function CreateTaskScreen() {
                     <View className="ml-2 px-2 py-0.5 rounded-full" style={{ backgroundColor: "#4361EE20" }}>
                       <Text className="text-xs font-semibold text-indigo-600 capitalize">{t.priority}</Text>
                     </View>
+                    {t.createdById === session?.user?.id ? (
+                      <View className="flex-row items-center ml-2" style={{ gap: 8 }}>
+                        <TouchableOpacity
+                          onPress={(e) => {
+                            e.stopPropagation();
+                            setEditingTemplate(t);
+                            setEditTitle(t.title);
+                            setEditDescription(t.description ?? "");
+                            setEditPriority(t.priority);
+                          }}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                          testID={`edit-template-${t.id}`}
+                        >
+                          <Pencil size={15} color="#94A3B8" />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={(e) => {
+                            e.stopPropagation();
+                            Alert.alert(
+                              "Delete Template",
+                              `Delete "${t.title}"? This cannot be undone.`,
+                              [
+                                { text: "Cancel", style: "cancel" },
+                                { text: "Delete", style: "destructive", onPress: () => deleteTemplate(t.id) },
+                              ]
+                            );
+                          }}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                          testID={`delete-template-${t.id}`}
+                        >
+                          <Trash2 size={15} color="#EF4444" />
+                        </TouchableOpacity>
+                      </View>
+                    ) : null}
                   </TouchableOpacity>
                 ))}
               </View>

@@ -91,6 +91,63 @@ templatesRouter.post(
   }
 );
 
+const updateTemplateSchema = z.object({
+  title: z.string().min(1, "Title is required").optional(),
+  description: z.string().optional(),
+  priority: z.enum(["low", "medium", "high"]).optional(),
+  attachmentUrl: z.string().url().optional().nullable(),
+  subtasks: z
+    .array(z.object({ title: z.string(), order: z.number() }))
+    .optional()
+    .nullable(),
+});
+
+// PATCH /api/teams/:teamId/templates/:templateId
+templatesRouter.patch(
+  "/:templateId",
+  zValidator("json", updateTemplateSchema),
+  async (c) => {
+    const user = c.get("user")!;
+    const teamId = c.req.param("teamId") as string;
+    const { templateId } = c.req.param();
+
+    const membership = await getMembership(user.id, teamId);
+    if (!membership) {
+      return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
+    }
+
+    const existing = await prisma.taskTemplate.findFirst({
+      where: { id: templateId, teamId },
+    });
+
+    if (!existing) {
+      return c.json({ error: { message: "Template not found", code: "NOT_FOUND" } }, 404);
+    }
+
+    if (existing.createdById !== user.id) {
+      return c.json({ error: { message: "Only the creator can update this template", code: "FORBIDDEN" } }, 403);
+    }
+
+    const { title, description, priority, attachmentUrl, subtasks } = c.req.valid("json");
+
+    const updated = await prisma.taskTemplate.update({
+      where: { id: templateId },
+      data: {
+        ...(title !== undefined && { title: title.trim() }),
+        ...(description !== undefined && { description: description.trim() }),
+        ...(priority !== undefined && { priority }),
+        ...(attachmentUrl !== undefined && { attachmentUrl: attachmentUrl ?? null }),
+        ...(subtasks !== undefined && { subtasks: subtasks ? JSON.stringify(subtasks) : null }),
+      },
+      include: {
+        createdBy: { select: { id: true, name: true, email: true, image: true } },
+      },
+    });
+
+    return c.json({ data: { ...updated, subtasks: updated.subtasks ? JSON.parse(updated.subtasks) : [] } });
+  }
+);
+
 // DELETE /api/teams/:teamId/templates/:templateId
 templatesRouter.delete("/:templateId", async (c) => {
   const user = c.get("user")!;
