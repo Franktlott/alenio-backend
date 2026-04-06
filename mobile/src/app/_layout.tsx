@@ -71,7 +71,7 @@ function CustomSplash({ onDone }: { onDone: () => void }) {
       <View style={{ position: 'absolute', bottom: 48, alignItems: 'center' }}>
         <Image
           source={require('@/assets/lotttech-logo.png')}
-          style={{ width: 157, height: 51 }}
+          style={{ width: 204, height: 66 }}
           resizeMode="contain"
         />
       </View>

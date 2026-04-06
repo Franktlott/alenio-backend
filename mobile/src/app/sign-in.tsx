@@ -242,7 +242,7 @@ export default function SignIn() {
       </KeyboardAvoidingView>
 
       <View style={{ alignItems: "center", paddingBottom: 16 }}>
-        <Image source={require("@/assets/lotttech-logo.png")} style={{ width: 142, height: 44 }} resizeMode="contain" />
+        <Image source={require("@/assets/lotttech-logo.png")} style={{ width: 185, height: 57 }} resizeMode="contain" />
       </View>
     </View>
   );
