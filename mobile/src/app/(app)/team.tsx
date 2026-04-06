@@ -263,7 +263,20 @@ export default function TeamScreen() {
               </View>
             </View>
             <Pressable
-              onPress={() => cancelMutation.mutate(myRequest.id)}
+              onPress={() =>
+                Alert.alert(
+                  "Cancel Request",
+                  `Are you sure you want to cancel your request to join ${myRequest.team.name}?`,
+                  [
+                    { text: "Keep Request", style: "cancel" },
+                    {
+                      text: "Cancel Request",
+                      style: "destructive",
+                      onPress: () => cancelMutation.mutate(myRequest.id),
+                    },
+                  ]
+                )
+              }
               disabled={cancelMutation.isPending}
               style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderWidth: 1.5, borderColor: "#EF4444", paddingVertical: 13, borderRadius: 14 }}
               testID="cancel-request-button"
