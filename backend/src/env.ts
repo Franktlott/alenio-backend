@@ -16,6 +16,9 @@ const envSchema = z.object({
   BACKEND_URL: z.string().default("http://localhost:3000"),
   // Admin Dashboard
   ADMIN_PASSWORD: z.string().optional().default("admin123"),
+  // Email (Resend)
+  RESEND_API_KEY: z.string().optional(),
+  FROM_EMAIL: z.string().optional().default("noreply@yourdomain.com"),
 });
 
 /**
