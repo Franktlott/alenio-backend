@@ -341,6 +341,7 @@ model Poll {
   question    String
   endsAt      DateTime
   createdAt   DateTime     @default(now())
+  allowLeaderDelete Boolean      @default(true)
   team        Team         @relation(fields: [teamId], references: [id], onDelete: Cascade)
   createdBy   User         @relation("PollCreatedBy", fields: [createdById], references: [id])
   options     PollOption[]

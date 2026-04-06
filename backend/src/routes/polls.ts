@@ -51,11 +51,12 @@ pollsRouter.post(
     question: z.string().min(1).max(500),
     options: z.array(z.string().min(1).max(200)).min(2).max(6),
     durationHours: z.number().int().min(1).max(168), // 1h to 7 days
+    allowLeaderDelete: z.boolean().default(true),
   })),
   async (c) => {
     const user = c.get("user")!;
     const { teamId } = c.req.param();
-    const { question, options, durationHours } = c.req.valid("json");
+    const { question, options, durationHours, allowLeaderDelete } = c.req.valid("json");
 
     const membership = await prisma.teamMember.findUnique({
       where: { userId_teamId: { userId: user.id, teamId } },
@@ -70,6 +71,7 @@ pollsRouter.post(
         createdById: user.id,
         question,
         endsAt,
+        allowLeaderDelete,
         options: {
           create: options.map((text) => ({ text })),
         },
@@ -141,7 +143,7 @@ pollsRouter.delete("/:teamId/polls/:pollId", async (c) => {
 
   const canDelete =
     poll.createdById === user.id ||
-    ["owner", "team_leader"].includes(membership.role);
+    (poll.allowLeaderDelete && ["owner", "team_leader"].includes(membership.role));
 
   if (!canDelete) return c.json({ error: { message: "Not allowed", code: "FORBIDDEN" } }, 403);
 

@@ -43,6 +43,7 @@ type PollType = {
   endsAt: string;
   createdAt: string;
   createdById: string;
+  allowLeaderDelete: boolean;
   createdBy: { id: string; name: string; image: string | null };
   options: { id: string; text: string; votes: { userId: string }[] }[];
   votes: { userId: string; optionId: string }[];
@@ -209,6 +210,8 @@ export default function TeamChatScreen() {
   const [pollQuestion, setPollQuestion] = useState<string>("");
   const [pollOptions, setPollOptions] = useState<string[]>(["", ""]);
   const [pollDuration, setPollDuration] = useState<number>(24);
+  const [pollAllowLeaderDelete, setPollAllowLeaderDelete] = useState<boolean>(true);
+  const [confirmDeletePollId, setConfirmDeletePollId] = useState<string | null>(null);
   const flatListRef = useRef<FlatList>(null);
   const currentUserId = session?.user?.id ?? "";
 
@@ -275,7 +278,7 @@ export default function TeamChatScreen() {
   });
 
   const createPollMutation = useMutation({
-    mutationFn: (payload: { question: string; options: string[]; durationHours: number }) =>
+    mutationFn: (payload: { question: string; options: string[]; durationHours: number; allowLeaderDelete: boolean }) =>
       api.post(`/api/teams/${teamId}/polls`, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["polls", teamId] });
@@ -283,6 +286,7 @@ export default function TeamChatScreen() {
       setPollQuestion("");
       setPollOptions(["", ""]);
       setPollDuration(24);
+      setPollAllowLeaderDelete(true);
     },
   });
 
@@ -559,6 +563,43 @@ export default function TeamChatScreen() {
         </TouchableOpacity>
       </Modal>
 
+      {/* Delete poll confirmation modal */}
+      <Modal visible={!!confirmDeletePollId} transparent animationType="fade" onRequestClose={() => setConfirmDeletePollId(null)}>
+        <TouchableOpacity
+          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", alignItems: "center", justifyContent: "center", paddingHorizontal: 32 }}
+          activeOpacity={1}
+          onPress={() => setConfirmDeletePollId(null)}
+        >
+          <TouchableOpacity activeOpacity={1} onPress={() => {}}>
+            <View style={{ backgroundColor: "white", borderRadius: 20, padding: 24, width: "100%" }}>
+              <Text style={{ fontSize: 17, fontWeight: "700", color: "#1E293B", textAlign: "center", marginBottom: 8 }}>Delete Poll?</Text>
+              <Text style={{ fontSize: 14, color: "#64748B", textAlign: "center", marginBottom: 24, lineHeight: 20 }}>
+                This poll and all its votes will be permanently removed.
+              </Text>
+              <View style={{ flexDirection: "row", gap: 10 }}>
+                <TouchableOpacity
+                  onPress={() => setConfirmDeletePollId(null)}
+                  style={{ flex: 1, paddingVertical: 13, borderRadius: 12, backgroundColor: "#F1F5F9", alignItems: "center" }}
+                  testID="cancel-delete-poll"
+                >
+                  <Text style={{ fontWeight: "600", color: "#64748B", fontSize: 15 }}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => {
+                    if (confirmDeletePollId) deletePollMutation.mutate(confirmDeletePollId);
+                    setConfirmDeletePollId(null);
+                  }}
+                  style={{ flex: 1, paddingVertical: 13, borderRadius: 12, backgroundColor: "#EF4444", alignItems: "center" }}
+                  testID="confirm-delete-poll"
+                >
+                  <Text style={{ fontWeight: "700", color: "white", fontSize: 15 }}>Delete</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
       {/* Poll creation modal */}
       <Modal visible={showPollModal} transparent animationType="slide" onRequestClose={() => setShowPollModal(false)}>
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
@@ -683,6 +724,31 @@ export default function TeamChatScreen() {
                 ))}
               </View>
 
+              {/* Allow leader delete toggle */}
+              <TouchableOpacity
+                onPress={() => setPollAllowLeaderDelete((v) => !v)}
+                style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 14, borderTopWidth: 1, borderTopColor: "#F1F5F9", marginBottom: 4 }}
+                testID="poll-allow-leader-toggle"
+              >
+                <View style={{ flex: 1, marginRight: 12 }}>
+                  <Text style={{ fontSize: 14, fontWeight: "600", color: "#1E293B" }}>Allow team leaders to delete</Text>
+                  <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 2 }}>Owners and team leaders can remove this poll</Text>
+                </View>
+                <View style={{
+                  width: 44, height: 26, borderRadius: 13,
+                  backgroundColor: pollAllowLeaderDelete ? "#4361EE" : "#E2E8F0",
+                  justifyContent: "center",
+                  paddingHorizontal: 2,
+                }}>
+                  <View style={{
+                    width: 22, height: 22, borderRadius: 11, backgroundColor: "white",
+                    alignSelf: pollAllowLeaderDelete ? "flex-end" : "flex-start",
+                    shadowColor: "#000", shadowOpacity: 0.15, shadowRadius: 2, shadowOffset: { width: 0, height: 1 },
+                    elevation: 2,
+                  }} />
+                </View>
+              </TouchableOpacity>
+
               {/* Create button */}
               <TouchableOpacity
                 testID="create-poll-submit"
@@ -693,6 +759,7 @@ export default function TeamChatScreen() {
                     question: pollQuestion.trim(),
                     options: validOptions,
                     durationHours: pollDuration,
+                    allowLeaderDelete: pollAllowLeaderDelete,
                   });
                 }}
                 disabled={
@@ -756,16 +823,14 @@ export default function TeamChatScreen() {
                 const poll = item as PollType;
                 const canDeletePoll =
                   poll.createdById === currentUserId ||
-                  currentUserRole === "owner" ||
-                  currentUserRole === "team_leader" ||
-                  currentUserRole === "admin";
+                  (poll.allowLeaderDelete && (currentUserRole === "owner" || currentUserRole === "team_leader" || currentUserRole === "admin"));
                 return (
                   <PollCard
                     poll={poll}
                     currentUserId={currentUserId}
                     teamId={teamId}
                     onVote={(pollId, optionId) => voteMutation.mutate({ pollId, optionId })}
-                    onDelete={(pollId) => deletePollMutation.mutate(pollId)}
+                    onDelete={(pollId) => setConfirmDeletePollId(pollId)}
                     canDelete={canDeletePoll}
                   />
                 );
