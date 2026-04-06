@@ -305,12 +305,16 @@ dmsRouter.post("/:conversationId/messages/:messageId/reactions", async (c) => {
   const { emoji } = body;
   if (!emoji) return c.json({ error: { message: "Emoji is required", code: "VALIDATION_ERROR" } }, 400);
 
-  const existing = await prisma.directMessageReaction.findUnique({
-    where: { directMessageId_userId_emoji: { directMessageId: messageId, userId: user.id, emoji } },
+  // Enforce 1 reaction per user — swap if different emoji, toggle off if same
+  const existingAny = await prisma.directMessageReaction.findFirst({
+    where: { directMessageId: messageId, userId: user.id },
   });
 
-  if (existing) {
-    await prisma.directMessageReaction.delete({ where: { id: existing.id } });
+  if (existingAny) {
+    await prisma.directMessageReaction.delete({ where: { id: existingAny.id } });
+    if (existingAny.emoji !== emoji) {
+      await prisma.directMessageReaction.create({ data: { directMessageId: messageId, userId: user.id, emoji } });
+    }
   } else {
     await prisma.directMessageReaction.create({ data: { directMessageId: messageId, userId: user.id, emoji } });
   }

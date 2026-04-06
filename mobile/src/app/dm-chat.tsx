@@ -332,20 +332,49 @@ export default function DMChatScreen() {
           <TouchableOpacity activeOpacity={1} onPress={() => {}}>
             <View style={{ marginHorizontal: 12, marginBottom: 32 }}>
               {/* Reaction row */}
-              <View style={{ backgroundColor: "white", borderRadius: 16, padding: 12, marginBottom: 8, flexDirection: "row", justifyContent: "space-around" }}>
-                {REACTION_EMOJIS.map((emoji) => (
-                  <TouchableOpacity
-                    key={emoji}
-                    onPress={() => {
-                      if (emojiTarget) reactionMutation.mutate({ messageId: emojiTarget.id, emoji });
-                      setEmojiTarget(null);
-                    }}
-                    style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: "#F1F5F9", alignItems: "center", justifyContent: "center" }}
-                  >
-                    <Text style={{ fontSize: 22 }}>{emoji}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
+              {(() => {
+                const myReaction = emojiTarget
+                  ? (emojiTarget.reactions ?? []).find((r: any) => r.userId === currentUserId)?.emoji
+                  : undefined;
+                return (
+                  <View style={{ backgroundColor: "white", borderRadius: 16, padding: 12, marginBottom: 8 }}>
+                    <View style={{ flexDirection: "row", justifyContent: "space-around" }}>
+                      {REACTION_EMOJIS.map((emoji) => {
+                        const isMine = emoji === myReaction;
+                        return (
+                          <TouchableOpacity
+                            key={emoji}
+                            onPress={() => {
+                              if (emojiTarget) reactionMutation.mutate({ messageId: emojiTarget.id, emoji });
+                              setEmojiTarget(null);
+                            }}
+                            style={{
+                              width: 44, height: 44, borderRadius: 22,
+                              backgroundColor: isMine ? "#EEF2FF" : "#F1F5F9",
+                              alignItems: "center", justifyContent: "center",
+                              borderWidth: isMine ? 1.5 : 0,
+                              borderColor: isMine ? "#4361EE" : "transparent",
+                            }}
+                          >
+                            <Text style={{ fontSize: 22 }}>{emoji}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                    {myReaction ? (
+                      <TouchableOpacity
+                        onPress={() => {
+                          if (emojiTarget) reactionMutation.mutate({ messageId: emojiTarget.id, emoji: myReaction });
+                          setEmojiTarget(null);
+                        }}
+                        style={{ alignItems: "center", paddingTop: 10, marginTop: 4, borderTopWidth: 0.5, borderTopColor: "#F1F5F9" }}
+                      >
+                        <Text style={{ fontSize: 14, color: "#EF4444", fontWeight: "600" }}>Remove reaction</Text>
+                      </TouchableOpacity>
+                    ) : null}
+                  </View>
+                );
+              })()}
 
               {/* Action list */}
               <View style={{ backgroundColor: "white", borderRadius: 16, overflow: "hidden" }}>

@@ -266,20 +266,49 @@ export default function TeamChatScreen() {
           onPress={() => setEmojiTarget(null)}
         >
           <View className="bg-white dark:bg-slate-800 rounded-2xl p-3 shadow-xl">
-            <View className="flex-row mb-3" style={{ gap: 8 }}>
-              {REACTION_EMOJIS.map((emoji) => (
-                <TouchableOpacity
-                  key={emoji}
-                  onPress={() => {
-                    if (emojiTarget) reactionMutation.mutate({ messageId: emojiTarget.id, emoji });
-                    setEmojiTarget(null);
-                  }}
-                  className="w-11 h-11 rounded-full bg-slate-100 dark:bg-slate-700 items-center justify-center"
-                >
-                  <Text style={{ fontSize: 22 }}>{emoji}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+            {(() => {
+              const myReaction = emojiTarget
+                ? (emojiTarget.reactions ?? []).find((r: any) => r.userId === currentUserId)?.emoji
+                : undefined;
+              return (
+                <>
+                  <View className="flex-row mb-3" style={{ gap: 8 }}>
+                    {REACTION_EMOJIS.map((emoji) => {
+                      const isMine = emoji === myReaction;
+                      return (
+                        <TouchableOpacity
+                          key={emoji}
+                          onPress={() => {
+                            if (emojiTarget) reactionMutation.mutate({ messageId: emojiTarget.id, emoji });
+                            setEmojiTarget(null);
+                          }}
+                          style={{
+                            width: 44, height: 44, borderRadius: 22,
+                            backgroundColor: isMine ? "#EEF2FF" : "#F1F5F9",
+                            alignItems: "center", justifyContent: "center",
+                            borderWidth: isMine ? 1.5 : 0,
+                            borderColor: isMine ? "#4361EE" : "transparent",
+                          }}
+                        >
+                          <Text style={{ fontSize: 22 }}>{emoji}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                  {myReaction ? (
+                    <TouchableOpacity
+                      onPress={() => {
+                        if (emojiTarget) reactionMutation.mutate({ messageId: emojiTarget.id, emoji: myReaction });
+                        setEmojiTarget(null);
+                      }}
+                      className="flex-row items-center justify-center py-2 border-t border-slate-100 dark:border-slate-700"
+                    >
+                      <Text style={{ color: "#EF4444", fontWeight: "600", fontSize: 14 }}>Remove reaction</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                </>
+              );
+            })()}
             <TouchableOpacity
               onPress={() => {
                 setReplyTo(emojiTarget);

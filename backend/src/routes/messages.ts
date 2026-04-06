@@ -128,12 +128,16 @@ messagesRouter.post("/:messageId/reactions", async (c) => {
   const { emoji } = body;
   if (!emoji) return c.json({ error: { message: "Emoji is required", code: "VALIDATION_ERROR" } }, 400);
 
-  const existing = await prisma.messageReaction.findUnique({
-    where: { messageId_userId_emoji: { messageId, userId: user.id, emoji } },
+  // Enforce 1 reaction per user — swap if different emoji, toggle off if same
+  const existingAny = await prisma.messageReaction.findFirst({
+    where: { messageId, userId: user.id },
   });
 
-  if (existing) {
-    await prisma.messageReaction.delete({ where: { id: existing.id } });
+  if (existingAny) {
+    await prisma.messageReaction.delete({ where: { id: existingAny.id } });
+    if (existingAny.emoji !== emoji) {
+      await prisma.messageReaction.create({ data: { messageId, userId: user.id, emoji } });
+    }
   } else {
     await prisma.messageReaction.create({ data: { messageId, userId: user.id, emoji } });
   }
