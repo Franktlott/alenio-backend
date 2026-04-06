@@ -37,11 +37,11 @@ const RECURRENCE_TYPES: { label: string; value: RecurrenceType }[] = [
 ];
 
 export default function CreateTaskScreen() {
-  const { teamId } = useLocalSearchParams<{ teamId: string }>();
+  const { teamId, prefillTitle } = useLocalSearchParams<{ teamId: string; prefillTitle?: string }>();
   const queryClient = useQueryClient();
   const { data: session } = useSession();
 
-  const [title, setTitle] = useState("");
+  const [title, setTitle] = useState(typeof prefillTitle === "string" ? prefillTitle : "");
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState<TaskPriority>("medium");
   const [selectedAssignees, setSelectedAssignees] = useState<string[]>([]);
@@ -116,11 +116,14 @@ export default function CreateTaskScreen() {
         const uploaded = await uploadFile(attachmentUri, filename, "image/jpeg");
         attachmentUrl = uploaded.url;
       }
-      const task = await api.post<Task>(`/api/teams/${teamId}/tasks`, { ...input, attachmentUrl });
-      for (const title of subtaskTitles) {
-        await api.post(`/api/teams/${teamId}/tasks/${task.id}/subtasks`, { title });
+      const tasks = await api.post<Task[]>(`/api/teams/${teamId}/tasks`, { ...input, attachmentUrl });
+      // Attach subtasks to each created task
+      for (const task of tasks) {
+        for (const subtaskTitle of subtaskTitles) {
+          await api.post(`/api/teams/${teamId}/tasks/${task.id}/subtasks`, { title: subtaskTitle });
+        }
       }
-      return task;
+      return tasks;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tasks", teamId] });

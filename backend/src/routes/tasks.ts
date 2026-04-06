@@ -121,44 +121,92 @@ tasksRouter.post("/", async (c) => {
     return c.json({ error: { message: "Title is required", code: "VALIDATION_ERROR" } }, 400);
   }
 
-  const task = await prisma.task.create({
-    data: {
-      title: title.trim(),
-      description: description?.trim(),
-      priority: priority || "medium",
-      dueDate: dueDate ? new Date(dueDate) : null,
-      incognito: incognito === true,
-      teamId,
-      creatorId: user.id,
-      ...(attachmentUrl ? { attachmentUrl } : {}),
-      ...(assigneeIds?.length
-        ? { assignments: { create: (assigneeIds as string[]).map((id) => ({ userId: id })) } }
-        : {}),
-      ...(recurrence
-        ? {
-            recurrenceRule: {
-              create: {
-                type: recurrence.type,
-                interval: recurrence.interval || 1,
-                daysOfWeek: recurrence.daysOfWeek,
-                dayOfMonth: recurrence.dayOfMonth,
-                nextDueAt: dueDate
-                  ? getNextDueDate(recurrence.type, recurrence.interval || 1, new Date(dueDate), recurrence.daysOfWeek, recurrence.dayOfMonth)
-                  : null,
-              },
-            },
-          }
-        : {}),
-    },
-    include: {
-      assignments: { include: { user: { select: { id: true, name: true, email: true, image: true } } } },
-      subtasks: { orderBy: { order: 'asc' } },
-      recurrenceRule: true,
-      creator: { select: { id: true, name: true, email: true } },
-    },
-  });
+  const taskInclude = {
+    assignments: { include: { user: { select: { id: true, name: true, email: true, image: true } } } },
+    subtasks: { orderBy: { order: 'asc' } },
+    recurrenceRule: true,
+    creator: { select: { id: true, name: true, email: true } },
+  } as const;
 
-  return c.json({ data: task }, 201);
+  const baseTaskData = {
+    title: title.trim(),
+    description: description?.trim(),
+    priority: priority || "medium",
+    dueDate: dueDate ? new Date(dueDate) : null,
+    incognito: incognito === true,
+    teamId,
+    creatorId: user.id,
+    ...(attachmentUrl ? { attachmentUrl } : {}),
+    ...(recurrence
+      ? {
+          recurrenceRule: {
+            create: {
+              type: recurrence.type,
+              interval: recurrence.interval || 1,
+              daysOfWeek: recurrence.daysOfWeek,
+              dayOfMonth: recurrence.dayOfMonth,
+              nextDueAt: dueDate
+                ? getNextDueDate(recurrence.type, recurrence.interval || 1, new Date(dueDate), recurrence.daysOfWeek, recurrence.dayOfMonth)
+                : null,
+            },
+          },
+        }
+      : {}),
+  };
+
+  const ids: string[] = assigneeIds?.length ? (assigneeIds as string[]) : [];
+
+  let tasks: Awaited<ReturnType<typeof prisma.task.create>>[];
+
+  if (ids.length <= 1) {
+    // Single task (0 or 1 assignee)
+    const task = await prisma.task.create({
+      data: {
+        ...baseTaskData,
+        ...(ids.length === 1 ? { assignments: { create: [{ userId: ids[0]! }] } } : {}),
+      },
+      include: taskInclude,
+    });
+    tasks = [task];
+  } else {
+    // One task per assignee
+    tasks = await Promise.all(
+      ids.map((assigneeId) =>
+        prisma.task.create({
+          data: {
+            ...baseTaskData,
+            assignments: { create: [{ userId: assigneeId }] },
+          },
+          include: taskInclude,
+        })
+      )
+    );
+  }
+
+  // Send push notifications to assignees (excluding the creator)
+  const assigneesToNotify = ids.filter((id) => id !== user.id);
+  if (assigneesToNotify.length > 0) {
+    await sendPushToUsers(
+      assigneesToNotify,
+      "New task assigned",
+      tasks[0]?.title ?? "You have a new task",
+      { taskId: tasks[0]?.id, teamId },
+      "notifTaskAssigned"
+    );
+  }
+
+  // Log activity for each assignee
+  for (const assigneeId of ids) {
+    const assignedUser = await prisma.user.findUnique({ where: { id: assigneeId }, select: { name: true } });
+    await logActivity({
+      teamId,
+      userId: assigneeId,
+      type: "task_assigned",
+      metadata: { taskTitle: incognito ? null : title.trim(), assigneeName: assignedUser?.name ?? "" },
+    });
+  }
+
+  return c.json({ data: tasks }, 201);
 });
 
 // GET /api/teams/:teamId/tasks/member-stats - task stats per team member
