@@ -310,10 +310,9 @@ function ReactionRow({
   );
 }
 
-function CelebrationCard({ item, activeTeamId, currentUserId, isDemo }: { item: ActivityEvent; activeTeamId: string | null; currentUserId: string | undefined; isDemo: boolean }) {
+function CelebrationCard({ item, activeTeamId, currentUserId, isDemo, showPicker, onOpenPicker, onClosePicker }: { item: ActivityEvent; activeTeamId: string | null; currentUserId: string | undefined; isDemo: boolean; showPicker: boolean; onOpenPicker: () => void; onClosePicker: () => void }) {
   const count = item.metadata?.count ?? 10;
   const name = item.user?.name ?? "Someone";
-  const [showPicker, setShowPicker] = useState<boolean>(false);
   const queryClient = useQueryClient();
 
   const { mutate: toggleReaction } = useMutation({
@@ -321,14 +320,14 @@ function CelebrationCard({ item, activeTeamId, currentUserId, isDemo }: { item: 
       api.post(`/api/teams/${activeTeamId}/activity/${item.id}/react`, { emoji }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["activity", activeTeamId] });
-      setShowPicker(false);
+      onClosePicker();
     },
   });
 
   return (
     <Pressable
       onPress={() => router.push("/(app)" as any)}
-      onLongPress={isDemo ? undefined : () => setShowPicker(true)}
+      onLongPress={isDemo ? undefined : onOpenPicker}
       style={{ marginHorizontal: 16, marginVertical: 6 }}
       testID={`milestone-card-${item.id}`}
     >
@@ -401,7 +400,7 @@ function CelebrationCard({ item, activeTeamId, currentUserId, isDemo }: { item: 
             currentUserId={currentUserId}
             onToggleReaction={toggleReaction}
             showPicker={showPicker}
-            onClosePicker={() => setShowPicker(false)}
+            onClosePicker={onClosePicker}
           />
         </View>
       </LinearGradient>
@@ -409,10 +408,9 @@ function CelebrationCard({ item, activeTeamId, currentUserId, isDemo }: { item: 
   );
 }
 
-function PersonalBestCard({ item, activeTeamId, currentUserId, isDemo }: { item: ActivityEvent; activeTeamId: string | null; currentUserId: string | undefined; isDemo: boolean }) {
+function PersonalBestCard({ item, activeTeamId, currentUserId, isDemo, showPicker, onOpenPicker, onClosePicker }: { item: ActivityEvent; activeTeamId: string | null; currentUserId: string | undefined; isDemo: boolean; showPicker: boolean; onOpenPicker: () => void; onClosePicker: () => void }) {
   const count = item.metadata?.count ?? 0;
   const name = item.user?.name ?? "Someone";
-  const [showPicker, setShowPicker] = useState<boolean>(false);
   const queryClient = useQueryClient();
 
   const { mutate: toggleReaction } = useMutation({
@@ -420,14 +418,14 @@ function PersonalBestCard({ item, activeTeamId, currentUserId, isDemo }: { item:
       api.post(`/api/teams/${activeTeamId}/activity/${item.id}/react`, { emoji }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["activity", activeTeamId] });
-      setShowPicker(false);
+      onClosePicker();
     },
   });
 
   return (
     <Pressable
       onPress={() => router.push("/(app)" as any)}
-      onLongPress={isDemo ? undefined : () => setShowPicker(true)}
+      onLongPress={isDemo ? undefined : onOpenPicker}
       style={{ marginHorizontal: 16, marginVertical: 6 }}
       testID={`personal-best-card-${item.id}`}
     >
@@ -500,7 +498,7 @@ function PersonalBestCard({ item, activeTeamId, currentUserId, isDemo }: { item:
             currentUserId={currentUserId}
             onToggleReaction={toggleReaction}
             showPicker={showPicker}
-            onClosePicker={() => setShowPicker(false)}
+            onClosePicker={onClosePicker}
           />
         </View>
       </LinearGradient>
@@ -508,8 +506,7 @@ function PersonalBestCard({ item, activeTeamId, currentUserId, isDemo }: { item:
   );
 }
 
-function ActivityItem({ item, activeTeamId, currentUserId, isDemo }: { item: ActivityEvent; activeTeamId: string | null; currentUserId: string | undefined; isDemo: boolean }) {
-  const [showPicker, setShowPicker] = useState<boolean>(false);
+function ActivityItem({ item, activeTeamId, currentUserId, isDemo, showPicker, onOpenPicker, onClosePicker }: { item: ActivityEvent; activeTeamId: string | null; currentUserId: string | undefined; isDemo: boolean; showPicker: boolean; onOpenPicker: () => void; onClosePicker: () => void }) {
   const queryClient = useQueryClient();
 
   const { mutate: toggleReaction } = useMutation({
@@ -517,16 +514,16 @@ function ActivityItem({ item, activeTeamId, currentUserId, isDemo }: { item: Act
       api.post(`/api/teams/${activeTeamId}/activity/${item.id}/react`, { emoji }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["activity", activeTeamId] });
-      setShowPicker(false);
+      onClosePicker();
     },
   });
 
   if (item.type === "task_milestone") {
-    return <CelebrationCard item={item} activeTeamId={activeTeamId} currentUserId={currentUserId} isDemo={isDemo} />;
+    return <CelebrationCard item={item} activeTeamId={activeTeamId} currentUserId={currentUserId} isDemo={isDemo} showPicker={showPicker} onOpenPicker={onOpenPicker} onClosePicker={onClosePicker} />;
   }
 
   if (item.type === "personal_best") {
-    return <PersonalBestCard item={item} activeTeamId={activeTeamId} currentUserId={currentUserId} isDemo={isDemo} />;
+    return <PersonalBestCard item={item} activeTeamId={activeTeamId} currentUserId={currentUserId} isDemo={isDemo} showPicker={showPicker} onOpenPicker={onOpenPicker} onClosePicker={onClosePicker} />;
   }
 
   const config = EVENT_CONFIG[item.type] ?? {
@@ -540,7 +537,7 @@ function ActivityItem({ item, activeTeamId, currentUserId, isDemo }: { item: Act
 
   return (
     <Pressable
-      onLongPress={isDemo ? undefined : () => setShowPicker(true)}
+      onLongPress={isDemo ? undefined : onOpenPicker}
       style={{ paddingHorizontal: 20, paddingVertical: 14 }}
       testID={`activity-item-${item.id}`}
     >
@@ -605,7 +602,7 @@ function ActivityItem({ item, activeTeamId, currentUserId, isDemo }: { item: Act
           currentUserId={currentUserId}
           onToggleReaction={toggleReaction}
           showPicker={showPicker}
-          onClosePicker={() => setShowPicker(false)}
+          onClosePicker={onClosePicker}
         />
       </View>
     </Pressable>
@@ -619,6 +616,7 @@ export default function FeedScreen() {
   const isDemo = useDemoMode();
   const currentUserId = session?.user?.id;
   const [showReactionHint, setShowReactionHint] = useState<boolean>(false);
+  const [openPickerId, setOpenPickerId] = useState<string | null>(null);
   const hintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -638,6 +636,12 @@ export default function FeedScreen() {
       }, 4000);
     }
   }, [showReactionHint]);
+
+  useEffect(() => {
+    if (!openPickerId) return;
+    const timer = setTimeout(() => setOpenPickerId(null), 10000);
+    return () => clearTimeout(timer);
+  }, [openPickerId]);
 
   const { data: activities = [], isLoading, refetch } = useQuery({
     queryKey: ["activity", activeTeamId],
@@ -706,7 +710,7 @@ export default function FeedScreen() {
           ListHeaderComponent={todayEvents.length > 0 ? <TodayEventsCard events={todayEvents} /> : null}
           renderItem={({ item, index }) => (
             <>
-              <ActivityItem item={item} activeTeamId={activeTeamId} currentUserId={currentUserId} isDemo={isDemo} />
+              <ActivityItem item={item} activeTeamId={activeTeamId} currentUserId={currentUserId} isDemo={isDemo} showPicker={openPickerId === item.id} onOpenPicker={() => setOpenPickerId(item.id)} onClosePicker={() => setOpenPickerId(null)} />
               {index === 0 && showReactionHint ? (
                 <Text style={{ fontSize: 10, color: "rgba(100,116,139,0.7)", textAlign: "center", marginTop: 2 }}>
                   Long press to react
