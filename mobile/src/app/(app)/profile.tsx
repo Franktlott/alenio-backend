@@ -591,6 +591,28 @@ export default function ProfileScreen() {
         </View>
         ) : null}
 
+        {/* Legal / About */}
+        <View className="mx-4 mt-5">
+          <GlassCard>
+            <TouchableOpacity
+              className="flex-row items-center px-4 py-4 border-b border-slate-100/60"
+              onPress={() => router.push("/privacy-policy")}
+              testID="privacy-policy-link"
+            >
+              <Text className="flex-1 text-slate-700 font-medium">Privacy Policy</Text>
+              <ChevronRight size={18} color="#94A3B8" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              className="flex-row items-center px-4 py-4"
+              onPress={() => router.push("/terms-of-service")}
+              testID="terms-of-service-link"
+            >
+              <Text className="flex-1 text-slate-700 font-medium">Terms of Service</Text>
+              <ChevronRight size={18} color="#94A3B8" />
+            </TouchableOpacity>
+          </GlassCard>
+        </View>
+
         {/* Sign out */}
         {showSignOutConfirm ? (
           <View className="mx-4 mt-5">

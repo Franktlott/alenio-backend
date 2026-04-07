@@ -164,6 +164,8 @@ function RootLayoutNav() {
           <Stack.Screen name="forgot-password" />
           <Stack.Screen name="reset-password" />
         </Stack.Protected>
+        <Stack.Screen name="privacy-policy" />
+        <Stack.Screen name="terms-of-service" />
       </Stack>
     </ThemeProvider>
   );

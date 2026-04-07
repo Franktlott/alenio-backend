@@ -238,6 +238,18 @@ export default function SignIn() {
               <Text className="text-indigo-600 text-sm font-medium">Forgot password?</Text>
             </TouchableOpacity>
           ) : null}
+
+          {/* Legal links */}
+          <View className="flex-row justify-center flex-wrap mt-6 mb-2 gap-1">
+            <Text className="text-xs text-slate-400">By continuing you agree to our</Text>
+            <TouchableOpacity onPress={() => router.push("/terms-of-service")} testID="terms-link">
+              <Text className="text-xs text-indigo-500 font-medium">Terms of Service</Text>
+            </TouchableOpacity>
+            <Text className="text-xs text-slate-400">and</Text>
+            <TouchableOpacity onPress={() => router.push("/privacy-policy")} testID="privacy-link">
+              <Text className="text-xs text-indigo-500 font-medium">Privacy Policy</Text>
+            </TouchableOpacity>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
 
