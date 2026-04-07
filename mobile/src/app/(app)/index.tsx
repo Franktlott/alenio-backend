@@ -669,7 +669,9 @@ export default function TasksScreen() {
 
   const openEventModal = () => {
     setEditingEvent(null);
-    const d = selectedDay ? new Date(selectedDay) : new Date();
+    const d = selectedDay
+      ? (() => { const [y, m, day] = selectedDay.split("-").map(Number); return new Date(y, m - 1, day); })()
+      : new Date();
     setEventTitle(""); setEventDescription("");
     setEventStart(d); setEventEnd(d);
     setEventColor("#4361EE"); setFormError(null);
