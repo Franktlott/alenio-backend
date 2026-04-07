@@ -9,7 +9,6 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { useSession } from '@/lib/auth/use-session';
 import { useEffect, useRef, useState } from 'react';
-import { Asset } from 'expo-asset';
 import * as Notifications from 'expo-notifications';
 import { registerForPushNotificationsAsync } from '@/lib/notifications';
 import { initRevenueCat } from '@/lib/revenue-cat';
@@ -173,24 +172,6 @@ function RootLayoutNav() {
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
-  const [assetsLoaded, setAssetsLoaded] = useState<boolean>(false);
-
-  useEffect(() => {
-    Asset.loadAsync([
-      require('@/assets/alenio-logo-white.png'),
-      require('@/assets/lotttech-logo.png'),
-      require('@/assets/alenio-logo.png'),
-      require('@/assets/brand-bg.png'),
-      require('@/assets/alenio-icon.png'),
-      require('@/assets/ventry-logo.png'),
-    ])
-      .catch(() => {})
-      .finally(() => setAssetsLoaded(true));
-  }, []);
-
-  if (!assetsLoaded) {
-    return null;
-  }
 
   return (
     <QueryClientProvider client={queryClient}>
