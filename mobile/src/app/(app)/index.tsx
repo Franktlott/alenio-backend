@@ -741,11 +741,14 @@ export default function TasksScreen() {
 
   const currentUserId = session?.user?.id ?? null;
   const isOwner = teams?.find((t) => t.id === activeTeamId)?.role === "owner";
+  const currentRole = teams?.find((t) => t.id === activeTeamId)?.role ?? "member";
+  const isRegularMember = currentRole === "member";
 
   React.useEffect(() => {
+    if (filter === "assigned" && isRegularMember) setFilter("all");
     if (filter === "assigned" && !currentUserId) setFilter("all");
     if (filter !== "assigned") setSelectedMemberId(null);
-  }, [currentUserId, filter]);
+  }, [currentUserId, filter, isRegularMember]);
 
   useEffect(() => {
     if (filter === "completed") setSort("completed");
@@ -963,7 +966,7 @@ export default function TasksScreen() {
         <View style={{ backgroundColor: "#F8FAFC", paddingTop: 10 }}>
           <View style={{ paddingHorizontal: 16, marginBottom: 10 }}>
             <View style={{ flexDirection: "row", backgroundColor: "#E2E8F0", borderRadius: 12, padding: 4, marginBottom: 8 }}>
-              {(["all", "completed", "assigned"] as FilterTab[]).map((f) => (
+              {(["all", "completed", ...(isRegularMember ? [] : ["assigned"])] as FilterTab[]).map((f) => (
                 <TouchableOpacity
                   key={f}
                   onPress={() => setFilter(f)}
