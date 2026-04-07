@@ -253,11 +253,19 @@ function MiniCalendar({
                     const evInfo = iso ? dayEventMap.get(iso) : null;
 
                     if (!bar) {
-                      // Day not covered by track 0 — show a small dot if it has events
-                      if (evInfo && evInfo.count > 0) {
+                      if (evInfo && evInfo.count === 1) {
+                        // Single event not in track 0 — show a proper bar segment
+                        return (
+                          <View key={colIdx} style={{ flex: 1, height: 15, backgroundColor: evInfo.color, borderRadius: 4, marginHorizontal: 2 }} />
+                        );
+                      }
+                      if (evInfo && evInfo.count > 1) {
+                        // Multiple events, none in track 0 — show count circle
                         return (
                           <View key={colIdx} style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-                            <View style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: evInfo.color }} />
+                            <View style={{ width: 15, height: 15, borderRadius: 7.5, backgroundColor: evInfo.color, alignItems: "center", justifyContent: "center" }}>
+                              <Text style={{ color: "white", fontSize: 8, fontWeight: "700", lineHeight: 15 }}>{evInfo.count}</Text>
+                            </View>
                           </View>
                         );
                       }
