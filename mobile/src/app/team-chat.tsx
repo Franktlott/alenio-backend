@@ -549,7 +549,7 @@ export default function TeamChatScreen() {
                 onPress={() => {
                   const msgText = emojiTarget.content ?? "";
                   setEmojiTarget(null);
-                  router.push({ pathname: "/create-task", params: { prefillTitle: msgText } });
+                  router.push({ pathname: "/create-task", params: { prefillTitle: msgText, fromChat: "true" } });
                 }}
                 style={{
                   flexDirection: "row",

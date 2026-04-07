@@ -16,7 +16,7 @@ import {
 } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams, Redirect } from "expo-router";
-import { Plus, User, Users, ArrowUpDown, ChevronLeft, ChevronRight, X, CalendarDays, CheckSquare, Calendar, Check, Bell } from "lucide-react-native";
+import { Plus, User, Users, ArrowUpDown, ChevronLeft, ChevronRight, X, CalendarDays, CheckSquare, Calendar, Check, Bell, MessageSquare } from "lucide-react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -530,6 +530,14 @@ function TaskRow({ task, isReminder, onToggle, onPress }: { task: Task; isRemind
           {!isReminder && task.recurrenceRule && !isDone ? (
             <Text style={{ fontSize: 9, color: "#818CF8" }}>↺ {task.recurrenceRule.type}</Text>
           ) : null}
+
+          {/* T2C badge — chat-to-task */}
+          {task.fromChat ? (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 2, backgroundColor: "#EEF2FF", borderRadius: 6, paddingHorizontal: 5, paddingVertical: 1 }}>
+              <MessageSquare size={9} color="#6366F1" />
+              <Text style={{ fontSize: 9, fontWeight: "700", color: "#6366F1" }}>T2C</Text>
+            </View>
+          ) : null}
         </View>
       </View>
     </Pressable>
@@ -555,6 +563,7 @@ function reminderToTask(r: Reminder): Task {
     subtasks: [],
     recurrenceRule: null,
     incognito: false,
+    fromChat: false,
   };
 }
 

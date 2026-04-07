@@ -67,6 +67,7 @@ export interface Task {
   subtasks: Subtask[];
   recurrenceRule?: RecurrenceRule | null;
   team?: { id: string; name: string };
+  fromChat?: boolean;
 }
 
 export interface MessageReaction {

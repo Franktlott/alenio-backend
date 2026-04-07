@@ -135,6 +135,7 @@ model Task {
   completedAt   DateTime?
   attachmentUrl String?
   incognito   Boolean  @default(false)
+  fromChat    Boolean  @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

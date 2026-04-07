@@ -115,7 +115,7 @@ tasksRouter.post("/", async (c) => {
   }
 
   const body = await c.req.json();
-  const { title, description, priority, dueDate, assigneeIds, recurrence, attachmentUrl, incognito } = body;
+  const { title, description, priority, dueDate, assigneeIds, recurrence, attachmentUrl, incognito, fromChat } = body;
 
   if (!title?.trim()) {
     return c.json({ error: { message: "Title is required", code: "VALIDATION_ERROR" } }, 400);
@@ -134,6 +134,7 @@ tasksRouter.post("/", async (c) => {
     priority: priority || "medium",
     dueDate: dueDate ? new Date(dueDate) : null,
     incognito: incognito === true,
+    fromChat: fromChat === true,
     teamId,
     creatorId: user.id,
     ...(attachmentUrl ? { attachmentUrl } : {}),
