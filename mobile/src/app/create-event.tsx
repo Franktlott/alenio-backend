@@ -311,8 +311,8 @@ export default function CreateEventScreen() {
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
             <EyeOff size={18} color={isHidden ? "#64748B" : "#CBD5E1"} />
             <View>
-              <Text style={{ fontSize: 14, fontWeight: "600", color: "#0F172A" }}>Hidden from team</Text>
-              <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 1 }}>Only visible to owners & leaders</Text>
+              <Text style={{ fontSize: 14, fontWeight: "600", color: "#0F172A" }}>Incognito</Text>
+              <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 1 }}>Only visible to you</Text>
             </View>
           </View>
           <Switch

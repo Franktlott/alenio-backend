@@ -27,9 +27,15 @@ calendarRouter.get("/:teamId/events", async (c) => {
     return c.json({ error: { message: "Team not found or not a member", code: "NOT_FOUND" } }, 404);
   }
 
-  const isPrivileged = ["owner", "team_leader"].includes(membership.role);
+  // Show all non-hidden events, plus hidden events created by the current user
   const events = await prisma.calendarEvent.findMany({
-    where: { teamId, ...(isPrivileged ? {} : { isHidden: false }) },
+    where: {
+      teamId,
+      OR: [
+        { isHidden: false },
+        { isHidden: true, createdById: user.id },
+      ],
+    },
     orderBy: { startDate: "asc" },
     include: {
       createdBy: { select: { id: true, name: true, image: true } },
