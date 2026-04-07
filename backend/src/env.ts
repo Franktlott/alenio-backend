@@ -19,6 +19,8 @@ const envSchema = z.object({
   // Email (Resend)
   RESEND_API_KEY: z.string().optional(),
   FROM_EMAIL: z.string().optional().default("noreply@yourdomain.com"),
+  // Daily.co video
+  DAILY_API_KEY: z.string().optional(),
 });
 
 /**
