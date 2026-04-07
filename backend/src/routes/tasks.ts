@@ -35,13 +35,19 @@ function getNextDueDate(
         next.setDate(next.getDate() + diff);
       }
       break;
-    case "monthly":
-      next.setMonth(next.getMonth() + interval);
-      if (dayOfMonth != null) {
-        const daysInMonth = new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate();
-        next.setDate(Math.min(dayOfMonth, daysInMonth));
-      }
+    case "monthly": {
+      // Compute target year/month without letting JS overflow (e.g. Jan 31 + 1 month → Mar 2)
+      const rawMonth = next.getMonth() + interval;
+      const targetYear = next.getFullYear() + Math.floor(rawMonth / 12);
+      const targetMonth = ((rawMonth % 12) + 12) % 12;
+      const daysInTargetMonth = new Date(targetYear, targetMonth + 1, 0).getDate();
+      // If dayOfMonth is stored (user picked "repeat on day X"), honour it clamped to month length
+      const targetDay = dayOfMonth != null
+        ? Math.min(dayOfMonth, daysInTargetMonth)
+        : Math.min(next.getDate(), daysInTargetMonth);
+      next.setFullYear(targetYear, targetMonth, targetDay);
       break;
+    }
     default:
       next.setDate(next.getDate() + interval);
   }
