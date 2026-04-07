@@ -456,12 +456,34 @@ export default function TaskDetailScreen() {
           )}
         </View>
 
+        {/* Due date chip (active tasks) */}
+        {task.dueDate && !isCompleted ? (() => {
+          const due = new Date(task.dueDate);
+          const overdue = due < new Date();
+          return (
+            <View className="mb-4 flex-row items-center">
+              <View
+                className="flex-row items-center px-3 py-2 rounded-xl"
+                style={{ backgroundColor: overdue ? "#FEF2F2" : "#F8FAFC", gap: 6 }}
+              >
+                <Text style={{ fontSize: 14 }}>{overdue ? "⚠️" : "📅"}</Text>
+                <Text className="text-sm font-medium" style={{ color: overdue ? "#EF4444" : "#64748B" }}>
+                  Due {due.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
+                </Text>
+                {overdue ? (
+                  <Text className="text-xs font-semibold" style={{ color: "#EF4444" }}>Overdue</Text>
+                ) : null}
+              </View>
+            </View>
+          );
+        })() : null}
+
         {/* Meta */}
         <View className="mt-2 pt-4 border-t border-slate-100 dark:border-slate-800" style={{ gap: 6 }}>
           <Text className="text-xs text-slate-400">
             Created {new Date(task.createdAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
           </Text>
-          {task.dueDate && isCompleted ? (
+          {task.dueDate ? (
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
               <Text style={{ fontSize: 11, color: "#94A3B8" }}>⏱</Text>
               <Text className="text-xs text-slate-400">

@@ -9,6 +9,7 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -394,15 +395,24 @@ export default function ReminderDetailScreen() {
           {!isEditMode ? (
             <View className="mb-4 flex-row items-center" style={{ gap: 8 }}>
               <View
-                style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: "#F97316", alignItems: "center", justifyContent: "center" }}
+                style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "#F97316", alignItems: "center", justifyContent: "center", overflow: "hidden" }}
               >
-                <Text style={{ color: "white", fontSize: 11, fontWeight: "700" }}>
-                  {reminder.creator?.name?.[0]?.toUpperCase() ?? "?"}
-                </Text>
+                {reminder.creator?.image ? (
+                  <Image source={{ uri: reminder.creator.image }} style={{ width: 32, height: 32 }} resizeMode="cover" />
+                ) : (
+                  <Text style={{ color: "white", fontSize: 13, fontWeight: "700" }}>
+                    {reminder.creator?.name?.[0]?.toUpperCase() ?? "?"}
+                  </Text>
+                )}
               </View>
-              <Text className="text-sm text-slate-600 dark:text-slate-400">
-                {reminder.creatorId === currentUserId ? "Your reminder" : `Created by ${reminder.creator?.name ?? "Unknown"}`}
-              </Text>
+              <View>
+                <Text className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                  {reminder.creatorId === currentUserId ? "Your reminder" : reminder.creator?.name ?? "Unknown"}
+                </Text>
+                {reminder.creatorId !== currentUserId && reminder.creator?.email ? (
+                  <Text className="text-xs text-slate-400">{reminder.creator.email}</Text>
+                ) : null}
+              </View>
             </View>
           ) : null}
 
