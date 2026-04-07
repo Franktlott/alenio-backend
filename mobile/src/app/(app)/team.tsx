@@ -14,7 +14,7 @@ import {
 } from "react-native";
 import { toast } from "burnt";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Copy, UserPlus, MessageCircle, AlertCircle, UserMinus, Clock, X, Check, ListChecks, Flame, Crown, Camera, Trash2 } from "lucide-react-native";
+import { Copy, UserPlus, MessageCircle, AlertCircle, UserMinus, Clock, X, Check, ListChecks, Flame, Crown, Camera, Trash2, Star, ChevronRight, CalendarDays } from "lucide-react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Clipboard from "expo-clipboard";
@@ -45,18 +45,21 @@ function MemberRow({
   onRemove,
   onSetRole,
   isDemo,
+  onPress,
 }: {
   member: TeamMember;
   isCurrentUser: boolean;
   onMessage: () => void;
-  stats?: { activeTasks: number; overdueTasks: number; streak: number };
+  stats?: { activeTasks: number; overdueTasks: number; streak: number; personalBestStreak?: number };
   isOwner?: boolean;
   onRemove?: () => void;
   onSetRole?: (role: string) => void;
   isDemo: boolean;
+  onPress: () => void;
 }) {
   return (
-    <View
+    <Pressable
+      onPress={onPress}
       className="flex-row items-center px-4 py-3 bg-white dark:bg-slate-800 border-b border-slate-100 dark:border-slate-700"
       testID="member-row"
     >
@@ -121,7 +124,7 @@ function MemberRow({
           {member.role === "owner" ? "Owner" : member.role === "team_leader" ? "Team Leader" : member.role}
         </Text>
       </View>
-    </View>
+    </Pressable>
   );
 }
 
@@ -142,7 +145,7 @@ export default function TeamScreen() {
   const { data: memberStats } = useQuery({
     queryKey: ["member-stats", activeTeamId],
     queryFn: () =>
-      api.get<Record<string, { activeTasks: number; overdueTasks: number; streak: number }>>(
+      api.get<Record<string, { activeTasks: number; overdueTasks: number; streak: number; personalBestStreak: number }>>(
         `/api/teams/${activeTeamId}/tasks/member-stats`
       ),
     enabled: !!activeTeamId,
@@ -264,6 +267,9 @@ export default function TeamScreen() {
   });
 
   const [refreshing, setRefreshing] = useState(false);
+  const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
+  const selectedMember = team?.members?.find((m) => m.userId === selectedMemberId) ?? null;
+  const selectedStats = selectedMemberId ? memberStats?.[selectedMemberId] : null;
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -579,6 +585,7 @@ export default function TeamScreen() {
             isOwner={isOwner}
             isDemo={isDemo}
             onRemove={() => handleRemove(item)}
+            onPress={() => setSelectedMemberId(item.userId)}
             onSetRole={(role) => {
               const isLeader = item.role === "team_leader";
               Alert.alert(
@@ -599,6 +606,110 @@ export default function TeamScreen() {
           />
         ))}
       </ScrollView>
+
+      {/* Member Detail Modal */}
+      <Modal visible={!!selectedMember} transparent animationType="slide" onRequestClose={() => setSelectedMemberId(null)}>
+        <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "flex-end" }} onPress={() => setSelectedMemberId(null)}>
+          <Pressable onPress={(e) => e.stopPropagation()}>
+            <View style={{ backgroundColor: "white", borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 40 }}>
+              {/* Handle */}
+              <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: "#E2E8F0", alignSelf: "center", marginTop: 12, marginBottom: 4 }} />
+
+              {/* Header gradient */}
+              <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ margin: 16, borderRadius: 18, padding: 20 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
+                  <View style={{ width: 60, height: 60, borderRadius: 30, backgroundColor: "rgba(255,255,255,0.25)", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                    {selectedMember?.user.image ? (
+                      <Image source={{ uri: selectedMember.user.image }} style={{ width: 60, height: 60 }} resizeMode="cover" />
+                    ) : (
+                      <Text style={{ fontSize: 24, fontWeight: "800", color: "white" }}>{selectedMember?.user.name?.[0]?.toUpperCase() ?? "?"}</Text>
+                    )}
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 18, fontWeight: "800", color: "white" }}>{selectedMember?.user.name}</Text>
+                    <Text style={{ fontSize: 13, color: "rgba(255,255,255,0.75)", marginTop: 2 }}>{selectedMember?.user.email}</Text>
+                    <View style={{ marginTop: 6, alignSelf: "flex-start", backgroundColor: "rgba(255,255,255,0.2)", borderRadius: 20, paddingHorizontal: 10, paddingVertical: 3 }}>
+                      <Text style={{ fontSize: 11, fontWeight: "700", color: "white" }}>
+                        {selectedMember?.role === "owner" ? "Owner" : selectedMember?.role === "team_leader" ? "Team Leader" : "Member"}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              </LinearGradient>
+
+              {/* Stats grid */}
+              <View style={{ flexDirection: "row", paddingHorizontal: 16, gap: 10, marginBottom: 12 }}>
+                {/* Current streak */}
+                <View style={{ flex: 1, backgroundColor: "#FFF7ED", borderRadius: 16, padding: 14, alignItems: "center", gap: 4 }}>
+                  <Text style={{ fontSize: 28, fontWeight: "900", color: "#F97316" }}>{selectedStats?.streak ?? 0}</Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                    <Flame size={13} color="#F97316" />
+                    <Text style={{ fontSize: 11, fontWeight: "700", color: "#9A3412" }}>Streak</Text>
+                  </View>
+                </View>
+                {/* Personal best */}
+                <View style={{ flex: 1, backgroundColor: "#F5F3FF", borderRadius: 16, padding: 14, alignItems: "center", gap: 4 }}>
+                  <Text style={{ fontSize: 28, fontWeight: "900", color: "#7C3AED" }}>{selectedStats?.personalBestStreak ?? 0}</Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                    <Star size={13} color="#7C3AED" />
+                    <Text style={{ fontSize: 11, fontWeight: "700", color: "#4C1D95" }}>Personal Best</Text>
+                  </View>
+                </View>
+              </View>
+
+              <View style={{ flexDirection: "row", paddingHorizontal: 16, gap: 10, marginBottom: 16 }}>
+                {/* Active tasks */}
+                <View style={{ flex: 1, backgroundColor: "#EEF2FF", borderRadius: 16, padding: 14, alignItems: "center", gap: 4 }}>
+                  <Text style={{ fontSize: 28, fontWeight: "900", color: "#4361EE" }}>{selectedStats?.activeTasks ?? 0}</Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                    <ListChecks size={13} color="#4361EE" />
+                    <Text style={{ fontSize: 11, fontWeight: "700", color: "#3730A3" }}>Active</Text>
+                  </View>
+                </View>
+                {/* Overdue tasks */}
+                <View style={{ flex: 1, backgroundColor: (selectedStats?.overdueTasks ?? 0) > 0 ? "#FEF2F2" : "#F8FAFC", borderRadius: 16, padding: 14, alignItems: "center", gap: 4 }}>
+                  <Text style={{ fontSize: 28, fontWeight: "900", color: (selectedStats?.overdueTasks ?? 0) > 0 ? "#EF4444" : "#94A3B8" }}>{selectedStats?.overdueTasks ?? 0}</Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                    <AlertCircle size={13} color={(selectedStats?.overdueTasks ?? 0) > 0 ? "#EF4444" : "#94A3B8"} />
+                    <Text style={{ fontSize: 11, fontWeight: "700", color: (selectedStats?.overdueTasks ?? 0) > 0 ? "#991B1B" : "#94A3B8" }}>Overdue</Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* Joined date */}
+              {selectedMember?.joinedAt ? (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginHorizontal: 16, backgroundColor: "#F8FAFC", borderRadius: 12, padding: 12, marginBottom: 16 }}>
+                  <CalendarDays size={16} color="#94A3B8" />
+                  <Text style={{ fontSize: 13, color: "#64748B" }}>
+                    Joined {new Date(selectedMember.joinedAt).toLocaleDateString("en-US", { month: "long", year: "numeric" })}
+                  </Text>
+                </View>
+              ) : null}
+
+              {/* Action buttons */}
+              <View style={{ flexDirection: "row", gap: 10, paddingHorizontal: 16 }}>
+                {selectedMember?.userId !== session?.user?.id ? (
+                  <Pressable
+                    onPress={() => { setSelectedMemberId(null); dmMutation.mutate(selectedMember!.userId); }}
+                    style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: "#4361EE", paddingVertical: 14, borderRadius: 14 }}
+                    testID="member-detail-message"
+                  >
+                    <MessageCircle size={16} color="white" />
+                    <Text style={{ color: "white", fontWeight: "700", fontSize: 15 }}>Message</Text>
+                  </Pressable>
+                ) : null}
+                <Pressable
+                  onPress={() => setSelectedMemberId(null)}
+                  style={{ flex: selectedMember?.userId !== session?.user?.id ? 0 : 1, paddingHorizontal: 20, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: "#F1F5F9", paddingVertical: 14, borderRadius: 14 }}
+                  testID="member-detail-close"
+                >
+                  <Text style={{ color: "#64748B", fontWeight: "700", fontSize: 15 }}>Close</Text>
+                </Pressable>
+              </View>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }

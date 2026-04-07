@@ -235,7 +235,7 @@ tasksRouter.get("/member-stats", async (c) => {
     userTasks[a.userId]!.push(a.task);
   }
 
-  const statsMap: Record<string, { activeTasks: number; overdueTasks: number; streak: number }> = {};
+  const statsMap: Record<string, { activeTasks: number; overdueTasks: number; streak: number; personalBestStreak: number }> = {};
 
   for (const [userId, tasks] of Object.entries(userTasks)) {
     let activeTasks = 0;
@@ -262,7 +262,21 @@ tasksRouter.get("/member-stats", async (c) => {
       }
     }
 
-    statsMap[userId] = { activeTasks, overdueTasks, streak };
+    statsMap[userId] = { activeTasks, overdueTasks, streak, personalBestStreak: 0 };
+  }
+
+  // Fetch personalBestStreak for all users in the map
+  const userIds = Object.keys(statsMap);
+  if (userIds.length > 0) {
+    const users = await prisma.user.findMany({
+      where: { id: { in: userIds } },
+      select: { id: true, personalBestStreak: true },
+    });
+    for (const u of users) {
+      if (statsMap[u.id]) {
+        statsMap[u.id]!.personalBestStreak = u.personalBestStreak;
+      }
+    }
   }
 
   return c.json({ data: statsMap });
