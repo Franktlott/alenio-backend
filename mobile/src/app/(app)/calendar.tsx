@@ -385,8 +385,8 @@ export default function CalendarScreen() {
                             overflow: "hidden",
                           }}
                         >
-                          <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 4 }}>
-                            {bar.isHidden ? <UserRound size={9} color="white" style={{ marginRight: 2 }} /> : null}
+                          <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 3 }}>
+                            {bar.isHidden ? <UserRound size={10} color="white" style={{ marginRight: 2 }} /> : null}
                             <Text style={{ color: "white", fontSize: 9, fontWeight: "600", lineHeight: 13, flex: 1 }} numberOfLines={1}>
                               {bar.title}
                             </Text>
