@@ -284,13 +284,6 @@ function MiniCalendar({
                       );
                     })}
                     {weekRowWidth > 0 && track.map((bar) => {
-                      // Only show title if no column in this bar's span has multiple events
-                      const hasConflict = Array.from({ length: bar.endCol - bar.startCol + 1 }, (_, i) => bar.startCol + i)
-                        .some((col) => {
-                          const d = week[col];
-                          return d && (dayEventMap.get(toLocalIso(d))?.count ?? 0) > 1;
-                        });
-                      if (hasConflict) return null;
                       const colWidth = weekRowWidth / 7;
                       return (
                         <View
