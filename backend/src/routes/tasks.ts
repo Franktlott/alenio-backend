@@ -432,14 +432,29 @@ tasksRouter.patch("/:taskId", async (c) => {
 
     const fullUser = await prisma.user.findUnique({ where: { id: user.id }, select: { personalBestStreak: true } });
     if (fullUser && streak > fullUser.personalBestStreak) {
+      // Only celebrate a personal best if the user has had at least one late/missed task
+      // (i.e., a "comeback" moment - they broke their record after a past failure)
+      const hadLateTask = await prisma.$queryRaw<{ count: number }[]>`
+        SELECT COUNT(*) as count
+        FROM Task t
+        JOIN TaskAssignment ta ON ta.taskId = t.id
+        WHERE ta.userId = ${user.id}
+        AND t.status = 'done'
+        AND t.completedAt IS NOT NULL
+        AND t.dueDate IS NOT NULL
+        AND t.completedAt > t.dueDate
+      `;
+      const lateCount = Number(hadLateTask[0]?.count ?? 0);
       await prisma.user.update({ where: { id: user.id }, data: { personalBestStreak: streak } });
-      personalBestCount = streak;
-      await logActivity({
-        teamId,
-        userId: user.id,
-        type: "personal_best",
-        metadata: { count: streak, userName: user.name, incognito: task.incognito },
-      });
+      if (lateCount > 0) {
+        personalBestCount = streak;
+        await logActivity({
+          teamId,
+          userId: user.id,
+          type: "personal_best",
+          metadata: { count: streak, userName: user.name, incognito: task.incognito },
+        });
+      }
     }
 
     const rule = await prisma.recurrenceRule.findUnique({ where: { taskId } });
