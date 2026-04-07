@@ -466,6 +466,25 @@ function TaskRow({ task, onToggle, onPress }: { task: Task; onToggle: () => void
             </View>
           ) : null}
 
+          {/* Creator */}
+          {task.creator ? (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
+              <Text style={{ fontSize: 9, color: "#CBD5E1" }}>by</Text>
+              <View style={{ width: 13, height: 13, borderRadius: 6.5, overflow: "hidden", backgroundColor: "#F1F5F9", alignItems: "center", justifyContent: "center" }}>
+                {task.creator.image ? (
+                  <Image source={{ uri: task.creator.image }} style={{ width: 13, height: 13 }} resizeMode="cover" />
+                ) : (
+                  <Text style={{ fontSize: 6, fontWeight: "700", color: "#64748B" }}>
+                    {task.creator.name?.[0]?.toUpperCase() ?? "?"}
+                  </Text>
+                )}
+              </View>
+              <Text style={{ fontSize: 9, color: "#CBD5E1" }}>
+                {task.creator.name ?? task.creator.email ?? "Unknown"}
+              </Text>
+            </View>
+          ) : null}
+
           {/* Due / completion dates */}
           {isDone ? (
             <>
