@@ -9,14 +9,17 @@ import {
   Alert,
   ScrollView,
   Pressable,
+  Modal,
   RefreshControl,
 } from "react-native";
 import { toast } from "burnt";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Copy, UserPlus, MessageCircle, AlertCircle, UserMinus, Clock, X, Check, ListChecks, Flame, Crown } from "lucide-react-native";
+import { Copy, UserPlus, MessageCircle, AlertCircle, UserMinus, Clock, X, Check, ListChecks, Flame, Crown, Camera, Trash2 } from "lucide-react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Clipboard from "expo-clipboard";
+import * as ImagePicker from "expo-image-picker";
+import { uploadFile } from "@/lib/upload";
 import { api } from "@/lib/api/api";
 import { useTeamStore } from "@/lib/state/team-store";
 import { useSession } from "@/lib/auth/use-session";
@@ -190,6 +193,40 @@ export default function TeamScreen() {
   const currentMembership = team?.members?.find((m) => m.userId === session?.user?.id);
   const isOwner = currentMembership?.role === "owner" || currentMembership?.role === "team_leader";
 
+  const [uploadingTeamImage, setUploadingTeamImage] = useState(false);
+  const [photoMenuOpen, setPhotoMenuOpen] = useState(false);
+
+  const updateTeamImageMutation = useMutation({
+    mutationFn: (image: string | null) =>
+      api.patch(`/api/teams/${activeTeamId}`, { image }),
+    onSuccess: (_data, image) => {
+      queryClient.invalidateQueries({ queryKey: ["team", activeTeamId] });
+      toast({ title: image === null ? "Photo removed" : "Photo updated", preset: "done" });
+      setPhotoMenuOpen(false);
+    },
+    onError: () => toast({ title: "Failed to update photo", preset: "error" }),
+  });
+
+  const handlePickTeamPhoto = async () => {
+    setPhotoMenuOpen(false);
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+    if (result.canceled || !result.assets[0]) return;
+    setUploadingTeamImage(true);
+    try {
+      const uploaded = await uploadFile(result.assets[0].uri, "team-photo.jpg", "image/jpeg");
+      updateTeamImageMutation.mutate(uploaded.url);
+    } catch {
+      toast({ title: "Failed to upload photo", preset: "error" });
+    } finally {
+      setUploadingTeamImage(false);
+    }
+  };
+
   // Pending join requests (owner sees incoming requests; non-member sees their own)
   const { data: myPendingRequests = [] } = useQuery({
     queryKey: ["join-requests-mine"],
@@ -349,13 +386,6 @@ export default function TeamScreen() {
       <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
         <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 14, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-            <View style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: "rgba(255,255,255,0.2)", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-              {team?.image ? (
-                <Image source={{ uri: team.image }} style={{ width: 30, height: 30 }} resizeMode="cover" />
-              ) : (
-                <Text style={{ color: "white", fontWeight: "700", fontSize: 13 }}>{team?.name?.[0]?.toUpperCase() ?? "T"}</Text>
-              )}
-            </View>
             <Text style={{ color: "white", fontSize: 18, fontWeight: "700" }}>{team?.name ?? "Team"}</Text>
           </View>
           <Image source={require("@/assets/alenio-icon.png")} style={{ width: 30, height: 30, borderRadius: 6 }} />
@@ -363,32 +393,91 @@ export default function TeamScreen() {
       </LinearGradient>
 
       {/* Invite code card */}
-      <View className="mx-4 mb-4 mt-4 rounded-2xl p-4" style={{ backgroundColor: "#4361EE15" }}>
-        <Text className="text-xs font-semibold text-indigo-600 uppercase tracking-wide mb-2">Invite Code</Text>
-        <View className="flex-row items-center justify-between">
-          <Text className="text-2xl font-bold text-indigo-600 tracking-widest">{team?.inviteCode}</Text>
-          {!isDemo ? (
-            <View className="flex-row" style={{ gap: 8 }}>
-              <TouchableOpacity
-                onPress={handleCopyCode}
-                className="w-9 h-9 rounded-full items-center justify-center"
-                style={{ backgroundColor: "#4361EE20" }}
-                testID="copy-invite-code"
-              >
-                <Copy size={16} color="#4361EE" />
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={handleShareCode}
-                className="w-9 h-9 rounded-full bg-indigo-600 items-center justify-center"
-                testID="share-invite-code"
-              >
-                <UserPlus size={16} color="white" />
-              </TouchableOpacity>
+      <View className="mx-4 mb-4 mt-4 rounded-2xl p-4" style={{ backgroundColor: "#4361EE15", flexDirection: "row", alignItems: "center", gap: 14 }}>
+        {/* Team photo */}
+        <TouchableOpacity
+          onPress={() => isOwner && !isDemo ? setPhotoMenuOpen(true) : undefined}
+          disabled={uploadingTeamImage}
+          testID="team-photo-button"
+          style={{ position: "relative" }}
+        >
+          <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: "#4361EE30", alignItems: "center", justifyContent: "center", overflow: "hidden", borderWidth: 2, borderColor: "#4361EE40" }}>
+            {uploadingTeamImage ? (
+              <ActivityIndicator color="#4361EE" />
+            ) : team?.image ? (
+              <Image source={{ uri: team.image }} style={{ width: 64, height: 64 }} resizeMode="cover" />
+            ) : (
+              <Text style={{ color: "#4361EE", fontWeight: "800", fontSize: 26 }}>{team?.name?.[0]?.toUpperCase() ?? "T"}</Text>
+            )}
+          </View>
+          {isOwner && !isDemo ? (
+            <View style={{ position: "absolute", bottom: 0, right: 0, width: 20, height: 20, borderRadius: 10, backgroundColor: "#4361EE", alignItems: "center", justifyContent: "center" }}>
+              <Camera size={11} color="white" />
             </View>
           ) : null}
+        </TouchableOpacity>
+        {/* Code + actions */}
+        <View style={{ flex: 1 }}>
+          <Text className="text-xs font-semibold text-indigo-600 uppercase tracking-wide mb-1">Invite Code</Text>
+          <View className="flex-row items-center justify-between">
+            <Text className="text-2xl font-bold text-indigo-600 tracking-widest">{team?.inviteCode}</Text>
+            {!isDemo ? (
+              <View className="flex-row" style={{ gap: 8 }}>
+                <TouchableOpacity
+                  onPress={handleCopyCode}
+                  className="w-9 h-9 rounded-full items-center justify-center"
+                  style={{ backgroundColor: "#4361EE20" }}
+                  testID="copy-invite-code"
+                >
+                  <Copy size={16} color="#4361EE" />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={handleShareCode}
+                  className="w-9 h-9 rounded-full bg-indigo-600 items-center justify-center"
+                  testID="share-invite-code"
+                >
+                  <UserPlus size={16} color="white" />
+                </TouchableOpacity>
+              </View>
+            ) : null}
+          </View>
+          <Text className="text-xs mt-1" style={{ color: "#4361EEb3" }}>Share this code to invite team members</Text>
         </View>
-        <Text className="text-xs mt-1" style={{ color: "#4361EEb3" }}>Share this code to invite team members</Text>
       </View>
+
+      {/* Team photo action sheet */}
+      <Modal visible={photoMenuOpen} transparent animationType="slide" onRequestClose={() => setPhotoMenuOpen(false)}>
+        <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.35)", justifyContent: "flex-end" }} onPress={() => setPhotoMenuOpen(false)}>
+          <Pressable onPress={(e) => e.stopPropagation()}>
+            <View style={{ backgroundColor: "white", borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingTop: 12, paddingBottom: 32, paddingHorizontal: 16 }}>
+              <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: "#E2E8F0", alignSelf: "center", marginBottom: 20 }} />
+              <Text style={{ fontSize: 16, fontWeight: "700", color: "#0F172A", marginBottom: 16 }}>Team Photo</Text>
+              <TouchableOpacity
+                onPress={handlePickTeamPhoto}
+                style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: "#F1F5F9" }}
+                testID="pick-team-photo"
+              >
+                <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "#EEF2FF", alignItems: "center", justifyContent: "center" }}>
+                  <Camera size={18} color="#4361EE" />
+                </View>
+                <Text style={{ fontSize: 15, fontWeight: "600", color: "#0F172A" }}>Choose from Library</Text>
+              </TouchableOpacity>
+              {team?.image ? (
+                <TouchableOpacity
+                  onPress={() => updateTeamImageMutation.mutate(null)}
+                  style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 14 }}
+                  testID="remove-team-photo"
+                >
+                  <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "#FEF2F2", alignItems: "center", justifyContent: "center" }}>
+                    <Trash2 size={18} color="#EF4444" />
+                  </View>
+                  <Text style={{ fontSize: 15, fontWeight: "600", color: "#EF4444" }}>Remove Photo</Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {/* Key */}
       <View className="mx-4 mb-3 flex-row items-center" style={{ gap: 12 }}>
