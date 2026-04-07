@@ -680,8 +680,8 @@ export default function TasksScreen() {
       if (result.milestone) {
         setMilestoneModal({ count: result.milestone, userName: session?.user?.name ?? "You" });
       }
-      if (result.personalBest) {
-        setPersonalBestModal({ count: result.personalBest, userName: session?.user?.name ?? "You" });
+      if (result.comeback) {
+        setPersonalBestModal({ count: result.comeback, userName: session?.user?.name ?? "You" });
       }
     },
     onError: (error: Error) => {
@@ -1504,47 +1504,57 @@ export default function TasksScreen() {
         </Pressable>
       </Modal>
 
-      {/* Personal Best Celebration Modal */}
+      {/* Comeback Celebration Modal */}
       <Modal visible={!!personalBestModal} transparent animationType="fade" onRequestClose={() => setPersonalBestModal(null)}>
         <Pressable
-          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center", paddingHorizontal: 32 }}
+          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.75)", alignItems: "center", justifyContent: "center", paddingHorizontal: 28 }}
           onPress={() => setPersonalBestModal(null)}
           testID="personal-best-modal-backdrop"
         >
           <Pressable onPress={(e) => e.stopPropagation()} testID="personal-best-modal">
             <LinearGradient
-              colors={["#7C3AED", "#4F46E5"]}
+              colors={["#F97316", "#EF4444"]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={{ borderRadius: 28, padding: 3 }}
             >
-              <View style={{ backgroundColor: "#F5F3FF", borderRadius: 26, padding: 28, alignItems: "center", gap: 12 }}>
-                <View style={{ alignItems: "center", gap: 4 }}>
-                  <Image source={require("@/assets/alenio-icon.png")} style={{ width: 40, height: 40, borderRadius: 10, marginBottom: 4 }} />
-                  <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: "#EDE9FE", alignItems: "center", justifyContent: "center" }}>
-                    <Text style={{ fontSize: 36 }}>⭐</Text>
+              <View style={{ backgroundColor: "#0F0F0F", borderRadius: 26, padding: 28, alignItems: "center", gap: 14 }}>
+                {/* Alenio branding */}
+                <Image source={require("@/assets/alenio-icon.png")} style={{ width: 36, height: 36, borderRadius: 9 }} />
+
+                {/* Fire icon */}
+                <View style={{ alignItems: "center", gap: 6 }}>
+                  <Text style={{ fontSize: 56 }}>🔥</Text>
+                  <View style={{ backgroundColor: "#F97316", paddingHorizontal: 14, paddingVertical: 4, borderRadius: 20 }}>
+                    <Text style={{ fontSize: 11, fontWeight: "800", color: "white", letterSpacing: 2, textTransform: "uppercase" }}>Comeback</Text>
                   </View>
                 </View>
 
-                <Text style={{ fontSize: 13, fontWeight: "700", color: "#6D28D9", letterSpacing: 1.5, textTransform: "uppercase" }}>New Personal Best!</Text>
+                {/* Streak count */}
+                <View style={{ alignItems: "center", gap: 4 }}>
+                  <Text style={{ fontSize: 64, fontWeight: "900", color: "white", lineHeight: 68 }}>
+                    {personalBestModal?.count}
+                  </Text>
+                  <Text style={{ fontSize: 14, color: "#9CA3AF", fontWeight: "600" }}>tasks in a row</Text>
+                </View>
 
-                <Text style={{ fontSize: 44, fontWeight: "800", color: "#7C3AED", lineHeight: 48 }}>
-                  {personalBestModal?.count}
-                </Text>
-                <Text style={{ fontSize: 16, fontWeight: "600", color: "#4C1D95", textAlign: "center", lineHeight: 22 }}>
-                  {personalBestModal?.userName} set a new{"\n"}personal best streak! 🏆
-                </Text>
+                {/* Message */}
+                <View style={{ alignItems: "center", gap: 6 }}>
+                  <Text style={{ fontSize: 20, fontWeight: "800", color: "white", textAlign: "center" }}>
+                    You're back! 💪
+                  </Text>
+                  <Text style={{ fontSize: 13, color: "#D1D5DB", textAlign: "center", lineHeight: 20 }}>
+                    {personalBestModal?.userName} just matched their{"\n"}personal best streak after a setback.
+                  </Text>
+                </View>
 
-                <Text style={{ fontSize: 13, color: "#5B21B6", textAlign: "center" }}>
-                  That's your longest streak ever 🌟
-                </Text>
-
+                {/* CTA */}
                 <Pressable
                   onPress={() => setPersonalBestModal(null)}
-                  style={{ marginTop: 8, backgroundColor: "#7C3AED", paddingHorizontal: 40, paddingVertical: 14, borderRadius: 24 }}
+                  style={{ marginTop: 4, backgroundColor: "#F97316", paddingHorizontal: 40, paddingVertical: 14, borderRadius: 24, width: "100%" }}
                   testID="personal-best-modal-close"
                 >
-                  <Text style={{ color: "white", fontWeight: "700", fontSize: 16 }}>Amazing! ⭐</Text>
+                  <Text style={{ color: "white", fontWeight: "800", fontSize: 16, textAlign: "center" }}>Keep the streak alive 🔥</Text>
                 </Pressable>
               </View>
             </LinearGradient>

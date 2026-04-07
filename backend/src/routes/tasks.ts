@@ -452,7 +452,7 @@ tasksRouter.patch("/:taskId", async (c) => {
       if (fullUser?.personalBestCelebrated) {
         await prisma.user.update({ where: { id: user.id }, data: { personalBestCelebrated: false } });
       }
-    } else if (fullUser && streak > fullUser.personalBestStreak) {
+    } else if (fullUser && streak >= fullUser.personalBestStreak && fullUser.personalBestStreak > 0) {
       if (!fullUser.personalBestCelebrated) {
         // First time crossing the personal best in this comeback — check for late task history
         const hadLateTask = await prisma.$queryRaw<{ count: number }[]>`
@@ -518,7 +518,7 @@ tasksRouter.patch("/:taskId", async (c) => {
     }
   }
 
-  return c.json({ data: updated, ...(milestoneCount !== null ? { milestone: milestoneCount } : {}), ...(personalBestCount !== null ? { personalBest: personalBestCount } : {}) });
+  return c.json({ data: updated, ...(milestoneCount !== null ? { milestone: milestoneCount } : {}), ...(personalBestCount !== null ? { comeback: personalBestCount } : {}) });
 });
 
 // DELETE /api/teams/:teamId/tasks/:taskId
