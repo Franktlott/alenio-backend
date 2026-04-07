@@ -563,6 +563,7 @@ export default function TasksScreen() {
   const insets = useSafeAreaInsets();
   const { openModal } = useLocalSearchParams<{ openModal?: string }>();
   const [filter, setFilter] = useState<FilterTab>("all");
+  const [visibleCount, setVisibleCount] = useState<number>(7);
   const [sort, setSort] = useState<SortMode>("due");
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
   const [memberDropdownOpen, setMemberDropdownOpen] = useState(false);
@@ -791,6 +792,10 @@ export default function TasksScreen() {
   useEffect(() => {
     if (filter === "completed") setSort("completed");
     else if (sort === "completed") setSort("due");
+  }, [filter]);
+
+  useEffect(() => {
+    setVisibleCount(7);
   }, [filter]);
 
   // Active: tasks assigned to me (or mine with no assignment), open
@@ -1138,7 +1143,7 @@ export default function TasksScreen() {
             ) : null}
           </View>
         ) : (
-          tasks.map((item) => (
+          tasks.slice(0, visibleCount).map((item) => (
             <TaskRow
               key={item.data.id}
               task={item.type === "reminder" ? reminderToTask(item.data) : item.data}
@@ -1148,6 +1153,17 @@ export default function TasksScreen() {
             />
           ))
         )}
+        {tasks.length > visibleCount ? (
+          <Pressable
+            onPress={() => setVisibleCount(v => v + 7)}
+            className="mx-4 mb-4 py-3 rounded-2xl items-center"
+            style={{ backgroundColor: '#F1F5F9' }}
+          >
+            <Text className="text-sm font-semibold text-slate-600">
+              Show {Math.min(7, tasks.length - visibleCount)} more
+            </Text>
+          </Pressable>
+        ) : null}
 
         {/* Team tab: collapsed completed section */}
         {filter === "assigned" && teamCompletedTasks.length > 0 ? (
