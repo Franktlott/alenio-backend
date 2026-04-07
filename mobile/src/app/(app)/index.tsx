@@ -1211,6 +1211,7 @@ export default function TasksScreen() {
                 </View>
               </Pressable>
             ) : null}
+            {!isRegularMember ? (
             <Pressable
               onPress={() => { setShowAddModal(false); router.push({ pathname: "/create-task", params: { teamId: activeTeamId!, initialDueDate: selectedDay ?? toLocalIso(new Date()) } }); }}
               style={{ flexDirection: "row", alignItems: "center", gap: 14, backgroundColor: "#EEF2FF", borderRadius: 16, padding: 16 }}
@@ -1223,6 +1224,7 @@ export default function TasksScreen() {
                 <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 2 }}>Create a new task for the team</Text>
               </View>
             </Pressable>
+            ) : null}
             <Pressable
               onPress={() => { setShowAddModal(false); router.push({ pathname: "/create-task", params: { teamId: activeTeamId!, initialDueDate: selectedDay ?? toLocalIso(new Date()), isReminder: "true" } }); }}
               style={{ flexDirection: "row", alignItems: "center", gap: 14, backgroundColor: "#FFF7ED", borderRadius: 16, padding: 16 }}
