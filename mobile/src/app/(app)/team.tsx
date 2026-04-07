@@ -177,6 +177,19 @@ export default function TeamScreen() {
     },
   });
 
+  const transferOwnershipMutation = useMutation({
+    mutationFn: (userId: string) =>
+      api.post(`/api/teams/${activeTeamId}/transfer-ownership`, { userId }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["team", activeTeamId] });
+      setSelectedMemberId(null);
+      toast({ title: "Ownership transferred", preset: "done" });
+    },
+    onError: () => {
+      toast({ title: "Transfer failed", preset: "error" });
+    },
+  });
+
   const handleRemove = (member: TeamMember) => {
     Alert.alert(
       "Remove Member",
@@ -680,6 +693,35 @@ export default function TeamScreen() {
                     Joined {new Date(selectedMember.joinedAt).toLocaleDateString("en-US", { month: "long", year: "numeric" })}
                   </Text>
                 </View>
+              ) : null}
+
+              {/* Transfer Ownership — only true owner, only for non-owner members */}
+              {currentMembership?.role === "owner" && selectedMember?.userId !== session?.user?.id && selectedMember?.role !== "owner" ? (
+                <Pressable
+                  testID="transfer-ownership-button"
+                  onPress={() => {
+                    Alert.alert(
+                      "Transfer Ownership",
+                      `Give full ownership of this team to ${selectedMember?.user.name}? You will become a regular member and cannot undo this yourself.`,
+                      [
+                        { text: "Cancel", style: "cancel" },
+                        {
+                          text: "Transfer",
+                          style: "destructive",
+                          onPress: () => transferOwnershipMutation.mutate(selectedMember!.userId),
+                        },
+                      ]
+                    );
+                  }}
+                  style={{ flexDirection: "row", alignItems: "center", gap: 10, marginHorizontal: 16, marginBottom: 12, backgroundColor: "#FFF7ED", borderRadius: 14, padding: 14, borderWidth: 1, borderColor: "#FED7AA" }}
+                >
+                  <Crown size={18} color="#F97316" />
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 14, fontWeight: "700", color: "#C2410C" }}>Transfer Ownership</Text>
+                    <Text style={{ fontSize: 12, color: "#9A3412", marginTop: 1 }}>Make {selectedMember?.user.name} the new owner</Text>
+                  </View>
+                  <ChevronRight size={16} color="#F97316" />
+                </Pressable>
               ) : null}
 
               {/* Action buttons */}

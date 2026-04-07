@@ -387,4 +387,42 @@ teamsRouter.patch("/:teamId/members/:userId/role", async (c) => {
   return c.json({ data: updated });
 });
 
+// Transfer team ownership to another member
+teamsRouter.post("/:teamId/transfer-ownership", async (c) => {
+  const user = c.get("user")!;
+  const { teamId } = c.req.param();
+  const { userId: newOwnerId } = await c.req.json<{ userId: string }>();
+
+  // Caller must be current owner
+  const caller = await prisma.teamMember.findUnique({
+    where: { userId_teamId: { userId: user.id, teamId } },
+  });
+  if (!caller || caller.role !== "owner") {
+    return c.json({ error: { message: "Only the owner can transfer ownership" } }, 403);
+  }
+
+  // Target must be an existing member and not already the owner
+  const target = await prisma.teamMember.findUnique({
+    where: { userId_teamId: { userId: newOwnerId, teamId } },
+  });
+  if (!target) return c.json({ error: { message: "Member not found" } }, 404);
+  if (target.role === "owner") {
+    return c.json({ error: { message: "Member is already the owner" } }, 400);
+  }
+
+  // Atomically promote new owner and demote current owner
+  await prisma.$transaction([
+    prisma.teamMember.update({
+      where: { userId_teamId: { userId: newOwnerId, teamId } },
+      data: { role: "owner" },
+    }),
+    prisma.teamMember.update({
+      where: { userId_teamId: { userId: user.id, teamId } },
+      data: { role: "member" },
+    }),
+  ]);
+
+  return c.json({ data: { success: true } });
+});
+
 export { teamsRouter };
