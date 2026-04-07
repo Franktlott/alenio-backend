@@ -17,7 +17,7 @@ import {
 } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams, Redirect, useFocusEffect } from "expo-router";
-import { Plus, User, Users, ArrowUpDown, ChevronLeft, ChevronRight, X, CalendarDays, CheckSquare, Calendar, Check, Bell, EyeOff } from "lucide-react-native";
+import { Plus, User, Users, ArrowUpDown, ChevronLeft, ChevronRight, X, CalendarDays, CheckSquare, Calendar, Check, Bell, Glasses } from "lucide-react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -1464,13 +1464,13 @@ export default function TasksScreen() {
 
               {formError ? <Text style={{ color: "#EF4444", fontSize: 13, marginBottom: 12 }}>{formError}</Text> : null}
 
-              {/* Hidden from team toggle */}
+              {/* Incognito toggle */}
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: "#F8FAFC", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 20, borderWidth: 1.5, borderColor: eventIsHidden ? "#94A3B8" : "#E2E8F0" }}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                  <EyeOff size={18} color={eventIsHidden ? "#64748B" : "#CBD5E1"} />
+                  <Glasses size={18} color={eventIsHidden ? "#64748B" : "#CBD5E1"} />
                   <View>
-                    <Text style={{ fontSize: 14, fontWeight: "600", color: "#0F172A" }}>Hidden from team</Text>
-                    <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 1 }}>Only visible to owners & leaders</Text>
+                    <Text style={{ fontSize: 14, fontWeight: "600", color: "#0F172A" }}>Incognito</Text>
+                    <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 1 }}>Only visible to you</Text>
                   </View>
                 </View>
                 <Switch
