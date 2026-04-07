@@ -12,7 +12,7 @@ export default function VideoCallScreen() {
 
   // Sanitize room ID for Jitsi (alphanumeric + hyphens only, max 50 chars)
   const jitsiRoom = `alenio-${roomId}`.replace(/[^a-zA-Z0-9-]/g, "-").slice(0, 50);
-  const jitsiUrl = `https://meet.jit.si/${jitsiRoom}`;
+  const jitsiUrl = `https://8x8.vc/vpaas-magic-cookie-free/${jitsiRoom}`;
 
   return (
     <View className="flex-1 bg-black">
