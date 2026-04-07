@@ -333,44 +333,69 @@ function CelebrationCard({ item, activeTeamId, currentUserId, isDemo }: { item: 
       testID={`milestone-card-${item.id}`}
     >
       <LinearGradient
-        colors={["#F97316", "#EF4444"]}
+        colors={["#1B2138", "#0D1117", "#111827"]}
         start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-        style={{ borderRadius: 18, padding: 2 }}
+        end={{ x: 1, y: 1 }}
+        style={{ borderRadius: 20, overflow: "hidden" }}
       >
-        <View style={{ backgroundColor: "#FFF7ED", borderRadius: 16, padding: 16, gap: 10 }}>
-          {/* Top row: flame + streak label + time */}
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+        {/* Sparkle particles */}
+        <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }} pointerEvents="none">
+          {[
+            { top: 12, left: 24, size: 10, opacity: 0.6 },
+            { top: 28, left: 60, size: 7, opacity: 0.4 },
+            { top: 8, right: 32, size: 9, opacity: 0.5 },
+            { top: 20, right: 70, size: 6, opacity: 0.35 },
+            { top: 50, left: 16, size: 6, opacity: 0.3 },
+            { top: 44, right: 20, size: 8, opacity: 0.45 },
+            { bottom: 48, left: 40, size: 7, opacity: 0.3 },
+            { bottom: 32, right: 50, size: 6, opacity: 0.35 },
+            { bottom: 16, left: 80, size: 8, opacity: 0.4 },
+            { bottom: 20, right: 80, size: 7, opacity: 0.3 },
+            { top: 36, left: 120, size: 5, opacity: 0.25 },
+            { top: 16, left: 160, size: 7, opacity: 0.4 },
+          ].map((s, i) => (
+            <Text key={i} style={{ position: "absolute", top: s.top, left: (s as any).left, right: (s as any).right, bottom: (s as any).bottom, fontSize: s.size, opacity: s.opacity, color: "#FFD700" }}>✦</Text>
+          ))}
+        </View>
+
+        <View style={{ padding: 20, alignItems: "center", gap: 12 }}>
+          {/* Gold shield badge */}
+          <View style={{ alignItems: "center", marginTop: 4 }}>
+            <LinearGradient
+              colors={["#F5C518", "#B8860B", "#8B6914"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={{ borderRadius: 16, padding: 2 }}
+            >
+              <View style={{ backgroundColor: "#0D1117", borderRadius: 14, paddingHorizontal: 28, paddingVertical: 16, alignItems: "center", minWidth: 100 }}>
+                <Text style={{ fontSize: 24, lineHeight: 28 }}>⭐</Text>
+                <Text style={{ fontSize: 52, fontWeight: "900", color: "#FFD700", lineHeight: 56 }}>{count}</Text>
+              </View>
+            </LinearGradient>
+          </View>
+
+          {/* Text */}
+          <View style={{ alignItems: "center", gap: 4 }}>
+            <Text style={{ fontSize: 15, color: "rgba(255,255,255,0.7)", fontWeight: "500" }}>tasks in a row</Text>
+            <Text style={{ fontSize: 17, fontWeight: "800", color: "white", textAlign: "center" }}>
+              {name} hit an INSANE milestone! 🏆✨
+            </Text>
+            <Text style={{ fontSize: 13, color: "#9CA3AF" }}>New Alenio record!</Text>
+          </View>
+
+          {/* Footer: avatar + time */}
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", width: "100%", marginTop: 4 }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-              <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#FFEDD5", alignItems: "center", justifyContent: "center" }}>
-                <Flame size={20} color="#F97316" />
+              <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: "#1C2540", borderWidth: 1, borderColor: "#FFD70040", overflow: "hidden", alignItems: "center", justifyContent: "center" }}>
+                {item.user?.image ? (
+                  <ExpoImage source={{ uri: item.user.image }} style={{ width: 28, height: 28 }} contentFit="cover" />
+                ) : (
+                  <Text style={{ fontSize: 12, fontWeight: "700", color: "#FFD700" }}>{name[0].toUpperCase()}</Text>
+                )}
               </View>
-              <View style={{ backgroundColor: "#FFEDD5", borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 }}>
-                <Text style={{ fontSize: 11, fontWeight: "800", color: "#C2410C", letterSpacing: 0.5 }}>🔥 STREAK</Text>
-              </View>
+              <Text style={{ fontSize: 12, color: "#6B7280" }}>{name}</Text>
             </View>
-            <Text style={{ fontSize: 12, color: "#94A3B8" }}>{timeAgo(item.createdAt)}</Text>
-          </View>
-
-          {/* Streak count */}
-          <View style={{ alignItems: "center", paddingVertical: 6 }}>
-            <Text style={{ fontSize: 56, fontWeight: "900", color: "#F97316", lineHeight: 60 }}>{count}</Text>
-            <Text style={{ fontSize: 13, fontWeight: "700", color: "#9A3412", marginTop: 2 }}>tasks completed on time 🔥</Text>
-          </View>
-
-          {/* Avatar + name */}
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "#FFEDD5", borderRadius: 12, padding: 10 }}>
-            <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "#FED7AA", overflow: "hidden", alignItems: "center", justifyContent: "center" }}>
-              {item.user?.image ? (
-                <ExpoImage source={{ uri: item.user.image }} style={{ width: 32, height: 32 }} contentFit="cover" />
-              ) : (
-                <Text style={{ fontSize: 14, fontWeight: "700", color: "#C2410C" }}>{name[0].toUpperCase()}</Text>
-              )}
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 14, fontWeight: "700", color: "#9A3412" }}>{name} is on fire! 🎉</Text>
-              <Text style={{ fontSize: 11, color: "#C2410C", marginTop: 1 }}>Tap to view tasks →</Text>
-            </View>
+            <Text style={{ fontSize: 12, color: "#4B5563" }}>{timeAgo(item.createdAt)}</Text>
           </View>
 
           <ReactionRow
@@ -411,44 +436,69 @@ function PersonalBestCard({ item, activeTeamId, currentUserId, isDemo }: { item:
       testID={`personal-best-card-${item.id}`}
     >
       <LinearGradient
-        colors={["#F97316", "#EF4444"]}
+        colors={["#1B1510", "#0D0D0D", "#111010"]}
         start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-        style={{ borderRadius: 18, padding: 2 }}
+        end={{ x: 1, y: 1 }}
+        style={{ borderRadius: 20, overflow: "hidden" }}
       >
-        <View style={{ backgroundColor: "#0F0F0F", borderRadius: 16, padding: 16, gap: 10 }}>
-          {/* Top row: icon + comeback label + time */}
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+        {/* Ember particles */}
+        <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }} pointerEvents="none">
+          {[
+            { top: 10, left: 20, size: 9, opacity: 0.5 },
+            { top: 24, left: 55, size: 6, opacity: 0.35 },
+            { top: 6, right: 28, size: 8, opacity: 0.45 },
+            { top: 18, right: 65, size: 5, opacity: 0.3 },
+            { top: 46, left: 14, size: 6, opacity: 0.25 },
+            { top: 40, right: 18, size: 7, opacity: 0.4 },
+            { bottom: 44, left: 38, size: 6, opacity: 0.3 },
+            { bottom: 28, right: 46, size: 5, opacity: 0.3 },
+            { bottom: 14, left: 75, size: 7, opacity: 0.35 },
+            { bottom: 18, right: 75, size: 6, opacity: 0.25 },
+            { top: 32, left: 115, size: 5, opacity: 0.2 },
+            { top: 14, left: 155, size: 6, opacity: 0.35 },
+          ].map((s, i) => (
+            <Text key={i} style={{ position: "absolute", top: s.top, left: (s as any).left, right: (s as any).right, bottom: (s as any).bottom, fontSize: s.size, opacity: s.opacity, color: "#F97316" }}>✦</Text>
+          ))}
+        </View>
+
+        <View style={{ padding: 20, alignItems: "center", gap: 12 }}>
+          {/* Orange fire badge */}
+          <View style={{ alignItems: "center", marginTop: 4 }}>
+            <LinearGradient
+              colors={["#F97316", "#EA580C", "#9A3412"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={{ borderRadius: 16, padding: 2 }}
+            >
+              <View style={{ backgroundColor: "#0D0D0D", borderRadius: 14, paddingHorizontal: 28, paddingVertical: 16, alignItems: "center", minWidth: 100 }}>
+                <Text style={{ fontSize: 24, lineHeight: 28 }}>🔥</Text>
+                <Text style={{ fontSize: 52, fontWeight: "900", color: "#F97316", lineHeight: 56 }}>{count}</Text>
+              </View>
+            </LinearGradient>
+          </View>
+
+          {/* Text */}
+          <View style={{ alignItems: "center", gap: 4 }}>
+            <Text style={{ fontSize: 15, color: "rgba(255,255,255,0.7)", fontWeight: "500" }}>tasks in a row</Text>
+            <Text style={{ fontSize: 17, fontWeight: "800", color: "white", textAlign: "center" }}>
+              {name} made an epic comeback! 💪🔥
+            </Text>
+            <Text style={{ fontSize: 13, color: "#9CA3AF" }}>Matched their personal best!</Text>
+          </View>
+
+          {/* Footer: avatar + time */}
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", width: "100%", marginTop: 4 }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-              <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#1C1C1C", alignItems: "center", justifyContent: "center" }}>
-                <Text style={{ fontSize: 20 }}>🔥</Text>
+              <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: "#1C1410", borderWidth: 1, borderColor: "#F9731640", overflow: "hidden", alignItems: "center", justifyContent: "center" }}>
+                {item.user?.image ? (
+                  <ExpoImage source={{ uri: item.user.image }} style={{ width: 28, height: 28 }} contentFit="cover" />
+                ) : (
+                  <Text style={{ fontSize: 12, fontWeight: "700", color: "#F97316" }}>{name[0].toUpperCase()}</Text>
+                )}
               </View>
-              <View style={{ backgroundColor: "#F97316", borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 }}>
-                <Text style={{ fontSize: 11, fontWeight: "800", color: "white", letterSpacing: 0.5 }}>💪 COMEBACK</Text>
-              </View>
+              <Text style={{ fontSize: 12, color: "#6B7280" }}>{name}</Text>
             </View>
-            <Text style={{ fontSize: 12, color: "#6B7280" }}>{timeAgo(item.createdAt)}</Text>
-          </View>
-
-          {/* Streak count */}
-          <View style={{ alignItems: "center", paddingVertical: 6 }}>
-            <Text style={{ fontSize: 56, fontWeight: "900", color: "white", lineHeight: 60 }}>{count}</Text>
-            <Text style={{ fontSize: 13, fontWeight: "700", color: "#9CA3AF", marginTop: 2 }}>tasks in a row 🔥</Text>
-          </View>
-
-          {/* Avatar + name */}
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "#1C1C1C", borderRadius: 12, padding: 10 }}>
-            <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "#2C2C2C", overflow: "hidden", alignItems: "center", justifyContent: "center" }}>
-              {item.user?.image ? (
-                <ExpoImage source={{ uri: item.user.image }} style={{ width: 32, height: 32 }} contentFit="cover" />
-              ) : (
-                <Text style={{ fontSize: 14, fontWeight: "700", color: "#F97316" }}>{name[0].toUpperCase()}</Text>
-              )}
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 14, fontWeight: "700", color: "white" }}>{name} made a comeback! 💪</Text>
-              <Text style={{ fontSize: 11, color: "#F97316", marginTop: 1 }}>Matched their personal best →</Text>
-            </View>
+            <Text style={{ fontSize: 12, color: "#4B5563" }}>{timeAgo(item.createdAt)}</Text>
           </View>
 
           <ReactionRow
