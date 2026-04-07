@@ -39,6 +39,7 @@ model User {
   activityReactions TeamActivityReaction[]
   pollsCreated  Poll[]     @relation("PollCreatedBy")
   pollVotes     PollVote[] @relation("PollVoteUser")
+  remindersCreated  Reminder[]  @relation("ReminderCreator")
 }
 
 model Session {
@@ -96,6 +97,7 @@ model Team {
   teamActivities TeamActivity[]
   topics      Topic[]
   polls       Poll[]
+  reminders   Reminder[]
 }
 
 model TeamSubscription {
@@ -133,7 +135,6 @@ model Task {
   completedAt   DateTime?
   attachmentUrl String?
   incognito   Boolean  @default(false)
-  isReminder  Boolean  @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -372,4 +373,21 @@ model PollVote {
   user      User       @relation("PollVoteUser", fields: [userId], references: [id])
 
   @@unique([pollId, userId])
+}
+
+model Reminder {
+  id            String    @id @default(cuid())
+  title         String
+  description   String?
+  status        String    @default("todo")
+  priority      String    @default("medium")
+  dueDate       DateTime?
+  completedAt   DateTime?
+  attachmentUrl String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  teamId        String
+  team          Team      @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  creatorId     String
+  creator       User      @relation("ReminderCreator", fields: [creatorId], references: [id])
 }

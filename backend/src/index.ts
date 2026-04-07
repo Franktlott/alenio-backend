@@ -21,6 +21,7 @@ import { adminRouter } from "./routes/admin";
 import { webRouter } from "./routes/web-app";
 import { pollsRouter } from "./routes/polls";
 import { demoRouter } from "./routes/demo";
+import { remindersRouter } from "./routes/reminders";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -198,6 +199,7 @@ app.route("/api/teams/:teamId/subscription", subscriptionRouter);
 app.route("/api/teams", activityRouter);
 app.route("/api/teams", topicsRouter);
 app.route("/api/teams", pollsRouter);
+app.route("/api/teams/:teamId/reminders", remindersRouter);
 app.route("/api/demo", demoRouter);
 app.route("/admin", adminRouter);
 app.route("/web", webRouter);

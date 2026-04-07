@@ -58,7 +58,6 @@ export interface Task {
   completedAt?: string | null;
   attachmentUrl?: string | null;
   incognito?: boolean;
-  isReminder?: boolean;
   createdAt: string;
   updatedAt: string;
   teamId: string;
@@ -144,6 +143,22 @@ export interface CalendarEvent {
   teamId: string;
   createdAt: string;
   createdBy?: { id: string; name: string; image?: string | null };
+}
+
+export interface Reminder {
+  id: string;
+  title: string;
+  description?: string | null;
+  status: TaskStatus;
+  priority: TaskPriority;
+  dueDate?: string | null;
+  completedAt?: string | null;
+  attachmentUrl?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  teamId: string;
+  creatorId: string;
+  creator: User;
 }
 
 export interface CreateTaskInput {

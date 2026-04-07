@@ -150,6 +150,12 @@ export default function CreateTaskScreen() {
         const uploaded = await uploadFile(attachmentUri, filename, "image/jpeg");
         attachmentUrl = uploaded.url;
       }
+      if (isReminder) {
+        // POST to reminders endpoint — no subtasks for reminders
+        const { isReminder: _r, assigneeIds: _a, ...reminderInput } = input as Record<string, unknown>;
+        await api.post(`/api/teams/${teamId}/reminders`, { ...reminderInput, attachmentUrl });
+        return;
+      }
       const tasks = await api.post<Task[]>(`/api/teams/${teamId}/tasks`, { ...input, attachmentUrl });
       // Attach subtasks to each created task
       for (const task of tasks) {
@@ -162,6 +168,7 @@ export default function CreateTaskScreen() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tasks", teamId] });
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["reminders", teamId] });
       router.back();
     },
     onError: () => setError("Failed to create task. Please try again."),

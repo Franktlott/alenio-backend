@@ -24,12 +24,13 @@ import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
 import { useTeamStore } from "@/lib/state/team-store";
 import { useSubscriptionStore } from "@/lib/state/subscription-store";
-import type { Task, Team, TeamMember, CalendarEvent } from "@/lib/types";
+import type { Task, Team, TeamMember, CalendarEvent, Reminder } from "@/lib/types";
 import { NoTeamPlaceholder } from "@/components/NoTeamPlaceholder";
 import { useDemoMode, showDemoAlert } from "@/lib/useDemo";
 
 type FilterTab = "all" | "assigned" | "completed";
 type SortMode = "due" | "priority" | "completed";
+type ListItem = { type: "task"; data: Task } | { type: "reminder"; data: Reminder };
 
 const DAY_LABELS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
@@ -372,7 +373,7 @@ function EventRow({ event, onLongPress }: { event: CalendarEvent; onLongPress?: 
   );
 }
 
-function TaskRow({ task, onToggle, onPress }: { task: Task; onToggle: () => void; onPress: () => void }) {
+function TaskRow({ task, isReminder, onToggle, onPress }: { task: Task; isReminder: boolean; onToggle: () => void; onPress: () => void }) {
   const isDone = task.status === "done";
   const priority = PRIORITY_CONFIG[task.priority as keyof typeof PRIORITY_CONFIG] ?? PRIORITY_CONFIG.medium;
 
@@ -424,7 +425,7 @@ function TaskRow({ task, onToggle, onPress }: { task: Task; onToggle: () => void
       {/* Content */}
       <View style={{ flex: 1 }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 2 }}>
-          {task.isReminder ? (
+          {isReminder ? (
             <View style={{ flexDirection: "row", alignItems: "center", gap: 2, backgroundColor: "#FFF7ED", borderRadius: 6, paddingHorizontal: 5, paddingVertical: 1 }}>
               <Bell size={9} color="#F97316" />
               <Text style={{ fontSize: 9, fontWeight: "700", color: "#F97316" }}>Reminder</Text>
@@ -453,8 +454,8 @@ function TaskRow({ task, onToggle, onPress }: { task: Task; onToggle: () => void
             <Text style={{ fontSize: 9, fontWeight: "600", color: priority.text }}>{priority.label}</Text>
           </View>
 
-          {/* Assignee */}
-          {task.assignments?.[0]?.user ? (
+          {/* Assignee — only for real tasks */}
+          {!isReminder && task.assignments?.[0]?.user ? (
             <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
               <View style={{ width: 13, height: 13, borderRadius: 6.5, overflow: "hidden", backgroundColor: "#E0E7FF", alignItems: "center", justifyContent: "center" }}>
                 {task.assignments[0].user.image ? (
@@ -525,14 +526,36 @@ function TaskRow({ task, onToggle, onPress }: { task: Task; onToggle: () => void
             </View>
           ) : null}
 
-          {/* Recurrence */}
-          {task.recurrenceRule && !isDone ? (
+          {/* Recurrence — only for real tasks */}
+          {!isReminder && task.recurrenceRule && !isDone ? (
             <Text style={{ fontSize: 9, color: "#818CF8" }}>↺ {task.recurrenceRule.type}</Text>
           ) : null}
         </View>
       </View>
     </Pressable>
   );
+}
+
+function reminderToTask(r: Reminder): Task {
+  return {
+    id: r.id,
+    title: r.title,
+    description: r.description,
+    status: r.status,
+    priority: r.priority,
+    dueDate: r.dueDate,
+    completedAt: r.completedAt,
+    attachmentUrl: r.attachmentUrl,
+    createdAt: r.createdAt,
+    updatedAt: r.updatedAt,
+    teamId: r.teamId,
+    creatorId: r.creatorId,
+    creator: r.creator,
+    assignments: [],
+    subtasks: [],
+    recurrenceRule: null,
+    incognito: false,
+  };
 }
 
 export default function TasksScreen() {
@@ -583,6 +606,7 @@ export default function TasksScreen() {
     await queryClient.invalidateQueries({ queryKey: ["tasks", activeTeamId, "mine"] });
     await queryClient.invalidateQueries({ queryKey: ["tasks", activeTeamId, "team"] });
     await queryClient.invalidateQueries({ queryKey: ["calendar-events", activeTeamId] });
+    await queryClient.invalidateQueries({ queryKey: ["reminders", activeTeamId] });
     setRefreshing(false);
   };
 
@@ -602,6 +626,13 @@ export default function TasksScreen() {
   const { data: allTasks = [], isLoading } = useQuery({
     queryKey: ["tasks", activeTeamId, "mine"],
     queryFn: () => api.get<Task[]>(`/api/teams/${activeTeamId}/tasks?myTasks=true`),
+    enabled: !!activeTeamId,
+  });
+
+  // Reminders for the active team
+  const { data: allReminders = [] } = useQuery({
+    queryKey: ["reminders", activeTeamId],
+    queryFn: () => api.get<Reminder[]>(`/api/teams/${activeTeamId}/reminders`),
     enabled: !!activeTeamId,
   });
 
@@ -764,7 +795,7 @@ export default function TasksScreen() {
   // Active: tasks assigned to me (or mine with no assignment), open
   // Completed: same pool, done only
   // Team: tasks I created that are assigned to someone else, open
-  const tasks = (filter === "assigned" ? teamTasks : allTasks).filter((t) => {
+  const filteredTasks = (filter === "assigned" ? teamTasks : allTasks).filter((t) => {
     if (filter === "assigned") {
       // Show tasks I created that have at least one assignment to someone other than me
       if ((t.assignments ?? []).length === 0) return false;
@@ -778,21 +809,34 @@ export default function TasksScreen() {
       if (t.status === "done") return false;
     }
     return true;
-  }).sort((a, b) => {
+  });
+
+  // Reminders: show in "all" (active) and "completed" tabs, never in "assigned"
+  const filteredReminders: Reminder[] = filter === "assigned" ? [] : allReminders.filter((r) => {
+    if (filter === "completed") return r.status === "done";
+    return r.status !== "done";
+  });
+
+  const tasks: ListItem[] = [
+    ...filteredTasks.map((t): ListItem => ({ type: "task", data: t })),
+    ...filteredReminders.map((r): ListItem => ({ type: "reminder", data: r })),
+  ].sort((a, b) => {
+    const aData = a.data;
+    const bData = b.data;
     if (sort === "priority") {
       const order = { urgent: 0, high: 1, medium: 2, low: 3 };
-      return (order[a.priority as keyof typeof order] ?? 2) - (order[b.priority as keyof typeof order] ?? 2);
+      return (order[aData.priority as keyof typeof order] ?? 2) - (order[bData.priority as keyof typeof order] ?? 2);
     }
     if (sort === "completed") {
-      const aDate = a.completedAt ? new Date(a.completedAt).getTime() : 0;
-      const bDate = b.completedAt ? new Date(b.completedAt).getTime() : 0;
+      const aDate = aData.completedAt ? new Date(aData.completedAt).getTime() : 0;
+      const bDate = bData.completedAt ? new Date(bData.completedAt).getTime() : 0;
       return bDate - aDate; // newest first
     }
     // due date: tasks with no due date go last
-    if (!a.dueDate && !b.dueDate) return 0;
-    if (!a.dueDate) return 1;
-    if (!b.dueDate) return -1;
-    return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+    if (!aData.dueDate && !bData.dueDate) return 0;
+    if (!aData.dueDate) return 1;
+    if (!bData.dueDate) return -1;
+    return new Date(aData.dueDate).getTime() - new Date(bData.dueDate).getTime();
   });
 
   const currentYear = new Date().getFullYear();
@@ -1095,10 +1139,11 @@ export default function TasksScreen() {
         ) : (
           tasks.map((item) => (
             <TaskRow
-              key={item.id}
-              task={item}
-              onToggle={() => handleToggleTask(item)}
-              onPress={() => router.push({ pathname: "/task-detail", params: { taskId: item.id, teamId: activeTeamId! } })}
+              key={item.data.id}
+              task={item.type === "reminder" ? reminderToTask(item.data) : item.data}
+              isReminder={item.type === "reminder"}
+              onToggle={() => item.type === "task" ? handleToggleTask(item.data) : undefined}
+              onPress={() => item.type === "task" ? router.push({ pathname: "/task-detail", params: { taskId: item.data.id, teamId: activeTeamId! } }) : undefined}
             />
           ))
         )}
@@ -1127,6 +1172,7 @@ export default function TasksScreen() {
               <TaskRow
                 key={item.id}
                 task={item}
+                isReminder={false}
                 onToggle={() => handleToggleTask(item)}
                 onPress={() => router.push({ pathname: "/task-detail", params: { taskId: item.id, teamId: activeTeamId! } })}
               />
