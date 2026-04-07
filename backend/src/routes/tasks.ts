@@ -444,30 +444,44 @@ tasksRouter.patch("/:taskId", async (c) => {
       });
     }
 
-    const fullUser = await prisma.user.findUnique({ where: { id: user.id }, select: { personalBestStreak: true } });
-    if (fullUser && streak > fullUser.personalBestStreak) {
-      // Only celebrate a personal best if the user has had at least one late/missed task
-      // (i.e., a "comeback" moment - they broke their record after a past failure)
-      const hadLateTask = await prisma.$queryRaw<{ count: number }[]>`
-        SELECT COUNT(*) as count
-        FROM Task t
-        JOIN TaskAssignment ta ON ta.taskId = t.id
-        WHERE ta.userId = ${user.id}
-        AND t.status = 'done'
-        AND t.completedAt IS NOT NULL
-        AND t.dueDate IS NOT NULL
-        AND t.completedAt > t.dueDate
-      `;
-      const lateCount = Number(hadLateTask[0]?.count ?? 0);
-      await prisma.user.update({ where: { id: user.id }, data: { personalBestStreak: streak } });
-      if (lateCount > 0) {
-        personalBestCount = streak;
-        await logActivity({
-          teamId,
-          userId: user.id,
-          type: "personal_best",
-          metadata: { count: streak, userName: user.name, incognito: task.incognito },
-        });
+    const fullUser = await prisma.user.findUnique({ where: { id: user.id }, select: { personalBestStreak: true, personalBestCelebrated: true } });
+
+    if (streak === 0) {
+      // Task was completed late — reset the flag so the next comeback can be celebrated
+      if (fullUser?.personalBestCelebrated) {
+        await prisma.user.update({ where: { id: user.id }, data: { personalBestCelebrated: false } });
+      }
+    } else if (fullUser && streak > fullUser.personalBestStreak) {
+      if (!fullUser.personalBestCelebrated) {
+        // First time crossing the personal best in this comeback — check for late task history
+        const hadLateTask = await prisma.$queryRaw<{ count: number }[]>`
+          SELECT COUNT(*) as count
+          FROM Task t
+          JOIN TaskAssignment ta ON ta.taskId = t.id
+          WHERE ta.userId = ${user.id}
+          AND t.status = 'done'
+          AND t.completedAt IS NOT NULL
+          AND t.dueDate IS NOT NULL
+          AND t.completedAt > t.dueDate
+        `;
+        const lateCount = Number(hadLateTask[0]?.count ?? 0);
+        if (lateCount > 0) {
+          // Celebrate once and mark as celebrated — won't fire again until next streak break
+          await prisma.user.update({ where: { id: user.id }, data: { personalBestStreak: streak, personalBestCelebrated: true } });
+          personalBestCount = streak;
+          await logActivity({
+            teamId,
+            userId: user.id,
+            type: "personal_best",
+            metadata: { count: streak, userName: user.name, incognito: task.incognito },
+          });
+        } else {
+          // No late history yet — update PB silently
+          await prisma.user.update({ where: { id: user.id }, data: { personalBestStreak: streak } });
+        }
+      } else {
+        // Already celebrated this comeback — just update PB silently
+        await prisma.user.update({ where: { id: user.id }, data: { personalBestStreak: streak } });
       }
     }
 

@@ -28,6 +28,7 @@ model User {
   templatesCreated TaskTemplate[] @relation("TemplateCreator")
   pushToken     String?
   personalBestStreak Int @default(0)
+  personalBestCelebrated Boolean @default(false)
   notifMessages     Boolean @default(true)
   notifTaskAssigned Boolean @default(true)
   notifTaskDue      Boolean @default(true)
