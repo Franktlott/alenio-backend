@@ -179,16 +179,12 @@ export default function TaskDetailScreen() {
             {task.incognito ? "🕵️ " : ""}{task.title}
           </Text>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
-            {canEdit ? (
+            {canEdit && isEditMode ? (
               <TouchableOpacity
-                onPress={() => setIsEditMode((v) => !v)}
+                onPress={() => setIsEditMode(false)}
                 testID="edit-mode-button"
               >
-                {isEditMode ? (
-                  <Text style={{ color: "white", fontSize: 14, fontWeight: "700" }}>Done</Text>
-                ) : (
-                  <Pencil size={18} color="white" />
-                )}
+                <Text style={{ color: "white", fontSize: 14, fontWeight: "700" }}>Done</Text>
               </TouchableOpacity>
             ) : null}
             {isCreator && !isEditMode ? (
