@@ -34,7 +34,6 @@ type SortMode = "due" | "priority" | "completed";
 const DAY_LABELS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 
-type WeekBar ={ id: string; title: string; color: string; startCol: number; endCol: number };
 
 // Returns the date of the Nth weekday in a given month/year
 // weekday: 0=Sun, 1=Mon ... 6=Sat; nth: 1-based (use -1 for last)
@@ -85,37 +84,6 @@ function toLocalIso(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function computeWeekBars(week: (Date | null)[], events: CalendarEvent[]): WeekBar[][] {
-  const bars: WeekBar[] = [];
-  for (const event of events) {
-    const evStart = startOfDay(new Date(event.startDate));
-    const evEnd = event.endDate ? startOfDay(new Date(event.endDate)) : evStart;
-    let startCol = -1, endCol = -1;
-    for (let i = 0; i < week.length; i++) {
-      const day = week[i];
-      if (!day) continue;
-      const d = startOfDay(day);
-      if (d >= evStart && d <= evEnd) {
-        if (startCol === -1) startCol = i;
-        endCol = i;
-      }
-    }
-    if (startCol === -1) continue;
-    bars.push({ id: event.id, title: event.title, color: event.color, startCol, endCol });
-  }
-  bars.sort((a, b) => (b.endCol - b.startCol) - (a.endCol - a.startCol) || a.startCol - b.startCol);
-  const tracks: WeekBar[][] = [];
-  for (const bar of bars) {
-    let placed = false;
-    for (const track of tracks) {
-      if (!track.some((b) => b.startCol <= bar.endCol && b.endCol >= bar.startCol)) {
-        track.push(bar); placed = true; break;
-      }
-    }
-    if (!placed) tracks.push([bar]);
-  }
-  return tracks;
-}
 
 function MiniCalendar({
   tasks,
@@ -133,7 +101,6 @@ function MiniCalendar({
   const today = new Date();
   const [viewYear, setViewYear] = useState(today.getFullYear());
   const [viewMonth, setViewMonth] = useState(today.getMonth());
-  const [weekRowWidth, setWeekRowWidth] = useState(0);
 
   const firstDay = new Date(viewYear, viewMonth, 1).getDay();
   const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
@@ -144,6 +111,20 @@ function MiniCalendar({
       .filter((t) => t.dueDate && t.status !== "done")
       .map((t) => toLocalIso(new Date(t.dueDate!)))
   );
+
+  // Build per-day event count map
+  const dayEventMap = new Map<string, { count: number; color: string }>();
+  for (const ev of events) {
+    const evStart = startOfDay(new Date(ev.startDate));
+    const evEnd = ev.endDate ? startOfDay(new Date(ev.endDate)) : evStart;
+    const cur = new Date(evStart);
+    while (cur <= evEnd) {
+      const iso = toLocalIso(cur);
+      const existing = dayEventMap.get(iso);
+      dayEventMap.set(iso, { count: (existing?.count ?? 0) + 1, color: existing?.color ?? ev.color });
+      cur.setDate(cur.getDate() + 1);
+    }
+  }
 
   // Build day cells padded into full weeks
   const allCells: (Date | null)[] = [
@@ -186,92 +167,48 @@ function MiniCalendar({
       </View>
 
       {/* Week rows */}
-      {weeks.map((week, weekIdx) => {
-        const tracks = computeWeekBars(week, events);
-        return (
-          <View key={weekIdx}>
-            {/* Day numbers */}
-            <View style={{ flexDirection: "row" }}>
-              {week.map((day, colIdx) => {
-                if (!day) return <View key={`e-${weekIdx}-${colIdx}`} style={{ flex: 1, height: 34 }} />;
-                const iso = toLocalIso(day);
-                const isToday = isSameDay(day, today);
-                const isSelected = selectedDay === iso;
-                const hasTasks = taskDays.has(iso);
-                const isHoliday = holidays.some((h) => isSameDay(h.date, day));
-                return (
-                  <TouchableOpacity
-                    key={iso}
-                    onPress={() => onSelectDay(isSelected ? null : iso)}
-                    style={{ flex: 1, height: 34, alignItems: "center", justifyContent: "center" }}
-                  >
-                    <View style={{
-                      width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center",
-                      backgroundColor: isSelected ? "#4361EE" : isToday ? "#EEF2FF" : "transparent",
-                    }}>
-                      <Text style={{ fontSize: 12, fontWeight: isToday || isSelected ? "700" : "400", color: isSelected ? "white" : isToday ? "#4361EE" : "#334155" }}>
-                        {day.getDate()}
-                      </Text>
-                    </View>
-                    <View style={{ position: "absolute", bottom: 3, flexDirection: "row", gap: 2, alignItems: "center" }}>
-                      {hasTasks && !isSelected ? <View style={{ width: 3, height: 3, borderRadius: 1.5, backgroundColor: "#4361EE" }} /> : null}
-                      {isHoliday && !isSelected ? <View style={{ width: 3, height: 3, borderRadius: 1.5, backgroundColor: "#EF4444" }} /> : null}
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-
-            {/* Event bars */}
-            {tracks.length > 0 ? (
-              <View
-                onLayout={(e) => setWeekRowWidth(e.nativeEvent.layout.width)}
-                style={{ position: "relative", marginBottom: 3 }}
+      {weeks.map((week, weekIdx) => (
+        <View key={weekIdx} style={{ flexDirection: "row" }}>
+          {week.map((day, colIdx) => {
+            if (!day) return <View key={`e-${weekIdx}-${colIdx}`} style={{ flex: 1, height: 36 }} />;
+            const iso = toLocalIso(day);
+            const isToday = isSameDay(day, today);
+            const isSelected = selectedDay === iso;
+            const hasTasks = taskDays.has(iso);
+            const isHoliday = holidays.some((h) => isSameDay(h.date, day));
+            const evInfo = dayEventMap.get(iso);
+            return (
+              <TouchableOpacity
+                key={iso}
+                onPress={() => onSelectDay(isSelected ? null : iso)}
+                style={{ flex: 1, height: 36, alignItems: "center", justifyContent: "center" }}
               >
-                {tracks.map((track, trackIdx) => (
-                  <View key={trackIdx} style={{ flexDirection: "row", height: 15, marginBottom: 2 }}>
-                    {week.map((_, colIdx) => {
-                      const bar = track.find((b) => b.startCol <= colIdx && b.endCol >= colIdx);
-                      if (!bar) return <View key={colIdx} style={{ flex: 1 }} />;
-                      const isStart = colIdx === bar.startCol;
-                      const isEnd = colIdx === bar.endCol;
-                      return (
-                        <View
-                          key={colIdx}
-                          style={{
-                            flex: 1, height: 15,
-                            backgroundColor: bar.color,
-                            borderTopLeftRadius: isStart ? 4 : 0,
-                            borderBottomLeftRadius: isStart ? 4 : 0,
-                            borderTopRightRadius: isEnd ? 4 : 0,
-                            borderBottomRightRadius: isEnd ? 4 : 0,
-                            marginLeft: isStart ? 2 : 0,
-                            marginRight: isEnd ? 2 : 0,
-                          }}
-                        />
-                      );
-                    })}
-                    {weekRowWidth > 0 && track.map((bar) => {
-                      const colWidth = weekRowWidth / 7;
-                      return (
-                        <View
-                          key={`t-${bar.id}`}
-                          pointerEvents="none"
-                          style={{ position: "absolute", left: bar.startCol * colWidth + 2, width: (bar.endCol - bar.startCol + 1) * colWidth - 4, top: 0, height: 15, justifyContent: "center", overflow: "hidden" }}
-                        >
-                          <Text style={{ color: "white", fontSize: 9, fontWeight: "600", paddingHorizontal: 4, lineHeight: 14 }} numberOfLines={1}>
-                            {bar.title}
-                          </Text>
-                        </View>
-                      );
-                    })}
-                  </View>
-                ))}
-              </View>
-            ) : <View style={{ height: 2 }} />}
-          </View>
-        );
-      })}
+                <View style={{
+                  width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center",
+                  backgroundColor: isSelected ? "#4361EE" : isToday ? "#EEF2FF" : "transparent",
+                }}>
+                  <Text style={{ fontSize: 12, fontWeight: isToday || isSelected ? "700" : "400", color: isSelected ? "white" : isToday ? "#4361EE" : "#334155" }}>
+                    {day.getDate()}
+                  </Text>
+                </View>
+                <View style={{ position: "absolute", bottom: 2, flexDirection: "row", gap: 2, alignItems: "center" }}>
+                  {hasTasks && !isSelected ? <View style={{ width: 3, height: 3, borderRadius: 1.5, backgroundColor: "#4361EE" }} /> : null}
+                  {isHoliday && !isSelected ? <View style={{ width: 3, height: 3, borderRadius: 1.5, backgroundColor: "#EF4444" }} /> : null}
+                  {evInfo && !isSelected ? (
+                    evInfo.count > 1 ? (
+                      <View style={{ backgroundColor: evInfo.color, borderRadius: 5, paddingHorizontal: 3, paddingVertical: 0.5, minWidth: 12, alignItems: "center" }}>
+                        <Text style={{ color: "white", fontSize: 8, fontWeight: "700", lineHeight: 11 }}>{evInfo.count}</Text>
+                      </View>
+                    ) : (
+                      <View style={{ width: 3, height: 3, borderRadius: 1.5, backgroundColor: evInfo.color }} />
+                    )
+                  ) : null}
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      ))}
     </View>
   );
 }
