@@ -329,7 +329,7 @@ function CelebrationCard({ item, activeTeamId, currentUserId, isDemo }: { item: 
     <Pressable
       onPress={() => router.push("/(app)" as any)}
       onLongPress={isDemo ? undefined : () => setShowPicker(true)}
-      style={{ marginHorizontal: 16, marginVertical: 8 }}
+      style={{ marginHorizontal: 16, marginVertical: 6 }}
       testID={`milestone-card-${item.id}`}
     >
       <LinearGradient
@@ -349,53 +349,49 @@ function CelebrationCard({ item, activeTeamId, currentUserId, isDemo }: { item: 
             { top: 44, right: 20, size: 8, opacity: 0.45 },
             { bottom: 48, left: 40, size: 7, opacity: 0.3 },
             { bottom: 32, right: 50, size: 6, opacity: 0.35 },
-            { bottom: 16, left: 80, size: 8, opacity: 0.4 },
-            { bottom: 20, right: 80, size: 7, opacity: 0.3 },
-            { top: 36, left: 120, size: 5, opacity: 0.25 },
-            { top: 16, left: 160, size: 7, opacity: 0.4 },
           ].map((s, i) => (
             <Text key={i} style={{ position: "absolute", top: s.top, left: (s as any).left, right: (s as any).right, bottom: (s as any).bottom, fontSize: s.size, opacity: s.opacity, color: "#FFD700" }}>✦</Text>
           ))}
         </View>
 
-        <View style={{ padding: 20, alignItems: "center", gap: 12 }}>
+        <View style={{ padding: 14, alignItems: "center", gap: 8 }}>
           {/* Gold shield badge */}
-          <View style={{ alignItems: "center", marginTop: 4 }}>
+          <View style={{ alignItems: "center", marginTop: 0 }}>
             <LinearGradient
               colors={["#F5C518", "#B8860B", "#8B6914"]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={{ borderRadius: 16, padding: 2 }}
             >
-              <View style={{ backgroundColor: "#0D1117", borderRadius: 14, paddingHorizontal: 28, paddingVertical: 16, alignItems: "center", minWidth: 100 }}>
-                <Text style={{ fontSize: 24, lineHeight: 28 }}>⭐</Text>
-                <Text style={{ fontSize: 52, fontWeight: "900", color: "#FFD700", lineHeight: 56 }}>{count}</Text>
+              <View style={{ backgroundColor: "#0D1117", borderRadius: 14, paddingHorizontal: 20, paddingVertical: 10, alignItems: "center", minWidth: 80 }}>
+                <Text style={{ fontSize: 18, lineHeight: 28 }}>⭐</Text>
+                <Text style={{ fontSize: 40, fontWeight: "900", color: "#FFD700", lineHeight: 44 }}>{count}</Text>
               </View>
             </LinearGradient>
           </View>
 
           {/* Text */}
           <View style={{ alignItems: "center", gap: 4 }}>
-            <Text style={{ fontSize: 15, color: "rgba(255,255,255,0.7)", fontWeight: "500" }}>tasks in a row</Text>
-            <Text style={{ fontSize: 17, fontWeight: "800", color: "white", textAlign: "center" }}>
+            <Text style={{ fontSize: 12, color: "rgba(255,255,255,0.7)", fontWeight: "500" }}>tasks in a row</Text>
+            <Text style={{ fontSize: 14, fontWeight: "800", color: "white", textAlign: "center" }}>
               {name} hit an INSANE milestone! 🏆✨
             </Text>
-            <Text style={{ fontSize: 13, color: "#9CA3AF" }}>New Alenio record!</Text>
+            <Text style={{ fontSize: 11, color: "#9CA3AF" }}>New Alenio record!</Text>
           </View>
 
           {/* Footer: avatar + time */}
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", width: "100%", marginTop: 4 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", width: "100%", marginTop: 2 }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-              <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: "#1C2540", borderWidth: 1, borderColor: "#FFD70040", overflow: "hidden", alignItems: "center", justifyContent: "center" }}>
+              <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: "#1C2540", borderWidth: 1, borderColor: "#FFD70040", overflow: "hidden", alignItems: "center", justifyContent: "center" }}>
                 {item.user?.image ? (
-                  <ExpoImage source={{ uri: item.user.image }} style={{ width: 28, height: 28 }} contentFit="cover" />
+                  <ExpoImage source={{ uri: item.user.image }} style={{ width: 24, height: 24 }} contentFit="cover" />
                 ) : (
-                  <Text style={{ fontSize: 12, fontWeight: "700", color: "#FFD700" }}>{name[0].toUpperCase()}</Text>
+                  <Text style={{ fontSize: 11, fontWeight: "700", color: "#FFD700" }}>{name[0].toUpperCase()}</Text>
                 )}
               </View>
-              <Text style={{ fontSize: 12, color: "#6B7280" }}>{name}</Text>
+              <Text style={{ fontSize: 11, color: "#6B7280" }}>{name}</Text>
             </View>
-            <Text style={{ fontSize: 12, color: "#4B5563" }}>{timeAgo(item.createdAt)}</Text>
+            <Text style={{ fontSize: 11, color: "#4B5563" }}>{timeAgo(item.createdAt)}</Text>
           </View>
 
           <ReactionRow
@@ -432,7 +428,7 @@ function PersonalBestCard({ item, activeTeamId, currentUserId, isDemo }: { item:
     <Pressable
       onPress={() => router.push("/(app)" as any)}
       onLongPress={isDemo ? undefined : () => setShowPicker(true)}
-      style={{ marginHorizontal: 16, marginVertical: 8 }}
+      style={{ marginHorizontal: 16, marginVertical: 6 }}
       testID={`personal-best-card-${item.id}`}
     >
       <LinearGradient
@@ -452,53 +448,49 @@ function PersonalBestCard({ item, activeTeamId, currentUserId, isDemo }: { item:
             { top: 40, right: 18, size: 7, opacity: 0.4 },
             { bottom: 44, left: 38, size: 6, opacity: 0.3 },
             { bottom: 28, right: 46, size: 5, opacity: 0.3 },
-            { bottom: 14, left: 75, size: 7, opacity: 0.35 },
-            { bottom: 18, right: 75, size: 6, opacity: 0.25 },
-            { top: 32, left: 115, size: 5, opacity: 0.2 },
-            { top: 14, left: 155, size: 6, opacity: 0.35 },
           ].map((s, i) => (
             <Text key={i} style={{ position: "absolute", top: s.top, left: (s as any).left, right: (s as any).right, bottom: (s as any).bottom, fontSize: s.size, opacity: s.opacity, color: "#F97316" }}>✦</Text>
           ))}
         </View>
 
-        <View style={{ padding: 20, alignItems: "center", gap: 12 }}>
+        <View style={{ padding: 14, alignItems: "center", gap: 8 }}>
           {/* Orange fire badge */}
-          <View style={{ alignItems: "center", marginTop: 4 }}>
+          <View style={{ alignItems: "center", marginTop: 0 }}>
             <LinearGradient
               colors={["#F97316", "#EA580C", "#9A3412"]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={{ borderRadius: 16, padding: 2 }}
             >
-              <View style={{ backgroundColor: "#0D0D0D", borderRadius: 14, paddingHorizontal: 28, paddingVertical: 16, alignItems: "center", minWidth: 100 }}>
-                <Text style={{ fontSize: 24, lineHeight: 28 }}>🔥</Text>
-                <Text style={{ fontSize: 52, fontWeight: "900", color: "#F97316", lineHeight: 56 }}>{count}</Text>
+              <View style={{ backgroundColor: "#0D0D0D", borderRadius: 14, paddingHorizontal: 20, paddingVertical: 10, alignItems: "center", minWidth: 80 }}>
+                <Text style={{ fontSize: 18, lineHeight: 28 }}>🔥</Text>
+                <Text style={{ fontSize: 40, fontWeight: "900", color: "#F97316", lineHeight: 44 }}>{count}</Text>
               </View>
             </LinearGradient>
           </View>
 
           {/* Text */}
           <View style={{ alignItems: "center", gap: 4 }}>
-            <Text style={{ fontSize: 15, color: "rgba(255,255,255,0.7)", fontWeight: "500" }}>tasks in a row</Text>
-            <Text style={{ fontSize: 17, fontWeight: "800", color: "white", textAlign: "center" }}>
+            <Text style={{ fontSize: 12, color: "rgba(255,255,255,0.7)", fontWeight: "500" }}>tasks in a row</Text>
+            <Text style={{ fontSize: 14, fontWeight: "800", color: "white", textAlign: "center" }}>
               {name} made an epic comeback! 💪🔥
             </Text>
-            <Text style={{ fontSize: 13, color: "#9CA3AF" }}>Matched their personal best!</Text>
+            <Text style={{ fontSize: 11, color: "#9CA3AF" }}>Matched their personal best!</Text>
           </View>
 
           {/* Footer: avatar + time */}
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", width: "100%", marginTop: 4 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", width: "100%", marginTop: 2 }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-              <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: "#1C1410", borderWidth: 1, borderColor: "#F9731640", overflow: "hidden", alignItems: "center", justifyContent: "center" }}>
+              <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: "#1C1410", borderWidth: 1, borderColor: "#F9731640", overflow: "hidden", alignItems: "center", justifyContent: "center" }}>
                 {item.user?.image ? (
-                  <ExpoImage source={{ uri: item.user.image }} style={{ width: 28, height: 28 }} contentFit="cover" />
+                  <ExpoImage source={{ uri: item.user.image }} style={{ width: 24, height: 24 }} contentFit="cover" />
                 ) : (
-                  <Text style={{ fontSize: 12, fontWeight: "700", color: "#F97316" }}>{name[0].toUpperCase()}</Text>
+                  <Text style={{ fontSize: 11, fontWeight: "700", color: "#F97316" }}>{name[0].toUpperCase()}</Text>
                 )}
               </View>
-              <Text style={{ fontSize: 12, color: "#6B7280" }}>{name}</Text>
+              <Text style={{ fontSize: 11, color: "#6B7280" }}>{name}</Text>
             </View>
-            <Text style={{ fontSize: 12, color: "#4B5563" }}>{timeAgo(item.createdAt)}</Text>
+            <Text style={{ fontSize: 11, color: "#4B5563" }}>{timeAgo(item.createdAt)}</Text>
           </View>
 
           <ReactionRow
