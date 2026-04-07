@@ -12,7 +12,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { ChevronLeft, ChevronRight, Plus, Calendar, Glasses } from "lucide-react-native";
+import { ChevronLeft, ChevronRight, Plus, Calendar, UserRound } from "lucide-react-native";
 import { router } from "expo-router";
 import { api } from "@/lib/api/api";
 import { useTeamStore } from "@/lib/state/team-store";
@@ -385,9 +385,12 @@ export default function CalendarScreen() {
                             overflow: "hidden",
                           }}
                         >
-                          <Text style={{ color: "white", fontSize: 9, fontWeight: "600", paddingHorizontal: 4, lineHeight: 13 }} numberOfLines={1}>
-                            {bar.title}
-                          </Text>
+                          <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 4 }}>
+                            {bar.isHidden ? <UserRound size={9} color="white" style={{ marginRight: 2 }} /> : null}
+                            <Text style={{ color: "white", fontSize: 9, fontWeight: "600", lineHeight: 13, flex: 1 }} numberOfLines={1}>
+                              {bar.title}
+                            </Text>
+                          </View>
                         </View>
                       );
                     })}
@@ -410,7 +413,7 @@ export default function CalendarScreen() {
           </View>
           {isOwnerOrLeader ? (
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-              <Glasses size={10} color="#94A3B8" />
+              <UserRound size={10} color="#94A3B8" />
               <Text style={{ fontSize: 11, color: "#64748B" }}>Incognito</Text>
             </View>
           ) : null}
@@ -460,7 +463,7 @@ export default function CalendarScreen() {
                     <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
                       <View style={{ flexDirection: "row", alignItems: "center", flex: 1 }}>
                         <Text style={{ fontSize: 14, fontWeight: "700", color: "#0F172A", flex: 1 }} numberOfLines={1}>{event.title}</Text>
-                        {event.isHidden ? <Glasses size={13} color="#94A3B8" style={{ marginLeft: 4 }} /> : null}
+                        {event.isHidden ? <UserRound size={13} color="#94A3B8" style={{ marginLeft: 4 }} /> : null}
                       </View>
                       <View style={{ backgroundColor: event.color + "20", paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 }}>
                         <Text style={{ fontSize: 10, fontWeight: "600", color: event.color }}>

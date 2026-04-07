@@ -13,7 +13,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { X, Calendar, Trash2, Glasses } from "lucide-react-native";
+import { X, Calendar, Trash2, UserRound } from "lucide-react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api/api";
@@ -309,7 +309,7 @@ export default function CreateEventScreen() {
         {/* Hidden toggle */}
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: "white", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 14, borderWidth: 1.5, borderColor: isHidden ? "#94A3B8" : "#E2E8F0" }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-            <Glasses size={18} color={isHidden ? "#64748B" : "#CBD5E1"} />
+            <UserRound size={18} color={isHidden ? "#64748B" : "#CBD5E1"} />
             <View>
               <Text style={{ fontSize: 14, fontWeight: "600", color: "#0F172A" }}>Incognito</Text>
               <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 1 }}>Only visible to you</Text>
