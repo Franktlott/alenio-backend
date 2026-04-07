@@ -411,43 +411,43 @@ function PersonalBestCard({ item, activeTeamId, currentUserId, isDemo }: { item:
       testID={`personal-best-card-${item.id}`}
     >
       <LinearGradient
-        colors={["#7C3AED", "#4F46E5"]}
+        colors={["#F97316", "#EF4444"]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
         style={{ borderRadius: 18, padding: 2 }}
       >
-        <View style={{ backgroundColor: "#F5F3FF", borderRadius: 16, padding: 16, gap: 10 }}>
-          {/* Top row: star + label + time */}
+        <View style={{ backgroundColor: "#FFF7ED", borderRadius: 16, padding: 16, gap: 10 }}>
+          {/* Top row: icon + comeback label + time */}
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-              <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#EDE9FE", alignItems: "center", justifyContent: "center" }}>
-                <Text style={{ fontSize: 20 }}>⭐</Text>
+              <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#FFEDD5", alignItems: "center", justifyContent: "center" }}>
+                <Text style={{ fontSize: 20 }}>💪</Text>
               </View>
-              <View style={{ backgroundColor: "#EDE9FE", borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 }}>
-                <Text style={{ fontSize: 11, fontWeight: "800", color: "#5B21B6", letterSpacing: 0.5 }}>🏆 PERSONAL BEST</Text>
+              <View style={{ backgroundColor: "#FFEDD5", borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 }}>
+                <Text style={{ fontSize: 11, fontWeight: "800", color: "#C2410C", letterSpacing: 0.5 }}>🏆 COMEBACK</Text>
               </View>
             </View>
             <Text style={{ fontSize: 12, color: "#94A3B8" }}>{timeAgo(item.createdAt)}</Text>
           </View>
 
-          {/* Count */}
+          {/* Streak count */}
           <View style={{ alignItems: "center", paddingVertical: 6 }}>
-            <Text style={{ fontSize: 56, fontWeight: "900", color: "#7C3AED", lineHeight: 60 }}>{count}</Text>
-            <Text style={{ fontSize: 13, fontWeight: "700", color: "#4C1D95", marginTop: 2 }}>tasks on time — new record! 🌟</Text>
+            <Text style={{ fontSize: 56, fontWeight: "900", color: "#F97316", lineHeight: 60 }}>{count}</Text>
+            <Text style={{ fontSize: 13, fontWeight: "700", color: "#9A3412", marginTop: 2 }}>streak matched — personal best! 🏆</Text>
           </View>
 
           {/* Avatar + name */}
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "#EDE9FE", borderRadius: 12, padding: 10 }}>
-            <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "#DDD6FE", overflow: "hidden", alignItems: "center", justifyContent: "center" }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "#FFEDD5", borderRadius: 12, padding: 10 }}>
+            <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "#FED7AA", overflow: "hidden", alignItems: "center", justifyContent: "center" }}>
               {item.user?.image ? (
                 <ExpoImage source={{ uri: item.user.image }} style={{ width: 32, height: 32 }} contentFit="cover" />
               ) : (
-                <Text style={{ fontSize: 14, fontWeight: "700", color: "#5B21B6" }}>{name[0].toUpperCase()}</Text>
+                <Text style={{ fontSize: 14, fontWeight: "700", color: "#C2410C" }}>{name[0].toUpperCase()}</Text>
               )}
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 14, fontWeight: "700", color: "#4C1D95" }}>{name} broke their record! 🎉</Text>
-              <Text style={{ fontSize: 11, color: "#6D28D9", marginTop: 1 }}>Tap to view tasks →</Text>
+              <Text style={{ fontSize: 14, fontWeight: "700", color: "#9A3412" }}>{name} made a comeback! 💪</Text>
+              <Text style={{ fontSize: 11, color: "#C2410C", marginTop: 1 }}>Back to their personal best →</Text>
             </View>
           </View>
 
