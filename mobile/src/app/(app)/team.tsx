@@ -209,6 +209,7 @@ export default function TeamScreen() {
 
   const handlePickTeamPhoto = async () => {
     setPhotoMenuOpen(false);
+    await new Promise((resolve) => setTimeout(resolve, 400));
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ["images"],
       allowsEditing: true,
