@@ -388,6 +388,84 @@ function CelebrationCard({ item, activeTeamId, currentUserId, isDemo }: { item: 
   );
 }
 
+function PersonalBestCard({ item, activeTeamId, currentUserId, isDemo }: { item: ActivityEvent; activeTeamId: string | null; currentUserId: string | undefined; isDemo: boolean }) {
+  const count = item.metadata?.count ?? 0;
+  const name = item.user?.name ?? "Someone";
+  const [showPicker, setShowPicker] = useState<boolean>(false);
+  const queryClient = useQueryClient();
+
+  const { mutate: toggleReaction } = useMutation({
+    mutationFn: (emoji: string) =>
+      api.post(`/api/teams/${activeTeamId}/activity/${item.id}/react`, { emoji }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["activity", activeTeamId] });
+      setShowPicker(false);
+    },
+  });
+
+  return (
+    <Pressable
+      onPress={() => router.push("/(app)" as any)}
+      onLongPress={isDemo ? undefined : () => setShowPicker(true)}
+      style={{ marginHorizontal: 16, marginVertical: 8 }}
+      testID={`personal-best-card-${item.id}`}
+    >
+      <LinearGradient
+        colors={["#7C3AED", "#4F46E5"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={{ borderRadius: 18, padding: 2 }}
+      >
+        <View style={{ backgroundColor: "#F5F3FF", borderRadius: 16, padding: 16, gap: 10 }}>
+          {/* Top row: star + label + time */}
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#EDE9FE", alignItems: "center", justifyContent: "center" }}>
+                <Text style={{ fontSize: 20 }}>⭐</Text>
+              </View>
+              <View style={{ backgroundColor: "#EDE9FE", borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 }}>
+                <Text style={{ fontSize: 11, fontWeight: "800", color: "#5B21B6", letterSpacing: 0.5 }}>🏆 PERSONAL BEST</Text>
+              </View>
+            </View>
+            <Text style={{ fontSize: 12, color: "#94A3B8" }}>{timeAgo(item.createdAt)}</Text>
+          </View>
+
+          {/* Count */}
+          <View style={{ alignItems: "center", paddingVertical: 6 }}>
+            <Text style={{ fontSize: 56, fontWeight: "900", color: "#7C3AED", lineHeight: 60 }}>{count}</Text>
+            <Text style={{ fontSize: 13, fontWeight: "700", color: "#4C1D95", marginTop: 2 }}>tasks on time — new record! 🌟</Text>
+          </View>
+
+          {/* Avatar + name */}
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "#EDE9FE", borderRadius: 12, padding: 10 }}>
+            <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "#DDD6FE", overflow: "hidden", alignItems: "center", justifyContent: "center" }}>
+              {item.user?.image ? (
+                <ExpoImage source={{ uri: item.user.image }} style={{ width: 32, height: 32 }} contentFit="cover" />
+              ) : (
+                <Text style={{ fontSize: 14, fontWeight: "700", color: "#5B21B6" }}>{name[0].toUpperCase()}</Text>
+              )}
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 14, fontWeight: "700", color: "#4C1D95" }}>{name} broke their record! 🎉</Text>
+              <Text style={{ fontSize: 11, color: "#6D28D9", marginTop: 1 }}>Tap to view tasks →</Text>
+            </View>
+          </View>
+
+          <ReactionRow
+            activityId={item.id}
+            teamId={activeTeamId}
+            reactions={item.reactions ?? {}}
+            currentUserId={currentUserId}
+            onToggleReaction={toggleReaction}
+            showPicker={showPicker}
+            onClosePicker={() => setShowPicker(false)}
+          />
+        </View>
+      </LinearGradient>
+    </Pressable>
+  );
+}
+
 function ActivityItem({ item, activeTeamId, currentUserId, isDemo }: { item: ActivityEvent; activeTeamId: string | null; currentUserId: string | undefined; isDemo: boolean }) {
   const [showPicker, setShowPicker] = useState<boolean>(false);
   const queryClient = useQueryClient();
@@ -403,6 +481,10 @@ function ActivityItem({ item, activeTeamId, currentUserId, isDemo }: { item: Act
 
   if (item.type === "task_milestone") {
     return <CelebrationCard item={item} activeTeamId={activeTeamId} currentUserId={currentUserId} isDemo={isDemo} />;
+  }
+
+  if (item.type === "personal_best") {
+    return <PersonalBestCard item={item} activeTeamId={activeTeamId} currentUserId={currentUserId} isDemo={isDemo} />;
   }
 
   const config = EVENT_CONFIG[item.type] ?? {

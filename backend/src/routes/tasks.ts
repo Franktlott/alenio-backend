@@ -389,6 +389,7 @@ tasksRouter.patch("/:taskId", async (c) => {
 
   // Handle recurrence: if completed, spawn next occurrence
   let milestoneCount: number | null = null;
+  let personalBestCount: number | null = null;
   if (status === "done" && task.status !== "done") {
     // Log activity for task completion
     await logActivity({
@@ -429,6 +430,18 @@ tasksRouter.patch("/:taskId", async (c) => {
       });
     }
 
+    const fullUser = await prisma.user.findUnique({ where: { id: user.id }, select: { personalBestStreak: true } });
+    if (fullUser && streak > fullUser.personalBestStreak) {
+      await prisma.user.update({ where: { id: user.id }, data: { personalBestStreak: streak } });
+      personalBestCount = streak;
+      await logActivity({
+        teamId,
+        userId: user.id,
+        type: "personal_best",
+        metadata: { count: streak, userName: user.name, incognito: task.incognito },
+      });
+    }
+
     const rule = await prisma.recurrenceRule.findUnique({ where: { taskId } });
     if (rule) {
       const baseDue = task.dueDate || new Date();
@@ -461,7 +474,7 @@ tasksRouter.patch("/:taskId", async (c) => {
     }
   }
 
-  return c.json({ data: updated, ...(milestoneCount !== null ? { milestone: milestoneCount } : {}) });
+  return c.json({ data: updated, ...(milestoneCount !== null ? { milestone: milestoneCount } : {}), ...(personalBestCount !== null ? { personalBest: personalBestCount } : {}) });
 });
 
 // DELETE /api/teams/:teamId/tasks/:taskId
