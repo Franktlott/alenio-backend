@@ -377,6 +377,11 @@ export default function TeamChatScreen() {
           const url = URLS[id];
           if (url) {
             try {
+              await Audio.setAudioModeAsync({
+                playsInSilentModeIOS: true,
+                allowsRecordingIOS: false,
+                staysActiveInBackground: false,
+              });
               const { sound } = await Audio.Sound.createAsync({ uri: url }, { shouldPlay: true, volume: 1 });
               sound.setOnPlaybackStatusUpdate((s) => { if (s.isLoaded && s.didJustFinish) sound.unloadAsync(); });
             } catch {}

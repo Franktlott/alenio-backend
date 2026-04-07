@@ -55,6 +55,11 @@ export const DM_TONE_KEY  = "dm_tone";
 async function playTonePreview(url: string | null) {
   if (!url) return;
   try {
+    await Audio.setAudioModeAsync({
+      playsInSilentModeIOS: true,
+      allowsRecordingIOS: false,
+      staysActiveInBackground: false,
+    });
     const { sound } = await Audio.Sound.createAsync({ uri: url }, { shouldPlay: true, volume: 1 });
     sound.setOnPlaybackStatusUpdate((status) => {
       if (status.isLoaded && status.didJustFinish) sound.unloadAsync();
