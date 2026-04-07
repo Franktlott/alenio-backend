@@ -83,6 +83,8 @@ export default function CreateTaskScreen() {
   });
 
   const members = team?.members ?? [];
+  const currentMembership = members.find((m) => m.userId === session?.user?.id);
+  const isRegularMember = !currentMembership || currentMembership.role === "member";
 
   const { data: templates = [] } = useQuery({
     queryKey: ["templates", teamId],
@@ -349,7 +351,7 @@ export default function CreateTaskScreen() {
                       value={dueDate ?? new Date()}
                       mode="date"
                       display="inline"
-                      minimumDate={new Date()}
+                      minimumDate={isRegularMember ? new Date() : undefined}
                       onChange={(_e, date) => { if (date) { date.setHours(23, 59, 59, 0); setDueDate(date); setError(null); } }}
                       testID="date-time-picker"
                     />
@@ -363,7 +365,7 @@ export default function CreateTaskScreen() {
                   value={dueDate ?? new Date()}
                   mode="date"
                   display="calendar"
-                  minimumDate={new Date()}
+                  minimumDate={isRegularMember ? new Date() : undefined}
                   onChange={(_e, date) => { setShowDatePicker(false); if (date) { date.setHours(23, 59, 59, 0); setDueDate(date); setError(null); } }}
                   testID="date-time-picker"
                 />
@@ -580,7 +582,8 @@ export default function CreateTaskScreen() {
             ) : null}
           </View>
 
-          {/* Incognito */}
+          {/* Incognito — owners and team leaders only */}
+          {!isRegularMember ? (
           <View className="py-4 border-b border-slate-100 dark:border-slate-800">
             <View className="flex-row items-center justify-between">
               <View style={{ flex: 1, marginRight: 12 }}>
@@ -601,6 +604,7 @@ export default function CreateTaskScreen() {
               />
             </View>
           </View>
+          ) : null}
 
           {/* Photo attachment */}
           <View className="py-4 border-b border-slate-100 dark:border-slate-800">
