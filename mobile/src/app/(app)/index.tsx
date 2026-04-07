@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -15,7 +15,7 @@ import {
   KeyboardAvoidingView,
 } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { router, useLocalSearchParams, Redirect } from "expo-router";
+import { router, useLocalSearchParams, Redirect, useFocusEffect } from "expo-router";
 import { Plus, User, Users, ArrowUpDown, ChevronLeft, ChevronRight, X, CalendarDays, CheckSquare, Calendar, Check, Bell } from "lucide-react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -24,6 +24,7 @@ import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
 import { useTeamStore } from "@/lib/state/team-store";
 import { useSubscriptionStore } from "@/lib/state/subscription-store";
+import { useTaskStore } from "@/lib/state/task-store";
 import type { Task, Team, TeamMember, CalendarEvent, Reminder } from "@/lib/types";
 import { NoTeamPlaceholder } from "@/components/NoTeamPlaceholder";
 import { useDemoMode, showDemoAlert } from "@/lib/useDemo";
@@ -592,6 +593,16 @@ export default function TasksScreen() {
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
   const setActiveTeamId = useTeamStore((s) => s.setActiveTeamId);
   const queryClient = useQueryClient();
+  const acknowledge = useTaskStore((s) => s.acknowledge);
+
+  // Clear the task badge when this page is opened
+  useFocusEffect(
+    useCallback(() => {
+      if (!activeTeamId) return;
+      const count = queryClient.getQueryData<number>(["tasks-count", activeTeamId]) ?? 0;
+      acknowledge(activeTeamId, count);
+    }, [activeTeamId, acknowledge, queryClient])
+  );
 
   const [refreshing, setRefreshing] = useState(false);
 

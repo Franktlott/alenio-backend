@@ -8,6 +8,7 @@ import { useSession } from "@/lib/auth/use-session";
 import { useTeamStore } from "@/lib/state/team-store";
 import { useUnreadStore } from "@/lib/state/unread-store";
 import { useSubscriptionStore } from "@/lib/state/subscription-store";
+import { useTaskStore } from "@/lib/state/task-store";
 import { useEffect, useMemo } from "react";
 import type { Conversation, Team } from "@/lib/types";
 
@@ -31,6 +32,7 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
   const lastReadIds = useUnreadStore((s) => s.lastReadIds);
   const isPro = useSubscriptionStore((s) => s.isPro);
+  const acknowledgedCounts = useTaskStore((s) => s.acknowledgedCounts);
 
   const { data: conversations = [] } = useQuery({
     queryKey: ["conversations"],
@@ -114,8 +116,10 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
         const { Icon, label, name } = tab;
         const isChat = name === "chat";
         const isTasks = name === "index";
+        const acknowledgedCount = acknowledgedCounts[activeTeamId ?? ""] ?? 0;
+        const newTaskCount = Math.max(0, taskCount - acknowledgedCount);
         const badge = isChat && (unreadCount + teamUnreadCount) > 0 ? (unreadCount + teamUnreadCount)
-          : isTasks && taskCount > 0 ? taskCount
+          : isTasks && newTaskCount > 0 ? newTaskCount
           : null;
 
         return (
