@@ -38,7 +38,8 @@ const RECURRENCE_TYPES: { label: string; value: RecurrenceType }[] = [
 ];
 
 export default function CreateTaskScreen() {
-  const { teamId, prefillTitle, initialDueDate } = useLocalSearchParams<{ teamId: string; prefillTitle?: string; initialDueDate?: string }>();
+  const { teamId, prefillTitle, initialDueDate, isReminder: isReminderParam } = useLocalSearchParams<{ teamId: string; prefillTitle?: string; initialDueDate?: string; isReminder?: string }>();
+  const isReminder = isReminderParam === "true";
   const queryClient = useQueryClient();
   const { data: session } = useSession();
 
@@ -171,7 +172,7 @@ export default function CreateTaskScreen() {
       setError("Please enter a task title");
       return;
     }
-    if (selectedAssignees.length === 0) {
+    if (!isReminder && selectedAssignees.length === 0) {
       setError("Please assign this task to at least one person");
       return;
     }
@@ -181,7 +182,7 @@ export default function CreateTaskScreen() {
       description: description.trim() || undefined,
       priority,
       dueDate: dueDate!.toISOString(),
-      assigneeIds: selectedAssignees,
+      ...(isReminder ? { isReminder: true } : { assigneeIds: selectedAssignees }),
       incognito: isIncognito,
       recurrence: isRecurring
         ? {
@@ -245,7 +246,7 @@ export default function CreateTaskScreen() {
             <TouchableOpacity onPress={() => router.back()} testID="close-button">
               <X size={22} color="white" />
             </TouchableOpacity>
-            <Text style={{ flex: 1, marginLeft: 12, color: "white", fontSize: 18, fontWeight: "700" }}>New Task</Text>
+            <Text style={{ flex: 1, marginLeft: 12, color: "white", fontSize: 18, fontWeight: "700" }}>{isReminder ? "New Reminder" : "New Task"}</Text>
             <View className="flex-row items-center" style={{ gap: 14 }}>
               {templates.length > 0 ? (
                 <TouchableOpacity onPress={() => setShowTemplatePicker(true)} testID="use-template-button">
@@ -407,8 +408,8 @@ export default function CreateTaskScreen() {
             </View>
           </View>
 
-          {/* Assignees */}
-          {members.length > 0 ? (
+          {/* Assignees — hidden for reminders */}
+          {!isReminder && members.length > 0 ? (
             <View className="py-4 border-b border-slate-100 dark:border-slate-800">
               <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 12 }}>
                 <Text className="text-sm font-semibold text-slate-500">Assign to</Text>
@@ -582,8 +583,8 @@ export default function CreateTaskScreen() {
             ) : null}
           </View>
 
-          {/* Incognito — owners and team leaders only */}
-          {!isRegularMember ? (
+          {/* Incognito — owners and team leaders only, not for reminders */}
+          {!isRegularMember && !isReminder ? (
           <View className="py-4 border-b border-slate-100 dark:border-slate-800">
             <View className="flex-row items-center justify-between">
               <View style={{ flex: 1, marginRight: 12 }}>

@@ -16,7 +16,7 @@ import {
 } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams, Redirect } from "expo-router";
-import { Plus, User, Users, ArrowUpDown, ChevronLeft, ChevronRight, X, CalendarDays, CheckSquare, Calendar, Check } from "lucide-react-native";
+import { Plus, User, Users, ArrowUpDown, ChevronLeft, ChevronRight, X, CalendarDays, CheckSquare, Calendar, Check, Bell } from "lucide-react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -424,6 +424,12 @@ function TaskRow({ task, onToggle, onPress }: { task: Task; onToggle: () => void
       {/* Content */}
       <View style={{ flex: 1 }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 2 }}>
+          {task.isReminder ? (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 2, backgroundColor: "#FFF7ED", borderRadius: 6, paddingHorizontal: 5, paddingVertical: 1 }}>
+              <Bell size={9} color="#F97316" />
+              <Text style={{ fontSize: 9, fontWeight: "700", color: "#F97316" }}>Reminder</Text>
+            </View>
+          ) : null}
           {task.incognito ? <Text style={{ fontSize: 12 }}>🕵️</Text> : null}
           <Text
             numberOfLines={1}
@@ -1215,6 +1221,18 @@ export default function TasksScreen() {
               <View>
                 <Text style={{ fontSize: 15, fontWeight: "700", color: "#0F172A" }}>Add Task</Text>
                 <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 2 }}>Create a new task for the team</Text>
+              </View>
+            </Pressable>
+            <Pressable
+              onPress={() => { setShowAddModal(false); router.push({ pathname: "/create-task", params: { teamId: activeTeamId!, initialDueDate: selectedDay ?? toLocalIso(new Date()), isReminder: "true" } }); }}
+              style={{ flexDirection: "row", alignItems: "center", gap: 14, backgroundColor: "#FFF7ED", borderRadius: 16, padding: 16 }}
+            >
+              <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: "#F97316", alignItems: "center", justifyContent: "center" }}>
+                <Bell size={22} color="white" />
+              </View>
+              <View>
+                <Text style={{ fontSize: 15, fontWeight: "700", color: "#0F172A" }}>Add Reminder</Text>
+                <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 2 }}>Set a personal reminder for yourself</Text>
               </View>
             </Pressable>
             <View style={{ height: 16 }} />

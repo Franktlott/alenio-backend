@@ -58,6 +58,7 @@ export interface Task {
   completedAt?: string | null;
   attachmentUrl?: string | null;
   incognito?: boolean;
+  isReminder?: boolean;
   createdAt: string;
   updatedAt: string;
   teamId: string;

@@ -115,7 +115,7 @@ tasksRouter.post("/", async (c) => {
   }
 
   const body = await c.req.json();
-  const { title, description, priority, dueDate, assigneeIds, recurrence, attachmentUrl, incognito } = body;
+  const { title, description, priority, dueDate, assigneeIds, recurrence, attachmentUrl, incognito, isReminder } = body;
 
   if (!title?.trim()) {
     return c.json({ error: { message: "Title is required", code: "VALIDATION_ERROR" } }, 400);
@@ -134,6 +134,7 @@ tasksRouter.post("/", async (c) => {
     priority: priority || "medium",
     dueDate: dueDate ? new Date(dueDate) : null,
     incognito: incognito === true,
+    isReminder: isReminder === true,
     teamId,
     creatorId: user.id,
     ...(attachmentUrl ? { attachmentUrl } : {}),
@@ -154,7 +155,8 @@ tasksRouter.post("/", async (c) => {
       : {}),
   };
 
-  const ids: string[] = assigneeIds?.length ? (assigneeIds as string[]) : [];
+  // Reminders are always self-assigned to the creator
+  const ids: string[] = isReminder === true ? [user.id] : (assigneeIds?.length ? (assigneeIds as string[]) : []);
 
   let tasks: Awaited<ReturnType<typeof prisma.task.create>>[];
 
@@ -183,27 +185,29 @@ tasksRouter.post("/", async (c) => {
     );
   }
 
-  // Send push notifications to assignees (excluding the creator)
-  const assigneesToNotify = ids.filter((id) => id !== user.id);
-  if (assigneesToNotify.length > 0) {
-    await sendPushToUsers(
-      assigneesToNotify,
-      "New task assigned",
-      tasks[0]?.title ?? "You have a new task",
-      { taskId: tasks[0]?.id, teamId },
-      "notifTaskAssigned"
-    );
-  }
+  if (!isReminder) {
+    // Send push notifications to assignees (excluding the creator)
+    const assigneesToNotify = ids.filter((id) => id !== user.id);
+    if (assigneesToNotify.length > 0) {
+      await sendPushToUsers(
+        assigneesToNotify,
+        "New task assigned",
+        tasks[0]?.title ?? "You have a new task",
+        { taskId: tasks[0]?.id, teamId },
+        "notifTaskAssigned"
+      );
+    }
 
-  // Log activity for each assignee
-  for (const assigneeId of ids) {
-    const assignedUser = await prisma.user.findUnique({ where: { id: assigneeId }, select: { name: true } });
-    await logActivity({
-      teamId,
-      userId: assigneeId,
-      type: "task_assigned",
-      metadata: { taskTitles: incognito ? [] : [title.trim()], taskCount: 1, assigneeName: assignedUser?.name ?? "" },
-    });
+    // Log activity for each assignee
+    for (const assigneeId of ids) {
+      const assignedUser = await prisma.user.findUnique({ where: { id: assigneeId }, select: { name: true } });
+      await logActivity({
+        teamId,
+        userId: assigneeId,
+        type: "task_assigned",
+        metadata: { taskTitles: incognito ? [] : [title.trim()], taskCount: 1, assigneeName: assignedUser?.name ?? "" },
+      });
+    }
   }
 
   return c.json({ data: tasks }, 201);
