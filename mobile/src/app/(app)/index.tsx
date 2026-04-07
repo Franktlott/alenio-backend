@@ -304,11 +304,21 @@ function MiniCalendar({
                   })}
                   {weekRowWidth > 0 && (tracks[0] ?? []).map((bar) => {
                     const colWidth = weekRowWidth / 7;
+                    // Clip title width to contiguous single-event columns from bar.startCol
+                    let effectiveEndCol = bar.startCol - 1;
+                    for (let col = bar.startCol; col <= bar.endCol; col++) {
+                      const d = week[col];
+                      const count = d ? (dayEventMap.get(toLocalIso(d))?.count ?? 1) : 1;
+                      if (count > 1) break;
+                      effectiveEndCol = col;
+                    }
+                    if (effectiveEndCol < bar.startCol) return null;
+                    const titleWidth = (effectiveEndCol - bar.startCol + 1) * colWidth - 4;
                     return (
                       <View
                         key={`t-${bar.id}`}
                         pointerEvents="none"
-                        style={{ position: "absolute", left: bar.startCol * colWidth + 2, width: (bar.endCol - bar.startCol + 1) * colWidth - 4, top: 0, height: 15, justifyContent: "center", overflow: "hidden" }}
+                        style={{ position: "absolute", left: bar.startCol * colWidth + 2, width: titleWidth, top: 0, height: 15, justifyContent: "center", overflow: "hidden" }}
                       >
                         <Text style={{ color: "white", fontSize: 9, fontWeight: "600", paddingHorizontal: 4, lineHeight: 14 }} numberOfLines={1}>
                           {bar.title}
