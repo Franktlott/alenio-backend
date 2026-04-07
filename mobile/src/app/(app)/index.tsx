@@ -232,18 +232,13 @@ function MiniCalendar({
                     <View style={{ position: "absolute", bottom: 3, flexDirection: "row", gap: 2, alignItems: "center" }}>
                       {hasTasks && !isSelected ? <View style={{ width: 3, height: 3, borderRadius: 1.5, backgroundColor: "#4361EE" }} /> : null}
                       {isHoliday && !isSelected ? <View style={{ width: 3, height: 3, borderRadius: 1.5, backgroundColor: "#EF4444" }} /> : null}
-                      {evInfo && evInfo.count > 1 && !isSelected ? (
-                        <View style={{ backgroundColor: evInfo.color, borderRadius: 5, paddingHorizontal: 3, paddingVertical: 0.5, minWidth: 12, alignItems: "center" }}>
-                          <Text style={{ color: "white", fontSize: 8, fontWeight: "700", lineHeight: 11 }}>{evInfo.count}</Text>
-                        </View>
-                      ) : null}
                     </View>
                   </TouchableOpacity>
                 );
               })}
             </View>
 
-            {/* Event bars — only rendered for columns where day has exactly 1 event */}
+            {/* Event bars — title bar for 1 event, count pill for multiple */}
             {tracks.length > 0 ? (
               <View
                 onLayout={(e) => setWeekRowWidth(e.nativeEvent.layout.width)}
@@ -255,9 +250,21 @@ function MiniCalendar({
                       const bar = track.find((b) => b.startCol <= colIdx && b.endCol >= colIdx);
                       if (!bar) return <View key={colIdx} style={{ flex: 1 }} />;
                       const iso = day ? toLocalIso(day) : null;
-                      const evCount = iso ? (dayEventMap.get(iso)?.count ?? 0) : 1;
-                      // Skip bar segment if this day has multiple events (count badge shown instead)
-                      if (evCount > 1) return <View key={colIdx} style={{ flex: 1 }} />;
+                      const evInfo = iso ? dayEventMap.get(iso) : null;
+                      const evCount = evInfo?.count ?? 1;
+
+                      if (evCount > 1) {
+                        // Show count pill only in the first track row to avoid duplicates
+                        if (trackIdx > 0) return <View key={colIdx} style={{ flex: 1 }} />;
+                        return (
+                          <View key={colIdx} style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+                            <View style={{ backgroundColor: (evInfo?.color ?? bar.color) + "25", borderRadius: 6, paddingHorizontal: 5, paddingVertical: 1, borderWidth: 1, borderColor: evInfo?.color ?? bar.color }}>
+                              <Text style={{ color: evInfo?.color ?? bar.color, fontSize: 9, fontWeight: "700", lineHeight: 12 }}>{evCount}</Text>
+                            </View>
+                          </View>
+                        );
+                      }
+
                       const isStart = colIdx === bar.startCol;
                       const isEnd = colIdx === bar.endCol;
                       return (
@@ -277,6 +284,13 @@ function MiniCalendar({
                       );
                     })}
                     {weekRowWidth > 0 && track.map((bar) => {
+                      // Only show title if no column in this bar's span has multiple events
+                      const hasConflict = Array.from({ length: bar.endCol - bar.startCol + 1 }, (_, i) => bar.startCol + i)
+                        .some((col) => {
+                          const d = week[col];
+                          return d && (dayEventMap.get(toLocalIso(d))?.count ?? 0) > 1;
+                        });
+                      if (hasConflict) return null;
                       const colWidth = weekRowWidth / 7;
                       return (
                         <View
