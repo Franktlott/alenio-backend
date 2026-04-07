@@ -572,6 +572,7 @@ export default function TasksScreen() {
   const [subtaskBlockMessage, setSubtaskBlockMessage] = useState<string | null>(null);
   const [confirmDeleteEvent, setConfirmDeleteEvent] = useState(false);
   const [milestoneModal, setMilestoneModal] = useState<{ count: number; userName: string } | null>(null);
+  const [personalBestModal, setPersonalBestModal] = useState<{ count: number; userName: string } | null>(null);
   // Event modal state
   const [showEventModal, setShowEventModal] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -679,7 +680,9 @@ export default function TasksScreen() {
       if (result.milestone) {
         setMilestoneModal({ count: result.milestone, userName: session?.user?.name ?? "You" });
       }
-
+      if (result.comeback) {
+        setPersonalBestModal({ count: result.comeback, userName: session?.user?.name ?? "You" });
+      }
     },
     onError: (error: Error) => {
       setSubtaskBlockMessage(error.message);
@@ -1494,6 +1497,53 @@ export default function TasksScreen() {
                   testID="milestone-modal-close"
                 >
                   <Text style={{ color: "white", fontWeight: "700", fontSize: 16 }}>Let's go! 🎉</Text>
+                </Pressable>
+              </View>
+            </LinearGradient>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Comeback Celebration Modal */}
+      <Modal visible={!!personalBestModal} transparent animationType="fade" onRequestClose={() => setPersonalBestModal(null)}>
+        <Pressable
+          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.75)", alignItems: "center", justifyContent: "center", paddingHorizontal: 28 }}
+          onPress={() => setPersonalBestModal(null)}
+        >
+          <Pressable onPress={(e) => e.stopPropagation()}>
+            <LinearGradient
+              colors={["#F97316", "#EF4444"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={{ borderRadius: 28, padding: 3 }}
+            >
+              <View style={{ backgroundColor: "#0F0F0F", borderRadius: 26, padding: 28, alignItems: "center", gap: 14 }}>
+                <Image source={require("@/assets/alenio-icon.png")} style={{ width: 36, height: 36, borderRadius: 9 }} />
+                <View style={{ alignItems: "center", gap: 6 }}>
+                  <Text style={{ fontSize: 56 }}>🔥</Text>
+                  <View style={{ backgroundColor: "#F97316", paddingHorizontal: 14, paddingVertical: 4, borderRadius: 20 }}>
+                    <Text style={{ fontSize: 11, fontWeight: "800", color: "white", letterSpacing: 2, textTransform: "uppercase" }}>Comeback</Text>
+                  </View>
+                </View>
+                <View style={{ alignItems: "center", gap: 4 }}>
+                  <Text style={{ fontSize: 64, fontWeight: "900", color: "white", lineHeight: 68 }}>
+                    {personalBestModal?.count}
+                  </Text>
+                  <Text style={{ fontSize: 14, color: "#9CA3AF", fontWeight: "600" }}>tasks in a row</Text>
+                </View>
+                <View style={{ alignItems: "center", gap: 6 }}>
+                  <Text style={{ fontSize: 20, fontWeight: "800", color: "white", textAlign: "center" }}>
+                    You're back! 💪
+                  </Text>
+                  <Text style={{ fontSize: 13, color: "#D1D5DB", textAlign: "center", lineHeight: 20 }}>
+                    {personalBestModal?.userName} just matched their{"\n"}personal best streak after a setback.
+                  </Text>
+                </View>
+                <Pressable
+                  onPress={() => setPersonalBestModal(null)}
+                  style={{ marginTop: 4, backgroundColor: "#F97316", paddingHorizontal: 40, paddingVertical: 14, borderRadius: 24, width: "100%" }}
+                >
+                  <Text style={{ color: "white", fontWeight: "800", fontSize: 16, textAlign: "center" }}>Keep the streak alive 🔥</Text>
                 </Pressable>
               </View>
             </LinearGradient>

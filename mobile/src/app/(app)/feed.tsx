@@ -416,38 +416,38 @@ function PersonalBestCard({ item, activeTeamId, currentUserId, isDemo }: { item:
         end={{ x: 1, y: 0 }}
         style={{ borderRadius: 18, padding: 2 }}
       >
-        <View style={{ backgroundColor: "#FFF7ED", borderRadius: 16, padding: 16, gap: 10 }}>
+        <View style={{ backgroundColor: "#0F0F0F", borderRadius: 16, padding: 16, gap: 10 }}>
           {/* Top row: icon + comeback label + time */}
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-              <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#FFEDD5", alignItems: "center", justifyContent: "center" }}>
-                <Text style={{ fontSize: 20 }}>💪</Text>
+              <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#1C1C1C", alignItems: "center", justifyContent: "center" }}>
+                <Text style={{ fontSize: 20 }}>🔥</Text>
               </View>
-              <View style={{ backgroundColor: "#FFEDD5", borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 }}>
-                <Text style={{ fontSize: 11, fontWeight: "800", color: "#C2410C", letterSpacing: 0.5 }}>🏆 COMEBACK</Text>
+              <View style={{ backgroundColor: "#F97316", borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 }}>
+                <Text style={{ fontSize: 11, fontWeight: "800", color: "white", letterSpacing: 0.5 }}>💪 COMEBACK</Text>
               </View>
             </View>
-            <Text style={{ fontSize: 12, color: "#94A3B8" }}>{timeAgo(item.createdAt)}</Text>
+            <Text style={{ fontSize: 12, color: "#6B7280" }}>{timeAgo(item.createdAt)}</Text>
           </View>
 
           {/* Streak count */}
           <View style={{ alignItems: "center", paddingVertical: 6 }}>
-            <Text style={{ fontSize: 56, fontWeight: "900", color: "#F97316", lineHeight: 60 }}>{count}</Text>
-            <Text style={{ fontSize: 13, fontWeight: "700", color: "#9A3412", marginTop: 2 }}>streak matched — personal best! 🏆</Text>
+            <Text style={{ fontSize: 56, fontWeight: "900", color: "white", lineHeight: 60 }}>{count}</Text>
+            <Text style={{ fontSize: 13, fontWeight: "700", color: "#9CA3AF", marginTop: 2 }}>tasks in a row 🔥</Text>
           </View>
 
           {/* Avatar + name */}
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "#FFEDD5", borderRadius: 12, padding: 10 }}>
-            <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "#FED7AA", overflow: "hidden", alignItems: "center", justifyContent: "center" }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "#1C1C1C", borderRadius: 12, padding: 10 }}>
+            <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "#2C2C2C", overflow: "hidden", alignItems: "center", justifyContent: "center" }}>
               {item.user?.image ? (
                 <ExpoImage source={{ uri: item.user.image }} style={{ width: 32, height: 32 }} contentFit="cover" />
               ) : (
-                <Text style={{ fontSize: 14, fontWeight: "700", color: "#C2410C" }}>{name[0].toUpperCase()}</Text>
+                <Text style={{ fontSize: 14, fontWeight: "700", color: "#F97316" }}>{name[0].toUpperCase()}</Text>
               )}
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 14, fontWeight: "700", color: "#9A3412" }}>{name} made a comeback! 💪</Text>
-              <Text style={{ fontSize: 11, color: "#C2410C", marginTop: 1 }}>Back to their personal best →</Text>
+              <Text style={{ fontSize: 14, fontWeight: "700", color: "white" }}>{name} made a comeback! 💪</Text>
+              <Text style={{ fontSize: 11, color: "#F97316", marginTop: 1 }}>Matched their personal best →</Text>
             </View>
           </View>
 
