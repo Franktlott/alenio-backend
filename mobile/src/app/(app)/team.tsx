@@ -74,7 +74,6 @@ function MemberRow({
         <Text className="text-slate-900 dark:text-white font-semibold">
           {member.user.name} {isCurrentUser ? "(you)" : ""}
         </Text>
-        <Text className="text-slate-500 text-xs mb-1">{member.user.email}</Text>
         <View className="flex-row" style={{ gap: 6 }}>
           <View className="flex-row items-center bg-indigo-50 dark:bg-indigo-900/40 rounded-full px-2 py-0.5">
             <Text className="text-indigo-600 dark:text-indigo-400 text-xs font-medium">{stats?.activeTasks ?? 0} active</Text>
@@ -328,7 +327,6 @@ export default function TeamScreen() {
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontSize: 15, fontWeight: "700", color: "#1E293B" }}>{session?.user?.name ?? "You"}</Text>
-                  <Text style={{ fontSize: 13, color: "#94A3B8" }}>{session?.user?.email ?? ""}</Text>
                 </View>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "#FFF7ED", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20, borderWidth: 1, borderColor: "#FED7AA" }}>
                   <Clock size={12} color="#F59E0B" />
@@ -529,7 +527,6 @@ export default function TeamScreen() {
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontSize: 14, fontWeight: "700", color: "#0F172A" }}>{req.user?.name ?? "Unknown"}</Text>
-                  <Text style={{ fontSize: 12, color: "#94A3B8" }}>{req.user?.email ?? ""}</Text>
                 </View>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "#FFF7ED", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 20, borderWidth: 1, borderColor: "#FED7AA" }}>
                   <Clock size={11} color="#F59E0B" />
@@ -627,7 +624,6 @@ export default function TeamScreen() {
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={{ fontSize: 18, fontWeight: "800", color: "white" }}>{selectedMember?.user.name}</Text>
-                    <Text style={{ fontSize: 13, color: "rgba(255,255,255,0.75)", marginTop: 2 }}>{selectedMember?.user.email}</Text>
                     <View style={{ marginTop: 6, alignSelf: "flex-start", backgroundColor: "rgba(255,255,255,0.2)", borderRadius: 20, paddingHorizontal: 10, paddingVertical: 3 }}>
                       <Text style={{ fontSize: 11, fontWeight: "700", color: "white" }}>
                         {selectedMember?.role === "owner" ? "Owner" : selectedMember?.role === "team_leader" ? "Team Leader" : "Member"}
