@@ -244,61 +244,71 @@ function MiniCalendar({
                 onLayout={(e) => setWeekRowWidth(e.nativeEvent.layout.width)}
                 style={{ position: "relative", marginBottom: 3 }}
               >
-                {tracks.map((track, trackIdx) => (
-                  <View key={trackIdx} style={{ flexDirection: "row", height: 15, marginBottom: 2 }}>
-                    {week.map((day, colIdx) => {
-                      const bar = track.find((b) => b.startCol <= colIdx && b.endCol >= colIdx);
-                      if (!bar) return <View key={colIdx} style={{ flex: 1 }} />;
-                      const iso = day ? toLocalIso(day) : null;
-                      const evInfo = iso ? dayEventMap.get(iso) : null;
-                      const evCount = evInfo?.count ?? 1;
+                {/* Only render the first track — avoids multi-row stacking */}
+                <View style={{ flexDirection: "row", height: 15, marginBottom: 2 }}>
+                  {week.map((day, colIdx) => {
+                    const track0 = tracks[0] ?? [];
+                    const bar = track0.find((b) => b.startCol <= colIdx && b.endCol >= colIdx);
+                    const iso = day ? toLocalIso(day) : null;
+                    const evInfo = iso ? dayEventMap.get(iso) : null;
 
-                      if (evCount > 1) {
-                        // Show count pill only in the first track row to avoid duplicates
-                        if (trackIdx > 0) return <View key={colIdx} style={{ flex: 1 }} />;
+                    if (!bar) {
+                      // Day not covered by track 0 — show a small dot if it has events
+                      if (evInfo && evInfo.count > 0) {
                         return (
                           <View key={colIdx} style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-                            <View style={{ backgroundColor: (evInfo?.color ?? bar.color) + "25", borderRadius: 6, paddingHorizontal: 5, paddingVertical: 1, borderWidth: 1, borderColor: evInfo?.color ?? bar.color }}>
-                              <Text style={{ color: evInfo?.color ?? bar.color, fontSize: 9, fontWeight: "700", lineHeight: 12 }}>{evCount}</Text>
-                            </View>
+                            <View style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: evInfo.color }} />
                           </View>
                         );
                       }
+                      return <View key={colIdx} style={{ flex: 1 }} />;
+                    }
 
-                      const isStart = colIdx === bar.startCol;
-                      const isEnd = colIdx === bar.endCol;
+                    const evCount = evInfo?.count ?? 1;
+                    if (evCount > 1) {
+                      // Multi-event day: show a small filled count circle
                       return (
-                        <View
-                          key={colIdx}
-                          style={{
-                            flex: 1, height: 15,
-                            backgroundColor: bar.color,
-                            borderTopLeftRadius: isStart ? 4 : 0,
-                            borderBottomLeftRadius: isStart ? 4 : 0,
-                            borderTopRightRadius: isEnd ? 4 : 0,
-                            borderBottomRightRadius: isEnd ? 4 : 0,
-                            marginLeft: isStart ? 2 : 0,
-                            marginRight: isEnd ? 2 : 0,
-                          }}
-                        />
-                      );
-                    })}
-                    {weekRowWidth > 0 && track.map((bar) => {
-                      const colWidth = weekRowWidth / 7;
-                      return (
-                        <View
-                          key={`t-${bar.id}`}
-                          pointerEvents="none"
-                          style={{ position: "absolute", left: bar.startCol * colWidth + 2, width: (bar.endCol - bar.startCol + 1) * colWidth - 4, top: 0, height: 15, justifyContent: "center", overflow: "hidden" }}
-                        >
-                          <Text style={{ color: "white", fontSize: 9, fontWeight: "600", paddingHorizontal: 4, lineHeight: 14 }} numberOfLines={1}>
-                            {bar.title}
-                          </Text>
+                        <View key={colIdx} style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+                          <View style={{ width: 15, height: 15, borderRadius: 7.5, backgroundColor: evInfo?.color ?? bar.color, alignItems: "center", justifyContent: "center" }}>
+                            <Text style={{ color: "white", fontSize: 8, fontWeight: "700", lineHeight: 15 }}>{evCount}</Text>
+                          </View>
                         </View>
                       );
-                    })}
-                  </View>
-                ))}
+                    }
+
+                    const isStart = colIdx === bar.startCol;
+                    const isEnd = colIdx === bar.endCol;
+                    return (
+                      <View
+                        key={colIdx}
+                        style={{
+                          flex: 1, height: 15,
+                          backgroundColor: bar.color,
+                          borderTopLeftRadius: isStart ? 4 : 0,
+                          borderBottomLeftRadius: isStart ? 4 : 0,
+                          borderTopRightRadius: isEnd ? 4 : 0,
+                          borderBottomRightRadius: isEnd ? 4 : 0,
+                          marginLeft: isStart ? 2 : 0,
+                          marginRight: isEnd ? 2 : 0,
+                        }}
+                      />
+                    );
+                  })}
+                  {weekRowWidth > 0 && (tracks[0] ?? []).map((bar) => {
+                    const colWidth = weekRowWidth / 7;
+                    return (
+                      <View
+                        key={`t-${bar.id}`}
+                        pointerEvents="none"
+                        style={{ position: "absolute", left: bar.startCol * colWidth + 2, width: (bar.endCol - bar.startCol + 1) * colWidth - 4, top: 0, height: 15, justifyContent: "center", overflow: "hidden" }}
+                      >
+                        <Text style={{ color: "white", fontSize: 9, fontWeight: "600", paddingHorizontal: 4, lineHeight: 14 }} numberOfLines={1}>
+                          {bar.title}
+                        </Text>
+                      </View>
+                    );
+                  })}
+                </View>
               </View>
             ) : <View style={{ height: 2 }} />}
           </View>
