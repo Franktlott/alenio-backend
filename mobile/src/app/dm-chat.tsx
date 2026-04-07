@@ -24,6 +24,7 @@ import { useSession } from "@/lib/auth/use-session";
 import { uploadFile } from "@/lib/upload";
 import { pickMedia, takePhoto } from "@/lib/file-picker";
 import { ChatMessage } from "@/components/ChatMessage";
+import { ImageSendPreview } from "@/components/ImageSendPreview";
 import type { DirectMessage, MessageReaction } from "@/lib/types";
 import * as Clipboard from "expo-clipboard";
 import ReanimatedSwipeable from "react-native-gesture-handler/ReanimatedSwipeable";
@@ -158,27 +159,31 @@ export default function DMChatScreen() {
 
   const handleSend = async () => {
     const content = input.trim();
-    if (!content && !mediaPreview) return;
-
-    let mediaUrl: string | undefined;
-    let mediaType: string | undefined;
-
-    if (mediaPreview) {
-      setUploading(true);
-      try {
-        const uploaded = await uploadFile(mediaPreview.uri, mediaPreview.filename, mediaPreview.mimeType);
-        mediaUrl = uploaded.url;
-        mediaType = mediaPreview.mimeType.startsWith('video') ? 'video' : 'image';
-      } catch {
-        setUploading(false);
-        return;
-      }
-      setUploading(false);
-    }
-
+    if (!content) return;
     setInput("");
     sendMutation.mutate({
-      content: content || undefined,
+      content,
+      replyToId: replyTo?.id,
+    });
+  };
+
+  const handleSendMedia = async (caption: string) => {
+    if (!mediaPreview) return;
+    let mediaUrl: string | undefined;
+    let mediaType: string | undefined;
+    setUploading(true);
+    try {
+      const uploaded = await uploadFile(mediaPreview.uri, mediaPreview.filename, mediaPreview.mimeType);
+      mediaUrl = uploaded.url;
+      mediaType = mediaPreview.mimeType.startsWith('video') ? 'video' : 'image';
+    } catch {
+      setUploading(false);
+      return;
+    }
+    setUploading(false);
+    setMediaPreview(null);
+    sendMutation.mutate({
+      content: caption || undefined,
       mediaUrl,
       mediaType,
       replyToId: replyTo?.id,
@@ -691,20 +696,6 @@ export default function DMChatScreen() {
           </View>
         ) : null}
 
-        {/* Media preview */}
-        {mediaPreview ? (
-          <View className="flex-row items-center px-3 py-2 bg-slate-100 dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700">
-            <Image
-              source={{ uri: mediaPreview.uri }}
-              style={{ width: 48, height: 48, borderRadius: 8, marginRight: 8 }}
-              resizeMode="cover"
-            />
-            <TouchableOpacity onPress={() => setMediaPreview(null)}>
-              <X size={16} color="#94A3B8" />
-            </TouchableOpacity>
-          </View>
-        ) : null}
-
         {/* Input bar */}
         <View testID="dm-chat-input-bar" className="flex-row items-end px-3 bg-white dark:bg-slate-800 border-t border-slate-100 dark:border-slate-700" style={{ paddingTop: 8, paddingBottom: insets.bottom + 8 }}>
           {!isDemo ? (
@@ -733,19 +724,27 @@ export default function DMChatScreen() {
             <TouchableOpacity
               testID="dm-chat-send-button"
               onPress={handleSend}
-              disabled={(!input.trim() && !mediaPreview) || sendMutation.isPending || uploading}
+              disabled={!input.trim() || sendMutation.isPending || uploading}
               className="w-10 h-10 rounded-full items-center justify-center"
-              style={{ backgroundColor: (input.trim() || mediaPreview) ? "#4361EE" : "#E2E8F0" }}
+              style={{ backgroundColor: input.trim() ? "#4361EE" : "#E2E8F0" }}
             >
               {sendMutation.isPending || uploading ? (
-                <ActivityIndicator size="small" color={(input.trim() || mediaPreview) ? "white" : "#94A3B8"} />
+                <ActivityIndicator size="small" color={input.trim() ? "white" : "#94A3B8"} />
               ) : (
-                <Send size={18} color={(input.trim() || mediaPreview) ? "white" : "#94A3B8"} />
+                <Send size={18} color={input.trim() ? "white" : "#94A3B8"} />
               )}
             </TouchableOpacity>
           ) : null}
         </View>
       </KeyboardAvoidingView>
+      <ImageSendPreview
+        visible={!!mediaPreview}
+        mediaUri={mediaPreview?.uri ?? null}
+        isVideo={mediaPreview?.mimeType.startsWith('video') ?? false}
+        onCancel={() => setMediaPreview(null)}
+        onSend={handleSendMedia}
+        isSending={uploading || sendMutation.isPending}
+      />
     </SafeAreaView>
   );
 }
