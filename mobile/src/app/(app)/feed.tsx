@@ -429,79 +429,85 @@ function PersonalBestCard({ item, activeTeamId, currentUserId, isDemo, showPicke
       style={{ marginHorizontal: 16, marginVertical: 6 }}
       testID={`personal-best-card-${item.id}`}
     >
-      <LinearGradient
-        colors={["#1B1510", "#0D0D0D", "#111010"]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={{ borderRadius: 20, overflow: "hidden" }}
-      >
-        {/* Ember particles */}
-        <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }} pointerEvents="none">
-          {[
-            { top: 10, left: 20, size: 9, opacity: 0.5 },
-            { top: 24, left: 55, size: 6, opacity: 0.35 },
-            { top: 6, right: 28, size: 8, opacity: 0.45 },
-            { top: 18, right: 65, size: 5, opacity: 0.3 },
-            { top: 46, left: 14, size: 6, opacity: 0.25 },
-            { top: 40, right: 18, size: 7, opacity: 0.4 },
-            { bottom: 44, left: 38, size: 6, opacity: 0.3 },
-            { bottom: 28, right: 46, size: 5, opacity: 0.3 },
-          ].map((s, i) => (
-            <Text key={i} style={{ position: "absolute", top: s.top, left: (s as any).left, right: (s as any).right, bottom: (s as any).bottom, fontSize: s.size, opacity: s.opacity, color: "#F97316" }}>✦</Text>
-          ))}
-        </View>
-
-        <View style={{ padding: 14, alignItems: "center", gap: 8 }}>
-          {/* Orange fire badge */}
-          <View style={{ alignItems: "center", marginTop: 0 }}>
-            <LinearGradient
-              colors={["#F97316", "#EA580C", "#9A3412"]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={{ borderRadius: 16, padding: 2 }}
-            >
-              <View style={{ backgroundColor: "#0D0D0D", borderRadius: 14, paddingHorizontal: 20, paddingVertical: 10, alignItems: "center", minWidth: 80 }}>
-                <Text style={{ fontSize: 18, lineHeight: 28 }}>🔥</Text>
-                <Text style={{ fontSize: 40, fontWeight: "900", color: "#F97316", lineHeight: 44 }}>{count}</Text>
-              </View>
-            </LinearGradient>
+      <View style={{ shadowColor: "#F97316", shadowOpacity: 0.4, shadowRadius: 16, shadowOffset: { width: 0, height: 0 }, elevation: 8, borderRadius: 20 }}>
+        <LinearGradient
+          colors={["#2D1200", "#1A0800", "#0D0400"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={{ borderRadius: 20, overflow: "hidden" }}
+        >
+          {/* Ember particles */}
+          <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }} pointerEvents="none">
+            {[
+              { top: 10, left: 20, size: 9, opacity: 0.5, char: "✦" },
+              { top: 24, left: 55, size: 6, opacity: 0.35, char: "•" },
+              { top: 6, right: 28, size: 8, opacity: 0.45, char: "✦" },
+              { top: 18, right: 65, size: 5, opacity: 0.3, char: "•" },
+              { top: 46, left: 14, size: 6, opacity: 0.25, char: "✦" },
+              { top: 40, right: 18, size: 7, opacity: 0.4, char: "•" },
+              { bottom: 44, left: 38, size: 6, opacity: 0.3, char: "✦" },
+              { bottom: 28, right: 46, size: 5, opacity: 0.3, char: "•" },
+              { top: 32, left: 90, size: 7, opacity: 0.4, char: "✦" },
+              { top: 14, left: 140, size: 6, opacity: 0.35, char: "•" },
+              { bottom: 20, left: 70, size: 8, opacity: 0.3, char: "✦" },
+              { bottom: 50, right: 80, size: 6, opacity: 0.35, char: "•" },
+            ].map((s, i) => (
+              <Text key={i} style={{ position: "absolute", top: (s as any).top, left: (s as any).left, right: (s as any).right, bottom: (s as any).bottom, fontSize: s.size, opacity: s.opacity, color: i % 2 === 0 ? "#F97316" : "#FB923C" }}>{s.char}</Text>
+            ))}
           </View>
 
-          {/* Text */}
-          <View style={{ alignItems: "center", gap: 4 }}>
-            <Text style={{ fontSize: 12, color: "rgba(255,255,255,0.7)", fontWeight: "500" }}>tasks in a row</Text>
-            <Text style={{ fontSize: 14, fontWeight: "800", color: "white", textAlign: "center" }}>
-              {name} made an epic comeback! 💪🔥
-            </Text>
-            <Text style={{ fontSize: 11, color: "#9CA3AF" }}>Matched their personal best!</Text>
-          </View>
-
-          {/* Footer: avatar + time */}
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", width: "100%", marginTop: 2 }}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-              <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: "#1C1410", borderWidth: 1, borderColor: "#F9731640", overflow: "hidden", alignItems: "center", justifyContent: "center" }}>
-                {item.user?.image ? (
-                  <ExpoImage source={{ uri: item.user.image }} style={{ width: 24, height: 24 }} contentFit="cover" />
-                ) : (
-                  <Text style={{ fontSize: 11, fontWeight: "700", color: "#F97316" }}>{name[0].toUpperCase()}</Text>
-                )}
-              </View>
-              <Text style={{ fontSize: 11, color: "#6B7280" }}>{name}</Text>
+          <View style={{ padding: 14, alignItems: "center", gap: 8 }}>
+            {/* Orange fire badge */}
+            <View style={{ alignItems: "center", marginTop: 0 }}>
+              <LinearGradient
+                colors={["#FF6B00", "#F97316", "#EA580C"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={{ borderRadius: 16, padding: 2 }}
+              >
+                <View style={{ backgroundColor: "#0D0400", borderRadius: 14, paddingHorizontal: 20, paddingVertical: 10, alignItems: "center", minWidth: 80 }}>
+                  <Text style={{ fontSize: 18, lineHeight: 28 }}>🔥</Text>
+                  <Text style={{ fontSize: 40, fontWeight: "900", color: "#FF8C00", lineHeight: 44 }}>{count}</Text>
+                </View>
+              </LinearGradient>
             </View>
-            <Text style={{ fontSize: 11, color: "#4B5563" }}>{timeAgo(item.createdAt)}</Text>
-          </View>
 
-          <ReactionRow
-            activityId={item.id}
-            teamId={activeTeamId}
-            reactions={item.reactions ?? {}}
-            currentUserId={currentUserId}
-            onToggleReaction={toggleReaction}
-            showPicker={showPicker}
-            onClosePicker={onClosePicker}
-          />
-        </View>
-      </LinearGradient>
+            {/* Text */}
+            <View style={{ alignItems: "center", gap: 4 }}>
+              <Text style={{ fontSize: 12, color: "#FB923C", fontWeight: "500" }}>tasks in a row</Text>
+              <Text style={{ fontSize: 14, fontWeight: "800", color: "white", textAlign: "center" }}>
+                {name} is BACK and better than ever! 💪🔥
+              </Text>
+              <Text style={{ fontSize: 11, color: "#9CA3AF" }}>Personal best streak matched! 🏆</Text>
+            </View>
+
+            {/* Footer: avatar + time */}
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", width: "100%", marginTop: 2 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: "#1C1410", borderWidth: 1, borderColor: "#F97316", overflow: "hidden", alignItems: "center", justifyContent: "center" }}>
+                  {item.user?.image ? (
+                    <ExpoImage source={{ uri: item.user.image }} style={{ width: 24, height: 24 }} contentFit="cover" />
+                  ) : (
+                    <Text style={{ fontSize: 11, fontWeight: "700", color: "#F97316" }}>{name[0].toUpperCase()}</Text>
+                  )}
+                </View>
+                <Text style={{ fontSize: 11, color: "#FB923C" }}>{name}</Text>
+              </View>
+              <Text style={{ fontSize: 11, color: "#4B5563" }}>{timeAgo(item.createdAt)}</Text>
+            </View>
+
+            <ReactionRow
+              activityId={item.id}
+              teamId={activeTeamId}
+              reactions={item.reactions ?? {}}
+              currentUserId={currentUserId}
+              onToggleReaction={toggleReaction}
+              showPicker={showPicker}
+              onClosePicker={onClosePicker}
+            />
+          </View>
+        </LinearGradient>
+      </View>
     </Pressable>
   );
 }
