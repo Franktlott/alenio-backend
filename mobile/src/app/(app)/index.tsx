@@ -826,22 +826,51 @@ export default function TasksScreen() {
         {/* Events section — below calendar, above filter tabs */}
         {(dayEvents.length > 0 || dayHolidays.length > 0) ? (
           <View style={{ backgroundColor: "white", marginTop: 10 }}>
-            <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 6, flexDirection: "row", alignItems: "center", gap: 6, borderBottomWidth: 1, borderBottomColor: "#F1F5F9" }}>
-              <CalendarDays size={13} color="#64748B" />
-              <Text style={{ fontSize: 11, fontWeight: "700", color: "#64748B", textTransform: "uppercase", letterSpacing: 0.5 }}>Events</Text>
-            </View>
-            {dayHolidays.map((h) => (
-              <View key={h.name} style={{ paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: "#F1F5F9", backgroundColor: "white", flexDirection: "row", alignItems: "center" }}>
-                <View style={{ width: 4, borderRadius: 2, alignSelf: "stretch", backgroundColor: "#EF4444", marginRight: 12 }} />
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 14, fontWeight: "600", color: "#0F172A" }}>{h.name}</Text>
-                  <Text style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>Federal Holiday 🇺🇸</Text>
-                </View>
+            <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 6, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: 1, borderBottomColor: "#F1F5F9" }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <CalendarDays size={13} color="#64748B" />
+                <Text style={{ fontSize: 11, fontWeight: "700", color: "#64748B", textTransform: "uppercase", letterSpacing: 0.5 }}>Events</Text>
               </View>
-            ))}
-            {dayEvents.map((ev) => (
-              <EventRow key={ev.id} event={ev} onLongPress={isOwner && !isDemo ? () => openEditEventModal(ev) : undefined} />
-            ))}
+              {(dayEvents.length + dayHolidays.length) > 1 ? (
+                <Text style={{ fontSize: 11, fontWeight: "600", color: "#4361EE" }}>{dayEvents.length + dayHolidays.length} events</Text>
+              ) : null}
+            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={{ paddingHorizontal: 12, paddingVertical: 8, gap: 8, flexDirection: "row" }}>
+              {dayHolidays.map((h) => (
+                <View key={h.name} style={{ backgroundColor: "#FEF2F2", borderRadius: 12, padding: 12, minWidth: 180, flexDirection: "row", alignItems: "center", gap: 8 }}>
+                  <View style={{ width: 3, borderRadius: 2, alignSelf: "stretch", backgroundColor: "#EF4444" }} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 13, fontWeight: "600", color: "#0F172A" }} numberOfLines={1}>{h.name}</Text>
+                    <Text style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>Federal Holiday 🇺🇸</Text>
+                  </View>
+                </View>
+              ))}
+              {dayEvents.map((ev) => {
+                const start = new Date(ev.startDate);
+                const end = ev.endDate ? new Date(ev.endDate) : start;
+                const isSingleDay = toLocalIso(start) === toLocalIso(end);
+                const dateText = isSingleDay
+                  ? start.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+                  : `${start.toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${end.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
+                return (
+                  <Pressable
+                    key={ev.id}
+                    onLongPress={isOwner && !isDemo ? () => openEditEventModal(ev) : undefined}
+                    delayLongPress={400}
+                    style={{ backgroundColor: `${ev.color}18`, borderRadius: 12, padding: 12, minWidth: 180, flexDirection: "row", alignItems: "center", gap: 8 }}
+                  >
+                    <View style={{ width: 3, borderRadius: 2, alignSelf: "stretch", backgroundColor: ev.color }} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 13, fontWeight: "600", color: "#0F172A", marginBottom: 2 }} numberOfLines={1}>{ev.title}</Text>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                        <CalendarDays size={10} color="#64748B" />
+                        <Text style={{ fontSize: 11, color: "#64748B" }}>{dateText}</Text>
+                      </View>
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
           </View>
         ) : null}
 
