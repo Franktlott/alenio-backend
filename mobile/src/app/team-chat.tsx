@@ -17,7 +17,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { LinearGradient } from "expo-linear-gradient";
-import { ArrowLeft, Send, Paperclip, X, Video, Camera, ImageIcon, BarChart2, ListTodo } from "lucide-react-native";
+import { ArrowLeft, Send, Paperclip, X, Video, Camera, ImageIcon, BarChart2 } from "lucide-react-native";
 import { BlurView } from "expo-blur";
 import { router, useLocalSearchParams } from "expo-router";
 import { api } from "@/lib/api/api";
@@ -544,42 +544,6 @@ export default function TeamChatScreen() {
             >
               <Text className="text-indigo-600 font-semibold text-sm">↩ Reply</Text>
             </TouchableOpacity>
-            {emojiTarget?.content ? (
-              <TouchableOpacity
-                onPress={() => {
-                  const msgText = emojiTarget.content ?? "";
-                  setEmojiTarget(null);
-                  router.push({ pathname: "/create-task", params: { prefillTitle: msgText, fromChat: "true" } });
-                }}
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  paddingVertical: 10,
-                  gap: 7,
-                  borderTopWidth: 1,
-                  borderTopColor: "rgba(209,250,229,0.8)",
-                  backgroundColor: "rgba(13,148,136,0.08)",
-                  marginHorizontal: -12,
-                  paddingHorizontal: 12,
-                }}
-              >
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 6,
-                    backgroundColor: "#0D9488",
-                    paddingHorizontal: 14,
-                    paddingVertical: 6,
-                    borderRadius: 20,
-                  }}
-                >
-                  <ListTodo size={15} color="white" />
-                  <Text style={{ color: "white", fontWeight: "700", fontSize: 13, letterSpacing: 0.3 }}>chat2Task</Text>
-                </View>
-              </TouchableOpacity>
-            ) : null}
             {emojiTarget && canDelete(emojiTarget) ? (
               <TouchableOpacity
                 onPress={() => {

@@ -38,7 +38,7 @@ const RECURRENCE_TYPES: { label: string; value: RecurrenceType }[] = [
 ];
 
 export default function CreateTaskScreen() {
-  const { teamId, prefillTitle, initialDueDate, isReminder: isReminderParam, fromChat } = useLocalSearchParams<{ teamId: string; prefillTitle?: string; initialDueDate?: string; isReminder?: string; fromChat?: string }>();
+  const { teamId, prefillTitle, initialDueDate, isReminder: isReminderParam } = useLocalSearchParams<{ teamId: string; prefillTitle?: string; initialDueDate?: string; isReminder?: string }>();
   const isReminder = isReminderParam === "true";
   const queryClient = useQueryClient();
   const { data: session } = useSession();
@@ -191,7 +191,6 @@ export default function CreateTaskScreen() {
       dueDate: dueDate!.toISOString(),
       ...(isReminder ? { isReminder: true } : { assigneeIds: selectedAssignees }),
       incognito: isIncognito,
-      fromChat: fromChat === "true",
       recurrence: isRecurring
         ? {
             type: recurrenceType,
