@@ -17,7 +17,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams } from "expo-router";
-import { X, BookOpen, Bookmark, Plus, Square, Camera, Pencil, Trash2 } from "lucide-react-native";
+import { X, BookOpen, Bookmark, Plus, Square, Camera, Pencil, Trash2, ImageIcon } from "lucide-react-native";
 import * as ImagePicker from "expo-image-picker";
 import { api } from "@/lib/api/api";
 import { uploadFile } from "@/lib/upload";
@@ -71,6 +71,7 @@ export default function CreateTaskScreen() {
   const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
   const [attachmentUri, setAttachmentUri] = useState<string | null>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [showPhotoOptions, setShowPhotoOptions] = useState(false);
 
   const [editingTemplate, setEditingTemplate] = useState<TaskTemplate | null>(null);
   const [editTitle, setEditTitle] = useState("");
@@ -225,14 +226,31 @@ export default function CreateTaskScreen() {
     setSubtaskTitles((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const pickPhoto = async () => {
+  const pickPhotoFromLibrary = async () => {
+    setShowPhotoOptions(false);
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
       setError("Permission to access photos is required.");
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ['images'] as ImagePicker.MediaType[],
+      quality: 0.8,
+      allowsEditing: true,
+    });
+    if (!result.canceled && result.assets[0]) {
+      setAttachmentUri(result.assets[0].uri);
+    }
+  };
+
+  const takePhotoWithCamera = async () => {
+    setShowPhotoOptions(false);
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== "granted") {
+      setError("Permission to access camera is required.");
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({
       quality: 0.8,
       allowsEditing: true,
     });
@@ -634,7 +652,7 @@ export default function CreateTaskScreen() {
               </View>
             ) : (
               <TouchableOpacity
-                onPress={pickPhoto}
+                onPress={() => setShowPhotoOptions(true)}
                 disabled={uploadingPhoto}
                 className="flex-row items-center justify-center border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl py-6"
                 style={{ gap: 8 }}
@@ -691,6 +709,50 @@ export default function CreateTaskScreen() {
 
       {/* Template picker modal */}
       <Modal visible={showTemplatePicker} transparent animationType="slide" onRequestClose={() => { setShowTemplatePicker(false); setEditingTemplate(null); }}>
+
+      {/* Photo options modal */}
+      <Modal visible={showPhotoOptions} transparent animationType="slide" onRequestClose={() => setShowPhotoOptions(false)}>
+        <TouchableOpacity className="flex-1 bg-black/40 justify-end" activeOpacity={1} onPress={() => setShowPhotoOptions(false)}>
+          <TouchableOpacity activeOpacity={1} className="bg-white dark:bg-slate-800 rounded-t-3xl px-4 pt-4 pb-10">
+            <View className="flex-row items-center justify-between mb-4">
+              <Text className="text-base font-bold text-slate-900 dark:text-white">Add Photo</Text>
+              <TouchableOpacity onPress={() => setShowPhotoOptions(false)}>
+                <X size={20} color="#94A3B8" />
+              </TouchableOpacity>
+            </View>
+            <View style={{ gap: 12 }}>
+              <TouchableOpacity
+                onPress={takePhotoWithCamera}
+                className="flex-row items-center p-4 rounded-xl border border-slate-200 dark:border-slate-700"
+                style={{ gap: 12 }}
+                testID="take-photo-button"
+              >
+                <View className="w-10 h-10 rounded-full bg-indigo-100 items-center justify-center">
+                  <Camera size={20} color="#4361EE" />
+                </View>
+                <View className="flex-1">
+                  <Text className="font-semibold text-slate-900 dark:text-white">Take Photo</Text>
+                  <Text className="text-xs text-slate-400 mt-0.5">Use your camera</Text>
+                </View>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={pickPhotoFromLibrary}
+                className="flex-row items-center p-4 rounded-xl border border-slate-200 dark:border-slate-700"
+                style={{ gap: 12 }}
+                testID="choose-from-library-button"
+              >
+                <View className="w-10 h-10 rounded-full bg-purple-100 items-center justify-center">
+                  <ImageIcon size={20} color="#7C3AED" />
+                </View>
+                <View className="flex-1">
+                  <Text className="font-semibold text-slate-900 dark:text-white">Choose from Library</Text>
+                  <Text className="text-xs text-slate-400 mt-0.5">Select from your photos</Text>
+                </View>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
         <TouchableOpacity className="flex-1 bg-black/40 justify-end" activeOpacity={1} onPress={() => { setShowTemplatePicker(false); setEditingTemplate(null); }}>
           <TouchableOpacity activeOpacity={1} className="bg-white dark:bg-slate-800 rounded-t-3xl px-4 pt-4 pb-10">
             <View className="flex-row items-center justify-between mb-4">
