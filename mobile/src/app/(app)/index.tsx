@@ -1143,7 +1143,7 @@ export default function TasksScreen() {
               task={item.type === "reminder" ? reminderToTask(item.data) : item.data}
               isReminder={item.type === "reminder"}
               onToggle={() => item.type === "task" ? handleToggleTask(item.data) : undefined}
-              onPress={() => item.type === "task" ? router.push({ pathname: "/task-detail", params: { taskId: item.data.id, teamId: activeTeamId! } }) : undefined}
+              onPress={() => item.type === "task" ? router.push({ pathname: "/task-detail", params: { taskId: item.data.id, teamId: activeTeamId! } }) : router.push({ pathname: "/reminder-detail", params: { reminderId: item.data.id, teamId: activeTeamId! } })}
             />
           ))
         )}

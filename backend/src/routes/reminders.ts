@@ -69,6 +69,24 @@ remindersRouter.post("/", async (c) => {
   return c.json({ data: reminder }, 201);
 });
 
+// GET /api/teams/:teamId/reminders/:reminderId — get a single reminder
+remindersRouter.get("/:reminderId", async (c) => {
+  const user = c.get("user")!;
+  const teamId = c.req.param("teamId") as string;
+  const reminderId = c.req.param("reminderId");
+
+  const membership = await getMembership(user.id, teamId);
+  if (!membership) return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
+
+  const reminder = await prisma.reminder.findFirst({
+    where: { id: reminderId, teamId, creatorId: user.id },
+    include: reminderInclude,
+  });
+  if (!reminder) return c.json({ error: { message: "Reminder not found", code: "NOT_FOUND" } }, 404);
+
+  return c.json({ data: reminder });
+});
+
 // PATCH /api/teams/:teamId/reminders/:reminderId — update status/fields
 remindersRouter.patch("/:reminderId", async (c) => {
   const user = c.get("user")!;
