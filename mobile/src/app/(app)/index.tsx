@@ -29,7 +29,7 @@ import { NoTeamPlaceholder } from "@/components/NoTeamPlaceholder";
 import { useDemoMode, showDemoAlert } from "@/lib/useDemo";
 
 type FilterTab = "all" | "assigned" | "completed";
-type SortMode = "due" | "priority";
+type SortMode = "due" | "priority" | "completed";
 
 const DAY_LABELS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
@@ -662,6 +662,11 @@ export default function TasksScreen() {
     if (filter !== "assigned") setSelectedMemberId(null);
   }, [currentUserId, filter]);
 
+  useEffect(() => {
+    if (filter === "completed") setSort("completed");
+    else if (sort === "completed") setSort("due");
+  }, [filter]);
+
   // Active: tasks assigned to me (or mine with no assignment), open
   // Completed: same pool, done only
   // Team: tasks I created that are assigned to someone else, open
@@ -683,6 +688,11 @@ export default function TasksScreen() {
     if (sort === "priority") {
       const order = { urgent: 0, high: 1, medium: 2, low: 3 };
       return (order[a.priority as keyof typeof order] ?? 2) - (order[b.priority as keyof typeof order] ?? 2);
+    }
+    if (sort === "completed") {
+      const aDate = a.completedAt ? new Date(a.completedAt).getTime() : 0;
+      const bDate = b.completedAt ? new Date(b.completedAt).getTime() : 0;
+      return bDate - aDate; // newest first
     }
     // due date: tasks with no due date go last
     if (!a.dueDate && !b.dueDate) return 0;
@@ -875,7 +885,10 @@ export default function TasksScreen() {
                   <ChevronRight size={11} color={selectedMemberId ? "#4361EE" : "#94A3B8"} style={{ transform: [{ rotate: "90deg" }] }} />
                 </TouchableOpacity>
               ) : null}
-              {(["due", "priority"] as SortMode[]).map((s) => (
+              {(filter === "completed"
+                ? (["completed", "priority"] as SortMode[])
+                : (["due", "priority"] as SortMode[])
+              ).map((s) => (
                 <TouchableOpacity
                   key={s}
                   onPress={() => setSort(s)}
@@ -883,7 +896,7 @@ export default function TasksScreen() {
                   testID={`sort-${s}`}
                 >
                   <Text style={{ fontSize: 12, fontWeight: "600", color: sort === s ? "white" : "#64748B" }}>
-                    {s === "due" ? "Due Date" : "Priority"}
+                    {s === "due" ? "Due Date" : s === "completed" ? "Completed Date" : "Priority"}
                   </Text>
                 </TouchableOpacity>
               ))}
