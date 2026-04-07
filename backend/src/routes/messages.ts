@@ -70,7 +70,8 @@ messagesRouter.post("/", async (c) => {
   }
 
   const body = await c.req.json();
-  const { content, mediaUrl, mediaType, replyToId, topicId } = body;
+  const { content, mediaUrl, mediaType, replyToId, topicId, mentionedUserIds } = body;
+  const mentionIds: string[] = Array.isArray(mentionedUserIds) ? mentionedUserIds : [];
 
   if (!content?.trim() && !mediaUrl) {
     return c.json({ error: { message: "Content or media is required", code: "VALIDATION_ERROR" } }, 400);
@@ -85,6 +86,7 @@ messagesRouter.post("/", async (c) => {
       topicId: topicId || null,
       teamId,
       senderId: user.id,
+      mentionedUserIds: JSON.stringify(mentionIds),
     },
     include: {
       sender: { select: { id: true, name: true, email: true, image: true } },
@@ -111,6 +113,17 @@ messagesRouter.post("/", async (c) => {
   const memberIds = members.map((m: any) => m.userId);
   const senderName = user.name ?? "Someone";
   await sendPushToUsers(memberIds, senderName, notifBody, { teamId, teamName: team?.name ?? "", topicId: topicId || undefined }, "notifMessages");
+
+  // Send mention notifications
+  if (mentionIds.length > 0) {
+    const mentionBody = content?.trim() || "mentioned you in a message";
+    await sendPushToUsers(
+      mentionIds,
+      `${senderName} mentioned you`,
+      mentionBody,
+      { teamId, teamName: team?.name ?? "", topicId: topicId || undefined }
+    );
+  }
 
   return c.json({ data: message }, 201);
 });

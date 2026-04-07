@@ -12,6 +12,7 @@ import { MediaViewer } from "@/components/MediaViewer";
 import { Play } from "lucide-react-native";
 import * as VideoThumbnails from "expo-video-thumbnails";
 import type { MessageReaction } from "@/lib/types";
+import { renderMentionText } from "@/lib/renderMentions";
 
 interface ChatMessageProps {
   id: string;
@@ -151,7 +152,13 @@ export function ChatMessage({
                 <Text
                   className={`text-sm leading-5 px-4 ${replyTo || mediaUrl ? "pt-1.5 pb-2.5" : "py-2.5"} ${isOwn ? "text-white" : "text-slate-900"}`}
                 >
-                  {content}
+                  {renderMentionText(
+                    content,
+                    currentUserId,
+                    isOwn
+                      ? { color: "white", fontSize: 14, lineHeight: 20 }
+                      : { color: "#0F172A", fontSize: 14, lineHeight: 20 }
+                  )}
                 </Text>
               ) : null}
             </View>

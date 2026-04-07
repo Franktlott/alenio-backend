@@ -195,21 +195,22 @@ model TaskTemplate {
 }
 
 model Message {
-  id        String   @id @default(cuid())
-  content   String?
-  mediaUrl  String?
-  mediaType String?
-  createdAt DateTime @default(now())
-  teamId    String
-  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  senderId  String
-  sender    User     @relation(fields: [senderId], references: [id])
-  replyToId String?
-  replyTo   Message?  @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
-  replies   Message[] @relation("MessageReplies")
-  reactions MessageReaction[]
-  topicId   String?
-  topic     Topic?   @relation(fields: [topicId], references: [id], onDelete: SetNull)
+  id               String   @id @default(cuid())
+  content          String?
+  mediaUrl         String?
+  mediaType        String?
+  createdAt        DateTime @default(now())
+  teamId           String
+  team             Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  senderId         String
+  sender           User     @relation(fields: [senderId], references: [id])
+  replyToId        String?
+  replyTo          Message?  @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies          Message[] @relation("MessageReplies")
+  reactions        MessageReaction[]
+  topicId          String?
+  topic            Topic?   @relation(fields: [topicId], references: [id], onDelete: SetNull)
+  mentionedUserIds String   @default("[]")
 }
 
 model MessageReaction {
@@ -272,6 +273,7 @@ model DirectMessage {
   replyTo        DirectMessage?  @relation("DMReplies", fields: [replyToId], references: [id], onDelete: SetNull)
   replies        DirectMessage[] @relation("DMReplies")
   reactions      DirectMessageReaction[]
+  mentionedUserIds String     @default("[]")
 }
 
 model DirectMessageReaction {

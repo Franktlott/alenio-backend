@@ -27,8 +27,10 @@ import { uploadFile } from "@/lib/upload";
 import { pickMedia, takePhoto } from "@/lib/file-picker";
 import { ChatMessage } from "@/components/ChatMessage";
 import { ImageSendPreview } from "@/components/ImageSendPreview";
+import { MentionPicker } from "@/components/MentionPicker";
 import type { Message, Team, MessageReaction } from "@/lib/types";
 import { useDemoMode, showDemoAlert } from "@/lib/useDemo";
+import { useMention } from "@/lib/useMention";
 
 const REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🔥'];
 
@@ -222,6 +224,8 @@ export default function TeamChatScreen() {
   const currentUserId = session?.user?.id ?? "";
   const prevMsgCountRef = useRef<number>(0);
 
+  const { mentionedUserIds, mentionQuery, onTextChange: onMentionTextChange, selectMention, resetMentions } = useMention();
+
   const topicKey = topicId ?? "general";
 
   const markAsRead = useUnreadStore((s) => s.markAsRead);
@@ -249,7 +253,7 @@ export default function TeamChatScreen() {
   const currentUserRole = team?.members?.find((m) => m.userId === currentUserId)?.role;
 
   const sendMutation = useMutation({
-    mutationFn: (payload: { content?: string; mediaUrl?: string; mediaType?: string; replyToId?: string; topicId?: string }) =>
+    mutationFn: (payload: { content?: string; mediaUrl?: string; mediaType?: string; replyToId?: string; topicId?: string; mentionedUserIds?: string[] }) =>
       api.post<Message>(`/api/teams/${teamId}/messages`, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["messages", teamId, topicKey] });
@@ -310,7 +314,9 @@ export default function TeamChatScreen() {
       content,
       replyToId: replyTo?.id,
       topicId: topicId ?? undefined,
+      mentionedUserIds: mentionedUserIds.length > 0 ? mentionedUserIds : undefined,
     });
+    resetMentions();
   };
 
   const handleSendMedia = async (caption: string) => {
@@ -912,6 +918,20 @@ export default function TeamChatScreen() {
           />
         )}
 
+        {/* Mention picker */}
+        {mentionQuery !== null && team?.members ? (
+          <MentionPicker
+            users={team.members
+              .filter((m) => m.userId !== currentUserId)
+              .map((m) => ({ id: m.userId, name: m.user.name, image: m.user.image ?? null }))}
+            query={mentionQuery}
+            onSelect={(user) => {
+              const newText = selectMention(input, user);
+              setInput(newText);
+            }}
+          />
+        ) : null}
+
         {/* Reply preview bar */}
         {replyTo ? (
           <View className="flex-row items-center px-3 py-2 bg-indigo-50 dark:bg-indigo-900/30 border-t border-indigo-200 dark:border-indigo-800">
@@ -944,7 +964,10 @@ export default function TeamChatScreen() {
             placeholder={isDemo ? "Read-only demo account" : "Message..."}
             placeholderTextColor="#94A3B8"
             value={input}
-            onChangeText={setInput}
+            onChangeText={(text) => {
+              setInput(text);
+              onMentionTextChange(text);
+            }}
             multiline
             maxLength={2000}
             style={{ maxHeight: 120 }}

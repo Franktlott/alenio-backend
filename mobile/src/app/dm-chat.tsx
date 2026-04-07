@@ -25,7 +25,8 @@ import { uploadFile } from "@/lib/upload";
 import { pickMedia, takePhoto } from "@/lib/file-picker";
 import { ChatMessage } from "@/components/ChatMessage";
 import { ImageSendPreview } from "@/components/ImageSendPreview";
-import type { DirectMessage, MessageReaction } from "@/lib/types";
+import { MentionPicker } from "@/components/MentionPicker";
+import type { DirectMessage, MessageReaction, Conversation } from "@/lib/types";
 import * as Clipboard from "expo-clipboard";
 import ReanimatedSwipeable from "react-native-gesture-handler/ReanimatedSwipeable";
 import Reanimated, { useAnimatedStyle, interpolate } from "react-native-reanimated";
@@ -35,6 +36,7 @@ import { useUnreadStore } from "@/lib/state/unread-store";
 import * as Haptics from "expo-haptics";
 import { toast } from "burnt";
 import { useDemoMode, showDemoAlert } from "@/lib/useDemo";
+import { useMention } from "@/lib/useMention";
 
 const REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🔥'];
 
@@ -108,6 +110,19 @@ export default function DMChatScreen() {
   const markAsRead = useUnreadStore((s) => s.markAsRead);
   const prevMsgCountRef = useRef<number>(0);
 
+  const { mentionedUserIds, mentionQuery, onTextChange: onMentionTextChange, selectMention, resetMentions } = useMention();
+
+  const { data: conversations = [] } = useQuery({
+    queryKey: ["conversations"],
+    queryFn: () => api.get<Conversation[]>("/api/dms"),
+    enabled: !!conversationId,
+  });
+
+  const currentConversation = conversations.find((c) => c.id === conversationId);
+  const mentionableUsers = (currentConversation?.participants ?? [])
+    .filter((p) => p.id !== currentUserId)
+    .map((p) => ({ id: p.id, name: p.name, image: p.image ?? null }));
+
   const { data: messages = [], isLoading } = useQuery({
     queryKey: ["dm-messages", conversationId],
     queryFn: () => api.get<DirectMessage[]>(`/api/dms/${conversationId}/messages`),
@@ -116,7 +131,7 @@ export default function DMChatScreen() {
   });
 
   const sendMutation = useMutation({
-    mutationFn: (payload: { content?: string; mediaUrl?: string; mediaType?: string; replyToId?: string }) =>
+    mutationFn: (payload: { content?: string; mediaUrl?: string; mediaType?: string; replyToId?: string; mentionedUserIds?: string[] }) =>
       api.post<DirectMessage>(`/api/dms/${conversationId}/messages`, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["dm-messages", conversationId] });
@@ -164,7 +179,9 @@ export default function DMChatScreen() {
     sendMutation.mutate({
       content,
       replyToId: replyTo?.id,
+      mentionedUserIds: mentionedUserIds.length > 0 ? mentionedUserIds : undefined,
     });
+    resetMentions();
   };
 
   const handleSendMedia = async (caption: string) => {
@@ -681,6 +698,18 @@ export default function DMChatScreen() {
           />
         )}
 
+        {/* Mention picker */}
+        {mentionQuery !== null && mentionableUsers.length > 0 ? (
+          <MentionPicker
+            users={mentionableUsers}
+            query={mentionQuery}
+            onSelect={(user) => {
+              const newText = selectMention(input, user);
+              setInput(newText);
+            }}
+          />
+        ) : null}
+
         {/* Reply preview bar */}
         {replyTo ? (
           <View className="flex-row items-center px-3 py-2 bg-indigo-50 dark:bg-indigo-900/30 border-t border-indigo-200 dark:border-indigo-800">
@@ -713,7 +742,10 @@ export default function DMChatScreen() {
             placeholder={isDemo ? "Read-only demo account" : `Message ${recipientName ?? ""}...`}
             placeholderTextColor="#94A3B8"
             value={input}
-            onChangeText={setInput}
+            onChangeText={(text) => {
+              setInput(text);
+              onMentionTextChange(text);
+            }}
             multiline
             maxLength={2000}
             style={{ maxHeight: 120 }}

@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { prisma } from "../prisma";
 import { auth } from "../auth";
 import { authGuard } from "../middleware/auth-guard";
+import { sendPushToUsers } from "../lib/push";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -261,7 +262,9 @@ dmsRouter.post("/:conversationId/messages", async (c) => {
   }
 
   const body = await c.req.json();
-  const { content, mediaUrl, mediaType, replyToId } = body;
+  const { content, mediaUrl, mediaType, replyToId, mentionedUserIds } = body;
+  const mentionIds: string[] = Array.isArray(mentionedUserIds) ? mentionedUserIds : [];
+
   if (!content?.trim() && !mediaUrl) {
     return c.json({ error: { message: "Content or media is required", code: "VALIDATION_ERROR" } }, 400);
   }
@@ -274,6 +277,7 @@ dmsRouter.post("/:conversationId/messages", async (c) => {
       replyToId: replyToId || null,
       conversationId,
       senderId: user.id,
+      mentionedUserIds: JSON.stringify(mentionIds),
     },
     include: {
       sender: { select: { id: true, name: true, email: true, image: true } },
@@ -287,6 +291,27 @@ dmsRouter.post("/:conversationId/messages", async (c) => {
     where: { id: conversationId },
     data: { updatedAt: new Date() },
   });
+
+  // Send mention notifications
+  if (mentionIds.length > 0) {
+    const participants = await prisma.conversationParticipant.findMany({
+      where: { conversationId },
+      select: { userId: true },
+    });
+    const participantIds = new Set(participants.map((p: any) => p.userId));
+    const validMentionIds = mentionIds.filter((id: string) => id !== user.id && participantIds.has(id));
+
+    if (validMentionIds.length > 0) {
+      const senderName = user.name ?? "Someone";
+      const mentionBody = content?.trim() || "mentioned you in a message";
+      await sendPushToUsers(
+        validMentionIds,
+        `${senderName} mentioned you`,
+        mentionBody,
+        { conversationId }
+      );
+    }
+  }
 
   return c.json({ data: message }, 201);
 });
