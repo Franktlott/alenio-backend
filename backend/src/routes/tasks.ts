@@ -224,12 +224,12 @@ tasksRouter.get("/member-stats", async (c) => {
   const assignments = await prisma.taskAssignment.findMany({
     where: { task: { teamId } },
     include: {
-      task: { select: { status: true, dueDate: true, completedAt: true, creatorId: true } },
+      task: { select: { status: true, dueDate: true, completedAt: true } },
     },
   });
 
   // Group by userId
-  const userTasks: Record<string, { status: string; dueDate: Date | null; completedAt: Date | null; creatorId: string }[]> = {};
+  const userTasks: Record<string, { status: string; dueDate: Date | null; completedAt: Date | null }[]> = {};
   for (const a of assignments) {
     if (!userTasks[a.userId]) userTasks[a.userId] = [];
     userTasks[a.userId]!.push(a.task);
@@ -249,9 +249,8 @@ tasksRouter.get("/member-stats", async (c) => {
     }
 
     // Streak: consecutive on-time completions from most recent, stopping at first overdue
-    // Self-assigned tasks (creator === assignee) are excluded from streak counts
     const doneTasks = tasks
-      .filter((t) => t.status === "done" && t.completedAt != null && t.dueDate != null && t.creatorId !== userId)
+      .filter((t) => t.status === "done" && t.completedAt != null && t.dueDate != null)
       .sort((a, b) => new Date(b.completedAt!).getTime() - new Date(a.completedAt!).getTime());
 
     let streak = 0;
@@ -415,14 +414,12 @@ tasksRouter.patch("/:taskId", async (c) => {
     });
 
     // Calculate streak: consecutive on-time completions since last overdue (most recent first)
-    // Self-assigned tasks (creator === assignee) are excluded from streak counts
     const streakRows = await prisma.$queryRaw<{ completedAt: string; dueDate: string }[]>`
       SELECT t.completedAt, t.dueDate
       FROM Task t
       JOIN TaskAssignment ta ON ta.taskId = t.id
       WHERE t.teamId = ${teamId}
       AND ta.userId = ${user.id}
-      AND t.creatorId != ta.userId
       AND t.status = 'done'
       AND t.completedAt IS NOT NULL
       AND t.dueDate IS NOT NULL
@@ -462,7 +459,6 @@ tasksRouter.patch("/:taskId", async (c) => {
           FROM Task t
           JOIN TaskAssignment ta ON ta.taskId = t.id
           WHERE ta.userId = ${user.id}
-          AND t.creatorId != ta.userId
           AND t.status = 'done'
           AND t.completedAt IS NOT NULL
           AND t.dueDate IS NOT NULL
