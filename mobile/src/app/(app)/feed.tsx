@@ -310,10 +310,77 @@ function ReactionRow({
   );
 }
 
+const NUM_CELEBRATION_VARIANTS = 4;
+
 function CelebrationCard({ item, activeTeamId, currentUserId, isDemo, showPicker, onOpenPicker, onClosePicker }: { item: ActivityEvent; activeTeamId: string | null; currentUserId: string | undefined; isDemo: boolean; showPicker: boolean; onOpenPicker: () => void; onClosePicker: () => void }) {
   const count = item.metadata?.count ?? 10;
   const name = item.user?.name ?? "Someone";
   const queryClient = useQueryClient();
+
+  const variant = parseInt(item.id.replace(/[^0-9]/g, '').slice(0, 6) || '0', 10) % NUM_CELEBRATION_VARIANTS;
+
+  type CelebrationTheme = {
+    gradient: [string, string, string];
+    badgeGradient: [string, string, string];
+    badgeBg: string;
+    badgeTextColor: string;
+    emoji: string;
+    particleColor: string;
+    headline: string;
+    sub: string;
+  };
+
+  let theme: CelebrationTheme;
+  switch (variant) {
+    case 1:
+      theme = {
+        gradient: ["#1A0A2E", "#0F0520", "#080010"],
+        badgeGradient: ["#9333EA", "#7C3AED", "#6D28D9"],
+        badgeBg: "#080010",
+        badgeTextColor: "#C084FC",
+        emoji: "🚀",
+        particleColor: "#A855F7",
+        headline: `${name} is absolutely CRUSHING IT! 🚀💜`,
+        sub: "Top performer streak!",
+      };
+      break;
+    case 2:
+      theme = {
+        gradient: ["#052E16", "#021A0D", "#010D07"],
+        badgeGradient: ["#10B981", "#059669", "#047857"],
+        badgeBg: "#010D07",
+        badgeTextColor: "#34D399",
+        emoji: "💎",
+        particleColor: "#10B981",
+        headline: `${name} is playing at a LEGENDARY level! 💎`,
+        sub: "Consistency is power 🌿",
+      };
+      break;
+    case 3:
+      theme = {
+        gradient: ["#1E0000", "#120000", "#0A0000"],
+        badgeGradient: ["#EF4444", "#DC2626", "#B91C1C"],
+        badgeBg: "#0A0000",
+        badgeTextColor: "#F87171",
+        emoji: "⚡",
+        particleColor: "#EF4444",
+        headline: `${name} is UNSTOPPABLE right now! ⚡🔴`,
+        sub: "On fire, no breaks! 💥",
+      };
+      break;
+    default:
+      theme = {
+        gradient: ["#1B2138", "#0D1117", "#111827"],
+        badgeGradient: ["#F5C518", "#B8860B", "#8B6914"],
+        badgeBg: "#0D1117",
+        badgeTextColor: "#FFD700",
+        emoji: "⭐",
+        particleColor: "#FFD700",
+        headline: `${name} hit an INSANE milestone! 🏆✨`,
+        sub: "New Alenio record!",
+      };
+      break;
+  }
 
   const { mutate: toggleReaction } = useMutation({
     mutationFn: (emoji: string) =>
@@ -332,7 +399,7 @@ function CelebrationCard({ item, activeTeamId, currentUserId, isDemo, showPicker
       testID={`milestone-card-${item.id}`}
     >
       <LinearGradient
-        colors={["#1B2138", "#0D1117", "#111827"]}
+        colors={theme.gradient}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={{ borderRadius: 20, overflow: "hidden" }}
@@ -349,22 +416,22 @@ function CelebrationCard({ item, activeTeamId, currentUserId, isDemo, showPicker
             { bottom: 48, left: 40, size: 7, opacity: 0.3 },
             { bottom: 32, right: 50, size: 6, opacity: 0.35 },
           ].map((s, i) => (
-            <Text key={i} style={{ position: "absolute", top: s.top, left: (s as any).left, right: (s as any).right, bottom: (s as any).bottom, fontSize: s.size, opacity: s.opacity, color: "#FFD700" }}>✦</Text>
+            <Text key={i} style={{ position: "absolute", top: (s as any).top, left: (s as any).left, right: (s as any).right, bottom: (s as any).bottom, fontSize: s.size, opacity: s.opacity, color: theme.particleColor }}>✦</Text>
           ))}
         </View>
 
         <View style={{ padding: 14, alignItems: "center", gap: 8 }}>
-          {/* Gold shield badge */}
+          {/* Badge */}
           <View style={{ alignItems: "center", marginTop: 0 }}>
             <LinearGradient
-              colors={["#F5C518", "#B8860B", "#8B6914"]}
+              colors={theme.badgeGradient}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={{ borderRadius: 16, padding: 2 }}
             >
-              <View style={{ backgroundColor: "#0D1117", borderRadius: 14, paddingHorizontal: 20, paddingVertical: 10, alignItems: "center", minWidth: 80 }}>
-                <Text style={{ fontSize: 18, lineHeight: 28 }}>⭐</Text>
-                <Text style={{ fontSize: 40, fontWeight: "900", color: "#FFD700", lineHeight: 44 }}>{count}</Text>
+              <View style={{ backgroundColor: theme.badgeBg, borderRadius: 14, paddingHorizontal: 20, paddingVertical: 10, alignItems: "center", minWidth: 80 }}>
+                <Text style={{ fontSize: 18, lineHeight: 28 }}>{theme.emoji}</Text>
+                <Text style={{ fontSize: 40, fontWeight: "900", color: theme.badgeTextColor, lineHeight: 44 }}>{count}</Text>
               </View>
             </LinearGradient>
           </View>
@@ -373,9 +440,9 @@ function CelebrationCard({ item, activeTeamId, currentUserId, isDemo, showPicker
           <View style={{ alignItems: "center", gap: 4 }}>
             <Text style={{ fontSize: 12, color: "rgba(255,255,255,0.7)", fontWeight: "500" }}>tasks in a row</Text>
             <Text style={{ fontSize: 14, fontWeight: "800", color: "white", textAlign: "center" }}>
-              {name} hit an INSANE milestone! 🏆✨
+              {theme.headline}
             </Text>
-            <Text style={{ fontSize: 11, color: "#9CA3AF" }}>New Alenio record!</Text>
+            <Text style={{ fontSize: 11, color: "#9CA3AF" }}>{theme.sub}</Text>
           </View>
 
           {/* Footer: avatar + time */}
@@ -385,7 +452,7 @@ function CelebrationCard({ item, activeTeamId, currentUserId, isDemo, showPicker
                 {item.user?.image ? (
                   <ExpoImage source={{ uri: item.user.image }} style={{ width: 24, height: 24 }} contentFit="cover" />
                 ) : (
-                  <Text style={{ fontSize: 11, fontWeight: "700", color: "#FFD700" }}>{name[0].toUpperCase()}</Text>
+                  <Text style={{ fontSize: 11, fontWeight: "700", color: theme.badgeTextColor }}>{name[0].toUpperCase()}</Text>
                 )}
               </View>
               <Text style={{ fontSize: 11, color: "#6B7280" }}>{name}</Text>
@@ -408,10 +475,77 @@ function CelebrationCard({ item, activeTeamId, currentUserId, isDemo, showPicker
   );
 }
 
+const NUM_PERSONAL_BEST_VARIANTS = 3;
+
 function PersonalBestCard({ item, activeTeamId, currentUserId, isDemo, showPicker, onOpenPicker, onClosePicker }: { item: ActivityEvent; activeTeamId: string | null; currentUserId: string | undefined; isDemo: boolean; showPicker: boolean; onOpenPicker: () => void; onClosePicker: () => void }) {
   const count = item.metadata?.count ?? 0;
   const name = item.user?.name ?? "Someone";
   const queryClient = useQueryClient();
+
+  const variant = parseInt(item.id.replace(/[^0-9]/g, '').slice(0, 6) || '0', 10) % NUM_PERSONAL_BEST_VARIANTS;
+
+  type PersonalBestTheme = {
+    shadow: string;
+    gradient: [string, string, string];
+    badgeGradient: [string, string, string];
+    badgeBg: string;
+    badgeTextColor: string;
+    emoji: string;
+    particleColor0: string;
+    particleColor1: string;
+    headline: string;
+    sub: string;
+    nameColor: string;
+  };
+
+  let theme: PersonalBestTheme;
+  switch (variant) {
+    case 1:
+      theme = {
+        shadow: "#3B82F6",
+        gradient: ["#001A40", "#000D26", "#00060F"],
+        badgeGradient: ["#3B82F6", "#2563EB", "#1D4ED8"],
+        badgeBg: "#00060F",
+        badgeTextColor: "#60A5FA",
+        emoji: "❄️",
+        particleColor0: "#3B82F6",
+        particleColor1: "#60A5FA",
+        headline: `${name} is BACK in ice cold form! ❄️💙`,
+        sub: "Personal best streak matched! 🏆",
+        nameColor: "#60A5FA",
+      };
+      break;
+    case 2:
+      theme = {
+        shadow: "#EC4899",
+        gradient: ["#2D0020", "#1A0012", "#0D0009"],
+        badgeGradient: ["#EC4899", "#DB2777", "#BE185D"],
+        badgeBg: "#0D0009",
+        badgeTextColor: "#F472B6",
+        emoji: "💫",
+        particleColor0: "#EC4899",
+        particleColor1: "#F472B6",
+        headline: `${name} just made a STUNNING comeback! 💫💖`,
+        sub: "Personal best streak matched! 🏆",
+        nameColor: "#F472B6",
+      };
+      break;
+    default:
+      theme = {
+        shadow: "#F97316",
+        gradient: ["#2D1200", "#1A0800", "#0D0400"],
+        badgeGradient: ["#FF6B00", "#F97316", "#EA580C"],
+        badgeBg: "#0D0400",
+        badgeTextColor: "#FF8C00",
+        emoji: "🔥",
+        particleColor0: "#F97316",
+        particleColor1: "#FB923C",
+        headline: `${name} is BACK and better than ever! 💪🔥`,
+        sub: "Personal best streak matched! 🏆",
+        nameColor: "#FB923C",
+      };
+      break;
+  }
 
   const { mutate: toggleReaction } = useMutation({
     mutationFn: (emoji: string) =>
@@ -429,9 +563,9 @@ function PersonalBestCard({ item, activeTeamId, currentUserId, isDemo, showPicke
       style={{ marginHorizontal: 16, marginVertical: 6 }}
       testID={`personal-best-card-${item.id}`}
     >
-      <View style={{ shadowColor: "#F97316", shadowOpacity: 0.4, shadowRadius: 16, shadowOffset: { width: 0, height: 0 }, elevation: 8, borderRadius: 20 }}>
+      <View style={{ shadowColor: theme.shadow, shadowOpacity: 0.4, shadowRadius: 16, shadowOffset: { width: 0, height: 0 }, elevation: 8, borderRadius: 20 }}>
         <LinearGradient
-          colors={["#2D1200", "#1A0800", "#0D0400"]}
+          colors={theme.gradient}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={{ borderRadius: 20, overflow: "hidden" }}
@@ -452,46 +586,46 @@ function PersonalBestCard({ item, activeTeamId, currentUserId, isDemo, showPicke
               { bottom: 20, left: 70, size: 8, opacity: 0.3, char: "✦" },
               { bottom: 50, right: 80, size: 6, opacity: 0.35, char: "•" },
             ].map((s, i) => (
-              <Text key={i} style={{ position: "absolute", top: (s as any).top, left: (s as any).left, right: (s as any).right, bottom: (s as any).bottom, fontSize: s.size, opacity: s.opacity, color: i % 2 === 0 ? "#F97316" : "#FB923C" }}>{s.char}</Text>
+              <Text key={i} style={{ position: "absolute", top: (s as any).top, left: (s as any).left, right: (s as any).right, bottom: (s as any).bottom, fontSize: s.size, opacity: s.opacity, color: i % 2 === 0 ? theme.particleColor0 : theme.particleColor1 }}>{s.char}</Text>
             ))}
           </View>
 
           <View style={{ padding: 14, alignItems: "center", gap: 8 }}>
-            {/* Orange fire badge */}
+            {/* Badge */}
             <View style={{ alignItems: "center", marginTop: 0 }}>
               <LinearGradient
-                colors={["#FF6B00", "#F97316", "#EA580C"]}
+                colors={theme.badgeGradient}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={{ borderRadius: 16, padding: 2 }}
               >
-                <View style={{ backgroundColor: "#0D0400", borderRadius: 14, paddingHorizontal: 20, paddingVertical: 10, alignItems: "center", minWidth: 80 }}>
-                  <Text style={{ fontSize: 18, lineHeight: 28 }}>🔥</Text>
-                  <Text style={{ fontSize: 40, fontWeight: "900", color: "#FF8C00", lineHeight: 44 }}>{count}</Text>
+                <View style={{ backgroundColor: theme.badgeBg, borderRadius: 14, paddingHorizontal: 20, paddingVertical: 10, alignItems: "center", minWidth: 80 }}>
+                  <Text style={{ fontSize: 18, lineHeight: 28 }}>{theme.emoji}</Text>
+                  <Text style={{ fontSize: 40, fontWeight: "900", color: theme.badgeTextColor, lineHeight: 44 }}>{count}</Text>
                 </View>
               </LinearGradient>
             </View>
 
             {/* Text */}
             <View style={{ alignItems: "center", gap: 4 }}>
-              <Text style={{ fontSize: 12, color: "#FB923C", fontWeight: "500" }}>tasks in a row</Text>
+              <Text style={{ fontSize: 12, color: theme.nameColor, fontWeight: "500" }}>tasks in a row</Text>
               <Text style={{ fontSize: 14, fontWeight: "800", color: "white", textAlign: "center" }}>
-                {name} is BACK and better than ever! 💪🔥
+                {theme.headline}
               </Text>
-              <Text style={{ fontSize: 11, color: "#9CA3AF" }}>Personal best streak matched! 🏆</Text>
+              <Text style={{ fontSize: 11, color: "#9CA3AF" }}>{theme.sub}</Text>
             </View>
 
             {/* Footer: avatar + time */}
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", width: "100%", marginTop: 2 }}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: "#1C1410", borderWidth: 1, borderColor: "#F97316", overflow: "hidden", alignItems: "center", justifyContent: "center" }}>
+                <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: "#1C1410", borderWidth: 1, borderColor: theme.particleColor0, overflow: "hidden", alignItems: "center", justifyContent: "center" }}>
                   {item.user?.image ? (
                     <ExpoImage source={{ uri: item.user.image }} style={{ width: 24, height: 24 }} contentFit="cover" />
                   ) : (
-                    <Text style={{ fontSize: 11, fontWeight: "700", color: "#F97316" }}>{name[0].toUpperCase()}</Text>
+                    <Text style={{ fontSize: 11, fontWeight: "700", color: theme.badgeTextColor }}>{name[0].toUpperCase()}</Text>
                   )}
                 </View>
-                <Text style={{ fontSize: 11, color: "#FB923C" }}>{name}</Text>
+                <Text style={{ fontSize: 11, color: theme.nameColor }}>{name}</Text>
               </View>
               <Text style={{ fontSize: 11, color: "#4B5563" }}>{timeAgo(item.createdAt)}</Text>
             </View>
