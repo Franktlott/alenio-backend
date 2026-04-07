@@ -143,6 +143,7 @@ export interface CalendarEvent {
   teamId: string;
   createdAt: string;
   createdBy?: { id: string; name: string; image?: string | null };
+  isHidden?: boolean;
 }
 
 export interface Reminder {

@@ -13,10 +13,11 @@ import {
   TextInput,
   Platform,
   KeyboardAvoidingView,
+  Switch,
 } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams, Redirect, useFocusEffect } from "expo-router";
-import { Plus, User, Users, ArrowUpDown, ChevronLeft, ChevronRight, X, CalendarDays, CheckSquare, Calendar, Check, Bell } from "lucide-react-native";
+import { Plus, User, Users, ArrowUpDown, ChevronLeft, ChevronRight, X, CalendarDays, CheckSquare, Calendar, Check, Bell, EyeOff } from "lucide-react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -585,6 +586,7 @@ export default function TasksScreen() {
   const [eventStart, setEventStart] = useState<Date>(new Date());
   const [eventEnd, setEventEnd] = useState<Date>(new Date());
   const [eventColor, setEventColor] = useState("#4361EE");
+  const [eventIsHidden, setEventIsHidden] = useState(false);
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -714,7 +716,7 @@ export default function TasksScreen() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["calendar-events", activeTeamId] });
       setShowEventModal(false);
-      setEventTitle(""); setEventDescription(""); setEventColor("#4361EE");
+      setEventTitle(""); setEventDescription(""); setEventColor("#4361EE"); setEventIsHidden(false);
     },
   });
 
@@ -725,7 +727,7 @@ export default function TasksScreen() {
       queryClient.invalidateQueries({ queryKey: ["calendar-events", activeTeamId] });
       setShowEventModal(false);
       setEditingEvent(null);
-      setEventTitle(""); setEventDescription(""); setEventColor("#4361EE");
+      setEventTitle(""); setEventDescription(""); setEventColor("#4361EE"); setEventIsHidden(false);
     },
   });
 
@@ -736,7 +738,7 @@ export default function TasksScreen() {
       queryClient.invalidateQueries({ queryKey: ["calendar-events", activeTeamId] });
       setShowEventModal(false);
       setEditingEvent(null);
-      setEventTitle(""); setEventDescription(""); setEventColor("#4361EE");
+      setEventTitle(""); setEventDescription(""); setEventColor("#4361EE"); setEventIsHidden(false);
     },
   });
 
@@ -747,7 +749,7 @@ export default function TasksScreen() {
       : new Date();
     setEventTitle(""); setEventDescription("");
     setEventStart(d); setEventEnd(d);
-    setEventColor("#4361EE"); setFormError(null);
+    setEventColor("#4361EE"); setEventIsHidden(false); setFormError(null);
     setShowEventModal(true);
   };
 
@@ -758,6 +760,7 @@ export default function TasksScreen() {
     setEventStart(new Date(ev.startDate));
     setEventEnd(ev.endDate ? new Date(ev.endDate) : new Date(ev.startDate));
     setEventColor(ev.color);
+    setEventIsHidden(ev.isHidden ?? false);
     setFormError(null);
     setConfirmDeleteEvent(false);
     setShowEventModal(true);
@@ -775,6 +778,7 @@ export default function TasksScreen() {
           startDate: eventStart.toISOString(),
           endDate: end.toISOString(),
           color: eventColor,
+          isHidden: eventIsHidden,
         },
       });
     } else {
@@ -785,6 +789,7 @@ export default function TasksScreen() {
         endDate: end.toISOString(),
         color: eventColor,
         allDay: true,
+        isHidden: eventIsHidden,
       });
     }
   };
@@ -1458,6 +1463,24 @@ export default function TasksScreen() {
               ) : null}
 
               {formError ? <Text style={{ color: "#EF4444", fontSize: 13, marginBottom: 12 }}>{formError}</Text> : null}
+
+              {/* Hidden from team toggle */}
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: "#F8FAFC", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 20, borderWidth: 1.5, borderColor: eventIsHidden ? "#94A3B8" : "#E2E8F0" }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                  <EyeOff size={18} color={eventIsHidden ? "#64748B" : "#CBD5E1"} />
+                  <View>
+                    <Text style={{ fontSize: 14, fontWeight: "600", color: "#0F172A" }}>Hidden from team</Text>
+                    <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 1 }}>Only visible to owners & leaders</Text>
+                  </View>
+                </View>
+                <Switch
+                  value={eventIsHidden}
+                  onValueChange={setEventIsHidden}
+                  trackColor={{ false: "#E2E8F0", true: "#64748B" }}
+                  thumbColor="white"
+                  testID="hidden-toggle"
+                />
+              </View>
 
               <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748B", marginBottom: 10 }}>Color</Text>
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 20 }}>
