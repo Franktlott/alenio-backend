@@ -38,7 +38,7 @@ const RECURRENCE_TYPES: { label: string; value: RecurrenceType }[] = [
 ];
 
 export default function CreateTaskScreen() {
-  const { teamId, prefillTitle } = useLocalSearchParams<{ teamId: string; prefillTitle?: string }>();
+  const { teamId, prefillTitle, initialDueDate } = useLocalSearchParams<{ teamId: string; prefillTitle?: string; initialDueDate?: string }>();
   const queryClient = useQueryClient();
   const { data: session } = useSession();
 
@@ -53,6 +53,11 @@ export default function CreateTaskScreen() {
   const [selectedDayOfWeek, setSelectedDayOfWeek] = useState<number | null>(null);
   const [selectedDayOfMonth, setSelectedDayOfMonth] = useState<number | null>(null);
   const [dueDate, setDueDate] = useState<Date | null>(() => {
+    if (typeof initialDueDate === "string" && initialDueDate) {
+      const [y, m, d] = initialDueDate.split("-").map(Number);
+      const date = new Date(y, m - 1, d, 23, 59, 59, 0);
+      return date;
+    }
     const d = new Date();
     d.setHours(23, 59, 59, 0);
     return d;
