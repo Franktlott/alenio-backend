@@ -13,6 +13,7 @@ import {
   TextInput,
   Platform,
   KeyboardAvoidingView,
+  useWindowDimensions,
 } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams, Redirect } from "expo-router";
@@ -452,6 +453,7 @@ function TaskRow({ task, onToggle, onPress }: { task: Task; onToggle: () => void
 
 export default function TasksScreen() {
   const insets = useSafeAreaInsets();
+  const { width: screenWidth } = useWindowDimensions();
   const { openModal } = useLocalSearchParams<{ openModal?: string }>();
   const [filter, setFilter] = useState<FilterTab>("all");
   const [sort, setSort] = useState<SortMode>("due");
@@ -826,22 +828,36 @@ export default function TasksScreen() {
         {/* Events section — below calendar, above filter tabs */}
         {(dayEvents.length > 0 || dayHolidays.length > 0) ? (
           <View style={{ backgroundColor: "white", marginTop: 10 }}>
-            <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 6, flexDirection: "row", alignItems: "center", gap: 6, borderBottomWidth: 1, borderBottomColor: "#F1F5F9" }}>
-              <CalendarDays size={13} color="#64748B" />
-              <Text style={{ fontSize: 11, fontWeight: "700", color: "#64748B", textTransform: "uppercase", letterSpacing: 0.5 }}>Events</Text>
-            </View>
-            {dayHolidays.map((h) => (
-              <View key={h.name} style={{ paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: "#F1F5F9", backgroundColor: "white", flexDirection: "row", alignItems: "center" }}>
-                <View style={{ width: 4, borderRadius: 2, alignSelf: "stretch", backgroundColor: "#EF4444", marginRight: 12 }} />
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 14, fontWeight: "600", color: "#0F172A" }}>{h.name}</Text>
-                  <Text style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>Federal Holiday 🇺🇸</Text>
-                </View>
+            <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 6, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: 1, borderBottomColor: "#F1F5F9" }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <CalendarDays size={13} color="#64748B" />
+                <Text style={{ fontSize: 11, fontWeight: "700", color: "#64748B", textTransform: "uppercase", letterSpacing: 0.5 }}>Events</Text>
               </View>
-            ))}
-            {dayEvents.map((ev) => (
-              <EventRow key={ev.id} event={ev} onLongPress={isOwner && !isDemo ? () => openEditEventModal(ev) : undefined} />
-            ))}
+              {(dayEvents.length + dayHolidays.length) > 1 ? (
+                <Text style={{ fontSize: 11, color: "#94A3B8" }}>{dayEvents.length + dayHolidays.length} events</Text>
+              ) : null}
+            </View>
+            <ScrollView
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              style={{ flexGrow: 0 }}
+            >
+              {dayHolidays.map((h) => (
+                <View key={h.name} style={{ width: screenWidth, paddingHorizontal: 16, paddingVertical: 10, backgroundColor: "white", flexDirection: "row", alignItems: "center" }}>
+                  <View style={{ width: 4, borderRadius: 2, alignSelf: "stretch", backgroundColor: "#EF4444", marginRight: 12 }} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 14, fontWeight: "600", color: "#0F172A" }}>{h.name}</Text>
+                    <Text style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>Federal Holiday 🇺🇸</Text>
+                  </View>
+                </View>
+              ))}
+              {dayEvents.map((ev) => (
+                <View key={ev.id} style={{ width: screenWidth }}>
+                  <EventRow event={ev} onLongPress={isOwner && !isDemo ? () => openEditEventModal(ev) : undefined} />
+                </View>
+              ))}
+            </ScrollView>
           </View>
         ) : null}
 
