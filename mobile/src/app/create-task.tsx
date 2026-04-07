@@ -441,7 +441,7 @@ export default function CreateTaskScreen() {
                 <Text style={{ fontSize: 12, color: "#EF4444", fontWeight: "600" }}>*</Text>
               </View>
               <View style={{ gap: 8 }}>
-                {members.map((m: TeamMember) => {
+                {members.filter((m: TeamMember) => m.userId !== session?.user?.id).map((m: TeamMember) => {
                   const isSelected = selectedAssignees.includes(m.userId);
                   const displayName = m.user.name || m.user.email || "Unknown";
                   return (
@@ -471,7 +471,7 @@ export default function CreateTaskScreen() {
                         style={{ color: isSelected ? "#4361EE" : "#334155" }}
                         numberOfLines={1}
                       >
-                        {displayName}{m.userId === session?.user?.id ? " (You)" : ""}
+                        {displayName}
                       </Text>
                       {isSelected ? (
                         <View className="w-5 h-5 rounded-full bg-indigo-600 items-center justify-center">
