@@ -961,7 +961,7 @@ export default function TasksScreen() {
       >
         <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 14 }}>
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-            <Text style={{ color: "white", fontSize: 18, fontWeight: "700" }}>Tasks</Text>
+            <Text style={{ color: "white", fontSize: 18, fontWeight: "700" }}>Plan</Text>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
               {activeTeamId && !isDemo ? (
                 <Pressable
