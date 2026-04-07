@@ -963,12 +963,14 @@ export default function TasksScreen() {
         </View>
       </LinearGradient>
 
-      <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} stickyHeaderIndices={[2]} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" colors={["#4361EE"]} />}>
-        {/* Mini Calendar */}
-        <MiniCalendar tasks={allTasks} events={calendarEvents} holidays={holidays} selectedDay={selectedDay} onSelectDay={setSelectedDay} />
+      <View style={{ flex: 1 }}>
+        {/* Fixed top section: calendar, events, filter tabs */}
+        <View style={{ flexShrink: 0 }}>
+          {/* Mini Calendar */}
+          <MiniCalendar tasks={allTasks} events={calendarEvents} holidays={holidays} selectedDay={selectedDay} onSelectDay={setSelectedDay} />
 
-        {/* Events section — below calendar, above filter tabs */}
-        {(dayEvents.length > 0 || dayHolidays.length > 0) ? (
+          {/* Events section — below calendar, above filter tabs */}
+          {(dayEvents.length > 0 || dayHolidays.length > 0) ? (
           <View style={{ backgroundColor: "white", marginTop: 10 }}>
             <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 6, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: 1, borderBottomColor: "#F1F5F9" }}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
@@ -1124,81 +1126,85 @@ export default function TasksScreen() {
             ) : null}
           </View>
         </View>
+        </View>
 
-        {/* Task list */}
-        {isLoading ? (
-          <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: 40 }} testID="loading-indicator">
-            <ActivityIndicator color="#4361EE" />
-          </View>
-        ) : tasks.length === 0 ? (
-          <View style={{ alignItems: "center", justifyContent: "center", paddingHorizontal: 24, paddingVertical: 40 }} testID="empty-state">
-            <Text style={{ fontSize: 40, marginBottom: 12 }}>✓</Text>
-            <Text style={{ fontSize: 17, fontWeight: "600", color: "#94A3B8" }}>
-              {filter === "completed" ? "No completed tasks" : filter === "assigned" ? "No tasks assigned to others" : "No active tasks"}
-            </Text>
-            {filter === "all" && !selectedDay ? (
-              <Text style={{ color: "#CBD5E1", fontSize: 13, marginTop: 4, textAlign: "center" }}>
-                Tap the + button to create your first task or event
+        {/* Scrollable task list */}
+        <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" colors={["#4361EE"]} />}>
+          {/* Task list */}
+          {isLoading ? (
+            <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: 40 }} testID="loading-indicator">
+              <ActivityIndicator color="#4361EE" />
+            </View>
+          ) : tasks.length === 0 ? (
+            <View style={{ alignItems: "center", justifyContent: "center", paddingHorizontal: 24, paddingVertical: 40 }} testID="empty-state">
+              <Text style={{ fontSize: 40, marginBottom: 12 }}>✓</Text>
+              <Text style={{ fontSize: 17, fontWeight: "600", color: "#94A3B8" }}>
+                {filter === "completed" ? "No completed tasks" : filter === "assigned" ? "No tasks assigned to others" : "No active tasks"}
               </Text>
-            ) : null}
-          </View>
-        ) : (
-          tasks.slice(0, visibleCount).map((item) => (
-            <TaskRow
-              key={item.data.id}
-              task={item.type === "reminder" ? reminderToTask(item.data) : item.data}
-              isReminder={item.type === "reminder"}
-              onToggle={() => item.type === "task" ? handleToggleTask(item.data) : undefined}
-              onPress={() => item.type === "task" ? router.push({ pathname: "/task-detail", params: { taskId: item.data.id, teamId: activeTeamId! } }) : router.push({ pathname: "/reminder-detail", params: { reminderId: item.data.id, teamId: activeTeamId! } })}
-            />
-          ))
-        )}
-        {tasks.length > visibleCount ? (
-          <Pressable
-            onPress={() => setVisibleCount(v => v + 7)}
-            className="mx-4 mb-4 py-3 rounded-2xl items-center"
-            style={{ backgroundColor: '#F1F5F9' }}
-          >
-            <Text className="text-sm font-semibold text-slate-600">
-              Show {Math.min(7, tasks.length - visibleCount)} more
-            </Text>
-          </Pressable>
-        ) : null}
-
-        {/* Team tab: collapsed completed section */}
-        {filter === "assigned" && teamCompletedTasks.length > 0 ? (
-          <View style={{ marginTop: 8 }}>
-            <Pressable
-              onPress={() => setTeamCompletedExpanded((v) => !v)}
-              style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12, gap: 8 }}
-              testID="team-completed-toggle"
-            >
-              <View style={{ flex: 1, height: 1, backgroundColor: "#E2E8F0" }} />
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: "#10B981", alignItems: "center", justifyContent: "center" }}>
-                  <Text style={{ color: "white", fontSize: 10, fontWeight: "bold" }}>✓</Text>
-                </View>
-                <Text style={{ fontSize: 13, fontWeight: "600", color: "#64748B" }}>
-                  Completed ({teamCompletedTasks.length})
+              {filter === "all" && !selectedDay ? (
+                <Text style={{ color: "#CBD5E1", fontSize: 13, marginTop: 4, textAlign: "center" }}>
+                  Tap the + button to create your first task or event
                 </Text>
-                <Text style={{ fontSize: 12, color: "#94A3B8" }}>{teamCompletedExpanded ? "▲" : "▼"}</Text>
-              </View>
-              <View style={{ flex: 1, height: 1, backgroundColor: "#E2E8F0" }} />
-            </Pressable>
-            {teamCompletedExpanded ? teamCompletedTasks.map((item) => (
+              ) : null}
+            </View>
+          ) : (
+            tasks.slice(0, visibleCount).map((item) => (
               <TaskRow
-                key={item.id}
-                task={item}
-                isReminder={false}
-                onToggle={() => handleToggleTask(item)}
-                onPress={() => router.push({ pathname: "/task-detail", params: { taskId: item.id, teamId: activeTeamId! } })}
+                key={item.data.id}
+                task={item.type === "reminder" ? reminderToTask(item.data) : item.data}
+                isReminder={item.type === "reminder"}
+                onToggle={() => item.type === "task" ? handleToggleTask(item.data) : undefined}
+                onPress={() => item.type === "task" ? router.push({ pathname: "/task-detail", params: { taskId: item.data.id, teamId: activeTeamId! } }) : router.push({ pathname: "/reminder-detail", params: { reminderId: item.data.id, teamId: activeTeamId! } })}
               />
-            )) : null}
-          </View>
-        ) : null}
+            ))
+          )}
+          {tasks.length > visibleCount ? (
+            <Pressable
+              onPress={() => setVisibleCount(v => v + 7)}
+              className="mx-4 mb-4 py-3 rounded-2xl items-center"
+              style={{ backgroundColor: '#F1F5F9' }}
+            >
+              <Text className="text-sm font-semibold text-slate-600">
+                Show {Math.min(7, tasks.length - visibleCount)} more
+              </Text>
+            </Pressable>
+          ) : null}
 
-        <View style={{ height: insets.bottom + 88 }} />
-      </ScrollView>
+          {/* Team tab: collapsed completed section */}
+          {filter === "assigned" && teamCompletedTasks.length > 0 ? (
+            <View style={{ marginTop: 8 }}>
+              <Pressable
+                onPress={() => setTeamCompletedExpanded((v) => !v)}
+                style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12, gap: 8 }}
+                testID="team-completed-toggle"
+              >
+                <View style={{ flex: 1, height: 1, backgroundColor: "#E2E8F0" }} />
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: "#10B981", alignItems: "center", justifyContent: "center" }}>
+                    <Text style={{ color: "white", fontSize: 10, fontWeight: "bold" }}>✓</Text>
+                  </View>
+                  <Text style={{ fontSize: 13, fontWeight: "600", color: "#64748B" }}>
+                    Completed ({teamCompletedTasks.length})
+                  </Text>
+                  <Text style={{ fontSize: 12, color: "#94A3B8" }}>{teamCompletedExpanded ? "▲" : "▼"}</Text>
+                </View>
+                <View style={{ flex: 1, height: 1, backgroundColor: "#E2E8F0" }} />
+              </Pressable>
+              {teamCompletedExpanded ? teamCompletedTasks.map((item) => (
+                <TaskRow
+                  key={item.id}
+                  task={item}
+                  isReminder={false}
+                  onToggle={() => handleToggleTask(item)}
+                  onPress={() => router.push({ pathname: "/task-detail", params: { taskId: item.id, teamId: activeTeamId! } })}
+                />
+              )) : null}
+            </View>
+          ) : null}
+
+          <View style={{ height: insets.bottom + 88 }} />
+        </ScrollView>
+      </View>
 
       {/* Task completion confirmation modal */}
       {confirmCompleteTask ? (
