@@ -12,7 +12,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { ChevronLeft, ChevronRight, Plus, Calendar } from "lucide-react-native";
+import { ChevronLeft, ChevronRight, Plus, Calendar, EyeOff } from "lucide-react-native";
 import { router } from "expo-router";
 import { api } from "@/lib/api/api";
 import { useTeamStore } from "@/lib/state/team-store";
@@ -31,6 +31,7 @@ type CalendarEvent = {
   teamId: string;
   createdById: string;
   createdAt: string;
+  isHidden?: boolean;
 };
 
 type WeekBar = {
@@ -39,6 +40,7 @@ type WeekBar = {
   color: string;
   startCol: number;
   endCol: number;
+  isHidden?: boolean;
 };
 
 const DAYS_OF_WEEK = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -114,7 +116,7 @@ function computeWeekBars(week: Date[], events: CalendarEvent[]): WeekBar[][] {
     }
     if (startCol === -1) continue; // event doesn't touch this week
 
-    bars.push({ id: event.id, title: event.title, color: event.color, startCol, endCol });
+    bars.push({ id: event.id, title: event.title, color: event.color, startCol, endCol, isHidden: event.isHidden });
   }
 
   // Sort: longer spans first so they get top tracks
@@ -158,7 +160,8 @@ export default function CalendarScreen() {
 
   const isDemo = useDemoMode();
   const activeTeam = teams?.find((t) => t.id === activeTeamId);
-  const isOwner = (activeTeam as (Team & { role?: string }) | undefined)?.role === "owner";
+  const myRole = (activeTeam as (Team & { role?: string }) | undefined)?.role ?? "";
+  const isOwnerOrLeader = myRole === "owner" || myRole === "team_leader";
 
   const { data: events = [], isLoading: eventsLoading } = useQuery({
     queryKey: ["calendar-events", activeTeamId],
@@ -224,7 +227,7 @@ export default function CalendarScreen() {
               {MONTHS[currentMonth.getMonth()]} {currentMonth.getFullYear()}
             </Text>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-              {isOwner && activeTeamId && !isDemo ? (
+              {isOwnerOrLeader && activeTeamId && !isDemo ? (
                 <Pressable
                   onPress={() => router.push({ pathname: "/create-event", params: { teamId: activeTeamId!, startDate: (selectedDate ?? new Date()).toISOString() } })}
                   style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "rgba(255,255,255,0.22)", paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20 }}
@@ -338,10 +341,10 @@ export default function CalendarScreen() {
                         <Pressable
                           key={colIndex}
                           onPress={() => {
-                            if (isOwner) {
+                            if (isOwnerOrLeader) {
                               const event = events.find((e) => e.id === bar.id);
                               if (event) {
-                                router.push({ pathname: "/create-event", params: { teamId: activeTeamId!, eventId: event.id, eventTitle: event.title, eventDescription: event.description ?? "", eventColor: event.color, startDate: event.startDate, eventEndDate: event.endDate ?? event.startDate } });
+                                router.push({ pathname: "/create-event", params: { teamId: activeTeamId!, eventId: event.id, eventTitle: event.title, eventDescription: event.description ?? "", eventColor: event.color, startDate: event.startDate, eventEndDate: event.endDate ?? event.startDate, eventIsHidden: String(event.isHidden ?? false) } });
                               }
                             }
                           }}
@@ -349,6 +352,7 @@ export default function CalendarScreen() {
                             flex: 1,
                             height: 14,
                             backgroundColor: bar.color,
+                            opacity: bar.isHidden ? 0.45 : 1,
                             borderTopLeftRadius: isBarStart ? 3 : 0,
                             borderBottomLeftRadius: isBarStart ? 3 : 0,
                             borderTopRightRadius: isBarEnd ? 3 : 0,
@@ -404,6 +408,12 @@ export default function CalendarScreen() {
             <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#10B981" }} />
             <Text style={{ fontSize: 11, color: "#64748B" }}>Your tasks</Text>
           </View>
+          {isOwnerOrLeader ? (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+              <EyeOff size={10} color="#94A3B8" />
+              <Text style={{ fontSize: 11, color: "#64748B" }}>Hidden</Text>
+            </View>
+          ) : null}
         </View>
 
         {/* Selected day panel */}
@@ -413,7 +423,7 @@ export default function CalendarScreen() {
               <Text style={{ fontSize: 14, fontWeight: "700", color: "#0F172A" }}>
                 {selectedDate.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
               </Text>
-              {isOwner && !isDemo ? (
+              {isOwnerOrLeader && !isDemo ? (
                 <Pressable
                   onPress={() => router.push({ pathname: "/create-event", params: { teamId: activeTeamId!, startDate: selectedDate.toISOString() } })}
                   style={{ flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "#4361EE", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 }}
@@ -440,15 +450,18 @@ export default function CalendarScreen() {
                   <Pressable
                     key={event.id}
                     onPress={() => {
-                      if (isOwner) {
-                        router.push({ pathname: "/create-event", params: { teamId: activeTeamId!, eventId: event.id, eventTitle: event.title, eventDescription: event.description ?? "", eventColor: event.color, startDate: event.startDate, eventEndDate: event.endDate ?? event.startDate } });
+                      if (isOwnerOrLeader) {
+                        router.push({ pathname: "/create-event", params: { teamId: activeTeamId!, eventId: event.id, eventTitle: event.title, eventDescription: event.description ?? "", eventColor: event.color, startDate: event.startDate, eventEndDate: event.endDate ?? event.startDate, eventIsHidden: String(event.isHidden ?? false) } });
                       }
                     }}
                     style={{ backgroundColor: "white", borderRadius: 14, padding: 14, borderLeftWidth: 4, borderLeftColor: event.color, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 4, shadowOffset: { width: 0, height: 1 }, elevation: 1 }}
                     testID={`event-item-${event.id}`}
                   >
                     <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                      <Text style={{ fontSize: 14, fontWeight: "700", color: "#0F172A", flex: 1 }} numberOfLines={1}>{event.title}</Text>
+                      <View style={{ flexDirection: "row", alignItems: "center", flex: 1 }}>
+                        <Text style={{ fontSize: 14, fontWeight: "700", color: "#0F172A", flex: 1 }} numberOfLines={1}>{event.title}</Text>
+                        {event.isHidden ? <EyeOff size={13} color="#94A3B8" style={{ marginLeft: 4 }} /> : null}
+                      </View>
                       <View style={{ backgroundColor: event.color + "20", paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 }}>
                         <Text style={{ fontSize: 10, fontWeight: "600", color: event.color }}>
                           {event.endDate && !isSameDay(new Date(event.startDate), new Date(event.endDate))
@@ -460,7 +473,7 @@ export default function CalendarScreen() {
                     {event.description ? (
                       <Text style={{ fontSize: 12, color: "#64748B", marginTop: 4 }} numberOfLines={2}>{event.description}</Text>
                     ) : null}
-                    {isOwner ? <Text style={{ fontSize: 11, color: "#CBD5E1", marginTop: 6 }}>Tap to edit</Text> : null}
+                    {isOwnerOrLeader ? <Text style={{ fontSize: 11, color: "#CBD5E1", marginTop: 6 }}>Tap to edit</Text> : null}
                   </Pressable>
                 ))}
 

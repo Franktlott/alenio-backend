@@ -309,6 +309,7 @@ model CalendarEvent {
   endDate     DateTime?
   allDay      Boolean   @default(true)
   color       String    @default("#4361EE")
+  isHidden    Boolean   @default(false)
   teamId      String
   createdById String
   createdAt   DateTime  @default(now())

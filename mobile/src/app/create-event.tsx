@@ -7,12 +7,13 @@ import {
   ActivityIndicator,
   Modal,
   Platform,
+  Switch,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { X, Calendar, Trash2 } from "lucide-react-native";
+import { X, Calendar, Trash2, EyeOff } from "lucide-react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api/api";
@@ -28,6 +29,7 @@ type CalendarEvent = {
   teamId: string;
   createdById: string;
   createdAt: string;
+  isHidden?: boolean;
 };
 
 const EVENT_COLORS = ["#4361EE", "#7C3AED", "#10B981", "#F59E0B", "#EF4444", "#EC4899"];
@@ -41,6 +43,7 @@ export default function CreateEventScreen() {
     eventDescription: initialDescription,
     eventColor: initialColor,
     eventEndDate,
+    eventIsHidden,
   } = useLocalSearchParams<{
     teamId: string;
     startDate?: string;
@@ -49,6 +52,7 @@ export default function CreateEventScreen() {
     eventDescription?: string;
     eventColor?: string;
     eventEndDate?: string;
+    eventIsHidden?: string;
   }>();
 
   const queryClient = useQueryClient();
@@ -66,6 +70,7 @@ export default function CreateEventScreen() {
   const [eventStart, setEventStart] = useState<Date>(defaultStart);
   const [eventEnd, setEventEnd] = useState<Date>(defaultEnd);
   const [eventColor, setEventColor] = useState(initialColor ?? "#4361EE");
+  const [isHidden, setIsHidden] = useState(eventIsHidden === "true");
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -105,6 +110,7 @@ export default function CreateEventScreen() {
       endDate: end.toISOString(),
       color: eventColor,
       allDay: true,
+      isHidden: isHidden,
     };
     if (isEditing && eventId) {
       updateMutation.mutate({ id: eventId, data: payload });
@@ -299,6 +305,24 @@ export default function CreateEventScreen() {
             ) : null}
           </>
         )}
+
+        {/* Hidden toggle */}
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: "white", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 14, borderWidth: 1.5, borderColor: isHidden ? "#94A3B8" : "#E2E8F0" }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+            <EyeOff size={18} color={isHidden ? "#64748B" : "#CBD5E1"} />
+            <View>
+              <Text style={{ fontSize: 14, fontWeight: "600", color: "#0F172A" }}>Hidden from team</Text>
+              <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 1 }}>Only visible to owners & leaders</Text>
+            </View>
+          </View>
+          <Switch
+            value={isHidden}
+            onValueChange={setIsHidden}
+            trackColor={{ false: "#E2E8F0", true: "#64748B" }}
+            thumbColor="white"
+            testID="hidden-toggle"
+          />
+        </View>
 
         {/* Color picker */}
         <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748B", marginBottom: 10 }}>Color</Text>

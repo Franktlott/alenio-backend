@@ -27,8 +27,9 @@ calendarRouter.get("/:teamId/events", async (c) => {
     return c.json({ error: { message: "Team not found or not a member", code: "NOT_FOUND" } }, 404);
   }
 
+  const isPrivileged = ["owner", "team_leader"].includes(membership.role);
   const events = await prisma.calendarEvent.findMany({
-    where: { teamId },
+    where: { teamId, ...(isPrivileged ? {} : { isHidden: false }) },
     orderBy: { startDate: "asc" },
     include: {
       createdBy: { select: { id: true, name: true, image: true } },
@@ -45,9 +46,8 @@ const createEventSchema = z.object({
   endDate: z.string().optional(),
   allDay: z.boolean().optional(),
   color: z.string().optional(),
+  isHidden: z.boolean().optional(),
 });
-
-// POST /api/teams/:teamId/events — owner only
 calendarRouter.post(
   "/:teamId/events",
   zValidator("json", createEventSchema),
@@ -71,6 +71,7 @@ calendarRouter.post(
         endDate: body.endDate ? new Date(body.endDate) : null,
         allDay: body.allDay ?? true,
         color: body.color ?? "#4361EE",
+        isHidden: body.isHidden ?? false,
         teamId,
         createdById: user.id,
       },
@@ -97,6 +98,7 @@ const updateEventSchema = z.object({
   endDate: z.string().nullable().optional(),
   allDay: z.boolean().optional(),
   color: z.string().optional(),
+  isHidden: z.boolean().optional(),
 });
 
 // PATCH /api/teams/:teamId/events/:eventId — owner only
@@ -131,6 +133,7 @@ calendarRouter.patch(
         ...(body.endDate !== undefined ? { endDate: body.endDate ? new Date(body.endDate) : null } : {}),
         ...(body.allDay !== undefined ? { allDay: body.allDay } : {}),
         ...(body.color !== undefined ? { color: body.color } : {}),
+        ...(body.isHidden !== undefined ? { isHidden: body.isHidden } : {}),
       },
       include: {
         createdBy: { select: { id: true, name: true, image: true } },
