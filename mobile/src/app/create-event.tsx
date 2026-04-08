@@ -14,7 +14,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { X, Calendar, Trash2, UserRound, Video, Clock, Bell } from "lucide-react-native";
+import { X, Calendar, Trash2, UserRound, Video, Clock } from "lucide-react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api/api";
@@ -36,16 +36,6 @@ type CalendarEvent = {
 };
 
 const EVENT_COLORS = ["#4361EE", "#7C3AED", "#10B981", "#F59E0B", "#EF4444", "#EC4899"];
-
-const REMINDER_OPTIONS = [
-  { label: "At time of event", value: 0 },
-  { label: "5 minutes before", value: 5 },
-  { label: "15 minutes before", value: 15 },
-  { label: "30 minutes before", value: 30 },
-  { label: "1 hour before", value: 60 },
-  { label: "2 hours before", value: 120 },
-  { label: "1 day before", value: 1440 },
-];
 
 export default function CreateEventScreen() {
   const {
@@ -80,8 +70,6 @@ export default function CreateEventScreen() {
   const [eventColor, setEventColor] = useState(initialColor ?? "#4361EE");
   const [isHidden, setIsHidden] = useState(eventIsHidden === "true");
   const [isVideoMeeting, setIsVideoMeeting] = useState(eventIsVideoMeeting === "true");
-  const [reminderMinutes, setReminderMinutes] = useState<number[]>([15]);
-  const [showReminderPicker, setShowReminderPicker] = useState(false);
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
   const [showStartTimePicker, setShowStartTimePicker] = useState(false);
@@ -139,7 +127,7 @@ export default function CreateEventScreen() {
       allDay: !isVideoMeeting,
       isHidden: isHidden,
       isVideoMeeting: isVideoMeeting,
-      reminderMinutes: isVideoMeeting ? reminderMinutes : [],
+      reminderMinutes: isVideoMeeting ? [0, 5, 15] : [],
     };
     if (isEditing && eventId) {
       updateMutation.mutate({ id: eventId, data: payload });
@@ -464,76 +452,8 @@ export default function CreateEventScreen() {
               </View>
             </View>
 
-            {/* Notify Team reminder */}
-            <Pressable
-            onPress={() => setShowReminderPicker(true)}
-            style={{ flexDirection: "row", alignItems: "center", backgroundColor: "white", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 14, borderWidth: 1.5, borderColor: "#4361EE", gap: 10 }}
-            testID="reminder-picker-button"
-          >
-            <Bell size={18} color="#4361EE" />
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 14, fontWeight: "600", color: "#0F172A" }}>Notify Team</Text>
-              <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 1 }}>
-                {reminderMinutes.length === 0
-                  ? "No reminders"
-                  : reminderMinutes
-                      .sort((a, b) => b - a)
-                      .map((m) => REMINDER_OPTIONS.find((r) => r.value === m)?.label ?? `${m} min`)
-                      .join(", ")}
-              </Text>
-            </View>
-            <Text style={{ fontSize: 12, color: "#94A3B8" }}>Edit</Text>
-          </Pressable>
           </>
         ) : null}
-
-        {/* Reminder picker modal */}
-        <Modal visible={showReminderPicker} transparent animationType="slide">
-          <View style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.4)" }}>
-            <View style={{ backgroundColor: "white", borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 32 }}>
-              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingTop: 16, paddingBottom: 12 }}>
-                <Pressable onPress={() => setShowReminderPicker(false)}>
-                  <Text style={{ color: "#64748B", fontSize: 15 }}>Cancel</Text>
-                </Pressable>
-                <Text style={{ fontSize: 16, fontWeight: "700", color: "#0F172A" }}>Notify Team</Text>
-                <Pressable onPress={() => setShowReminderPicker(false)}>
-                  <Text style={{ color: "#4361EE", fontWeight: "700", fontSize: 15 }}>Done</Text>
-                </Pressable>
-              </View>
-              <Text style={{ fontSize: 12, color: "#94A3B8", paddingHorizontal: 20, marginBottom: 8 }}>
-                Select when to notify your team before the meeting
-              </Text>
-              {REMINDER_OPTIONS.map((opt) => {
-                const selected = reminderMinutes.includes(opt.value);
-                return (
-                  <Pressable
-                    key={opt.value}
-                    onPress={() => {
-                      setReminderMinutes((prev) =>
-                        prev.includes(opt.value)
-                          ? prev.filter((v) => v !== opt.value)
-                          : [...prev, opt.value]
-                      );
-                    }}
-                    style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: "#F1F5F9" }}
-                    testID={`reminder-option-${opt.value}`}
-                  >
-                    <Text style={{ fontSize: 15, color: selected ? "#4361EE" : "#0F172A", fontWeight: selected ? "600" : "400" }}>
-                      {opt.label}
-                    </Text>
-                    {selected ? (
-                      <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: "#4361EE", alignItems: "center", justifyContent: "center" }}>
-                        <Text style={{ color: "white", fontSize: 13, fontWeight: "700" }}>✓</Text>
-                      </View>
-                    ) : (
-                      <View style={{ width: 22, height: 22, borderRadius: 11, borderWidth: 1.5, borderColor: "#CBD5E1" }} />
-                    )}
-                  </Pressable>
-                );
-              })}
-            </View>
-          </View>
-        </Modal>
 
         {/* Hidden toggle */}
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: "white", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 14, borderWidth: 1.5, borderColor: isHidden ? "#94A3B8" : "#E2E8F0" }}>
