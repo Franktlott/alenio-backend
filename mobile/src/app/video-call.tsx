@@ -190,7 +190,7 @@ export default function VideoCallScreen() {
     return (
       <View style={s.screen}>
         <StatusBar barStyle="light-content" />
-        <SafeAreaView style={{ flex: 1 }}>
+        <SafeAreaView style={{ flex: 1 }} edges={["top", "bottom", "left", "right"]}>
           {/* Header */}
           <View style={s.header}>
             <TouchableOpacity onPress={goBack} style={s.headerBack} testID="back-button">
@@ -297,7 +297,7 @@ const s = StyleSheet.create({
   // Header
   header: {
     flexDirection: "row", alignItems: "center",
-    paddingHorizontal: 16, paddingVertical: 12,
+    paddingHorizontal: 16, paddingVertical: 14,
   },
   headerBack: {
     width: 40, height: 40, borderRadius: 20,
