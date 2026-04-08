@@ -53,6 +53,7 @@ const createEventSchema = z.object({
   allDay: z.boolean().optional(),
   color: z.string().optional(),
   isHidden: z.boolean().optional(),
+  isVideoMeeting: z.boolean().optional().default(false),
 });
 calendarRouter.post(
   "/:teamId/events",
@@ -78,6 +79,7 @@ calendarRouter.post(
         allDay: body.allDay ?? true,
         color: body.color ?? "#4361EE",
         isHidden: body.isHidden ?? false,
+        isVideoMeeting: body.isVideoMeeting ?? false,
         teamId,
         createdById: user.id,
       },
@@ -105,6 +107,7 @@ const updateEventSchema = z.object({
   allDay: z.boolean().optional(),
   color: z.string().optional(),
   isHidden: z.boolean().optional(),
+  isVideoMeeting: z.boolean().optional(),
 });
 
 // PATCH /api/teams/:teamId/events/:eventId — owner only
@@ -140,6 +143,7 @@ calendarRouter.patch(
         ...(body.allDay !== undefined ? { allDay: body.allDay } : {}),
         ...(body.color !== undefined ? { color: body.color } : {}),
         ...(body.isHidden !== undefined ? { isHidden: body.isHidden } : {}),
+        ...(body.isVideoMeeting !== undefined ? { isVideoMeeting: body.isVideoMeeting } : {}),
       },
       include: {
         createdBy: { select: { id: true, name: true, image: true } },

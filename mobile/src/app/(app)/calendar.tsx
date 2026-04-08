@@ -32,6 +32,7 @@ type CalendarEvent = {
   createdById: string;
   createdAt: string;
   isHidden?: boolean;
+  isVideoMeeting?: boolean;
 };
 
 type WeekBar = {
@@ -344,7 +345,7 @@ export default function CalendarScreen() {
                             if (isOwnerOrLeader) {
                               const event = events.find((e) => e.id === bar.id);
                               if (event) {
-                                router.push({ pathname: "/create-event", params: { teamId: activeTeamId!, eventId: event.id, eventTitle: event.title, eventDescription: event.description ?? "", eventColor: event.color, startDate: event.startDate, eventEndDate: event.endDate ?? event.startDate, eventIsHidden: String(event.isHidden ?? false) } });
+                                router.push({ pathname: "/create-event", params: { teamId: activeTeamId!, eventId: event.id, eventTitle: event.title, eventDescription: event.description ?? "", eventColor: event.color, startDate: event.startDate, eventEndDate: event.endDate ?? event.startDate, eventIsHidden: String(event.isHidden ?? false), eventIsVideoMeeting: String(event.isVideoMeeting ?? false) } });
                               }
                             }
                           }}
@@ -454,7 +455,7 @@ export default function CalendarScreen() {
                     key={event.id}
                     onPress={() => {
                       if (isOwnerOrLeader) {
-                        router.push({ pathname: "/create-event", params: { teamId: activeTeamId!, eventId: event.id, eventTitle: event.title, eventDescription: event.description ?? "", eventColor: event.color, startDate: event.startDate, eventEndDate: event.endDate ?? event.startDate, eventIsHidden: String(event.isHidden ?? false) } });
+                        router.push({ pathname: "/create-event", params: { teamId: activeTeamId!, eventId: event.id, eventTitle: event.title, eventDescription: event.description ?? "", eventColor: event.color, startDate: event.startDate, eventEndDate: event.endDate ?? event.startDate, eventIsHidden: String(event.isHidden ?? false), eventIsVideoMeeting: String(event.isVideoMeeting ?? false) } });
                       }
                     }}
                     style={{ backgroundColor: "white", borderRadius: 14, padding: 14, borderLeftWidth: 4, borderLeftColor: event.color, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 4, shadowOffset: { width: 0, height: 1 }, elevation: 1 }}

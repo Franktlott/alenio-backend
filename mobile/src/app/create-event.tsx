@@ -13,7 +13,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { X, Calendar, Trash2, UserRound } from "lucide-react-native";
+import { X, Calendar, Trash2, UserRound, Video, Clock } from "lucide-react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api/api";
@@ -30,20 +30,15 @@ type CalendarEvent = {
   createdById: string;
   createdAt: string;
   isHidden?: boolean;
+  isVideoMeeting?: boolean;
 };
 
 const EVENT_COLORS = ["#4361EE", "#7C3AED", "#10B981", "#F59E0B", "#EF4444", "#EC4899"];
 
 export default function CreateEventScreen() {
   const {
-    teamId,
-    startDate,
-    eventId,
-    eventTitle: initialTitle,
-    eventDescription: initialDescription,
-    eventColor: initialColor,
-    eventEndDate,
-    eventIsHidden,
+    teamId, startDate, eventId, eventTitle: initialTitle, eventDescription: initialDescription,
+    eventColor: initialColor, eventEndDate, eventIsHidden, eventIsVideoMeeting,
   } = useLocalSearchParams<{
     teamId: string;
     startDate?: string;
@@ -53,6 +48,7 @@ export default function CreateEventScreen() {
     eventColor?: string;
     eventEndDate?: string;
     eventIsHidden?: string;
+    eventIsVideoMeeting?: string;
   }>();
 
   const queryClient = useQueryClient();
@@ -71,8 +67,11 @@ export default function CreateEventScreen() {
   const [eventEnd, setEventEnd] = useState<Date>(defaultEnd);
   const [eventColor, setEventColor] = useState(initialColor ?? "#4361EE");
   const [isHidden, setIsHidden] = useState(eventIsHidden === "true");
+  const [isVideoMeeting, setIsVideoMeeting] = useState(eventIsVideoMeeting === "true");
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
+  const [showStartTimePicker, setShowStartTimePicker] = useState(false);
+  const [showEndTimePicker, setShowEndTimePicker] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
   const onSuccess = () => {
@@ -109,8 +108,9 @@ export default function CreateEventScreen() {
       startDate: eventStart.toISOString(),
       endDate: end.toISOString(),
       color: eventColor,
-      allDay: true,
+      allDay: !isVideoMeeting,
       isHidden: isHidden,
+      isVideoMeeting: isVideoMeeting,
     };
     if (isEditing && eventId) {
       updateMutation.mutate({ id: eventId, data: payload });
@@ -215,6 +215,38 @@ export default function CreateEventScreen() {
           </View>
         </View>
 
+        {/* Time pickers (video meetings only) */}
+        {isVideoMeeting ? (
+          <View style={{ flexDirection: "row", gap: 10, marginBottom: 14 }}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748B", marginBottom: 6 }}>Start Time</Text>
+              <Pressable
+                onPress={() => setShowStartTimePicker(true)}
+                style={{ borderWidth: 1.5, borderColor: "#4361EE", borderRadius: 12, paddingHorizontal: 10, paddingVertical: 10, flexDirection: "row", alignItems: "center", backgroundColor: "#4361EE0D" }}
+                testID="event-start-time-button"
+              >
+                <Clock size={13} color="#4361EE" style={{ marginRight: 6 }} />
+                <Text style={{ fontSize: 12, fontWeight: "500", color: "#4361EE" }}>
+                  {eventStart.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}
+                </Text>
+              </Pressable>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748B", marginBottom: 6 }}>End Time</Text>
+              <Pressable
+                onPress={() => setShowEndTimePicker(true)}
+                style={{ borderWidth: 1.5, borderColor: "#7C3AED", borderRadius: 12, paddingHorizontal: 10, paddingVertical: 10, flexDirection: "row", alignItems: "center", backgroundColor: "#7C3AED0D" }}
+                testID="event-end-time-button"
+              >
+                <Clock size={13} color="#7C3AED" style={{ marginRight: 6 }} />
+                <Text style={{ fontSize: 12, fontWeight: "500", color: "#7C3AED" }}>
+                  {eventEnd.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
+
         {/* iOS date pickers */}
         {Platform.OS === "ios" ? (
           <>
@@ -272,6 +304,53 @@ export default function CreateEventScreen() {
                 </View>
               </View>
             </Modal>
+            {/* iOS time pickers for video meetings */}
+            <Modal visible={showStartTimePicker} transparent animationType="slide">
+              <View style={{ flex: 1, justifyContent: "flex-end" }}>
+                <View style={{ backgroundColor: "white", borderTopLeftRadius: 24, borderTopRightRadius: 24 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 }}>
+                    <Pressable onPress={() => setShowStartTimePicker(false)}>
+                      <Text style={{ color: "#64748B", fontSize: 15 }}>Cancel</Text>
+                    </Pressable>
+                    <Text style={{ fontSize: 15, fontWeight: "600", color: "#0F172A" }}>Start Time</Text>
+                    <Pressable onPress={() => setShowStartTimePicker(false)}>
+                      <Text style={{ color: "#4361EE", fontWeight: "600", fontSize: 15 }}>Done</Text>
+                    </Pressable>
+                  </View>
+                  <DateTimePicker
+                    value={eventStart}
+                    mode="time"
+                    display="spinner"
+                    onChange={(_e, d) => { if (d) setEventStart(prev => { const n = new Date(prev); n.setHours(d.getHours(), d.getMinutes()); return n; }); }}
+                    testID="start-time-picker"
+                  />
+                  <View style={{ height: 20 }} />
+                </View>
+              </View>
+            </Modal>
+            <Modal visible={showEndTimePicker} transparent animationType="slide">
+              <View style={{ flex: 1, justifyContent: "flex-end" }}>
+                <View style={{ backgroundColor: "white", borderTopLeftRadius: 24, borderTopRightRadius: 24 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 }}>
+                    <Pressable onPress={() => setShowEndTimePicker(false)}>
+                      <Text style={{ color: "#64748B", fontSize: 15 }}>Cancel</Text>
+                    </Pressable>
+                    <Text style={{ fontSize: 15, fontWeight: "600", color: "#0F172A" }}>End Time</Text>
+                    <Pressable onPress={() => setShowEndTimePicker(false)}>
+                      <Text style={{ color: "#7C3AED", fontWeight: "600", fontSize: 15 }}>Done</Text>
+                    </Pressable>
+                  </View>
+                  <DateTimePicker
+                    value={eventEnd}
+                    mode="time"
+                    display="spinner"
+                    onChange={(_e, d) => { if (d) setEventEnd(prev => { const n = new Date(prev); n.setHours(d.getHours(), d.getMinutes()); return n; }); }}
+                    testID="end-time-picker"
+                  />
+                  <View style={{ height: 20 }} />
+                </View>
+              </View>
+            </Modal>
           </>
         ) : (
           <>
@@ -303,8 +382,50 @@ export default function CreateEventScreen() {
                 testID="end-date-picker"
               />
             ) : null}
+            {isVideoMeeting && showStartTimePicker ? (
+              <DateTimePicker
+                value={eventStart}
+                mode="time"
+                display="clock"
+                onChange={(_e, d) => {
+                  setShowStartTimePicker(false);
+                  if (d) setEventStart(prev => { const n = new Date(prev); n.setHours(d.getHours(), d.getMinutes()); return n; });
+                }}
+                testID="start-time-picker"
+              />
+            ) : null}
+            {isVideoMeeting && showEndTimePicker ? (
+              <DateTimePicker
+                value={eventEnd}
+                mode="time"
+                display="clock"
+                onChange={(_e, d) => {
+                  setShowEndTimePicker(false);
+                  if (d) setEventEnd(prev => { const n = new Date(prev); n.setHours(d.getHours(), d.getMinutes()); return n; });
+                }}
+                testID="end-time-picker"
+              />
+            ) : null}
           </>
         )}
+
+        {/* Video Meeting toggle */}
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: "white", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 14, borderWidth: 1.5, borderColor: isVideoMeeting ? "#4361EE" : "#E2E8F0" }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+            <Video size={18} color={isVideoMeeting ? "#4361EE" : "#CBD5E1"} />
+            <View>
+              <Text style={{ fontSize: 14, fontWeight: "600", color: "#0F172A" }}>Video Meeting</Text>
+              <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 1 }}>Includes a video call link</Text>
+            </View>
+          </View>
+          <Switch
+            value={isVideoMeeting}
+            onValueChange={setIsVideoMeeting}
+            trackColor={{ false: "#E2E8F0", true: "#4361EE" }}
+            thumbColor="white"
+            testID="video-meeting-toggle"
+          />
+        </View>
 
         {/* Hidden toggle */}
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: "white", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 14, borderWidth: 1.5, borderColor: isHidden ? "#94A3B8" : "#E2E8F0" }}>

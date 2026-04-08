@@ -310,6 +310,7 @@ model CalendarEvent {
   allDay      Boolean   @default(true)
   color       String    @default("#4361EE")
   isHidden    Boolean   @default(false)
+  isVideoMeeting Boolean @default(false)
   teamId      String
   createdById String
   createdAt   DateTime  @default(now())

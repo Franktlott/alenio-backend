@@ -144,6 +144,7 @@ export interface CalendarEvent {
   createdAt: string;
   createdBy?: { id: string; name: string; image?: string | null };
   isHidden?: boolean;
+  isVideoMeeting?: boolean;
 }
 
 export interface Reminder {

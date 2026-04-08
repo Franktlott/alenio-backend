@@ -2,8 +2,16 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { env } from "../env";
+import { prisma } from "../prisma";
+import { auth } from "../auth";
+import { authGuard } from "../middleware/auth-guard";
 
-const videoRouter = new Hono();
+type Variables = {
+  user: typeof auth.$Infer.Session.user | null;
+  session: typeof auth.$Infer.Session.session | null;
+};
+
+const videoRouter = new Hono<{ Variables: Variables }>();
 
 function sanitizeRoomName(id: string): string {
   return `room-${id}`.replace(/[^a-zA-Z0-9-]/g, "-").slice(0, 40);
@@ -84,5 +92,46 @@ videoRouter.post(
     return c.json({ data: { url: roomUrl, token: tokenData.token } });
   }
 );
+
+// GET /api/video/upcoming — returns video meetings starting within 60 min (for banner)
+videoRouter.get("/upcoming", authGuard, async (c) => {
+  const user = c.get("user")!;
+
+  const now = new Date();
+  const windowEnd = new Date(now.getTime() + 60 * 60 * 1000); // 60 min from now
+  const windowStart = new Date(now.getTime() - 30 * 60 * 1000); // allow 30 min past start
+
+  // Get all teams the user is in
+  const memberships = await prisma.teamMember.findMany({
+    where: { userId: user.id },
+    include: { team: { select: { id: true, name: true } } },
+  });
+
+  if (memberships.length === 0) return c.json({ data: [] });
+
+  const teamIds = memberships.map(m => m.teamId);
+
+  // Get upcoming video meetings across all teams
+  const events = await prisma.calendarEvent.findMany({
+    where: {
+      teamId: { in: teamIds },
+      isVideoMeeting: true,
+      startDate: { gte: windowStart, lte: windowEnd },
+    },
+    include: { createdBy: { select: { id: true, name: true, image: true } } },
+    orderBy: { startDate: "asc" },
+  });
+
+  const result = events.map(event => {
+    const membership = memberships.find(m => m.teamId === event.teamId);
+    return {
+      event,
+      teamName: membership?.team.name ?? "",
+      userRole: membership?.role ?? "member",
+    };
+  });
+
+  return c.json({ data: result });
+});
 
 export { videoRouter };

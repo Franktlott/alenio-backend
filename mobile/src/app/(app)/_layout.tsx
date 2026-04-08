@@ -11,6 +11,7 @@ import { useSubscriptionStore } from "@/lib/state/subscription-store";
 import { useTaskStore } from "@/lib/state/task-store";
 import { useEffect, useMemo } from "react";
 import type { Conversation, Team } from "@/lib/types";
+import MeetingBanner from "@/components/MeetingBanner";
 
 const DEMO_EMAIL = "demo@alenio.app";
 
@@ -219,6 +220,7 @@ export default function AppLayout() {
         <Tabs.Screen name="calendar" options={{ href: null }} />
         <Tabs.Screen name="profile" options={{ title: "Profile" }} />
       </Tabs>
+      <MeetingBanner />
     </>
   );
 }
