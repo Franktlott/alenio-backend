@@ -7,7 +7,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import WebView from "react-native-webview";
 import { useLocalSearchParams, router, useNavigation } from "expo-router";
-import { ChevronLeft, Video, PhoneOff, Share2 } from "lucide-react-native";
+import { ChevronLeft, Video, PhoneOff, Share2, Monitor } from "lucide-react-native";
 import { useSession } from "@/lib/auth/use-session";
 import { useCameraPermissions, useMicrophonePermissions } from "expo-camera";
 
@@ -202,6 +202,14 @@ export default function VideoCallScreen() {
                 <Text style={s.shareBtnText}>Share link</Text>
               </TouchableOpacity>
             )}
+            {!!shareUrl && (
+              <View style={s.screenShareHint}>
+                <Monitor size={14} color="rgba(255,255,255,0.4)" style={{ marginRight: 6 }} />
+                <Text style={s.screenShareHintText}>
+                  Need to share your screen? Join from a computer using the link above
+                </Text>
+              </View>
+            )}
           </View>
         </View>
       </View>
@@ -332,4 +340,19 @@ const s = StyleSheet.create({
     borderWidth: 1, borderColor: "rgba(255,255,255,0.15)",
   },
   shareBtnText: { color: "rgba(255,255,255,0.7)", fontSize: 15, fontWeight: "600" },
+
+  // Screen share hint
+  screenShareHint: {
+    marginTop: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 12,
+  },
+  screenShareHintText: {
+    color: "rgba(255,255,255,0.4)",
+    fontSize: 12,
+    textAlign: "center",
+    lineHeight: 18,
+  },
 });
