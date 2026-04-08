@@ -10,6 +10,7 @@ import { useLocalSearchParams, router, useNavigation } from "expo-router";
 import { ChevronLeft, Video, PhoneOff, Share2, Monitor, Mail, X, Check } from "lucide-react-native";
 import { useSession } from "@/lib/auth/use-session";
 import { useCameraPermissions, useMicrophonePermissions } from "expo-camera";
+import { api } from "@/lib/api/api";
 
 const alenioLogo = require("@/assets/alenio-logo-white.png");
 
@@ -106,30 +107,20 @@ export default function VideoCallScreen() {
     setInviteSending(true);
     setInviteError(null);
     try {
-      const res = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/api/video/invite`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          to: inviteEmail.trim(),
-          roomUrl: shareUrl,
-          roomName: roomName ?? "Video Call",
-          senderName: userName,
-        }),
+      await api.post("/api/video/invite", {
+        to: inviteEmail.trim(),
+        roomUrl: shareUrl,
+        roomName: roomName ?? "Video Call",
+        senderName: userName,
       });
-      const json = await res.json();
-      if (!res.ok) {
-        setInviteError(json.error?.message ?? "Failed to send invite.");
-      } else {
-        setInviteSent(true);
-        setTimeout(() => {
-          setShowEmailModal(false);
-          setInviteSent(false);
-          setInviteEmail("");
-        }, 2000);
-      }
-    } catch {
-      setInviteError("Could not send invite. Try again.");
+      setInviteSent(true);
+      setTimeout(() => {
+        setShowEmailModal(false);
+        setInviteSent(false);
+        setInviteEmail("");
+      }, 2000);
+    } catch (err: any) {
+      setInviteError(err?.message ?? "Could not send invite. Try again.");
     } finally {
       setInviteSending(false);
     }
