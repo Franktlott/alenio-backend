@@ -224,6 +224,8 @@ export default function TeamChatScreen() {
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const [emojiTarget, setEmojiTarget] = useState<Message | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Message | null>(null);
+  const [editTarget, setEditTarget] = useState<Message | null>(null);
+  const [editInput, setEditInput] = useState("");
   const [reactionView, setReactionView] = useState<MessageReaction[] | null>(null);
   const [mediaPreview, setMediaPreview] = useState<{ uri: string; mimeType: string; filename: string } | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -291,6 +293,21 @@ export default function TeamChatScreen() {
       setDeleteTarget(null);
     },
   });
+
+  const editMutation = useMutation({
+    mutationFn: ({ messageId, content }: { messageId: string; content: string }) =>
+      api.patch(`/api/teams/${teamId}/messages/${messageId}`, { content }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["messages", teamId, topicKey] });
+      setEditTarget(null);
+      setEditInput("");
+    },
+  });
+
+  const canEdit = (msg: Message) => {
+    if (msg.senderId !== currentUserId) return false;
+    return Date.now() - new Date(msg.createdAt).getTime() < 15 * 60 * 1000;
+  };
 
   const voteMutation = useMutation({
     mutationFn: ({ pollId, optionId }: { pollId: string; optionId: string }) =>
@@ -581,6 +598,19 @@ export default function TeamChatScreen() {
             >
               <Text className="text-indigo-600 font-semibold text-sm">↩ Reply</Text>
             </TouchableOpacity>
+            {emojiTarget && canEdit(emojiTarget) ? (
+              <TouchableOpacity
+                onPress={() => {
+                  const target = emojiTarget;
+                  setEmojiTarget(null);
+                  setEditInput(target.content ?? "");
+                  setEditTarget(target);
+                }}
+                className="flex-row items-center justify-center py-2 border-t border-slate-100 dark:border-slate-700"
+              >
+                <Text className="text-slate-700 font-semibold text-sm">✏️ Edit message</Text>
+              </TouchableOpacity>
+            ) : null}
             {emojiTarget && canDelete(emojiTarget) ? (
               <TouchableOpacity
                 onPress={() => {
@@ -639,6 +669,71 @@ export default function TeamChatScreen() {
             </View>
           </TouchableOpacity>
         </TouchableOpacity>
+      </Modal>
+
+      {/* Edit message modal */}
+      <Modal
+        visible={!!editTarget}
+        transparent
+        animationType="fade"
+        onRequestClose={() => { setEditTarget(null); setEditInput(""); }}
+      >
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
+          <TouchableOpacity
+            className="flex-1 bg-black/40 items-center justify-center px-8"
+            activeOpacity={1}
+            onPress={() => { setEditTarget(null); setEditInput(""); }}
+          >
+            <TouchableOpacity activeOpacity={1} className="w-full bg-white dark:bg-slate-800 rounded-2xl overflow-hidden">
+              <View className="px-5 pt-5 pb-4">
+                <Text className="text-base font-bold text-slate-900 mb-3">Edit message</Text>
+                <TextInput
+                  testID="edit-message-input"
+                  value={editInput}
+                  onChangeText={setEditInput}
+                  multiline
+                  autoFocus
+                  style={{
+                    backgroundColor: "#F8FAFC",
+                    borderWidth: 1,
+                    borderColor: "#E2E8F0",
+                    borderRadius: 12,
+                    paddingHorizontal: 14,
+                    paddingVertical: 10,
+                    fontSize: 15,
+                    color: "#1E293B",
+                    minHeight: 80,
+                    maxHeight: 160,
+                  }}
+                />
+              </View>
+              <View className="flex-row border-t border-slate-100">
+                <TouchableOpacity
+                  onPress={() => { setEditTarget(null); setEditInput(""); }}
+                  className="flex-1 py-3.5 items-center border-r border-slate-100"
+                >
+                  <Text className="text-base font-medium text-slate-600">Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  testID="confirm-edit-button"
+                  onPress={() => {
+                    if (editTarget && editInput.trim()) {
+                      editMutation.mutate({ messageId: editTarget.id, content: editInput.trim() });
+                    }
+                  }}
+                  disabled={editMutation.isPending || !editInput.trim()}
+                  className="flex-1 py-3.5 items-center"
+                >
+                  {editMutation.isPending ? (
+                    <ActivityIndicator size="small" color="#4361EE" />
+                  ) : (
+                    <Text className="text-base font-semibold text-indigo-600">Save</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Delete poll confirmation modal */}
@@ -966,6 +1061,7 @@ export default function TeamChatScreen() {
                   senderInitial={msg.sender.name?.[0]?.toUpperCase() ?? "?"}
                   senderImage={msg.sender.image}
                   createdAt={msg.createdAt}
+                  editedAt={msg.editedAt}
                   isOwn={msg.senderId === currentUserId}
                   currentUserId={currentUserId}
                   onLongPress={() => handleLongPress(msg)}

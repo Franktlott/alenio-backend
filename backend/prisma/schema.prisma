@@ -211,6 +211,7 @@ model Message {
   topicId          String?
   topic            Topic?   @relation(fields: [topicId], references: [id], onDelete: SetNull)
   mentionedUserIds String   @default("[]")
+  editedAt         DateTime?
 }
 
 model MessageReaction {

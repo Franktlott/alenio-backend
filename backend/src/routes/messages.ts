@@ -167,6 +167,41 @@ messagesRouter.post("/:messageId/reactions", async (c) => {
   return c.json({ data: message });
 });
 
+// PATCH /api/teams/:teamId/messages/:messageId - edit own message within 15 minutes
+messagesRouter.patch("/:messageId", async (c) => {
+  const user = c.get("user")!;
+  const teamId = c.req.param("teamId") as string;
+  const { messageId } = c.req.param();
+
+  const membership = await getMembership(user.id, teamId);
+  if (!membership) return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
+
+  const message = await prisma.message.findFirst({ where: { id: messageId, teamId } });
+  if (!message) return c.json({ error: { message: "Message not found", code: "NOT_FOUND" } }, 404);
+  if (message.senderId !== user.id) return c.json({ error: { message: "Forbidden", code: "FORBIDDEN" } }, 403);
+
+  const ageMs = Date.now() - new Date(message.createdAt).getTime();
+  if (ageMs > 15 * 60 * 1000) {
+    return c.json({ error: { message: "Edit window expired", code: "EDIT_EXPIRED" } }, 400);
+  }
+
+  const body = await c.req.json();
+  const content = body.content?.trim();
+  if (!content) return c.json({ error: { message: "Content is required", code: "VALIDATION_ERROR" } }, 400);
+
+  const updated = await prisma.message.update({
+    where: { id: messageId },
+    data: { content, editedAt: new Date() },
+    include: {
+      sender: { select: { id: true, name: true, email: true, image: true } },
+      reactions: { include: { user: { select: { id: true, name: true } } } },
+      replyTo: { include: { sender: { select: { id: true, name: true } } } },
+    },
+  });
+
+  return c.json({ data: updated });
+});
+
 // DELETE /api/teams/:teamId/messages/:messageId - delete own message or admin/owner
 messagesRouter.delete("/:messageId", async (c) => {
   const user = c.get("user")!;

@@ -25,6 +25,7 @@ interface ChatMessageProps {
   senderInitial: string;
   senderImage?: string | null;
   createdAt: string;
+  editedAt?: string | null;
   isOwn: boolean;
   currentUserId: string;
   onLongPress: () => void;
@@ -48,7 +49,7 @@ export function formatTime(dateStr: string) {
 
 export function ChatMessage({
   content, mediaUrl, mediaType, replyTo, reactions, senderName, senderInitial,
-  senderImage, createdAt, isOwn, currentUserId, onLongPress, onReactionTap,
+  senderImage, createdAt, editedAt, isOwn, currentUserId, onLongPress, onReactionTap,
 }: ChatMessageProps) {
   const grouped = groupReactions(reactions);
   const hasReactions = grouped.length > 0;
@@ -164,7 +165,10 @@ export function ChatMessage({
             </View>
 
             {/* Timestamp */}
-            <Text className="text-xs text-slate-400 mt-1 mx-1">{formatTime(createdAt)}</Text>
+            <View className={`flex-row items-center mt-1 mx-1 gap-1 ${isOwn ? "justify-end" : "justify-start"}`}>
+              <Text className="text-xs text-slate-400">{formatTime(createdAt)}</Text>
+              {editedAt ? <Text className="text-xs text-slate-400">· edited</Text> : null}
+            </View>
 
             {/* Reactions */}
             {hasReactions ? (

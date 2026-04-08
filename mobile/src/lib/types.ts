@@ -85,6 +85,7 @@ export interface Message {
   replyTo?: { id: string; content?: string | null; sender: { id: string; name: string } } | null;
   reactions: MessageReaction[];
   createdAt: string;
+  editedAt?: string | null;
   teamId: string;
   senderId: string;
   sender: User;
