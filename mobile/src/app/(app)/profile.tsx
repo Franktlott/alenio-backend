@@ -44,7 +44,7 @@ const TONES = [
   { id: "tritone",    label: "Tri-tone",   url: "https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3" },
   { id: "chime",      label: "Chime",      url: "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" },
   { id: "glass",      label: "Glass",      url: "https://assets.mixkit.co/active_storage/sfx/2308/2308-preview.mp3" },
-  { id: "bamboo",     label: "Bamboo",     url: "https://assets.mixkit.co/active_storage/sfx/2356/2356-preview.mp3" },
+  { id: "aurora",    label: "Aurora",    url: "https://assets.mixkit.co/active_storage/sfx/2013/2013-preview.mp3" },
   { id: "chord",      label: "Chord",      url: "https://assets.mixkit.co/active_storage/sfx/2017/2017-preview.mp3" },
   { id: "circles",    label: "Circles",    url: "https://assets.mixkit.co/active_storage/sfx/2572/2572-preview.mp3" },
   { id: "complete",   label: "Complete",   url: "https://assets.mixkit.co/active_storage/sfx/2018/2018-preview.mp3" },
