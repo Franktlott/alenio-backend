@@ -9,6 +9,7 @@ import WebView, { WebViewNavigation } from "react-native-webview";
 import { useLocalSearchParams, router, useNavigation } from "expo-router";
 import { ChevronLeft, VideoOff, Video, Mic, MicOff, Volume2, VolumeX, Users, PhoneOff, MoreHorizontal } from "lucide-react-native";
 import { useSession } from "@/lib/auth/use-session";
+import { useCameraPermissions, useMicrophonePermissions } from "expo-camera";
 
 const alenioLogo = require("@/assets/alenio-logo-white.png");
 
@@ -132,6 +133,18 @@ export default function VideoCallScreen() {
   const { data: session } = useSession();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
+
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+  const [micPermission, requestMicPermission] = useMicrophonePermissions();
+
+  // Request camera + mic permissions immediately on mount
+  useEffect(() => {
+    async function requestPermissions() {
+      if (!cameraPermission?.granted) await requestCameraPermission();
+      if (!micPermission?.granted) await requestMicPermission();
+    }
+    requestPermissions();
+  }, []);
 
   useEffect(() => {
     navigation.setOptions({ headerShown: false });
