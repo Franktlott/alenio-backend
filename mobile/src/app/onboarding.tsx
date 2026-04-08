@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
 import { ArrowLeft, Clock } from "lucide-react-native";
 import { api } from "@/lib/api/api";
@@ -40,6 +40,16 @@ export default function OnboardingScreen() {
 
   const queryClient = useQueryClient();
   const setActiveTeamId = useTeamStore((s) => s.setActiveTeamId);
+
+  const { data: existingTeams = [] } = useQuery({
+    queryKey: ["teams"],
+    queryFn: () => api.get<any[]>("/api/teams"),
+  });
+  const alreadyOwnsTeam = existingTeams.some((t: any) => t.role === "owner");
+
+  useEffect(() => {
+    if (alreadyOwnsTeam) setMode("join");
+  }, [alreadyOwnsTeam]);
 
   const createMutation = useMutation({
     mutationFn: () => api.post<Team>("/api/teams", { name: teamName }),
@@ -200,30 +210,47 @@ export default function OnboardingScreen() {
           className="flex-1"
         >
           <View className="flex-1 px-6 justify-center">
-            {/* Mode toggle */}
-            <View className="flex-row bg-slate-200 dark:bg-slate-700 rounded-xl p-1 mb-6">
-              {(["create", "join"] as const).map((m) => (
+            {/* Mode toggle — hidden entirely when user already owns a team */}
+            {!alreadyOwnsTeam && (
+              <View className="flex-row bg-slate-200 dark:bg-slate-700 rounded-xl p-1 mb-6">
                 <TouchableOpacity
-                  key={m}
                   onPress={() => {
-                    setMode(m);
+                    setMode("create");
                     setError(null);
                   }}
                   className={`flex-1 py-2 rounded-lg items-center ${
-                    mode === m ? "bg-white dark:bg-slate-800" : ""
+                    mode === "create" ? "bg-white dark:bg-slate-800" : ""
                   }`}
-                  testID={`mode-${m}`}
+                  testID="mode-create"
                 >
                   <Text
                     className={`font-semibold text-sm ${
-                      mode === m ? "text-indigo-600" : "text-slate-500"
+                      mode === "create" ? "text-indigo-600" : "text-slate-500"
                     }`}
                   >
-                    {m === "create" ? "Create team" : "Join team"}
+                    Create team
                   </Text>
                 </TouchableOpacity>
-              ))}
-            </View>
+                <TouchableOpacity
+                  onPress={() => {
+                    setMode("join");
+                    setError(null);
+                  }}
+                  className={`flex-1 py-2 rounded-lg items-center ${
+                    mode === "join" ? "bg-white dark:bg-slate-800" : ""
+                  }`}
+                  testID="mode-join"
+                >
+                  <Text
+                    className={`font-semibold text-sm ${
+                      mode === "join" ? "text-indigo-600" : "text-slate-500"
+                    }`}
+                  >
+                    Join team
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
 
             {mode === "create" ? (
               <View>

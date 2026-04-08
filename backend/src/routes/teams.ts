@@ -45,6 +45,14 @@ teamsRouter.post("/", async (c) => {
     return c.json({ error: { message: "Team name is required", code: "VALIDATION_ERROR" } }, 400);
   }
 
+  // Check if user already owns a team
+  const existingOwned = await prisma.teamMember.findFirst({
+    where: { userId: user.id, role: "owner" },
+  });
+  if (existingOwned) {
+    return c.json({ error: { message: "You already own a team. You can only own one team.", code: "TEAM_LIMIT_REACHED" } }, 400);
+  }
+
   let inviteCode = generateInviteCode();
   // Ensure uniqueness
   while (await prisma.team.findUnique({ where: { inviteCode } })) {
