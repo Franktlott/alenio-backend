@@ -8,6 +8,7 @@ import {
   Modal,
   Platform,
   Switch,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -102,6 +103,20 @@ export default function CreateEventScreen() {
       return;
     }
     const end = eventEnd < eventStart ? eventStart : eventEnd;
+    if (isVideoMeeting) {
+      const existingEvents = queryClient.getQueryData<CalendarEvent[]>(["calendar-events", teamId]) ?? [];
+      const hasOverlap = existingEvents
+        .filter((e) => e.isVideoMeeting && e.id !== eventId)
+        .some((e) => {
+          const eStart = new Date(e.startDate);
+          const eEnd = e.endDate ? new Date(e.endDate) : eStart;
+          return eventStart < eEnd && end > eStart;
+        });
+      if (hasOverlap) {
+        Alert.alert("Scheduling Conflict", "This time overlaps with another video meeting. Please choose a different time.");
+        return;
+      }
+    }
     const payload = {
       title: eventTitle.trim(),
       description: eventDescription.trim() || undefined,

@@ -14,6 +14,7 @@ import {
   Platform,
   KeyboardAvoidingView,
   Switch,
+  Alert,
 } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams, Redirect, useFocusEffect } from "expo-router";
@@ -779,6 +780,20 @@ export default function TasksScreen() {
   const handleSaveEvent = () => {
     if (!eventTitle.trim()) { setFormError("Please enter a title"); return; }
     const end = eventEnd < eventStart ? eventStart : eventEnd;
+    if (eventIsVideoMeeting) {
+      const currentEventId = editingEvent?.id;
+      const hasOverlap = calendarEvents
+        .filter((e) => e.isVideoMeeting && e.id !== currentEventId)
+        .some((e) => {
+          const eStart = new Date(e.startDate);
+          const eEnd = e.endDate ? new Date(e.endDate) : eStart;
+          return eventStart < eEnd && end > eStart;
+        });
+      if (hasOverlap) {
+        Alert.alert("Scheduling Conflict", "This time overlaps with another video meeting. Please choose a different time.");
+        return;
+      }
+    }
     if (editingEvent) {
       updateEventMutation.mutate({
         id: editingEvent.id,
