@@ -1,132 +1,19 @@
-import React, { useRef, useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withSequence, withTiming } from "react-native-reanimated";
 import {
   View, Text, TouchableOpacity, ActivityIndicator,
   StatusBar, StyleSheet, Image, Linking,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import WebView, { WebViewNavigation } from "react-native-webview";
+import WebView from "react-native-webview";
 import { useLocalSearchParams, router, useNavigation } from "expo-router";
-import { ChevronLeft, VideoOff, Video, Mic, MicOff, Volume2, VolumeX, Users, PhoneOff, MoreHorizontal } from "lucide-react-native";
+import { ChevronLeft, VideoOff, Video, Mic, MicOff, Volume2, VolumeX, PhoneOff } from "lucide-react-native";
 import { useSession } from "@/lib/auth/use-session";
 import { useCameraPermissions, useMicrophonePermissions } from "expo-camera";
 
 const alenioLogo = require("@/assets/alenio-logo-white.png");
 
 type Phase = "loading" | "prejoin" | "incall" | "error";
-
-// Inject only CSS styles — runs before content loads, no auto-join logic
-function buildPreloadJS() {
-  return `
-(function() {
-  var PRIMARY = '#4361EE';
-  var BG = '#0A0F1E';
-  var SURFACE = '#111827';
-  var BORDER = 'rgba(255,255,255,0.08)';
-
-  function injectStyles() {
-    var id = '__alenio__';
-    if (document.getElementById(id)) return;
-    var s = document.createElement('style');
-    s.id = id;
-    s.textContent = \`
-      body,html{background:\${BG}!important;color:#fff!important;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display',sans-serif!important;}
-      [class*="prejoin"],[class*="Prejoin"],[class*="lobby"],[class*="Lobby"],[class*="HairCheck"]{background:\${BG}!important;}
-      [class*="card"],[class*="Card"],[class*="modal-content"]{background:\${SURFACE}!important;border:1px solid \${BORDER}!important;border-radius:20px!important;color:#fff!important;}
-      [class*="card"] *,[class*="Card"] *,[class*="prejoin"] *{color:#fff!important;}
-      input,select{background:#1E293B!important;border:1px solid \${BORDER}!important;border-radius:10px!important;color:#fff!important;}
-      button[class*="join"],button[class*="Join"],[class*="joinButton"]{background:\${PRIMARY}!important;border:none!important;border-radius:14px!important;color:#fff!important;font-weight:600!important;box-shadow:0 4px 20px rgba(67,97,238,0.4)!important;}
-      [class*="tray"],[class*="Tray"],[class*="controls"],[class*="Controls"],[class*="toolbar"]{background:rgba(10,15,30,0.95)!important;border-top:1px solid \${BORDER}!important;}
-      button[class*="tray"],button[class*="Tray"],[class*="controlButton"]{background:rgba(255,255,255,0.1)!important;border:1px solid \${BORDER}!important;border-radius:50%!important;color:#fff!important;}
-      button[class*="leave"],button[class*="Leave"],[class*="leaveButton"]{background:#EF4444!important;border-radius:16px!important;color:#fff!important;}
-      [class*="tile"],[class*="Tile"],[class*="participant"],[class*="video-container"]{background:\${SURFACE}!important;border-radius:16px!important;border:1px solid \${BORDER}!important;}
-      [class*="name-tag"],[class*="NameTag"],[class*="displayName"]{background:rgba(10,15,30,0.8)!important;border-radius:8px!important;color:#fff!important;padding:2px 8px!important;}
-      .powered-by-daily,.daily-logo,[class*="DailyLogo"],[class*="branding"],[class*="watermark"],a[href*="daily.co"]{display:none!important;}
-    \`;
-    (document.head||document.documentElement).appendChild(s);
-  }
-
-  function start() {
-    injectStyles();
-    var obs = new MutationObserver(function(){ injectStyles(); });
-    obs.observe(document.documentElement,{childList:true,subtree:true});
-  }
-  document.readyState==='loading' ? document.addEventListener('DOMContentLoaded',start) : start();
-})();
-true;
-`;
-}
-
-// Auto-skip Daily's pre-join + apply Alenio dark theme + leave detection
-function buildInjectedJS(micOn: boolean, videoOn: boolean) {
-  return `
-(function() {
-  var PRIMARY = '#4361EE';
-  var BG = '#0A0F1E';
-  var SURFACE = '#111827';
-  var BORDER = 'rgba(255,255,255,0.08)';
-
-  function injectStyles() {
-    var id = '__alenio__';
-    if (document.getElementById(id)) return;
-    var s = document.createElement('style');
-    s.id = id;
-    s.textContent = \`
-      body,html{background:\${BG}!important;color:#fff!important;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display',sans-serif!important;}
-      [class*="prejoin"],[class*="Prejoin"],[class*="lobby"],[class*="Lobby"],[class*="HairCheck"]{background:\${BG}!important;}
-      [class*="card"],[class*="Card"],[class*="modal-content"]{background:\${SURFACE}!important;border:1px solid \${BORDER}!important;border-radius:20px!important;color:#fff!important;}
-      [class*="card"] *,[class*="Card"] *,[class*="prejoin"] *{color:#fff!important;}
-      input,select{background:#1E293B!important;border:1px solid \${BORDER}!important;border-radius:10px!important;color:#fff!important;}
-      button[class*="join"],button[class*="Join"],[class*="joinButton"]{background:\${PRIMARY}!important;border:none!important;border-radius:14px!important;color:#fff!important;font-weight:600!important;box-shadow:0 4px 20px rgba(67,97,238,0.4)!important;}
-      [class*="tray"],[class*="Tray"],[class*="controls"],[class*="Controls"],[class*="toolbar"]{background:rgba(10,15,30,0.95)!important;border-top:1px solid \${BORDER}!important;}
-      button[class*="tray"],button[class*="Tray"],[class*="controlButton"]{background:rgba(255,255,255,0.1)!important;border:1px solid \${BORDER}!important;border-radius:50%!important;color:#fff!important;}
-      button[class*="leave"],button[class*="Leave"],[class*="leaveButton"]{background:#EF4444!important;border-radius:16px!important;color:#fff!important;}
-      [class*="tile"],[class*="Tile"],[class*="participant"],[class*="video-container"]{background:\${SURFACE}!important;border-radius:16px!important;border:1px solid \${BORDER}!important;}
-      [class*="name-tag"],[class*="NameTag"],[class*="displayName"]{background:rgba(10,15,30,0.8)!important;border-radius:8px!important;color:#fff!important;padding:2px 8px!important;}
-      .powered-by-daily,.daily-logo,[class*="DailyLogo"],[class*="branding"],[class*="watermark"],a[href*="daily.co"]{display:none!important;}
-    \`;
-    (document.head||document.documentElement).appendChild(s);
-  }
-
-  // Auto-click Daily's join button to skip their pre-join
-  var joinAttempts = 0;
-  function tryAutoJoin() {
-    var btn = document.querySelector('[data-testid="hair-check-join-button"]')
-      || document.querySelector('[data-testid="join-button"]')
-      || Array.from(document.querySelectorAll('button')).find(function(b){
-           return b.textContent && /^join$/i.test(b.textContent.trim());
-         });
-    if (btn) { btn.click(); return true; }
-    return false;
-  }
-  var joinInterval = setInterval(function(){
-    if(tryAutoJoin() || ++joinAttempts > 30) clearInterval(joinInterval);
-  }, 800);
-
-  function postLeave() {
-    window.ReactNativeWebView && window.ReactNativeWebView.postMessage(JSON.stringify({type:'left-meeting'}));
-  }
-  function checkEndState() {
-    var t = (document.body||{}).innerText||'';
-    if((t.includes('meeting')&&t.includes('does not exist'))||t.includes('call has ended')||t.includes("You've left")||t.includes('Thank you for joining')){
-      postLeave();
-    }
-  }
-  window.addEventListener('daily:left-meeting', postLeave);
-  window.addEventListener('daily:call-instance-destroyed', postLeave);
-
-  function start() {
-    injectStyles();
-    checkEndState();
-    var obs = new MutationObserver(function(){ injectStyles(); checkEndState(); });
-    obs.observe(document.documentElement,{childList:true,subtree:true});
-  }
-  document.readyState==='loading' ? document.addEventListener('DOMContentLoaded',start) : start();
-  [1500,4000,8000].forEach(function(t){ setTimeout(checkEndState,t); });
-})();
-true;
-`;
-}
 
 export default function VideoCallScreen() {
   const { roomId, roomName } = useLocalSearchParams<{ roomId: string; roomName: string }>();
@@ -138,33 +25,6 @@ export default function VideoCallScreen() {
   const [micPermission, requestMicPermission] = useMicrophonePermissions();
   const [permissionDenied, setPermissionDenied] = useState(false);
 
-  async function requestPermissionsAndJoin() {
-    // Step 1: Camera permission — shows its own iOS dialog
-    const cam = cameraPermission?.granted ? cameraPermission : await requestCameraPermission();
-    if (!cam?.granted) {
-      setPermissionDenied(true);
-      return;
-    }
-
-    // Brief pause so iOS fully dismisses the first dialog before showing the second
-    await new Promise(r => setTimeout(r, 300));
-
-    // Step 2: Mic permission — shows a separate iOS dialog
-    const mic = micPermission?.granted ? micPermission : await requestMicPermission();
-    if (!mic?.granted) {
-      setPermissionDenied(true);
-      return;
-    }
-
-    setPhase("incall");
-  }
-
-  useEffect(() => {
-    navigation.setOptions({ headerShown: false });
-  }, [navigation]);
-  const userName = session?.user?.name ?? "Guest";
-  const userImage = session?.user?.image;
-
   const [phase, setPhase] = useState<Phase>("loading");
   const [callUrl, setCallUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -172,12 +32,15 @@ export default function VideoCallScreen() {
   const [videoOn, setVideoOn] = useState(true);
   const [speakerOn, setSpeakerOn] = useState(true);
 
-  const roomHostRef = useRef<string | null>(null);
-  const webViewRef = useRef<WebView>(null);
-  const didLeave = useRef(false);
+  const userName = session?.user?.name ?? "Guest";
+  const userImage = session?.user?.image;
 
   const pulseScale = useSharedValue(1);
   const glowOpacity = useSharedValue(0.5);
+
+  useEffect(() => {
+    navigation.setOptions({ headerShown: false });
+  }, [navigation]);
 
   useEffect(() => {
     pulseScale.value = withRepeat(
@@ -196,8 +59,6 @@ export default function VideoCallScreen() {
   }));
 
   const goBack = useCallback(() => {
-    if (didLeave.current) return;
-    didLeave.current = true;
     router.back();
   }, []);
 
@@ -210,9 +71,12 @@ export default function VideoCallScreen() {
           body: JSON.stringify({ roomId, userName }),
         });
         const json = await res.json();
-        if (!res.ok || !json.data?.url) { setError("Could not start call."); setPhase("error"); return; }
+        if (!res.ok || !json.data?.url) {
+          setError("Could not start call.");
+          setPhase("error");
+          return;
+        }
         const { url, token } = json.data;
-        try { roomHostRef.current = new URL(url).hostname; } catch {}
         setCallUrl(token ? `${url}?t=${token}` : url);
         setPhase("prejoin");
       } catch {
@@ -223,13 +87,25 @@ export default function VideoCallScreen() {
     fetchRoom();
   }, [roomId, userName]);
 
-  function handleMessage(e: { nativeEvent: { data: string } }) {
-    try { if (JSON.parse(e.nativeEvent.data).type === "left-meeting") goBack(); } catch {}
-  }
-  function handleNavChange(nav: WebViewNavigation) {
-    const host = roomHostRef.current;
-    if (!host) return;
-    try { if (new URL(nav.url).hostname !== host) goBack(); } catch {}
+  async function requestPermissionsAndJoin() {
+    // Step 1: Camera — shows its own iOS dialog
+    const cam = cameraPermission?.granted ? cameraPermission : await requestCameraPermission();
+    if (!cam?.granted) {
+      setPermissionDenied(true);
+      return;
+    }
+
+    // Brief pause so iOS fully dismisses the first dialog before showing the second
+    await new Promise(r => setTimeout(r, 300));
+
+    // Step 2: Mic — shows a separate iOS dialog
+    const mic = micPermission?.granted ? micPermission : await requestMicPermission();
+    if (!mic?.granted) {
+      setPermissionDenied(true);
+      return;
+    }
+
+    setPhase("incall");
   }
 
   // ── PERMISSION DENIED ──
@@ -364,7 +240,6 @@ export default function VideoCallScreen() {
     <View style={{ flex: 1, backgroundColor: "#0A0F1E", paddingTop: insets.top + 20 }}>
       <StatusBar hidden />
       <WebView
-        ref={webViewRef}
         testID="daily-webview"
         source={{ uri: callUrl! }}
         userAgent="Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
@@ -372,17 +247,22 @@ export default function VideoCallScreen() {
         mediaPlaybackRequiresUserAction={false}
         javaScriptEnabled
         domStorageEnabled
-        startInLoadingState={false}
         mediaCapturePermissionGrantType="grant"
-        originWhitelist={['*']}
-        allowsAirPlayForMediaPlayback={true}
-        style={{ flex: 1, backgroundColor: "#0A0F1E" }}
-        injectedJavaScript={buildInjectedJS(micOn, videoOn)}
-        injectedJavaScriptBeforeContentLoaded={buildPreloadJS()}
-        onMessage={handleMessage}
-        onNavigationStateChange={handleNavChange}
-        onShouldStartLoadWithRequest={req => req.url.startsWith("http://") || req.url.startsWith("https://")}
+        originWhitelist={["*"]}
+        style={{ flex: 1 }}
+        onShouldStartLoadWithRequest={req =>
+          req.url.startsWith("http://") || req.url.startsWith("https://")
+        }
       />
+      {/* Floating Leave button — since we removed Daily's leave detection */}
+      <TouchableOpacity
+        testID="leave-call-button"
+        onPress={goBack}
+        style={[s.leaveBtn, { top: insets.top + 16 }]}
+      >
+        <PhoneOff size={18} color="#fff" />
+        <Text style={s.leaveBtnText}>Leave</Text>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -463,4 +343,23 @@ const s = StyleSheet.create({
     shadowOpacity: 0.5, shadowRadius: 16,
   },
   joinBtnText: { color: "#fff", fontSize: 17, fontWeight: "700" },
+
+  // Leave button (floating overlay in-call)
+  leaveBtn: {
+    position: "absolute",
+    right: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#EF4444",
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 24,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  leaveBtnText: { color: "#fff", fontSize: 14, fontWeight: "700" },
 });
