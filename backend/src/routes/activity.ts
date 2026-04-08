@@ -57,6 +57,46 @@ activityRouter.get("/:teamId/activity", async (c) => {
 });
 
 activityRouter.post(
+  "/:teamId/activity/celebrate",
+  zValidator("json", z.object({
+    targetUserId: z.string(),
+    celebrationType: z.string(),
+    message: z.string().max(300).optional(),
+  })),
+  async (c) => {
+    const user = c.get("user")!;
+    const { teamId } = c.req.param();
+    const { targetUserId, celebrationType, message } = c.req.valid("json");
+
+    const [membership, targetMember] = await Promise.all([
+      prisma.teamMember.findUnique({ where: { userId_teamId: { userId: user.id, teamId } } }),
+      prisma.teamMember.findUnique({
+        where: { userId_teamId: { userId: targetUserId, teamId } },
+        include: { user: { select: { id: true, name: true } } },
+      }),
+    ]);
+    if (!membership) return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
+    if (!targetMember) return c.json({ error: { message: "Target not a team member", code: "NOT_FOUND" } }, 404);
+
+    const activity = await prisma.teamActivity.create({
+      data: {
+        teamId,
+        userId: user.id,
+        type: "celebration",
+        metadata: JSON.stringify({
+          targetUserId,
+          targetName: targetMember.user.name,
+          celebrationType,
+          message: message?.trim() || null,
+        }),
+      },
+    });
+
+    return c.json({ data: { id: activity.id } }, 201);
+  }
+);
+
+activityRouter.post(
   "/:teamId/activity/:activityId/react",
   zValidator("json", z.object({ emoji: z.string() })),
   async (c) => {

@@ -1,10 +1,10 @@
-import { View, Text, FlatList, ActivityIndicator, Pressable, ScrollView, Modal, TouchableOpacity, Image } from "react-native";
+import { View, Text, FlatList, ActivityIndicator, Pressable, ScrollView, Modal, TouchableOpacity, Image, TextInput, KeyboardAvoidingView, Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api/api";
 import { useTeamStore } from "@/lib/state/team-store";
-import { CheckCircle, UserPlus, UserMinus, Calendar, Activity, UserCheck, Trophy, Flame, Clock, Video } from "lucide-react-native";
+import { CheckCircle, UserPlus, UserMinus, Calendar, Activity, UserCheck, Trophy, Flame, Clock, Video, PartyPopper, X } from "lucide-react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Image as ExpoImage } from "expo-image";
 import { useState, useEffect, useRef } from "react";
@@ -37,9 +37,9 @@ const REACTION_HINT_KEY = "reaction_hint_shown";
 
 type ActivityEvent = {
   id: string;
-  type: "task_completed" | "member_joined" | "member_removed" | "calendar_event_added" | "task_assigned" | "task_milestone" | "personal_best";
+  type: "task_completed" | "member_joined" | "member_removed" | "calendar_event_added" | "task_assigned" | "task_milestone" | "personal_best" | "celebration";
   createdAt: string;
-  metadata: { taskTitle?: string; taskTitles?: string[]; taskCount?: number; eventTitle?: string; eventTitles?: string[]; eventCount?: number; userName?: string; count?: number; incognito?: boolean; assigneeName?: string; isVideoMeeting?: boolean } | null;
+  metadata: { taskTitle?: string; taskTitles?: string[]; taskCount?: number; eventTitle?: string; eventTitles?: string[]; eventCount?: number; userName?: string; count?: number; incognito?: boolean; assigneeName?: string; isVideoMeeting?: boolean; targetUserId?: string; targetName?: string; celebrationType?: string; message?: string | null } | null;
   user: { id: string; name: string; image: string | null } | null;
   reactions: Record<string, { count: number; userIds: string[] }>;
 };
@@ -601,6 +601,86 @@ function PersonalBestCard({ item, activeTeamId, currentUserId, isDemo, showPicke
   );
 }
 
+const CELEBRATION_TYPES = [
+  { key: "shoutout",   emoji: "⭐", label: "Shoutout",        color: "#F59E0B", bg: "#FFFBEB", gradient: ["#1B1400", "#100C00"] as [string,string] },
+  { key: "mvp",        emoji: "🏆", label: "MVP",             color: "#4361EE", bg: "#EEF2FF", gradient: ["#0A0E28", "#060914"] as [string,string] },
+  { key: "beyond",     emoji: "💪", label: "Above & Beyond",  color: "#10B981", bg: "#ECFDF5", gradient: ["#001A0D", "#000E07"] as [string,string] },
+  { key: "rockstar",   emoji: "🚀", label: "Rockstar",        color: "#8B5CF6", bg: "#F5F3FF", gradient: ["#12002E", "#0A001A"] as [string,string] },
+  { key: "clutch",     emoji: "🎯", label: "Clutch",          color: "#EF4444", bg: "#FEF2F2", gradient: ["#1E0000", "#0D0000"] as [string,string] },
+  { key: "teamplayer", emoji: "🤝", label: "Team Player",     color: "#06B6D4", bg: "#ECFEFF", gradient: ["#001A1E", "#000E12"] as [string,string] },
+  { key: "bigbrain",   emoji: "💡", label: "Big Brain",       color: "#F97316", bg: "#FFF7ED", gradient: ["#1E0A00", "#0D0500"] as [string,string] },
+  { key: "onfire",     emoji: "🔥", label: "On Fire",         color: "#EF4444", bg: "#FEF2F2", gradient: ["#1E0500", "#0D0200"] as [string,string] },
+  { key: "milestone",  emoji: "🎉", label: "Milestone",       color: "#4361EE", bg: "#EEF2FF", gradient: ["#050A28", "#020514"] as [string,string] },
+  { key: "grateful",   emoji: "❤️", label: "Grateful",        color: "#EC4899", bg: "#FDF2F8", gradient: ["#1E0010", "#0D0008"] as [string,string] },
+];
+
+function CelebrationPostCard({ item, activeTeamId, currentUserId, isDemo, showPicker, onOpenPicker, onClosePicker }: { item: ActivityEvent; activeTeamId: string | null; currentUserId: string | undefined; isDemo: boolean; showPicker: boolean; onOpenPicker: () => void; onClosePicker: () => void }) {
+  const queryClient = useQueryClient();
+  const meta = item.metadata;
+  const celebType = CELEBRATION_TYPES.find((t) => t.key === meta?.celebrationType) ?? CELEBRATION_TYPES[0]!;
+  const fromName = item.user?.name ?? "Someone";
+  const toName = meta?.targetName ?? "a teammate";
+
+  const { mutate: toggleReaction } = useMutation({
+    mutationFn: (emoji: string) =>
+      api.post(`/api/teams/${activeTeamId}/activity/${item.id}/react`, { emoji }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["activity", activeTeamId] });
+      onClosePicker();
+    },
+  });
+
+  return (
+    <Pressable
+      onLongPress={isDemo ? undefined : onOpenPicker}
+      style={{ marginHorizontal: 16, marginVertical: 6 }}
+      testID={`celebration-post-card-${item.id}`}
+    >
+      <LinearGradient
+        colors={celebType.gradient}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={{ borderRadius: 20, overflow: "hidden", borderWidth: 1, borderColor: "rgba(255,255,255,0.07)" }}
+      >
+        <View style={{ padding: 16, gap: 10 }}>
+          {/* Badge row */}
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <View style={{ backgroundColor: "rgba(255,255,255,0.12)", borderRadius: 12, paddingHorizontal: 10, paddingVertical: 5, flexDirection: "row", alignItems: "center", gap: 6 }}>
+              <Text style={{ fontSize: 15 }}>{celebType.emoji}</Text>
+              <Text style={{ fontSize: 12, fontWeight: "700", color: "rgba(255,255,255,0.9)", letterSpacing: 0.4 }}>{celebType.label.toUpperCase()}</Text>
+            </View>
+            <Text style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginLeft: "auto" }}>{timeAgo(item.createdAt)}</Text>
+          </View>
+
+          {/* Main text */}
+          <View>
+            <Text style={{ fontSize: 20, fontWeight: "800", color: "white" }}>{toName} 🎊</Text>
+            <Text style={{ fontSize: 13, color: "rgba(255,255,255,0.55)", marginTop: 2 }}>celebrated by {fromName}</Text>
+          </View>
+
+          {/* Custom message */}
+          {meta?.message ? (
+            <View style={{ backgroundColor: "rgba(255,255,255,0.08)", borderRadius: 12, padding: 12 }}>
+              <Text style={{ fontSize: 14, color: "rgba(255,255,255,0.85)", lineHeight: 20, fontStyle: "italic" }}>"{meta.message}"</Text>
+            </View>
+          ) : null}
+
+          {/* Reactions */}
+          <ReactionRow
+            activityId={item.id}
+            teamId={activeTeamId}
+            reactions={item.reactions ?? {}}
+            currentUserId={currentUserId}
+            onToggleReaction={toggleReaction}
+            showPicker={showPicker}
+            onClosePicker={onClosePicker}
+          />
+        </View>
+      </LinearGradient>
+    </Pressable>
+  );
+}
+
 function ActivityItem({ item, activeTeamId, currentUserId, isDemo, showPicker, onOpenPicker, onClosePicker }: { item: ActivityEvent; activeTeamId: string | null; currentUserId: string | undefined; isDemo: boolean; showPicker: boolean; onOpenPicker: () => void; onClosePicker: () => void }) {
   const queryClient = useQueryClient();
 
@@ -619,6 +699,10 @@ function ActivityItem({ item, activeTeamId, currentUserId, isDemo, showPicker, o
 
   if (item.type === "personal_best") {
     return <PersonalBestCard item={item} activeTeamId={activeTeamId} currentUserId={currentUserId} isDemo={isDemo} showPicker={showPicker} onOpenPicker={onOpenPicker} onClosePicker={onClosePicker} />;
+  }
+
+  if (item.type === "celebration") {
+    return <CelebrationPostCard item={item} activeTeamId={activeTeamId} currentUserId={currentUserId} isDemo={isDemo} showPicker={showPicker} onOpenPicker={onOpenPicker} onClosePicker={onClosePicker} />;
   }
 
   const config = EVENT_CONFIG[item.type] ?? {
@@ -725,9 +809,15 @@ export default function FeedScreen() {
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
   const { data: session } = useSession();
   const isDemo = useDemoMode();
+  const queryClient = useQueryClient();
   const currentUserId = session?.user?.id;
   const [showReactionHint, setShowReactionHint] = useState<boolean>(false);
   const [openPickerId, setOpenPickerId] = useState<string | null>(null);
+  const [showCelebrateModal, setShowCelebrateModal] = useState(false);
+  const [celebrateStep, setCelebrateStep] = useState<1 | 2>(1);
+  const [celebrateTarget, setCelebrateTarget] = useState<{ id: string; name: string; image: string | null } | null>(null);
+  const [celebrateType, setCelebrateType] = useState<string>(CELEBRATION_TYPES[0]!.key);
+  const [celebrateMessage, setCelebrateMessage] = useState("");
   const hintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -761,6 +851,28 @@ export default function FeedScreen() {
     refetchInterval: 15000,
   });
 
+  const { data: teamMembers = [] } = useQuery({
+    queryKey: ["team-members-feed", activeTeamId],
+    queryFn: async () => {
+      const team = await api.get<{ members: { userId: string; user: { id: string; name: string; image: string | null } }[] }>(`/api/teams/${activeTeamId}`);
+      return (team.members ?? []).filter((m) => m.userId !== currentUserId);
+    },
+    enabled: !!activeTeamId && showCelebrateModal,
+  });
+
+  const celebrateMutation = useMutation({
+    mutationFn: (payload: { targetUserId: string; celebrationType: string; message?: string }) =>
+      api.post(`/api/teams/${activeTeamId}/activity/celebrate`, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["activity", activeTeamId] });
+      setShowCelebrateModal(false);
+      setCelebrateStep(1);
+      setCelebrateTarget(null);
+      setCelebrateType(CELEBRATION_TYPES[0]!.key);
+      setCelebrateMessage("");
+    },
+  });
+
   const now = new Date();
 
   if (!activeTeamId) {
@@ -777,13 +889,132 @@ export default function FeedScreen() {
       <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
         <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 14, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
           <Text style={{ color: "white", fontSize: 18, fontWeight: "700" }}>Feed</Text>
-          <ExpoImage
-            source={require("@/assets/alenio-icon.png")}
-            style={{ width: 30, height: 30, borderRadius: 6 }}
-            contentFit="cover"
-          />
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+            {!isDemo ? (
+              <TouchableOpacity
+                testID="celebrate-button"
+                onPress={() => { setShowCelebrateModal(true); setCelebrateStep(1); }}
+                style={{ backgroundColor: "rgba(255,255,255,0.2)", borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6, flexDirection: "row", alignItems: "center", gap: 6 }}
+              >
+                <Text style={{ fontSize: 14 }}>🎉</Text>
+                <Text style={{ color: "white", fontSize: 13, fontWeight: "700" }}>Celebrate</Text>
+              </TouchableOpacity>
+            ) : null}
+            <ExpoImage
+              source={require("@/assets/alenio-icon.png")}
+              style={{ width: 30, height: 30, borderRadius: 6 }}
+              contentFit="cover"
+            />
+          </View>
         </View>
       </LinearGradient>
+
+      {/* Celebrate modal */}
+      <Modal visible={showCelebrateModal} transparent animationType="slide" onRequestClose={() => setShowCelebrateModal(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
+          <TouchableOpacity style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)" }} activeOpacity={1} onPress={() => setShowCelebrateModal(false)} />
+          <View style={{ backgroundColor: "white", borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: "80%" }}>
+            {/* Modal header */}
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingTop: 20, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: "#F1F5F9" }}>
+              <TouchableOpacity onPress={celebrateStep === 2 ? () => setCelebrateStep(1) : () => setShowCelebrateModal(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Text style={{ fontSize: 14, color: "#64748B", fontWeight: "600" }}>{celebrateStep === 2 ? "← Back" : "Cancel"}</Text>
+              </TouchableOpacity>
+              <Text style={{ fontSize: 17, fontWeight: "700", color: "#1E293B" }}>
+                {celebrateStep === 1 ? "Who to celebrate? 🎉" : `Celebrate ${celebrateTarget?.name ?? ""}`}
+              </Text>
+              <TouchableOpacity onPress={() => setShowCelebrateModal(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <X size={20} color="#94A3B8" />
+              </TouchableOpacity>
+            </View>
+
+            {celebrateStep === 1 ? (
+              /* Step 1 — pick team member */
+              <ScrollView contentContainerStyle={{ paddingVertical: 8 }} showsVerticalScrollIndicator={false}>
+                {teamMembers.length === 0 ? (
+                  <View style={{ alignItems: "center", paddingVertical: 40 }}>
+                    <ActivityIndicator color="#4361EE" />
+                  </View>
+                ) : teamMembers.map((m) => (
+                  <TouchableOpacity
+                    key={m.userId}
+                    testID={`celebrate-member-${m.userId}`}
+                    onPress={() => { setCelebrateTarget(m.user); setCelebrateStep(2); }}
+                    style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: "#F8FAFC" }}
+                  >
+                    <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: "#EEF2FF", alignItems: "center", justifyContent: "center", marginRight: 14, overflow: "hidden" }}>
+                      {m.user.image ? (
+                        <ExpoImage source={{ uri: m.user.image }} style={{ width: 44, height: 44 }} contentFit="cover" />
+                      ) : (
+                        <Text style={{ fontSize: 18, fontWeight: "700", color: "#4361EE" }}>{m.user.name[0]?.toUpperCase()}</Text>
+                      )}
+                    </View>
+                    <Text style={{ fontSize: 16, fontWeight: "600", color: "#1E293B", flex: 1 }}>{m.user.name}</Text>
+                    <Text style={{ fontSize: 18 }}>→</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            ) : (
+              /* Step 2 — pick celebration type + message */
+              <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+                <Text style={{ fontSize: 13, fontWeight: "600", color: "#64748B", marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.5 }}>Choose a celebration</Text>
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 20 }}>
+                  {CELEBRATION_TYPES.map((ct) => {
+                    const selected = celebrateType === ct.key;
+                    return (
+                      <TouchableOpacity
+                        key={ct.key}
+                        testID={`celebrate-type-${ct.key}`}
+                        onPress={() => setCelebrateType(ct.key)}
+                        style={{
+                          flexDirection: "row", alignItems: "center", gap: 6,
+                          paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20,
+                          backgroundColor: selected ? ct.color : "#F1F5F9",
+                          borderWidth: 1.5, borderColor: selected ? ct.color : "transparent",
+                        }}
+                      >
+                        <Text style={{ fontSize: 16 }}>{ct.emoji}</Text>
+                        <Text style={{ fontSize: 13, fontWeight: "700", color: selected ? "white" : "#64748B" }}>{ct.label}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                <Text style={{ fontSize: 13, fontWeight: "600", color: "#64748B", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 }}>Add a message (optional)</Text>
+                <TextInput
+                  testID="celebrate-message-input"
+                  value={celebrateMessage}
+                  onChangeText={setCelebrateMessage}
+                  placeholder={`Say something nice about ${celebrateTarget?.name ?? "them"}...`}
+                  placeholderTextColor="#CBD5E1"
+                  multiline
+                  maxLength={300}
+                  style={{ backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: "#1E293B", minHeight: 80, maxHeight: 140, marginBottom: 20 }}
+                />
+
+                <TouchableOpacity
+                  testID="celebrate-submit"
+                  onPress={() => {
+                    if (!celebrateTarget) return;
+                    celebrateMutation.mutate({
+                      targetUserId: celebrateTarget.id,
+                      celebrationType: celebrateType,
+                      message: celebrateMessage.trim() || undefined,
+                    });
+                  }}
+                  disabled={celebrateMutation.isPending}
+                  style={{ backgroundColor: "#4361EE", borderRadius: 14, paddingVertical: 15, alignItems: "center", shadowColor: "#4361EE", shadowOpacity: 0.4, shadowRadius: 12, shadowOffset: { width: 0, height: 4 } }}
+                >
+                  {celebrateMutation.isPending ? (
+                    <ActivityIndicator color="white" />
+                  ) : (
+                    <Text style={{ fontSize: 16, fontWeight: "700", color: "white" }}>🎉 Post Celebration</Text>
+                  )}
+                </TouchableOpacity>
+              </ScrollView>
+            )}
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
 
       {isLoading ? (
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }} testID="loading-indicator">
