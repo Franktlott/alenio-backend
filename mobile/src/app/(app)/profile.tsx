@@ -119,6 +119,19 @@ export default function ProfileScreen() {
   const [localImage, setLocalImage] = useState<string | null>(null);
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
 
+  // Delete account state
+  const [deleteStep, setDeleteStep] = useState<0 | 1 | 2 | 3>(0);
+  const [deletePassword, setDeletePassword] = useState<string>("");
+  const [deletePasswordVisible, setDeletePasswordVisible] = useState<boolean>(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const closeDeleteModal = () => {
+    setDeleteStep(0);
+    setDeletePassword("");
+    setDeleteError(null);
+    setDeletePasswordVisible(false);
+  };
+
   // Tone state
   const [msgToneId, setMsgToneId] = useState<string>("chime");
   const [dmToneId,  setDmToneId]  = useState<string>("chime");
@@ -275,6 +288,33 @@ export default function ProfileScreen() {
     },
     onError: () => toast({ title: "Failed to leave team", preset: "error" }),
   });
+
+  const deleteAccountMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/api/user`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ password: deletePassword }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error?.message ?? "Failed to delete account");
+      return json.data;
+    },
+    onSuccess: async () => {
+      closeDeleteModal();
+      await authClient.signOut();
+      await invalidateSession();
+      queryClient.clear();
+      setActiveTeamId(null);
+      router.replace("/(auth)/sign-in" as never);
+    },
+    onError: (err: Error) => {
+      setDeleteError(err.message === "Incorrect password" ? "Incorrect password. Please try again." : err.message);
+      setDeleteStep(2);
+    },
+  });
+
   const handlePhotoPress = () => {
     if (Platform.OS === "ios") {
       ActionSheetIOS.showActionSheetWithOptions(
@@ -656,6 +696,19 @@ export default function ProfileScreen() {
             </GlassCard>
           </View>
         )}
+
+        {/* Delete Account */}
+        {!isDemo && (
+          <View className="mx-4 mt-3 mb-6">
+            <TouchableOpacity
+              onPress={() => setDeleteStep(1)}
+              className="py-3 items-center"
+              testID="delete-account-button"
+            >
+              <Text className="text-sm text-slate-400">Delete Account</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </ScrollView>
 
       {/* Tone picker modal */}
@@ -933,6 +986,127 @@ export default function ProfileScreen() {
               </View>
             </View>
           </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Delete Account Modal */}
+      <Modal visible={deleteStep > 0} transparent animationType="slide" onRequestClose={closeDeleteModal}>
+        <Pressable className="flex-1 bg-black/40 justify-end" onPress={closeDeleteModal}>
+          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"}>
+            <Pressable onPress={(e) => e.stopPropagation()}>
+              <View className="bg-white dark:bg-slate-800 rounded-t-3xl px-5 pt-6 pb-10">
+                {/* Step 1: Impact */}
+                {deleteStep === 1 && (
+                  <>
+                    <View className="flex-row items-center justify-between mb-5">
+                      <Text className="text-xl font-bold text-slate-900 dark:text-white">Delete Account?</Text>
+                      <TouchableOpacity onPress={closeDeleteModal}>
+                        <X size={22} color="#94A3B8" />
+                      </TouchableOpacity>
+                    </View>
+                    <View className="bg-red-50 rounded-2xl p-4 mb-5" style={{ gap: 12 }}>
+                      {[
+                        "You'll be removed from all your teams",
+                        "All your messages will be deleted",
+                        "Your task history will be removed",
+                        "This action cannot be undone",
+                      ].map((item) => (
+                        <View key={item} className="flex-row items-start" style={{ gap: 10 }}>
+                          <X size={16} color="#EF4444" style={{ marginTop: 1 }} />
+                          <Text className="flex-1 text-sm text-slate-700">{item}</Text>
+                        </View>
+                      ))}
+                    </View>
+                    <TouchableOpacity
+                      onPress={() => setDeleteStep(2)}
+                      className="rounded-2xl py-4 items-center mb-3 bg-slate-100"
+                      testID="delete-continue-step1"
+                    >
+                      <Text className="font-semibold text-slate-700 text-base">Continue</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={closeDeleteModal} className="py-3 items-center">
+                      <Text className="text-slate-400 font-medium">Cancel</Text>
+                    </TouchableOpacity>
+                  </>
+                )}
+                {/* Step 2: Password */}
+                {deleteStep === 2 && (
+                  <>
+                    <View className="flex-row items-center justify-between mb-2">
+                      <Text className="text-xl font-bold text-slate-900 dark:text-white">Confirm identity</Text>
+                      <TouchableOpacity onPress={closeDeleteModal}>
+                        <X size={22} color="#94A3B8" />
+                      </TouchableOpacity>
+                    </View>
+                    <Text className="text-sm text-slate-500 mb-5">Enter your password to continue</Text>
+                    <View className="flex-row items-center bg-slate-50 rounded-xl px-4 border border-slate-200 mb-2">
+                      <TextInput
+                        className="flex-1 py-3 text-base text-slate-900"
+                        placeholder="Password"
+                        placeholderTextColor="#94A3B8"
+                        secureTextEntry={!deletePasswordVisible}
+                        value={deletePassword}
+                        onChangeText={(t) => { setDeletePassword(t); setDeleteError(null); }}
+                        autoCapitalize="none"
+                        testID="delete-password-input"
+                      />
+                      <TouchableOpacity onPress={() => setDeletePasswordVisible((v) => !v)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                        <Text className="text-slate-400 text-sm">{deletePasswordVisible ? "Hide" : "Show"}</Text>
+                      </TouchableOpacity>
+                    </View>
+                    {deleteError ? <Text className="text-red-500 text-xs mb-3 ml-1">{deleteError}</Text> : <View className="mb-3" />}
+                    <TouchableOpacity
+                      onPress={() => {
+                        if (!deletePassword.trim()) return;
+                        setDeleteStep(3);
+                      }}
+                      disabled={!deletePassword.trim()}
+                      className="rounded-2xl py-4 items-center mb-3"
+                      style={{ backgroundColor: deletePassword.trim() ? "#4361EE" : "#CBD5E1" }}
+                      testID="delete-continue-step2"
+                    >
+                      <Text className="font-bold text-white text-base">Continue</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => setDeleteStep(1)} className="py-3 items-center">
+                      <Text className="text-slate-400 font-medium">Back</Text>
+                    </TouchableOpacity>
+                  </>
+                )}
+                {/* Step 3: Final confirm */}
+                {deleteStep === 3 && (
+                  <>
+                    <View className="flex-row items-center justify-between mb-3">
+                      <Text className="text-xl font-bold text-slate-900 dark:text-white">Final step</Text>
+                      <TouchableOpacity onPress={closeDeleteModal}>
+                        <X size={22} color="#94A3B8" />
+                      </TouchableOpacity>
+                    </View>
+                    <View className="bg-red-50 rounded-2xl p-4 mb-5">
+                      <Text className="text-sm text-red-700 text-center leading-5">
+                        This will permanently delete your account and all associated data. There is no way to recover it.
+                      </Text>
+                    </View>
+                    {deleteError ? <Text className="text-red-500 text-xs mb-3 text-center">{deleteError}</Text> : null}
+                    <TouchableOpacity
+                      onPress={() => deleteAccountMutation.mutate()}
+                      disabled={deleteAccountMutation.isPending}
+                      className="rounded-2xl py-4 items-center mb-3 bg-red-500"
+                      testID="confirm-delete-account"
+                    >
+                      {deleteAccountMutation.isPending ? (
+                        <ActivityIndicator color="white" />
+                      ) : (
+                        <Text className="font-bold text-white text-base">Delete My Account</Text>
+                      )}
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={closeDeleteModal} className="py-3 items-center">
+                      <Text className="text-slate-400 font-medium">Cancel</Text>
+                    </TouchableOpacity>
+                  </>
+                )}
+              </View>
+            </Pressable>
+          </KeyboardAvoidingView>
         </Pressable>
       </Modal>
         </View>

@@ -186,6 +186,39 @@ app.get("/api/users/search", async (c) => {
   return c.json({ data: users });
 });
 
+app.delete("/api/user", async (c) => {
+  const user = c.get("user");
+  if (!user) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
+
+  const body = await c.req.json();
+  const { password } = body;
+
+  if (!password || typeof password !== "string") {
+    return c.json({ error: { message: "Password required", code: "VALIDATION_ERROR" } }, 400);
+  }
+
+  // Find the email+password account credential
+  const account = await prisma.account.findFirst({
+    where: { userId: user.id, providerId: "credential" },
+  });
+
+  if (!account?.password) {
+    return c.json({ error: { message: "No password set for this account", code: "NO_PASSWORD" } }, 400);
+  }
+
+  // Verify password
+  const { compare } = await import("bcryptjs");
+  const valid = await compare(password, account.password);
+  if (!valid) {
+    return c.json({ error: { message: "Incorrect password", code: "INVALID_PASSWORD" } }, 401);
+  }
+
+  // Delete user (cascades to sessions, accounts, team memberships, etc.)
+  await prisma.user.delete({ where: { id: user.id } });
+
+  return c.json({ data: { deleted: true } });
+});
+
 // Routes
 app.route("/api/sample", sampleRouter);
 app.route("/api/teams", teamsRouter);
