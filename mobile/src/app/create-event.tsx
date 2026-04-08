@@ -420,7 +420,14 @@ export default function CreateEventScreen() {
           </View>
           <Switch
             value={isVideoMeeting}
-            onValueChange={setIsVideoMeeting}
+            onValueChange={(val) => {
+              setIsVideoMeeting(val);
+              if (val) {
+                const newEnd = new Date(eventStart);
+                newEnd.setHours(newEnd.getHours() + 1);
+                setEventEnd(newEnd);
+              }
+            }}
             trackColor={{ false: "#E2E8F0", true: "#4361EE" }}
             thumbColor="white"
             testID="video-meeting-toggle"
