@@ -278,13 +278,15 @@ export default function CreateTaskScreen() {
                   <BookOpen size={20} color="white" />
                 </TouchableOpacity>
               ) : null}
-              <TouchableOpacity onPress={handleSaveAsTemplate} disabled={savingTemplate} testID="save-template-button">
-                {savingTemplate ? (
-                  <ActivityIndicator color="white" size="small" />
-                ) : (
-                  <Bookmark size={20} color="white" />
-                )}
-              </TouchableOpacity>
+              {!isReminder ? (
+                <TouchableOpacity onPress={handleSaveAsTemplate} disabled={savingTemplate} testID="save-template-button">
+                  {savingTemplate ? (
+                    <ActivityIndicator color="white" size="small" />
+                  ) : (
+                    <Bookmark size={20} color="white" />
+                  )}
+                </TouchableOpacity>
+              ) : null}
               <TouchableOpacity
                 onPress={handleCreate}
                 disabled={createMutation.isPending}
@@ -486,6 +488,7 @@ export default function CreateTaskScreen() {
           ) : null}
 
           {/* Recurring */}
+          {!isReminder ? (
           <View className="py-4 border-b border-slate-100 dark:border-slate-800">
             <View className="flex-row items-center justify-between mb-3">
               <View>
@@ -607,6 +610,7 @@ export default function CreateTaskScreen() {
               </View>
             ) : null}
           </View>
+          ) : null}
 
           {/* Incognito — owners and team leaders only, not for reminders */}
           {!isRegularMember && !isReminder ? (
@@ -665,6 +669,7 @@ export default function CreateTaskScreen() {
           </View>
 
           {/* Subtasks */}
+          {!isReminder ? (
           <View className="py-4 border-b border-slate-100 dark:border-slate-800">
             <Text className="text-sm font-semibold text-slate-500 mb-3">
               Subtasks{subtaskTitles.length > 0 ? ` (${subtaskTitles.length})` : ""}
@@ -703,6 +708,7 @@ export default function CreateTaskScreen() {
               </TouchableOpacity>
             </View>
           </View>
+          ) : null}
 
           <View style={{ height: 32 }} />
         </KeyboardAwareScrollView>
