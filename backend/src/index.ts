@@ -210,8 +210,18 @@ app.delete("/api/user", async (c) => {
     return c.json({ error: { message: "Incorrect password", code: "INVALID_PASSWORD" } }, 401);
   }
 
-  // Delete user (cascades to sessions, accounts, team memberships, etc.)
-  await prisma.user.delete({ where: { id: user.id } });
+  // Delete records that don't have onDelete: Cascade, in dependency order
+  const uid = user.id;
+  await prisma.pollVote.deleteMany({ where: { userId: uid } });
+  await prisma.poll.deleteMany({ where: { createdById: uid } });
+  await prisma.reminder.deleteMany({ where: { creatorId: uid } });
+  await prisma.directMessage.deleteMany({ where: { senderId: uid } });
+  await prisma.message.deleteMany({ where: { senderId: uid } });
+  await prisma.topic.deleteMany({ where: { createdById: uid } });
+  await prisma.taskTemplate.deleteMany({ where: { createdById: uid } });
+  await prisma.task.deleteMany({ where: { creatorId: uid } });
+  // Delete user (cascades: sessions, accounts, team memberships, reactions, etc.)
+  await prisma.user.delete({ where: { id: uid } });
 
   return c.json({ data: { deleted: true } });
 });
