@@ -163,9 +163,9 @@ export default function VideoCallScreen() {
     return (
       <View style={[s.screen, { alignItems: "stretch" }]}>
         <StatusBar barStyle="light-content" />
-        <SafeAreaView style={{ flex: 1 }} edges={["top", "bottom", "left", "right"]}>
+        <View style={{ flex: 1 }}>
           {/* Header */}
-          <View style={s.header}>
+          <View style={[s.header, { paddingTop: insets.top + 8 }]}>
             <TouchableOpacity onPress={goBack} style={s.headerBack} testID="back-button">
               <ChevronLeft size={22} color="#fff" />
             </TouchableOpacity>
@@ -203,7 +203,7 @@ export default function VideoCallScreen() {
               </TouchableOpacity>
             )}
           </View>
-        </SafeAreaView>
+        </View>
       </View>
     );
   }
