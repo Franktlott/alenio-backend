@@ -293,7 +293,7 @@ export default function ProfileScreen() {
     mutationFn: async () => {
       const res = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/api/user`, {
         method: "DELETE",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Cookie: authClient.getCookie() },
         credentials: "include",
         body: JSON.stringify({ password: deletePassword }),
       });
