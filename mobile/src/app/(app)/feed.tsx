@@ -32,51 +32,6 @@ function formatEventTime(startDate: string, endDate: string | null | undefined, 
   return `${fmt(start)} – ${fmt(new Date(endDate))}`;
 }
 
-function TodayEventsCard({ events }: { events: CalendarEvent[] }) {
-  if (events.length === 0) return null;
-  return (
-    <View style={{ marginHorizontal: 16, marginTop: 14, marginBottom: 4 }}>
-      <LinearGradient
-        colors={["#4361EE", "#7C3AED"]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={{ borderRadius: 18, padding: 2 }}
-      >
-        <View style={{ backgroundColor: "#F5F3FF", borderRadius: 16, padding: 16, gap: 10 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "#EDE9FE", alignItems: "center", justifyContent: "center" }}>
-              <Calendar size={16} color="#7C3AED" />
-            </View>
-            <Text style={{ fontSize: 13, fontWeight: "800", color: "#6D28D9", letterSpacing: 0.4 }}>TODAY'S EVENTS</Text>
-            <View style={{ marginLeft: "auto", backgroundColor: "#EDE9FE", borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2 }}>
-              <Text style={{ fontSize: 11, fontWeight: "700", color: "#7C3AED" }}>{events.length}</Text>
-            </View>
-          </View>
-          {events.map((ev, i) => (
-            <View key={ev.id} style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 10,
-              backgroundColor: "white",
-              borderRadius: 12,
-              padding: 10,
-              borderLeftWidth: 3,
-              borderLeftColor: ev.color ?? "#7C3AED",
-            }}>
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 14, fontWeight: "700", color: "#1E1B4B" }} numberOfLines={1}>{ev.title}</Text>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 }}>
-                  <Clock size={11} color="#94A3B8" />
-                  <Text style={{ fontSize: 12, color: "#64748B" }}>{formatEventTime(ev.startDate, ev.endDate, ev.allDay)}</Text>
-                </View>
-              </View>
-            </View>
-          ))}
-        </View>
-      </LinearGradient>
-    </View>
-  );
-}
 
 const REACTION_HINT_KEY = "reaction_hint_shown";
 
@@ -791,21 +746,6 @@ export default function FeedScreen() {
   });
 
   const now = new Date();
-  const isPast6am = now.getHours() >= 6;
-
-  const { data: allEvents = [] } = useQuery({
-    queryKey: ["events", activeTeamId],
-    queryFn: () => api.get<CalendarEvent[]>(`/api/teams/${activeTeamId}/events`),
-    enabled: !!activeTeamId && isPast6am,
-    refetchInterval: 60000,
-  });
-
-  const todayEvents = isPast6am ? allEvents.filter((ev) => {
-    const evDate = new Date(ev.startDate);
-    return evDate.getFullYear() === now.getFullYear() &&
-      evDate.getMonth() === now.getMonth() &&
-      evDate.getDate() === now.getDate();
-  }).sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime()) : [];
 
   if (!activeTeamId) {
     return (
@@ -847,7 +787,7 @@ export default function FeedScreen() {
         <FlatList
           data={activities}
           keyExtractor={(item) => item.id}
-          ListHeaderComponent={todayEvents.length > 0 ? <TodayEventsCard events={todayEvents} /> : null}
+
           renderItem={({ item, index }) => (
             <>
               <ActivityItem item={item} activeTeamId={activeTeamId} currentUserId={currentUserId} isDemo={isDemo} showPicker={openPickerId === item.id} onOpenPicker={() => setOpenPickerId(item.id)} onClosePicker={() => setOpenPickerId(null)} />
