@@ -17,6 +17,19 @@ function sanitizeRoomName(id: string): string {
   return `room-${id}`.replace(/[^a-zA-Z0-9-]/g, "-").slice(0, 40);
 }
 
+async function computeExp(roomId: string): Promise<number> {
+  const event = await prisma.calendarEvent.findUnique({
+    where: { id: roomId },
+    select: { endDate: true },
+  });
+
+  if (event?.endDate) {
+    return Math.floor(event.endDate.getTime() / 1000) + 3600;
+  }
+
+  return Math.floor(Date.now() / 1000) + 86400;
+}
+
 videoRouter.post(
   "/room",
   zValidator("json", z.object({ roomId: z.string(), userName: z.string().optional() })),
@@ -29,6 +42,7 @@ videoRouter.post(
     }
 
     const roomName = sanitizeRoomName(roomId);
+    const exp = await computeExp(roomId);
 
     // Get or create room
     const getRes = await fetch(`https://api.daily.co/v1/rooms/${roomName}`, {
@@ -40,6 +54,18 @@ videoRouter.post(
     if (getRes.ok) {
       const room = await getRes.json() as { url: string };
       roomUrl = room.url;
+
+      // Update existing room with expiration
+      await fetch(`https://api.daily.co/v1/rooms/${roomName}`, {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          properties: { exp },
+        }),
+      });
     } else {
       const createRes = await fetch("https://api.daily.co/v1/rooms", {
         method: "POST",
@@ -54,6 +80,7 @@ videoRouter.post(
             enable_knocking: false,
             enable_screenshare: true,
             enable_chat: true,
+            exp,
           },
         }),
       });

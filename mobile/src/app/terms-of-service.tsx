@@ -9,7 +9,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { ArrowLeft } from "lucide-react-native";
 
-const LAST_UPDATED = "April 7, 2026";
+const LAST_UPDATED = "April 8, 2026";
 const APP_NAME = "Alenio";
 const COMPANY_NAME = "Lott Technologies Group, LLC";
 const CONTACT_EMAIL = "Info@lotttechnologies.com";
@@ -70,7 +70,7 @@ export default function TermsOfService() {
 
         <Section title="2. Description of Service">
           <Body>
-            {APP_NAME} is a team communication and task management platform that enables teams to collaborate through messaging, task assignments, shared calendars, and real-time communication tools. Features may evolve over time and we reserve the right to modify, suspend, or discontinue any part of the service.
+            {APP_NAME} is a team communication and task management platform that enables teams to collaborate through messaging, task assignments, shared calendars, video meetings, and real-time communication tools. Features may evolve over time and we reserve the right to modify, suspend, or discontinue any part of the service.
           </Body>
         </Section>
 
@@ -134,49 +134,62 @@ export default function TermsOfService() {
           </Body>
         </Section>
 
-        <Section title="9. Team Responsibilities">
+        <Section title="9. Video Meetings">
+          <Body>
+            {APP_NAME} includes video meeting functionality powered by Daily.co. By using video meetings, you agree to the following:
+          </Body>
+          <View className="mt-2">
+            <Bullet>Video meeting rooms are created on Daily.co's infrastructure and are subject to Daily.co's Terms of Service and Privacy Policy.</Bullet>
+            <Bullet>Meeting rooms expire automatically — by default, one hour after the scheduled meeting end time, or within 24 hours if no end time is set. Expired rooms can no longer be joined.</Bullet>
+            <Bullet>You may share a meeting link with external participants who can join via a web browser. You are responsible for ensuring that only authorised individuals receive the link.</Bullet>
+            <Bullet>You must not use video meetings to transmit unlawful, harmful, or offensive content, or to record participants without their consent where required by applicable law.</Bullet>
+            <Bullet>{COMPANY_NAME} does not record or store video or audio from meetings.</Bullet>
+          </View>
+        </Section>
+
+        <Section title="10. Team Responsibilities">
           <Body>
             Team administrators are responsible for managing team membership and ensuring that team usage complies with these Terms. {COMPANY_NAME} is not responsible for content shared between team members or any disputes that arise within teams.
           </Body>
         </Section>
 
-        <Section title="10. Disclaimers">
+        <Section title="11. Disclaimers">
           <Body>
             {APP_NAME} is provided "as is" and "as available" without warranties of any kind, either express or implied, including warranties of merchantability, fitness for a particular purpose, or non-infringement. We do not warrant that the App will be uninterrupted, error-free, or free of viruses or other harmful components.
           </Body>
         </Section>
 
-        <Section title="11. Limitation of Liability">
+        <Section title="12. Limitation of Liability">
           <Body>
             To the fullest extent permitted by applicable law, {COMPANY_NAME} and its officers, directors, employees, and agents shall not be liable for any indirect, incidental, special, consequential, or punitive damages arising from your use of or inability to use the App, even if advised of the possibility of such damages. Our total liability to you for any claims arising from these Terms or your use of the App shall not exceed the amount you paid us in the 12 months preceding the claim.
           </Body>
         </Section>
 
-        <Section title="12. Indemnification">
+        <Section title="13. Indemnification">
           <Body>
             You agree to indemnify, defend, and hold harmless {COMPANY_NAME} and its affiliates from any claims, damages, losses, and expenses (including reasonable legal fees) arising out of your use of the App, your content, or your violation of these Terms.
           </Body>
         </Section>
 
-        <Section title="13. Termination">
+        <Section title="14. Termination">
           <Body>
             We reserve the right to suspend or terminate your account at our discretion, without notice, if we believe you have violated these Terms or applicable law. You may delete your account at any time through the App settings. Upon termination, your right to use the App ceases immediately.
           </Body>
         </Section>
 
-        <Section title="14. Changes to Terms">
+        <Section title="15. Changes to Terms">
           <Body>
             We may update these Terms from time to time. We will notify you of material changes within the App. Your continued use of {APP_NAME} after the effective date of revised Terms constitutes your acceptance of the changes.
           </Body>
         </Section>
 
-        <Section title="15. Governing Law">
+        <Section title="16. Governing Law">
           <Body>
             These Terms shall be governed by and construed in accordance with applicable law. Any disputes arising from these Terms or your use of {APP_NAME} shall be resolved through good-faith negotiation or, failing that, through binding arbitration or the courts of competent jurisdiction.
           </Body>
         </Section>
 
-        <Section title="16. Contact Us">
+        <Section title="17. Contact Us">
           <Body>
             If you have questions about these Terms, please contact us at:
           </Body>

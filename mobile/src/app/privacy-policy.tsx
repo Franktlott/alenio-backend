@@ -9,7 +9,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { ArrowLeft } from "lucide-react-native";
 
-const LAST_UPDATED = "April 7, 2026";
+const LAST_UPDATED = "April 8, 2026";
 const APP_NAME = "Alenio";
 const COMPANY_NAME = "Lott Technologies Group, LLC";
 const CONTACT_EMAIL = "Info@lotttechnologies.com";
@@ -78,6 +78,9 @@ export default function PrivacyPolicy() {
               <Text className="font-semibold">Team &amp; Collaboration Data:</Text> Team names, membership information, channels, and associated content.
             </Bullet>
             <Bullet>
+              <Text className="font-semibold">Video Call Data:</Text> When you use video meetings, your display name is shared with the video call provider (Daily.co) to identify you during the call. We do not record or store video or audio content.
+            </Bullet>
+            <Bullet>
               <Text className="font-semibold">Device Information:</Text> Device type, operating system, push notification tokens, and app version.
             </Bullet>
             <Bullet>
@@ -91,7 +94,7 @@ export default function PrivacyPolicy() {
           <View className="mt-2">
             <Bullet>Provide, operate, and maintain the App and its features.</Bullet>
             <Bullet>Create and manage your account and authenticate your identity.</Bullet>
-            <Bullet>Enable team communication, task management, and collaboration.</Bullet>
+            <Bullet>Enable team communication, task management, collaboration, and video meetings.</Bullet>
             <Bullet>Send push notifications for messages, tasks, and reminders (you may opt out in Settings).</Bullet>
             <Bullet>Process subscription payments via our payment provider.</Bullet>
             <Bullet>Respond to your support requests and communicate important updates.</Bullet>
@@ -167,6 +170,7 @@ export default function PrivacyPolicy() {
             <Bullet>Firebase Cloud Messaging (FCM) — Android push notifications</Bullet>
             <Bullet>RevenueCat — Subscription and in-app purchase management</Bullet>
             <Bullet>Expo — App infrastructure and over-the-air updates</Bullet>
+            <Bullet>Daily.co — Video call infrastructure. Your display name is passed to Daily.co to identify you during video meetings. Video and audio streams are processed by Daily.co and are not stored by us. Daily.co's privacy policy applies to data processed on their platform.</Bullet>
           </View>
         </Section>
 
