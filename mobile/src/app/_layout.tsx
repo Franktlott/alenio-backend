@@ -10,7 +10,7 @@ import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { useSession } from '@/lib/auth/use-session';
 import { useEffect, useRef, useState } from 'react';
 import * as Notifications from 'expo-notifications';
-import { registerForPushNotificationsAsync } from '@/lib/notifications';
+import { registerForPushNotificationsAsync, playNotificationTone } from '@/lib/notifications';
 import { initRevenueCat } from '@/lib/revenue-cat';
 import Animated, {
   useSharedValue,
@@ -92,7 +92,12 @@ function RootLayoutNav() {
     if (!session?.user) return;
     registerForPushNotificationsAsync();
     initRevenueCat(session.user.id);
-    notificationListener.current = Notifications.addNotificationReceivedListener(() => {});
+    notificationListener.current = Notifications.addNotificationReceivedListener((notification) => {
+      // Play custom notification tone
+      const data = notification.request.content.data as Record<string, string>;
+      const toneType = data?.conversationId ? "dm" : "msg";
+      playNotificationTone(toneType);
+    });
 
     const responseListener = Notifications.addNotificationResponseReceivedListener((response) => {
       const data = response.notification.request.content.data as Record<string, string>;
