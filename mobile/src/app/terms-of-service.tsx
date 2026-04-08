@@ -11,8 +11,8 @@ import { ArrowLeft } from "lucide-react-native";
 
 const LAST_UPDATED = "April 7, 2026";
 const APP_NAME = "Alenio";
-const COMPANY_NAME = "Lotttech";
-const CONTACT_EMAIL = "legal@alenio.app";
+const COMPANY_NAME = "Lott Technologies Group, LLC";
+const CONTACT_EMAIL = "Info@lotttechnologies.com";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
