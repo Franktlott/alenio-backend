@@ -159,11 +159,11 @@ export default function VideoCallScreen() {
   if (phase === "prejoin") {
     const initials = userName.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase();
     return (
-      <View style={s.screen}>
+      <View style={[s.screen, { alignItems: "stretch" }]}>
         <StatusBar barStyle="light-content" />
         <SafeAreaView style={{ flex: 1 }} edges={["top", "bottom", "left", "right"]}>
           {/* Header */}
-          <View style={[s.header, { paddingTop: insets.top + 20 }]}>
+          <View style={s.header}>
             <TouchableOpacity onPress={goBack} style={s.headerBack} testID="back-button">
               <ChevronLeft size={22} color="#fff" />
             </TouchableOpacity>
