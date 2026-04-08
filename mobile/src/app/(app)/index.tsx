@@ -17,7 +17,7 @@ import {
 } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams, Redirect, useFocusEffect } from "expo-router";
-import { Plus, User, Users, ArrowUpDown, ChevronLeft, ChevronRight, X, CalendarDays, CheckSquare, Calendar, Check, Bell, UserRound } from "lucide-react-native";
+import { Plus, User, Users, ArrowUpDown, ChevronLeft, ChevronRight, X, CalendarDays, CheckSquare, Calendar, Check, Bell, UserRound, Video, VideoOff, Clock } from "lucide-react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -587,8 +587,11 @@ export default function TasksScreen() {
   const [eventEnd, setEventEnd] = useState<Date>(new Date());
   const [eventColor, setEventColor] = useState("#4361EE");
   const [eventIsHidden, setEventIsHidden] = useState(false);
+  const [eventIsVideoMeeting, setEventIsVideoMeeting] = useState(false);
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
+  const [showStartTimePicker, setShowStartTimePicker] = useState(false);
+  const [showEndTimePicker, setShowEndTimePicker] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const { data: session } = useSession();
   const isDemo = useDemoMode();
@@ -716,7 +719,7 @@ export default function TasksScreen() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["calendar-events", activeTeamId] });
       setShowEventModal(false);
-      setEventTitle(""); setEventDescription(""); setEventColor("#4361EE"); setEventIsHidden(false);
+      setEventTitle(""); setEventDescription(""); setEventColor("#4361EE"); setEventIsHidden(false); setEventIsVideoMeeting(false);
     },
   });
 
@@ -727,7 +730,7 @@ export default function TasksScreen() {
       queryClient.invalidateQueries({ queryKey: ["calendar-events", activeTeamId] });
       setShowEventModal(false);
       setEditingEvent(null);
-      setEventTitle(""); setEventDescription(""); setEventColor("#4361EE"); setEventIsHidden(false);
+      setEventTitle(""); setEventDescription(""); setEventColor("#4361EE"); setEventIsHidden(false); setEventIsVideoMeeting(false);
     },
   });
 
@@ -738,7 +741,7 @@ export default function TasksScreen() {
       queryClient.invalidateQueries({ queryKey: ["calendar-events", activeTeamId] });
       setShowEventModal(false);
       setEditingEvent(null);
-      setEventTitle(""); setEventDescription(""); setEventColor("#4361EE"); setEventIsHidden(false);
+      setEventTitle(""); setEventDescription(""); setEventColor("#4361EE"); setEventIsHidden(false); setEventIsVideoMeeting(false);
     },
   });
 
@@ -749,7 +752,7 @@ export default function TasksScreen() {
       : new Date();
     setEventTitle(""); setEventDescription("");
     setEventStart(d); setEventEnd(d);
-    setEventColor("#4361EE"); setEventIsHidden(false); setFormError(null);
+    setEventColor("#4361EE"); setEventIsHidden(false); setEventIsVideoMeeting(false); setFormError(null);
     setShowEventModal(true);
   };
 
@@ -761,6 +764,7 @@ export default function TasksScreen() {
     setEventEnd(ev.endDate ? new Date(ev.endDate) : new Date(ev.startDate));
     setEventColor(ev.color);
     setEventIsHidden(ev.isHidden ?? false);
+    setEventIsVideoMeeting(ev.isVideoMeeting ?? false);
     setFormError(null);
     setConfirmDeleteEvent(false);
     setShowEventModal(true);
@@ -778,7 +782,9 @@ export default function TasksScreen() {
           startDate: eventStart.toISOString(),
           endDate: end.toISOString(),
           color: eventColor,
+          allDay: !eventIsVideoMeeting,
           isHidden: eventIsHidden,
+          isVideoMeeting: eventIsVideoMeeting,
         },
       });
     } else {
@@ -788,8 +794,9 @@ export default function TasksScreen() {
         startDate: eventStart.toISOString(),
         endDate: end.toISOString(),
         color: eventColor,
-        allDay: true,
+        allDay: !eventIsVideoMeeting,
         isHidden: eventIsHidden,
+        isVideoMeeting: eventIsVideoMeeting,
       });
     }
   };
@@ -1445,8 +1452,7 @@ export default function TasksScreen() {
                 <DateTimePicker value={eventStart} mode="date" display="default" onChange={(_e, d) => { setShowStartPicker(false); if (d) { setEventStart(d); if (d > eventEnd) setEventEnd(d); } }} />
               ) : null}
 
-              {showEndPicker && Platform.OS === "ios" ? (
-                <Modal visible transparent animationType="slide">
+              {showEndPicker && Platform.OS === "ios" ? (                <Modal visible transparent animationType="slide">
                   <View style={{ flex: 1, justifyContent: "flex-end" }}>
                     <View style={{ backgroundColor: "white", borderTopLeftRadius: 24, borderTopRightRadius: 24 }}>
                       <View style={{ flexDirection: "row", justifyContent: "space-between", paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 }}>
@@ -1460,6 +1466,85 @@ export default function TasksScreen() {
                 </Modal>
               ) : showEndPicker ? (
                 <DateTimePicker value={eventEnd} mode="date" display="default" onChange={(_e, d) => { setShowEndPicker(false); if (d) setEventEnd(d); }} />
+              ) : null}
+
+              {/* Video Meeting toggle */}
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: "#F8FAFC", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, marginBottom: eventIsVideoMeeting ? 10 : 14, borderWidth: 1.5, borderColor: eventIsVideoMeeting ? "#4361EE" : "#E2E8F0" }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                  <Video size={18} color={eventIsVideoMeeting ? "#4361EE" : "#CBD5E1"} />
+                  <View>
+                    <Text style={{ fontSize: 14, fontWeight: "600", color: "#0F172A" }}>Video Meeting</Text>
+                    <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 1 }}>Includes a video call link</Text>
+                  </View>
+                </View>
+                <Switch
+                  value={eventIsVideoMeeting}
+                  onValueChange={setEventIsVideoMeeting}
+                  trackColor={{ false: "#E2E8F0", true: "#4361EE" }}
+                  thumbColor="white"
+                  testID="video-meeting-toggle"
+                />
+              </View>
+
+              {/* Time pickers — only shown for video meetings */}
+              {eventIsVideoMeeting ? (
+                <View style={{ flexDirection: "row", gap: 10, marginBottom: 14 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748B", marginBottom: 6 }}>Start Time</Text>
+                    <Pressable onPress={() => setShowStartTimePicker(true)} style={{ borderWidth: 1.5, borderColor: "#4361EE", borderRadius: 12, paddingHorizontal: 10, paddingVertical: 10, flexDirection: "row", alignItems: "center", backgroundColor: "#4361EE0D" }}>
+                      <Clock size={13} color="#4361EE" />
+                      <Text style={{ fontSize: 12, fontWeight: "500", color: "#4361EE", marginLeft: 6 }}>
+                        {eventStart.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}
+                      </Text>
+                    </Pressable>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748B", marginBottom: 6 }}>End Time</Text>
+                    <Pressable onPress={() => setShowEndTimePicker(true)} style={{ borderWidth: 1.5, borderColor: "#7C3AED", borderRadius: 12, paddingHorizontal: 10, paddingVertical: 10, flexDirection: "row", alignItems: "center", backgroundColor: "#7C3AED0D" }}>
+                      <Clock size={13} color="#7C3AED" />
+                      <Text style={{ fontSize: 12, fontWeight: "500", color: "#7C3AED", marginLeft: 6 }}>
+                        {eventEnd.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}
+                      </Text>
+                    </Pressable>
+                  </View>
+                </View>
+              ) : null}
+
+              {/* iOS time pickers */}
+              {showStartTimePicker && Platform.OS === "ios" ? (
+                <Modal visible transparent animationType="slide">
+                  <View style={{ flex: 1, justifyContent: "flex-end" }}>
+                    <View style={{ backgroundColor: "white", borderTopLeftRadius: 24, borderTopRightRadius: 24 }}>
+                      <View style={{ flexDirection: "row", justifyContent: "space-between", paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 }}>
+                        <Pressable onPress={() => setShowStartTimePicker(false)}><Text style={{ color: "#64748B", fontSize: 15 }}>Cancel</Text></Pressable>
+                        <Text style={{ fontSize: 15, fontWeight: "600", color: "#0F172A" }}>Start Time</Text>
+                        <Pressable onPress={() => setShowStartTimePicker(false)}><Text style={{ color: "#4361EE", fontWeight: "600", fontSize: 15 }}>Done</Text></Pressable>
+                      </View>
+                      <DateTimePicker value={eventStart} mode="time" display="spinner" onChange={(_e, d) => { if (d) setEventStart(prev => { const n = new Date(prev); n.setHours(d.getHours(), d.getMinutes()); return n; }); }} />
+                      <View style={{ height: 20 }} />
+                    </View>
+                  </View>
+                </Modal>
+              ) : showStartTimePicker ? (
+                <DateTimePicker value={eventStart} mode="time" display="clock" onChange={(_e, d) => { setShowStartTimePicker(false); if (d) setEventStart(prev => { const n = new Date(prev); n.setHours(d.getHours(), d.getMinutes()); return n; }); }} />
+              ) : null}
+
+              {showEndTimePicker && Platform.OS === "ios" ? (
+                <Modal visible transparent animationType="slide">
+                  <View style={{ flex: 1, justifyContent: "flex-end" }}>
+                    <View style={{ backgroundColor: "white", borderTopLeftRadius: 24, borderTopRightRadius: 24 }}>
+                      <View style={{ flexDirection: "row", justifyContent: "space-between", paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 }}>
+                        <Pressable onPress={() => setShowEndTimePicker(false)}><Text style={{ color: "#64748B", fontSize: 15 }}>Cancel</Text></Pressable>
+                        <Text style={{ fontSize: 15, fontWeight: "600", color: "#0F172A" }}>End Time</Text>
+                        <Pressable onPress={() => setShowEndTimePicker(false)}><Text style={{ color: "#7C3AED", fontWeight: "600", fontSize: 15 }}>Done</Text></Pressable>
+                      </View>
+                      <DateTimePicker value={eventEnd} mode="time" display="spinner" onChange={(_e, d) => { if (d) setEventEnd(prev => { const n = new Date(prev); n.setHours(d.getHours(), d.getMinutes()); return n; }); }} />
+                      <View style={{ height: 20 }} />
+                    </View>
+                  </View>
+                </Modal>
+              ) : showEndTimePicker ? (
+                <DateTimePicker value={eventEnd} mode="time" display="clock" onChange={(_e, d) => { setShowEndTimePicker(false); if (d) setEventEnd(prev => { const n = new Date(prev); n.setHours(d.getHours(), d.getMinutes()); return n; }); }} />
               ) : null}
 
               {formError ? <Text style={{ color: "#EF4444", fontSize: 13, marginBottom: 12 }}>{formError}</Text> : null}
