@@ -250,6 +250,18 @@ export default function VideoCallScreen() {
         mediaCapturePermissionGrantType="grant"
         originWhitelist={["*"]}
         style={{ flex: 1 }}
+        injectedJavaScript={`
+(function(){
+  var style = document.createElement('style');
+  style.textContent = 'button[class*="leave"],button[class*="Leave"],[class*="leaveButton"],[data-testid*="leave"],[aria-label*="leave"],[aria-label*="Leave"]{display:none!important;}';
+  (document.head||document.documentElement).appendChild(style);
+  var obs = new MutationObserver(function(){
+    var s = document.getElementById('__hide_leave__');
+    if(!s){ var s2=document.createElement('style'); s2.id='__hide_leave__'; s2.textContent='button[class*="leave"],button[class*="Leave"],[class*="leaveButton"],[data-testid*="leave"],[aria-label*="leave"],[aria-label*="Leave"]{display:none!important;}'; (document.head||document.documentElement).appendChild(s2); }
+  });
+  obs.observe(document.documentElement,{childList:true,subtree:true});
+})(); true;
+        `}
         onShouldStartLoadWithRequest={req =>
           req.url.startsWith("http://") || req.url.startsWith("https://")
         }
