@@ -55,12 +55,13 @@ export function ChatMessage({
   const hasReactions = grouped.length > 0;
   const [viewerVisible, setViewerVisible] = useState(false);
   const [videoThumb, setVideoThumb] = useState<string | null>(null);
-  const [imgHeight, setImgHeight] = useState<number>(220);
+  const IMG_WIDTH = 154;
+  const [imgHeight, setImgHeight] = useState<number>(IMG_WIDTH);
 
   useEffect(() => {
     if (mediaType === "image" && mediaUrl) {
       Image.getSize(mediaUrl, (w, h) => {
-        if (w > 0) setImgHeight(Math.round((h / w) * 220));
+        if (w > 0) setImgHeight(Math.round((h / w) * IMG_WIDTH));
       }, () => {});
     }
   }, [mediaUrl, mediaType]);
@@ -129,7 +130,7 @@ export function ChatMessage({
                 <Pressable
                   onPress={() => setViewerVisible(true)}
                   className="overflow-hidden"
-                  style={{ maxWidth: 220 }}
+                  style={{ maxWidth: 154 }}
                   testID="media-thumbnail"
                 >
                   {mediaType === 'video' ? (
@@ -150,7 +151,7 @@ export function ChatMessage({
                   ) : (
                     <Image
                       source={{ uri: mediaUrl }}
-                      style={{ width: 220, height: imgHeight }}
+                      style={{ width: IMG_WIDTH, height: imgHeight }}
                       resizeMode="cover"
                     />
                   )}
