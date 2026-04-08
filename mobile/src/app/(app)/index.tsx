@@ -417,7 +417,7 @@ function TaskRow({ task, isReminder, onToggle, onPress }: { task: Task; isRemind
       testID="task-row"
     >
       {/* Checkbox */}
-      <TouchableOpacity
+      <Pressable
         onPress={onToggle}
         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         style={{ marginRight: 10 }}
@@ -429,7 +429,7 @@ function TaskRow({ task, isReminder, onToggle, onPress }: { task: Task; isRemind
         ) : (
           <View style={{ width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: "#CBD5E1" }} />
         )}
-      </TouchableOpacity>
+      </Pressable>
 
       {/* Content */}
       <View style={{ flex: 1 }}>
