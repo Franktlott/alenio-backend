@@ -24,7 +24,6 @@ import { useDemoMode } from "@/lib/useDemo";
 
 const STATUS_OPTIONS: { label: string; value: TaskStatus; color: string }[] = [
   { label: "To Do", value: "todo", color: "#64748B" },
-  { label: "In Progress", value: "in_progress", color: "#3B82F6" },
   { label: "Done", value: "done", color: "#10B981" },
 ];
 
