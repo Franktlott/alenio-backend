@@ -39,7 +39,7 @@ type ActivityEvent = {
   id: string;
   type: "task_completed" | "member_joined" | "member_removed" | "calendar_event_added" | "task_assigned" | "task_milestone" | "personal_best" | "celebration";
   createdAt: string;
-  metadata: { taskTitle?: string; taskTitles?: string[]; taskCount?: number; eventTitle?: string; eventTitles?: string[]; eventCount?: number; userName?: string; count?: number; incognito?: boolean; assigneeName?: string; isVideoMeeting?: boolean; targetUserId?: string; targetName?: string; celebrationType?: string; message?: string | null } | null;
+  metadata: { taskTitle?: string; taskTitles?: string[]; taskCount?: number; eventTitle?: string; eventTitles?: string[]; eventCount?: number; startDate?: string; allDay?: boolean; userName?: string; count?: number; incognito?: boolean; assigneeName?: string; isVideoMeeting?: boolean; targetUserId?: string; targetName?: string; celebrationType?: string; message?: string | null } | null;
   user: { id: string; name: string; image: string | null } | null;
   reactions: Record<string, { count: number; userIds: string[] }>;
 };
@@ -771,19 +771,34 @@ function ActivityItem({ item, activeTeamId, currentUserId, isDemo, showPicker, o
             {config.getMessage(item)}
           </Text>
 
-          {/* Video meeting badge */}
-          {item.type === "calendar_event_added" && item.metadata?.isVideoMeeting ? (
-            <View style={{
-              flexDirection: "row", alignItems: "center", gap: 5,
-              marginTop: 6,
-              alignSelf: "flex-start",
-              backgroundColor: "#EEF2FF",
-              borderRadius: 10,
-              paddingHorizontal: 8, paddingVertical: 4,
-              borderWidth: 1, borderColor: "#C7D2FE",
-            }}>
-              <Video size={12} color="#4361EE" />
-              <Text style={{ fontSize: 11, fontWeight: "600", color: "#4361EE" }}>Video meeting</Text>
+          {/* Event date/time + video badge */}
+          {item.type === "calendar_event_added" && item.metadata?.startDate ? (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 5, flexWrap: "wrap" }}>
+              <View style={{
+                flexDirection: "row", alignItems: "center", gap: 4,
+                backgroundColor: "#F5F3FF", borderRadius: 8,
+                paddingHorizontal: 7, paddingVertical: 3,
+                borderWidth: 1, borderColor: "#DDD6FE",
+              }}>
+                <Calendar size={11} color="#8B5CF6" />
+                <Text style={{ fontSize: 11, fontWeight: "600", color: "#7C3AED" }}>
+                  {new Date(item.metadata.startDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                  {!item.metadata.allDay
+                    ? `  ·  ${new Date(item.metadata.startDate).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}`
+                    : null}
+                </Text>
+              </View>
+              {item.metadata.isVideoMeeting ? (
+                <View style={{
+                  flexDirection: "row", alignItems: "center", gap: 4,
+                  backgroundColor: "#EEF2FF", borderRadius: 8,
+                  paddingHorizontal: 7, paddingVertical: 3,
+                  borderWidth: 1, borderColor: "#C7D2FE",
+                }}>
+                  <Video size={11} color="#4361EE" />
+                  <Text style={{ fontSize: 11, fontWeight: "600", color: "#4361EE" }}>Video</Text>
+                </View>
+              ) : null}
             </View>
           ) : null}
         </View>

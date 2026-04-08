@@ -184,7 +184,7 @@ calendarRouter.post(
       teamId,
       userId: user.id,
       type: "calendar_event_added",
-      metadata: { eventTitles: [event.title], eventCount: 1, isVideoMeeting: event.isVideoMeeting },
+      metadata: { eventTitles: [event.title], eventCount: 1, isVideoMeeting: event.isVideoMeeting, startDate: event.startDate.toISOString(), allDay: event.allDay },
     });
 
     return c.json({ data: event }, 201);
