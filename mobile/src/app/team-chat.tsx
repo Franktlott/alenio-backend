@@ -255,8 +255,8 @@ export default function TeamChatScreen() {
   });
 
   const { data: polls = [] } = useQuery<PollType[]>({
-    queryKey: ["polls", teamId],
-    queryFn: () => api.get<PollType[]>(`/api/teams/${teamId}/polls`),
+    queryKey: ["polls", teamId, topicKey],
+    queryFn: () => api.get<PollType[]>(`/api/teams/${teamId}/polls?topicId=${topicKey}`),
     enabled: !!teamId,
     refetchInterval: 5000,
     select: (data) => data.map((p) => ({ ...p, _isPoll: true as const })),
@@ -312,24 +312,24 @@ export default function TeamChatScreen() {
   const voteMutation = useMutation({
     mutationFn: ({ pollId, optionId }: { pollId: string; optionId: string }) =>
       api.post(`/api/teams/${teamId}/polls/${pollId}/vote`, { optionId }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["polls", teamId] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["polls", teamId, topicKey] }),
   });
 
   const deletePollMutation = useMutation({
     mutationFn: (pollId: string) => api.delete(`/api/teams/${teamId}/polls/${pollId}`),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["polls", teamId] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["polls", teamId, topicKey] }),
   });
 
   const endPollMutation = useMutation({
     mutationFn: (pollId: string) => api.patch(`/api/teams/${teamId}/polls/${pollId}/end`, {}),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["polls", teamId] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["polls", teamId, topicKey] }),
   });
 
   const createPollMutation = useMutation({
-    mutationFn: (payload: { question: string; options: string[]; durationHours: number; allowLeaderDelete: boolean }) =>
+    mutationFn: (payload: { question: string; options: string[]; durationHours: number; allowLeaderDelete: boolean; topicId: string | null }) =>
       api.post(`/api/teams/${teamId}/polls`, payload),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["polls", teamId] });
+      queryClient.invalidateQueries({ queryKey: ["polls", teamId, topicKey] });
       setShowPollModal(false);
       setPollQuestion("");
       setPollOptions(["", ""]);
@@ -970,6 +970,7 @@ export default function TeamChatScreen() {
                     options: validOptions,
                     durationHours: pollDuration,
                     allowLeaderDelete: pollAllowLeaderDelete,
+                    topicId: topicId || null,
                   });
                 }}
                 disabled={

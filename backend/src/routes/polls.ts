@@ -17,6 +17,9 @@ pollsRouter.use("*", authGuard);
 pollsRouter.get("/:teamId/polls", async (c) => {
   const user = c.get("user")!;
   const { teamId } = c.req.param();
+  const topicIdParam = c.req.query("topicId");
+  // "general" means no specific topic (null in DB)
+  const topicId = topicIdParam === "general" || !topicIdParam ? null : topicIdParam;
 
   const membership = await prisma.teamMember.findUnique({
     where: { userId_teamId: { userId: user.id, teamId } },
@@ -28,7 +31,7 @@ pollsRouter.get("/:teamId/polls", async (c) => {
   await prisma.poll.deleteMany({ where: { teamId, endsAt: { lt: cutoff } } });
 
   const polls = await prisma.poll.findMany({
-    where: { teamId },
+    where: { teamId, topicId },
     include: {
       createdBy: { select: { id: true, name: true, image: true } },
       options: {
@@ -52,11 +55,12 @@ pollsRouter.post(
     options: z.array(z.string().min(1).max(200)).min(2).max(6),
     durationHours: z.number().int().min(1).max(168), // 1h to 7 days
     allowLeaderDelete: z.boolean().default(true),
+    topicId: z.string().nullable().optional(),
   })),
   async (c) => {
     const user = c.get("user")!;
     const { teamId } = c.req.param();
-    const { question, options, durationHours, allowLeaderDelete } = c.req.valid("json");
+    const { question, options, durationHours, allowLeaderDelete, topicId } = c.req.valid("json");
 
     const membership = await prisma.teamMember.findUnique({
       where: { userId_teamId: { userId: user.id, teamId } },
@@ -68,6 +72,7 @@ pollsRouter.post(
     const poll = await prisma.poll.create({
       data: {
         teamId,
+        topicId: topicId || null,
         createdById: user.id,
         question,
         endsAt,

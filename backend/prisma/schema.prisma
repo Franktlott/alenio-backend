@@ -236,6 +236,7 @@ model Topic {
   team        Team      @relation(fields: [teamId], references: [id], onDelete: Cascade)
   createdBy   User      @relation("TopicCreator", fields: [createdById], references: [id])
   messages    Message[]
+  polls       Poll[]
 }
 
 model Conversation {
@@ -346,12 +347,14 @@ model TeamActivityReaction {
 model Poll {
   id          String       @id @default(cuid())
   teamId      String
+  topicId     String?
   createdById String
   question    String
   endsAt      DateTime
   createdAt   DateTime     @default(now())
   allowLeaderDelete Boolean      @default(true)
   team        Team         @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  topic       Topic?       @relation(fields: [topicId], references: [id], onDelete: SetNull)
   createdBy   User         @relation("PollCreatedBy", fields: [createdById], references: [id])
   options     PollOption[]
   votes       PollVote[]
