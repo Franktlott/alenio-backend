@@ -1,57 +1,182 @@
-import React, { useRef, useState, useEffect } from "react";
+import React, { useRef, useState, useEffect, useCallback } from "react";
 import { View, Text, TouchableOpacity, ActivityIndicator, StatusBar } from "react-native";
 import WebView, { WebViewNavigation } from "react-native-webview";
 import { useLocalSearchParams, router } from "expo-router";
 import { useSession } from "@/lib/auth/use-session";
 
-// Injected into Daily's WebView:
-// 1. Hides Daily branding
-// 2. Listens for the leave event and notifies React Native
+// Skins Daily's prebuilt UI to match Alenio and auto-exits on meeting end/error
 const INJECTED_JS = `
 (function() {
-  // Hide Daily branding via CSS
-  var style = document.createElement('style');
-  style.textContent = \`
-    .powered-by-daily,
-    .daily-logo,
-    [class*="branding"],
-    [class*="Branding"],
-    [class*="DailyLogo"],
-    [class*="daily-logo"] { display: none !important; }
-    body, html { background: #000 !important; }
-  \`;
-  document.head.appendChild(style);
+  var PRIMARY = '#4361EE';
+  var PRIMARY_DARK = '#2D4ED8';
+  var BG = '#0A0F1E';
+  var SURFACE = '#111827';
+  var SURFACE2 = '#1E293B';
+  var BORDER = 'rgba(255,255,255,0.08)';
 
-  // Listen for Daily leave events (prebuilt fires these on window)
-  function notifyLeave() {
-    if (window.ReactNativeWebView) {
-      window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'left-meeting' }));
-    }
+  function postLeave() {
+    window.ReactNativeWebView && window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'left-meeting' }));
   }
 
-  // Daily prebuilt custom events
-  window.addEventListener('daily:left-meeting', notifyLeave);
+  function injectStyles() {
+    var id = '__alenio_styles__';
+    if (document.getElementById(id)) return;
+    var style = document.createElement('style');
+    style.id = id;
+    style.textContent = \`
+      /* ── Base ── */
+      *, *::before, *::after { box-sizing: border-box; }
+      body, html { background: \${BG} !important; color: #fff !important; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif !important; }
 
-  // Intercept Daily call object if available
-  function watchCallObject() {
-    if (window.DailyIframe) {
-      try {
-        var frames = document.querySelectorAll('iframe');
-        frames.forEach(function(f) {
-          try { f.contentWindow.addEventListener('daily:left-meeting', notifyLeave); } catch(e) {}
-        });
-      } catch(e) {}
-    }
+      /* ── Pre-join lobby card ── */
+      [class*="prejoin"], [class*="Prejoin"],
+      [class*="lobby"], [class*="Lobby"],
+      [class*="HairCheck"], [class*="haircheck"] {
+        background: \${BG} !important;
+      }
+      [class*="card"], [class*="Card"],
+      [class*="modal-content"], [class*="ModalContent"],
+      [class*="prejoin-container"], [class*="PrejoinContainer"] {
+        background: \${SURFACE} !important;
+        border: 1px solid \${BORDER} !important;
+        border-radius: 20px !important;
+        box-shadow: 0 20px 60px rgba(0,0,0,0.6) !important;
+        color: #fff !important;
+      }
+
+      /* ── All text white ── */
+      [class*="card"] *, [class*="Card"] *,
+      [class*="prejoin"] *, [class*="Prejoin"] * {
+        color: #fff !important;
+      }
+
+      /* ── Inputs ── */
+      input, select, textarea {
+        background: \${SURFACE2} !important;
+        border: 1px solid \${BORDER} !important;
+        border-radius: 10px !important;
+        color: #fff !important;
+      }
+
+      /* ── Primary / Join button ── */
+      button[class*="join"], button[class*="Join"],
+      button[class*="primary"], button[class*="Primary"],
+      [class*="joinButton"], [class*="JoinButton"],
+      button[data-testid*="join"], button[data-testid*="Join"] {
+        background: \${PRIMARY} !important;
+        background-image: none !important;
+        border: none !important;
+        border-radius: 14px !important;
+        color: #fff !important;
+        font-weight: 600 !important;
+        letter-spacing: 0.3px !important;
+        box-shadow: 0 4px 20px rgba(67,97,238,0.4) !important;
+        transition: background 0.15s !important;
+      }
+      button[class*="join"]:active, button[class*="Join"]:active { background: \${PRIMARY_DARK} !important; }
+
+      /* ── Secondary / icon buttons ── */
+      button[class*="tray"], button[class*="Tray"],
+      [class*="controlButton"], [class*="ControlButton"],
+      [class*="tray-button"], [class*="TrayButton"] {
+        background: rgba(255,255,255,0.1) !important;
+        border: 1px solid \${BORDER} !important;
+        border-radius: 50% !important;
+        color: #fff !important;
+      }
+      button[class*="leave"], button[class*="Leave"],
+      [class*="leaveButton"], [class*="LeaveButton"] {
+        background: #EF4444 !important;
+        border-radius: 50% !important;
+        color: #fff !important;
+      }
+
+      /* ── Toolbar / tray ── */
+      [class*="tray"], [class*="Tray"],
+      [class*="controls"], [class*="Controls"],
+      [class*="toolbar"], [class*="Toolbar"] {
+        background: rgba(10,15,30,0.92) !important;
+        border-top: 1px solid \${BORDER} !important;
+        backdrop-filter: blur(20px) !important;
+      }
+
+      /* ── Video tiles ── */
+      [class*="tile"], [class*="Tile"],
+      [class*="participant"], [class*="Participant"],
+      [class*="video-container"], [class*="VideoContainer"] {
+        background: \${SURFACE} !important;
+        border-radius: 16px !important;
+        overflow: hidden !important;
+        border: 1px solid \${BORDER} !important;
+      }
+
+      /* ── Name tags ── */
+      [class*="name-tag"], [class*="NameTag"],
+      [class*="displayName"], [class*="DisplayName"] {
+        background: rgba(10,15,30,0.75) !important;
+        border-radius: 8px !important;
+        color: #fff !important;
+        padding: 2px 8px !important;
+        font-size: 12px !important;
+      }
+
+      /* ── Hide Daily branding / header logo ── */
+      .powered-by-daily, .daily-logo,
+      [class*="DailyLogo"], [class*="dailyLogo"],
+      [class*="branding"], [class*="Branding"],
+      [class*="watermark"], [class*="Watermark"],
+      a[href*="daily.co"] { display: none !important; }
+
+      /* ── Error / ended state card ── */
+      [class*="error"], [class*="Error"],
+      [class*="ended"], [class*="Ended"] {
+        background: \${SURFACE} !important;
+        border-radius: 20px !important;
+        color: #fff !important;
+      }
+    \`;
+    (document.head || document.documentElement).appendChild(style);
   }
 
-  // Re-apply styles and watch for leave on DOM changes
-  var obs = new MutationObserver(function() {
-    if (!document.head.contains(style)) document.head.appendChild(style);
-    watchCallObject();
-  });
-  obs.observe(document.body || document.documentElement, { childList: true, subtree: true });
+  // ── Auto-detect end/error states ──
+  function checkEndState() {
+    var text = (document.body || {}).innerText || '';
+    var shouldLeave =
+      (text.includes('meeting') && text.includes('does not exist')) ||
+      text.includes('This call has ended') ||
+      text.includes("You've left") ||
+      text.includes('left the meeting') ||
+      text.includes('Thank you for joining') ||
+      text.includes('You left the call') ||
+      text.includes('call has been ended');
+    if (shouldLeave) postLeave();
+  }
 
-  watchCallObject();
+  // ── Daily event listeners ──
+  window.addEventListener('daily:left-meeting', postLeave);
+  window.addEventListener('daily:call-instance-destroyed', postLeave);
+
+  // ── Start observing ──
+  function startObserver() {
+    injectStyles();
+    checkEndState();
+    var obs = new MutationObserver(function() {
+      injectStyles();
+      checkEndState();
+    });
+    obs.observe(document.documentElement, { childList: true, subtree: true });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', startObserver);
+  } else {
+    startObserver();
+  }
+
+  // Fallback checks
+  setTimeout(checkEndState, 1500);
+  setTimeout(checkEndState, 4000);
+  setTimeout(checkEndState, 8000);
 })();
 true;
 `;
@@ -64,8 +189,15 @@ export default function VideoCallScreen() {
   const [loading, setLoading] = useState(true);
   const [callUrl, setCallUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const roomUrlRef = useRef<string | null>(null);
+  const roomHostRef = useRef<string | null>(null);
   const webViewRef = useRef<WebView>(null);
+  const didLeave = useRef(false);
+
+  const goBack = useCallback(() => {
+    if (didLeave.current) return;
+    didLeave.current = true;
+    router.back();
+  }, []);
 
   useEffect(() => {
     async function fetchRoom() {
@@ -82,9 +214,8 @@ export default function VideoCallScreen() {
           return;
         }
         const { url, token } = json.data;
-        const finalUrl = token ? `${url}?t=${token}` : url;
-        roomUrlRef.current = url;
-        setCallUrl(finalUrl);
+        try { roomHostRef.current = new URL(url).hostname; } catch {}
+        setCallUrl(token ? `${url}?t=${token}` : url);
       } catch {
         setError("Could not connect. Please try again.");
       }
@@ -92,74 +223,65 @@ export default function VideoCallScreen() {
     fetchRoom();
   }, [roomId, userName]);
 
-  // Detect when user navigates away from the Daily room (leave button clicked)
-  function handleNavigationChange(navState: WebViewNavigation) {
-    const base = roomUrlRef.current;
-    if (!base) return;
-    const currentHost = new URL(base).hostname;
-    try {
-      const navHost = new URL(navState.url).hostname;
-      if (navHost !== currentHost) {
-        router.back();
-      }
-    } catch {
-      // ignore parse errors
-    }
-  }
-
-  // Handle messages from injected JS (leave event)
   function handleMessage(event: { nativeEvent: { data: string } }) {
     try {
       const msg = JSON.parse(event.nativeEvent.data);
-      if (msg.type === "left-meeting") {
-        router.back();
-      }
-    } catch {
-      // ignore
-    }
+      if (msg.type === "left-meeting") goBack();
+    } catch {}
+  }
+
+  function handleNavigationChange(navState: WebViewNavigation) {
+    const host = roomHostRef.current;
+    if (!host) return;
+    try {
+      const navHost = new URL(navState.url).hostname;
+      // Navigate back if we land somewhere outside the Daily domain
+      if (navHost && navHost !== host) goBack();
+    } catch {}
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#000" }}>
+    <View style={{ flex: 1, backgroundColor: "#0A0F1E" }}>
       <StatusBar hidden />
 
       {error ? (
-        <View style={{ flex: 1, backgroundColor: "#0F172A", alignItems: "center", justifyContent: "center" }}>
-          <Text style={{ color: "white", textAlign: "center", paddingHorizontal: 24, marginBottom: 16 }}>
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 32 }}>
+          <Text style={{ color: "white", textAlign: "center", fontSize: 16, marginBottom: 20 }}>
             {error}
           </Text>
           <TouchableOpacity
-            testID="error-back-button"
-            onPress={() => router.back()}
-            style={{ backgroundColor: "#EF4444", paddingHorizontal: 24, paddingVertical: 12, borderRadius: 24 }}
+            onPress={goBack}
+            style={{
+              backgroundColor: "#4361EE",
+              paddingHorizontal: 28,
+              paddingVertical: 14,
+              borderRadius: 14,
+            }}
           >
-            <Text style={{ color: "white", fontWeight: "600" }}>Go Back</Text>
+            <Text style={{ color: "white", fontWeight: "600", fontSize: 16 }}>Go Back</Text>
           </TouchableOpacity>
         </View>
       ) : !callUrl ? (
-        <View
-          testID="loading-room"
-          style={{ flex: 1, backgroundColor: "#0F172A", alignItems: "center", justifyContent: "center" }}
-        >
-          <ActivityIndicator color="white" size="large" />
-          <Text style={{ color: "white", marginTop: 12, fontSize: 14 }}>Starting call...</Text>
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+          <ActivityIndicator color="#4361EE" size="large" />
+          <Text style={{ color: "rgba(255,255,255,0.6)", marginTop: 14, fontSize: 14 }}>
+            Starting call...
+          </Text>
         </View>
       ) : (
         <>
           {loading ? (
             <View
               style={{
-                position: "absolute",
-                inset: 0,
-                top: 0, left: 0, right: 0, bottom: 0,
-                backgroundColor: "#0F172A",
+                ...StyleSheet.absoluteFillObject,
+                backgroundColor: "#0A0F1E",
                 alignItems: "center",
                 justifyContent: "center",
                 zIndex: 10,
               }}
             >
-              <ActivityIndicator color="white" size="large" />
-              <Text style={{ color: "white", marginTop: 12, fontSize: 14 }}>
+              <ActivityIndicator color="#4361EE" size="large" />
+              <Text style={{ color: "rgba(255,255,255,0.6)", marginTop: 14, fontSize: 14 }}>
                 Joining as {userName}...
               </Text>
             </View>
@@ -174,7 +296,7 @@ export default function VideoCallScreen() {
             javaScriptEnabled
             domStorageEnabled
             startInLoadingState={false}
-            style={{ flex: 1, backgroundColor: "#000000" }}
+            style={{ flex: 1, backgroundColor: "#0A0F1E" }}
             injectedJavaScript={INJECTED_JS}
             injectedJavaScriptBeforeContentLoaded={INJECTED_JS}
             onMessage={handleMessage}
@@ -188,3 +310,5 @@ export default function VideoCallScreen() {
     </View>
   );
 }
+
+import { StyleSheet } from "react-native";
