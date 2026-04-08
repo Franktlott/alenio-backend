@@ -7,7 +7,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import WebView from "react-native-webview";
 import { useLocalSearchParams, router, useNavigation } from "expo-router";
-import { ChevronLeft, VideoOff, Video, Mic, MicOff, Volume2, VolumeX, PhoneOff } from "lucide-react-native";
+import { ChevronLeft, Video, PhoneOff } from "lucide-react-native";
 import { useSession } from "@/lib/auth/use-session";
 import { useCameraPermissions, useMicrophonePermissions } from "expo-camera";
 
@@ -28,10 +28,6 @@ export default function VideoCallScreen() {
   const [phase, setPhase] = useState<Phase>("loading");
   const [callUrl, setCallUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [micOn, setMicOn] = useState(true);
-  const [videoOn, setVideoOn] = useState(true);
-  const [speakerOn, setSpeakerOn] = useState(true);
-
   const userName = session?.user?.name ?? "Guest";
   const userImage = session?.user?.image;
 
@@ -185,40 +181,6 @@ export default function VideoCallScreen() {
               </View>
             )}
             <Text style={s.previewName}>{userName}</Text>
-            {!videoOn ? (
-              <View style={s.videoOffBadge}>
-                <VideoOff size={16} color="rgba(255,255,255,0.6)" />
-                <Text style={s.videoOffText}>Camera off</Text>
-              </View>
-            ) : null}
-          </View>
-
-          {/* Controls */}
-          <View style={s.controlRow}>
-            <TouchableOpacity
-              testID="toggle-camera"
-              style={[s.controlBtn, !videoOn && s.controlBtnOff]}
-              onPress={() => setVideoOn(v => !v)}
-            >
-              {videoOn ? <Video size={22} color="#fff" /> : <VideoOff size={22} color="#fff" />}
-              <Text style={s.controlLabel}>{videoOn ? "Camera" : "Cam off"}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              testID="toggle-mic"
-              style={[s.controlBtn, !micOn && s.controlBtnOff]}
-              onPress={() => setMicOn(m => !m)}
-            >
-              {micOn ? <Mic size={22} color="#fff" /> : <MicOff size={22} color="#fff" />}
-              <Text style={s.controlLabel}>{micOn ? "Mic" : "Muted"}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              testID="toggle-speaker"
-              style={[s.controlBtn, !speakerOn && s.controlBtnOff]}
-              onPress={() => setSpeakerOn(v => !v)}
-            >
-              {speakerOn ? <Volume2 size={22} color="#fff" /> : <VolumeX size={22} color="#fff" />}
-              <Text style={s.controlLabel}>Speaker</Text>
-            </TouchableOpacity>
           </View>
 
           {/* Join button */}
@@ -321,30 +283,6 @@ const s = StyleSheet.create({
   },
   avatarInitialsText: { color: "#fff", fontSize: 32, fontWeight: "700" },
   previewName: { color: "#fff", fontSize: 18, fontWeight: "600", marginTop: 14 },
-  videoOffBadge: {
-    flexDirection: "row", alignItems: "center",
-    marginTop: 8, backgroundColor: "rgba(255,255,255,0.1)",
-    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, gap: 6,
-  },
-  videoOffText: { color: "rgba(255,255,255,0.6)", fontSize: 13 },
-
-  // Controls
-  controlRow: {
-    flexDirection: "row", justifyContent: "center",
-    gap: 24, paddingVertical: 20, paddingHorizontal: 32,
-  },
-  controlBtn: {
-    width: 72, alignItems: "center", gap: 6,
-    backgroundColor: "rgba(255,255,255,0.1)",
-    paddingVertical: 14, borderRadius: 20,
-    borderWidth: 1, borderColor: "rgba(255,255,255,0.08)",
-  },
-  controlBtnOff: {
-    backgroundColor: "rgba(239,68,68,0.2)",
-    borderColor: "rgba(239,68,68,0.3)",
-  },
-  controlLabel: { color: "rgba(255,255,255,0.7)", fontSize: 11, fontWeight: "500" },
-
   // Join button
   joinRow: { paddingHorizontal: 24, paddingBottom: 24 },
   joinBtn: {
