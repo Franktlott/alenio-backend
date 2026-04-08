@@ -1,8 +1,10 @@
 import React, { useRef, useState, useEffect, useCallback } from "react";
-import { View, Text, TouchableOpacity, ActivityIndicator, StatusBar } from "react-native";
+import { View, Text, TouchableOpacity, ActivityIndicator, StatusBar, StyleSheet, Image } from "react-native";
 import WebView, { WebViewNavigation } from "react-native-webview";
 import { useLocalSearchParams, router } from "expo-router";
 import { useSession } from "@/lib/auth/use-session";
+
+const alenioLogo = require("@/assets/alenio-logo-white.png");
 
 // Skins Daily's prebuilt UI to match Alenio and auto-exits on meeting end/error
 const INJECTED_JS = `
@@ -246,6 +248,7 @@ export default function VideoCallScreen() {
 
       {error ? (
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 32 }}>
+          <Image source={alenioLogo} style={{ width: 120, height: 40, marginBottom: 32 }} resizeMode="contain" />
           <Text style={{ color: "white", textAlign: "center", fontSize: 16, marginBottom: 20 }}>
             {error}
           </Text>
@@ -263,6 +266,7 @@ export default function VideoCallScreen() {
         </View>
       ) : !callUrl ? (
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+          <Image source={alenioLogo} style={{ width: 120, height: 40, marginBottom: 32 }} resizeMode="contain" />
           <ActivityIndicator color="#4361EE" size="large" />
           <Text style={{ color: "rgba(255,255,255,0.6)", marginTop: 14, fontSize: 14 }}>
             Starting call...
@@ -280,6 +284,7 @@ export default function VideoCallScreen() {
                 zIndex: 10,
               }}
             >
+              <Image source={alenioLogo} style={{ width: 120, height: 40, marginBottom: 32 }} resizeMode="contain" />
               <ActivityIndicator color="#4361EE" size="large" />
               <Text style={{ color: "rgba(255,255,255,0.6)", marginTop: 14, fontSize: 14 }}>
                 Joining as {userName}...
@@ -311,4 +316,4 @@ export default function VideoCallScreen() {
   );
 }
 
-import { StyleSheet } from "react-native";
+
