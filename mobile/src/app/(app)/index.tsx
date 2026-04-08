@@ -37,7 +37,7 @@ type ListItem = { type: "task"; data: Task } | { type: "reminder"; data: Reminde
 const DAY_LABELS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 
-type WeekBar = { id: string; title: string; color: string; startCol: number; endCol: number };
+type WeekBar = { id: string; title: string; color: string; startCol: number; endCol: number; isVideoMeeting?: boolean };
 
 function computeWeekBars(week: (Date | null)[], events: CalendarEvent[]): WeekBar[][] {
   const bars: WeekBar[] = [];
@@ -55,7 +55,7 @@ function computeWeekBars(week: (Date | null)[], events: CalendarEvent[]): WeekBa
       }
     }
     if (startCol === -1) continue;
-    bars.push({ id: event.id, title: event.title, color: event.color, startCol, endCol });
+    bars.push({ id: event.id, title: event.title, color: event.color, startCol, endCol, isVideoMeeting: event.isVideoMeeting });
   }
   bars.sort((a, b) => (b.endCol - b.startCol) - (a.endCol - a.startCol) || a.startCol - b.startCol);
   const tracks: WeekBar[][] = [];
@@ -323,9 +323,12 @@ function MiniCalendar({
                         pointerEvents="none"
                         style={{ position: "absolute", left: bar.startCol * colWidth + 2, width: titleWidth, top: 0, height: 15, justifyContent: "center", overflow: "hidden" }}
                       >
-                        <Text style={{ color: "white", fontSize: 9, fontWeight: "600", paddingHorizontal: 4, lineHeight: 14 }} numberOfLines={1}>
-                          {bar.title}
-                        </Text>
+                        <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 4 }}>
+                          {bar.isVideoMeeting ? <Video size={8} color="white" style={{ marginRight: 2 }} /> : null}
+                          <Text style={{ color: "white", fontSize: 9, fontWeight: "600", lineHeight: 14, flex: 1 }} numberOfLines={1}>
+                            {bar.title}
+                          </Text>
+                        </View>
                       </View>
                     );
                   })}
