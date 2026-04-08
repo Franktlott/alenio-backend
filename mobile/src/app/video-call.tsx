@@ -268,7 +268,7 @@ export default function VideoCallScreen() {
 
   // ── IN-CALL ──
   return (
-    <View style={{ flex: 1, backgroundColor: "#0A0F1E" }}>
+    <View style={{ flex: 1, backgroundColor: "#0A0F1E", paddingTop: insets.top + 20 }}>
       <StatusBar hidden />
       <WebView
         ref={webViewRef}
