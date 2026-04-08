@@ -720,6 +720,22 @@ export default function TasksScreen() {
     setConfirmCompleteTask(task);
   };
 
+  const [pendingAcknowledgeReminder, setPendingAcknowledgeReminder] = useState<Reminder | null>(null);
+
+  const acknowledgeMutation = useMutation({
+    mutationFn: (r: Reminder) => api.post<Reminder>(`/api/teams/${r.teamId}/reminders/${r.id}/acknowledge`, {}),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["reminders", activeTeamId] });
+      setPendingAcknowledgeReminder(null);
+    },
+  });
+
+  const handleAcknowledgeReminder = (r: Reminder) => {
+    if (isDemo) { showDemoAlert(); return; }
+    if (r.acknowledgedAt) return; // already acknowledged
+    setPendingAcknowledgeReminder(r);
+  };
+
   const createEventMutation = useMutation({
     mutationFn: (data: object) =>
       api.post(`/api/teams/${activeTeamId}/events`, data),
@@ -1200,7 +1216,7 @@ export default function TasksScreen() {
                 key={item.data.id}
                 task={item.type === "reminder" ? reminderToTask(item.data) : item.data}
                 isReminder={item.type === "reminder"}
-                onToggle={() => item.type === "task" ? handleToggleTask(item.data) : undefined}
+                onToggle={() => item.type === "task" ? handleToggleTask(item.data) : handleAcknowledgeReminder(item.data)}
                 onPress={() => item.type === "task" ? router.push({ pathname: "/task-detail", params: { taskId: item.data.id, teamId: activeTeamId! } }) : router.push({ pathname: "/reminder-detail", params: { reminderId: item.data.id, teamId: activeTeamId! } })}
               />
             ))
@@ -1277,6 +1293,40 @@ export default function TasksScreen() {
               onPress={() => setConfirmCompleteTask(null)}
               style={{ borderRadius: 12, paddingVertical: 12, alignItems: "center" }}
               testID="complete-confirm-cancel"
+            >
+              <Text style={{ color: "#94A3B8", fontSize: 15, fontWeight: "600" }}>Cancel</Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
+
+      {/* Reminder acknowledge confirmation modal */}
+      {pendingAcknowledgeReminder ? (
+        <View style={{ position: "absolute", inset: 0, backgroundColor: "rgba(0,0,0,0.45)", alignItems: "center", justifyContent: "center", zIndex: 100 }} testID="acknowledge-confirm-overlay">
+          <View style={{ backgroundColor: "white", borderRadius: 20, marginHorizontal: 32, padding: 24, shadowColor: "#000", shadowOpacity: 0.2, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 12, width: "85%" }}>
+            <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: "#D1FAE5", alignItems: "center", justifyContent: "center", alignSelf: "center", marginBottom: 14 }}>
+              <Check size={24} color="#10B981" />
+            </View>
+            <Text style={{ fontSize: 17, fontWeight: "700", color: "#0F172A", textAlign: "center", marginBottom: 6 }}>Acknowledge reminder?</Text>
+            <Text style={{ fontSize: 14, color: "#64748B", textAlign: "center", marginBottom: 24 }} numberOfLines={2}>
+              "{pendingAcknowledgeReminder.title}"
+            </Text>
+            <Text style={{ fontSize: 12, color: "#94A3B8", textAlign: "center", marginBottom: 20 }}>
+              This reminder will be automatically deleted in 24 hours.
+            </Text>
+            <Pressable
+              onPress={() => acknowledgeMutation.mutate(pendingAcknowledgeReminder)}
+              style={{ backgroundColor: "#10B981", borderRadius: 12, paddingVertical: 14, alignItems: "center", marginBottom: 10 }}
+              testID="acknowledge-confirm-yes"
+            >
+              {acknowledgeMutation.isPending
+                ? <ActivityIndicator color="white" />
+                : <Text style={{ color: "white", fontSize: 15, fontWeight: "700" }}>Acknowledge</Text>}
+            </Pressable>
+            <Pressable
+              onPress={() => setPendingAcknowledgeReminder(null)}
+              style={{ borderRadius: 12, paddingVertical: 12, alignItems: "center" }}
+              testID="acknowledge-confirm-cancel"
             >
               <Text style={{ color: "#94A3B8", fontSize: 15, fontWeight: "600" }}>Cancel</Text>
             </Pressable>
