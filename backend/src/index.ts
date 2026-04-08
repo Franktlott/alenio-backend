@@ -197,19 +197,16 @@ app.delete("/api/user", async (c) => {
     return c.json({ error: { message: "Password required", code: "VALIDATION_ERROR" } }, 400);
   }
 
-  // Find the email+password account credential
-  const account = await prisma.account.findFirst({
-    where: { userId: user.id, providerId: "credential" },
-  });
+  // Verify password using Better Auth's own sign-in (handles its custom hash format)
+  const fullUser = await prisma.user.findUnique({ where: { id: user.id } });
+  if (!fullUser) return c.json({ error: { message: "User not found", code: "NOT_FOUND" } }, 404);
 
-  if (!account?.password) {
-    return c.json({ error: { message: "No password set for this account", code: "NO_PASSWORD" } }, 400);
-  }
-
-  // Verify password
-  const { compare } = await import("bcryptjs");
-  const valid = await compare(password, account.password);
-  if (!valid) {
+  try {
+    const result = await auth.api.signInEmail({
+      body: { email: fullUser.email, password },
+    });
+    if (!result) throw new Error("Sign-in failed");
+  } catch {
     return c.json({ error: { message: "Incorrect password", code: "INVALID_PASSWORD" } }, 401);
   }
 
