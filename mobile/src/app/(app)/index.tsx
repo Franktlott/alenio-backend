@@ -362,7 +362,10 @@ function EventRow({ event, onLongPress }: { event: CalendarEvent; onLongPress?: 
     >
       <View style={{ width: 4, borderRadius: 2, alignSelf: "stretch", backgroundColor: event.color, marginRight: 12 }} />
       <View style={{ flex: 1 }}>
-        <Text style={{ fontSize: 14, fontWeight: "600", color: "#0F172A", marginBottom: 3 }} numberOfLines={1}>{event.title}</Text>
+        <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 3 }}>
+          {event.isVideoMeeting ? <Video size={13} color="#4361EE" style={{ marginRight: 5 }} /> : null}
+          <Text style={{ fontSize: 14, fontWeight: "600", color: "#0F172A", flex: 1 }} numberOfLines={1}>{event.title}</Text>
+        </View>
         {event.description ? (
           <Text numberOfLines={1} style={{ fontSize: 12, color: "#94A3B8", marginBottom: 4 }}>{event.description}</Text>
         ) : null}

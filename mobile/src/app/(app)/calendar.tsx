@@ -12,7 +12,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { ChevronLeft, ChevronRight, Plus, Calendar, UserRound } from "lucide-react-native";
+import { ChevronLeft, ChevronRight, Plus, Calendar, UserRound, Video } from "lucide-react-native";
 import { router } from "expo-router";
 import { api } from "@/lib/api/api";
 import { useTeamStore } from "@/lib/state/team-store";
@@ -42,6 +42,7 @@ type WeekBar = {
   startCol: number;
   endCol: number;
   isHidden?: boolean;
+  isVideoMeeting?: boolean;
 };
 
 const DAYS_OF_WEEK = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -117,7 +118,7 @@ function computeWeekBars(week: Date[], events: CalendarEvent[]): WeekBar[][] {
     }
     if (startCol === -1) continue; // event doesn't touch this week
 
-    bars.push({ id: event.id, title: event.title, color: event.color, startCol, endCol, isHidden: event.isHidden });
+    bars.push({ id: event.id, title: event.title, color: event.color, startCol, endCol, isHidden: event.isHidden, isVideoMeeting: event.isVideoMeeting });
   }
 
   // Sort: longer spans first so they get top tracks
@@ -388,6 +389,7 @@ export default function CalendarScreen() {
                         >
                           <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 3 }}>
                             {bar.isHidden ? <UserRound size={10} color="white" style={{ marginRight: 2 }} /> : null}
+                            {bar.isVideoMeeting ? <Video size={9} color="white" style={{ marginRight: 2 }} /> : null}
                             <Text style={{ color: "white", fontSize: 9, fontWeight: "600", lineHeight: 13, flex: 1 }} numberOfLines={1}>
                               {bar.title}
                             </Text>
@@ -464,6 +466,7 @@ export default function CalendarScreen() {
                     <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
                       <View style={{ flexDirection: "row", alignItems: "center", flex: 1 }}>
                         <Text style={{ fontSize: 14, fontWeight: "700", color: "#0F172A", flex: 1 }} numberOfLines={1}>{event.title}</Text>
+                        {event.isVideoMeeting ? <Video size={13} color="#4361EE" style={{ marginLeft: 4 }} /> : null}
                         {event.isHidden ? <UserRound size={13} color="#94A3B8" style={{ marginLeft: 4 }} /> : null}
                       </View>
                       <View style={{ backgroundColor: event.color + "20", paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 }}>
