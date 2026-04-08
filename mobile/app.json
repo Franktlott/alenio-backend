@@ -1,21 +1,35 @@
 {
   "expo": {
-    "name": "vibecode",
-    "slug": "vibecode",
+    "name": "Alenio",
+    "slug": "alenio",
     "scheme": "vibecode",
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.vibecode.alenio-9iqp9v",
+      "buildNumber": "1",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Alenio uses the camera to capture photos inside the app before you publish them.",
+        "NSMicrophoneUsageDescription": "Alenio uses the microphone to record audio tracks that the app attaches to your creations.",
+        "NSPhotoLibraryUsageDescription": "Alenio accesses your photo library to generate thumbnails for your videos.",
+        "NSPhotoLibraryAddUsageDescription": "Alenio saves media you export from the app into your photo library.",
+        "UIBackgroundModes": [
+          "remote-notification"
+        ]
+      }
     },
     "android": {
       "edgeToEdgeEnabled": true
     },
-    "plugins": ["expo-router"],
+    "plugins": [
+      "expo-router"
+    ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "icon": "./icon.png"
   }
 }
