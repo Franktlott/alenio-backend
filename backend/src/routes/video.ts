@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
+import { Resend } from "resend";
 import { env } from "../env";
 import { prisma } from "../prisma";
 import { auth } from "../auth";
@@ -162,5 +163,120 @@ videoRouter.get("/upcoming", authGuard, async (c) => {
 
   return c.json({ data: result });
 });
+
+videoRouter.post(
+  "/invite",
+  authGuard,
+  zValidator(
+    "json",
+    z.object({
+      to: z.string().email(),
+      roomUrl: z.string().url(),
+      roomName: z.string(),
+      senderName: z.string(),
+    })
+  ),
+  async (c) => {
+    if (!env.RESEND_API_KEY) {
+      return c.json(
+        { error: { message: "Email not configured", code: "NO_EMAIL_CONFIG" } },
+        503
+      );
+    }
+
+    const { to, roomUrl, roomName, senderName } = c.req.valid("json");
+
+    const html = `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#F1F5F9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#F1F5F9;padding:40px 16px;">
+    <tr><td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;">
+        <!-- Logo header -->
+        <tr><td align="center" style="padding-bottom:28px;">
+          <table cellpadding="0" cellspacing="0">
+            <tr>
+              <td style="background:#4361EE;border-radius:12px;padding:10px 20px;">
+                <span style="color:#ffffff;font-size:20px;font-weight:700;letter-spacing:-0.5px;">Alenio</span>
+              </td>
+            </tr>
+          </table>
+        </td></tr>
+        <!-- Card -->
+        <tr><td style="background:#ffffff;border-radius:20px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+          <!-- Blue top bar -->
+          <table width="100%" cellpadding="0" cellspacing="0">
+            <tr><td style="background:linear-gradient(135deg,#4361EE,#7C3AED);padding:32px 40px;">
+              <div style="width:52px;height:52px;background:rgba(255,255,255,0.2);border-radius:16px;display:inline-flex;align-items:center;justify-content:center;margin-bottom:16px;">
+                <span style="font-size:26px;">📹</span>
+              </div>
+              <h1 style="margin:0;color:#ffffff;font-size:24px;font-weight:700;line-height:1.3;">You're invited to a video call</h1>
+              <p style="margin:8px 0 0;color:rgba(255,255,255,0.75);font-size:15px;">${senderName} is waiting for you</p>
+            </td></tr>
+          </table>
+          <!-- Body -->
+          <table width="100%" cellpadding="0" cellspacing="0">
+            <tr><td style="padding:36px 40px;">
+              <!-- Meeting info -->
+              <table width="100%" cellpadding="0" cellspacing="0" style="background:#F8FAFC;border-radius:12px;margin-bottom:28px;">
+                <tr><td style="padding:20px 24px;">
+                  <p style="margin:0 0 4px;font-size:11px;font-weight:700;color:#94A3B8;text-transform:uppercase;letter-spacing:0.8px;">Meeting</p>
+                  <p style="margin:0;font-size:17px;font-weight:700;color:#0F172A;">${roomName}</p>
+                </td></tr>
+              </table>
+              <!-- CTA button -->
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr><td align="center">
+                  <a href="${roomUrl}" style="display:inline-block;background:#4361EE;color:#ffffff;font-size:16px;font-weight:700;text-decoration:none;padding:16px 48px;border-radius:14px;letter-spacing:-0.2px;">Join Video Call</a>
+                </td></tr>
+              </table>
+              <!-- Divider -->
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin:28px 0;">
+                <tr>
+                  <td style="border-top:1px solid #E2E8F0;"></td>
+                </tr>
+              </table>
+              <!-- Link fallback -->
+              <p style="margin:0 0 6px;font-size:13px;color:#64748B;">Or copy this link into your browser:</p>
+              <p style="margin:0;font-size:13px;color:#4361EE;word-break:break-all;">${roomUrl}</p>
+            </td></tr>
+          </table>
+          <!-- Footer -->
+          <table width="100%" cellpadding="0" cellspacing="0">
+            <tr><td style="padding:20px 40px;background:#F8FAFC;border-top:1px solid #F1F5F9;">
+              <p style="margin:0;font-size:12px;color:#94A3B8;text-align:center;">Sent via <strong>Alenio</strong> · Team collaboration made simple</p>
+            </td></tr>
+          </table>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+    try {
+      const resend = new Resend(env.RESEND_API_KEY);
+      const result = await resend.emails.send({
+        from: env.FROM_EMAIL,
+        to,
+        subject: `${senderName} invited you to a video call`,
+        html,
+      });
+
+      if (result.error) {
+        return c.json(
+          { error: { message: result.error.message, code: "EMAIL_SEND_FAILED" } },
+          500
+        );
+      }
+
+      return c.json({ data: { sent: true } });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to send email";
+      return c.json({ error: { message, code: "EMAIL_SEND_FAILED" } }, 500);
+    }
+  }
+);
 
 export { videoRouter };

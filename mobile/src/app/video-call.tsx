@@ -2,12 +2,12 @@ import React, { useState, useEffect, useCallback } from "react";
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withSequence, withTiming } from "react-native-reanimated";
 import {
   View, Text, TouchableOpacity, ActivityIndicator,
-  StatusBar, StyleSheet, Image, Linking, Share,
+  StatusBar, StyleSheet, Image, Linking, Share, TextInput, Modal, KeyboardAvoidingView, Platform,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import WebView from "react-native-webview";
 import { useLocalSearchParams, router, useNavigation } from "expo-router";
-import { ChevronLeft, Video, PhoneOff, Share2, Monitor } from "lucide-react-native";
+import { ChevronLeft, Video, PhoneOff, Share2, Monitor, Mail, X, Check } from "lucide-react-native";
 import { useSession } from "@/lib/auth/use-session";
 import { useCameraPermissions, useMicrophonePermissions } from "expo-camera";
 
@@ -31,6 +31,13 @@ export default function VideoCallScreen() {
   const [error, setError] = useState<string | null>(null);
   const userName = session?.user?.name ?? "Guest";
   const userImage = session?.user?.image;
+
+  // Email invite state
+  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteSending, setInviteSending] = useState(false);
+  const [inviteSent, setInviteSent] = useState(false);
+  const [inviteError, setInviteError] = useState<string | null>(null);
 
   const pulseScale = useSharedValue(1);
   const glowOpacity = useSharedValue(0.5);
@@ -86,24 +93,46 @@ export default function VideoCallScreen() {
   }, [roomId, userName]);
 
   async function requestPermissionsAndJoin() {
-    // Step 1: Camera — shows its own iOS dialog
     const cam = cameraPermission?.granted ? cameraPermission : await requestCameraPermission();
-    if (!cam?.granted) {
-      setPermissionDenied(true);
-      return;
-    }
-
-    // Brief pause so iOS fully dismisses the first dialog before showing the second
+    if (!cam?.granted) { setPermissionDenied(true); return; }
     await new Promise(r => setTimeout(r, 300));
-
-    // Step 2: Mic — shows a separate iOS dialog
     const mic = micPermission?.granted ? micPermission : await requestMicPermission();
-    if (!mic?.granted) {
-      setPermissionDenied(true);
-      return;
-    }
-
+    if (!mic?.granted) { setPermissionDenied(true); return; }
     setPhase("incall");
+  }
+
+  async function sendEmailInvite() {
+    if (!inviteEmail.trim() || !shareUrl) return;
+    setInviteSending(true);
+    setInviteError(null);
+    try {
+      const res = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/api/video/invite`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          to: inviteEmail.trim(),
+          roomUrl: shareUrl,
+          roomName: roomName ?? "Video Call",
+          senderName: userName,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setInviteError(json.error?.message ?? "Failed to send invite.");
+      } else {
+        setInviteSent(true);
+        setTimeout(() => {
+          setShowEmailModal(false);
+          setInviteSent(false);
+          setInviteEmail("");
+        }, 2000);
+      }
+    } catch {
+      setInviteError("Could not send invite. Try again.");
+    } finally {
+      setInviteSending(false);
+    }
   }
 
   // ── PERMISSION DENIED ──
@@ -118,10 +147,7 @@ export default function VideoCallScreen() {
         <Text style={{ color: "rgba(255,255,255,0.6)", fontSize: 14, textAlign: "center", marginBottom: 32, lineHeight: 22 }}>
           Please allow camera and microphone access in your device Settings to join video calls.
         </Text>
-        <TouchableOpacity
-          onPress={() => Linking.openSettings()}
-          style={{ backgroundColor: "#4361EE", borderRadius: 14, paddingVertical: 14, paddingHorizontal: 32, marginBottom: 16 }}
-        >
+        <TouchableOpacity onPress={() => Linking.openSettings()} style={{ backgroundColor: "#4361EE", borderRadius: 14, paddingVertical: 14, paddingHorizontal: 32, marginBottom: 16 }}>
           <Text style={{ color: "#fff", fontSize: 16, fontWeight: "700" }}>Open Settings</Text>
         </TouchableOpacity>
         <TouchableOpacity onPress={goBack}>
@@ -185,7 +211,7 @@ export default function VideoCallScreen() {
             <Text style={s.previewName}>{userName}</Text>
           </View>
 
-          {/* Join button */}
+          {/* Actions */}
           <View style={s.joinRow}>
             <Animated.View style={joinBtnAnimStyle}>
               <TouchableOpacity testID="join-call-button" style={s.joinBtn} onPress={requestPermissionsAndJoin}>
@@ -193,15 +219,28 @@ export default function VideoCallScreen() {
                 <Text style={s.joinBtnText}>Join call</Text>
               </TouchableOpacity>
             </Animated.View>
+
             {!!shareUrl && (
-              <TouchableOpacity
-                style={s.shareBtn}
-                onPress={() => Share.share({ message: shareUrl, url: shareUrl, title: `Join ${roomName ?? "Video Call"}` })}
-              >
-                <Share2 size={16} color="rgba(255,255,255,0.7)" style={{ marginRight: 8 }} />
-                <Text style={s.shareBtnText}>Share link</Text>
-              </TouchableOpacity>
+              <View style={{ flexDirection: "row", gap: 10, marginTop: 12 }}>
+                <TouchableOpacity
+                  style={[s.secondaryBtn, { flex: 1 }]}
+                  onPress={() => Share.share({ message: shareUrl, url: shareUrl, title: `Join ${roomName ?? "Video Call"}` })}
+                >
+                  <Share2 size={15} color="rgba(255,255,255,0.7)" style={{ marginRight: 6 }} />
+                  <Text style={s.secondaryBtnText}>Share link</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[s.secondaryBtn, { flex: 1 }]}
+                  onPress={() => { setShowEmailModal(true); setInviteSent(false); setInviteError(null); }}
+                  testID="email-invite-button"
+                >
+                  <Mail size={15} color="rgba(255,255,255,0.7)" style={{ marginRight: 6 }} />
+                  <Text style={s.secondaryBtnText}>Email invite</Text>
+                </TouchableOpacity>
+              </View>
             )}
+
             {!!shareUrl && (
               <View style={s.screenShareHint}>
                 <Monitor size={14} color="rgba(255,255,255,0.4)" style={{ marginRight: 6 }} />
@@ -212,6 +251,80 @@ export default function VideoCallScreen() {
             )}
           </View>
         </View>
+
+        {/* Email invite modal */}
+        <Modal visible={showEmailModal} transparent animationType="slide" onRequestClose={() => setShowEmailModal(false)}>
+          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
+            <TouchableOpacity style={s.modalOverlay} activeOpacity={1} onPress={() => setShowEmailModal(false)}>
+              <TouchableOpacity activeOpacity={1} style={[s.modalCard, { paddingBottom: insets.bottom + 24 }]}>
+                {/* Modal header */}
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+                  <View>
+                    <Text style={{ fontSize: 18, fontWeight: "700", color: "#0F172A" }}>Email Invite</Text>
+                    <Text style={{ fontSize: 13, color: "#94A3B8", marginTop: 2 }}>Send a professional invite with a join link</Text>
+                  </View>
+                  <TouchableOpacity onPress={() => setShowEmailModal(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <X size={20} color="#94A3B8" />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Preview badge */}
+                <View style={s.invitePreview}>
+                  <View style={s.invitePreviewLogo}>
+                    <Text style={{ color: "#fff", fontSize: 13, fontWeight: "700" }}>Alenio</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 13, fontWeight: "600", color: "#0F172A" }} numberOfLines={1}>
+                      {userName} invited you to a video call
+                    </Text>
+                    <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 2 }} numberOfLines={1}>
+                      {roomName ?? "Video Call"} · Tap to join
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Email input */}
+                <Text style={{ fontSize: 13, fontWeight: "600", color: "#374151", marginBottom: 8 }}>Recipient email</Text>
+                <TextInput
+                  style={s.emailInput}
+                  placeholder="name@company.com"
+                  placeholderTextColor="#CBD5E1"
+                  value={inviteEmail}
+                  onChangeText={setInviteEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  testID="invite-email-input"
+                />
+
+                {inviteError ? (
+                  <Text style={{ fontSize: 13, color: "#EF4444", marginBottom: 12 }}>{inviteError}</Text>
+                ) : null}
+
+                <TouchableOpacity
+                  style={[s.sendBtn, (!inviteEmail.trim() || inviteSending) && { opacity: 0.5 }]}
+                  onPress={sendEmailInvite}
+                  disabled={!inviteEmail.trim() || inviteSending}
+                  testID="send-invite-button"
+                >
+                  {inviteSent ? (
+                    <>
+                      <Check size={18} color="#fff" style={{ marginRight: 8 }} />
+                      <Text style={s.sendBtnText}>Invite sent!</Text>
+                    </>
+                  ) : inviteSending ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <>
+                      <Mail size={18} color="#fff" style={{ marginRight: 8 }} />
+                      <Text style={s.sendBtnText}>Send invite</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </TouchableOpacity>
+            </TouchableOpacity>
+          </KeyboardAvoidingView>
+        </Modal>
       </View>
     );
   }
@@ -247,7 +360,6 @@ export default function VideoCallScreen() {
           req.url.startsWith("http://") || req.url.startsWith("https://")
         }
       />
-      {/* Floating Leave button — since we removed Daily's leave detection */}
       <TouchableOpacity
         testID="leave-call-button"
         onPress={goBack}
@@ -269,7 +381,6 @@ const s = StyleSheet.create({
   loadingText: { color: "rgba(255,255,255,0.5)", marginTop: 14, fontSize: 14 },
   errorText: { color: "#fff", fontSize: 16, textAlign: "center", paddingHorizontal: 32, marginBottom: 24 },
 
-  // Header
   header: {
     flexDirection: "row", alignItems: "center",
     paddingHorizontal: 16, paddingVertical: 14,
@@ -284,7 +395,6 @@ const s = StyleSheet.create({
     fontWeight: "600", textAlign: "center",
   },
 
-  // Preview area
   previewArea: {
     flex: 1, margin: 16, borderRadius: 24,
     backgroundColor: "#111827",
@@ -302,7 +412,7 @@ const s = StyleSheet.create({
   },
   avatarInitialsText: { color: "#fff", fontSize: 32, fontWeight: "700" },
   previewName: { color: "#fff", fontSize: 18, fontWeight: "600", marginTop: 14 },
-  // Join button
+
   joinRow: { paddingHorizontal: 24, paddingBottom: 24 },
   joinBtn: {
     backgroundColor: "#4361EE",
@@ -313,46 +423,61 @@ const s = StyleSheet.create({
   },
   joinBtnText: { color: "#fff", fontSize: 17, fontWeight: "700" },
 
-  // Leave button (floating overlay in-call)
+  secondaryBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center",
+    paddingVertical: 13, borderRadius: 14,
+    borderWidth: 1, borderColor: "rgba(255,255,255,0.15)",
+  },
+  secondaryBtnText: { color: "rgba(255,255,255,0.7)", fontSize: 14, fontWeight: "600" },
+
   leaveBtn: {
-    position: "absolute",
-    right: 16,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
+    position: "absolute", right: 16,
+    flexDirection: "row", alignItems: "center", gap: 6,
     backgroundColor: "#EF4444",
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 24,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    elevation: 6,
+    paddingVertical: 10, paddingHorizontal: 16, borderRadius: 24,
+    shadowColor: "#000", shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4, shadowRadius: 8, elevation: 6,
   },
   leaveBtnText: { color: "#fff", fontSize: 14, fontWeight: "700" },
 
-  // Share button
-  shareBtn: {
-    marginTop: 12,
-    flexDirection: "row", alignItems: "center", justifyContent: "center",
-    paddingVertical: 14, borderRadius: 18,
-    borderWidth: 1, borderColor: "rgba(255,255,255,0.15)",
-  },
-  shareBtnText: { color: "rgba(255,255,255,0.7)", fontSize: 15, fontWeight: "600" },
-
-  // Screen share hint
   screenShareHint: {
-    marginTop: 16,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 12,
+    marginTop: 16, flexDirection: "row",
+    alignItems: "center", justifyContent: "center", paddingHorizontal: 12,
   },
   screenShareHintText: {
-    color: "rgba(255,255,255,0.4)",
-    fontSize: 12,
-    textAlign: "center",
-    lineHeight: 18,
+    color: "rgba(255,255,255,0.4)", fontSize: 12,
+    textAlign: "center", lineHeight: 18,
   },
+
+  // Email modal
+  modalOverlay: {
+    flex: 1, backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "flex-end",
+  },
+  modalCard: {
+    backgroundColor: "#fff", borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    padding: 24,
+  },
+  invitePreview: {
+    flexDirection: "row", alignItems: "center", gap: 12,
+    backgroundColor: "#F8FAFC", borderRadius: 12,
+    padding: 14, marginBottom: 20,
+    borderWidth: 1, borderColor: "#E2E8F0",
+  },
+  invitePreviewLogo: {
+    backgroundColor: "#4361EE", borderRadius: 8,
+    paddingHorizontal: 10, paddingVertical: 6,
+  },
+  emailInput: {
+    borderWidth: 1.5, borderColor: "#E2E8F0", borderRadius: 12,
+    paddingHorizontal: 16, paddingVertical: 14,
+    fontSize: 15, color: "#0F172A", marginBottom: 16,
+    backgroundColor: "#F8FAFC",
+  },
+  sendBtn: {
+    backgroundColor: "#4361EE", borderRadius: 14,
+    paddingVertical: 16, flexDirection: "row",
+    alignItems: "center", justifyContent: "center",
+  },
+  sendBtnText: { color: "#fff", fontSize: 16, fontWeight: "700" },
 });
