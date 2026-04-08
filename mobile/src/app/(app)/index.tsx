@@ -1036,7 +1036,10 @@ export default function TasksScreen() {
                   >
                     <View style={{ width: 3, borderRadius: 2, alignSelf: "stretch", backgroundColor: ev.color }} />
                     <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 13, fontWeight: "600", color: "#0F172A", marginBottom: 2 }} numberOfLines={1}>{ev.title}</Text>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 5, marginBottom: 2 }}>
+                        {ev.isVideoMeeting ? <Video size={12} color="#4361EE" /> : null}
+                        <Text style={{ fontSize: 13, fontWeight: "600", color: "#0F172A", flex: 1 }} numberOfLines={1}>{ev.title}</Text>
+                      </View>
                       <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
                         <CalendarDays size={10} color="#64748B" />
                         <Text style={{ fontSize: 11, color: "#64748B" }}>{dateText}</Text>
