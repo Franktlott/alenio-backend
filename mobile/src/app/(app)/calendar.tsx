@@ -477,6 +477,12 @@ export default function CalendarScreen() {
                         </Text>
                       </View>
                     </View>
+                    {!event.allDay ? (
+                      <Text style={{ fontSize: 12, color: "#64748B", marginTop: 4 }}>
+                        {new Date(event.startDate).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}
+                        {event.endDate ? ` – ${new Date(event.endDate).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}` : null}
+                      </Text>
+                    ) : null}
                     {event.description ? (
                       <Text style={{ fontSize: 12, color: "#64748B", marginTop: 4 }} numberOfLines={2}>{event.description}</Text>
                     ) : null}
