@@ -148,22 +148,6 @@ export interface CalendarEvent {
   isVideoMeeting?: boolean;
 }
 
-export interface Reminder {
-  id: string;
-  title: string;
-  description?: string | null;
-  status: TaskStatus;
-  priority: TaskPriority;
-  dueDate?: string | null;
-  completedAt?: string | null;
-  acknowledgedAt?: string | null;
-  attachmentUrl?: string | null;
-  createdAt: string;
-  updatedAt: string;
-  teamId: string;
-  creatorId: string;
-  creator: User;
-}
 
 export interface CreateTaskInput {
   title: string;

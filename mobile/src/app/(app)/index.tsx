@@ -18,7 +18,7 @@ import {
 } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams, Redirect, useFocusEffect } from "expo-router";
-import { Plus, User, Users, ArrowUpDown, ChevronLeft, ChevronRight, X, CalendarDays, CheckSquare, Calendar, Check, Bell, UserRound, Video, VideoOff, Clock } from "lucide-react-native";
+import { Plus, User, Users, ArrowUpDown, ChevronLeft, ChevronRight, X, CalendarDays, CheckSquare, Calendar, Check, UserRound, Video, VideoOff, Clock } from "lucide-react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -27,13 +27,12 @@ import { useSession } from "@/lib/auth/use-session";
 import { useTeamStore } from "@/lib/state/team-store";
 import { useSubscriptionStore } from "@/lib/state/subscription-store";
 import { useTaskStore } from "@/lib/state/task-store";
-import type { Task, Team, TeamMember, CalendarEvent, Reminder } from "@/lib/types";
+import type { Task, Team, TeamMember, CalendarEvent } from "@/lib/types";
 import { NoTeamPlaceholder } from "@/components/NoTeamPlaceholder";
 import { useDemoMode, showDemoAlert } from "@/lib/useDemo";
 
 type FilterTab = "all" | "assigned" | "completed";
 type SortMode = "due" | "priority" | "completed";
-type ListItem = { type: "task"; data: Task } | { type: "reminder"; data: Reminder };
 
 const DAY_LABELS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
@@ -382,7 +381,7 @@ function EventRow({ event, onLongPress }: { event: CalendarEvent; onLongPress?: 
   );
 }
 
-function TaskRow({ task, isReminder, onToggle, onPress }: { task: Task; isReminder: boolean; onToggle: () => void; onPress: () => void }) {
+function TaskRow({ task, onToggle, onPress }: { task: Task; onToggle: () => void; onPress: () => void }) {
   const isDone = task.status === "done";
   const priority = PRIORITY_CONFIG[task.priority as keyof typeof PRIORITY_CONFIG] ?? PRIORITY_CONFIG.medium;
 
@@ -434,12 +433,6 @@ function TaskRow({ task, isReminder, onToggle, onPress }: { task: Task; isRemind
       {/* Content */}
       <View style={{ flex: 1 }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 2 }}>
-          {isReminder ? (
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 2, backgroundColor: "#FFF7ED", borderRadius: 6, paddingHorizontal: 5, paddingVertical: 1 }}>
-              <Bell size={9} color="#F97316" />
-              <Text style={{ fontSize: 9, fontWeight: "700", color: "#F97316" }}>Reminder</Text>
-            </View>
-          ) : null}
           {task.incognito ? <Text style={{ fontSize: 12 }}>🕵️</Text> : null}
           <Text
             numberOfLines={1}
@@ -463,8 +456,8 @@ function TaskRow({ task, isReminder, onToggle, onPress }: { task: Task; isRemind
             <Text style={{ fontSize: 9, fontWeight: "600", color: priority.text }}>{priority.label}</Text>
           </View>
 
-          {/* Assignee — only for real tasks */}
-          {!isReminder && task.assignments?.[0]?.user ? (
+          {/* Assignee */}
+          {task.assignments?.[0]?.user ? (
             <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
               <View style={{ width: 13, height: 13, borderRadius: 6.5, overflow: "hidden", backgroundColor: "#E0E7FF", alignItems: "center", justifyContent: "center" }}>
                 {task.assignments[0].user.image ? (
@@ -535,8 +528,8 @@ function TaskRow({ task, isReminder, onToggle, onPress }: { task: Task; isRemind
             </View>
           ) : null}
 
-          {/* Recurrence — only for real tasks */}
-          {!isReminder && task.recurrenceRule && !isDone ? (
+          {/* Recurrence */}
+          {task.recurrenceRule && !isDone ? (
             <Text style={{ fontSize: 9, color: "#818CF8" }}>↺ {task.recurrenceRule.type}</Text>
           ) : null}
 
@@ -546,27 +539,6 @@ function TaskRow({ task, isReminder, onToggle, onPress }: { task: Task; isRemind
   );
 }
 
-function reminderToTask(r: Reminder): Task {
-  return {
-    id: r.id,
-    title: r.title,
-    description: r.description,
-    status: r.status,
-    priority: r.priority,
-    dueDate: r.dueDate,
-    completedAt: r.completedAt,
-    attachmentUrl: r.attachmentUrl,
-    createdAt: r.createdAt,
-    updatedAt: r.updatedAt,
-    teamId: r.teamId,
-    creatorId: r.creatorId,
-    creator: r.creator,
-    assignments: [],
-    subtasks: [],
-    recurrenceRule: null,
-    incognito: false,
-  };
-}
 
 export default function TasksScreen() {
   const insets = useSafeAreaInsets();
@@ -631,7 +603,6 @@ export default function TasksScreen() {
     await queryClient.invalidateQueries({ queryKey: ["tasks", activeTeamId, "mine"] });
     await queryClient.invalidateQueries({ queryKey: ["tasks", activeTeamId, "team"] });
     await queryClient.invalidateQueries({ queryKey: ["calendar-events", activeTeamId] });
-    await queryClient.invalidateQueries({ queryKey: ["reminders", activeTeamId] });
     setRefreshing(false);
   };
 
@@ -651,13 +622,6 @@ export default function TasksScreen() {
   const { data: allTasks = [], isLoading } = useQuery({
     queryKey: ["tasks", activeTeamId, "mine"],
     queryFn: () => api.get<Task[]>(`/api/teams/${activeTeamId}/tasks?myTasks=true`),
-    enabled: !!activeTeamId,
-  });
-
-  // Reminders for the active team
-  const { data: allReminders = [] } = useQuery({
-    queryKey: ["reminders", activeTeamId],
-    queryFn: () => api.get<Reminder[]>(`/api/teams/${activeTeamId}/reminders`),
     enabled: !!activeTeamId,
   });
 
@@ -718,22 +682,6 @@ export default function TasksScreen() {
     if (isDemo) { showDemoAlert(); return; }
     // Always confirm before toggling either direction
     setConfirmCompleteTask(task);
-  };
-
-  const [pendingAcknowledgeReminder, setPendingAcknowledgeReminder] = useState<Reminder | null>(null);
-
-  const acknowledgeMutation = useMutation({
-    mutationFn: (r: Reminder) => api.post<Reminder>(`/api/teams/${r.teamId}/reminders/${r.id}/acknowledge`, {}),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["reminders", activeTeamId] });
-      setPendingAcknowledgeReminder(null);
-    },
-  });
-
-  const handleAcknowledgeReminder = (r: Reminder) => {
-    if (isDemo) { showDemoAlert(); return; }
-    if (r.acknowledgedAt) return; // already acknowledged
-    setPendingAcknowledgeReminder(r);
   };
 
   const createEventMutation = useMutation({
@@ -877,32 +825,20 @@ export default function TasksScreen() {
     return true;
   });
 
-  // Reminders: show in "all" (active) and "completed" tabs, never in "assigned"
-  const filteredReminders: Reminder[] = filter === "assigned" ? [] : allReminders.filter((r) => {
-    if (filter === "completed") return r.status === "done";
-    return r.status !== "done";
-  });
-
-  const tasks: ListItem[] = [
-    ...filteredTasks.map((t): ListItem => ({ type: "task", data: t })),
-    ...filteredReminders.map((r): ListItem => ({ type: "reminder", data: r })),
-  ].sort((a, b) => {
-    const aData = a.data;
-    const bData = b.data;
+  const tasks: Task[] = filteredTasks.slice().sort((a, b) => {
     if (sort === "priority") {
       const order = { urgent: 0, high: 1, medium: 2, low: 3 };
-      return (order[aData.priority as keyof typeof order] ?? 2) - (order[bData.priority as keyof typeof order] ?? 2);
+      return (order[a.priority as keyof typeof order] ?? 2) - (order[b.priority as keyof typeof order] ?? 2);
     }
     if (sort === "completed") {
-      const aDate = aData.completedAt ? new Date(aData.completedAt).getTime() : 0;
-      const bDate = bData.completedAt ? new Date(bData.completedAt).getTime() : 0;
-      return bDate - aDate; // newest first
+      const aDate = a.completedAt ? new Date(a.completedAt).getTime() : 0;
+      const bDate = b.completedAt ? new Date(b.completedAt).getTime() : 0;
+      return bDate - aDate;
     }
-    // due date: tasks with no due date go last
-    if (!aData.dueDate && !bData.dueDate) return 0;
-    if (!aData.dueDate) return 1;
-    if (!bData.dueDate) return -1;
-    return new Date(aData.dueDate).getTime() - new Date(bData.dueDate).getTime();
+    if (!a.dueDate && !b.dueDate) return 0;
+    if (!a.dueDate) return 1;
+    if (!b.dueDate) return -1;
+    return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
   });
 
   const currentYear = new Date().getFullYear();
@@ -1211,13 +1147,12 @@ export default function TasksScreen() {
               ) : null}
             </View>
           ) : (
-            tasks.slice(0, visibleCount).map((item) => (
+            tasks.slice(0, visibleCount).map((task) => (
               <TaskRow
-                key={item.data.id}
-                task={item.type === "reminder" ? reminderToTask(item.data) : item.data}
-                isReminder={item.type === "reminder"}
-                onToggle={() => item.type === "task" ? handleToggleTask(item.data) : handleAcknowledgeReminder(item.data)}
-                onPress={() => item.type === "task" ? router.push({ pathname: "/task-detail", params: { taskId: item.data.id, teamId: activeTeamId! } }) : router.push({ pathname: "/reminder-detail", params: { reminderId: item.data.id, teamId: activeTeamId! } })}
+                key={task.id}
+                task={task}
+                onToggle={() => handleToggleTask(task)}
+                onPress={() => router.push({ pathname: "/task-detail", params: { taskId: task.id, teamId: activeTeamId! } })}
               />
             ))
           )}
@@ -1257,7 +1192,6 @@ export default function TasksScreen() {
                 <TaskRow
                   key={item.id}
                   task={item}
-                  isReminder={false}
                   onToggle={() => handleToggleTask(item)}
                   onPress={() => router.push({ pathname: "/task-detail", params: { taskId: item.id, teamId: activeTeamId! } })}
                 />
@@ -1293,40 +1227,6 @@ export default function TasksScreen() {
               onPress={() => setConfirmCompleteTask(null)}
               style={{ borderRadius: 12, paddingVertical: 12, alignItems: "center" }}
               testID="complete-confirm-cancel"
-            >
-              <Text style={{ color: "#94A3B8", fontSize: 15, fontWeight: "600" }}>Cancel</Text>
-            </Pressable>
-          </View>
-        </View>
-      ) : null}
-
-      {/* Reminder acknowledge confirmation modal */}
-      {pendingAcknowledgeReminder ? (
-        <View style={{ position: "absolute", inset: 0, backgroundColor: "rgba(0,0,0,0.45)", alignItems: "center", justifyContent: "center", zIndex: 100 }} testID="acknowledge-confirm-overlay">
-          <View style={{ backgroundColor: "white", borderRadius: 20, marginHorizontal: 32, padding: 24, shadowColor: "#000", shadowOpacity: 0.2, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 12, width: "85%" }}>
-            <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: "#D1FAE5", alignItems: "center", justifyContent: "center", alignSelf: "center", marginBottom: 14 }}>
-              <Check size={24} color="#10B981" />
-            </View>
-            <Text style={{ fontSize: 17, fontWeight: "700", color: "#0F172A", textAlign: "center", marginBottom: 6 }}>Acknowledge reminder?</Text>
-            <Text style={{ fontSize: 14, color: "#64748B", textAlign: "center", marginBottom: 24 }} numberOfLines={2}>
-              "{pendingAcknowledgeReminder.title}"
-            </Text>
-            <Text style={{ fontSize: 12, color: "#94A3B8", textAlign: "center", marginBottom: 20 }}>
-              This reminder will be automatically deleted in 24 hours.
-            </Text>
-            <Pressable
-              onPress={() => acknowledgeMutation.mutate(pendingAcknowledgeReminder)}
-              style={{ backgroundColor: "#10B981", borderRadius: 12, paddingVertical: 14, alignItems: "center", marginBottom: 10 }}
-              testID="acknowledge-confirm-yes"
-            >
-              {acknowledgeMutation.isPending
-                ? <ActivityIndicator color="white" />
-                : <Text style={{ color: "white", fontSize: 15, fontWeight: "700" }}>Acknowledge</Text>}
-            </Pressable>
-            <Pressable
-              onPress={() => setPendingAcknowledgeReminder(null)}
-              style={{ borderRadius: 12, paddingVertical: 12, alignItems: "center" }}
-              testID="acknowledge-confirm-cancel"
             >
               <Text style={{ color: "#94A3B8", fontSize: 15, fontWeight: "600" }}>Cancel</Text>
             </Pressable>
@@ -1391,18 +1291,6 @@ export default function TasksScreen() {
               </View>
             </Pressable>
             ) : null}
-            <Pressable
-              onPress={() => { setShowAddModal(false); router.push({ pathname: "/create-task", params: { teamId: activeTeamId!, initialDueDate: selectedDay ?? toLocalIso(new Date()), isReminder: "true" } }); }}
-              style={{ flexDirection: "row", alignItems: "center", gap: 14, backgroundColor: "#FFF7ED", borderRadius: 16, padding: 16 }}
-            >
-              <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: "#F97316", alignItems: "center", justifyContent: "center" }}>
-                <Bell size={22} color="white" />
-              </View>
-              <View>
-                <Text style={{ fontSize: 15, fontWeight: "700", color: "#0F172A" }}>Add Reminder</Text>
-                <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 2 }}>Set a personal reminder for yourself</Text>
-              </View>
-            </Pressable>
             <View style={{ height: 16 }} />
           </Pressable>
         </Pressable>

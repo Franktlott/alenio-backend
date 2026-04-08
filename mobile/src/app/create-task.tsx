@@ -38,8 +38,7 @@ const RECURRENCE_TYPES: { label: string; value: RecurrenceType }[] = [
 ];
 
 export default function CreateTaskScreen() {
-  const { teamId, prefillTitle, initialDueDate, isReminder: isReminderParam } = useLocalSearchParams<{ teamId: string; prefillTitle?: string; initialDueDate?: string; isReminder?: string }>();
-  const isReminder = isReminderParam === "true";
+  const { teamId, prefillTitle, initialDueDate } = useLocalSearchParams<{ teamId: string; prefillTitle?: string; initialDueDate?: string }>();
   const queryClient = useQueryClient();
   const { data: session } = useSession();
 
@@ -151,12 +150,6 @@ export default function CreateTaskScreen() {
         const uploaded = await uploadFile(attachmentUri, filename, "image/jpeg");
         attachmentUrl = uploaded.url;
       }
-      if (isReminder) {
-        // POST to reminders endpoint — no subtasks for reminders
-        const { isReminder: _r, assigneeIds: _a, ...reminderInput } = input as Record<string, unknown>;
-        await api.post(`/api/teams/${teamId}/reminders`, { ...reminderInput, attachmentUrl });
-        return;
-      }
       const tasks = await api.post<Task[]>(`/api/teams/${teamId}/tasks`, { ...input, attachmentUrl });
       // Attach subtasks to each created task
       for (const task of tasks) {
@@ -169,7 +162,6 @@ export default function CreateTaskScreen() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tasks", teamId] });
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
-      queryClient.invalidateQueries({ queryKey: ["reminders", teamId] });
       router.back();
     },
     onError: () => setError("Failed to create task. Please try again."),
@@ -180,7 +172,7 @@ export default function CreateTaskScreen() {
       setError("Please enter a task title");
       return;
     }
-    if (!isReminder && selectedAssignees.length === 0) {
+    if (selectedAssignees.length === 0) {
       setError("Please assign this task to at least one person");
       return;
     }
@@ -190,7 +182,7 @@ export default function CreateTaskScreen() {
       description: description.trim() || undefined,
       priority,
       dueDate: dueDate!.toISOString(),
-      ...(isReminder ? { isReminder: true } : { assigneeIds: selectedAssignees }),
+      assigneeIds: selectedAssignees,
       incognito: isIncognito,
       recurrence: isRecurring
         ? {
@@ -271,22 +263,20 @@ export default function CreateTaskScreen() {
             <TouchableOpacity onPress={() => router.back()} testID="close-button">
               <X size={22} color="white" />
             </TouchableOpacity>
-            <Text style={{ flex: 1, marginLeft: 12, color: "white", fontSize: 18, fontWeight: "700" }}>{isReminder ? "New Reminder" : "New Task"}</Text>
+            <Text style={{ flex: 1, marginLeft: 12, color: "white", fontSize: 18, fontWeight: "700" }}>New Task</Text>
             <View className="flex-row items-center" style={{ gap: 14 }}>
               {templates.length > 0 ? (
                 <TouchableOpacity onPress={() => setShowTemplatePicker(true)} testID="use-template-button">
                   <BookOpen size={20} color="white" />
                 </TouchableOpacity>
               ) : null}
-              {!isReminder ? (
-                <TouchableOpacity onPress={handleSaveAsTemplate} disabled={savingTemplate} testID="save-template-button">
+              <TouchableOpacity onPress={handleSaveAsTemplate} disabled={savingTemplate} testID="save-template-button">
                   {savingTemplate ? (
                     <ActivityIndicator color="white" size="small" />
                   ) : (
                     <Bookmark size={20} color="white" />
                   )}
                 </TouchableOpacity>
-              ) : null}
               <TouchableOpacity
                 onPress={handleCreate}
                 disabled={createMutation.isPending}
@@ -435,8 +425,8 @@ export default function CreateTaskScreen() {
             </View>
           </View>
 
-          {/* Assignees — hidden for reminders */}
-          {!isReminder && members.length > 0 ? (
+          {/* Assignees */}
+          {members.length > 0 ? (
             <View className="py-4 border-b border-slate-100 dark:border-slate-800">
               <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 12 }}>
                 <Text className="text-sm font-semibold text-slate-500">Assign to</Text>
@@ -488,7 +478,6 @@ export default function CreateTaskScreen() {
           ) : null}
 
           {/* Recurring */}
-          {!isReminder ? (
           <View className="py-4 border-b border-slate-100 dark:border-slate-800">
             <View className="flex-row items-center justify-between mb-3">
               <View>
@@ -610,10 +599,9 @@ export default function CreateTaskScreen() {
               </View>
             ) : null}
           </View>
-          ) : null}
 
-          {/* Incognito — owners and team leaders only, not for reminders */}
-          {!isRegularMember && !isReminder ? (
+          {/* Incognito — owners and team leaders only */}
+          {!isRegularMember ? (
           <View className="py-4 border-b border-slate-100 dark:border-slate-800">
             <View className="flex-row items-center justify-between">
               <View style={{ flex: 1, marginRight: 12 }}>
@@ -669,7 +657,6 @@ export default function CreateTaskScreen() {
           </View>
 
           {/* Subtasks */}
-          {!isReminder ? (
           <View className="py-4 border-b border-slate-100 dark:border-slate-800">
             <Text className="text-sm font-semibold text-slate-500 mb-3">
               Subtasks{subtaskTitles.length > 0 ? ` (${subtaskTitles.length})` : ""}
@@ -708,7 +695,6 @@ export default function CreateTaskScreen() {
               </TouchableOpacity>
             </View>
           </View>
-          ) : null}
 
           <View style={{ height: 32 }} />
         </KeyboardAwareScrollView>

@@ -21,7 +21,6 @@ import { adminRouter } from "./routes/admin";
 import { webRouter } from "./routes/web-app";
 import { pollsRouter } from "./routes/polls";
 import { demoRouter } from "./routes/demo";
-import { remindersRouter } from "./routes/reminders";
 import { videoRouter } from "./routes/video";
 
 type Variables = {
@@ -214,7 +213,6 @@ app.delete("/api/user", async (c) => {
   const uid = user.id;
   await prisma.pollVote.deleteMany({ where: { userId: uid } });
   await prisma.poll.deleteMany({ where: { createdById: uid } });
-  await prisma.reminder.deleteMany({ where: { creatorId: uid } });
   await prisma.directMessage.deleteMany({ where: { senderId: uid } });
   await prisma.message.deleteMany({ where: { senderId: uid } });
   await prisma.topic.deleteMany({ where: { createdById: uid } });
@@ -240,7 +238,6 @@ app.route("/api/teams/:teamId/subscription", subscriptionRouter);
 app.route("/api/teams", activityRouter);
 app.route("/api/teams", topicsRouter);
 app.route("/api/teams", pollsRouter);
-app.route("/api/teams/:teamId/reminders", remindersRouter);
 app.route("/api/demo", demoRouter);
 app.route("/api/video", videoRouter);
 app.route("/admin", adminRouter);
@@ -266,19 +263,6 @@ async function runCleanup() {
 
     if (deletedEvents.count > 0 || deletedTasks.count > 0) {
       console.log(`[cleanup] Removed ${deletedEvents.count} events, ${deletedTasks.count} tasks older than 45 days`);
-    }
-
-    // Delete reminders acknowledged more than 24 hours ago
-    const ackCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    const acknowledgedReminders = await prisma.reminder.findMany({
-      where: { acknowledgedAt: { lt: ackCutoff } },
-      select: { id: true, attachmentUrl: true },
-    });
-    if (acknowledgedReminders.length > 0) {
-      await prisma.reminder.deleteMany({
-        where: { id: { in: acknowledgedReminders.map((r) => r.id) } },
-      });
-      console.log(`[cleanup] Removed ${acknowledgedReminders.length} acknowledged reminders`);
     }
   } catch (err) {
     console.error("[cleanup] Error during cleanup:", err);
