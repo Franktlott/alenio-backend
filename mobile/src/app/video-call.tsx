@@ -2,7 +2,7 @@ import React, { useRef, useState, useEffect, useCallback } from "react";
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withSequence, withTiming } from "react-native-reanimated";
 import {
   View, Text, TouchableOpacity, ActivityIndicator,
-  StatusBar, StyleSheet, Image,
+  StatusBar, StyleSheet, Image, Linking,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import WebView, { WebViewNavigation } from "react-native-webview";
@@ -136,12 +136,16 @@ export default function VideoCallScreen() {
 
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [micPermission, requestMicPermission] = useMicrophonePermissions();
+  const [permissionDenied, setPermissionDenied] = useState(false);
 
-  // Request camera + mic permissions immediately on mount
+  // Request camera + mic on mount; detect denied state
   useEffect(() => {
     async function requestPermissions() {
-      if (!cameraPermission?.granted) await requestCameraPermission();
-      if (!micPermission?.granted) await requestMicPermission();
+      const cam = cameraPermission?.granted ? cameraPermission : await requestCameraPermission();
+      const mic = micPermission?.granted ? micPermission : await requestMicPermission();
+      if (!cam?.granted || !mic?.granted) {
+        setPermissionDenied(true);
+      }
     }
     requestPermissions();
   }, []);
@@ -217,6 +221,31 @@ export default function VideoCallScreen() {
     const host = roomHostRef.current;
     if (!host) return;
     try { if (new URL(nav.url).hostname !== host) goBack(); } catch {}
+  }
+
+  // ── PERMISSION DENIED ──
+  if (permissionDenied) {
+    return (
+      <View style={[s.screen, { paddingHorizontal: 32 }]}>
+        <StatusBar barStyle="light-content" />
+        <Text style={{ fontSize: 48, marginBottom: 16 }}>📷</Text>
+        <Text style={{ color: "#fff", fontSize: 20, fontWeight: "700", textAlign: "center", marginBottom: 12 }}>
+          Camera & Mic Access Required
+        </Text>
+        <Text style={{ color: "rgba(255,255,255,0.6)", fontSize: 14, textAlign: "center", marginBottom: 32, lineHeight: 22 }}>
+          Please allow camera and microphone access in your device Settings to join video calls.
+        </Text>
+        <TouchableOpacity
+          onPress={() => Linking.openSettings()}
+          style={{ backgroundColor: "#4361EE", borderRadius: 14, paddingVertical: 14, paddingHorizontal: 32, marginBottom: 16 }}
+        >
+          <Text style={{ color: "#fff", fontSize: 16, fontWeight: "700" }}>Open Settings</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={goBack}>
+          <Text style={{ color: "rgba(255,255,255,0.5)", fontSize: 14 }}>Go Back</Text>
+        </TouchableOpacity>
+      </View>
+    );
   }
 
   // ── LOADING ──
