@@ -129,7 +129,7 @@ remindersRouter.post("/:reminderId/acknowledge", async (c) => {
 
   const updated = await prisma.reminder.update({
     where: { id: reminderId },
-    data: { acknowledgedAt: new Date() },
+    data: { acknowledgedAt: new Date(), status: "done", completedAt: new Date() },
     include: reminderInclude,
   });
 

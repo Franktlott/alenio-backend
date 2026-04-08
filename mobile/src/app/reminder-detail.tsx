@@ -380,7 +380,7 @@ export default function ReminderDetailScreen() {
                       key={s.value}
                       onPress={() => {
                         if (s.value === "done" && !isCompleted) {
-                          setShowDoneConfirm(true);
+                          setShowAcknowledgeConfirm(true);
                         } else if (s.value !== "done" && isCreator && !isCompleted && !isDemo) {
                           updateMutation.mutate({ status: s.value });
                         }
