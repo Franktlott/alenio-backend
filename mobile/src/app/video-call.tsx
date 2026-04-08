@@ -139,12 +139,23 @@ export default function VideoCallScreen() {
   const [permissionDenied, setPermissionDenied] = useState(false);
 
   async function requestPermissionsAndJoin() {
+    // Step 1: Camera permission — shows its own iOS dialog
     const cam = cameraPermission?.granted ? cameraPermission : await requestCameraPermission();
-    const mic = micPermission?.granted ? micPermission : await requestMicPermission();
-    if (!cam?.granted || !mic?.granted) {
+    if (!cam?.granted) {
       setPermissionDenied(true);
       return;
     }
+
+    // Brief pause so iOS fully dismisses the first dialog before showing the second
+    await new Promise(r => setTimeout(r, 300));
+
+    // Step 2: Mic permission — shows a separate iOS dialog
+    const mic = micPermission?.granted ? micPermission : await requestMicPermission();
+    if (!mic?.granted) {
+      setPermissionDenied(true);
+      return;
+    }
+
     setPhase("incall");
   }
 
@@ -356,6 +367,7 @@ export default function VideoCallScreen() {
         ref={webViewRef}
         testID="daily-webview"
         source={{ uri: callUrl! }}
+        userAgent="Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
         allowsInlineMediaPlayback
         mediaPlaybackRequiresUserAction={false}
         javaScriptEnabled
