@@ -361,7 +361,7 @@ export default function VideoCallScreen() {
         javaScriptEnabled
         domStorageEnabled
         startInLoadingState={false}
-        mediaCapturePermissionGrantType="prompt"
+        mediaCapturePermissionGrantType="grant"
         originWhitelist={['*']}
         allowsAirPlayForMediaPlayback={true}
         style={{ flex: 1, backgroundColor: "#0A0F1E" }}
