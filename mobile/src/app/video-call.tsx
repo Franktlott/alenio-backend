@@ -4,7 +4,7 @@ import {
   View, Text, TouchableOpacity, ActivityIndicator,
   StatusBar, StyleSheet, Image,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import WebView, { WebViewNavigation } from "react-native-webview";
 import { useLocalSearchParams, router, useNavigation } from "expo-router";
 import { ChevronLeft, VideoOff, Video, Mic, MicOff, Volume2, VolumeX, Users, PhoneOff, MoreHorizontal } from "lucide-react-native";
@@ -89,6 +89,7 @@ export default function VideoCallScreen() {
   const { roomId, roomName } = useLocalSearchParams<{ roomId: string; roomName: string }>();
   const { data: session } = useSession();
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     navigation.setOptions({ headerShown: false });
@@ -197,7 +198,7 @@ export default function VideoCallScreen() {
         <StatusBar barStyle="light-content" />
         <SafeAreaView style={{ flex: 1 }} edges={["top", "bottom", "left", "right"]}>
           {/* Header */}
-          <View style={s.header}>
+          <View style={[s.header, { paddingTop: insets.top + 20 }]}>
             <TouchableOpacity onPress={goBack} style={s.headerBack} testID="back-button">
               <ChevronLeft size={22} color="#fff" />
             </TouchableOpacity>
