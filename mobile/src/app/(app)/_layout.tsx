@@ -22,7 +22,7 @@ export const unstable_settings = {
 const ALL_TABS = [
   { name: "feed", label: "Feed", Icon: Activity, proOnly: true },
   { name: "chat", label: "Chat", Icon: MessageCircle, proOnly: false },
-  { name: "index", label: "Plan", Icon: CheckSquare, proOnly: true },
+  { name: "index", label: "Execute", Icon: CheckSquare, proOnly: true },
   { name: "team", label: "Team", Icon: Users, proOnly: false },
   { name: "profile", label: "Profile", Icon: User, proOnly: false },
 ] as const;
@@ -215,7 +215,7 @@ export default function AppLayout() {
       >
         <Tabs.Screen name="feed" options={{ href: hideProTabs ? null : undefined }} />
         <Tabs.Screen name="chat" options={{}} />
-        <Tabs.Screen name="index" options={{ title: "Plan", href: hideProTabs ? null : undefined }} />
+        <Tabs.Screen name="index" options={{ title: "Execute", href: hideProTabs ? null : undefined }} />
         <Tabs.Screen name="team" options={{ title: "Team" }} />
         <Tabs.Screen name="calendar" options={{ href: null }} />
         <Tabs.Screen name="profile" options={{ title: "Profile" }} />
