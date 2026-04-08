@@ -4,11 +4,41 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import WebView from "react-native-webview";
 import { useLocalSearchParams, router } from "expo-router";
 import { PhoneOff } from "lucide-react-native";
+import { useSession } from "@/lib/auth/use-session";
+
+// Injected into the WebView to hide Daily branding and polish the UI
+const INJECTED_CSS = `
+(function() {
+  var style = document.createElement('style');
+  style.textContent = \`
+    /* Hide Daily.co branding */
+    [data-testid="leave-button-label"],
+    .powered-by-daily,
+    .daily-logo,
+    [class*="branding"],
+    [class*="Branding"],
+    [class*="logo"],
+    [class*="Logo"] { display: none !important; }
+    /* Make video tiles fill space nicely */
+    body { background: #000 !important; }
+  \`;
+  document.head.appendChild(style);
+  // Re-apply after navigation changes
+  var obs = new MutationObserver(function() {
+    if (!document.head.contains(style)) document.head.appendChild(style);
+  });
+  obs.observe(document.head, { childList: true });
+})();
+true;
+`;
 
 export default function VideoCallScreen() {
   const { roomId, roomName } = useLocalSearchParams<{ roomId: string; roomName: string }>();
+  const { data: session } = useSession();
+  const userName = session?.user?.name ?? "Guest";
+
   const [loading, setLoading] = useState(true);
-  const [roomUrl, setRoomUrl] = useState<string | null>(null);
+  const [callUrl, setCallUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const webViewRef = useRef(null);
 
@@ -19,20 +49,21 @@ export default function VideoCallScreen() {
         const res = await fetch(`${baseUrl}/api/video/room`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ roomId }),
+          body: JSON.stringify({ roomId, userName }),
         });
         const json = await res.json();
         if (!res.ok || !json.data?.url) {
           setError("Could not start call. Please try again.");
           return;
         }
-        setRoomUrl(json.data.url);
+        const { url, token } = json.data;
+        setCallUrl(token ? `${url}?t=${token}` : url);
       } catch {
         setError("Could not connect. Please try again.");
       }
     }
     fetchRoom();
-  }, [roomId]);
+  }, [roomId, userName]);
 
   return (
     <View className="flex-1 bg-black">
@@ -44,7 +75,6 @@ export default function VideoCallScreen() {
             <Text className="text-white font-bold text-base" numberOfLines={1}>
               {roomName ?? "Video Call"}
             </Text>
-            <Text className="text-white/60 text-xs">Powered by Daily</Text>
           </View>
           <TouchableOpacity
             testID="end-call-button"
@@ -64,7 +94,7 @@ export default function VideoCallScreen() {
                 <Text className="text-white font-semibold">Go Back</Text>
               </TouchableOpacity>
             </View>
-          ) : !roomUrl ? (
+          ) : !callUrl ? (
             <View className="flex-1 bg-slate-900 items-center justify-center">
               <ActivityIndicator color="white" size="large" />
               <Text className="text-white mt-3 text-sm">Starting call...</Text>
@@ -74,20 +104,22 @@ export default function VideoCallScreen() {
               {loading ? (
                 <View className="absolute inset-0 bg-slate-900 items-center justify-center z-10">
                   <ActivityIndicator color="white" size="large" />
-                  <Text className="text-white mt-3 text-sm">Joining call...</Text>
+                  <Text className="text-white mt-3 text-sm">Joining as {userName}...</Text>
                 </View>
               ) : null}
               <WebView
                 ref={webViewRef}
-                source={{ uri: roomUrl }}
+                source={{ uri: callUrl }}
                 onLoadEnd={() => setLoading(false)}
                 allowsInlineMediaPlayback
                 mediaPlaybackRequiresUserAction={false}
                 javaScriptEnabled
                 domStorageEnabled
                 startInLoadingState={false}
-                style={{ flex: 1, backgroundColor: "#0F172A" }}
+                style={{ flex: 1, backgroundColor: "#000000" }}
                 testID="daily-webview"
+                injectedJavaScript={INJECTED_CSS}
+                injectedJavaScriptBeforeContentLoaded={INJECTED_CSS}
                 onShouldStartLoadWithRequest={(request) => {
                   return request.url.startsWith("http://") || request.url.startsWith("https://");
                 }}
