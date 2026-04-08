@@ -39,19 +39,19 @@ import type { Team } from "@/lib/types";
 const DEMO_EMAIL = "demo@alenio.app";
 
 const TONES = [
-  { id: "none",      label: "None",      url: null },
-  { id: "bell",      label: "Default",   url: "https://assets.mixkit.co/active_storage/sfx/2870/2870-preview.mp3" },
-  { id: "ping",      label: "Ping",      url: "https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3" },
-  { id: "blip",      label: "Blip",      url: "https://assets.mixkit.co/active_storage/sfx/2572/2572-preview.mp3" },
-  { id: "droplet",   label: "Droplet",   url: "https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3" },
-  { id: "sparkle",   label: "Sparkle",   url: "https://assets.mixkit.co/active_storage/sfx/2573/2573-preview.mp3" },
-  { id: "pop",       label: "Pop",       url: "https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3" },
-  { id: "bloop",     label: "Bloop",     url: "https://assets.mixkit.co/active_storage/sfx/2356/2356-preview.mp3" },
-  { id: "tap",       label: "Tap",       url: "https://assets.mixkit.co/active_storage/sfx/2570/2570-preview.mp3" },
-  { id: "click",     label: "Click",     url: "https://assets.mixkit.co/active_storage/sfx/2569/2569-preview.mp3" },
-  { id: "whoosh",    label: "Whoosh",    url: "https://assets.mixkit.co/active_storage/sfx/2576/2576-preview.mp3" },
-  { id: "swipe",     label: "Swipe",     url: "https://assets.mixkit.co/active_storage/sfx/2575/2575-preview.mp3" },
-  { id: "twinkle",   label: "Twinkle",   url: "https://assets.mixkit.co/active_storage/sfx/2574/2574-preview.mp3" },
+  { id: "none",       label: "None",       url: null },
+  { id: "bell",       label: "Default",    url: "https://assets.mixkit.co/active_storage/sfx/2870/2870-preview.mp3" },
+  { id: "bloop",      label: "Bloop",      url: "https://assets.mixkit.co/active_storage/sfx/2356/2356-preview.mp3" },
+  { id: "blip",       label: "Blip",       url: "https://assets.mixkit.co/active_storage/sfx/2572/2572-preview.mp3" },
+  { id: "ding",       label: "Ding",       url: "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" },
+  { id: "woohoo",     label: "Woohoo",     url: "https://assets.mixkit.co/active_storage/sfx/2020/2020-preview.mp3" },
+  { id: "yoink",      label: "Yoink",      url: "https://assets.mixkit.co/active_storage/sfx/2304/2304-preview.mp3" },
+  { id: "bonk",       label: "Bonk",       url: "https://assets.mixkit.co/active_storage/sfx/2005/2005-preview.mp3" },
+  { id: "zoop",       label: "Zoop",       url: "https://assets.mixkit.co/active_storage/sfx/2303/2303-preview.mp3" },
+  { id: "pew",        label: "Pew",        url: "https://assets.mixkit.co/active_storage/sfx/2001/2001-preview.mp3" },
+  { id: "beepboop",   label: "Beep Boop",  url: "https://assets.mixkit.co/active_storage/sfx/2003/2003-preview.mp3" },
+  { id: "woop",       label: "Woop",       url: "https://assets.mixkit.co/active_storage/sfx/2000/2000-preview.mp3" },
+  { id: "doot",       label: "Doot",       url: "https://assets.mixkit.co/active_storage/sfx/2004/2004-preview.mp3" },
 ];
 
 export { TONES };
