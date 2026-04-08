@@ -141,8 +141,8 @@ export function ChatMessage({
                   ) : (
                     <Image
                       source={{ uri: mediaUrl }}
-                      style={{ width: 220, height: 160 }}
-                      resizeMode="cover"
+                      style={{ width: 220, height: 220 }}
+                      resizeMode="contain"
                     />
                   )}
                 </Pressable>

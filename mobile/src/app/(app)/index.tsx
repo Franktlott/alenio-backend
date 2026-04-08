@@ -1070,7 +1070,7 @@ export default function TasksScreen() {
                   testID={`sort-${s}`}
                 >
                   <Text style={{ fontSize: 12, fontWeight: "600", color: sort === s ? "white" : "#64748B" }}>
-                    {s === "due" ? "Due Date" : s === "completed" ? "Completed Date" : "Priority"}
+                    {s === "due" ? "Due Date" : s === "completed" ? "Completion" : "Priority"}
                   </Text>
                 </TouchableOpacity>
               ))}
