@@ -244,38 +244,6 @@ export default function CreateEventScreen() {
           </View>
         </View>
 
-        {/* Time pickers (video meetings only) */}
-        {isVideoMeeting ? (
-          <View style={{ flexDirection: "row", gap: 10, marginBottom: 14 }}>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748B", marginBottom: 6 }}>Start Time</Text>
-              <Pressable
-                onPress={() => setShowStartTimePicker(true)}
-                style={{ borderWidth: 1.5, borderColor: "#4361EE", borderRadius: 12, paddingHorizontal: 10, paddingVertical: 10, flexDirection: "row", alignItems: "center", backgroundColor: "#4361EE0D" }}
-                testID="event-start-time-button"
-              >
-                <Clock size={13} color="#4361EE" style={{ marginRight: 6 }} />
-                <Text style={{ fontSize: 12, fontWeight: "500", color: "#4361EE" }}>
-                  {eventStart.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}
-                </Text>
-              </Pressable>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748B", marginBottom: 6 }}>End Time</Text>
-              <Pressable
-                onPress={() => setShowEndTimePicker(true)}
-                style={{ borderWidth: 1.5, borderColor: "#7C3AED", borderRadius: 12, paddingHorizontal: 10, paddingVertical: 10, flexDirection: "row", alignItems: "center", backgroundColor: "#7C3AED0D" }}
-                testID="event-end-time-button"
-              >
-                <Clock size={13} color="#7C3AED" style={{ marginRight: 6 }} />
-                <Text style={{ fontSize: 12, fontWeight: "500", color: "#7C3AED" }}>
-                  {eventEnd.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}
-                </Text>
-              </Pressable>
-            </View>
-          </View>
-        ) : null}
-
         {/* iOS date pickers */}
         {Platform.OS === "ios" ? (
           <>
@@ -465,7 +433,39 @@ export default function CreateEventScreen() {
 
         {/* Reminder picker — only for video meetings */}
         {isVideoMeeting ? (
-          <Pressable
+          <>
+            {/* Start / End Time */}
+            <View style={{ flexDirection: "row", gap: 10, marginBottom: 14 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748B", marginBottom: 6 }}>Start Time</Text>
+                <Pressable
+                  onPress={() => setShowStartTimePicker(true)}
+                  style={{ borderWidth: 1.5, borderColor: "#4361EE", borderRadius: 12, paddingHorizontal: 10, paddingVertical: 10, flexDirection: "row", alignItems: "center", backgroundColor: "#4361EE0D" }}
+                  testID="event-start-time-button"
+                >
+                  <Clock size={13} color="#4361EE" style={{ marginRight: 6 }} />
+                  <Text style={{ fontSize: 12, fontWeight: "500", color: "#4361EE" }}>
+                    {eventStart.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}
+                  </Text>
+                </Pressable>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748B", marginBottom: 6 }}>End Time</Text>
+                <Pressable
+                  onPress={() => setShowEndTimePicker(true)}
+                  style={{ borderWidth: 1.5, borderColor: "#7C3AED", borderRadius: 12, paddingHorizontal: 10, paddingVertical: 10, flexDirection: "row", alignItems: "center", backgroundColor: "#7C3AED0D" }}
+                  testID="event-end-time-button"
+                >
+                  <Clock size={13} color="#7C3AED" style={{ marginRight: 6 }} />
+                  <Text style={{ fontSize: 12, fontWeight: "500", color: "#7C3AED" }}>
+                    {eventEnd.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+
+            {/* Notify Team reminder */}
+            <Pressable
             onPress={() => setShowReminderPicker(true)}
             style={{ flexDirection: "row", alignItems: "center", backgroundColor: "white", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 14, borderWidth: 1.5, borderColor: "#4361EE", gap: 10 }}
             testID="reminder-picker-button"
@@ -484,6 +484,7 @@ export default function CreateEventScreen() {
             </View>
             <Text style={{ fontSize: 12, color: "#94A3B8" }}>Edit</Text>
           </Pressable>
+          </>
         ) : null}
 
         {/* Reminder picker modal */}
