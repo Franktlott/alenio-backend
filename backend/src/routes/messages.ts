@@ -95,13 +95,6 @@ messagesRouter.post("/", async (c) => {
     },
   });
 
-  // Fetch topic name if needed
-  let notifBody = content?.trim() || "Sent a photo";
-  if (topicId) {
-    const topic = await prisma.topic.findUnique({ where: { id: topicId }, select: { name: true } });
-    if (topic) notifBody = `#${topic.name}: ${notifBody}`;
-  }
-
   // Notify other team members
   const [members, team] = await Promise.all([
     prisma.teamMember.findMany({
@@ -110,17 +103,29 @@ messagesRouter.post("/", async (c) => {
     }),
     prisma.team.findUnique({ where: { id: teamId }, select: { name: true } }),
   ]);
-  const memberIds = members.map((m: any) => m.userId);
+
   const senderName = user.name ?? "Someone";
-  await sendPushToUsers(memberIds, senderName, notifBody, { teamId, teamName: team?.name ?? "", topicId: topicId || undefined }, "notifMessages");
+  const messageText = content?.trim() || "📷 Photo";
+
+  // Build title: "Team Name" or "Team Name > #channel"
+  let notifTitle = team?.name ?? "Alenio";
+  if (topicId) {
+    const topic = await prisma.topic.findUnique({ where: { id: topicId }, select: { name: true } });
+    if (topic) notifTitle = `${notifTitle} › #${topic.name}`;
+  }
+
+  // Build body: "Sender: message"
+  const notifBody = `${senderName}: ${messageText}`;
+
+  const memberIds = members.map((m: any) => m.userId);
+  await sendPushToUsers(memberIds, notifTitle, notifBody, { teamId, teamName: team?.name ?? "", topicId: topicId || undefined }, "notifMessages");
 
   // Send mention notifications
   if (mentionIds.length > 0) {
-    const mentionBody = content?.trim() || "mentioned you in a message";
     await sendPushToUsers(
       mentionIds,
-      `${senderName} mentioned you`,
-      mentionBody,
+      notifTitle,
+      `${senderName} mentioned you: ${messageText}`,
       { teamId, teamName: team?.name ?? "", topicId: topicId || undefined }
     );
   }

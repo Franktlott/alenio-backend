@@ -292,6 +292,32 @@ dmsRouter.post("/:conversationId/messages", async (c) => {
     data: { updatedAt: new Date() },
   });
 
+  // Send push notification to other participants
+  {
+    const conversation = await prisma.conversation.findUnique({
+      where: { id: conversationId },
+      include: {
+        participants: { select: { userId: true } },
+      },
+    });
+    if (conversation) {
+      const otherIds = conversation.participants
+        .map((p: any) => p.userId)
+        .filter((id: string) => id !== user.id);
+
+      const senderName = user.name ?? "Someone";
+      const msgText = content?.trim() || "📷 Photo";
+      const notifTitle = conversation.name
+        ? conversation.name
+        : senderName;
+      const notifBody = conversation.name
+        ? `${senderName}: ${msgText}`
+        : msgText;
+
+      await sendPushToUsers(otherIds, notifTitle, notifBody, { conversationId });
+    }
+  }
+
   // Send mention notifications
   if (mentionIds.length > 0) {
     const participants = await prisma.conversationParticipant.findMany({
