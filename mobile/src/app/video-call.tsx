@@ -1,33 +1,57 @@
 import React, { useRef, useState, useEffect } from "react";
 import { View, Text, TouchableOpacity, ActivityIndicator, StatusBar } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import WebView from "react-native-webview";
+import WebView, { WebViewNavigation } from "react-native-webview";
 import { useLocalSearchParams, router } from "expo-router";
-import { PhoneOff } from "lucide-react-native";
 import { useSession } from "@/lib/auth/use-session";
 
-// Injected into the WebView to hide Daily branding and polish the UI
-const INJECTED_CSS = `
+// Injected into Daily's WebView:
+// 1. Hides Daily branding
+// 2. Listens for the leave event and notifies React Native
+const INJECTED_JS = `
 (function() {
+  // Hide Daily branding via CSS
   var style = document.createElement('style');
   style.textContent = \`
-    /* Hide Daily.co branding */
-    [data-testid="leave-button-label"],
     .powered-by-daily,
     .daily-logo,
     [class*="branding"],
     [class*="Branding"],
-    [class*="logo"],
-    [class*="Logo"] { display: none !important; }
-    /* Make video tiles fill space nicely */
-    body { background: #000 !important; }
+    [class*="DailyLogo"],
+    [class*="daily-logo"] { display: none !important; }
+    body, html { background: #000 !important; }
   \`;
   document.head.appendChild(style);
-  // Re-apply after navigation changes
+
+  // Listen for Daily leave events (prebuilt fires these on window)
+  function notifyLeave() {
+    if (window.ReactNativeWebView) {
+      window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'left-meeting' }));
+    }
+  }
+
+  // Daily prebuilt custom events
+  window.addEventListener('daily:left-meeting', notifyLeave);
+
+  // Intercept Daily call object if available
+  function watchCallObject() {
+    if (window.DailyIframe) {
+      try {
+        var frames = document.querySelectorAll('iframe');
+        frames.forEach(function(f) {
+          try { f.contentWindow.addEventListener('daily:left-meeting', notifyLeave); } catch(e) {}
+        });
+      } catch(e) {}
+    }
+  }
+
+  // Re-apply styles and watch for leave on DOM changes
   var obs = new MutationObserver(function() {
     if (!document.head.contains(style)) document.head.appendChild(style);
+    watchCallObject();
   });
-  obs.observe(document.head, { childList: true });
+  obs.observe(document.body || document.documentElement, { childList: true, subtree: true });
+
+  watchCallObject();
 })();
 true;
 `;
@@ -40,7 +64,8 @@ export default function VideoCallScreen() {
   const [loading, setLoading] = useState(true);
   const [callUrl, setCallUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const webViewRef = useRef(null);
+  const roomUrlRef = useRef<string | null>(null);
+  const webViewRef = useRef<WebView>(null);
 
   useEffect(() => {
     async function fetchRoom() {
@@ -57,7 +82,9 @@ export default function VideoCallScreen() {
           return;
         }
         const { url, token } = json.data;
-        setCallUrl(token ? `${url}?t=${token}` : url);
+        const finalUrl = token ? `${url}?t=${token}` : url;
+        roomUrlRef.current = url;
+        setCallUrl(finalUrl);
       } catch {
         setError("Could not connect. Please try again.");
       }
@@ -65,69 +92,99 @@ export default function VideoCallScreen() {
     fetchRoom();
   }, [roomId, userName]);
 
+  // Detect when user navigates away from the Daily room (leave button clicked)
+  function handleNavigationChange(navState: WebViewNavigation) {
+    const base = roomUrlRef.current;
+    if (!base) return;
+    const currentHost = new URL(base).hostname;
+    try {
+      const navHost = new URL(navState.url).hostname;
+      if (navHost !== currentHost) {
+        router.back();
+      }
+    } catch {
+      // ignore parse errors
+    }
+  }
+
+  // Handle messages from injected JS (leave event)
+  function handleMessage(event: { nativeEvent: { data: string } }) {
+    try {
+      const msg = JSON.parse(event.nativeEvent.data);
+      if (msg.type === "left-meeting") {
+        router.back();
+      }
+    } catch {
+      // ignore
+    }
+  }
+
   return (
-    <View className="flex-1 bg-black">
-      <StatusBar barStyle="light-content" />
-      <SafeAreaView className="flex-1" edges={["top"]}>
-        {/* Header */}
-        <View className="flex-row items-center justify-between px-4 py-3">
-          <View className="flex-1">
-            <Text className="text-white font-bold text-base" numberOfLines={1}>
-              {roomName ?? "Video Call"}
-            </Text>
-          </View>
+    <View style={{ flex: 1, backgroundColor: "#000" }}>
+      <StatusBar hidden />
+
+      {error ? (
+        <View style={{ flex: 1, backgroundColor: "#0F172A", alignItems: "center", justifyContent: "center" }}>
+          <Text style={{ color: "white", textAlign: "center", paddingHorizontal: 24, marginBottom: 16 }}>
+            {error}
+          </Text>
           <TouchableOpacity
-            testID="end-call-button"
+            testID="error-back-button"
             onPress={() => router.back()}
-            className="w-12 h-12 rounded-full bg-red-500 items-center justify-center"
+            style={{ backgroundColor: "#EF4444", paddingHorizontal: 24, paddingVertical: 12, borderRadius: 24 }}
           >
-            <PhoneOff size={20} color="white" />
+            <Text style={{ color: "white", fontWeight: "600" }}>Go Back</Text>
           </TouchableOpacity>
         </View>
-
-        {/* Content */}
-        <View className="flex-1 overflow-hidden rounded-2xl mx-2 mb-2">
-          {error ? (
-            <View className="flex-1 bg-slate-900 items-center justify-center">
-              <Text className="text-white text-center px-6">{error}</Text>
-              <TouchableOpacity onPress={() => router.back()} className="mt-4 px-6 py-3 bg-red-500 rounded-full">
-                <Text className="text-white font-semibold">Go Back</Text>
-              </TouchableOpacity>
-            </View>
-          ) : !callUrl ? (
-            <View className="flex-1 bg-slate-900 items-center justify-center">
-              <ActivityIndicator color="white" size="large" />
-              <Text className="text-white mt-3 text-sm">Starting call...</Text>
-            </View>
-          ) : (
-            <>
-              {loading ? (
-                <View className="absolute inset-0 bg-slate-900 items-center justify-center z-10">
-                  <ActivityIndicator color="white" size="large" />
-                  <Text className="text-white mt-3 text-sm">Joining as {userName}...</Text>
-                </View>
-              ) : null}
-              <WebView
-                ref={webViewRef}
-                source={{ uri: callUrl }}
-                onLoadEnd={() => setLoading(false)}
-                allowsInlineMediaPlayback
-                mediaPlaybackRequiresUserAction={false}
-                javaScriptEnabled
-                domStorageEnabled
-                startInLoadingState={false}
-                style={{ flex: 1, backgroundColor: "#000000" }}
-                testID="daily-webview"
-                injectedJavaScript={INJECTED_CSS}
-                injectedJavaScriptBeforeContentLoaded={INJECTED_CSS}
-                onShouldStartLoadWithRequest={(request) => {
-                  return request.url.startsWith("http://") || request.url.startsWith("https://");
-                }}
-              />
-            </>
-          )}
+      ) : !callUrl ? (
+        <View
+          testID="loading-room"
+          style={{ flex: 1, backgroundColor: "#0F172A", alignItems: "center", justifyContent: "center" }}
+        >
+          <ActivityIndicator color="white" size="large" />
+          <Text style={{ color: "white", marginTop: 12, fontSize: 14 }}>Starting call...</Text>
         </View>
-      </SafeAreaView>
+      ) : (
+        <>
+          {loading ? (
+            <View
+              style={{
+                position: "absolute",
+                inset: 0,
+                top: 0, left: 0, right: 0, bottom: 0,
+                backgroundColor: "#0F172A",
+                alignItems: "center",
+                justifyContent: "center",
+                zIndex: 10,
+              }}
+            >
+              <ActivityIndicator color="white" size="large" />
+              <Text style={{ color: "white", marginTop: 12, fontSize: 14 }}>
+                Joining as {userName}...
+              </Text>
+            </View>
+          ) : null}
+          <WebView
+            ref={webViewRef}
+            testID="daily-webview"
+            source={{ uri: callUrl }}
+            onLoadEnd={() => setLoading(false)}
+            allowsInlineMediaPlayback
+            mediaPlaybackRequiresUserAction={false}
+            javaScriptEnabled
+            domStorageEnabled
+            startInLoadingState={false}
+            style={{ flex: 1, backgroundColor: "#000000" }}
+            injectedJavaScript={INJECTED_JS}
+            injectedJavaScriptBeforeContentLoaded={INJECTED_JS}
+            onMessage={handleMessage}
+            onNavigationStateChange={handleNavigationChange}
+            onShouldStartLoadWithRequest={(request) => {
+              return request.url.startsWith("http://") || request.url.startsWith("https://");
+            }}
+          />
+        </>
+      )}
     </View>
   );
 }
