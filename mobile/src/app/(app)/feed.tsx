@@ -4,7 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api/api";
 import { useTeamStore } from "@/lib/state/team-store";
-import { CheckCircle, UserPlus, UserMinus, Calendar, Activity, UserCheck, Trophy, Flame, Clock } from "lucide-react-native";
+import { CheckCircle, UserPlus, UserMinus, Calendar, Activity, UserCheck, Trophy, Flame, Clock, Video } from "lucide-react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Image as ExpoImage } from "expo-image";
 import { useState, useEffect, useRef } from "react";
@@ -39,7 +39,7 @@ type ActivityEvent = {
   id: string;
   type: "task_completed" | "member_joined" | "member_removed" | "calendar_event_added" | "task_assigned" | "task_milestone" | "personal_best";
   createdAt: string;
-  metadata: { taskTitle?: string; taskTitles?: string[]; taskCount?: number; eventTitle?: string; eventTitles?: string[]; eventCount?: number; userName?: string; count?: number; incognito?: boolean; assigneeName?: string } | null;
+  metadata: { taskTitle?: string; taskTitles?: string[]; taskCount?: number; eventTitle?: string; eventTitles?: string[]; eventCount?: number; userName?: string; count?: number; incognito?: boolean; assigneeName?: string; isVideoMeeting?: boolean } | null;
   user: { id: string; name: string; image: string | null } | null;
   reactions: Record<string, { count: number; userIds: string[] }>;
 };
@@ -686,6 +686,22 @@ function ActivityItem({ item, activeTeamId, currentUserId, isDemo, showPicker, o
           <Text style={{ fontSize: 14, color: "#334155", lineHeight: 20 }}>
             {config.getMessage(item)}
           </Text>
+
+          {/* Video meeting badge */}
+          {item.type === "calendar_event_added" && item.metadata?.isVideoMeeting ? (
+            <View style={{
+              flexDirection: "row", alignItems: "center", gap: 5,
+              marginTop: 6,
+              alignSelf: "flex-start",
+              backgroundColor: "#EEF2FF",
+              borderRadius: 10,
+              paddingHorizontal: 8, paddingVertical: 4,
+              borderWidth: 1, borderColor: "#C7D2FE",
+            }}>
+              <Video size={12} color="#4361EE" />
+              <Text style={{ fontSize: 11, fontWeight: "600", color: "#4361EE" }}>Video meeting</Text>
+            </View>
+          ) : null}
         </View>
       </View>
 
