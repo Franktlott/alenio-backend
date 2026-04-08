@@ -14,7 +14,49 @@ const alenioLogo = require("@/assets/alenio-logo-white.png");
 
 type Phase = "loading" | "prejoin" | "incall" | "error";
 
-// Auto-skip Daily's pre-join + apply Alenio dark theme
+// Inject only CSS styles — runs before content loads, no auto-join logic
+function buildPreloadJS() {
+  return `
+(function() {
+  var PRIMARY = '#4361EE';
+  var BG = '#0A0F1E';
+  var SURFACE = '#111827';
+  var BORDER = 'rgba(255,255,255,0.08)';
+
+  function injectStyles() {
+    var id = '__alenio__';
+    if (document.getElementById(id)) return;
+    var s = document.createElement('style');
+    s.id = id;
+    s.textContent = \`
+      body,html{background:\${BG}!important;color:#fff!important;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display',sans-serif!important;}
+      [class*="prejoin"],[class*="Prejoin"],[class*="lobby"],[class*="Lobby"],[class*="HairCheck"]{background:\${BG}!important;}
+      [class*="card"],[class*="Card"],[class*="modal-content"]{background:\${SURFACE}!important;border:1px solid \${BORDER}!important;border-radius:20px!important;color:#fff!important;}
+      [class*="card"] *,[class*="Card"] *,[class*="prejoin"] *{color:#fff!important;}
+      input,select{background:#1E293B!important;border:1px solid \${BORDER}!important;border-radius:10px!important;color:#fff!important;}
+      button[class*="join"],button[class*="Join"],[class*="joinButton"]{background:\${PRIMARY}!important;border:none!important;border-radius:14px!important;color:#fff!important;font-weight:600!important;box-shadow:0 4px 20px rgba(67,97,238,0.4)!important;}
+      [class*="tray"],[class*="Tray"],[class*="controls"],[class*="Controls"],[class*="toolbar"]{background:rgba(10,15,30,0.95)!important;border-top:1px solid \${BORDER}!important;}
+      button[class*="tray"],button[class*="Tray"],[class*="controlButton"]{background:rgba(255,255,255,0.1)!important;border:1px solid \${BORDER}!important;border-radius:50%!important;color:#fff!important;}
+      button[class*="leave"],button[class*="Leave"],[class*="leaveButton"]{background:#EF4444!important;border-radius:16px!important;color:#fff!important;}
+      [class*="tile"],[class*="Tile"],[class*="participant"],[class*="video-container"]{background:\${SURFACE}!important;border-radius:16px!important;border:1px solid \${BORDER}!important;}
+      [class*="name-tag"],[class*="NameTag"],[class*="displayName"]{background:rgba(10,15,30,0.8)!important;border-radius:8px!important;color:#fff!important;padding:2px 8px!important;}
+      .powered-by-daily,.daily-logo,[class*="DailyLogo"],[class*="branding"],[class*="watermark"],a[href*="daily.co"]{display:none!important;}
+    \`;
+    (document.head||document.documentElement).appendChild(s);
+  }
+
+  function start() {
+    injectStyles();
+    var obs = new MutationObserver(function(){ injectStyles(); });
+    obs.observe(document.documentElement,{childList:true,subtree:true});
+  }
+  document.readyState==='loading' ? document.addEventListener('DOMContentLoaded',start) : start();
+})();
+true;
+`;
+}
+
+// Auto-skip Daily's pre-join + apply Alenio dark theme + leave detection
 function buildInjectedJS(micOn: boolean, videoOn: boolean) {
   return `
 (function() {
@@ -58,7 +100,7 @@ function buildInjectedJS(micOn: boolean, videoOn: boolean) {
   }
   var joinInterval = setInterval(function(){
     if(tryAutoJoin() || ++joinAttempts > 30) clearInterval(joinInterval);
-  }, 400);
+  }, 800);
 
   function postLeave() {
     window.ReactNativeWebView && window.ReactNativeWebView.postMessage(JSON.stringify({type:'left-meeting'}));
@@ -280,9 +322,11 @@ export default function VideoCallScreen() {
         domStorageEnabled
         startInLoadingState={false}
         mediaCapturePermissionGrantType="grant"
+        originWhitelist={['*']}
+        allowsAirPlayForMediaPlayback={true}
         style={{ flex: 1, backgroundColor: "#0A0F1E" }}
         injectedJavaScript={buildInjectedJS(micOn, videoOn)}
-        injectedJavaScriptBeforeContentLoaded={buildInjectedJS(micOn, videoOn)}
+        injectedJavaScriptBeforeContentLoaded={buildPreloadJS()}
         onMessage={handleMessage}
         onNavigationStateChange={handleNavChange}
         onShouldStartLoadWithRequest={req => req.url.startsWith("http://") || req.url.startsWith("https://")}

@@ -79,6 +79,8 @@ videoRouter.post(
           room_name: roomName,
           user_name: userName ?? "Guest",
           enable_screenshare: true,
+          start_video_off: false,
+          start_audio_off: false,
         },
       }),
     });
