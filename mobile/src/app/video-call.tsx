@@ -273,6 +273,7 @@ export default function VideoCallScreen() {
         javaScriptEnabled
         domStorageEnabled
         startInLoadingState={false}
+        mediaCapturePermissionGrantType="grant"
         style={{ flex: 1, backgroundColor: "#0A0F1E" }}
         injectedJavaScript={buildInjectedJS(micOn, videoOn)}
         injectedJavaScriptBeforeContentLoaded={buildInjectedJS(micOn, videoOn)}
