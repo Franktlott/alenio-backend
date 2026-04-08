@@ -39,18 +39,19 @@ import type { Team } from "@/lib/types";
 const DEMO_EMAIL = "demo@alenio.app";
 
 const TONES = [
-  { id: "none",     label: "None",     url: null },
-  { id: "chime",    label: "Default",  url: "https://assets.mixkit.co/active_storage/sfx/2013/2013-preview.mp3" },
-  { id: "soft",     label: "Soft",     url: "https://assets.mixkit.co/active_storage/sfx/2018/2018-preview.mp3" },
-  { id: "ding",     label: "Ding",     url: "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" },
-  { id: "note",     label: "Note",     url: "https://assets.mixkit.co/active_storage/sfx/2015/2015-preview.mp3" },
-  { id: "glass",    label: "Glass",    url: "https://assets.mixkit.co/active_storage/sfx/2308/2308-preview.mp3" },
-  { id: "bloom",    label: "Bloom",    url: "https://assets.mixkit.co/active_storage/sfx/2017/2017-preview.mp3" },
-  { id: "pop",      label: "Pop",      url: "https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3" },
-  { id: "bubble",   label: "Bubble",   url: "https://assets.mixkit.co/active_storage/sfx/2357/2357-preview.mp3" },
-  { id: "swoosh",   label: "Swoosh",   url: "https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3" },
-  { id: "bell",     label: "Bell",     url: "https://assets.mixkit.co/active_storage/sfx/2870/2870-preview.mp3" },
-  { id: "chirp",    label: "Chirp",    url: "https://assets.mixkit.co/active_storage/sfx/2309/2309-preview.mp3" },
+  { id: "none",      label: "None",      url: null },
+  { id: "bell",      label: "Default",   url: "https://assets.mixkit.co/active_storage/sfx/2870/2870-preview.mp3" },
+  { id: "ping",      label: "Ping",      url: "https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3" },
+  { id: "blip",      label: "Blip",      url: "https://assets.mixkit.co/active_storage/sfx/2572/2572-preview.mp3" },
+  { id: "droplet",   label: "Droplet",   url: "https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3" },
+  { id: "sparkle",   label: "Sparkle",   url: "https://assets.mixkit.co/active_storage/sfx/2573/2573-preview.mp3" },
+  { id: "pop",       label: "Pop",       url: "https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3" },
+  { id: "bloop",     label: "Bloop",     url: "https://assets.mixkit.co/active_storage/sfx/2356/2356-preview.mp3" },
+  { id: "tap",       label: "Tap",       url: "https://assets.mixkit.co/active_storage/sfx/2570/2570-preview.mp3" },
+  { id: "click",     label: "Click",     url: "https://assets.mixkit.co/active_storage/sfx/2569/2569-preview.mp3" },
+  { id: "whoosh",    label: "Whoosh",    url: "https://assets.mixkit.co/active_storage/sfx/2576/2576-preview.mp3" },
+  { id: "swipe",     label: "Swipe",     url: "https://assets.mixkit.co/active_storage/sfx/2575/2575-preview.mp3" },
+  { id: "twinkle",   label: "Twinkle",   url: "https://assets.mixkit.co/active_storage/sfx/2574/2574-preview.mp3" },
 ];
 
 export { TONES };
@@ -138,8 +139,8 @@ export default function ProfileScreen() {
   };
 
   // Tone state
-  const [msgToneId, setMsgToneId] = useState<string>("chime");
-  const [dmToneId,  setDmToneId]  = useState<string>("chime");
+  const [msgToneId, setMsgToneId] = useState<string>("bell");
+  const [dmToneId,  setDmToneId]  = useState<string>("bell");
   const [showTonePicker, setShowTonePicker] = useState<"msg" | "dm" | null>(null);
 
   useEffect(() => {
