@@ -2,12 +2,12 @@ import React, { useState, useEffect, useCallback } from "react";
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withSequence, withTiming } from "react-native-reanimated";
 import {
   View, Text, TouchableOpacity, ActivityIndicator,
-  StatusBar, StyleSheet, Image, Linking,
+  StatusBar, StyleSheet, Image, Linking, Share,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import WebView from "react-native-webview";
 import { useLocalSearchParams, router, useNavigation } from "expo-router";
-import { ChevronLeft, Video, PhoneOff } from "lucide-react-native";
+import { ChevronLeft, Video, PhoneOff, Share2 } from "lucide-react-native";
 import { useSession } from "@/lib/auth/use-session";
 import { useCameraPermissions, useMicrophonePermissions } from "expo-camera";
 
@@ -27,6 +27,7 @@ export default function VideoCallScreen() {
 
   const [phase, setPhase] = useState<Phase>("loading");
   const [callUrl, setCallUrl] = useState<string | null>(null);
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const userName = session?.user?.name ?? "Guest";
   const userImage = session?.user?.image;
@@ -73,6 +74,7 @@ export default function VideoCallScreen() {
           return;
         }
         const { url, token } = json.data;
+        setShareUrl(url);
         setCallUrl(token ? `${url}?t=${token}` : url);
         setPhase("prejoin");
       } catch {
@@ -191,6 +193,15 @@ export default function VideoCallScreen() {
                 <Text style={s.joinBtnText}>Join call</Text>
               </TouchableOpacity>
             </Animated.View>
+            {!!shareUrl && (
+              <TouchableOpacity
+                style={s.shareBtn}
+                onPress={() => Share.share({ message: shareUrl, url: shareUrl, title: `Join ${roomName ?? "Video Call"}` })}
+              >
+                <Share2 size={16} color="rgba(255,255,255,0.7)" style={{ marginRight: 8 }} />
+                <Text style={s.shareBtnText}>Share link</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </SafeAreaView>
       </View>
@@ -312,4 +323,13 @@ const s = StyleSheet.create({
     elevation: 6,
   },
   leaveBtnText: { color: "#fff", fontSize: 14, fontWeight: "700" },
+
+  // Share button
+  shareBtn: {
+    marginTop: 12,
+    flexDirection: "row", alignItems: "center", justifyContent: "center",
+    paddingVertical: 14, borderRadius: 18,
+    borderWidth: 1, borderColor: "rgba(255,255,255,0.15)",
+  },
+  shareBtnText: { color: "rgba(255,255,255,0.7)", fontSize: 15, fontWeight: "600" },
 });
