@@ -116,6 +116,26 @@ remindersRouter.patch("/:reminderId", async (c) => {
   return c.json({ data: updated });
 });
 
+// POST /api/teams/:teamId/reminders/:reminderId/acknowledge
+remindersRouter.post("/:reminderId/acknowledge", async (c) => {
+  const user = c.get("user")!;
+  const teamId = c.req.param("teamId") as string;
+  const reminderId = c.req.param("reminderId");
+
+  const reminder = await prisma.reminder.findFirst({
+    where: { id: reminderId, teamId, creatorId: user.id },
+  });
+  if (!reminder) return c.json({ error: { message: "Reminder not found", code: "NOT_FOUND" } }, 404);
+
+  const updated = await prisma.reminder.update({
+    where: { id: reminderId },
+    data: { acknowledgedAt: new Date() },
+    include: reminderInclude,
+  });
+
+  return c.json({ data: updated });
+});
+
 // DELETE /api/teams/:teamId/reminders/:reminderId
 remindersRouter.delete("/:reminderId", async (c) => {
   const user = c.get("user")!;

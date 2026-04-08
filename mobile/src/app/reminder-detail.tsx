@@ -51,6 +51,7 @@ export default function ReminderDetailScreen() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<boolean>(false);
   const [showDoneConfirm, setShowDoneConfirm] = useState<boolean>(false);
   const [showRecallConfirm, setShowRecallConfirm] = useState<boolean>(false);
+  const [showAcknowledgeConfirm, setShowAcknowledgeConfirm] = useState<boolean>(false);
   const [isEditMode, setIsEditMode] = useState<boolean>(false);
 
   // Edit form state
@@ -82,6 +83,18 @@ export default function ReminderDetailScreen() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["reminders", teamId] });
       router.back();
+    },
+    onError: (error: Error) => {
+      toast({ title: error.message, preset: "error" });
+    },
+  });
+
+  const acknowledgeMutation = useMutation({
+    mutationFn: () => api.post<Reminder>(`/api/teams/${teamId}/reminders/${reminderId}/acknowledge`, {}),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(["reminder", reminderId, teamId], updated);
+      queryClient.invalidateQueries({ queryKey: ["reminders", teamId] });
+      toast({ title: "Reminder acknowledged", preset: "done" });
     },
     onError: (error: Error) => {
       toast({ title: error.message, preset: "error" });
@@ -310,6 +323,17 @@ export default function ReminderDetailScreen() {
               {reminder.description ? (
                 <Text className="text-base text-slate-600 dark:text-slate-400 mb-4 leading-relaxed">{reminder.description}</Text>
               ) : null}
+
+              {/* Attachment photo */}
+              {reminder.attachmentUrl ? (
+                <View className="mb-4 rounded-2xl overflow-hidden" style={{ borderWidth: 1, borderColor: "#F1F5F9" }}>
+                  <Image
+                    source={{ uri: reminder.attachmentUrl }}
+                    style={{ width: "100%", height: 200 }}
+                    resizeMode="cover"
+                  />
+                </View>
+              ) : null}
             </>
           )}
 
@@ -331,6 +355,16 @@ export default function ReminderDetailScreen() {
                   <Text className="text-xs font-semibold text-white">Reopen</Text>
                 )}
               </TouchableOpacity>
+            </View>
+          ) : null}
+
+          {/* Acknowledged banner */}
+          {reminder.acknowledgedAt && !isEditMode ? (
+            <View className="flex-row items-center bg-violet-50 border border-violet-200 rounded-xl px-4 py-3 mb-4" style={{ gap: 8 }}>
+              <Text style={{ fontSize: 16 }}>✅</Text>
+              <Text className="flex-1 text-sm text-violet-700">
+                Acknowledged — will be deleted automatically in 24 hours.
+              </Text>
             </View>
           ) : null}
 
@@ -433,6 +467,26 @@ export default function ReminderDetailScreen() {
             </View>
           ) : null}
 
+          {/* Acknowledge CTA — only shown if not yet acknowledged and not completed and is creator */}
+          {!reminder.acknowledgedAt && !isCompleted && isCreator && !isEditMode ? (
+            <TouchableOpacity
+              onPress={() => setShowAcknowledgeConfirm(true)}
+              disabled={acknowledgeMutation.isPending}
+              className="mx-1 rounded-2xl py-4 items-center mb-3"
+              style={{ backgroundColor: "#10B981" }}
+              testID="acknowledge-button"
+            >
+              {acknowledgeMutation.isPending ? (
+                <ActivityIndicator color="white" />
+              ) : (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                  <Check size={18} color="white" />
+                  <Text style={{ color: "white", fontWeight: "700", fontSize: 16 }}>Acknowledge</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          ) : null}
+
           <View style={{ height: 48 }} />
         </ScrollView>
       </KeyboardAvoidingView>
@@ -519,6 +573,36 @@ export default function ReminderDetailScreen() {
                 className="flex-1 py-3.5 items-center"
               >
                 <Text className="text-base font-semibold text-amber-500">Reopen</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Acknowledge confirmation modal */}
+      <Modal visible={showAcknowledgeConfirm} transparent animationType="fade" onRequestClose={() => setShowAcknowledgeConfirm(false)}>
+        <TouchableOpacity className="flex-1 bg-black/40 items-center justify-center px-8" activeOpacity={1} onPress={() => setShowAcknowledgeConfirm(false)}>
+          <TouchableOpacity activeOpacity={1} className="w-full bg-white dark:bg-slate-800 rounded-2xl overflow-hidden">
+            <View className="px-5 pt-5 pb-4 items-center">
+              <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: "#D1FAE5", alignItems: "center", justifyContent: "center", marginBottom: 12 }}>
+                <Check size={24} color="#10B981" />
+              </View>
+              <Text className="text-lg font-bold text-slate-900 dark:text-white mb-1">Acknowledge reminder?</Text>
+              <Text className="text-sm text-slate-500 dark:text-slate-400 text-center">
+                This reminder will be automatically deleted 24 hours after acknowledging.
+              </Text>
+            </View>
+            <View className="flex-row border-t border-slate-100 dark:border-slate-700">
+              <TouchableOpacity onPress={() => setShowAcknowledgeConfirm(false)} className="flex-1 py-3.5 items-center border-r border-slate-100 dark:border-slate-700">
+                <Text className="text-base font-medium text-slate-600 dark:text-slate-300">Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                testID="confirm-acknowledge-button"
+                onPress={() => { setShowAcknowledgeConfirm(false); acknowledgeMutation.mutate(); }}
+                disabled={acknowledgeMutation.isPending}
+                className="flex-1 py-3.5 items-center"
+              >
+                <Text className="text-base font-semibold text-emerald-500">Acknowledge</Text>
               </TouchableOpacity>
             </View>
           </TouchableOpacity>

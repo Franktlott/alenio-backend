@@ -267,6 +267,19 @@ async function runCleanup() {
     if (deletedEvents.count > 0 || deletedTasks.count > 0) {
       console.log(`[cleanup] Removed ${deletedEvents.count} events, ${deletedTasks.count} tasks older than 45 days`);
     }
+
+    // Delete reminders acknowledged more than 24 hours ago
+    const ackCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const acknowledgedReminders = await prisma.reminder.findMany({
+      where: { acknowledgedAt: { lt: ackCutoff } },
+      select: { id: true, attachmentUrl: true },
+    });
+    if (acknowledgedReminders.length > 0) {
+      await prisma.reminder.deleteMany({
+        where: { id: { in: acknowledgedReminders.map((r) => r.id) } },
+      });
+      console.log(`[cleanup] Removed ${acknowledgedReminders.length} acknowledged reminders`);
+    }
   } catch (err) {
     console.error("[cleanup] Error during cleanup:", err);
   }
@@ -274,7 +287,7 @@ async function runCleanup() {
 
 // Run once on startup, then every 24 hours
 runCleanup();
-setInterval(runCleanup, 24 * 60 * 60 * 1000);
+setInterval(runCleanup, 60 * 60 * 1000);
 
 const port = Number(process.env.PORT) || 3000;
 

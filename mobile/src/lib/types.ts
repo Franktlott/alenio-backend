@@ -156,6 +156,7 @@ export interface Reminder {
   priority: TaskPriority;
   dueDate?: string | null;
   completedAt?: string | null;
+  acknowledgedAt?: string | null;
   attachmentUrl?: string | null;
   createdAt: string;
   updatedAt: string;
