@@ -1,4 +1,5 @@
 import React, { useRef, useState, useEffect, useCallback } from "react";
+import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withSequence, withTiming } from "react-native-reanimated";
 import {
   View, Text, TouchableOpacity, ActivityIndicator,
   StatusBar, StyleSheet, Image,
@@ -100,6 +101,25 @@ export default function VideoCallScreen() {
   const roomHostRef = useRef<string | null>(null);
   const webViewRef = useRef<WebView>(null);
   const didLeave = useRef(false);
+
+  const pulseScale = useSharedValue(1);
+  const glowOpacity = useSharedValue(0.5);
+
+  useEffect(() => {
+    pulseScale.value = withRepeat(
+      withSequence(withTiming(1.03, { duration: 950 }), withTiming(1, { duration: 950 })),
+      -1, false
+    );
+    glowOpacity.value = withRepeat(
+      withSequence(withTiming(0.9, { duration: 950 }), withTiming(0.4, { duration: 950 })),
+      -1, false
+    );
+  }, []);
+
+  const joinBtnAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: pulseScale.value }],
+    shadowOpacity: glowOpacity.value,
+  }));
 
   const goBack = useCallback(() => {
     if (didLeave.current) return;
@@ -228,10 +248,12 @@ export default function VideoCallScreen() {
 
           {/* Join button */}
           <View style={s.joinRow}>
-            <TouchableOpacity testID="join-call-button" style={s.joinBtn} onPress={() => setPhase("incall")}>
-              <Video size={20} color="#fff" style={{ marginRight: 8 }} />
-              <Text style={s.joinBtnText}>Join call</Text>
-            </TouchableOpacity>
+            <Animated.View style={joinBtnAnimStyle}>
+              <TouchableOpacity testID="join-call-button" style={s.joinBtn} onPress={() => setPhase("incall")}>
+                <Video size={20} color="#fff" style={{ marginRight: 8 }} />
+                <Text style={s.joinBtnText}>Join call</Text>
+              </TouchableOpacity>
+            </Animated.View>
           </View>
         </SafeAreaView>
       </View>
