@@ -46,6 +46,11 @@ const TONES = [
   { id: "note",     label: "Note",     url: "https://assets.mixkit.co/active_storage/sfx/2015/2015-preview.mp3" },
   { id: "glass",    label: "Glass",    url: "https://assets.mixkit.co/active_storage/sfx/2308/2308-preview.mp3" },
   { id: "bloom",    label: "Bloom",    url: "https://assets.mixkit.co/active_storage/sfx/2017/2017-preview.mp3" },
+  { id: "pop",      label: "Pop",      url: "https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3" },
+  { id: "bubble",   label: "Bubble",   url: "https://assets.mixkit.co/active_storage/sfx/2357/2357-preview.mp3" },
+  { id: "swoosh",   label: "Swoosh",   url: "https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3" },
+  { id: "bell",     label: "Bell",     url: "https://assets.mixkit.co/active_storage/sfx/2870/2870-preview.mp3" },
+  { id: "chirp",    label: "Chirp",    url: "https://assets.mixkit.co/active_storage/sfx/2309/2309-preview.mp3" },
 ];
 
 export { TONES };
