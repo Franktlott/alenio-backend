@@ -128,6 +128,40 @@ pollsRouter.post(
   }
 );
 
+// PATCH /api/teams/:teamId/polls/:pollId/end — end a poll early
+pollsRouter.patch("/:teamId/polls/:pollId/end", async (c) => {
+  const user = c.get("user")!;
+  const { teamId, pollId } = c.req.param();
+
+  const [membership, poll] = await Promise.all([
+    prisma.teamMember.findUnique({ where: { userId_teamId: { userId: user.id, teamId } } }),
+    prisma.poll.findUnique({ where: { id: pollId } }),
+  ]);
+
+  if (!membership) return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
+  if (!poll || poll.teamId !== teamId) return c.json({ error: { message: "Poll not found", code: "NOT_FOUND" } }, 404);
+
+  const canEnd =
+    poll.createdById === user.id ||
+    (poll.allowLeaderDelete && ["owner", "team_leader"].includes(membership.role));
+
+  if (!canEnd) return c.json({ error: { message: "Not allowed", code: "FORBIDDEN" } }, 403);
+
+  if (new Date() > poll.endsAt) return c.json({ error: { message: "Poll already ended", code: "POLL_ENDED" } }, 400);
+
+  const updated = await prisma.poll.update({
+    where: { id: pollId },
+    data: { endsAt: new Date() },
+    include: {
+      createdBy: { select: { id: true, name: true, image: true } },
+      options: { include: { votes: { select: { userId: true } } } },
+      votes: { select: { userId: true, optionId: true } },
+    },
+  });
+
+  return c.json({ data: updated });
+});
+
 // DELETE /api/teams/:teamId/polls/:pollId — creator or owner/team_leader can delete
 pollsRouter.delete("/:teamId/polls/:pollId", async (c) => {
   const user = c.get("user")!;

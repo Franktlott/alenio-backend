@@ -84,6 +84,7 @@ function PollCard({
   teamId,
   onVote,
   onDelete,
+  onEndEarly,
   canDelete,
 }: {
   poll: PollType;
@@ -91,6 +92,7 @@ function PollCard({
   teamId: string;
   onVote: (pollId: string, optionId: string) => void;
   onDelete: (pollId: string) => void;
+  onEndEarly: (pollId: string) => void;
   canDelete: boolean;
 }) {
   const isEnded = new Date() > new Date(poll.endsAt);
@@ -131,9 +133,21 @@ function PollCard({
             <Text style={{ fontSize: 10, color: "#94A3B8" }}>{poll.createdBy.name} · {timeLeft()}</Text>
           </View>
           {canDelete ? (
-            <TouchableOpacity onPress={() => onDelete(poll.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Text style={{ fontSize: 16, color: "#CBD5E1" }}>✕</Text>
-            </TouchableOpacity>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              {!isEnded ? (
+                <TouchableOpacity
+                  testID={`end-poll-early-${poll.id}`}
+                  onPress={() => onEndEarly(poll.id)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  style={{ backgroundColor: "#FEF3C7", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}
+                >
+                  <Text style={{ fontSize: 11, fontWeight: "700", color: "#D97706" }}>End early</Text>
+                </TouchableOpacity>
+              ) : null}
+              <TouchableOpacity onPress={() => onDelete(poll.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Text style={{ fontSize: 16, color: "#CBD5E1" }}>✕</Text>
+              </TouchableOpacity>
+            </View>
           ) : null}
         </View>
 
@@ -220,6 +234,7 @@ export default function TeamChatScreen() {
   const [pollDuration, setPollDuration] = useState<number>(24);
   const [pollAllowLeaderDelete, setPollAllowLeaderDelete] = useState<boolean>(true);
   const [confirmDeletePollId, setConfirmDeletePollId] = useState<string | null>(null);
+  const [confirmEndPollId, setConfirmEndPollId] = useState<string | null>(null);
   const flatListRef = useRef<FlatList>(null);
   const currentUserId = session?.user?.id ?? "";
   const prevMsgCountRef = useRef<number>(0);
@@ -285,6 +300,11 @@ export default function TeamChatScreen() {
 
   const deletePollMutation = useMutation({
     mutationFn: (pollId: string) => api.delete(`/api/teams/${teamId}/polls/${pollId}`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["polls", teamId] }),
+  });
+
+  const endPollMutation = useMutation({
+    mutationFn: (pollId: string) => api.patch(`/api/teams/${teamId}/polls/${pollId}/end`, {}),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["polls", teamId] }),
   });
 
@@ -658,6 +678,43 @@ export default function TeamChatScreen() {
         </TouchableOpacity>
       </Modal>
 
+      {/* End poll early confirmation modal */}
+      <Modal visible={!!confirmEndPollId} transparent animationType="fade" onRequestClose={() => setConfirmEndPollId(null)}>
+        <TouchableOpacity
+          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", alignItems: "center", justifyContent: "center", paddingHorizontal: 32 }}
+          activeOpacity={1}
+          onPress={() => setConfirmEndPollId(null)}
+        >
+          <TouchableOpacity activeOpacity={1} onPress={() => {}}>
+            <View style={{ backgroundColor: "white", borderRadius: 20, padding: 24, width: "100%" }}>
+              <Text style={{ fontSize: 17, fontWeight: "700", color: "#1E293B", textAlign: "center", marginBottom: 8 }}>End Poll Early?</Text>
+              <Text style={{ fontSize: 14, color: "#64748B", textAlign: "center", marginBottom: 24, lineHeight: 20 }}>
+                The poll will close immediately and results will be final.
+              </Text>
+              <View style={{ flexDirection: "row", gap: 10 }}>
+                <TouchableOpacity
+                  onPress={() => setConfirmEndPollId(null)}
+                  style={{ flex: 1, paddingVertical: 13, borderRadius: 12, backgroundColor: "#F1F5F9", alignItems: "center" }}
+                  testID="cancel-end-poll"
+                >
+                  <Text style={{ fontWeight: "600", color: "#64748B", fontSize: 15 }}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => {
+                    if (confirmEndPollId) endPollMutation.mutate(confirmEndPollId);
+                    setConfirmEndPollId(null);
+                  }}
+                  style={{ flex: 1, paddingVertical: 13, borderRadius: 12, backgroundColor: "#D97706", alignItems: "center" }}
+                  testID="confirm-end-poll"
+                >
+                  <Text style={{ fontWeight: "700", color: "white", fontSize: 15 }}>End Poll</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
       {/* Poll creation modal */}
       <Modal visible={showPollModal} transparent animationType="slide" onRequestClose={() => setShowPollModal(false)}>
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
@@ -889,6 +946,7 @@ export default function TeamChatScreen() {
                     teamId={teamId}
                     onVote={(pollId, optionId) => voteMutation.mutate({ pollId, optionId })}
                     onDelete={(pollId) => setConfirmDeletePollId(pollId)}
+                    onEndEarly={(pollId) => setConfirmEndPollId(pollId)}
                     canDelete={canDeletePoll}
                   />
                 );
