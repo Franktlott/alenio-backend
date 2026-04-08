@@ -10,6 +10,7 @@ import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { useSession } from '@/lib/auth/use-session';
 import { useEffect, useRef, useState } from 'react';
 import * as Notifications from 'expo-notifications';
+import * as Haptics from 'expo-haptics';
 import { registerForPushNotificationsAsync, playNotificationTone } from '@/lib/notifications';
 import { initRevenueCat } from '@/lib/revenue-cat';
 import Animated, {
@@ -93,10 +94,11 @@ function RootLayoutNav() {
     registerForPushNotificationsAsync();
     initRevenueCat(session.user.id);
     notificationListener.current = Notifications.addNotificationReceivedListener((notification) => {
-      // Play custom notification tone
+      // Play custom notification tone + haptic
       const data = notification.request.content.data as Record<string, string>;
       const toneType = data?.conversationId ? "dm" : "msg";
       playNotificationTone(toneType);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     });
 
     const responseListener = Notifications.addNotificationResponseReceivedListener((response) => {
