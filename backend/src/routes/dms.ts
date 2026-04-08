@@ -314,7 +314,7 @@ dmsRouter.post("/:conversationId/messages", async (c) => {
         ? `${senderName}: ${msgText}`
         : msgText;
 
-      await sendPushToUsers(otherIds, notifTitle, notifBody, { conversationId });
+      await sendPushToUsers(otherIds, notifTitle, notifBody, { conversationId }, "notifMessages");
     }
   }
 
@@ -334,7 +334,8 @@ dmsRouter.post("/:conversationId/messages", async (c) => {
         validMentionIds,
         `${senderName} mentioned you`,
         mentionBody,
-        { conversationId }
+        { conversationId },
+        "notifMessages"
       );
     }
   }

@@ -13,7 +13,7 @@ import { messagesRouter } from "./routes/messages";
 import { dmsRouter } from "./routes/dms";
 import { templatesRouter } from "./routes/templates";
 import { joinRequestsRouter } from "./routes/join-requests";
-import { calendarRouter } from "./routes/calendar";
+import { calendarRouter, initMeetingReminders } from "./routes/calendar";
 import { subscriptionRouter } from "./routes/subscription";
 import { activityRouter } from "./routes/activity";
 import { topicsRouter } from "./routes/topics";
@@ -136,7 +136,7 @@ app.get("/api/notification-preferences", async (c) => {
   if (!user) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
   const prefs = await prisma.user.findUnique({
     where: { id: user.id },
-    select: { notifMessages: true, notifTaskAssigned: true, notifTaskDue: true },
+    select: { notifMessages: true, notifTaskAssigned: true, notifTaskDue: true, notifMeetings: true },
   });
   return c.json({ data: prefs });
 });
@@ -146,15 +146,16 @@ app.patch("/api/notification-preferences", async (c) => {
   const user = c.get("user");
   if (!user) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
   const body = await c.req.json();
-  const { notifMessages, notifTaskAssigned, notifTaskDue } = body;
+  const { notifMessages, notifTaskAssigned, notifTaskDue, notifMeetings } = body;
   const updated = await prisma.user.update({
     where: { id: user.id },
     data: {
       ...(notifMessages !== undefined ? { notifMessages } : {}),
       ...(notifTaskAssigned !== undefined ? { notifTaskAssigned } : {}),
       ...(notifTaskDue !== undefined ? { notifTaskDue } : {}),
+      ...(notifMeetings !== undefined ? { notifMeetings } : {}),
     },
-    select: { notifMessages: true, notifTaskAssigned: true, notifTaskDue: true },
+    select: { notifMessages: true, notifTaskAssigned: true, notifTaskDue: true, notifMeetings: true },
   });
   return c.json({ data: updated });
 });
@@ -272,6 +273,9 @@ async function runCleanup() {
 // Run once on startup, then every 24 hours
 runCleanup();
 setInterval(runCleanup, 60 * 60 * 1000);
+
+// Re-schedule any pending meeting reminders after server restart
+initMeetingReminders();
 
 const port = Number(process.env.PORT) || 3000;
 

@@ -26,7 +26,7 @@ export async function sendPushNotification(
   }
 }
 
-type NotifPrefKey = "notifMessages" | "notifTaskAssigned" | "notifTaskDue";
+type NotifPrefKey = "notifMessages" | "notifTaskAssigned" | "notifTaskDue" | "notifMeetings";
 
 export async function sendPushToUsers(
   userIds: string[],

@@ -32,6 +32,7 @@ model User {
   notifMessages     Boolean @default(true)
   notifTaskAssigned Boolean @default(true)
   notifTaskDue      Boolean @default(true)
+  notifMeetings     Boolean @default(true)
   joinRequests  JoinRequest[]
   calendarEvents CalendarEvent[]
   activities    TeamActivity[]
@@ -311,6 +312,7 @@ model CalendarEvent {
   color       String    @default("#4361EE")
   isHidden    Boolean   @default(false)
   isVideoMeeting Boolean @default(false)
+  reminderMinutes String  @default("[]")
   teamId      String
   createdById String
   createdAt   DateTime  @default(now())

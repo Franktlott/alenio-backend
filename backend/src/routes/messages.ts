@@ -126,7 +126,8 @@ messagesRouter.post("/", async (c) => {
       mentionIds,
       notifTitle,
       `${senderName} mentioned you: ${messageText}`,
-      { teamId, teamName: team?.name ?? "", topicId: topicId || undefined }
+      { teamId, teamName: team?.name ?? "", topicId: topicId || undefined },
+      "notifMessages"
     );
   }
 

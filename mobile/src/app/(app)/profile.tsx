@@ -163,7 +163,7 @@ export default function ProfileScreen() {
     enabled: !!user,
   });
 
-  type NotifPrefs = { notifMessages: boolean; notifTaskAssigned: boolean; notifTaskDue: boolean };
+  type NotifPrefs = { notifMessages: boolean; notifTaskAssigned: boolean; notifTaskDue: boolean; notifMeetings: boolean };
 
   const { data: notifPrefs } = useQuery({
     queryKey: ["notification-preferences"],
@@ -566,6 +566,7 @@ export default function ProfileScreen() {
               { key: "notifMessages" as const, label: "New messages", description: "Team and direct messages" },
               { key: "notifTaskAssigned" as const, label: "Task assigned", description: "When a task is assigned to you" },
               { key: "notifTaskDue" as const, label: "Task due reminders", description: "Reminders for upcoming due dates" },
+              { key: "notifMeetings" as const, label: "Meeting reminders", description: "Alerts before video meetings" },
             ].map((item, index, arr) => (
               <View
                 key={item.key}
