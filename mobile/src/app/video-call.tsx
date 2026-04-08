@@ -138,17 +138,15 @@ export default function VideoCallScreen() {
   const [micPermission, requestMicPermission] = useMicrophonePermissions();
   const [permissionDenied, setPermissionDenied] = useState(false);
 
-  // Request camera + mic on mount; detect denied state
-  useEffect(() => {
-    async function requestPermissions() {
-      const cam = cameraPermission?.granted ? cameraPermission : await requestCameraPermission();
-      const mic = micPermission?.granted ? micPermission : await requestMicPermission();
-      if (!cam?.granted || !mic?.granted) {
-        setPermissionDenied(true);
-      }
+  async function requestPermissionsAndJoin() {
+    const cam = cameraPermission?.granted ? cameraPermission : await requestCameraPermission();
+    const mic = micPermission?.granted ? micPermission : await requestMicPermission();
+    if (!cam?.granted || !mic?.granted) {
+      setPermissionDenied(true);
+      return;
     }
-    requestPermissions();
-  }, []);
+    setPhase("incall");
+  }
 
   useEffect(() => {
     navigation.setOptions({ headerShown: false });
@@ -339,7 +337,7 @@ export default function VideoCallScreen() {
           {/* Join button */}
           <View style={s.joinRow}>
             <Animated.View style={joinBtnAnimStyle}>
-              <TouchableOpacity testID="join-call-button" style={s.joinBtn} onPress={() => setPhase("incall")}>
+              <TouchableOpacity testID="join-call-button" style={s.joinBtn} onPress={requestPermissionsAndJoin}>
                 <Video size={20} color="#fff" style={{ marginRight: 8 }} />
                 <Text style={s.joinBtnText}>Join call</Text>
               </TouchableOpacity>
@@ -363,7 +361,7 @@ export default function VideoCallScreen() {
         javaScriptEnabled
         domStorageEnabled
         startInLoadingState={false}
-        mediaCapturePermissionGrantType="grant"
+        mediaCapturePermissionGrantType="prompt"
         originWhitelist={['*']}
         allowsAirPlayForMediaPlayback={true}
         style={{ flex: 1, backgroundColor: "#0A0F1E" }}
