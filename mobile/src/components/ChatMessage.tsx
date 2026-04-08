@@ -55,6 +55,15 @@ export function ChatMessage({
   const hasReactions = grouped.length > 0;
   const [viewerVisible, setViewerVisible] = useState(false);
   const [videoThumb, setVideoThumb] = useState<string | null>(null);
+  const [imgHeight, setImgHeight] = useState<number>(220);
+
+  useEffect(() => {
+    if (mediaType === "image" && mediaUrl) {
+      Image.getSize(mediaUrl, (w, h) => {
+        if (w > 0) setImgHeight(Math.round((h / w) * 220));
+      }, () => {});
+    }
+  }, [mediaUrl, mediaType]);
 
   useEffect(() => {
     if (mediaType === "video" && mediaUrl) {
@@ -141,8 +150,8 @@ export function ChatMessage({
                   ) : (
                     <Image
                       source={{ uri: mediaUrl }}
-                      style={{ width: 220, height: 220 }}
-                      resizeMode="contain"
+                      style={{ width: 220, height: imgHeight }}
+                      resizeMode="cover"
                     />
                   )}
                 </Pressable>
