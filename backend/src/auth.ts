@@ -1,6 +1,7 @@
 import { betterAuth } from "better-auth";
 import { expo } from "@better-auth/expo";
 import { prismaAdapter } from "better-auth/adapters/prisma";
+import { emailOTP } from "better-auth/plugins";
 import { Resend } from "resend";
 import { prisma } from "./prisma";
 import { env } from "./env";
@@ -38,6 +39,37 @@ export const auth = betterAuth({
   ],
   plugins: [
     expo(),
+    emailOTP({
+      otpLength: 6,
+      expiresIn: 600,
+      async sendVerificationOTP({ email, otp, type }: { email: string; otp: string; type: string }) {
+        if (!env.RESEND_API_KEY) {
+          console.warn("[auth] RESEND_API_KEY not set, skipping OTP email");
+          return;
+        }
+        const resend = new Resend(env.RESEND_API_KEY);
+        const subject = type === "email-verification"
+          ? "Verify your email"
+          : type === "sign-in"
+          ? "Your sign-in code"
+          : "Your verification code";
+        await resend.emails.send({
+          from: env.FROM_EMAIL,
+          to: email,
+          subject,
+          html: `
+            <div style="font-family: sans-serif; max-width: 400px; margin: 0 auto;">
+              <h2 style="color: #4361EE;">Your verification code</h2>
+              <p>Use the code below to verify your email address. It expires in 10 minutes.</p>
+              <div style="background: #f4f4f8; border-radius: 8px; padding: 24px; text-align: center; margin: 24px 0;">
+                <span style="font-size: 36px; font-weight: bold; letter-spacing: 8px; color: #4361EE;">${otp}</span>
+              </div>
+              <p style="color: #888; font-size: 13px;">If you didn't request this, you can safely ignore this email.</p>
+            </div>
+          `,
+        });
+      },
+    }),
   ],
   advanced: {
     trustedProxyHeaders: true,

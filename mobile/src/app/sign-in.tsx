@@ -64,7 +64,12 @@ export default function SignIn() {
       if (result.error) {
         setError(result.error.message ?? "Sign up failed. Please try again.");
       } else {
-        await invalidateSession();
+        // Send OTP and go to verification screen
+        await authClient.emailOtp.sendVerificationOtp({
+          email: email.trim().toLowerCase(),
+          type: "email-verification",
+        });
+        router.push({ pathname: "/verify-otp", params: { email: email.trim().toLowerCase() } });
       }
     } else {
       setLoading(true);
