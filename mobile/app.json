@@ -47,7 +47,10 @@
       "android": {
         "compileSdkVersion": 35,
         "targetSdkVersion": 35,
-        "minSdkVersion": 24
+        "minSdkVersion": 24,
+        "gradleVersion": "8.10.2",
+        "gradlePluginVersion": "8.7.3",
+        "kotlinVersion": "2.0.21"
       }
     }
   ]
