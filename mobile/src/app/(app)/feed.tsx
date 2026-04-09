@@ -610,16 +610,16 @@ function PersonalBestCard({ item, activeTeamId, currentUserId, isDemo, showPicke
 }
 
 const CELEBRATION_TYPES = [
-  { key: "shoutout",   emoji: "⭐", label: "Shoutout",        color: "#F59E0B", bg: "#FFFBEB", gradient: ["#FBBF24", "#F59E0B"] as [string,string] },
-  { key: "mvp",        emoji: "🏆", label: "MVP",             color: "#4361EE", bg: "#EEF2FF", gradient: ["#818CF8", "#4361EE"] as [string,string] },
-  { key: "beyond",     emoji: "💪", label: "Above & Beyond",  color: "#10B981", bg: "#ECFDF5", gradient: ["#34D399", "#10B981"] as [string,string] },
-  { key: "rockstar",   emoji: "🚀", label: "Rockstar",        color: "#8B5CF6", bg: "#F5F3FF", gradient: ["#C084FC", "#8B5CF6"] as [string,string] },
-  { key: "clutch",     emoji: "🎯", label: "Clutch",          color: "#EF4444", bg: "#FEF2F2", gradient: ["#FB7185", "#EF4444"] as [string,string] },
-  { key: "teamplayer", emoji: "🤝", label: "Team Player",     color: "#06B6D4", bg: "#ECFEFF", gradient: ["#22D3EE", "#06B6D4"] as [string,string] },
-  { key: "bigbrain",   emoji: "💡", label: "Big Brain",       color: "#F97316", bg: "#FFF7ED", gradient: ["#FB923C", "#F97316"] as [string,string] },
-  { key: "onfire",     emoji: "🔥", label: "On Fire",         color: "#EF4444", bg: "#FEF2F2", gradient: ["#F97316", "#EF4444"] as [string,string] },
-  { key: "milestone",  emoji: "🎉", label: "Milestone",       color: "#4361EE", bg: "#EEF2FF", gradient: ["#818CF8", "#4361EE"] as [string,string] },
-  { key: "grateful",   emoji: "❤️", label: "Grateful",        color: "#EC4899", bg: "#FDF2F8", gradient: ["#F472B6", "#EC4899"] as [string,string] },
+  { key: "shoutout",   emoji: "⭐", label: "Shoutout",        color: "#D97706", bg: "#FFFBEB", gradient: ["#D97706", "#B45309"] as [string,string] },
+  { key: "mvp",        emoji: "🏆", label: "MVP",             color: "#7C3AED", bg: "#EEF2FF", gradient: ["#7C3AED", "#6D28D9"] as [string,string] },
+  { key: "beyond",     emoji: "💪", label: "Above & Beyond",  color: "#059669", bg: "#ECFDF5", gradient: ["#059669", "#047857"] as [string,string] },
+  { key: "rockstar",   emoji: "🚀", label: "Rockstar",        color: "#EA580C", bg: "#FFF7ED", gradient: ["#EA580C", "#C2410C"] as [string,string] },
+  { key: "clutch",     emoji: "🎯", label: "Clutch",          color: "#DC2626", bg: "#FEF2F2", gradient: ["#DC2626", "#B91C1C"] as [string,string] },
+  { key: "teamplayer", emoji: "🤝", label: "Team Player",     color: "#1D4ED8", bg: "#EFF6FF", gradient: ["#1D4ED8", "#1E40AF"] as [string,string] },
+  { key: "bigbrain",   emoji: "💡", label: "Big Brain",       color: "#0891B2", bg: "#ECFEFF", gradient: ["#0891B2", "#0E7490"] as [string,string] },
+  { key: "onfire",     emoji: "🔥", label: "On Fire",         color: "#4338CA", bg: "#EEF2FF", gradient: ["#4338CA", "#3730A3"] as [string,string] },
+  { key: "milestone",  emoji: "🎉", label: "Milestone",       color: "#7C3AED", bg: "#F5F3FF", gradient: ["#7C3AED", "#5B21B6"] as [string,string] },
+  { key: "grateful",   emoji: "❤️", label: "Grateful",        color: "#E11D48", bg: "#FDF2F8", gradient: ["#E11D48", "#BE123C"] as [string,string] },
 ];
 
 function CelebrationPostCard({ item, activeTeamId, currentUserId, isDemo, showPicker, onOpenPicker, onClosePicker }: { item: ActivityEvent; activeTeamId: string | null; currentUserId: string | undefined; isDemo: boolean; showPicker: boolean; onOpenPicker: () => void; onClosePicker: () => void }) {
@@ -650,6 +650,10 @@ function CelebrationPostCard({ item, activeTeamId, currentUserId, isDemo, showPi
         end={{ x: 1, y: 1 }}
         style={{ borderRadius: 20, overflow: "hidden", borderWidth: 1, borderColor: "rgba(255,255,255,0.07)" }}
       >
+        <Image
+          source={require("@/assets/alenio-icon.png")}
+          style={{ position: "absolute", top: 12, right: 12, width: 28, height: 28, borderRadius: 6, opacity: 0.9 }}
+        />
         <View style={{ padding: 16, gap: 10 }}>
           {/* Badge row */}
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
