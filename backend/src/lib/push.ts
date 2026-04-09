@@ -6,6 +6,7 @@ export interface PushMessage {
   to: string;
   title: string;
   body: string;
+  sound: string;
   data?: Record<string, unknown>;
 }
 
@@ -19,7 +20,7 @@ export async function sendPushNotification(
     await fetch(EXPO_PUSH_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify([{ to, title, body, data }]),
+      body: JSON.stringify([{ to, title, body, sound: "default", data }]),
     });
   } catch {
     // Silently fail — notifications are non-critical
