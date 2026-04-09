@@ -650,18 +650,20 @@ function CelebrationPostCard({ item, activeTeamId, currentUserId, isDemo, showPi
         end={{ x: 1, y: 1 }}
         style={{ borderRadius: 20, overflow: "hidden", borderWidth: 1, borderColor: "rgba(255,255,255,0.07)" }}
       >
-        <Image
-          source={require("@/assets/alenio-icon.png")}
-          style={{ position: "absolute", top: 12, right: 12, width: 28, height: 28, borderRadius: 6, opacity: 0.9 }}
-        />
         <View style={{ padding: 16, gap: 10 }}>
           {/* Badge row */}
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 8 }}>
             <View style={{ backgroundColor: "rgba(255,255,255,0.12)", borderRadius: 12, paddingHorizontal: 10, paddingVertical: 5, flexDirection: "row", alignItems: "center", gap: 6 }}>
               <Text style={{ fontSize: 15 }}>{celebType.emoji}</Text>
               <Text style={{ fontSize: 12, fontWeight: "700", color: "rgba(255,255,255,0.9)", letterSpacing: 0.4 }}>{celebType.label.toUpperCase()}</Text>
             </View>
-            <Text style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginLeft: "auto" }}>{timeAgo(item.createdAt)}</Text>
+            <View style={{ marginLeft: "auto", alignItems: "flex-end", gap: 6 }}>
+              <Text style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>{timeAgo(item.createdAt)}</Text>
+              <Image
+                source={require("@/assets/alenio-icon.png")}
+                style={{ width: 26, height: 26, borderRadius: 6, opacity: 0.9 }}
+              />
+            </View>
           </View>
 
           {/* Main text */}
