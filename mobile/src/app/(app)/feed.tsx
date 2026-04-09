@@ -289,48 +289,48 @@ function CelebrationCard({ item, activeTeamId, currentUserId, isDemo, showPicker
   switch (variant) {
     case 1:
       theme = {
-        gradient: ["#1A0A2E", "#0F0520", "#080010"],
-        badgeGradient: ["#9333EA", "#7C3AED", "#6D28D9"],
-        badgeBg: "#080010",
-        badgeTextColor: "#C084FC",
+        gradient: ["#C084FC", "#A855F7", "#7C3AED"] as [string, string, string],
+        badgeGradient: ["#F3E8FF", "#DDD6FE", "#C4B5FD"] as [string, string, string],
+        badgeBg: "rgba(255,255,255,0.25)",
+        badgeTextColor: "#ffffff",
         emoji: "🚀",
-        particleColor: "#A855F7",
+        particleColor: "#F3E8FF",
         headline: `${name} is absolutely CRUSHING IT! 🚀💜`,
         sub: "Top performer streak!",
       };
       break;
     case 2:
       theme = {
-        gradient: ["#052E16", "#021A0D", "#010D07"],
-        badgeGradient: ["#10B981", "#059669", "#047857"],
-        badgeBg: "#010D07",
-        badgeTextColor: "#34D399",
+        gradient: ["#34D399", "#10B981", "#059669"] as [string, string, string],
+        badgeGradient: ["#ECFDF5", "#A7F3D0", "#6EE7B7"] as [string, string, string],
+        badgeBg: "rgba(255,255,255,0.25)",
+        badgeTextColor: "#ffffff",
         emoji: "💎",
-        particleColor: "#10B981",
+        particleColor: "#D1FAE5",
         headline: `${name} is playing at a LEGENDARY level! 💎`,
         sub: "Consistency is power 🌿",
       };
       break;
     case 3:
       theme = {
-        gradient: ["#1E0000", "#120000", "#0A0000"],
-        badgeGradient: ["#EF4444", "#DC2626", "#B91C1C"],
-        badgeBg: "#0A0000",
-        badgeTextColor: "#F87171",
+        gradient: ["#FB7185", "#F43F5E", "#E11D48"] as [string, string, string],
+        badgeGradient: ["#FFE4E6", "#FECDD3", "#FDA4AF"] as [string, string, string],
+        badgeBg: "rgba(255,255,255,0.25)",
+        badgeTextColor: "#ffffff",
         emoji: "⚡",
-        particleColor: "#EF4444",
-        headline: `${name} is UNSTOPPABLE right now! ⚡🔴`,
+        particleColor: "#FFE4E6",
+        headline: `${name} is UNSTOPPABLE right now! ⚡🔥`,
         sub: "On fire, no breaks! 💥",
       };
       break;
     default:
       theme = {
-        gradient: ["#1B2138", "#0D1117", "#111827"],
-        badgeGradient: ["#F5C518", "#B8860B", "#8B6914"],
-        badgeBg: "#0D1117",
-        badgeTextColor: "#FFD700",
+        gradient: ["#FBBF24", "#F59E0B", "#D97706"] as [string, string, string],
+        badgeGradient: ["#FEF9C3", "#FEF08A", "#FDE047"] as [string, string, string],
+        badgeBg: "rgba(255,255,255,0.25)",
+        badgeTextColor: "#ffffff",
         emoji: "⭐",
-        particleColor: "#FFD700",
+        particleColor: "#FEF9C3",
         headline: `${name} hit an INSANE milestone! 🏆✨`,
         sub: "New Alenio record!",
       };
@@ -374,6 +374,10 @@ function CelebrationCard({ item, activeTeamId, currentUserId, isDemo, showPicker
             <Text key={i} style={{ position: "absolute", top: (s as any).top, left: (s as any).left, right: (s as any).right, bottom: (s as any).bottom, fontSize: s.size, opacity: s.opacity, color: theme.particleColor }}>✦</Text>
           ))}
         </View>
+        <Image
+          source={require("@/assets/alenio-icon.png")}
+          style={{ position: "absolute", top: 12, right: 12, width: 28, height: 28, borderRadius: 6, opacity: 0.9 }}
+        />
 
         <View style={{ padding: 14, alignItems: "center", gap: 8 }}>
           {/* Badge */}
@@ -397,22 +401,22 @@ function CelebrationCard({ item, activeTeamId, currentUserId, isDemo, showPicker
             <Text style={{ fontSize: 14, fontWeight: "800", color: "white", textAlign: "center" }}>
               {theme.headline}
             </Text>
-            <Text style={{ fontSize: 11, color: "#9CA3AF" }}>{theme.sub}</Text>
+            <Text style={{ fontSize: 11, color: "rgba(255,255,255,0.75)" }}>{theme.sub}</Text>
           </View>
 
           {/* Footer: avatar + time */}
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", width: "100%", marginTop: 2 }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-              <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: "#1C2540", borderWidth: 1, borderColor: "#FFD70040", overflow: "hidden", alignItems: "center", justifyContent: "center" }}>
+              <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.2)", borderWidth: 1, borderColor: "#FFD70040", overflow: "hidden", alignItems: "center", justifyContent: "center" }}>
                 {item.user?.image ? (
                   <ExpoImage source={{ uri: item.user.image }} style={{ width: 24, height: 24 }} contentFit="cover" />
                 ) : (
                   <Text style={{ fontSize: 11, fontWeight: "700", color: theme.badgeTextColor }}>{name[0].toUpperCase()}</Text>
                 )}
               </View>
-              <Text style={{ fontSize: 11, color: "#6B7280" }}>{name}</Text>
+              <Text style={{ fontSize: 11, color: "rgba(255,255,255,0.8)" }}>{name}</Text>
             </View>
-            <Text style={{ fontSize: 11, color: "#4B5563" }}>{timeAgo(item.createdAt)}</Text>
+            <Text style={{ fontSize: 11, color: "rgba(255,255,255,0.6)" }}>{timeAgo(item.createdAt)}</Text>
           </View>
 
           <ReactionRow
@@ -458,46 +462,46 @@ function PersonalBestCard({ item, activeTeamId, currentUserId, isDemo, showPicke
     case 1:
       theme = {
         shadow: "#3B82F6",
-        gradient: ["#001A40", "#000D26", "#00060F"],
-        badgeGradient: ["#3B82F6", "#2563EB", "#1D4ED8"],
-        badgeBg: "#00060F",
-        badgeTextColor: "#60A5FA",
+        gradient: ["#60A5FA", "#3B82F6", "#2563EB"] as [string, string, string],
+        badgeGradient: ["#DBEAFE", "#BFDBFE", "#93C5FD"] as [string, string, string],
+        badgeBg: "rgba(255,255,255,0.25)",
+        badgeTextColor: "#ffffff",
         emoji: "❄️",
-        particleColor0: "#3B82F6",
-        particleColor1: "#60A5FA",
+        particleColor0: "#BFDBFE",
+        particleColor1: "#DBEAFE",
         headline: `${name} is BACK in ice cold form! ❄️💙`,
         sub: "Personal best streak matched! 🏆",
-        nameColor: "#60A5FA",
+        nameColor: "rgba(255,255,255,0.85)",
       };
       break;
     case 2:
       theme = {
         shadow: "#EC4899",
-        gradient: ["#2D0020", "#1A0012", "#0D0009"],
-        badgeGradient: ["#EC4899", "#DB2777", "#BE185D"],
-        badgeBg: "#0D0009",
-        badgeTextColor: "#F472B6",
+        gradient: ["#F472B6", "#EC4899", "#DB2777"] as [string, string, string],
+        badgeGradient: ["#FCE7F3", "#FBCFE8", "#F9A8D4"] as [string, string, string],
+        badgeBg: "rgba(255,255,255,0.25)",
+        badgeTextColor: "#ffffff",
         emoji: "💫",
-        particleColor0: "#EC4899",
-        particleColor1: "#F472B6",
+        particleColor0: "#FBCFE8",
+        particleColor1: "#FCE7F3",
         headline: `${name} just made a STUNNING comeback! 💫💖`,
         sub: "Personal best streak matched! 🏆",
-        nameColor: "#F472B6",
+        nameColor: "rgba(255,255,255,0.85)",
       };
       break;
     default:
       theme = {
         shadow: "#F97316",
-        gradient: ["#2D1200", "#1A0800", "#0D0400"],
-        badgeGradient: ["#FF6B00", "#F97316", "#EA580C"],
-        badgeBg: "#0D0400",
-        badgeTextColor: "#FF8C00",
+        gradient: ["#FB923C", "#F97316", "#EA580C"] as [string, string, string],
+        badgeGradient: ["#FED7AA", "#FDBA74", "#FB923C"] as [string, string, string],
+        badgeBg: "rgba(255,255,255,0.25)",
+        badgeTextColor: "#ffffff",
         emoji: "🔥",
-        particleColor0: "#F97316",
-        particleColor1: "#FB923C",
+        particleColor0: "#FED7AA",
+        particleColor1: "#FDBA74",
         headline: `${name} is BACK and better than ever! 💪🔥`,
         sub: "Personal best streak matched! 🏆",
-        nameColor: "#FB923C",
+        nameColor: "rgba(255,255,255,0.85)",
       };
       break;
   }
@@ -544,6 +548,10 @@ function PersonalBestCard({ item, activeTeamId, currentUserId, isDemo, showPicke
               <Text key={i} style={{ position: "absolute", top: (s as any).top, left: (s as any).left, right: (s as any).right, bottom: (s as any).bottom, fontSize: s.size, opacity: s.opacity, color: i % 2 === 0 ? theme.particleColor0 : theme.particleColor1 }}>{s.char}</Text>
             ))}
           </View>
+          <Image
+            source={require("@/assets/alenio-icon.png")}
+            style={{ position: "absolute", top: 12, right: 12, width: 28, height: 28, borderRadius: 6, opacity: 0.9 }}
+          />
 
           <View style={{ padding: 14, alignItems: "center", gap: 8 }}>
             {/* Badge */}
@@ -567,13 +575,13 @@ function PersonalBestCard({ item, activeTeamId, currentUserId, isDemo, showPicke
               <Text style={{ fontSize: 14, fontWeight: "800", color: "white", textAlign: "center" }}>
                 {theme.headline}
               </Text>
-              <Text style={{ fontSize: 11, color: "#9CA3AF" }}>{theme.sub}</Text>
+              <Text style={{ fontSize: 11, color: "rgba(255,255,255,0.75)" }}>{theme.sub}</Text>
             </View>
 
             {/* Footer: avatar + time */}
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", width: "100%", marginTop: 2 }}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: "#1C1410", borderWidth: 1, borderColor: theme.particleColor0, overflow: "hidden", alignItems: "center", justifyContent: "center" }}>
+                <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.2)", borderWidth: 1, borderColor: theme.particleColor0, overflow: "hidden", alignItems: "center", justifyContent: "center" }}>
                   {item.user?.image ? (
                     <ExpoImage source={{ uri: item.user.image }} style={{ width: 24, height: 24 }} contentFit="cover" />
                   ) : (
@@ -582,7 +590,7 @@ function PersonalBestCard({ item, activeTeamId, currentUserId, isDemo, showPicke
                 </View>
                 <Text style={{ fontSize: 11, color: theme.nameColor }}>{name}</Text>
               </View>
-              <Text style={{ fontSize: 11, color: "#4B5563" }}>{timeAgo(item.createdAt)}</Text>
+              <Text style={{ fontSize: 11, color: "rgba(255,255,255,0.6)" }}>{timeAgo(item.createdAt)}</Text>
             </View>
 
             <ReactionRow
@@ -602,16 +610,16 @@ function PersonalBestCard({ item, activeTeamId, currentUserId, isDemo, showPicke
 }
 
 const CELEBRATION_TYPES = [
-  { key: "shoutout",   emoji: "⭐", label: "Shoutout",        color: "#F59E0B", bg: "#FFFBEB", gradient: ["#1B1400", "#100C00"] as [string,string] },
-  { key: "mvp",        emoji: "🏆", label: "MVP",             color: "#4361EE", bg: "#EEF2FF", gradient: ["#0A0E28", "#060914"] as [string,string] },
-  { key: "beyond",     emoji: "💪", label: "Above & Beyond",  color: "#10B981", bg: "#ECFDF5", gradient: ["#001A0D", "#000E07"] as [string,string] },
-  { key: "rockstar",   emoji: "🚀", label: "Rockstar",        color: "#8B5CF6", bg: "#F5F3FF", gradient: ["#12002E", "#0A001A"] as [string,string] },
-  { key: "clutch",     emoji: "🎯", label: "Clutch",          color: "#EF4444", bg: "#FEF2F2", gradient: ["#1E0000", "#0D0000"] as [string,string] },
-  { key: "teamplayer", emoji: "🤝", label: "Team Player",     color: "#06B6D4", bg: "#ECFEFF", gradient: ["#001A1E", "#000E12"] as [string,string] },
-  { key: "bigbrain",   emoji: "💡", label: "Big Brain",       color: "#F97316", bg: "#FFF7ED", gradient: ["#1E0A00", "#0D0500"] as [string,string] },
-  { key: "onfire",     emoji: "🔥", label: "On Fire",         color: "#EF4444", bg: "#FEF2F2", gradient: ["#1E0500", "#0D0200"] as [string,string] },
-  { key: "milestone",  emoji: "🎉", label: "Milestone",       color: "#4361EE", bg: "#EEF2FF", gradient: ["#050A28", "#020514"] as [string,string] },
-  { key: "grateful",   emoji: "❤️", label: "Grateful",        color: "#EC4899", bg: "#FDF2F8", gradient: ["#1E0010", "#0D0008"] as [string,string] },
+  { key: "shoutout",   emoji: "⭐", label: "Shoutout",        color: "#F59E0B", bg: "#FFFBEB", gradient: ["#FBBF24", "#F59E0B"] as [string,string] },
+  { key: "mvp",        emoji: "🏆", label: "MVP",             color: "#4361EE", bg: "#EEF2FF", gradient: ["#818CF8", "#4361EE"] as [string,string] },
+  { key: "beyond",     emoji: "💪", label: "Above & Beyond",  color: "#10B981", bg: "#ECFDF5", gradient: ["#34D399", "#10B981"] as [string,string] },
+  { key: "rockstar",   emoji: "🚀", label: "Rockstar",        color: "#8B5CF6", bg: "#F5F3FF", gradient: ["#C084FC", "#8B5CF6"] as [string,string] },
+  { key: "clutch",     emoji: "🎯", label: "Clutch",          color: "#EF4444", bg: "#FEF2F2", gradient: ["#FB7185", "#EF4444"] as [string,string] },
+  { key: "teamplayer", emoji: "🤝", label: "Team Player",     color: "#06B6D4", bg: "#ECFEFF", gradient: ["#22D3EE", "#06B6D4"] as [string,string] },
+  { key: "bigbrain",   emoji: "💡", label: "Big Brain",       color: "#F97316", bg: "#FFF7ED", gradient: ["#FB923C", "#F97316"] as [string,string] },
+  { key: "onfire",     emoji: "🔥", label: "On Fire",         color: "#EF4444", bg: "#FEF2F2", gradient: ["#F97316", "#EF4444"] as [string,string] },
+  { key: "milestone",  emoji: "🎉", label: "Milestone",       color: "#4361EE", bg: "#EEF2FF", gradient: ["#818CF8", "#4361EE"] as [string,string] },
+  { key: "grateful",   emoji: "❤️", label: "Grateful",        color: "#EC4899", bg: "#FDF2F8", gradient: ["#F472B6", "#EC4899"] as [string,string] },
 ];
 
 function CelebrationPostCard({ item, activeTeamId, currentUserId, isDemo, showPicker, onOpenPicker, onClosePicker }: { item: ActivityEvent; activeTeamId: string | null; currentUserId: string | undefined; isDemo: boolean; showPicker: boolean; onOpenPicker: () => void; onClosePicker: () => void }) {
