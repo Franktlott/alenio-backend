@@ -53,7 +53,7 @@ export const auth = betterAuth({
           : type === "sign-in"
           ? "Your sign-in code"
           : "Your verification code";
-        await resend.emails.send({
+        const { data, error } = await resend.emails.send({
           from: env.FROM_EMAIL,
           to: email,
           subject,
@@ -68,6 +68,11 @@ export const auth = betterAuth({
             </div>
           `,
         });
+        if (error) {
+          console.error("[auth] Resend OTP email error:", JSON.stringify(error));
+        } else {
+          console.log("[auth] OTP email sent, id:", data?.id);
+        }
       },
     }),
   ],
