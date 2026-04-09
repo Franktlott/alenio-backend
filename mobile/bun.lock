@@ -161,6 +161,7 @@
     "expo-asset@11.1.5": "patches/expo-asset@11.1.5.patch",
   },
   "overrides": {
+    "expo-location": "~18.1.4",
     "react-native-css-interop": "0.1.22",
     "react-native-reanimated": "3.17.4",
   },
@@ -1435,7 +1436,7 @@
 
     "expo-live-photo": ["expo-live-photo@0.1.4", "", { "peerDependencies": { "expo": "*", "react": "*", "react-native": "*" } }, "sha512-wb6dpNNOSWvrp5i0lYWUaClLW2WwYOLmsBjU/AUZI87vaKoIBgW7MCX+kFzfhy1smJIHio1vShLpP8wwTHeLPA=="],
 
-    "expo-location": ["expo-location@15.1.1", "", { "peerDependencies": { "expo": "*" } }, "sha512-hoKRlmi6Ya+NeZ72Zt385SDcSsIDpJI60TCBVO+Hc9xfKA9Hyminyyo5WiwI8J03igmPTCl8Y37MxBNKY9AWkg=="],
+    "expo-location": ["expo-location@18.1.6", "", { "peerDependencies": { "expo": "*" } }, "sha512-l5dQQ2FYkrBgNzaZN1BvSmdhhcztFOUucu2kEfDBMV4wSIuTIt/CKsho+F3RnAiWgvui1wb1WTTf80E8zq48hA=="],
 
     "expo-mail-composer": ["expo-mail-composer@14.1.6", "", { "peerDependencies": { "expo": "*" } }, "sha512-xue+6ygCdqYMbIRbujZLWe/XlarYzxIKpMDxkFGw6yn6wMBGmc0WcNHL/77U9YbEejRlInlXbDC8m7VX7K96Zw=="],
 
