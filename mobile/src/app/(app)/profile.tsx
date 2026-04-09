@@ -39,19 +39,33 @@ import type { Team } from "@/lib/types";
 const DEMO_EMAIL = "demo@alenio.app";
 
 const TONES = [
-  { id: "none",       label: "None",       url: null },
-  { id: "bell",       label: "Default",    url: "https://assets.mixkit.co/active_storage/sfx/2870/2870-preview.mp3" },
-  { id: "tritone",    label: "Tri-tone",   url: "https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3" },
-  { id: "chime",      label: "Chime",      url: "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" },
-  { id: "glass",      label: "Glass",      url: "https://assets.mixkit.co/active_storage/sfx/2308/2308-preview.mp3" },
-  { id: "aurora",    label: "Aurora",    url: "https://assets.mixkit.co/active_storage/sfx/2013/2013-preview.mp3" },
-  { id: "chord",      label: "Chord",      url: "https://assets.mixkit.co/active_storage/sfx/2017/2017-preview.mp3" },
-  { id: "circles",    label: "Circles",    url: "https://assets.mixkit.co/active_storage/sfx/2572/2572-preview.mp3" },
-  { id: "complete",   label: "Complete",   url: "https://assets.mixkit.co/active_storage/sfx/2018/2018-preview.mp3" },
-  { id: "note",       label: "Note",       url: "https://assets.mixkit.co/active_storage/sfx/2015/2015-preview.mp3" },
-  { id: "popcorn",    label: "Popcorn",    url: "https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3" },
-  { id: "pulse",      label: "Pulse",      url: "https://assets.mixkit.co/active_storage/sfx/2573/2573-preview.mp3" },
-  { id: "synth",      label: "Synth",      url: "https://assets.mixkit.co/active_storage/sfx/2574/2574-preview.mp3" },
+  // System
+  { id: "none",        label: "None",          url: null,   section: "system" },
+  { id: "system",      label: "System Default", url: null,   section: "system" },
+  // Custom
+  { id: "bell",        label: "Bell",           url: "https://assets.mixkit.co/active_storage/sfx/2870/2870-preview.mp3", section: "custom" },
+  { id: "tritone",     label: "Tri-tone",       url: "https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3", section: "custom" },
+  { id: "chime",       label: "Chime",          url: "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3", section: "custom" },
+  { id: "glass",       label: "Glass",          url: "https://assets.mixkit.co/active_storage/sfx/2308/2308-preview.mp3", section: "custom" },
+  { id: "aurora",      label: "Aurora",         url: "https://assets.mixkit.co/active_storage/sfx/2013/2013-preview.mp3", section: "custom" },
+  { id: "chord",       label: "Chord",          url: "https://assets.mixkit.co/active_storage/sfx/2017/2017-preview.mp3", section: "custom" },
+  { id: "circles",     label: "Circles",        url: "https://assets.mixkit.co/active_storage/sfx/2572/2572-preview.mp3", section: "custom" },
+  { id: "complete",    label: "Complete",       url: "https://assets.mixkit.co/active_storage/sfx/2018/2018-preview.mp3", section: "custom" },
+  { id: "note",        label: "Note",           url: "https://assets.mixkit.co/active_storage/sfx/2015/2015-preview.mp3", section: "custom" },
+  { id: "popcorn",     label: "Popcorn",        url: "https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3", section: "custom" },
+  { id: "pulse",       label: "Pulse",          url: "https://assets.mixkit.co/active_storage/sfx/2573/2573-preview.mp3", section: "custom" },
+  { id: "synth",       label: "Synth",          url: "https://assets.mixkit.co/active_storage/sfx/2574/2574-preview.mp3", section: "custom" },
+  { id: "ding",        label: "Ding",           url: "https://assets.mixkit.co/active_storage/sfx/2014/2014-preview.mp3", section: "custom" },
+  { id: "magic",       label: "Magic",          url: "https://assets.mixkit.co/active_storage/sfx/2016/2016-preview.mp3", section: "custom" },
+  { id: "achievement", label: "Achievement",    url: "https://assets.mixkit.co/active_storage/sfx/2019/2019-preview.mp3", section: "custom" },
+  { id: "beep",        label: "Beep",           url: "https://assets.mixkit.co/active_storage/sfx/2020/2020-preview.mp3", section: "custom" },
+  { id: "quickwin",    label: "Quick Win",      url: "https://assets.mixkit.co/active_storage/sfx/2359/2359-preview.mp3", section: "custom" },
+  { id: "digital",     label: "Digital",        url: "https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3", section: "custom" },
+  { id: "pop",         label: "Pop",            url: "https://assets.mixkit.co/active_storage/sfx/2357/2357-preview.mp3", section: "custom" },
+  { id: "clarity",     label: "Clarity",        url: "https://assets.mixkit.co/active_storage/sfx/2570/2570-preview.mp3", section: "custom" },
+  { id: "alert",       label: "Alert",          url: "https://assets.mixkit.co/active_storage/sfx/2575/2575-preview.mp3", section: "custom" },
+  { id: "softbell",    label: "Soft Bell",      url: "https://assets.mixkit.co/active_storage/sfx/2868/2868-preview.mp3", section: "custom" },
+  { id: "cheer",       label: "Cheer",          url: "https://assets.mixkit.co/active_storage/sfx/2867/2867-preview.mp3", section: "custom" },
 ];
 
 export { TONES };
@@ -751,39 +765,64 @@ export default function ProfileScreen() {
                   </Pressable>
                 </View>
                 <Text style={{ fontSize: 13, color: "#94A3B8", marginBottom: 16 }}>Tap to preview</Text>
-                {TONES.map((tone) => {
-                  const selected = showTonePicker === "msg" ? tone.id === msgToneId : tone.id === dmToneId;
-                  return (
-                    <Pressable
-                      key={tone.id}
-                      testID={`tone-option-${tone.id}`}
-                      onPress={async () => {
-                        await playTonePreview(tone.url);
-                        if (showTonePicker === "msg") {
-                          setMsgToneId(tone.id);
-                          AsyncStorage.setItem(MSG_TONE_KEY, tone.id);
-                        } else {
-                          setDmToneId(tone.id);
-                          AsyncStorage.setItem(DM_TONE_KEY, tone.id);
-                        }
-                      }}
-                      style={{
-                        flexDirection: "row",
-                        alignItems: "center",
-                        paddingVertical: 14,
-                        borderBottomWidth: 1,
-                        borderBottomColor: "rgba(241,245,249,0.9)",
-                      }}
-                    >
-                      <Text style={{ fontSize: 20, marginRight: 6, color: selected ? "#4361EE" : "#CBD5E1" }}>
-                        {selected ? "●" : "○"}
-                      </Text>
-                      <Text style={{ fontSize: 15, fontWeight: selected ? "600" : "400", color: selected ? "#4361EE" : "#1E293B", flex: 1 }}>
-                        {tone.label}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
+                <ScrollView style={{ maxHeight: 400 }} showsVerticalScrollIndicator={false}>
+                  {/* System section */}
+                  <Text style={{ fontSize: 11, fontWeight: "700", color: "#94A3B8", letterSpacing: 0.8, textTransform: "uppercase", marginBottom: 4 }}>System</Text>
+                  {TONES.filter(t => t.section === "system").map((tone) => {
+                    const selected = showTonePicker === "msg" ? tone.id === msgToneId : tone.id === dmToneId;
+                    return (
+                      <Pressable
+                        key={tone.id}
+                        testID={`tone-option-${tone.id}`}
+                        onPress={async () => {
+                          if (tone.id !== "system") await playTonePreview(tone.url);
+                          if (showTonePicker === "msg") {
+                            setMsgToneId(tone.id);
+                            AsyncStorage.setItem(MSG_TONE_KEY, tone.id);
+                          } else {
+                            setDmToneId(tone.id);
+                            AsyncStorage.setItem(DM_TONE_KEY, tone.id);
+                          }
+                        }}
+                        style={{ flexDirection: "row", alignItems: "center", paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: "rgba(241,245,249,0.9)" }}
+                      >
+                        <Text style={{ fontSize: 20, marginRight: 6, color: selected ? "#4361EE" : "#CBD5E1" }}>{selected ? "●" : "○"}</Text>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 15, fontWeight: selected ? "600" : "400", color: selected ? "#4361EE" : "#1E293B" }}>{tone.label}</Text>
+                          {tone.id === "system" ? (
+                            <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 1 }}>Uses your device's default notification sound</Text>
+                          ) : null}
+                        </View>
+                      </Pressable>
+                    );
+                  })}
+                  {/* Custom section */}
+                  <Text style={{ fontSize: 11, fontWeight: "700", color: "#94A3B8", letterSpacing: 0.8, textTransform: "uppercase", marginTop: 16, marginBottom: 4 }}>Custom Tones</Text>
+                  {TONES.filter(t => t.section === "custom").map((tone) => {
+                    const selected = showTonePicker === "msg" ? tone.id === msgToneId : tone.id === dmToneId;
+                    return (
+                      <Pressable
+                        key={tone.id}
+                        testID={`tone-option-${tone.id}`}
+                        onPress={async () => {
+                          await playTonePreview(tone.url);
+                          if (showTonePicker === "msg") {
+                            setMsgToneId(tone.id);
+                            AsyncStorage.setItem(MSG_TONE_KEY, tone.id);
+                          } else {
+                            setDmToneId(tone.id);
+                            AsyncStorage.setItem(DM_TONE_KEY, tone.id);
+                          }
+                        }}
+                        style={{ flexDirection: "row", alignItems: "center", paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: "rgba(241,245,249,0.9)" }}
+                      >
+                        <Text style={{ fontSize: 20, marginRight: 6, color: selected ? "#4361EE" : "#CBD5E1" }}>{selected ? "●" : "○"}</Text>
+                        <Text style={{ fontSize: 15, fontWeight: selected ? "600" : "400", color: selected ? "#4361EE" : "#1E293B", flex: 1 }}>{tone.label}</Text>
+                        <Text style={{ fontSize: 12, color: "#CBD5E1" }}>▶</Text>
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
               </View>
             </BlurView>
           </Pressable>

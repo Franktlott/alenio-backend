@@ -8,33 +8,51 @@ import { api } from "./api/api";
 
 // Tone configuration (must match profile.tsx)
 const TONES = [
-  { id: "none",       label: "None",       url: null },
-  { id: "bell",       label: "Default",    url: "https://assets.mixkit.co/active_storage/sfx/2870/2870-preview.mp3" },
-  { id: "tritone",    label: "Tri-tone",   url: "https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3" },
-  { id: "chime",      label: "Chime",      url: "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" },
-  { id: "glass",      label: "Glass",      url: "https://assets.mixkit.co/active_storage/sfx/2308/2308-preview.mp3" },
-  { id: "aurora",     label: "Aurora",     url: "https://assets.mixkit.co/active_storage/sfx/2013/2013-preview.mp3" },
-  { id: "chord",      label: "Chord",      url: "https://assets.mixkit.co/active_storage/sfx/2017/2017-preview.mp3" },
-  { id: "circles",    label: "Circles",    url: "https://assets.mixkit.co/active_storage/sfx/2572/2572-preview.mp3" },
-  { id: "complete",   label: "Complete",   url: "https://assets.mixkit.co/active_storage/sfx/2018/2018-preview.mp3" },
-  { id: "note",       label: "Note",       url: "https://assets.mixkit.co/active_storage/sfx/2015/2015-preview.mp3" },
-  { id: "popcorn",    label: "Popcorn",    url: "https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3" },
-  { id: "pulse",      label: "Pulse",      url: "https://assets.mixkit.co/active_storage/sfx/2573/2573-preview.mp3" },
-  { id: "synth",      label: "Synth",      url: "https://assets.mixkit.co/active_storage/sfx/2574/2574-preview.mp3" },
+  { id: "none",        label: "None",          url: null },
+  { id: "system",      label: "System Default", url: null },
+  { id: "bell",        label: "Bell",           url: "https://assets.mixkit.co/active_storage/sfx/2870/2870-preview.mp3" },
+  { id: "tritone",     label: "Tri-tone",       url: "https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3" },
+  { id: "chime",       label: "Chime",          url: "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" },
+  { id: "glass",       label: "Glass",          url: "https://assets.mixkit.co/active_storage/sfx/2308/2308-preview.mp3" },
+  { id: "aurora",      label: "Aurora",         url: "https://assets.mixkit.co/active_storage/sfx/2013/2013-preview.mp3" },
+  { id: "chord",       label: "Chord",          url: "https://assets.mixkit.co/active_storage/sfx/2017/2017-preview.mp3" },
+  { id: "circles",     label: "Circles",        url: "https://assets.mixkit.co/active_storage/sfx/2572/2572-preview.mp3" },
+  { id: "complete",    label: "Complete",       url: "https://assets.mixkit.co/active_storage/sfx/2018/2018-preview.mp3" },
+  { id: "note",        label: "Note",           url: "https://assets.mixkit.co/active_storage/sfx/2015/2015-preview.mp3" },
+  { id: "popcorn",     label: "Popcorn",        url: "https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3" },
+  { id: "pulse",       label: "Pulse",          url: "https://assets.mixkit.co/active_storage/sfx/2573/2573-preview.mp3" },
+  { id: "synth",       label: "Synth",          url: "https://assets.mixkit.co/active_storage/sfx/2574/2574-preview.mp3" },
+  { id: "ding",        label: "Ding",           url: "https://assets.mixkit.co/active_storage/sfx/2014/2014-preview.mp3" },
+  { id: "magic",       label: "Magic",          url: "https://assets.mixkit.co/active_storage/sfx/2016/2016-preview.mp3" },
+  { id: "achievement", label: "Achievement",    url: "https://assets.mixkit.co/active_storage/sfx/2019/2019-preview.mp3" },
+  { id: "beep",        label: "Beep",           url: "https://assets.mixkit.co/active_storage/sfx/2020/2020-preview.mp3" },
+  { id: "quickwin",    label: "Quick Win",      url: "https://assets.mixkit.co/active_storage/sfx/2359/2359-preview.mp3" },
+  { id: "digital",     label: "Digital",        url: "https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3" },
+  { id: "pop",         label: "Pop",            url: "https://assets.mixkit.co/active_storage/sfx/2357/2357-preview.mp3" },
+  { id: "clarity",     label: "Clarity",        url: "https://assets.mixkit.co/active_storage/sfx/2570/2570-preview.mp3" },
+  { id: "alert",       label: "Alert",          url: "https://assets.mixkit.co/active_storage/sfx/2575/2575-preview.mp3" },
+  { id: "softbell",    label: "Soft Bell",      url: "https://assets.mixkit.co/active_storage/sfx/2868/2868-preview.mp3" },
+  { id: "cheer",       label: "Cheer",          url: "https://assets.mixkit.co/active_storage/sfx/2867/2867-preview.mp3" },
 ];
 
 const MSG_TONE_KEY = "msg_tone";
 const DM_TONE_KEY = "dm_tone";
 
-// Show notifications when app is in foreground (but don't play system sound - we handle it ourselves)
+// Show notifications when app is in foreground
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: false, // We play custom sound instead
-    shouldSetBadge: true,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
+  handleNotification: async (notification) => {
+    const data = notification.request.content.data as Record<string, string>;
+    const toneKey = data?.conversationId ? DM_TONE_KEY : MSG_TONE_KEY;
+    const toneId = await AsyncStorage.getItem(toneKey) ?? "bell";
+    const useSystemSound = toneId === "system";
+    return {
+      shouldShowAlert: true,
+      shouldPlaySound: useSystemSound,
+      shouldSetBadge: true,
+      shouldShowBanner: true,
+      shouldShowList: true,
+    };
+  },
 });
 
 /**
@@ -45,6 +63,8 @@ export async function playNotificationTone(type: "msg" | "dm" = "msg"): Promise<
   try {
     const key = type === "dm" ? DM_TONE_KEY : MSG_TONE_KEY;
     const toneId = await AsyncStorage.getItem(key) ?? "bell";
+
+    if (toneId === "system") return; // OS handles it via shouldPlaySound: true
 
     const tone = TONES.find(t => t.id === toneId);
     if (!tone?.url) return; // "none" selected or not found
