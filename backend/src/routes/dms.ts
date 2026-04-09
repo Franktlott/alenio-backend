@@ -234,7 +234,15 @@ dmsRouter.get("/:conversationId/messages", async (c) => {
     include: {
       sender: { select: { id: true, name: true, email: true, image: true } },
       reactions: { include: { user: { select: { id: true, name: true } } } },
-      replyTo: { include: { sender: { select: { id: true, name: true } } } },
+      replyTo: {
+        select: {
+          id: true,
+          content: true,
+          mediaUrl: true,
+          mediaType: true,
+          sender: { select: { id: true, name: true } },
+        },
+      },
     },
     orderBy: { createdAt: "asc" },
     take: 100,
@@ -282,7 +290,15 @@ dmsRouter.post("/:conversationId/messages", async (c) => {
     include: {
       sender: { select: { id: true, name: true, email: true, image: true } },
       reactions: { include: { user: { select: { id: true, name: true } } } },
-      replyTo: { include: { sender: { select: { id: true, name: true } } } },
+      replyTo: {
+        select: {
+          id: true,
+          content: true,
+          mediaUrl: true,
+          mediaType: true,
+          sender: { select: { id: true, name: true } },
+        },
+      },
     },
   });
 
@@ -376,7 +392,15 @@ dmsRouter.post("/:conversationId/messages/:messageId/reactions", async (c) => {
     include: {
       sender: { select: { id: true, name: true, email: true, image: true } },
       reactions: { include: { user: { select: { id: true, name: true } } } },
-      replyTo: { include: { sender: { select: { id: true, name: true } } } },
+      replyTo: {
+        select: {
+          id: true,
+          content: true,
+          mediaUrl: true,
+          mediaType: true,
+          sender: { select: { id: true, name: true } },
+        },
+      },
     },
   });
 

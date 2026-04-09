@@ -19,7 +19,7 @@ interface ChatMessageProps {
   content?: string | null;
   mediaUrl?: string | null;
   mediaType?: 'image' | 'video' | null;
-  replyTo?: { id: string; content?: string | null; sender: { id: string; name: string } } | null;
+  replyTo?: { id: string; content?: string | null; mediaUrl?: string | null; mediaType?: string | null; sender: { id: string; name: string } } | null;
   reactions: MessageReaction[];
   senderName: string;
   senderInitial: string;
@@ -111,17 +111,30 @@ export function ChatMessage({
               {/* Reply preview */}
               {replyTo ? (
                 <View
-                  className={`px-3 pt-2.5 pb-1.5 border-l-4 mx-2 mt-2 rounded-lg ${isOwn ? "border-white/40 bg-white/10" : "border-indigo-400 bg-indigo-50"}`}
+                  className={`px-3 pt-2.5 pb-1.5 border-l-4 mx-2 mt-2 rounded-lg flex-row items-center gap-2 ${isOwn ? "border-white/40 bg-white/10" : "border-indigo-400 bg-indigo-50"}`}
                 >
-                  <Text className={`text-xs font-semibold mb-0.5 ${isOwn ? "text-white/80" : "text-indigo-600"}`}>
-                    {replyTo.sender.name}
-                  </Text>
-                  <Text
-                    className={`text-xs ${isOwn ? "text-white/70" : "text-slate-500"}`}
-                    numberOfLines={1}
-                  >
-                    {replyTo.content ?? "📎 Media"}
-                  </Text>
+                  <View style={{ flex: 1 }}>
+                    <Text className={`text-xs font-semibold mb-0.5 ${isOwn ? "text-white/80" : "text-indigo-600"}`}>
+                      {replyTo.sender.name}
+                    </Text>
+                    <Text
+                      className={`text-xs ${isOwn ? "text-white/70" : "text-slate-500"}`}
+                      numberOfLines={1}
+                    >
+                      {replyTo.content ? replyTo.content : replyTo.mediaType === 'video' ? '🎥 Video' : '📷 Photo'}
+                    </Text>
+                  </View>
+                  {replyTo.mediaUrl && replyTo.mediaType === 'image' ? (
+                    <Image
+                      source={{ uri: replyTo.mediaUrl }}
+                      style={{ width: 40, height: 40, borderRadius: 6 }}
+                      resizeMode="cover"
+                    />
+                  ) : replyTo.mediaUrl && replyTo.mediaType === 'video' ? (
+                    <View style={{ width: 40, height: 40, borderRadius: 6, backgroundColor: '#0F172A', alignItems: 'center', justifyContent: 'center' }}>
+                      <Play size={14} color="white" fill="white" />
+                    </View>
+                  ) : null}
                 </View>
               ) : null}
 

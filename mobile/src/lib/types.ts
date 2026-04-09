@@ -82,7 +82,7 @@ export interface Message {
   mediaUrl?: string | null;
   mediaType?: 'image' | 'video' | null;
   replyToId?: string | null;
-  replyTo?: { id: string; content?: string | null; sender: { id: string; name: string } } | null;
+  replyTo?: { id: string; content?: string | null; mediaUrl?: string | null; mediaType?: string | null; sender: { id: string; name: string } } | null;
   reactions: MessageReaction[];
   createdAt: string;
   editedAt?: string | null;
@@ -97,7 +97,7 @@ export interface DirectMessage {
   mediaUrl?: string | null;
   mediaType?: 'image' | 'video' | null;
   replyToId?: string | null;
-  replyTo?: { id: string; content?: string | null; sender: { id: string; name: string } } | null;
+  replyTo?: { id: string; content?: string | null; mediaUrl?: string | null; mediaType?: string | null; sender: { id: string; name: string } } | null;
   reactions: MessageReaction[];
   createdAt: string;
   conversationId: string;

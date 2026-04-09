@@ -1089,12 +1089,17 @@ export default function TeamChatScreen() {
 
         {/* Reply preview bar */}
         {replyTo ? (
-          <View className="flex-row items-center px-3 py-2 bg-indigo-50 dark:bg-indigo-900/30 border-t border-indigo-200 dark:border-indigo-800">
-            <View className="flex-1">
-              <Text className="text-xs font-semibold text-indigo-600">↩ Replying to {replyTo.sender.name}</Text>
-              <Text className="text-xs text-slate-500 dark:text-slate-400" numberOfLines={1}>
-                {replyTo.content ?? "📎 Media"}
-              </Text>
+          <View className="flex-row items-center px-3 py-2 bg-indigo-50 border-t border-indigo-200">
+            <View className="flex-1 flex-row items-center gap-2">
+              <View style={{ flex: 1 }}>
+                <Text className="text-xs font-semibold text-indigo-600">↩ Replying to {replyTo.sender.name}</Text>
+                <Text className="text-xs text-slate-500" numberOfLines={1}>
+                  {replyTo.content ? replyTo.content : replyTo.mediaType === 'video' ? '🎥 Video' : '📷 Photo'}
+                </Text>
+              </View>
+              {replyTo.mediaUrl && replyTo.mediaType === 'image' ? (
+                <Image source={{ uri: replyTo.mediaUrl }} style={{ width: 36, height: 36, borderRadius: 6 }} resizeMode="cover" />
+              ) : null}
             </View>
             <TouchableOpacity onPress={() => setReplyTo(null)} className="ml-2">
               <X size={16} color="#6366F1" />

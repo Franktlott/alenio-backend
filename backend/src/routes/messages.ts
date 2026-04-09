@@ -49,7 +49,13 @@ messagesRouter.get("/", async (c) => {
       sender: { select: { id: true, name: true, email: true, image: true } },
       reactions: { include: { user: { select: { id: true, name: true } } } },
       replyTo: {
-        include: { sender: { select: { id: true, name: true } } },
+        select: {
+          id: true,
+          content: true,
+          mediaUrl: true,
+          mediaType: true,
+          sender: { select: { id: true, name: true } },
+        },
       },
     },
     orderBy: { createdAt: "asc" },
@@ -91,7 +97,15 @@ messagesRouter.post("/", async (c) => {
     include: {
       sender: { select: { id: true, name: true, email: true, image: true } },
       reactions: { include: { user: { select: { id: true, name: true } } } },
-      replyTo: { include: { sender: { select: { id: true, name: true } } } },
+      replyTo: {
+        select: {
+          id: true,
+          content: true,
+          mediaUrl: true,
+          mediaType: true,
+          sender: { select: { id: true, name: true } },
+        },
+      },
     },
   });
 
@@ -166,7 +180,15 @@ messagesRouter.post("/:messageId/reactions", async (c) => {
     include: {
       sender: { select: { id: true, name: true, email: true, image: true } },
       reactions: { include: { user: { select: { id: true, name: true } } } },
-      replyTo: { include: { sender: { select: { id: true, name: true } } } },
+      replyTo: {
+        select: {
+          id: true,
+          content: true,
+          mediaUrl: true,
+          mediaType: true,
+          sender: { select: { id: true, name: true } },
+        },
+      },
     },
   });
 
@@ -201,7 +223,15 @@ messagesRouter.patch("/:messageId", async (c) => {
     include: {
       sender: { select: { id: true, name: true, email: true, image: true } },
       reactions: { include: { user: { select: { id: true, name: true } } } },
-      replyTo: { include: { sender: { select: { id: true, name: true } } } },
+      replyTo: {
+        select: {
+          id: true,
+          content: true,
+          mediaUrl: true,
+          mediaType: true,
+          sender: { select: { id: true, name: true } },
+        },
+      },
     },
   });
 
