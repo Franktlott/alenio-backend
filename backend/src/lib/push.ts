@@ -20,7 +20,15 @@ export async function sendPushNotification(
     await fetch(EXPO_PUSH_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify([{ to, title, body, sound: "default", data }]),
+      body: JSON.stringify([{
+        to,
+        title,
+        body,
+        sound: "default",
+        priority: "high",
+        channelId: "default",
+        data,
+      }]),
     });
   } catch {
     // Silently fail — notifications are non-critical
