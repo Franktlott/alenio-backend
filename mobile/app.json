@@ -15,14 +15,14 @@
         "NSCameraUsageDescription": "Alenio uses the camera to take photos and join video calls with your team.",
         "NSMicrophoneUsageDescription": "Alenio uses the microphone for video calls and voice messages in team chats.",
         "NSPhotoLibraryUsageDescription": "Alenio accesses your photos to share images in team and direct message chats.",
-        "NSPhotoLibraryAddUsageDescription": "Alenio saves shared media to your photo library."
+        "NSPhotoLibraryAddUsageDescription": "Alenio saves shared media to your photo library.",
         "UIBackgroundModes": [
           "remote-notification"
         ]
       }
     },
     "android": {
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
       "package": "com.vibecode.alenio9iqp9v"
     },
    "plugins": [
