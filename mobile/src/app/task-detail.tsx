@@ -111,8 +111,15 @@ export default function TaskDetailScreen() {
   const toggleSubtaskMutation = useMutation({
     mutationFn: ({ subtaskId, completed }: { subtaskId: string; completed: boolean }) =>
       api.patch<Subtask>(`/api/teams/${teamId}/tasks/${taskId}/subtasks/${subtaskId}`, { completed }),
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["task", taskId, teamId] });
+      if (variables.completed && !isCompleted) {
+        const subtasks = task?.subtasks ?? [];
+        const incompleteSubtasks = subtasks.filter((s) => !s.completed);
+        if (incompleteSubtasks.length === 1 && incompleteSubtasks[0].id === variables.subtaskId && subtasks.length > 0) {
+          setShowDoneConfirm(true);
+        }
+      }
     },
   });
 
