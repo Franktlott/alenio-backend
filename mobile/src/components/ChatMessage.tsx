@@ -112,6 +112,7 @@ export function ChatMessage({
               {replyTo ? (
                 <View
                   className={`px-3 pt-2.5 pb-1.5 border-l-4 mx-2 mt-2 rounded-lg flex-row items-center gap-2 ${isOwn ? "border-white/40 bg-white/10" : "border-indigo-400 bg-indigo-50"}`}
+                  style={{ minWidth: 160 }}
                 >
                   <View style={{ flex: 1 }}>
                     <Text className={`text-xs font-semibold mb-0.5 ${isOwn ? "text-white/80" : "text-indigo-600"}`}>
