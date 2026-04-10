@@ -26,6 +26,8 @@ model User {
   messageReactions MessageReaction[]
   directMessageReactions DirectMessageReaction[]
   templatesCreated TaskTemplate[] @relation("TemplateCreator")
+  phoneNumber   String?
+  phoneNumberVerified Boolean @default(false)
   pushToken     String?
   personalBestStreak Int @default(0)
   personalBestCelebrated Boolean @default(false)

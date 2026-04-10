@@ -19,7 +19,7 @@ import { router, useLocalSearchParams } from "expo-router";
 const OTP_LENGTH = 6;
 
 export default function VerifyOtp() {
-  const { email } = useLocalSearchParams<{ email: string }>();
+  const { phone } = useLocalSearchParams<{ phone: string }>();
   const [code, setCode] = useState<string[]>(Array(OTP_LENGTH).fill(""));
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
@@ -62,15 +62,15 @@ export default function VerifyOtp() {
       setError("Please enter all 6 digits");
       return;
     }
-    if (!email) {
-      setError("Email missing. Please go back and sign up again.");
+    if (!phone) {
+      setError("Phone number missing. Please go back and try again.");
       return;
     }
     setLoading(true);
     setError(null);
-    const result = await authClient.emailOtp.verifyEmail({
-      email: email.trim().toLowerCase(),
-      otp: finalCode,
+    const result = await authClient.phoneNumber.verify({
+      phoneNumber: phone,
+      code: finalCode,
     });
     setLoading(false);
     if (result.error) {
@@ -84,13 +84,10 @@ export default function VerifyOtp() {
   };
 
   const handleResend = async () => {
-    if (!email || countdown > 0) return;
+    if (!phone || countdown > 0) return;
     setResending(true);
     setError(null);
-    const result = await authClient.emailOtp.sendVerificationOtp({
-      email: email.trim().toLowerCase(),
-      type: "email-verification",
-    });
+    const result = await authClient.phoneNumber.sendOtp({ phoneNumber: phone });
     setResending(false);
     if (result.error) {
       setError("Failed to resend code. Please try again.");
@@ -120,11 +117,11 @@ export default function VerifyOtp() {
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} className="flex-1">
         <View className="flex-1 px-6 pt-10">
           <Text className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
-            Check your email
+            Check your messages
           </Text>
           <Text className="text-slate-500 dark:text-slate-400 text-base mb-8">
             We sent a 6-digit code to{" "}
-            <Text className="text-indigo-600 font-medium">{email}</Text>
+            <Text className="text-indigo-600 font-medium">{phone}</Text>
           </Text>
 
           {/* OTP boxes */}
@@ -161,7 +158,7 @@ export default function VerifyOtp() {
           ) : null}
 
           {success ? (
-            <Text className="text-green-600 text-sm mb-4">Email verified! Signing you in...</Text>
+            <Text className="text-green-600 text-sm mb-4">Verified! Signing you in...</Text>
           ) : null}
 
           <TouchableOpacity
@@ -174,7 +171,7 @@ export default function VerifyOtp() {
             {loading ? (
               <ActivityIndicator color="white" />
             ) : (
-              <Text className="text-white font-semibold text-base">Verify email</Text>
+              <Text className="text-white font-semibold text-base">Verify code</Text>
             )}
           </TouchableOpacity>
 

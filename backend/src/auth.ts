@@ -1,7 +1,7 @@
 import { betterAuth } from "better-auth";
 import { expo } from "@better-auth/expo";
 import { prismaAdapter } from "better-auth/adapters/prisma";
-import { emailOTP } from "better-auth/plugins";
+import { emailOTP, phoneNumber } from "better-auth/plugins";
 import { Resend } from "resend";
 import { prisma } from "./prisma";
 import { env } from "./env";
@@ -153,6 +153,27 @@ export const auth = betterAuth({
           console.error("[auth] Resend OTP email error:", JSON.stringify(error));
         } else {
           console.log("[auth] OTP email sent, id:", data?.id);
+        }
+      },
+    }),
+    phoneNumber({
+      sendOTP: async ({ phoneNumber: phone, code }: { phoneNumber: string; code: string }) => {
+        if (env.TWILIO_ACCOUNT_SID && env.TWILIO_AUTH_TOKEN && env.TWILIO_PHONE_NUMBER) {
+          const body = new URLSearchParams({
+            To: phone,
+            From: env.TWILIO_PHONE_NUMBER,
+            Body: `Your Alenio code is: ${code}`
+          });
+          await fetch(`https://api.twilio.com/2010-04-01/Accounts/${env.TWILIO_ACCOUNT_SID}/Messages.json`, {
+            method: 'POST',
+            headers: {
+              'Authorization': 'Basic ' + btoa(`${env.TWILIO_ACCOUNT_SID}:${env.TWILIO_AUTH_TOKEN}`),
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: body.toString(),
+          });
+        } else {
+          console.log(`[DEV] Phone OTP for ${phone}: ${code}`);
         }
       },
     }),
