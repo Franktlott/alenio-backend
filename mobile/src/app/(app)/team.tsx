@@ -539,7 +539,7 @@ export default function TeamScreen() {
             {/* Overlay */}
             <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.55)" }}>
               {/* Header */}
-              <SafeAreaView edges={["top"]}>
+              <View style={{ paddingTop: insets.top }}>
                 <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 12 }}>
                   <Pressable
                     onPress={() => { setScannerOpen(false); scannedRef.current = false; }}
@@ -551,7 +551,7 @@ export default function TeamScreen() {
                   <Text style={{ fontSize: 17, fontWeight: "700", color: "white" }}>Scan QR Code</Text>
                   <View style={{ width: 40 }} />
                 </View>
-              </SafeAreaView>
+              </View>
 
               {/* Viewfinder cutout */}
               <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
