@@ -200,7 +200,7 @@ videoRouter.post(
           <!-- Logo + tagline header -->
           <table width="100%" cellpadding="0" cellspacing="0">
             <tr><td style="padding:36px 40px 24px;text-align:center;">
-              <img src="${logoUrl}" alt="Alenio" style="height:52px;width:auto;display:block;margin:0 auto 12px;" />
+              <img src="${logoUrl}" alt="Alenio" style="height:73px;width:auto;display:block;margin:0 auto 12px;" />
               <p style="margin:0;font-size:14px;font-weight:600;color:#000000;letter-spacing:0.2px;">
                 Connect. Execute. Celebrate.
               </p>
