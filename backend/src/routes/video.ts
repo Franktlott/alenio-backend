@@ -231,6 +231,8 @@ videoRouter.post(
                   <td style="border-top:1px solid #E2E8F0;"></td>
                 </tr>
               </table>
+              <!-- Expiry notice -->
+              <p style="margin:0 0 20px;font-size:13px;color:#94A3B8;text-align:center;">⏱ This link expires in 24 hours.</p>
               <!-- Link fallback -->
               <p style="margin:0 0 6px;font-size:13px;color:#64748B;">Or copy this link into your browser:</p>
               <p style="margin:0;font-size:13px;color:#4361EE;word-break:break-all;">${roomUrl}</p>
