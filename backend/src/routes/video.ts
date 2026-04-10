@@ -185,7 +185,8 @@ videoRouter.post(
     }
 
     const { to, roomUrl, roomName, senderName } = c.req.valid("json");
-    const logoUrl = `${env.BACKEND_URL}/static/alenio-logo-white.png`;
+    const logoUrl = `${env.BACKEND_URL}/static/alenio-logo.png`;
+    const lotttechLogoUrl = `${env.BACKEND_URL}/static/lotttech-logo.png`;
 
     const html = `<!DOCTYPE html>
 <html>
@@ -193,55 +194,46 @@ videoRouter.post(
 <body style="margin:0;padding:0;background:#F1F5F9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#F1F5F9;padding:40px 16px;">
     <tr><td align="center">
-      <table width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;">
+      <table width="520" cellpadding="0" cellspacing="0" style="max-width:520px;width:100%;">
         <!-- Card -->
-        <tr><td style="background:#ffffff;border-radius:20px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
-          <!-- Blue top bar with logo + tagline -->
+        <tr><td style="background:#ffffff;border-radius:24px;overflow:hidden;box-shadow:0 4px 32px rgba(0,0,0,0.10);">
+          <!-- Logo + tagline header -->
           <table width="100%" cellpadding="0" cellspacing="0">
-            <tr><td style="background:linear-gradient(135deg,#4361EE,#7C3AED);padding:32px 40px;text-align:center;">
-              <img src="${logoUrl}" alt="Alenio" style="height:48px;width:auto;display:block;margin:0 auto 10px;" />
-              <p style="margin:0 0 20px;font-size:13px;font-weight:600;letter-spacing:0.3px;">
-                <span style="color:#A5B4FC;">Connect.</span>
-                <span style="color:#C4B5FD;"> Execute.</span>
-                <span style="color:#FCA5A5;"> Celebrate.</span>
+            <tr><td style="padding:36px 40px 24px;text-align:center;">
+              <img src="${logoUrl}" alt="Alenio" style="height:52px;width:auto;display:block;margin:0 auto 12px;" />
+              <p style="margin:0;font-size:14px;font-weight:600;color:#000000;letter-spacing:0.2px;">
+                Connect. Execute. Celebrate.
               </p>
-              <h1 style="margin:0;color:#ffffff;font-size:24px;font-weight:700;line-height:1.3;">You're invited to a video call</h1>
-              <p style="margin:8px 0 0;color:rgba(255,255,255,0.75);font-size:15px;">${senderName} is waiting for you</p>
             </td></tr>
           </table>
-          <!-- Body -->
+          <!-- Dark meeting card -->
           <table width="100%" cellpadding="0" cellspacing="0">
-            <tr><td style="padding:36px 40px;">
-              <!-- Meeting info -->
-              <table width="100%" cellpadding="0" cellspacing="0" style="background:#F8FAFC;border-radius:12px;margin-bottom:28px;">
-                <tr><td style="padding:20px 24px;">
-                  <p style="margin:0 0 4px;font-size:11px;font-weight:700;color:#94A3B8;text-transform:uppercase;letter-spacing:0.8px;">Meeting</p>
-                  <p style="margin:0;font-size:17px;font-weight:700;color:#0F172A;">${roomName}</p>
+            <tr><td style="padding:0 28px 28px;">
+              <table width="100%" cellpadding="0" cellspacing="0" style="background:linear-gradient(135deg,#2D4FD6,#1E3BB8);border-radius:18px;overflow:hidden;">
+                <tr><td style="padding:28px 28px 20px;">
+                  <p style="margin:0 0 6px;font-size:11px;font-weight:700;color:rgba(255,255,255,0.55);text-transform:uppercase;letter-spacing:1px;">Meeting</p>
+                  <p style="margin:0 0 24px;font-size:20px;font-weight:700;color:#ffffff;">${roomName}</p>
+                  <table width="100%" cellpadding="0" cellspacing="0">
+                    <tr><td align="center">
+                      <a href="${roomUrl}" style="display:inline-block;background:#4361EE;color:#ffffff;font-size:16px;font-weight:700;text-decoration:none;padding:15px 0;border-radius:12px;letter-spacing:-0.2px;width:100%;text-align:center;box-sizing:border-box;">Join Video Call</a>
+                    </td></tr>
+                  </table>
                 </td></tr>
               </table>
-              <!-- CTA button -->
-              <table width="100%" cellpadding="0" cellspacing="0">
-                <tr><td align="center">
-                  <a href="${roomUrl}" style="display:inline-block;background:#4361EE;color:#ffffff;font-size:16px;font-weight:700;text-decoration:none;padding:16px 48px;border-radius:14px;letter-spacing:-0.2px;">Join Video Call</a>
-                </td></tr>
-              </table>
-              <!-- Divider -->
-              <table width="100%" cellpadding="0" cellspacing="0" style="margin:28px 0;">
-                <tr>
-                  <td style="border-top:1px solid #E2E8F0;"></td>
-                </tr>
-              </table>
-              <!-- Expiry notice -->
-              <p style="margin:0 0 20px;font-size:13px;color:#94A3B8;text-align:center;">⏱ This link expires in 24 hours.</p>
-              <!-- Link fallback -->
-              <p style="margin:0 0 6px;font-size:13px;color:#64748B;">Or copy this link into your browser:</p>
+            </td></tr>
+          </table>
+          <!-- Expiry + link fallback -->
+          <table width="100%" cellpadding="0" cellspacing="0">
+            <tr><td style="padding:0 40px 32px;">
+              <p style="margin:0 0 16px;font-size:13px;color:#94A3B8;text-align:center;">⏱ This link expires in 24 hours.</p>
+              <p style="margin:0 0 6px;font-size:13px;color:#64748B;">Or join via browser:</p>
               <p style="margin:0;font-size:13px;color:#4361EE;word-break:break-all;">${roomUrl}</p>
             </td></tr>
           </table>
-          <!-- Footer -->
+          <!-- Footer logo -->
           <table width="100%" cellpadding="0" cellspacing="0">
-            <tr><td style="padding:20px 40px;background:#F8FAFC;border-top:1px solid #F1F5F9;">
-              <p style="margin:0;font-size:12px;color:#94A3B8;text-align:center;">Sent via <strong>Alenio</strong> · Team collaboration made simple</p>
+            <tr><td style="padding:20px 40px 28px;border-top:1px solid #F1F5F9;text-align:center;">
+              <img src="${lotttechLogoUrl}" alt="Lott Technology Group" style="height:44px;width:auto;display:inline-block;" />
             </td></tr>
           </table>
         </td></tr>
