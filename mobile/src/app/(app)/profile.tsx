@@ -56,7 +56,6 @@ const TONES = [
   { id: "pulse",       label: "Pulse",          url: "https://assets.mixkit.co/active_storage/sfx/2573/2573-preview.mp3", section: "custom" },
   { id: "synth",       label: "Synth",          url: "https://assets.mixkit.co/active_storage/sfx/2574/2574-preview.mp3", section: "custom" },
   { id: "ding",        label: "Ding",           url: "https://assets.mixkit.co/active_storage/sfx/2014/2014-preview.mp3", section: "custom" },
-  { id: "magic",       label: "Magic",          url: "https://assets.mixkit.co/active_storage/sfx/2016/2016-preview.mp3", section: "custom" },
   { id: "achievement", label: "Achievement",    url: "https://assets.mixkit.co/active_storage/sfx/2019/2019-preview.mp3", section: "custom" },
   { id: "beep",        label: "Beep",           url: "https://assets.mixkit.co/active_storage/sfx/2020/2020-preview.mp3", section: "custom" },
   { id: "quickwin",    label: "Quick Win",      url: "https://assets.mixkit.co/active_storage/sfx/2359/2359-preview.mp3", section: "custom" },
@@ -153,8 +152,8 @@ export default function ProfileScreen() {
   };
 
   // Tone state
-  const [msgToneId, setMsgToneId] = useState<string>("bell");
-  const [dmToneId,  setDmToneId]  = useState<string>("bell");
+  const [msgToneId, setMsgToneId] = useState<string>("synth");
+  const [dmToneId,  setDmToneId]  = useState<string>("synth");
   const [showTonePicker, setShowTonePicker] = useState<"msg" | "dm" | null>(null);
 
   useEffect(() => {

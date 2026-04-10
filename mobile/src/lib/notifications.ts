@@ -23,7 +23,6 @@ const TONES = [
   { id: "pulse",       label: "Pulse",          url: "https://assets.mixkit.co/active_storage/sfx/2573/2573-preview.mp3" },
   { id: "synth",       label: "Synth",          url: "https://assets.mixkit.co/active_storage/sfx/2574/2574-preview.mp3" },
   { id: "ding",        label: "Ding",           url: "https://assets.mixkit.co/active_storage/sfx/2014/2014-preview.mp3" },
-  { id: "magic",       label: "Magic",          url: "https://assets.mixkit.co/active_storage/sfx/2016/2016-preview.mp3" },
   { id: "achievement", label: "Achievement",    url: "https://assets.mixkit.co/active_storage/sfx/2019/2019-preview.mp3" },
   { id: "beep",        label: "Beep",           url: "https://assets.mixkit.co/active_storage/sfx/2020/2020-preview.mp3" },
   { id: "quickwin",    label: "Quick Win",      url: "https://assets.mixkit.co/active_storage/sfx/2359/2359-preview.mp3" },
@@ -43,7 +42,7 @@ Notifications.setNotificationHandler({
   handleNotification: async (notification) => {
     const data = notification.request.content.data as Record<string, string>;
     const toneKey = data?.conversationId ? DM_TONE_KEY : MSG_TONE_KEY;
-    const toneId = await AsyncStorage.getItem(toneKey) ?? "bell";
+    const toneId = await AsyncStorage.getItem(toneKey) ?? "synth";
     const useSystemSound = toneId === "system";
     return {
       shouldShowAlert: true,
@@ -62,7 +61,7 @@ Notifications.setNotificationHandler({
 export async function playNotificationTone(type: "msg" | "dm" = "msg"): Promise<void> {
   try {
     const key = type === "dm" ? DM_TONE_KEY : MSG_TONE_KEY;
-    const toneId = await AsyncStorage.getItem(key) ?? "bell";
+    const toneId = await AsyncStorage.getItem(key) ?? "synth";
 
     if (toneId === "system") return; // OS handles it via shouldPlaySound: true
 
