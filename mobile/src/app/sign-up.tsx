@@ -17,31 +17,46 @@ import { LinearGradient } from "expo-linear-gradient";
 import { StatusBar } from "expo-status-bar";
 import { router } from "expo-router";
 
-export default function SignIn() {
+export default function SignUp() {
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const invalidateSession = useInvalidateSession();
 
-  const handleSignIn = async () => {
+  const handleSignUp = async () => {
     setError(null);
+    if (!name.trim()) {
+      setError("Please enter your name");
+      return;
+    }
     if (!email.trim()) {
       setError("Please enter your email address");
       return;
     }
     if (!password) {
-      setError("Please enter your password");
+      setError("Please enter a password");
+      return;
+    }
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters");
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError("Passwords do not match");
       return;
     }
     setLoading(true);
-    const result = await authClient.signIn.email({
+    const result = await authClient.signUp.email({
+      name: name.trim(),
       email: email.trim().toLowerCase(),
       password,
     });
     setLoading(false);
     if (result.error) {
-      setError(result.error.message ?? "Invalid email or password. Please try again.");
+      setError(result.error.message ?? "Failed to create account. Please try again.");
     } else {
       await invalidateSession();
     }
@@ -71,11 +86,26 @@ export default function SignIn() {
           showsVerticalScrollIndicator={false}
         >
           <Text className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
-            Welcome back
+            Create account
           </Text>
           <Text className="text-slate-500 dark:text-slate-400 text-base mb-8">
-            Sign in to your account
+            Join Alenio and get started
           </Text>
+
+          <View className="mb-4">
+            <Text className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Full name</Text>
+            <TextInput
+              className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3.5 text-base text-slate-900 dark:text-white"
+              placeholder="Your name"
+              placeholderTextColor="#94A3B8"
+              autoCapitalize="words"
+              autoComplete="name"
+              value={name}
+              onChangeText={(t) => { setName(t); setError(null); }}
+              returnKeyType="next"
+              testID="name-input"
+            />
+          </View>
 
           <View className="mb-4">
             <Text className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Email address</Text>
@@ -93,29 +123,36 @@ export default function SignIn() {
             />
           </View>
 
-          <View className="mb-2">
+          <View className="mb-4">
             <Text className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Password</Text>
             <TextInput
               className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3.5 text-base text-slate-900 dark:text-white"
               placeholder="••••••••"
               placeholderTextColor="#94A3B8"
               secureTextEntry
-              autoComplete="password"
+              autoComplete="new-password"
               value={password}
               onChangeText={(t) => { setPassword(t); setError(null); }}
-              returnKeyType="done"
-              onSubmitEditing={handleSignIn}
+              returnKeyType="next"
               testID="password-input"
             />
           </View>
 
-          <TouchableOpacity
-            onPress={() => router.push("/forgot-password")}
-            className="self-end mb-6 py-1"
-            testID="forgot-password-link"
-          >
-            <Text className="text-sm text-indigo-600 font-medium">Forgot password?</Text>
-          </TouchableOpacity>
+          <View className="mb-6">
+            <Text className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Confirm password</Text>
+            <TextInput
+              className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3.5 text-base text-slate-900 dark:text-white"
+              placeholder="••••••••"
+              placeholderTextColor="#94A3B8"
+              secureTextEntry
+              autoComplete="new-password"
+              value={confirmPassword}
+              onChangeText={(t) => { setConfirmPassword(t); setError(null); }}
+              returnKeyType="done"
+              onSubmitEditing={handleSignUp}
+              testID="confirm-password-input"
+            />
+          </View>
 
           {error ? (
             <Text className="text-red-500 text-sm mb-4" testID="error-message">{error}</Text>
@@ -123,22 +160,22 @@ export default function SignIn() {
 
           <TouchableOpacity
             className="bg-indigo-600 rounded-xl py-4 items-center"
-            onPress={handleSignIn}
+            onPress={handleSignUp}
             disabled={loading}
             activeOpacity={0.8}
-            testID="sign-in-button"
+            testID="create-account-button"
           >
             {loading ? (
               <ActivityIndicator color="white" />
             ) : (
-              <Text className="text-white font-semibold text-base">Sign In</Text>
+              <Text className="text-white font-semibold text-base">Create Account</Text>
             )}
           </TouchableOpacity>
 
           <View className="flex-row justify-center items-center mt-6">
-            <Text className="text-slate-500 text-sm">Don't have an account? </Text>
-            <TouchableOpacity onPress={() => router.push("/sign-up")} testID="sign-up-link">
-              <Text className="text-indigo-600 text-sm font-medium">Sign up</Text>
+            <Text className="text-slate-500 text-sm">Already have an account? </Text>
+            <TouchableOpacity onPress={() => router.push("/sign-in")} testID="sign-in-link">
+              <Text className="text-indigo-600 text-sm font-medium">Sign in</Text>
             </TouchableOpacity>
           </View>
 
