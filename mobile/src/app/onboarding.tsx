@@ -9,12 +9,13 @@ import {
   Platform,
   Modal,
   Pressable,
+  ScrollView,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
-import { ArrowLeft, Clock, ScanLine, X } from "lucide-react-native";
+import { ArrowLeft, Clock, ScanLine, X, Users, Link2 } from "lucide-react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { api } from "@/lib/api/api";
 import { useTeamStore } from "@/lib/state/team-store";
@@ -28,6 +29,14 @@ type MineRequest = {
   id: string;
   status: string;
   team: { id: string; name: string; image: string | null };
+};
+
+const cardShadow = {
+  shadowColor: "#000",
+  shadowOffset: { width: 0, height: 4 },
+  shadowOpacity: 0.08,
+  shadowRadius: 16,
+  elevation: 4,
 };
 
 export default function OnboardingScreen() {
@@ -169,203 +178,290 @@ export default function OnboardingScreen() {
 
   return (
     <SafeAreaView
-      className="flex-1 bg-slate-50 dark:bg-slate-900"
+      style={{ flex: 1, backgroundColor: "#F0F2FF" }}
       edges={["top"]}
       testID="onboarding-screen"
     >
+      {/* Gradient header */}
       <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
-        <View className="px-4 pt-2 pb-4 flex-row items-center">
-          <TouchableOpacity onPress={() => router.back()} className="mr-3">
+        <View style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 16, flexDirection: "row", alignItems: "center" }}>
+          <TouchableOpacity onPress={() => router.back()} style={{ marginRight: 12 }}>
             <ArrowLeft size={22} color="white" />
           </TouchableOpacity>
           <View>
-            <Text className="text-white text-xl font-bold">
+            <Text style={{ color: "white", fontSize: 20, fontWeight: "700" }}>
               {alreadyOwnsTeam ? "Join a team" : "Set up your team"}
             </Text>
-            <Text className="text-white/70 text-sm">
-              {alreadyOwnsTeam ? "Enter an invite code to join a workspace" : "Create or join a workspace"}
+            <Text style={{ color: "rgba(255,255,255,0.7)", fontSize: 14 }}>
+              {alreadyOwnsTeam ? "Enter a code or scan to join your team" : "Create or join a workspace"}
             </Text>
           </View>
         </View>
       </LinearGradient>
 
-      {pendingRequest ? (
-        // Pending approval UI
-        <View className="flex-1 px-6 justify-center items-center">
-          <View
-            className="w-20 h-20 rounded-full bg-amber-100 items-center justify-center mb-6"
-          >
-            <Clock size={40} color="#F59E0B" />
-          </View>
-          <Text className="text-2xl font-bold text-slate-900 dark:text-white mb-3 text-center">
-            Request Sent!
-          </Text>
-          <Text className="text-sm text-slate-500 dark:text-slate-400 text-center mb-8 leading-5">
-            Your request to join{" "}
-            <Text className="font-semibold text-slate-700 dark:text-slate-200">
-              {pendingRequest.teamName}
-            </Text>{" "}
-            has been sent. The Team Leader will review it.
-          </Text>
-
-          <TouchableOpacity
-            className="bg-indigo-600 rounded-xl py-4 px-8 items-center mb-3 w-full"
-            onPress={handleCheckStatus}
-            disabled={isPolling}
-            testID="check-status-button"
-          >
-            {isPolling ? (
-              <ActivityIndicator color="white" />
-            ) : (
-              <Text className="text-white font-semibold text-base">Check Status</Text>
-            )}
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            className="py-3 items-center w-full"
-            onPress={() => {
-              setPendingRequest(null);
-              setInviteCode("");
-              setError(null);
-            }}
-            testID="cancel-pending-button"
-          >
-            <Text className="text-slate-400 text-sm">Cancel / Try different code</Text>
-          </TouchableOpacity>
-        </View>
-      ) : (
-        // Normal create/join form
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          className="flex-1"
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={{ flex: 1 }}
+      >
+        <ScrollView
+          contentContainerStyle={{ flexGrow: 1, justifyContent: "center", paddingHorizontal: 20, paddingVertical: 28 }}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
-          <View className="flex-1 px-6 justify-center">
-            {/* Mode toggle — hidden entirely when user already owns a team */}
-            {!alreadyOwnsTeam && (
-              <View className="flex-row bg-slate-200 dark:bg-slate-700 rounded-xl p-1 mb-6">
+          {pendingRequest ? (
+            // Pending approval card
+            <View
+              style={[
+                {
+                  backgroundColor: "white",
+                  borderRadius: 24,
+                  padding: 28,
+                  alignItems: "center",
+                },
+                cardShadow,
+              ]}
+            >
+              <View
+                style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: "#FEF3C7", alignItems: "center", justifyContent: "center", marginBottom: 20 }}
+              >
+                <Clock size={40} color="#F59E0B" />
+              </View>
+              <Text style={{ fontSize: 22, fontWeight: "700", color: "#0F172A", textAlign: "center", marginBottom: 10 }}>
+                Request Sent!
+              </Text>
+              <Text style={{ fontSize: 13, color: "#64748B", textAlign: "center", marginBottom: 24, lineHeight: 20 }}>
+                Your request to join{" "}
+                <Text style={{ fontWeight: "600", color: "#334155" }}>
+                  {pendingRequest.teamName}
+                </Text>{" "}
+                has been sent. The Team Leader will review it.
+              </Text>
+
+              <TouchableOpacity
+                style={{ backgroundColor: "#4361EE", borderRadius: 14, paddingVertical: 15, alignItems: "center", width: "100%", marginBottom: 12 }}
+                onPress={handleCheckStatus}
+                disabled={isPolling}
+                testID="check-status-button"
+              >
+                {isPolling ? (
+                  <ActivityIndicator color="white" />
+                ) : (
+                  <Text style={{ color: "white", fontWeight: "600", fontSize: 15 }}>Check Status</Text>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={{ paddingVertical: 10, alignItems: "center", width: "100%" }}
+                onPress={() => {
+                  setPendingRequest(null);
+                  setInviteCode("");
+                  setError(null);
+                }}
+                testID="cancel-pending-button"
+              >
+                <Text style={{ color: "#94A3B8", fontSize: 13 }}>Cancel / Try different code</Text>
+              </TouchableOpacity>
+            </View>
+          ) : mode === "join" || alreadyOwnsTeam ? (
+            // Join mode card
+            <View
+              style={[
+                {
+                  backgroundColor: "white",
+                  borderRadius: 24,
+                  padding: 28,
+                },
+                cardShadow,
+              ]}
+            >
+              {/* Illustration area */}
+              <View style={{ backgroundColor: "#EEF0FF", borderRadius: 16, height: 100, width: "100%", alignItems: "center", justifyContent: "center", position: "relative" }}>
+                <Users size={48} color="#4361EE" />
+                <View style={{ position: "absolute", bottom: 10, right: 12 }}>
+                  <Link2 size={20} color="#7C3AED" />
+                </View>
+              </View>
+
+              <Text style={{ fontSize: 22, fontWeight: "700", color: "#0F172A", textAlign: "center", marginTop: 16 }}>
+                Join a team
+              </Text>
+              <Text style={{ fontSize: 13, color: "#64748B", textAlign: "center", marginTop: 4, marginBottom: 20 }}>
+                Enter a code or scan to join your team
+              </Text>
+
+              {/* Mode toggle — only shown when user does not already own a team */}
+              {!alreadyOwnsTeam && (
+                <View style={{ flexDirection: "row", backgroundColor: "#F1F5F9", borderRadius: 12, padding: 4, marginBottom: 20 }}>
+                  <TouchableOpacity
+                    onPress={() => { setMode("create"); setError(null); }}
+                    style={{ flex: 1, paddingVertical: 8, borderRadius: 10, alignItems: "center", backgroundColor: mode === "create" ? "white" : "transparent" }}
+                    testID="mode-create"
+                  >
+                    <Text style={{ fontWeight: "600", fontSize: 13, color: mode === "create" ? "#4361EE" : "#94A3B8" }}>
+                      Create team
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => { setMode("join"); setError(null); }}
+                    style={{ flex: 1, paddingVertical: 8, borderRadius: 10, alignItems: "center", backgroundColor: mode === "join" ? "white" : "transparent" }}
+                    testID="mode-join"
+                  >
+                    <Text style={{ fontWeight: "600", fontSize: 13, color: mode === "join" ? "#4361EE" : "#94A3B8" }}>
+                      Join team
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* Invite code label + input */}
+              <Text style={{ fontSize: 13, fontWeight: "600", color: "#374151", marginBottom: 6 }}>
+                Invite Code
+              </Text>
+              <TextInput
+                style={{ backgroundColor: "white", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: "#0F172A", letterSpacing: 2 }}
+                placeholder="e.g. ABC123"
+                placeholderTextColor="#94A3B8"
+                autoCapitalize="characters"
+                value={inviteCode}
+                onChangeText={(t) => {
+                  setInviteCode(t.toUpperCase());
+                  setError(null);
+                }}
+                returnKeyType="done"
+                onSubmitEditing={handleSubmit}
+                maxLength={6}
+                testID="invite-code-input"
+              />
+
+              {/* OR divider */}
+              <View style={{ flexDirection: "row", alignItems: "center", marginVertical: 14 }}>
+                <View style={{ flex: 1, height: 1, backgroundColor: "#E2E8F0" }} />
+                <Text style={{ fontSize: 12, color: "#94A3B8", marginHorizontal: 10 }}>OR</Text>
+                <View style={{ flex: 1, height: 1, backgroundColor: "#E2E8F0" }} />
+              </View>
+
+              {/* Scan QR Code button */}
+              <Pressable
+                onPress={openScanner}
+                style={{ borderWidth: 1.5, borderColor: "#7C3AED", backgroundColor: "#7C3AED12", borderRadius: 14, width: "100%", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 13 }}
+                testID="scan-qr-button"
+              >
+                <ScanLine size={18} color="#7C3AED" />
+                <Text style={{ fontSize: 14, fontWeight: "600", color: "#7C3AED" }}>Scan QR Code</Text>
+              </Pressable>
+
+              {error ? (
+                <Text style={{ color: "#EF4444", fontSize: 13, marginTop: 8 }}>{error}</Text>
+              ) : null}
+
+              {/* Join Team button */}
+              <TouchableOpacity
+                style={{ backgroundColor: "#4361EE", borderRadius: 14, paddingVertical: 15, alignItems: "center", width: "100%", marginTop: 12 }}
+                onPress={handleSubmit}
+                disabled={isLoading}
+                testID="submit-button"
+              >
+                {isLoading ? (
+                  <ActivityIndicator color="white" />
+                ) : (
+                  <Text style={{ color: "white", fontWeight: "600", fontSize: 15 }}>Join Team</Text>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={{ marginTop: 12, alignItems: "center" }}
+                onPress={() => router.back()}
+              >
+                <Text style={{ color: "#94A3B8", fontSize: 13 }}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            // Create mode card
+            <View
+              style={[
+                {
+                  backgroundColor: "white",
+                  borderRadius: 24,
+                  padding: 28,
+                },
+                cardShadow,
+              ]}
+            >
+              <Text style={{ fontSize: 22, fontWeight: "700", color: "#0F172A", textAlign: "center", marginBottom: 4 }}>
+                Create a team
+              </Text>
+              <Text style={{ fontSize: 13, color: "#64748B", textAlign: "center", marginBottom: 20 }}>
+                Create or join a workspace
+              </Text>
+
+              {/* Mode toggle */}
+              <View style={{ flexDirection: "row", backgroundColor: "#F1F5F9", borderRadius: 12, padding: 4, marginBottom: 20 }}>
                 <TouchableOpacity
-                  onPress={() => {
-                    setMode("create");
-                    setError(null);
-                  }}
-                  className={`flex-1 py-2 rounded-lg items-center ${
-                    mode === "create" ? "bg-white dark:bg-slate-800" : ""
-                  }`}
+                  onPress={() => { setMode("create"); setError(null); }}
+                  style={{ flex: 1, paddingVertical: 8, borderRadius: 10, alignItems: "center", backgroundColor: mode === "create" ? "white" : "transparent" }}
                   testID="mode-create"
                 >
-                  <Text
-                    className={`font-semibold text-sm ${
-                      mode === "create" ? "text-indigo-600" : "text-slate-500"
-                    }`}
-                  >
+                  <Text style={{ fontWeight: "600", fontSize: 13, color: mode === "create" ? "#4361EE" : "#94A3B8" }}>
                     Create team
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  onPress={() => {
-                    setMode("join");
-                    setError(null);
-                  }}
-                  className={`flex-1 py-2 rounded-lg items-center ${
-                    mode === "join" ? "bg-white dark:bg-slate-800" : ""
-                  }`}
+                  onPress={() => { setMode("join"); setError(null); }}
+                  style={{ flex: 1, paddingVertical: 8, borderRadius: 10, alignItems: "center", backgroundColor: "transparent" }}
                   testID="mode-join"
                 >
-                  <Text
-                    className={`font-semibold text-sm ${
-                      mode === "join" ? "text-indigo-600" : "text-slate-500"
-                    }`}
-                  >
+                  <Text style={{ fontWeight: "600", fontSize: 13, color: "#94A3B8" }}>
                     Join team
                   </Text>
                 </TouchableOpacity>
               </View>
-            )}
 
-            {mode === "create" ? (
-              <View>
-                <Text className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                  Team name
-                </Text>
-                <TextInput
-                  className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3.5 text-base text-slate-900 dark:text-white"
-                  placeholder="e.g. Engineering, Marketing..."
-                  placeholderTextColor="#94A3B8"
-                  value={teamName}
-                  onChangeText={(t) => {
-                    setTeamName(t);
-                    setError(null);
-                  }}
-                  returnKeyType="done"
-                  onSubmitEditing={handleSubmit}
-                  testID="team-name-input"
-                />
-              </View>
-            ) : (
-              <View>
-                <Text className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                  Invite code
-                </Text>
-                <TextInput
-                  className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3.5 text-base text-slate-900 dark:text-white tracking-widest"
-                  placeholder="e.g. ABC123"
-                  placeholderTextColor="#94A3B8"
-                  autoCapitalize="characters"
-                  value={inviteCode}
-                  onChangeText={(t) => {
-                    setInviteCode(t.toUpperCase());
-                    setError(null);
-                  }}
-                  returnKeyType="done"
-                  onSubmitEditing={handleSubmit}
-                  maxLength={6}
-                  testID="invite-code-input"
-                />
-              </View>
-            )}
+              <Text style={{ fontSize: 13, fontWeight: "600", color: "#374151", marginBottom: 6 }}>
+                Team Name
+              </Text>
+              <TextInput
+                style={{ backgroundColor: "white", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: "#0F172A" }}
+                placeholder="e.g. Engineering, Marketing..."
+                placeholderTextColor="#94A3B8"
+                value={teamName}
+                onChangeText={(t) => {
+                  setTeamName(t);
+                  setError(null);
+                }}
+                returnKeyType="done"
+                onSubmitEditing={handleSubmit}
+                testID="team-name-input"
+              />
 
-            {/* Scan QR button — only in join mode */}
-            {mode === "join" ? (
-              <Pressable
-                onPress={openScanner}
-                style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 12, paddingVertical: 12, borderRadius: 14, borderWidth: 1.5, borderColor: "#7C3AED40", backgroundColor: "#7C3AED0D" }}
-                testID="scan-qr-button"
+              {error ? (
+                <Text style={{ color: "#EF4444", fontSize: 13, marginTop: 8 }}>{error}</Text>
+              ) : null}
+
+              <TouchableOpacity
+                style={{ backgroundColor: "#4361EE", borderRadius: 14, paddingVertical: 15, alignItems: "center", width: "100%", marginTop: 12 }}
+                onPress={handleSubmit}
+                disabled={isLoading}
+                testID="submit-button"
               >
-                <ScanLine size={18} color="#7C3AED" />
-                <Text style={{ fontSize: 14, fontWeight: "600", color: "#7C3AED" }}>Scan QR Code to Join</Text>
-              </Pressable>
-            ) : null}
+                {isLoading ? (
+                  <ActivityIndicator color="white" />
+                ) : (
+                  <Text style={{ color: "white", fontWeight: "600", fontSize: 15 }}>Create Team</Text>
+                )}
+              </TouchableOpacity>
 
-            {error ? (
-              <Text className="text-red-500 text-sm mt-2">{error}</Text>
-            ) : null}
+              <TouchableOpacity
+                style={{ marginTop: 12, alignItems: "center" }}
+                onPress={() => router.back()}
+              >
+                <Text style={{ color: "#94A3B8", fontSize: 13 }}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </ScrollView>
+      </KeyboardAvoidingView>
 
-            <TouchableOpacity
-              className="bg-indigo-600 rounded-xl py-4 items-center mt-4"
-              onPress={handleSubmit}
-              disabled={isLoading}
-              testID="submit-button"
-            >
-              {isLoading ? (
-                <ActivityIndicator color="white" />
-              ) : (
-                <Text className="text-white font-semibold text-base">
-                  {mode === "create" ? "Create team" : "Join team"}
-                </Text>
-              )}
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              className="mt-3 items-center"
-              onPress={() => router.back()}
-            >
-              <Text className="text-slate-400 text-sm">Cancel</Text>
-            </TouchableOpacity>
-          </View>
-        </KeyboardAvoidingView>
-      )}
-
-      {/* QR Scanner Modal */}
+      {/* QR Scanner Modal — unchanged */}
       <Modal visible={scannerOpen} animationType="slide" onRequestClose={() => { setScannerOpen(false); scannedRef.current = false; }}>
         <View style={{ flex: 1, backgroundColor: "#000" }}>
           <CameraView
