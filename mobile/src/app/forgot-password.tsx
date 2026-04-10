@@ -37,7 +37,7 @@ export default function ForgotPassword() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email: email.trim().toLowerCase(),
-          redirectTo: "alenio://reset-password",
+          redirectTo: "vibecode://reset-password",
         }),
       });
       if (res.ok) {

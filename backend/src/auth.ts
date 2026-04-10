@@ -108,8 +108,7 @@ export const auth = betterAuth({
     },
   },
   trustedOrigins: [
-    "alenio://*",
-    "vibecode://*/*",
+    "vibecode://*",
     "exp://*/*",
     "http://localhost:*",
     "http://127.0.0.1:*",
