@@ -12,6 +12,7 @@ export const auth = betterAuth({
   emailVerification: {
     sendOnSignUp: true,
     autoSignInAfterVerification: true,
+    callbackURL: "/email-verified",
     sendVerificationEmail: async ({ user, url }: { user: { email: string }, url: string }) => {
       if (!env.RESEND_API_KEY) {
         console.warn("[auth] RESEND_API_KEY not set, skipping verification email");

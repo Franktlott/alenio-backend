@@ -72,6 +72,50 @@ app.all("/api/auth/**", (c) => auth.handler(c.req.raw));
 // Health check endpoint
 app.get("/health", (c) => c.json({ status: "ok" }));
 
+// Email verified success page
+app.get("/email-verified", (c) => {
+  return c.html(`<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Email Verified – Alenio</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #EEF2FF; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
+    .card { background: #fff; border-radius: 24px; box-shadow: 0 4px 32px rgba(67,97,238,0.12); max-width: 420px; width: 100%; overflow: hidden; }
+    .header { background: linear-gradient(135deg, #4361EE, #7C3AED); padding: 40px 32px 32px; text-align: center; }
+    .header img { width: 180px; height: auto; display: block; margin: 0 auto 12px; }
+    .header p { color: rgba(255,255,255,0.8); font-size: 14px; font-weight: 600; letter-spacing: 0.3px; }
+    .body { padding: 40px 32px 32px; text-align: center; }
+    .icon { font-size: 56px; display: block; margin-bottom: 20px; }
+    h1 { font-size: 24px; font-weight: 800; color: #1E293B; margin-bottom: 12px; }
+    p { font-size: 15px; color: #64748B; line-height: 1.6; margin-bottom: 28px; }
+    .badge { display: inline-flex; align-items: center; gap: 6px; background: #ECFDF5; color: #059669; font-size: 13px; font-weight: 600; border-radius: 100px; padding: 6px 14px; margin-bottom: 28px; }
+    .footer { border-top: 1px solid #F1F5F9; padding: 20px 32px; text-align: center; }
+    .footer img { height: 48px; width: auto; display: inline-block; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="header">
+      <img src="/static/alenio-logo-white.png" alt="Alenio" onerror="this.style.display='none'" />
+      <p>Connect. Execute. Celebrate.</p>
+    </div>
+    <div class="body">
+      <span class="icon">✅</span>
+      <h1>Email verified!</h1>
+      <div class="badge">✓ Account activated</div>
+      <p>Your email address has been verified. Open the Alenio app and sign in to get started.</p>
+    </div>
+    <div class="footer">
+      <img src="/static/lotttech-logo.png" alt="Lott Technology Group" onerror="this.style.display='none'" />
+    </div>
+  </div>
+</body>
+</html>`);
+});
+
 // Static assets
 app.get("/static/:filename", async (c) => {
   const { filename } = c.req.param();
