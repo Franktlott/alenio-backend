@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import {
   View,
   Text,
@@ -14,11 +14,12 @@ import {
 } from "react-native";
 import { toast } from "burnt";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Copy, UserPlus, MessageCircle, AlertCircle, UserMinus, Clock, X, Check, ListChecks, Flame, Crown, Camera, Trash2, Star, ChevronRight, CalendarDays, QrCode } from "lucide-react-native";
+import { Copy, UserPlus, MessageCircle, AlertCircle, UserMinus, Clock, X, Check, ListChecks, Flame, Crown, Camera, Trash2, Star, ChevronRight, CalendarDays, QrCode, ScanLine } from "lucide-react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Clipboard from "expo-clipboard";
 import * as ImagePicker from "expo-image-picker";
+import { CameraView, useCameraPermissions } from "expo-camera";
 import { uploadFile } from "@/lib/upload";
 import { api } from "@/lib/api/api";
 import { useTeamStore } from "@/lib/state/team-store";
@@ -212,6 +213,9 @@ export default function TeamScreen() {
   const [uploadingTeamImage, setUploadingTeamImage] = useState(false);
   const [photoMenuOpen, setPhotoMenuOpen] = useState(false);
   const [qrModalOpen, setQrModalOpen] = useState(false);
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [scannerPermission, requestScannerPermission] = useCameraPermissions();
+  const scannedRef = useRef(false);
 
   const updateTeamImageMutation = useMutation({
     mutationFn: (image: string | null) =>
@@ -223,6 +227,47 @@ export default function TeamScreen() {
     },
     onError: () => toast({ title: "Failed to update photo", preset: "error" }),
   });
+
+  const joinByCodeMutation = useMutation({
+    mutationFn: (inviteCode: string) =>
+      api.post<{ status: string; teamId?: string }>("/api/teams/join", { inviteCode }),
+    onSuccess: (result) => {
+      setScannerOpen(false);
+      scannedRef.current = false;
+      if (result.status === "pending") {
+        toast({ title: "Join request sent!", preset: "done" });
+      } else {
+        queryClient.invalidateQueries({ queryKey: ["teams"] });
+        toast({ title: "Joined team!", preset: "done" });
+      }
+    },
+    onError: () => {
+      setScannerOpen(false);
+      scannedRef.current = false;
+      toast({ title: "Invalid or expired QR code", preset: "error" });
+    },
+  });
+
+  const handleBarcodeScan = ({ data }: { data: string }) => {
+    if (scannedRef.current || joinByCodeMutation.isPending) return;
+    // Parse alenio://join/CODE or just a raw code
+    const match = data.match(/alenio:\/\/join\/([A-Z0-9]+)/i) ?? data.match(/^([A-Z0-9]{6,10})$/i);
+    if (!match) return;
+    scannedRef.current = true;
+    joinByCodeMutation.mutate(match[1]!.toUpperCase());
+  };
+
+  const openScanner = async () => {
+    if (!scannerPermission?.granted) {
+      const result = await requestScannerPermission();
+      if (!result.granted) {
+        toast({ title: "Camera permission required to scan QR codes", preset: "error" });
+        return;
+      }
+    }
+    scannedRef.current = false;
+    setScannerOpen(true);
+  };
 
   const handlePickTeamPhoto = async () => {
     setPhotoMenuOpen(false);
@@ -470,8 +515,89 @@ export default function TeamScreen() {
             ) : null}
           </View>
           <Text className="text-xs mt-1" style={{ color: "#4361EEb3" }}>Share this code to invite team members</Text>
+          {/* Scan to join button */}
+          <Pressable
+            onPress={openScanner}
+            style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 10, alignSelf: "flex-start", backgroundColor: "#7C3AED18", borderRadius: 10, paddingHorizontal: 12, paddingVertical: 7 }}
+            testID="scan-qr-button"
+          >
+            <ScanLine size={14} color="#7C3AED" />
+            <Text style={{ fontSize: 12, fontWeight: "700", color: "#7C3AED" }}>Scan to Join Another Team</Text>
+          </Pressable>
         </View>
       </View>
+
+      {/* QR Scanner Modal */}
+      <Modal visible={scannerOpen} animationType="slide" onRequestClose={() => { setScannerOpen(false); scannedRef.current = false; }}>
+        <View style={{ flex: 1, backgroundColor: "#000" }}>
+          <CameraView
+            style={{ flex: 1 }}
+            facing="back"
+            barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
+            onBarcodeScanned={handleBarcodeScan}
+          >
+            {/* Overlay */}
+            <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.55)" }}>
+              {/* Header */}
+              <SafeAreaView edges={["top"]}>
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 12 }}>
+                  <Pressable
+                    onPress={() => { setScannerOpen(false); scannedRef.current = false; }}
+                    style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(255,255,255,0.15)", alignItems: "center", justifyContent: "center" }}
+                    testID="scanner-close"
+                  >
+                    <X size={20} color="white" />
+                  </Pressable>
+                  <Text style={{ fontSize: 17, fontWeight: "700", color: "white" }}>Scan QR Code</Text>
+                  <View style={{ width: 40 }} />
+                </View>
+              </SafeAreaView>
+
+              {/* Viewfinder cutout */}
+              <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+                <View style={{ width: 260, height: 260, position: "relative" }}>
+                  {/* Clear window */}
+                  <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "transparent" }} />
+                  {/* Corner brackets */}
+                  {[{ top: 0, left: 0 }, { top: 0, right: 0 }, { bottom: 0, left: 0 }, { bottom: 0, right: 0 }].map((pos, i) => (
+                    <View key={i} style={{
+                      position: "absolute", width: 36, height: 36,
+                      borderColor: "#7C3AED", borderWidth: 3,
+                      borderTopWidth: pos.bottom !== undefined ? 0 : 3,
+                      borderBottomWidth: pos.top !== undefined ? 0 : 3,
+                      borderLeftWidth: pos.right !== undefined ? 0 : 3,
+                      borderRightWidth: pos.left !== undefined ? 0 : 3,
+                      borderRadius: 2,
+                      ...pos,
+                    }} />
+                  ))}
+                  {/* Scan line indicator */}
+                  {joinByCodeMutation.isPending ? (
+                    <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, alignItems: "center", justifyContent: "center" }}>
+                      <ActivityIndicator color="#7C3AED" size="large" />
+                    </View>
+                  ) : null}
+                </View>
+              </View>
+
+              {/* Bottom instructions */}
+              <SafeAreaView edges={["bottom"]}>
+                <View style={{ alignItems: "center", paddingBottom: 40, paddingHorizontal: 40 }}>
+                  <LinearGradient
+                    colors={["#4361EE", "#7C3AED"]}
+                    start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                    style={{ borderRadius: 16, paddingHorizontal: 20, paddingVertical: 14, alignItems: "center", width: "100%" }}
+                  >
+                    <ScanLine size={20} color="white" style={{ marginBottom: 6 }} />
+                    <Text style={{ fontSize: 15, fontWeight: "700", color: "white", textAlign: "center" }}>Point at an Alenio team QR code</Text>
+                    <Text style={{ fontSize: 12, color: "rgba(255,255,255,0.7)", textAlign: "center", marginTop: 4 }}>You'll join automatically when it's detected</Text>
+                  </LinearGradient>
+                </View>
+              </SafeAreaView>
+            </View>
+          </CameraView>
+        </View>
+      </Modal>
 
       {/* QR Code Modal */}
       <Modal visible={qrModalOpen} transparent animationType="fade" onRequestClose={() => setQrModalOpen(false)}>
