@@ -185,6 +185,7 @@ videoRouter.post(
     }
 
     const { to, roomUrl, roomName, senderName } = c.req.valid("json");
+    const logoUrl = `${env.BACKEND_URL}/static/alenio-logo-white.png`;
 
     const html = `<!DOCTYPE html>
 <html>
@@ -193,24 +194,17 @@ videoRouter.post(
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#F1F5F9;padding:40px 16px;">
     <tr><td align="center">
       <table width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;">
-        <!-- Logo header -->
-        <tr><td align="center" style="padding-bottom:28px;">
-          <table cellpadding="0" cellspacing="0">
-            <tr>
-              <td style="background:#4361EE;border-radius:12px;padding:10px 20px;">
-                <span style="color:#ffffff;font-size:20px;font-weight:700;letter-spacing:-0.5px;">Alenio</span>
-              </td>
-            </tr>
-          </table>
-        </td></tr>
         <!-- Card -->
         <tr><td style="background:#ffffff;border-radius:20px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
-          <!-- Blue top bar -->
+          <!-- Blue top bar with logo + tagline -->
           <table width="100%" cellpadding="0" cellspacing="0">
-            <tr><td style="background:linear-gradient(135deg,#4361EE,#7C3AED);padding:32px 40px;">
-              <div style="width:52px;height:52px;background:rgba(255,255,255,0.2);border-radius:16px;display:inline-flex;align-items:center;justify-content:center;margin-bottom:16px;">
-                <span style="font-size:26px;">📹</span>
-              </div>
+            <tr><td style="background:linear-gradient(135deg,#4361EE,#7C3AED);padding:32px 40px;text-align:center;">
+              <img src="${logoUrl}" alt="Alenio" style="height:48px;width:auto;display:block;margin:0 auto 10px;" />
+              <p style="margin:0 0 20px;font-size:13px;font-weight:600;letter-spacing:0.3px;">
+                <span style="color:#A5B4FC;">Connect.</span>
+                <span style="color:#C4B5FD;"> Execute.</span>
+                <span style="color:#FCA5A5;"> Celebrate.</span>
+              </p>
               <h1 style="margin:0;color:#ffffff;font-size:24px;font-weight:700;line-height:1.3;">You're invited to a video call</h1>
               <p style="margin:8px 0 0;color:rgba(255,255,255,0.75);font-size:15px;">${senderName} is waiting for you</p>
             </td></tr>

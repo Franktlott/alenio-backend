@@ -72,6 +72,15 @@ app.all("/api/auth/**", (c) => auth.handler(c.req.raw));
 // Health check endpoint
 app.get("/health", (c) => c.json({ status: "ok" }));
 
+// Static assets
+app.get("/static/:filename", async (c) => {
+  const { filename } = c.req.param();
+  const path = `${import.meta.dir}/../static/${filename}`;
+  const file = Bun.file(path);
+  if (!(await file.exists())) return c.notFound();
+  return new Response(file);
+});
+
 // File upload endpoint - proxies to Vibecode storage
 app.post("/api/upload", async (c) => {
   const user = c.get("user");
