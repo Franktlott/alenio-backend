@@ -70,8 +70,8 @@ tasksRouter.get("/", async (c) => {
   if (!membership) return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
 
   const subscription = await getTeamSubscription(teamId);
-  if (subscription.plan !== "pro") {
-    return c.json({ error: { message: "Task manager requires Alenio Pro", code: "SUBSCRIPTION_REQUIRED" } }, 403);
+  if (!["team", "pro"].includes(subscription.plan)) {
+    return c.json({ error: { message: "Task manager requires Alenio Team or Pro", code: "SUBSCRIPTION_REQUIRED" } }, 403);
   }
 
   const { status, priority, assigneeId, creatorId, myTasks } = c.req.query();
@@ -116,8 +116,8 @@ tasksRouter.post("/", async (c) => {
   if (!membership) return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
 
   const subscription = await getTeamSubscription(teamId);
-  if (subscription.plan !== "pro") {
-    return c.json({ error: { message: "Task manager requires Alenio Pro", code: "SUBSCRIPTION_REQUIRED" } }, 403);
+  if (!["team", "pro"].includes(subscription.plan)) {
+    return c.json({ error: { message: "Task manager requires Alenio Team or Pro", code: "SUBSCRIPTION_REQUIRED" } }, 403);
   }
 
   const body = await c.req.json();

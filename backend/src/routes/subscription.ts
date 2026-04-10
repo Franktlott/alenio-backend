@@ -40,6 +40,13 @@ subscriptionRouter.get("/", async (c) => {
   return c.json({ data: subscription });
 });
 
+// Pricing info
+export const PLAN_PRICING: Record<string, { price: number; memberLimit: number }> = {
+  free: { price: 0, memberLimit: 10 },
+  team: { price: 19, memberLimit: 25 },
+  pro: { price: 39, memberLimit: 75 },
+};
+
 // POST /api/teams/:teamId/subscription/upgrade
 subscriptionRouter.post("/upgrade", async (c) => {
   const user = c.get("user")!;
@@ -55,6 +62,13 @@ subscriptionRouter.post("/upgrade", async (c) => {
     return c.json({ error: { message: "Only the team owner can manage the subscription", code: "FORBIDDEN" } }, 403);
   }
 
+  const body = await c.req.json().catch(() => ({}));
+  const plan: string = body.plan === "team" ? "team" : "pro";
+
+  if (!PLAN_PRICING[plan]) {
+    return c.json({ error: { message: "Invalid plan. Must be 'team' or 'pro'", code: "VALIDATION_ERROR" } }, 400);
+  }
+
   const currentPeriodEnd = new Date();
   currentPeriodEnd.setDate(currentPeriodEnd.getDate() + 30);
 
@@ -62,12 +76,12 @@ subscriptionRouter.post("/upgrade", async (c) => {
     where: { teamId },
     create: {
       teamId,
-      plan: "pro",
+      plan,
       status: "active",
       currentPeriodEnd,
     },
     update: {
-      plan: "pro",
+      plan,
       status: "active",
       currentPeriodEnd,
     },

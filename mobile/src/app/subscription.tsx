@@ -11,51 +11,97 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { ArrowLeft, Crown, Check, X, Zap, Shield, Users, MessageSquare, CheckSquare, Star, RotateCcw, Activity, Calendar } from "lucide-react-native";
+import { ArrowLeft, Crown, Check, Clock } from "lucide-react-native";
 import { router } from "expo-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api/api";
 import { useTeamStore } from "@/lib/state/team-store";
 import { toast } from "burnt";
-import { isRevenueCatEnabled, purchasePro, restorePurchases } from "@/lib/revenue-cat";
-import { useDemoMode } from "@/lib/useDemo";
 
 type Subscription = {
-  id: string;
-  teamId: string;
-  plan: "free" | "pro";
+  plan: "free" | "team" | "pro";
   status: string;
   currentPeriodEnd: string | null;
 };
 
-type FeatureRow = {
-  label: string;
-  free: boolean;
-  pro: boolean;
-  icon: React.ReactNode;
-};
+type TierPlan = "free" | "team" | "pro";
 
-const FEATURES: FeatureRow[] = [
-  { label: "Team chat", free: true, pro: true, icon: <Users size={15} color="#64748B" /> },
-  { label: "Direct messages", free: true, pro: true, icon: <MessageSquare size={15} color="#64748B" /> },
-  { label: "Activity Feed", free: false, pro: true, icon: <Activity size={15} color="#64748B" /> },
-  { label: "Calendar", free: false, pro: true, icon: <Calendar size={15} color="#64748B" /> },
-  { label: "Task manager", free: false, pro: true, icon: <CheckSquare size={15} color="#64748B" /> },
-  { label: "Group chats", free: false, pro: true, icon: <Users size={15} color="#64748B" /> },
-  { label: "Priority support", free: false, pro: true, icon: <Shield size={15} color="#64748B" /> },
-];
+const TIER_ORDER: TierPlan[] = ["free", "team", "pro"];
+
+function planRank(plan: TierPlan): number {
+  return TIER_ORDER.indexOf(plan);
+}
 
 function formatDate(iso: string | null): string {
   if (!iso) return "—";
-  return new Date(iso).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+  return new Date(iso).toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
 }
+
+type TierConfig = {
+  id: TierPlan;
+  name: string;
+  price: string;
+  priceSubtext: string;
+  memberLimit: string;
+  accentColor: string;
+  badgeLabel: string | null;
+  features: Array<{ label: string; comingSoon?: boolean }>;
+};
+
+const TIERS: TierConfig[] = [
+  {
+    id: "free",
+    name: "Starter",
+    price: "Free",
+    priceSubtext: "forever",
+    memberLimit: "Up to 10 members",
+    accentColor: "#64748B",
+    badgeLabel: null,
+    features: [
+      { label: "Channels & messaging" },
+      { label: "Video call invites" },
+      { label: "Team polls" },
+    ],
+  },
+  {
+    id: "team",
+    name: "Team",
+    price: "$19",
+    priceSubtext: "/mo",
+    memberLimit: "Up to 25 members",
+    accentColor: "#4361EE",
+    badgeLabel: "Most Popular",
+    features: [
+      { label: "Everything in Starter" },
+      { label: "Activity feed & celebrations" },
+      { label: "Tasks & action items" },
+      { label: "Team Calendar" },
+    ],
+  },
+  {
+    id: "pro",
+    name: "Pro",
+    price: "$39",
+    priceSubtext: "/mo",
+    memberLimit: "Up to 75 members",
+    accentColor: "#7C3AED",
+    badgeLabel: null,
+    features: [
+      { label: "Everything in Team" },
+      { label: "Analytics & insights", comingSoon: true },
+      { label: "Priority support" },
+    ],
+  },
+];
 
 export default function SubscriptionScreen() {
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
   const queryClient = useQueryClient();
-  const isDemo = useDemoMode();
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
-  const [restoring, setRestoring] = useState(false);
 
   const { data: subscription, isLoading } = useQuery({
     queryKey: ["subscription", activeTeamId],
@@ -63,23 +109,15 @@ export default function SubscriptionScreen() {
     enabled: !!activeTeamId,
   });
 
+  const currentPlan: TierPlan = subscription?.plan ?? "free";
+
   const upgradeMutation = useMutation({
-    mutationFn: async () => {
-      if (isRevenueCatEnabled()) {
-        const result = await purchasePro();
-        if (!result.success) {
-          if (result.error !== "cancelled") throw new Error(result.error);
-          return; // user cancelled — silent
-        }
-        // Sync entitlement with backend after successful IAP
-        await api.post(`/api/teams/${activeTeamId}/subscription/upgrade`, {});
-      } else {
-        await api.post(`/api/teams/${activeTeamId}/subscription/upgrade`, {});
-      }
-    },
-    onSuccess: () => {
+    mutationFn: (plan: TierPlan) =>
+      api.post(`/api/teams/${activeTeamId}/subscription/upgrade`, { plan }),
+    onSuccess: (_data, plan) => {
       queryClient.invalidateQueries({ queryKey: ["subscription", activeTeamId] });
-      toast({ title: "Upgraded to Pro!", preset: "done" });
+      const label = plan === "team" ? "Team" : "Pro";
+      toast({ title: `Upgraded to ${label}!`, preset: "done" });
     },
     onError: (e: any) => {
       toast({ title: e?.message ?? "Upgrade failed. Please try again.", preset: "error" });
@@ -98,267 +136,402 @@ export default function SubscriptionScreen() {
     },
   });
 
-  const handleRestore = async () => {
-    setRestoring(true);
-    try {
-      if (isRevenueCatEnabled()) {
-        const result = await restorePurchases();
-        if (result.isPro) {
-          await api.post(`/api/teams/${activeTeamId}/subscription/upgrade`, {});
-          queryClient.invalidateQueries({ queryKey: ["subscription", activeTeamId] });
-          toast({ title: "Pro plan restored!", preset: "done" });
-        } else {
-          toast({ title: "No active purchases found.", preset: "error" });
-        }
-      } else {
-        toast({ title: "Restore not available in this environment.", preset: "error" });
-      }
-    } finally {
-      setRestoring(false);
-    }
-  };
+  const currentTier = TIERS.find((t) => t.id === currentPlan) ?? TIERS[0];
 
-  const isPro = subscription?.plan === "pro";
+  function planBadgeColors(plan: TierPlan) {
+    if (plan === "pro") return { bg: "#F3E8FF", border: "#C4B5FD", text: "#7C3AED" };
+    if (plan === "team") return { bg: "#EFF6FF", border: "#BFDBFE", text: "#4361EE" };
+    return { bg: "#F1F5F9", border: "#E2E8F0", text: "#64748B" };
+  }
+
+  const badgeColors = planBadgeColors(currentPlan);
 
   return (
-    <SafeAreaView className="flex-1 bg-slate-50 dark:bg-slate-900" edges={["top"]} testID="subscription-screen">
+    <SafeAreaView
+      style={{ flex: 1, backgroundColor: "#F8FAFC" }}
+      edges={["top"]}
+      testID="subscription-screen"
+    >
       {/* Header */}
-      <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
-        <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 14, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-          <TouchableOpacity onPress={() => router.back()} testID="back-button" hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+      <LinearGradient
+        colors={["#4361EE", "#7C3AED"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+      >
+        <View
+          style={{
+            paddingHorizontal: 16,
+            paddingTop: 10,
+            paddingBottom: 14,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <TouchableOpacity
+            onPress={() => router.back()}
+            testID="back-button"
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
             <ArrowLeft size={22} color="white" />
           </TouchableOpacity>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
             <Crown size={20} color="#FCD34D" />
-            <Text style={{ color: "white", fontSize: 18, fontWeight: "700" }}>Alenio Pro</Text>
+            <Text style={{ color: "white", fontSize: 18, fontWeight: "700" }}>
+              Subscription
+            </Text>
           </View>
           <View style={{ width: 30 }}>
-            <Image source={require("@/assets/alenio-icon.png")} style={{ width: 30, height: 30, borderRadius: 6 }} />
+            <Image
+              source={require("@/assets/alenio-icon.png")}
+              style={{ width: 30, height: 30, borderRadius: 6 }}
+            />
           </View>
         </View>
       </LinearGradient>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 48 }}>
-
-        {/* Current plan badge */}
-        <View className="items-center mt-6 mb-2">
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 48 }}
+      >
+        {/* Current plan banner */}
+        <View style={{ alignItems: "center", marginTop: 24, marginBottom: 4 }}>
           {isLoading ? (
             <ActivityIndicator color="#4361EE" testID="subscription-loading" />
           ) : (
             <View
-              className="flex-row items-center px-5 py-2 rounded-full"
               style={{
-                backgroundColor: isPro ? "#D1FAE5" : "#F1F5F9",
+                flexDirection: "row",
+                alignItems: "center",
+                paddingHorizontal: 20,
+                paddingVertical: 8,
+                borderRadius: 999,
+                backgroundColor: badgeColors.bg,
                 borderWidth: 1,
-                borderColor: isPro ? "#6EE7B7" : "#E2E8F0",
+                borderColor: badgeColors.border,
+                gap: 6,
               }}
               testID="plan-badge"
             >
-              {isPro ? <Crown size={14} color="#059669" style={{ marginRight: 6 }} /> : null}
+              <Crown size={13} color={badgeColors.text} />
               <Text
-                className="font-bold text-sm tracking-widest uppercase"
-                style={{ color: isPro ? "#059669" : "#64748B" }}
+                style={{
+                  color: badgeColors.text,
+                  fontWeight: "700",
+                  fontSize: 12,
+                  letterSpacing: 1,
+                  textTransform: "uppercase",
+                }}
               >
-                {isPro ? "Pro Plan" : "Free Plan"}
+                {currentTier.name} Plan
               </Text>
             </View>
           )}
         </View>
 
-        {/* Pro active banner */}
-        {isPro && subscription ? (
-          <View
-            className="mx-4 mt-4 rounded-2xl p-4 flex-row items-center"
-            style={{
-              backgroundColor: "#ECFDF5",
-              borderWidth: 1,
-              borderColor: "#6EE7B7",
-              gap: 10,
-            }}
-            testID="pro-active-banner"
-          >
-            <View className="w-10 h-10 rounded-full bg-green-500 items-center justify-center">
-              <Check size={20} color="white" />
-            </View>
-            <View className="flex-1">
-              <Text className="font-bold text-green-800 text-base">Active Pro Plan</Text>
-              <Text className="text-green-700 text-sm mt-0.5">
-                Renews {formatDate(subscription.currentPeriodEnd)}
-              </Text>
-            </View>
-          </View>
-        ) : null}
-
-        {/* Pricing card */}
-        {!isPro ? (
-          <View
-            className="mx-4 mt-5 rounded-2xl overflow-hidden"
-            style={{
-              shadowColor: "#4361EE",
-              shadowOpacity: 0.15,
-              shadowRadius: 16,
-              shadowOffset: { width: 0, height: 4 },
-              elevation: 5,
-            }}
-          >
-            <LinearGradient
-              colors={["#4361EE", "#7C3AED"]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={{ padding: 20 }}
-            >
-              <View className="flex-row items-center mb-1" style={{ gap: 8 }}>
-                <Zap size={18} color="#FCD34D" />
-                <Text className="text-white font-bold text-base">Upgrade to Pro</Text>
-              </View>
-              <View className="flex-row items-baseline mt-3" style={{ gap: 4 }}>
-                <Text style={{ color: "white", fontSize: 36, fontWeight: "800", lineHeight: 40 }}>$12</Text>
-                <Text className="text-white/70 text-base">/ month</Text>
-              </View>
-              <Text className="text-white/60 text-sm mt-1">+ $2 / month per member over 10</Text>
-            </LinearGradient>
-          </View>
-        ) : null}
-
-        {/* Feature comparison table */}
-        <View
-          className="mx-4 mt-5 bg-white dark:bg-slate-800 rounded-2xl overflow-hidden"
+        {/* Subheading */}
+        <Text
           style={{
-            shadowColor: "#000",
-            shadowOpacity: 0.06,
-            shadowRadius: 8,
-            shadowOffset: { width: 0, height: 2 },
-            elevation: 2,
+            textAlign: "center",
+            color: "#94A3B8",
+            fontSize: 14,
+            marginTop: 6,
+            marginBottom: 20,
+            paddingHorizontal: 32,
           }}
         >
-          {/* Table header */}
-          <View
-            className="flex-row px-4 py-3"
-            style={{ borderBottomWidth: 1, borderBottomColor: "#F1F5F9", backgroundColor: "#F8FAFC" }}
-          >
-            <View className="flex-1" />
-            <View className="w-14 items-center">
-              <Text className="text-xs font-bold text-slate-400 uppercase tracking-wide">Free</Text>
-            </View>
-            <View className="w-14 items-center">
-              <View className="flex-row items-center" style={{ gap: 3 }}>
-                <Crown size={11} color="#4361EE" />
-                <Text className="text-xs font-bold text-indigo-600 uppercase tracking-wide">Pro</Text>
-              </View>
-            </View>
-          </View>
+          {subscription?.currentPeriodEnd && currentPlan !== "free"
+            ? `Renews ${formatDate(subscription.currentPeriodEnd)}`
+            : "Choose the plan that fits your team"}
+        </Text>
 
-          {FEATURES.map((feat, index) => (
+        {/* Tier cards */}
+        {TIERS.map((tier) => {
+          const isCurrent = tier.id === currentPlan;
+          const isUpgrade = planRank(tier.id) > planRank(currentPlan);
+          const accent = tier.accentColor;
+
+          return (
             <View
-              key={feat.label}
-              className="flex-row items-center px-4 py-3.5"
-              style={index < FEATURES.length - 1 ? { borderBottomWidth: 1, borderBottomColor: "#F1F5F9" } : undefined}
-            >
-              <View className="flex-row items-center flex-1" style={{ gap: 8 }}>
-                {feat.icon}
-                <Text className="text-sm font-medium text-slate-700 dark:text-slate-200">{feat.label}</Text>
-              </View>
-              <View className="w-14 items-center">
-                {feat.free ? (
-                  <View className="w-6 h-6 rounded-full bg-slate-100 items-center justify-center">
-                    <Check size={13} color="#64748B" />
-                  </View>
-                ) : (
-                  <View className="w-6 h-6 rounded-full bg-slate-50 items-center justify-center">
-                    <X size={13} color="#CBD5E1" />
-                  </View>
-                )}
-              </View>
-              <View className="w-14 items-center">
-                {feat.pro ? (
-                  <View className="w-6 h-6 rounded-full bg-indigo-100 items-center justify-center">
-                    <Check size={13} color="#4361EE" />
-                  </View>
-                ) : (
-                  <View className="w-6 h-6 rounded-full bg-slate-50 items-center justify-center">
-                    <X size={13} color="#CBD5E1" />
-                  </View>
-                )}
-              </View>
-            </View>
-          ))}
-        </View>
-
-        {/* Upgrade button (free plan) */}
-        {!isPro && !isLoading && !isDemo ? (
-          <View className="mx-4 mt-6">
-            <TouchableOpacity
-              onPress={() => upgradeMutation.mutate()}
-              disabled={upgradeMutation.isPending}
-              testID="upgrade-button"
+              key={tier.id}
               style={{
-                borderRadius: 16,
-                overflow: "hidden",
-                shadowColor: "#4361EE",
-                shadowOpacity: 0.4,
-                shadowRadius: 12,
-                shadowOffset: { width: 0, height: 4 },
-                elevation: 6,
+                marginHorizontal: 16,
+                marginBottom: 14,
+                borderRadius: 20,
+                backgroundColor: "white",
+                borderWidth: isCurrent ? 2 : 1,
+                borderColor: isCurrent ? accent : "#E8EDF2",
+                shadowColor: isCurrent ? accent : "#000",
+                shadowOpacity: isCurrent ? 0.18 : 0.05,
+                shadowRadius: isCurrent ? 16 : 6,
+                shadowOffset: { width: 0, height: isCurrent ? 4 : 2 },
+                elevation: isCurrent ? 6 : 2,
               }}
+              testID={`tier-card-${tier.id}`}
             >
-              <LinearGradient
-                colors={["#4361EE", "#7C3AED"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={{ paddingVertical: 16, alignItems: "center", flexDirection: "row", justifyContent: "center", gap: 10 }}
+              {/* Card header row */}
+              <View
+                style={{
+                  paddingHorizontal: 18,
+                  paddingTop: 18,
+                  paddingBottom: 14,
+                  flexDirection: "row",
+                  alignItems: "flex-start",
+                  justifyContent: "space-between",
+                }}
               >
-                {upgradeMutation.isPending ? (
-                  <ActivityIndicator color="white" testID="upgrade-loading" />
-                ) : (
-                  <>
-                    <Crown size={18} color="#FCD34D" />
-                    <Text style={{ color: "white", fontSize: 16, fontWeight: "700" }}>Upgrade to Pro — $12/mo</Text>
-                  </>
-                )}
-              </LinearGradient>
-            </TouchableOpacity>
-            <Text className="text-center text-xs text-slate-400 mt-3">
-              Cancel anytime · Charged monthly via App Store
-            </Text>
-
-            {/* Restore Purchases — required by Apple */}
-            <TouchableOpacity
-              onPress={handleRestore}
-              disabled={restoring}
-              testID="restore-purchases-button"
-              className="mt-4 py-3 items-center"
-            >
-              {restoring ? (
-                <ActivityIndicator size="small" color="#94A3B8" />
-              ) : (
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                  <RotateCcw size={13} color="#94A3B8" />
-                  <Text className="text-slate-400 text-sm">Restore Purchases</Text>
+                {/* Left: name + price */}
+                <View style={{ flex: 1 }}>
+                  <Text
+                    style={{
+                      fontSize: 20,
+                      fontWeight: "800",
+                      color: "#0F172A",
+                      marginBottom: 4,
+                    }}
+                  >
+                    {tier.name}
+                  </Text>
+                  <View style={{ flexDirection: "row", alignItems: "baseline", gap: 2 }}>
+                    <Text style={{ fontSize: 28, fontWeight: "800", color: accent }}>
+                      {tier.price}
+                    </Text>
+                    {tier.priceSubtext ? (
+                      <Text style={{ fontSize: 14, color: "#94A3B8", fontWeight: "500" }}>
+                        {tier.priceSubtext}
+                      </Text>
+                    ) : null}
+                  </View>
+                  <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 3 }}>
+                    {tier.memberLimit}
+                  </Text>
                 </View>
-              )}
-            </TouchableOpacity>
-          </View>
-        ) : null}
 
-        {/* Cancel plan (pro plan) */}
-        {isPro && !isLoading && !isDemo ? (
-          <View className="mx-4 mt-6">
+                {/* Right: badges */}
+                <View style={{ alignItems: "flex-end", gap: 6 }}>
+                  {isCurrent ? (
+                    <View
+                      style={{
+                        backgroundColor: accent,
+                        paddingHorizontal: 10,
+                        paddingVertical: 4,
+                        borderRadius: 999,
+                      }}
+                      testID={`current-plan-badge-${tier.id}`}
+                    >
+                      <Text
+                        style={{
+                          color: "white",
+                          fontSize: 11,
+                          fontWeight: "700",
+                          letterSpacing: 0.5,
+                        }}
+                      >
+                        Current Plan
+                      </Text>
+                    </View>
+                  ) : null}
+                  {tier.badgeLabel && !isCurrent ? (
+                    <View
+                      style={{
+                        backgroundColor: "#EFF6FF",
+                        borderWidth: 1,
+                        borderColor: "#BFDBFE",
+                        paddingHorizontal: 10,
+                        paddingVertical: 4,
+                        borderRadius: 999,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          color: "#4361EE",
+                          fontSize: 11,
+                          fontWeight: "700",
+                          letterSpacing: 0.5,
+                        }}
+                      >
+                        {tier.badgeLabel}
+                      </Text>
+                    </View>
+                  ) : null}
+                  {tier.badgeLabel && isCurrent ? (
+                    <View
+                      style={{
+                        backgroundColor: "#EFF6FF",
+                        borderWidth: 1,
+                        borderColor: "#BFDBFE",
+                        paddingHorizontal: 10,
+                        paddingVertical: 4,
+                        borderRadius: 999,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          color: "#4361EE",
+                          fontSize: 11,
+                          fontWeight: "700",
+                          letterSpacing: 0.5,
+                        }}
+                      >
+                        {tier.badgeLabel}
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
+              </View>
+
+              {/* Divider */}
+              <View
+                style={{ height: 1, backgroundColor: "#F1F5F9", marginHorizontal: 18 }}
+              />
+
+              {/* Features */}
+              <View style={{ paddingHorizontal: 18, paddingTop: 14, paddingBottom: 6 }}>
+                {tier.features.map((feat) => (
+                  <View
+                    key={feat.label}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      marginBottom: 10,
+                      gap: 10,
+                    }}
+                  >
+                    {feat.comingSoon ? (
+                      <View
+                        style={{
+                          width: 22,
+                          height: 22,
+                          borderRadius: 11,
+                          backgroundColor: "#F5F3FF",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <Clock size={12} color="#7C3AED" />
+                      </View>
+                    ) : (
+                      <View
+                        style={{
+                          width: 22,
+                          height: 22,
+                          borderRadius: 11,
+                          backgroundColor: `${accent}18`,
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <Check size={12} color={accent} />
+                      </View>
+                    )}
+                    <Text
+                      style={{
+                        fontSize: 14,
+                        color: feat.comingSoon ? "#94A3B8" : "#334155",
+                        fontWeight: "500",
+                        flex: 1,
+                      }}
+                    >
+                      {feat.label}
+                      {feat.comingSoon ? (
+                        <Text style={{ color: "#CBD5E1", fontWeight: "400" }}>
+                          {" "}(Coming soon)
+                        </Text>
+                      ) : null}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+
+              {/* Upgrade button */}
+              {isUpgrade && !isLoading ? (
+                <View style={{ paddingHorizontal: 18, paddingBottom: 18, paddingTop: 4 }}>
+                  <TouchableOpacity
+                    onPress={() => upgradeMutation.mutate(tier.id)}
+                    disabled={upgradeMutation.isPending}
+                    testID={`upgrade-button-${tier.id}`}
+                    style={{
+                      borderRadius: 14,
+                      overflow: "hidden",
+                      shadowColor: accent,
+                      shadowOpacity: 0.35,
+                      shadowRadius: 10,
+                      shadowOffset: { width: 0, height: 3 },
+                      elevation: 4,
+                    }}
+                  >
+                    <LinearGradient
+                      colors={
+                        tier.id === "pro"
+                          ? ["#7C3AED", "#9F67F0"]
+                          : ["#4361EE", "#5B78F5"]
+                      }
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={{
+                        paddingVertical: 14,
+                        alignItems: "center",
+                        justifyContent: "center",
+                        flexDirection: "row",
+                        gap: 8,
+                      }}
+                    >
+                      {upgradeMutation.isPending && upgradeMutation.variables === tier.id ? (
+                        <ActivityIndicator color="white" testID={`upgrade-loading-${tier.id}`} />
+                      ) : (
+                        <>
+                          <Crown size={15} color="#FCD34D" />
+                          <Text
+                            style={{
+                              color: "white",
+                              fontSize: 15,
+                              fontWeight: "700",
+                            }}
+                          >
+                            Upgrade to {tier.name} — {tier.price}
+                            {tier.priceSubtext}
+                          </Text>
+                        </>
+                      )}
+                    </LinearGradient>
+                  </TouchableOpacity>
+                </View>
+              ) : null}
+
+              {/* Bottom spacing when no button */}
+              {!isUpgrade ? <View style={{ height: 8 }} /> : null}
+            </View>
+          );
+        })}
+
+        {/* Cancel plan section */}
+        {currentPlan !== "free" && !isLoading ? (
+          <View style={{ marginHorizontal: 16, marginTop: 8 }}>
             <TouchableOpacity
               onPress={() => setShowCancelConfirm(true)}
               testID="cancel-plan-button"
-              className="rounded-2xl py-4 items-center border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800"
               style={{
-                shadowColor: "#000",
-                shadowOpacity: 0.04,
-                shadowRadius: 4,
-                shadowOffset: { width: 0, height: 1 },
-                elevation: 1,
+                borderRadius: 16,
+                paddingVertical: 14,
+                alignItems: "center",
+                borderWidth: 1,
+                borderColor: "#E2E8F0",
+                backgroundColor: "white",
               }}
             >
-              <Text className="text-slate-600 dark:text-slate-300 font-semibold text-base">Cancel Plan</Text>
+              <Text style={{ color: "#94A3B8", fontWeight: "600", fontSize: 15 }}>
+                Cancel Plan
+              </Text>
             </TouchableOpacity>
-            <Text className="text-center text-xs text-slate-400 mt-3">
-              You'll retain Pro features until the end of your billing period.
+            <Text
+              style={{
+                textAlign: "center",
+                fontSize: 12,
+                color: "#CBD5E1",
+                marginTop: 8,
+              }}
+            >
+              You'll retain access until the end of your billing period.
             </Text>
           </View>
         ) : null}
@@ -372,33 +545,78 @@ export default function SubscriptionScreen() {
         onRequestClose={() => setShowCancelConfirm(false)}
       >
         <Pressable
-          className="flex-1 bg-black/40 items-center justify-center px-6"
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.4)",
+            alignItems: "center",
+            justifyContent: "center",
+            paddingHorizontal: 24,
+          }}
           onPress={() => setShowCancelConfirm(false)}
         >
           <Pressable onPress={(e) => e.stopPropagation()}>
-            <View className="bg-white dark:bg-slate-800 rounded-2xl p-6 w-full">
-              <Text className="text-lg font-bold text-slate-900 dark:text-white text-center mb-2">Cancel Pro Plan?</Text>
-              <Text className="text-sm text-slate-500 dark:text-slate-400 text-center mb-6">
-                You'll lose access to the task manager, group chats, and priority support at the end of your billing period.
+            <View
+              style={{
+                backgroundColor: "white",
+                borderRadius: 20,
+                padding: 24,
+                width: "100%",
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: 18,
+                  fontWeight: "700",
+                  color: "#0F172A",
+                  textAlign: "center",
+                  marginBottom: 8,
+                }}
+              >
+                Cancel {currentTier.name} Plan?
               </Text>
-              <View className="flex-row" style={{ gap: 10 }}>
+              <Text
+                style={{
+                  fontSize: 14,
+                  color: "#64748B",
+                  textAlign: "center",
+                  marginBottom: 24,
+                  lineHeight: 20,
+                }}
+              >
+                You'll lose access to premium features at the end of your billing period.
+              </Text>
+              <View style={{ flexDirection: "row", gap: 10 }}>
                 <TouchableOpacity
                   onPress={() => setShowCancelConfirm(false)}
-                  className="flex-1 py-3 rounded-xl bg-slate-100 dark:bg-slate-700 items-center"
                   testID="cancel-confirm-keep"
+                  style={{
+                    flex: 1,
+                    paddingVertical: 13,
+                    borderRadius: 12,
+                    backgroundColor: "#F1F5F9",
+                    alignItems: "center",
+                  }}
                 >
-                  <Text className="font-semibold text-slate-600 dark:text-slate-300">Keep Pro</Text>
+                  <Text style={{ fontWeight: "600", color: "#475569" }}>
+                    Keep Plan
+                  </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={() => cancelMutation.mutate()}
                   disabled={cancelMutation.isPending}
-                  className="flex-1 py-3 rounded-xl bg-red-500 items-center"
                   testID="cancel-confirm-proceed"
+                  style={{
+                    flex: 1,
+                    paddingVertical: 13,
+                    borderRadius: 12,
+                    backgroundColor: "#EF4444",
+                    alignItems: "center",
+                  }}
                 >
                   {cancelMutation.isPending ? (
                     <ActivityIndicator color="white" size="small" testID="cancel-loading" />
                   ) : (
-                    <Text className="font-semibold text-white">Cancel Plan</Text>
+                    <Text style={{ fontWeight: "600", color: "white" }}>Cancel Plan</Text>
                   )}
                 </TouchableOpacity>
               </View>
