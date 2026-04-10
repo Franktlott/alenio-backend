@@ -153,8 +153,12 @@ export default function OnboardingScreen() {
             <ArrowLeft size={22} color="white" />
           </TouchableOpacity>
           <View>
-            <Text className="text-white text-xl font-bold">Set up your team</Text>
-            <Text className="text-white/70 text-sm">Create or join a workspace</Text>
+            <Text className="text-white text-xl font-bold">
+              {alreadyOwnsTeam ? "Join a team" : "Set up your team"}
+            </Text>
+            <Text className="text-white/70 text-sm">
+              {alreadyOwnsTeam ? "Enter an invite code to join a workspace" : "Create or join a workspace"}
+            </Text>
           </View>
         </View>
       </LinearGradient>

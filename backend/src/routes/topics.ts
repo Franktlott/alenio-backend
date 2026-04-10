@@ -65,6 +65,11 @@ topicsRouter.post("/:teamId/topics", async (c) => {
     return c.json({ error: { message: "Only owners and admins can create topics", code: "FORBIDDEN" } }, 403);
   }
 
+  const channelCount = await prisma.topic.count({ where: { teamId } });
+  if (channelCount >= 10) {
+    return c.json({ error: { message: "Channel limit reached", code: "LIMIT_REACHED" } }, 400);
+  }
+
   const topic = await prisma.topic.create({
     data: {
       name: name.trim(),
