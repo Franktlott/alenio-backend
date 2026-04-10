@@ -11,7 +11,6 @@ import {
   ScrollView,
 } from "react-native";
 import { authClient } from "@/lib/auth/auth-client";
-import { useInvalidateSession } from "@/lib/auth/use-session";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { StatusBar } from "expo-status-bar";
@@ -24,7 +23,7 @@ export default function SignUp() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const invalidateSession = useInvalidateSession();
+  const [verificationSent, setVerificationSent] = useState(false);
 
   const handleSignUp = async () => {
     setError(null);
@@ -58,25 +57,62 @@ export default function SignUp() {
     if (result.error) {
       setError(result.error.message ?? "Failed to create account. Please try again.");
     } else {
-      await invalidateSession();
+      setVerificationSent(true);
     }
   };
+
+  const header = (
+    <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+      <SafeAreaView edges={["top"]}>
+        <View className="items-center py-10 px-6">
+          <Image
+            source={require("@/assets/alenio-logo-white.png")}
+            style={{ width: 200, height: 72 }}
+            resizeMode="contain"
+          />
+          <Text className="text-white/80 text-base mt-2">Connect. Execute. Celebrate.</Text>
+        </View>
+      </SafeAreaView>
+    </LinearGradient>
+  );
+
+  if (verificationSent) {
+    return (
+      <View className="flex-1 bg-white dark:bg-slate-900">
+        <StatusBar style="light" />
+        {header}
+        <View className="flex-1 items-center justify-center px-8">
+          <Text style={{ fontSize: 48 }}>📬</Text>
+          <Text className="text-2xl font-bold text-slate-900 dark:text-white mt-4 mb-2 text-center">
+            Check your email
+          </Text>
+          <Text className="text-slate-500 dark:text-slate-400 text-base text-center mb-4">
+            We sent a verification link to{"\n"}
+            <Text className="font-semibold text-slate-700 dark:text-slate-200">{email}</Text>
+          </Text>
+          <Text className="text-slate-400 text-sm text-center mb-8">
+            Click the link in the email to verify your account, then come back here to sign in.
+          </Text>
+          <TouchableOpacity
+            className="bg-indigo-600 rounded-xl py-4 items-center w-full"
+            onPress={() => router.replace("/sign-in")}
+            activeOpacity={0.8}
+            testID="go-to-sign-in-button"
+          >
+            <Text className="text-white font-semibold text-base">Go to Sign In</Text>
+          </TouchableOpacity>
+        </View>
+        <View style={{ alignItems: "center", paddingBottom: 16 }}>
+          <Image source={require("@/assets/lotttech-logo.png")} style={{ width: 185, height: 57 }} resizeMode="contain" />
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View className="flex-1 bg-white dark:bg-slate-900">
       <StatusBar style="light" />
-      <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
-        <SafeAreaView edges={["top"]}>
-          <View className="items-center py-10 px-6">
-            <Image
-              source={require("@/assets/alenio-logo-white.png")}
-              style={{ width: 200, height: 72 }}
-              resizeMode="contain"
-            />
-            <Text className="text-white/80 text-base mt-2">Connect. Execute. Celebrate.</Text>
-          </View>
-        </SafeAreaView>
-      </LinearGradient>
+      {header}
 
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} className="flex-1">
         <ScrollView

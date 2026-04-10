@@ -41,7 +41,12 @@ export default function SignIn() {
     });
     setLoading(false);
     if (result.error) {
-      setError(result.error.message ?? "Invalid email or password. Please try again.");
+      const msg = result.error.message ?? "";
+      if (msg.toLowerCase().includes("verify") || msg.toLowerCase().includes("verified")) {
+        setError("Please verify your email before signing in. Check your inbox for the verification link.");
+      } else {
+        setError(msg || "Invalid email or password. Please try again.");
+      }
     } else {
       await invalidateSession();
     }
