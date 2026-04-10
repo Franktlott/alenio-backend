@@ -14,7 +14,7 @@ import {
 } from "react-native";
 import { toast } from "burnt";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Copy, UserPlus, MessageCircle, AlertCircle, UserMinus, Clock, X, Check, ListChecks, Flame, Crown, Camera, Trash2, Star, ChevronRight, CalendarDays } from "lucide-react-native";
+import { Copy, UserPlus, MessageCircle, AlertCircle, UserMinus, Clock, X, Check, ListChecks, Flame, Crown, Camera, Trash2, Star, ChevronRight, CalendarDays, QrCode } from "lucide-react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Clipboard from "expo-clipboard";
@@ -23,6 +23,7 @@ import { uploadFile } from "@/lib/upload";
 import { api } from "@/lib/api/api";
 import { useTeamStore } from "@/lib/state/team-store";
 import { useSession } from "@/lib/auth/use-session";
+import QRCode from "react-native-qrcode-svg";
 import { router } from "expo-router";
 import type { Team, TeamMember } from "@/lib/types";
 import { NoTeamPlaceholder } from "@/components/NoTeamPlaceholder";
@@ -210,6 +211,7 @@ export default function TeamScreen() {
 
   const [uploadingTeamImage, setUploadingTeamImage] = useState(false);
   const [photoMenuOpen, setPhotoMenuOpen] = useState(false);
+  const [qrModalOpen, setQrModalOpen] = useState(false);
 
   const updateTeamImageMutation = useMutation({
     mutationFn: (image: string | null) =>
@@ -450,6 +452,14 @@ export default function TeamScreen() {
                   <Copy size={16} color="#4361EE" />
                 </TouchableOpacity>
                 <TouchableOpacity
+                  onPress={() => setQrModalOpen(true)}
+                  className="w-9 h-9 rounded-full items-center justify-center"
+                  style={{ backgroundColor: "#4361EE20" }}
+                  testID="qr-invite-code"
+                >
+                  <QrCode size={16} color="#4361EE" />
+                </TouchableOpacity>
+                <TouchableOpacity
                   onPress={handleShareCode}
                   className="w-9 h-9 rounded-full bg-indigo-600 items-center justify-center"
                   testID="share-invite-code"
@@ -462,6 +472,75 @@ export default function TeamScreen() {
           <Text className="text-xs mt-1" style={{ color: "#4361EEb3" }}>Share this code to invite team members</Text>
         </View>
       </View>
+
+      {/* QR Code Modal */}
+      <Modal visible={qrModalOpen} transparent animationType="fade" onRequestClose={() => setQrModalOpen(false)}>
+        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.85)", justifyContent: "center", alignItems: "center" }}>
+          <View style={{ width: 320, borderRadius: 28, overflow: "hidden" }}>
+            {/* Header gradient */}
+            <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ padding: 28, alignItems: "center" }}>
+              <Text style={{ fontSize: 11, fontWeight: "700", color: "rgba(255,255,255,0.6)", letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 4 }}>Team Invite</Text>
+              <Text style={{ fontSize: 22, fontWeight: "800", color: "white", textAlign: "center" }}>{team?.name}</Text>
+            </LinearGradient>
+
+            {/* QR code area */}
+            <View style={{ backgroundColor: "white", padding: 32, alignItems: "center" }}>
+              <View style={{ padding: 16, backgroundColor: "white", borderRadius: 16, shadowColor: "#4361EE", shadowOpacity: 0.12, shadowRadius: 20, shadowOffset: { width: 0, height: 4 }, elevation: 6 }}>
+                <QRCode
+                  value={`alenio://join/${team?.inviteCode}`}
+                  size={180}
+                  color="#0F172A"
+                  backgroundColor="white"
+                  logo={require("@/assets/alenio-icon.png")}
+                  logoSize={36}
+                  logoBackgroundColor="white"
+                  logoBorderRadius={8}
+                />
+              </View>
+
+              <View style={{ marginTop: 20, alignItems: "center" }}>
+                <Text style={{ fontSize: 11, fontWeight: "600", color: "#94A3B8", letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 6 }}>Invite Code</Text>
+                <Text style={{ fontSize: 28, fontWeight: "800", color: "#4361EE", letterSpacing: 6 }}>{team?.inviteCode}</Text>
+              </View>
+
+              <View style={{ marginTop: 20, backgroundColor: "#F8FAFC", borderRadius: 12, padding: 14, width: "100%" }}>
+                <Text style={{ fontSize: 12, color: "#64748B", textAlign: "center", lineHeight: 18 }}>
+                  Point your camera at this code or enter the invite code manually in the Alenio app.
+                </Text>
+              </View>
+            </View>
+
+            {/* Footer actions */}
+            <View style={{ backgroundColor: "white", borderTopWidth: 1, borderTopColor: "#F1F5F9", flexDirection: "row", gap: 10, padding: 16 }}>
+              <TouchableOpacity
+                onPress={() => { Clipboard.setStringAsync(team?.inviteCode ?? ""); toast({ title: "Code copied!", preset: "done" }); }}
+                style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: "#EEF2FF", borderRadius: 12, paddingVertical: 12 }}
+                testID="qr-copy-code"
+              >
+                <Copy size={15} color="#4361EE" />
+                <Text style={{ fontSize: 13, fontWeight: "700", color: "#4361EE" }}>Copy Code</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => { setQrModalOpen(false); handleShareCode(); }}
+                style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: "#4361EE", borderRadius: 12, paddingVertical: 12 }}
+                testID="qr-share"
+              >
+                <UserPlus size={15} color="white" />
+                <Text style={{ fontSize: 13, fontWeight: "700", color: "white" }}>Share Link</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Close button */}
+          <TouchableOpacity
+            onPress={() => setQrModalOpen(false)}
+            style={{ marginTop: 24, width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(255,255,255,0.15)", alignItems: "center", justifyContent: "center" }}
+            testID="qr-close"
+          >
+            <X size={20} color="white" />
+          </TouchableOpacity>
+        </View>
+      </Modal>
 
       {/* Team photo action sheet */}
       <Modal visible={photoMenuOpen} transparent animationType="slide" onRequestClose={() => setPhotoMenuOpen(false)}>
