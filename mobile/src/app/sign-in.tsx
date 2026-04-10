@@ -43,7 +43,7 @@ export default function SignIn() {
     if (result.error) {
       const msg = result.error.message ?? "";
       if (msg.toLowerCase().includes("verify") || msg.toLowerCase().includes("verified")) {
-        setError("Please verify your email before signing in. Check your inbox for the verification link.");
+        setError("Please verify your email first. Check your inbox for the 6-digit code.");
       } else {
         setError(msg || "Invalid email or password. Please try again.");
       }

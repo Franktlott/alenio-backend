@@ -39,6 +39,7 @@ export default function VerifyOtp() {
       setOtp("");
     } else {
       await invalidateSession();
+      router.replace("/(app)");
     }
   };
 
