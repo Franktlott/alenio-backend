@@ -20,11 +20,11 @@ export const unstable_settings = {
 };
 
 const ALL_TABS = [
-  { name: "feed", label: "Feed", Icon: Activity, proOnly: true },
-  { name: "chat", label: "Chat", Icon: MessageCircle, proOnly: false },
-  { name: "index", label: "Execute", Icon: CheckSquare, proOnly: true },
-  { name: "team", label: "Team", Icon: Users, proOnly: false },
-  { name: "profile", label: "Profile", Icon: User, proOnly: false },
+  { name: "feed", label: "Feed", Icon: Activity, paidOnly: true },
+  { name: "chat", label: "Chat", Icon: MessageCircle, paidOnly: false },
+  { name: "index", label: "Execute", Icon: CheckSquare, paidOnly: true },
+  { name: "team", label: "Team", Icon: Users, paidOnly: false },
+  { name: "profile", label: "Profile", Icon: User, paidOnly: false },
 ] as const;
 
 function FloatingTabBar({ state, descriptors, navigation }: any) {
@@ -32,7 +32,9 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
   const { data: session } = useSession();
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
   const lastReadIds = useUnreadStore((s) => s.lastReadIds);
+  const plan = useSubscriptionStore((s) => s.plan);
   const isPro = useSubscriptionStore((s) => s.isPro);
+  const isPaid = plan === "team" || plan === "pro";
   const acknowledgedCounts = useTaskStore((s) => s.acknowledgedCounts);
 
   const { data: conversations = [] } = useQuery({
@@ -88,7 +90,7 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
     if (r.name === "calendar") return false;
     const tab = ALL_TABS.find((t) => t.name === r.name);
     if (!tab) return false;
-    if (tab.proOnly && !isPro) return false;
+    if (tab.paidOnly && !isPaid) return false;
     return true;
   });
 
@@ -172,12 +174,12 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
 export default function AppLayout() {
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
   const setActiveTeamId = useTeamStore((s) => s.setActiveTeamId);
-  const isPro = useSubscriptionStore((s) => s.isPro);
-  const setIsPro = useSubscriptionStore((s) => s.setIsPro);
+  const setPlan = useSubscriptionStore((s) => s.setPlan);
+  const plan = useSubscriptionStore((s) => s.plan);
   const { data: session } = useSession();
   const isDemo = session?.user?.email === DEMO_EMAIL;
 
-  // Keep persisted pro status in sync with the server
+  // Keep plan in sync with server
   const { data: subscription } = useQuery({
     queryKey: ["subscription", activeTeamId],
     queryFn: () => api.get<{ plan: string; status: string }>(`/api/teams/${activeTeamId}/subscription`),
@@ -193,7 +195,7 @@ export default function AppLayout() {
   });
 
   useEffect(() => {
-    if (subscription) setIsPro(subscription.plan === "pro");
+    if (subscription) setPlan(subscription.plan as "free" | "team" | "pro");
   }, [subscription]);
 
   useEffect(() => {
@@ -202,9 +204,10 @@ export default function AppLayout() {
     }
   }, [teams, activeTeamId]);
 
-  // isPro is read synchronously from AsyncStorage — no loading state, no flicker
-  // Demo users get all tabs unlocked so they can explore every feature
-  const hideProTabs = !isPro && !isDemo;
+  // Free plan only gets chat, team, profile
+  // Demo users get all tabs
+  const isPaid = plan === "team" || plan === "pro";
+  const hidePaidTabs = !isPaid && !isDemo;
 
   return (
     <>
@@ -213,9 +216,9 @@ export default function AppLayout() {
         tabBar={(props) => <FloatingTabBar {...props} />}
         screenOptions={{ headerShown: false, animation: 'none', sceneStyle: { backgroundColor: '#fff' } }}
       >
-        <Tabs.Screen name="feed" options={{ href: hideProTabs ? null : undefined }} />
+        <Tabs.Screen name="feed" options={{ href: hidePaidTabs ? null : undefined }} />
         <Tabs.Screen name="chat" options={{}} />
-        <Tabs.Screen name="index" options={{ title: "Execute", href: hideProTabs ? null : undefined }} />
+        <Tabs.Screen name="index" options={{ title: "Execute", href: hidePaidTabs ? null : undefined }} />
         <Tabs.Screen name="team" options={{ title: "Team" }} />
         <Tabs.Screen name="calendar" options={{ href: null }} />
         <Tabs.Screen name="profile" options={{ title: "Profile" }} />
