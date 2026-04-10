@@ -46,10 +46,11 @@ activityRouter.get("/:teamId/activity", async (c) => {
       createdAt: a.createdAt,
       metadata: a.metadata ? JSON.parse(a.metadata) : null,
       user: a.user,
-      reactions: a.reactions.reduce((acc: Record<string, { count: number; userIds: string[] }>, r) => {
-        if (!acc[r.emoji]) acc[r.emoji] = { count: 0, userIds: [] };
+      reactions: a.reactions.reduce((acc: Record<string, { count: number; userIds: string[]; users: { id: string; name: string }[] }>, r) => {
+        if (!acc[r.emoji]) acc[r.emoji] = { count: 0, userIds: [], users: [] };
         acc[r.emoji]!.count++;
         acc[r.emoji]!.userIds.push(r.userId);
+        acc[r.emoji]!.users.push({ id: r.user.id, name: r.user.name });
         return acc;
       }, {}),
     })),

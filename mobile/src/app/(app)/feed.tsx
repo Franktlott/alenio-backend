@@ -41,7 +41,7 @@ type ActivityEvent = {
   createdAt: string;
   metadata: { taskTitle?: string; taskTitles?: string[]; taskCount?: number; eventTitle?: string; eventTitles?: string[]; eventCount?: number; startDate?: string; allDay?: boolean; userName?: string; count?: number; incognito?: boolean; assigneeName?: string; isVideoMeeting?: boolean; targetUserId?: string; targetName?: string; celebrationType?: string; message?: string | null } | null;
   user: { id: string; name: string; image: string | null } | null;
-  reactions: Record<string, { count: number; userIds: string[] }>;
+  reactions: Record<string, { count: number; userIds: string[]; users: { id: string; name: string }[] }>;
 };
 
 const EVENT_CONFIG = {
@@ -144,7 +144,7 @@ function ReactionRow({
 }: {
   activityId: string;
   teamId: string | null;
-  reactions: Record<string, { count: number; userIds: string[] }>;
+  reactions: Record<string, { count: number; userIds: string[]; users: { id: string; name: string }[] }>;
   currentUserId: string | undefined;
   onToggleReaction: (emoji: string) => void;
   showPicker: boolean;
@@ -155,9 +155,32 @@ function ReactionRow({
   const myReaction = currentUserId
     ? existingReactions.find(([, { userIds }]) => userIds.includes(currentUserId))?.[0]
     : undefined;
+  const [whoReacted, setWhoReacted] = useState<{ emoji: string; users: { id: string; name: string }[] } | null>(null);
 
   return (
     <View style={{ marginTop: 4 }}>
+      {/* Who reacted modal */}
+      <Modal visible={!!whoReacted} transparent animationType="fade" onRequestClose={() => setWhoReacted(null)}>
+        <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "center", alignItems: "center" }} onPress={() => setWhoReacted(null)}>
+          <Pressable onPress={(e) => e.stopPropagation()} style={{ backgroundColor: "white", borderRadius: 20, padding: 20, width: 280, maxHeight: 360 }}>
+            <Text style={{ fontSize: 22, textAlign: "center", marginBottom: 4 }}>{whoReacted?.emoji}</Text>
+            <Text style={{ fontSize: 13, fontWeight: "600", color: "#64748B", textAlign: "center", marginBottom: 14 }}>
+              {whoReacted?.users.length} {whoReacted?.users.length === 1 ? "person" : "people"} reacted
+            </Text>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {whoReacted?.users.map((u) => (
+                <View key={u.id} style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: "#F1F5F9" }}>
+                  <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "#EEF2FF", alignItems: "center", justifyContent: "center" }}>
+                    <Text style={{ fontSize: 13, fontWeight: "700", color: "#4361EE" }}>{u.name.charAt(0).toUpperCase()}</Text>
+                  </View>
+                  <Text style={{ fontSize: 14, fontWeight: "500", color: "#1E293B" }}>{u.name}</Text>
+                </View>
+              ))}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
       {showPicker ? (
         <ScrollView
           horizontal
@@ -232,14 +255,14 @@ function ReactionRow({
         style={{ flexGrow: 0 }}
         contentContainerStyle={{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 2 }}
       >
-        {existingReactions.map(([emoji, { count, userIds }]) => {
+        {existingReactions.map(([emoji, { count, userIds, users = [] }]) => {
           const isActive = !!currentUserId && userIds.includes(currentUserId);
           return (
             <Pressable
               key={emoji}
-              onPress={() => null}
+              onPress={() => setWhoReacted({ emoji, users })}
               onLongPress={() => onToggleReaction(emoji)}
-              testID={`reaction-long-press-${activityId}-${emoji}`}
+              testID={`reaction-pill-${activityId}-${emoji}`}
               style={({ pressed }) => ({
                 flexDirection: "row",
                 alignItems: "center",
