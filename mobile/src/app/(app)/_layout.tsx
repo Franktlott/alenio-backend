@@ -130,7 +130,7 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
             key={route.key}
             onPress={() => {
               const event = navigation.emit({ type: "tabPress", target: route.key, canPreventDefault: true });
-              if (!isFocused && !event.defaultPrevented) navigation.navigate(route.name);
+              if (!isFocused && !event.defaultPrevented) navigation.jumpTo(route.name);
             }}
             style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 3 }}
             testID={`tab-${name}`}
