@@ -32,8 +32,6 @@ import {
   ChevronRight,
   CalendarDays,
   QrCode,
-  Zap,
-  Download,
   AlertTriangle,
   CheckCircle2,
 } from "lucide-react-native";
@@ -70,8 +68,8 @@ const CHART_PAD_B = 24;
 const CHART_PAD_T = 6;
 const CHART_PAD_R = 12;
 
-const weeklyData = [60, 65, 77, 79, 84, 98];
-const weekLabels = ["W1", "W2", "W3", "W4", "W5", "W6"];
+const monthlyData = [72, 78, 81, 75, 83, 87];
+const monthLabels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"];
 const yTicks = [60, 80, 100];
 
 function PerformanceChart() {
@@ -80,10 +78,10 @@ function PerformanceChart() {
   const minY = 55;
   const maxY = 105;
 
-  const toX = (i: number) => CHART_PAD_L + (i / (weeklyData.length - 1)) * plotW;
+  const toX = (i: number) => CHART_PAD_L + (i / (monthlyData.length - 1)) * plotW;
   const toY = (v: number) => CHART_PAD_T + plotH - ((v - minY) / (maxY - minY)) * plotH;
 
-  const points = weeklyData.map((v, i) => ({ x: toX(i), y: toY(v) }));
+  const points = monthlyData.map((v: number, i: number) => ({ x: toX(i), y: toY(v) }));
 
   // Build smooth polyline points string
   const polylinePoints = points.map((p) => `${p.x},${p.y}`).join(" ");
@@ -161,127 +159,10 @@ function PerformanceChart() {
           fill="#94A3B8"
           textAnchor="middle"
         >
-          {weekLabels[i]}
+          {monthLabels[i]}
         </SvgText>
       ))}
     </Svg>
-  );
-}
-
-// ------------------------------------------------------------------
-// Leaderboard member row
-// ------------------------------------------------------------------
-function LeaderboardRow({
-  member,
-  rank,
-  stats,
-  isCurrentUser,
-  onPress,
-}: {
-  member: TeamMember;
-  rank: number;
-  stats?: { activeTasks: number; overdueTasks: number; streak: number; personalBestStreak?: number };
-  isCurrentUser: boolean;
-  onPress: () => void;
-}) {
-  const completed = stats?.activeTasks ?? 0;
-  const overdue = stats?.overdueTasks ?? 0;
-  const streak = stats?.streak ?? 0;
-  const total = completed + overdue;
-  const completionPct = total > 0 ? Math.round((completed / total) * 100) : 0;
-
-  const rankColors: Record<number, string> = { 1: "#F59E0B", 2: "#94A3B8", 3: "#CD7C3F" };
-  const rankColor = rankColors[rank] ?? "#4361EE";
-  const isTop3 = rank <= 3;
-
-  return (
-    <Pressable
-      onPress={onPress}
-      testID={`leaderboard-row-${member.userId}`}
-      style={{
-        flexDirection: "row",
-        alignItems: "center",
-        paddingHorizontal: 14,
-        paddingVertical: 8,
-        borderBottomWidth: 1,
-        borderBottomColor: "#F0F4FF",
-        backgroundColor: isCurrentUser ? "#F0F4FF" : "white",
-      }}
-    >
-      {/* Rank badge */}
-      <View
-        style={{
-          width: 26,
-          height: 26,
-          borderRadius: 13,
-          backgroundColor: isTop3 ? rankColor + "22" : "#F1F5F9",
-          alignItems: "center",
-          justifyContent: "center",
-          marginRight: 10,
-        }}
-      >
-        <Text style={{ fontSize: 11, fontWeight: "800", color: isTop3 ? rankColor : "#94A3B8" }}>
-          #{rank}
-        </Text>
-      </View>
-
-      {/* Avatar */}
-      <View
-        style={{
-          width: 38,
-          height: 38,
-          borderRadius: 19,
-          backgroundColor: "#4361EE",
-          alignItems: "center",
-          justifyContent: "center",
-          overflow: "hidden",
-          marginRight: 10,
-          borderWidth: isTop3 ? 2 : 0,
-          borderColor: rankColor,
-        }}
-      >
-        {member.user.image ? (
-          <Image source={{ uri: member.user.image }} style={{ width: 38, height: 38 }} resizeMode="cover" />
-        ) : (
-          <Text style={{ color: "white", fontWeight: "700", fontSize: 14 }}>
-            {member.user.name?.[0]?.toUpperCase() ?? "?"}
-          </Text>
-        )}
-      </View>
-
-      {/* Name + subtitle */}
-      <View style={{ flex: 1 }}>
-        <Text style={{ fontSize: 14, fontWeight: "700", color: "#0F172A" }}>
-          {member.user.name}
-          {isCurrentUser ? " (you)" : ""}
-        </Text>
-        {overdue > 0 ? (
-          <Text style={{ fontSize: 11, color: "#EF4444", fontWeight: "600" }}>
-            {overdue} overdue task{overdue !== 1 ? "s" : ""}
-          </Text>
-        ) : (
-          <Text style={{ fontSize: 11, color: "#F97316", fontWeight: "600" }}>
-            {streak > 0 ? `🔥 ${streak}-day streak` : "No active streak"}
-          </Text>
-        )}
-      </View>
-
-      {/* Completion badge */}
-      <View style={{ alignItems: "flex-end", gap: 3 }}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-          <CheckCircle2 size={13} color="#22C55E" />
-          <Text style={{ fontSize: 12, fontWeight: "700", color: "#0F172A" }}>{completed} completed</Text>
-        </View>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-          <Text style={{ fontSize: 11, color: completionPct >= 70 ? "#22C55E" : "#EF4444", fontWeight: "700" }}>
-            {completionPct}%
-          </Text>
-          {isTop3 ? (
-            <Text style={{ fontSize: 12 }}>{rank === 1 ? "🔥" : rank === 2 ? "🔥" : "🔥"}</Text>
-          ) : null}
-        </View>
-      </View>
-    </Pressable>
   );
 }
 
@@ -372,7 +253,6 @@ export default function TeamScreen() {
   const [uploadingTeamImage, setUploadingTeamImage] = useState(false);
   const [photoMenuOpen, setPhotoMenuOpen] = useState(false);
   const [qrModalOpen, setQrModalOpen] = useState(false);
-  const [leaderboardTab, setLeaderboardTab] = useState<"top" | "attention">("top");
 
   const updateTeamImageMutation = useMutation({
     mutationFn: (image: string | null) =>
@@ -470,35 +350,15 @@ export default function TeamScreen() {
     ? Object.values(memberStats).reduce((sum, s) => sum + s.overdueTasks, 0)
     : 0;
 
-  // Sorted member lists for leaderboard
+  const weekCompletionPct = (totalCompleted + totalOverdue) > 0
+    ? Math.round((totalCompleted / (totalCompleted + totalOverdue)) * 100)
+    : 0;
+
+  // Alphabetically sorted member list
   const members = team?.members ?? [];
-  const topPerformers = [...members].sort((a, b) => {
-    const sa = memberStats?.[a.userId];
-    const sb = memberStats?.[b.userId];
-    const streakA = sa?.streak ?? 0;
-    const streakB = sb?.streak ?? 0;
-    const completedA = sa?.activeTasks ?? 0;
-    const completedB = sb?.activeTasks ?? 0;
-    if (completedB !== completedA) return completedB - completedA;
-    return streakB - streakA;
-  });
-
-  const needsAttention = [...members].sort((a, b) => {
-    const sa = memberStats?.[a.userId];
-    const sb = memberStats?.[b.userId];
-    const overdueA = sa?.overdueTasks ?? 0;
-    const overdueB = sb?.overdueTasks ?? 0;
-    const completedA = sa?.activeTasks ?? 0;
-    const completedB = sb?.activeTasks ?? 0;
-    const totalA = completedA + overdueA;
-    const totalB = completedB + overdueB;
-    const pctA = totalA > 0 ? completedA / totalA : 1;
-    const pctB = totalB > 0 ? completedB / totalB : 1;
-    if (overdueB !== overdueA) return overdueB - overdueA;
-    return pctA - pctB;
-  });
-
-  const leaderboardMembers = leaderboardTab === "top" ? topPerformers : needsAttention;
+  const sortedMembers = [...members].sort((a, b) =>
+    (a.user.name ?? "").localeCompare(b.user.name ?? "")
+  );
 
   // ------------------------------------------------------------------
   // Guard states
@@ -842,29 +702,11 @@ export default function TeamScreen() {
             elevation: 2,
           }}
         >
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-            <View>
-              <Text style={{ fontSize: 10, fontWeight: "800", color: "#94A3B8", textTransform: "uppercase", letterSpacing: 1.2 }}>
-                Team Performance
-              </Text>
-              <Text style={{ fontSize: 11, color: "#CBD5E1", marginTop: 1 }}>Last 6 weeks</Text>
-            </View>
-            <Pressable
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 5,
-                borderWidth: 1,
-                borderColor: "#C7D2FE",
-                borderRadius: 10,
-                paddingHorizontal: 10,
-                paddingVertical: 6,
-              }}
-              testID="download-summary-button"
-            >
-              <Download size={13} color="#4361EE" />
-              <Text style={{ fontSize: 11, fontWeight: "700", color: "#4361EE" }}>Download Summary</Text>
-            </Pressable>
+          <View style={{ marginBottom: 8 }}>
+            <Text style={{ fontSize: 10, fontWeight: "800", color: "#94A3B8", textTransform: "uppercase", letterSpacing: 1.2 }}>
+              Team Performance
+            </Text>
+            <Text style={{ fontSize: 11, color: "#CBD5E1", marginTop: 1 }}>Last 6 months</Text>
           </View>
 
           <View style={{ alignItems: "center" }}>
@@ -891,11 +733,10 @@ export default function TeamScreen() {
         </View>
 
         {/* ── 4. KPI METRIC CARDS ───────────────────────────────────── */}
-        <View style={{ flexDirection: "row", marginHorizontal: 12, marginBottom: 8, gap: 8 }}>
-          {/* Completion Rate */}
+        <View style={{ marginHorizontal: 12, marginBottom: 8 }}>
+          {/* Completion Rate — full width */}
           <View
             style={{
-              flex: 1,
               backgroundColor: "white",
               borderRadius: 14,
               padding: 12,
@@ -904,72 +745,20 @@ export default function TeamScreen() {
               shadowRadius: 6,
               shadowOffset: { width: 0, height: 2 },
               elevation: 2,
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 12,
             }}
           >
-            <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: "#F0FDF4", alignItems: "center", justifyContent: "center", marginBottom: 6 }}>
-              <CheckCircle2 size={14} color="#22C55E" />
+            <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#F0FDF4", alignItems: "center", justifyContent: "center" }}>
+              <CheckCircle2 size={18} color="#22C55E" />
             </View>
-            <Text style={{ fontSize: 9, fontWeight: "700", color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 2 }}>
-              Completion
-            </Text>
-            <Text style={{ fontSize: 18, fontWeight: "900", color: "#0F172A" }}>87%</Text>
-            <Text style={{ fontSize: 10, color: "#94A3B8" }}>this week</Text>
-            <View style={{ marginTop: 5, backgroundColor: "#F0FDF4", borderRadius: 6, paddingHorizontal: 5, paddingVertical: 2, alignSelf: "flex-start" }}>
-              <Text style={{ fontSize: 9, fontWeight: "700", color: "#22C55E" }}>▲ +5%</Text>
-            </View>
-          </View>
-
-          {/* Execution Speed */}
-          <View
-            style={{
-              flex: 1,
-              backgroundColor: "white",
-              borderRadius: 14,
-              padding: 12,
-              shadowColor: "#000",
-              shadowOpacity: 0.05,
-              shadowRadius: 6,
-              shadowOffset: { width: 0, height: 2 },
-              elevation: 2,
-            }}
-          >
-            <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: "#FFF7ED", alignItems: "center", justifyContent: "center", marginBottom: 6 }}>
-              <Zap size={14} color="#F59E0B" />
-            </View>
-            <Text style={{ fontSize: 9, fontWeight: "700", color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 2 }}>
-              Speed
-            </Text>
-            <Text style={{ fontSize: 18, fontWeight: "900", color: "#0F172A" }}>2.3h</Text>
-            <Text style={{ fontSize: 10, color: "#94A3B8" }}>per task</Text>
-            <View style={{ marginTop: 5, backgroundColor: "#F0FDF4", borderRadius: 6, paddingHorizontal: 5, paddingVertical: 2, alignSelf: "flex-start" }}>
-              <Text style={{ fontSize: 9, fontWeight: "700", color: "#22C55E" }}>▲ 18%</Text>
-            </View>
-          </View>
-
-          {/* Consistency */}
-          <View
-            style={{
-              flex: 1,
-              backgroundColor: "white",
-              borderRadius: 14,
-              padding: 12,
-              shadowColor: "#000",
-              shadowOpacity: 0.05,
-              shadowRadius: 6,
-              shadowOffset: { width: 0, height: 2 },
-              elevation: 2,
-            }}
-          >
-            <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: "#FFF1F0", alignItems: "center", justifyContent: "center", marginBottom: 6 }}>
-              <Flame size={14} color="#F97316" />
-            </View>
-            <Text style={{ fontSize: 9, fontWeight: "700", color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 2 }}>
-              Consistency
-            </Text>
-            <Text style={{ fontSize: 18, fontWeight: "900", color: "#0F172A" }}>4-day</Text>
-            <Text style={{ fontSize: 10, color: "#94A3B8" }}>streak</Text>
-            <View style={{ marginTop: 5, backgroundColor: "#FFF7ED", borderRadius: 6, paddingHorizontal: 5, paddingVertical: 2, alignSelf: "flex-start" }}>
-              <Text style={{ fontSize: 9, fontWeight: "700", color: "#F97316" }}>Best: 6d</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 9, fontWeight: "700", color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 2 }}>
+                Completion Rate
+              </Text>
+              <Text style={{ fontSize: 22, fontWeight: "900", color: "#0F172A" }}>{weekCompletionPct}%</Text>
+              <Text style={{ fontSize: 10, color: "#94A3B8" }}>this week</Text>
             </View>
           </View>
         </View>
@@ -1006,7 +795,7 @@ export default function TeamScreen() {
           </Pressable>
         ) : null}
 
-        {/* ── 6. TEAM LEADERBOARD ───────────────────────────────────── */}
+        {/* ── 6. TEAM MEMBERS ───────────────────────────────────────── */}
         <View
           style={{
             marginHorizontal: 12,
@@ -1022,66 +811,85 @@ export default function TeamScreen() {
           }}
         >
           {/* Header */}
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 16, paddingBottom: 12 }}>
+          <View style={{ padding: 16, paddingBottom: 12 }}>
             <Text style={{ fontSize: 10, fontWeight: "800", color: "#94A3B8", textTransform: "uppercase", letterSpacing: 1.2 }}>
-              Team Leaderboard
+              Team Members
             </Text>
-            {/* Toggle tabs */}
-            <View style={{ flexDirection: "row", backgroundColor: "#F1F5F9", borderRadius: 10, padding: 2 }}>
-              <Pressable
-                onPress={() => setLeaderboardTab("top")}
-                style={{
-                  paddingHorizontal: 10,
-                  paddingVertical: 5,
-                  borderRadius: 8,
-                  backgroundColor: leaderboardTab === "top" ? "white" : "transparent",
-                  shadowColor: leaderboardTab === "top" ? "#000" : "transparent",
-                  shadowOpacity: 0.08,
-                  shadowRadius: 4,
-                  shadowOffset: { width: 0, height: 1 },
-                  elevation: leaderboardTab === "top" ? 1 : 0,
-                }}
-                testID="leaderboard-top-tab"
-              >
-                <Text style={{ fontSize: 11, fontWeight: "700", color: leaderboardTab === "top" ? "#0F172A" : "#94A3B8" }}>
-                  Top performers
-                </Text>
-              </Pressable>
-              <Pressable
-                onPress={() => setLeaderboardTab("attention")}
-                style={{
-                  paddingHorizontal: 10,
-                  paddingVertical: 5,
-                  borderRadius: 8,
-                  backgroundColor: leaderboardTab === "attention" ? "white" : "transparent",
-                  shadowColor: leaderboardTab === "attention" ? "#000" : "transparent",
-                  shadowOpacity: 0.08,
-                  shadowRadius: 4,
-                  shadowOffset: { width: 0, height: 1 },
-                  elevation: leaderboardTab === "attention" ? 1 : 0,
-                }}
-                testID="leaderboard-attention-tab"
-              >
-                <Text style={{ fontSize: 11, fontWeight: "700", color: leaderboardTab === "attention" ? "#0F172A" : "#94A3B8" }}>
-                  Need attention
-                </Text>
-              </Pressable>
-            </View>
           </View>
 
           {/* Member rows */}
-          {leaderboardMembers.map((item, index) => (
-            <LeaderboardRow
-              key={item.id}
-              member={item}
-              rank={index + 1}
-              stats={memberStats?.[item.userId]}
-              isCurrentUser={item.userId === session?.user?.id}
-              onPress={() => setSelectedMemberId(item.userId)}
-            />
-          ))}
+          {sortedMembers.map((item: TeamMember) => {
+            const stats = memberStats?.[item.userId];
+            const completed = stats?.activeTasks ?? 0;
+            const overdue = stats?.overdueTasks ?? 0;
+            const streak = stats?.streak ?? 0;
+            const isCurrentUser = item.userId === session?.user?.id;
+            return (
+              <Pressable
+                key={item.id}
+                onPress={() => setSelectedMemberId(item.userId)}
+                testID={`member-row-${item.userId}`}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  paddingHorizontal: 14,
+                  paddingVertical: 10,
+                  borderTopWidth: 1,
+                  borderTopColor: "#F0F4FF",
+                  backgroundColor: isCurrentUser ? "#F0F4FF" : "white",
+                }}
+              >
+                {/* Avatar */}
+                <View
+                  style={{
+                    width: 38,
+                    height: 38,
+                    borderRadius: 19,
+                    backgroundColor: "#4361EE",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    overflow: "hidden",
+                    marginRight: 10,
+                  }}
+                >
+                  {item.user.image ? (
+                    <Image source={{ uri: item.user.image }} style={{ width: 38, height: 38 }} resizeMode="cover" />
+                  ) : (
+                    <Text style={{ color: "white", fontWeight: "700", fontSize: 14 }}>
+                      {item.user.name?.[0]?.toUpperCase() ?? "?"}
+                    </Text>
+                  )}
+                </View>
 
-          {leaderboardMembers.length === 0 ? (
+                {/* Name */}
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 14, fontWeight: "700", color: "#0F172A" }}>
+                    {item.user.name}{isCurrentUser ? " (you)" : ""}
+                  </Text>
+                  <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 1 }}>this month</Text>
+                </View>
+
+                {/* Metrics */}
+                <View style={{ alignItems: "flex-end", gap: 2 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                    <CheckCircle2 size={12} color="#22C55E" />
+                    <Text style={{ fontSize: 12, fontWeight: "700", color: "#0F172A" }}>{completed}</Text>
+                    {overdue > 0 ? (
+                      <>
+                        <AlertCircle size={12} color="#EF4444" />
+                        <Text style={{ fontSize: 12, fontWeight: "700", color: "#EF4444" }}>{overdue}</Text>
+                      </>
+                    ) : null}
+                  </View>
+                  {streak > 0 ? (
+                    <Text style={{ fontSize: 11, color: "#F97316", fontWeight: "600" }}>{streak}-day streak</Text>
+                  ) : null}
+                </View>
+              </Pressable>
+            );
+          })}
+
+          {sortedMembers.length === 0 ? (
             <View style={{ paddingVertical: 32, alignItems: "center" }}>
               <Text style={{ fontSize: 13, color: "#94A3B8" }}>No members yet</Text>
             </View>
