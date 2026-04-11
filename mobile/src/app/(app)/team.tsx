@@ -534,12 +534,10 @@ export default function TeamScreen() {
           colors={["#4361EE", "#7C3AED"]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
-          style={{
+        style={{
             paddingTop: 14,
             paddingHorizontal: 16,
-            paddingBottom: 22,
-            borderBottomLeftRadius: 22,
-            borderBottomRightRadius: 22,
+            paddingBottom: 30,
           }}
         >
           <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" }}>
@@ -558,8 +556,8 @@ export default function TeamScreen() {
           </View>
         </LinearGradient>
 
-        {/* Team info section — sits below gradient inside the lavender card */}
-        <View style={{ paddingHorizontal: 14, paddingTop: 14, paddingBottom: 14 }}>
+        {/* Team info section — curved top creates the downward bulge on the gradient */}
+        <View style={{ paddingHorizontal: 14, paddingTop: 14, paddingBottom: 14, backgroundColor: "#E0E8FF", borderTopLeftRadius: 22, borderTopRightRadius: 22, marginTop: -20 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
             {/* Avatar */}
             <TouchableOpacity
