@@ -22,6 +22,12 @@ export const useSubscriptionStore = create<SubscriptionStore>()(
     {
       name: "alenio-subscription-store",
       storage: createJSONStorage(() => AsyncStorage),
+      // Normalize legacy "pro" value to "team" when reading from AsyncStorage
+      onRehydrateStorage: () => (state) => {
+        if (state && (state.plan as string) === "pro") {
+          state.plan = "team";
+        }
+      },
     }
   )
 );
