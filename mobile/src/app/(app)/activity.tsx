@@ -1049,7 +1049,7 @@ export default function ActivityScreen() {
                   })}
                 </View>
 
-                <Text style={{ fontSize: 13, fontWeight: "600", color: "#64748B", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 }}>Add a message (optional)</Text>
+                <Text style={{ fontSize: 13, fontWeight: "600", color: "#64748B", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 }}>Message <Text style={{ color: "#EF4444" }}>*</Text></Text>
                 <TextInput
                   testID="celebrate-message-input"
                   value={celebrateMessage}
@@ -1068,11 +1068,11 @@ export default function ActivityScreen() {
                     celebrateMutation.mutate({
                       targetUserId: celebrateTarget.id,
                       celebrationType: celebrateType,
-                      message: celebrateMessage.trim() || undefined,
+                      message: celebrateMessage.trim(),
                     });
                   }}
-                  disabled={celebrateMutation.isPending}
-                  style={{ backgroundColor: "#4361EE", borderRadius: 14, paddingVertical: 15, alignItems: "center", shadowColor: "#4361EE", shadowOpacity: 0.4, shadowRadius: 12, shadowOffset: { width: 0, height: 4 } }}
+                  disabled={celebrateMutation.isPending || !celebrateMessage.trim()}
+                  style={{ backgroundColor: celebrateMessage.trim() ? "#4361EE" : "#CBD5E1", borderRadius: 14, paddingVertical: 15, alignItems: "center", shadowColor: "#4361EE", shadowOpacity: celebrateMessage.trim() ? 0.4 : 0, shadowRadius: 12, shadowOffset: { width: 0, height: 4 } }}
                 >
                   {celebrateMutation.isPending ? (
                     <ActivityIndicator color="white" />
