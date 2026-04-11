@@ -503,28 +503,47 @@ export default function TeamScreen() {
   }
 
   // ------------------------------------------------------------------
+  // Derived: avg completion pct across all months
+  // ------------------------------------------------------------------
+  const nonNullPcts = (monthlyStats ?? []).map((m) => m.completionPct).filter((p): p is number => p !== null);
+  const avgCompletionPct = nonNullPcts.length > 0
+    ? Math.round(nonNullPcts.reduce((a, b) => a + b, 0) / nonNullPcts.length)
+    : null;
+
+  // ------------------------------------------------------------------
   // Main render
   // ------------------------------------------------------------------
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#F0F4FF" }} edges={["top"]} testID="team-screen">
-      <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
-        <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 14 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-            <View>
-              <Text style={{ color: "white", fontSize: 18, fontWeight: "700" }}>Team</Text>
-              <Text style={{ color: "rgba(255,255,255,0.7)", fontSize: 11, fontWeight: "500", marginTop: 1 }}>
-                {team?.name ?? ""}
-              </Text>
-            </View>
-            {isPaid ? (
-              <View style={{ alignItems: "flex-end" }}>
-                <Text style={{ color: "white", fontSize: 22, fontWeight: "900" }}>{weekCompletionPct}%</Text>
-                <Text style={{ color: "rgba(255,255,255,0.7)", fontSize: 10, fontWeight: "600" }}>this week</Text>
-              </View>
-            ) : null}
+      {/* ── HEADER (gradient, rounded bottom corners, overlapped by card) */}
+      <LinearGradient
+        colors={["#4361EE", "#7C3AED"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={{
+          paddingTop: 14,
+          paddingBottom: 28,
+          paddingHorizontal: 20,
+          borderBottomLeftRadius: 32,
+          borderBottomRightRadius: 32,
+        }}
+      >
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+          <View>
+            <Text style={{ color: "white", fontWeight: "700", fontSize: 22 }}>Team</Text>
+            <Text style={{ color: "rgba(255,255,255,0.7)", fontSize: 12, marginTop: 2 }}>
+              {team?.name ?? ""}
+            </Text>
           </View>
+          {isPaid ? (
+            <View style={{ alignItems: "flex-end" }}>
+              <Text style={{ color: "white", fontSize: 32, fontWeight: "900", lineHeight: 36 }}>{weekCompletionPct}%</Text>
+              <Text style={{ color: "rgba(255,255,255,0.7)", fontSize: 11, fontWeight: "600", marginTop: 2 }}>this month</Text>
+            </View>
+          ) : null}
         </View>
       </LinearGradient>
+
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: insets.bottom + 96 }}
@@ -533,23 +552,18 @@ export default function TeamScreen() {
         }
         testID="members-list"
       >
-        {/* ── 1. HEADER CARD ─────────────────────────────────────────── */}
+        {/* ── 1. TEAM INFO CARD (overlaps the rounded header bottom) ─── */}
         <View
           style={{
-            margin: 12,
+            backgroundColor: "#E8EEFF",
             borderRadius: 20,
-            backgroundColor: "#E0E9FF",
+            marginHorizontal: 12,
+            marginTop: -16,
             padding: 14,
-            shadowColor: "#4361EE",
-            shadowOpacity: 0.1,
-            shadowRadius: 12,
-            shadowOffset: { width: 0, height: 4 },
-            elevation: 4,
           }}
         >
-          {/* Horizontal row: avatar | name+code | buttons */}
           <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-            {/* Avatar */}
+            {/* Left: team avatar */}
             <TouchableOpacity
               onPress={() => isOwner && !isDemo ? setPhotoMenuOpen(true) : undefined}
               disabled={uploadingTeamImage}
@@ -565,8 +579,6 @@ export default function TeamScreen() {
                   alignItems: "center",
                   justifyContent: "center",
                   overflow: "hidden",
-                  borderWidth: 2,
-                  borderColor: "#4361EE50",
                 }}
               >
                 {uploadingTeamImage ? (
@@ -592,7 +604,7 @@ export default function TeamScreen() {
                     alignItems: "center",
                     justifyContent: "center",
                     borderWidth: 1.5,
-                    borderColor: "#E0E9FF",
+                    borderColor: "#E8EEFF",
                   }}
                 >
                   <Camera size={10} color="white" />
@@ -600,42 +612,51 @@ export default function TeamScreen() {
               ) : null}
             </TouchableOpacity>
 
-            {/* Middle: name + invite code + subtitle */}
+            {/* Middle: invite code + team name + subtitle */}
             <View style={{ flex: 1 }}>
               <Text style={{ fontSize: 18, fontWeight: "900", color: "#1E293B", letterSpacing: 3 }}>
                 {team?.inviteCode}
               </Text>
-              <Text style={{ fontSize: 13, fontWeight: "700", color: "#1E293B", marginTop: 1 }}>
+              <Text style={{ fontSize: 13, fontWeight: "700", color: "#1E293B", marginTop: 2 }}>
                 {team?.name ?? "Team"}
               </Text>
-              <Text style={{ fontSize: 11, color: "#64748B", marginTop: 1 }}>
+              <Text style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>
                 Share this code to invite team members
               </Text>
             </View>
 
-            {/* Right: 3 icon buttons stacked */}
+            {/* Right: two icon buttons stacked */}
             {!isDemo ? (
-              <View style={{ gap: 6 }}>
-                <Pressable
-                  onPress={handleCopyCode}
-                  style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: "white", borderWidth: 1, borderColor: "#C7D2FE", alignItems: "center", justifyContent: "center" }}
-                  testID="copy-invite-code"
-                >
-                  <Copy size={16} color="#4361EE" />
-                </Pressable>
+              <View style={{ gap: 8 }}>
                 <Pressable
                   onPress={() => setQrModalOpen(true)}
-                  style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: "white", borderWidth: 1, borderColor: "#C7D2FE", alignItems: "center", justifyContent: "center" }}
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 12,
+                    backgroundColor: "white",
+                    borderWidth: 1,
+                    borderColor: "#C7D2FE",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
                   testID="qr-invite-code"
                 >
-                  <QrCode size={16} color="#4361EE" />
+                  <QrCode size={18} color="#4361EE" />
                 </Pressable>
                 <Pressable
                   onPress={handleShareCode}
-                  style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: "#4361EE", alignItems: "center", justifyContent: "center" }}
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 12,
+                    backgroundColor: "#4361EE",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
                   testID="share-invite-code"
                 >
-                  <UserPlus size={16} color="white" />
+                  <UserPlus size={18} color="white" />
                 </Pressable>
               </View>
             ) : null}
@@ -644,7 +665,7 @@ export default function TeamScreen() {
 
         {/* ── Pending join requests (owner only) ────────────────────── */}
         {isOwner && incomingRequests.length > 0 ? (
-          <View style={{ marginBottom: 4 }}>
+          <View style={{ marginTop: 10, marginBottom: 4 }}>
             <Text style={{ paddingHorizontal: 16, fontSize: 11, fontWeight: "700", color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 8 }}>
               Pending Requests ({incomingRequests.length})
             </Text>
@@ -653,7 +674,7 @@ export default function TeamScreen() {
                 key={req.id}
                 style={{
                   backgroundColor: "white",
-                  marginHorizontal: 16,
+                  marginHorizontal: 12,
                   marginBottom: 8,
                   borderRadius: 14,
                   padding: 14,
@@ -713,134 +734,113 @@ export default function TeamScreen() {
           </View>
         ) : null}
 
-        {/* ── 2. THIS WEEK AT A GLANCE (paid only) ──────────────────── */}
+        {/* ── 2. AT A GLANCE CARD (paid only, unified) ──────────────── */}
         {isPaid ? (
           <View
             style={{
-              marginHorizontal: 12,
-              marginBottom: 8,
-              borderRadius: 14,
               backgroundColor: "white",
-              paddingHorizontal: 14,
-              paddingVertical: 10,
+              borderRadius: 20,
+              marginHorizontal: 12,
+              marginTop: 10,
+              padding: 16,
               shadowColor: "#000",
-              shadowOpacity: 0.05,
-              shadowRadius: 8,
-              shadowOffset: { width: 0, height: 2 },
-              elevation: 2,
+              shadowOpacity: 0.06,
+              shadowRadius: 12,
+              shadowOffset: { width: 0, height: 3 },
+              elevation: 3,
             }}
           >
-            {/* Month navigator row */}
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-              <Pressable
-                onPress={() => setSelectedMonthIndex(Math.max(0, monthIdx - 1))}
-                disabled={monthIdx === 0}
-                style={{ padding: 4 }}
-              >
-                <ChevronLeft size={16} color={monthIdx === 0 ? "#CBD5E1" : "#4361EE"} />
-              </Pressable>
-              <Text style={{ fontSize: 11, fontWeight: "700", color: "#4361EE", letterSpacing: 0.4 }}>
-                {monthLabel}
-              </Text>
-              <Pressable
-                onPress={() => setSelectedMonthIndex(Math.min(monthTotal - 1, monthIdx + 1))}
-                disabled={monthIdx === monthTotal - 1}
-                style={{ padding: 4 }}
-              >
-                <ChevronRight size={16} color={monthIdx === monthTotal - 1 ? "#CBD5E1" : "#4361EE"} />
-              </Pressable>
-            </View>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+            {/* Header row: label + month navigator */}
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
               <Text style={{ fontSize: 10, fontWeight: "800", color: "#94A3B8", textTransform: "uppercase", letterSpacing: 1.2 }}>
-                At a Glance
+                AT A GLANCE
               </Text>
-              <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 12 }}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                  <Check size={13} color="#22C55E" />
-                  <Text style={{ fontSize: 13, fontWeight: "800", color: "#15803D" }}>{monthDone}</Text>
-                  <Text style={{ fontSize: 11, color: "#16A34A", fontWeight: "600" }}>tasks completed</Text>
-                </View>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                  <AlertTriangle size={12} color={totalOverdue > 0 ? "#EF4444" : "#94A3B8"} />
-                  <Text style={{ fontSize: 13, fontWeight: "800", color: totalOverdue > 0 ? "#DC2626" : "#94A3B8" }}>{totalOverdue}</Text>
-                  <Text style={{ fontSize: 11, color: totalOverdue > 0 ? "#EF4444" : "#94A3B8", fontWeight: "600" }}>overdue</Text>
-                </View>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                <Pressable
+                  onPress={() => setSelectedMonthIndex(Math.max(0, monthIdx - 1))}
+                  disabled={monthIdx === 0}
+                  style={{ padding: 4 }}
+                  testID="month-prev"
+                >
+                  <ChevronLeft size={16} color={monthIdx === 0 ? "#CBD5E1" : "#4361EE"} />
+                </Pressable>
+                <Text style={{ fontSize: 13, fontWeight: "700", color: "#4361EE", minWidth: 80, textAlign: "center" }}>
+                  {monthLabel}
+                </Text>
+                <Pressable
+                  onPress={() => setSelectedMonthIndex(Math.min(monthTotal - 1, monthIdx + 1))}
+                  disabled={monthIdx === monthTotal - 1}
+                  style={{ padding: 4 }}
+                  testID="month-next"
+                >
+                  <ChevronRight size={16} color={monthIdx === monthTotal - 1 ? "#CBD5E1" : "#4361EE"} />
+                </Pressable>
               </View>
             </View>
-          </View>
-        ) : null}
 
-        {/* ── 3. TEAM PERFORMANCE CHART (paid only) ─────────────────── */}
-        {isPaid ? (
-          <View
-            style={{
-              marginHorizontal: 12,
-              marginBottom: 8,
-              borderRadius: 16,
-              backgroundColor: "white",
-              paddingTop: 12,
-              paddingBottom: 10,
-              paddingHorizontal: 14,
-              shadowColor: "#000",
-              shadowOpacity: 0.05,
-              shadowRadius: 8,
-              shadowOffset: { width: 0, height: 2 },
-              elevation: 2,
-            }}
-          >
-            <View style={{ marginBottom: 8 }}>
-              <Text style={{ fontSize: 10, fontWeight: "800", color: "#94A3B8", textTransform: "uppercase", letterSpacing: 1.2 }}>
-                Team Performance
-              </Text>
-              <Text style={{ fontSize: 11, color: "#CBD5E1", marginTop: 1 }}>Last 6 months</Text>
+            {/* Stats row */}
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginTop: 10 }}>
+              <View style={{ backgroundColor: "#EEF2FF", borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5 }}>
+                <Text style={{ fontSize: 12, fontWeight: "700", color: "#4361EE" }}>{monthLabel}</Text>
+              </View>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                <Check size={13} color="#22C55E" />
+                <Text style={{ fontSize: 13, fontWeight: "800", color: "#15803D" }}>{monthDone}</Text>
+                <Text style={{ fontSize: 11, color: "#16A34A", fontWeight: "600" }}>tasks completed</Text>
+              </View>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                <AlertTriangle size={12} color={totalOverdue > 0 ? "#EF4444" : "#94A3B8"} />
+                <Text style={{ fontSize: 13, fontWeight: "800", color: totalOverdue > 0 ? "#DC2626" : "#94A3B8" }}>{totalOverdue}</Text>
+                <Text style={{ fontSize: 11, color: totalOverdue > 0 ? "#EF4444" : "#94A3B8", fontWeight: "600" }}>overdue</Text>
+              </View>
             </View>
 
-            <View style={{ alignItems: "center" }}>
+            {/* Chart */}
+            <View style={{ alignItems: "center", marginTop: 12 }}>
               <PerformanceChart data={monthlyStats ?? []} />
             </View>
-          </View>
-        ) : null}
 
-        {/* ── 4. KPI METRIC CARDS (paid only) ───────────────────────── */}
-        {isPaid ? (
-          <View style={{ marginHorizontal: 12, marginBottom: 8 }}>
+            {/* Footer: avg completion rate + progress bar */}
             <View
               style={{
-                backgroundColor: "white",
-                borderRadius: 14,
-                padding: 12,
-                shadowColor: "#000",
-                shadowOpacity: 0.05,
-                shadowRadius: 6,
-                shadowOffset: { width: 0, height: 2 },
-                elevation: 2,
+                marginTop: 12,
+                paddingTop: 12,
+                borderTopWidth: 1,
+                borderTopColor: "#F1F5F9",
                 flexDirection: "row",
                 alignItems: "center",
-                gap: 12,
+                gap: 10,
               }}
             >
-              <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#F0FDF4", alignItems: "center", justifyContent: "center" }}>
-                <CheckCircle2 size={18} color="#22C55E" />
+              <Text style={{ fontSize: 12, color: "#64748B" }}>
+                Last 6 months completion rate{" "}
+                <Text style={{ fontWeight: "800", color: "#0F172A" }}>
+                  {avgCompletionPct !== null ? `${avgCompletionPct}%` : "—"}
+                </Text>
+              </Text>
+              <View style={{ flex: 1, height: 6, borderRadius: 3, backgroundColor: "#EEF2FF", overflow: "hidden" }}>
+                <View
+                  style={{
+                    height: 6,
+                    borderRadius: 3,
+                    backgroundColor: "#22C55E",
+                    width: `${avgCompletionPct ?? 0}%`,
+                  }}
+                />
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 9, fontWeight: "700", color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 2 }}>
-                  Completion Rate
-                </Text>
-                <Text style={{ fontSize: 22, fontWeight: "900", color: "#0F172A" }}>
-                  {monthCompletionPct !== null ? `${monthCompletionPct}%` : "—"}
-                </Text>
-                <Text style={{ fontSize: 10, color: "#94A3B8" }}>{monthLabel || "this month"}</Text>
+              <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: "#F0FDF4", alignItems: "center", justifyContent: "center" }}>
+                <CheckCircle2 size={14} color="#22C55E" />
               </View>
             </View>
           </View>
         ) : null}
 
-        {/* ── 5. NEEDS ATTENTION BANNER ─────────────────────────────── */}
+        {/* ── 3. NEEDS ATTENTION BANNER ─────────────────────────────── */}
         {totalOverdue > 0 ? (
           <Pressable
             style={{
               marginHorizontal: 12,
-              marginBottom: 8,
+              marginTop: 8,
               borderRadius: 14,
               backgroundColor: "#FFF7ED",
               flexDirection: "row",
@@ -867,12 +867,12 @@ export default function TeamScreen() {
           </Pressable>
         ) : null}
 
-        {/* ── 6. TEAM MEMBERS ───────────────────────────────────────── */}
+        {/* ── 4. TEAM MEMBERS CARD ──────────────────────────────────── */}
         <View
           style={{
             marginHorizontal: 12,
-            marginBottom: 8,
-            borderRadius: 16,
+            marginTop: 8,
+            borderRadius: 20,
             backgroundColor: "white",
             overflow: "hidden",
             shadowColor: "#000",
@@ -882,11 +882,35 @@ export default function TeamScreen() {
             elevation: 2,
           }}
         >
-          {/* Header */}
-          <View style={{ padding: 16, paddingBottom: 12 }}>
-            <Text style={{ fontSize: 10, fontWeight: "800", color: "#94A3B8", textTransform: "uppercase", letterSpacing: 1.2 }}>
-              Team Members
-            </Text>
+          {/* Header row */}
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              paddingHorizontal: 16,
+              paddingVertical: 14,
+            }}
+          >
+            <Text style={{ fontSize: 16, fontWeight: "700", color: "#0F172A" }}>Team Members</Text>
+            {!isDemo ? (
+              <Pressable
+                onPress={handleShareCode}
+                style={{
+                  backgroundColor: "#4361EE",
+                  borderRadius: 20,
+                  paddingHorizontal: 14,
+                  paddingVertical: 8,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+                testID="add-member-button"
+              >
+                <UserPlus size={13} color="white" />
+                <Text style={{ color: "white", fontSize: 13, fontWeight: "700" }}>Add Member</Text>
+              </Pressable>
+            ) : null}
           </View>
 
           {/* Member rows */}
@@ -970,11 +994,12 @@ export default function TeamScreen() {
           ) : null}
         </View>
 
-        {/* ── Owner management area: role/remove actions hint ────────── */}
+        {/* ── Owner hint row ─────────────────────────────────────────── */}
         {isOwner && !isDemo ? (
           <View
             style={{
               marginHorizontal: 12,
+              marginTop: 8,
               marginBottom: 8,
               borderRadius: 12,
               backgroundColor: "#EEF2FF",
