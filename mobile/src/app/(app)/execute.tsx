@@ -653,10 +653,10 @@ export default function TasksScreen() {
     queryFn: () => api.get<{ plan: string; status: string }>(`/api/teams/${activeTeamId}/subscription`),
     enabled: !!activeTeamId,
   });
-  const setIsPro = useSubscriptionStore((s) => s.setIsPro);
-  const isPro = useSubscriptionStore((s) => s.isPro);
+  const plan = useSubscriptionStore((s) => s.plan);
+  const isPro = plan === "team";
   React.useEffect(() => {
-    if (subscription) setIsPro(subscription.plan === "pro");
+    if (subscription) {}
   }, [subscription]);
 
   const toggleMutation = useMutation({
