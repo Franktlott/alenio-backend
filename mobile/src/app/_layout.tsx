@@ -92,6 +92,7 @@ function RootLayoutNav() {
   const notificationListener = useRef<Notifications.EventSubscription | null>(null);
   const [showSplash, setShowSplash] = useState(true);
   const [animDone, setAnimDone] = useState(false);
+  const [sessionSettled, setSessionSettled] = useState(false);
 
   useEffect(() => {
     SplashScreen.hideAsync();
@@ -99,6 +100,16 @@ function RootLayoutNav() {
     const timer = setTimeout(() => setAnimDone(true), 2300);
     return () => clearTimeout(timer);
   }, []);
+
+  // Wait for session to load, then give the navigation stack a moment to render
+  // before allowing the splash to fade. This prevents a white screen on Android
+  // where the Stack.Protected redirect hasn't rendered yet.
+  useEffect(() => {
+    if (!isLoading && !sessionSettled) {
+      const t = setTimeout(() => setSessionSettled(true), 300);
+      return () => clearTimeout(t);
+    }
+  }, [isLoading, sessionSettled]);
 
   useEffect(() => {
     if (!session?.user) return;
@@ -181,7 +192,7 @@ function RootLayoutNav() {
           <Stack.Screen name="terms-of-service" />
         </Stack>
       </ThemeProvider>
-      {showSplash ? <CustomSplash isReady={animDone ? !isLoading : false} onDone={() => setShowSplash(false)} /> : null}
+      {showSplash ? <CustomSplash isReady={animDone && sessionSettled ? true : false} onDone={() => setShowSplash(false)} /> : null}
     </View>
   );
 }
