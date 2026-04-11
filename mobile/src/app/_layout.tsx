@@ -2,7 +2,7 @@ import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native
 import { Stack, router } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { AppState, Image, Text, View } from 'react-native';
+import { AppState, Image, View } from 'react-native';
 import { useColorScheme } from '@/lib/useColorScheme';
 import { QueryClient, QueryClientProvider, focusManager } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -17,7 +17,6 @@ import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
-  withSequence,
   withDelay,
   runOnJS,
 } from 'react-native-reanimated';
@@ -39,29 +38,37 @@ focusManager.setEventListener((handleFocus) => {
 
 const queryClient = new QueryClient();
 
-function CustomSplash({ onDone }: { onDone: () => void }) {
-  const opacity = useSharedValue(0);
-  const scale = useSharedValue(0.85);
+function CustomSplash({ isReady, onDone }: { isReady: boolean; onDone: () => void }) {
+  const logoOpacity = useSharedValue(0);
+  const logoScale = useSharedValue(0.85);
+  const containerOpacity = useSharedValue(1);
+  const hasStartedFadeOut = useRef(false);
 
+  // Fade logo in on mount
   useEffect(() => {
-    opacity.value = withSequence(
-      withTiming(1, { duration: 500 }),
-      withDelay(1800, withTiming(0, { duration: 500 }))
-    );
-    scale.value = withSequence(
-      withTiming(1, { duration: 500 }),
-      withDelay(1800, withTiming(1.08, { duration: 500 }, () => runOnJS(onDone)()))
-    );
+    logoOpacity.value = withTiming(1, { duration: 500 });
+    logoScale.value = withTiming(1, { duration: 500 });
   }, []);
 
-  const animStyle = useAnimatedStyle(() => ({
-    opacity: opacity.value,
-    transform: [{ scale: scale.value }],
+  // Fade entire splash out once app is ready
+  useEffect(() => {
+    if (!isReady || hasStartedFadeOut.current) return;
+    hasStartedFadeOut.current = true;
+    containerOpacity.value = withDelay(300, withTiming(0, { duration: 400 }, () => runOnJS(onDone)()));
+  }, [isReady]);
+
+  const logoStyle = useAnimatedStyle(() => ({
+    opacity: logoOpacity.value,
+    transform: [{ scale: logoScale.value }],
+  }));
+
+  const containerStyle = useAnimatedStyle(() => ({
+    opacity: containerOpacity.value,
   }));
 
   return (
-    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' }}>
-      <Animated.View style={[animStyle, { alignItems: 'center' }]}>
+    <Animated.View style={[{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' }, containerStyle]}>
+      <Animated.View style={[logoStyle, { alignItems: 'center' }]}>
         <Image
           source={require('@/assets/alenio-logo.png')}
           style={{ width: 230, height: 230 }}
@@ -75,7 +82,7 @@ function CustomSplash({ onDone }: { onDone: () => void }) {
           resizeMode="contain"
         />
       </View>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -88,14 +95,10 @@ function RootLayoutNav() {
 
   useEffect(() => {
     SplashScreen.hideAsync();
+    // Mark display time done after logo has faded in + shown (500ms + 1800ms)
+    const timer = setTimeout(() => setAnimDone(true), 2300);
+    return () => clearTimeout(timer);
   }, []);
-
-  // Hide splash when both animation is done AND session has loaded
-  useEffect(() => {
-    if (animDone && !isLoading) {
-      setShowSplash(false);
-    }
-  }, [animDone, isLoading]);
 
   useEffect(() => {
     if (!session?.user) return;
@@ -178,7 +181,7 @@ function RootLayoutNav() {
           <Stack.Screen name="terms-of-service" />
         </Stack>
       </ThemeProvider>
-      {showSplash ? <CustomSplash onDone={() => setAnimDone(true)} /> : null}
+      {showSplash ? <CustomSplash isReady={animDone ? !isLoading : false} onDone={() => setShowSplash(false)} /> : null}
     </View>
   );
 }
