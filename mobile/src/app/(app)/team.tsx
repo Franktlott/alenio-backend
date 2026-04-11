@@ -719,19 +719,22 @@ export default function TeamScreen() {
               elevation: 3,
             }}
           >
-            {/* Header row: label + month navigator */}
+            {/* Header row */}
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
               <Text style={{ fontSize: 10, fontWeight: "800", color: "#94A3B8", textTransform: "uppercase", letterSpacing: 1.2 }}>
                 TEAM AT A GLANCE
               </Text>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                <Check size={13} color="#22C55E" />
-                <Text style={{ fontSize: 13, fontWeight: "800", color: "#15803D" }}>{totalDone6m}</Text>
-                <Text style={{ fontSize: 11, color: "#16A34A", fontWeight: "600" }}>completed · </Text>
-                <AlertTriangle size={11} color={totalOverdue > 0 ? "#EF4444" : "#94A3B8"} />
-                <Text style={{ fontSize: 11, color: totalOverdue > 0 ? "#DC2626" : "#94A3B8", fontWeight: "700" }}>{totalOverdue} overdue · </Text>
-                <Text style={{ fontSize: 11, color: "#16A34A", fontWeight: "600" }}>6 months</Text>
-              </View>
+              {(() => {
+                const currentMonth = monthlyStats?.[monthlyStats.length - 1];
+                const pct = currentMonth?.completionPct;
+                const label = currentMonth?.label ?? "";
+                return pct !== null && pct !== undefined ? (
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "#EEF2FF", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}>
+                    <Text style={{ fontSize: 13, fontWeight: "800", color: "#4361EE" }}>{pct}%</Text>
+                    <Text style={{ fontSize: 10, fontWeight: "600", color: "#6366F1" }}>{label}</Text>
+                  </View>
+                ) : null;
+              })()}
             </View>
 
             {/* Chart */}
