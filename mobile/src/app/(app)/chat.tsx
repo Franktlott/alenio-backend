@@ -24,6 +24,7 @@ import { useUnreadStore } from "@/lib/state/unread-store";
 import type { Conversation } from "@/lib/types";
 import { NoTeamPlaceholder } from "@/components/NoTeamPlaceholder";
 import { useDemoMode } from "@/lib/useDemo";
+import { useSubscriptionStore } from "@/lib/state/subscription-store";
 
 const PINNED_DMS_KEY = "pinned_dms";
 
@@ -93,12 +94,8 @@ export default function ChatScreen() {
     enabled: !!session?.user,
   });
 
-  const { data: subscription } = useQuery({
-    queryKey: ["subscription", activeTeamId],
-    queryFn: () => api.get<{ plan: string; status: string }>(`/api/teams/${activeTeamId}/subscription`),
-    enabled: !!activeTeamId,
-  });
-  const isPro = subscription?.plan === "pro";
+  const plan = useSubscriptionStore((s) => s.plan);
+  const isPaid = plan === "team";
 
   const { data: conversations = [], isLoading: dmsLoading } = useQuery({
     queryKey: ["conversations"],
@@ -403,7 +400,7 @@ export default function ChatScreen() {
               testID="add-modal-new-group"
               onPress={() => {
                 setShowAddModal(false);
-                if (!isPro) { setShowGroupPaywall(true); } else { router.push("/create-group"); }
+                if (!isPaid) { setShowGroupPaywall(true); } else { router.push("/create-group"); }
               }}
               style={{ flexDirection: "row", alignItems: "center", gap: 14, backgroundColor: "#F5F3FF", borderRadius: 16, padding: 16 }}
             >
@@ -439,7 +436,7 @@ export default function ChatScreen() {
                 Group Chats
               </Text>
               <Text style={{ fontSize: 14, color: "#64748B", textAlign: "center", marginBottom: 24, lineHeight: 20 }}>
-                Upgrade to Alenio Pro to create group conversations with your team
+                Upgrade to Alenio Team to create group conversations with your team
               </Text>
               <TouchableOpacity
                 onPress={() => { setShowGroupPaywall(false); router.push("/subscription"); }}
@@ -462,7 +459,7 @@ export default function ChatScreen() {
                   end={{ x: 1, y: 0 }}
                   style={{ paddingVertical: 14, alignItems: "center", flexDirection: "row", justifyContent: "center", gap: 8 }}
                 >
-                  <Text style={{ color: "white", fontWeight: "700", fontSize: 15 }}>Upgrade to Pro</Text>
+                  <Text style={{ color: "white", fontWeight: "700", fontSize: 15 }}>Upgrade to Team Plan</Text>
                   <Text style={{ color: "rgba(255,255,255,0.85)", fontSize: 15 }}>→</Text>
                 </LinearGradient>
               </TouchableOpacity>
