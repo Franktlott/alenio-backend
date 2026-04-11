@@ -9,6 +9,7 @@ if [[ "${ENVIRONMENT}" == "production" ]]; then
   DATA_DIR="${DATA_DIR:-/data}"
   export DATABASE_FILE="${DATA_DIR}/production.db"
   export DATABASE_URL="file:${DATABASE_FILE}"
+  export BACKEND_URL="https://toolbox-canopy.vibecode.run"
 else
   echo "Starting in development mode..."
   export NODE_ENV="development"
