@@ -60,7 +60,7 @@ function CustomSplash({ onDone }: { onDone: () => void }) {
   }));
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' }}>
+    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' }}>
       <Animated.View style={[animStyle, { alignItems: 'center' }]}>
         <Image
           source={require('@/assets/alenio-logo.png')}
@@ -84,10 +84,18 @@ function RootLayoutNav() {
   const { data: session, isLoading } = useSession();
   const notificationListener = useRef<Notifications.EventSubscription | null>(null);
   const [showSplash, setShowSplash] = useState(true);
+  const [animDone, setAnimDone] = useState(false);
 
   useEffect(() => {
     SplashScreen.hideAsync();
   }, []);
+
+  // Hide splash when both animation is done AND session has loaded
+  useEffect(() => {
+    if (animDone && !isLoading) {
+      setShowSplash(false);
+    }
+  }, [animDone, isLoading]);
 
   useEffect(() => {
     if (!session?.user) return;
@@ -120,59 +128,58 @@ function RootLayoutNav() {
     };
   }, [session?.user?.id]);
 
-  if (showSplash || isLoading) {
-    return <CustomSplash onDone={() => setShowSplash(false)} />;
-  }
-
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Protected guard={!!session?.user}>
-          <Stack.Screen name="(app)" />
-          <Stack.Screen name="onboarding" />
-          <Stack.Screen name="create-task" />
-          <Stack.Screen name="create-event" />
-          <Stack.Screen name="task-detail" />
-          <Stack.Screen name="team-chat" />
-          <Stack.Screen name="dm-chat" />
-          <Stack.Screen
-            name="video-call"
-            options={{
-              headerShown: false,
-              presentation: "fullScreenModal",
-            }}
-          />
-          <Stack.Screen
-            name="create-group"
-            options={{
-              presentation: 'formSheet',
-              sheetAllowedDetents: [0.9],
-              sheetGrabberVisible: true,
-              headerShown: false,
-            }}
-          />
-          <Stack.Screen
-            name="new-dm"
-            options={{
-              presentation: 'formSheet',
-              sheetAllowedDetents: [0.9],
-              sheetGrabberVisible: true,
-              headerShown: false,
-            }}
-          />
-          <Stack.Screen name="subscription" />
-        </Stack.Protected>
-        <Stack.Protected guard={!session?.user}>
-          <Stack.Screen name="sign-in" />
-          <Stack.Screen name="sign-up" />
-          <Stack.Screen name="forgot-password" />
-          <Stack.Screen name="reset-password" />
-        </Stack.Protected>
-        <Stack.Screen name="verify-otp" />
-        <Stack.Screen name="privacy-policy" />
-        <Stack.Screen name="terms-of-service" />
-      </Stack>
-    </ThemeProvider>
+    <View style={{ flex: 1 }}>
+      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Protected guard={!!session?.user}>
+            <Stack.Screen name="(app)" />
+            <Stack.Screen name="onboarding" />
+            <Stack.Screen name="create-task" />
+            <Stack.Screen name="create-event" />
+            <Stack.Screen name="task-detail" />
+            <Stack.Screen name="team-chat" />
+            <Stack.Screen name="dm-chat" />
+            <Stack.Screen
+              name="video-call"
+              options={{
+                headerShown: false,
+                presentation: "fullScreenModal",
+              }}
+            />
+            <Stack.Screen
+              name="create-group"
+              options={{
+                presentation: 'formSheet',
+                sheetAllowedDetents: [0.9],
+                sheetGrabberVisible: true,
+                headerShown: false,
+              }}
+            />
+            <Stack.Screen
+              name="new-dm"
+              options={{
+                presentation: 'formSheet',
+                sheetAllowedDetents: [0.9],
+                sheetGrabberVisible: true,
+                headerShown: false,
+              }}
+            />
+            <Stack.Screen name="subscription" />
+          </Stack.Protected>
+          <Stack.Protected guard={!session?.user}>
+            <Stack.Screen name="sign-in" />
+            <Stack.Screen name="sign-up" />
+            <Stack.Screen name="forgot-password" />
+            <Stack.Screen name="reset-password" />
+          </Stack.Protected>
+          <Stack.Screen name="verify-otp" />
+          <Stack.Screen name="privacy-policy" />
+          <Stack.Screen name="terms-of-service" />
+        </Stack>
+      </ThemeProvider>
+      {showSplash ? <CustomSplash onDone={() => setAnimDone(true)} /> : null}
+    </View>
   );
 }
 
