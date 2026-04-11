@@ -20,7 +20,7 @@ export const unstable_settings = {
 };
 
 const ALL_TABS = [
-  { name: "feed", label: "Feed", Icon: Activity, paidOnly: true },
+  { name: "activity", label: "Activity", Icon: Activity, paidOnly: true },
   { name: "chat", label: "Chat", Icon: MessageCircle, paidOnly: false },
   { name: "execute", label: "Execute", Icon: CheckSquare, paidOnly: true },
   { name: "team", label: "Team", Icon: Users, paidOnly: false },
@@ -217,7 +217,7 @@ export default function AppLayout() {
         tabBar={(props) => <FloatingTabBar {...props} />}
         screenOptions={{ headerShown: false, animation: 'none', sceneStyle: { backgroundColor: '#fff' } }}
       >
-        <Tabs.Screen name="feed" options={{}} />
+        <Tabs.Screen name="activity" options={{}} />
         <Tabs.Screen name="chat" options={{}} />
         <Tabs.Screen name="execute" options={{ title: "Execute" }} />
         <Tabs.Screen name="team" options={{ title: "Team" }} />

@@ -857,7 +857,7 @@ function ActivityItem({ item, activeTeamId, currentUserId, isDemo, showPicker, o
   );
 }
 
-export default function FeedScreen() {
+export default function ActivityScreen() {
   const insets = useSafeAreaInsets();
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
   const { data: session } = useSession();
@@ -937,7 +937,7 @@ export default function FeedScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#F8FAFC" }} edges={[]} testID="feed-screen">
+    <SafeAreaView style={{ flex: 1, backgroundColor: "#F8FAFC" }} edges={[]} testID="activity-screen">
       {/* Wave header */}
       {(() => {
         const W = Dimensions.get("window").width;
@@ -951,7 +951,7 @@ export default function FeedScreen() {
               style={{ paddingTop: insets.top + 12, paddingHorizontal: 16, paddingBottom: 16 + WAVE }}
             >
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                <Text style={{ color: "white", fontSize: 20, fontWeight: "800" }}>Feed</Text>
+                <Text style={{ color: "white", fontSize: 20, fontWeight: "800" }}>Activity</Text>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                   {!isDemo ? (
                     <TouchableOpacity
