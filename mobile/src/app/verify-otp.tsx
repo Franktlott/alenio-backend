@@ -60,7 +60,6 @@ export default function VerifyOtp() {
       }
     }
     await queryClient.refetchQueries({ queryKey: SESSION_QUERY_KEY });
-    setLoading(false);
     setSuccess(true);
   };
 
