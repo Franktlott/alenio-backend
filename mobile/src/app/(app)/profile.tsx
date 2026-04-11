@@ -415,7 +415,7 @@ export default function ProfileScreen() {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#F8FAFC" }} edges={["top"]} testID="profile-screen">
+    <SafeAreaView style={{ flex: 1, backgroundColor: "#F8FAFC" }} edges={[]} testID="profile-screen">
       {/* Header */}
       {(() => {
         const W = Dimensions.get("window").width;
@@ -426,7 +426,7 @@ export default function ProfileScreen() {
               colors={["#4361EE", "#7C3AED"]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
-              style={{ paddingTop: 12, paddingHorizontal: 16, paddingBottom: 16 + WAVE }}
+              style={{ paddingTop: insets.top + 12, paddingHorizontal: 16, paddingBottom: 16 + WAVE }}
             >
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
                 <Text style={{ color: "white", fontSize: 20, fontWeight: "800" }}>Profile</Text>

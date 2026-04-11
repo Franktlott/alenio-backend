@@ -515,7 +515,7 @@ export default function TeamScreen() {
   // Main render
   // ------------------------------------------------------------------
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#F8FAFC" }} edges={["top"]} testID="team-screen">
+    <SafeAreaView style={{ flex: 1, backgroundColor: "#F8FAFC" }} edges={[]} testID="team-screen">
 
       {/* ── HEADER: full-width gradient with wave bottom ── */}
       {(() => {
@@ -527,7 +527,7 @@ export default function TeamScreen() {
               colors={["#4361EE", "#7C3AED"]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
-              style={{ paddingTop: 12, paddingHorizontal: 16, paddingBottom: 16 + WAVE }}
+              style={{ paddingTop: insets.top + 12, paddingHorizontal: 16, paddingBottom: 16 + WAVE }}
             >
               <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" }}>
                 <View>
