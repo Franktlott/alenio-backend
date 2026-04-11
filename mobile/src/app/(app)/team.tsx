@@ -29,6 +29,7 @@ import {
   Camera,
   Trash2,
   Star,
+  ChevronLeft,
   ChevronRight,
   CalendarDays,
   QrCode,
@@ -357,6 +358,7 @@ export default function TeamScreen() {
 
   const [refreshing, setRefreshing] = useState(false);
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
+  const [selectedMonthIndex, setSelectedMonthIndex] = useState<number | null>(null);
   const selectedMember = team?.members?.find((m) => m.userId === selectedMemberId) ?? null;
   const selectedStats = selectedMemberId ? memberStats?.[selectedMemberId] : null;
 
@@ -390,9 +392,12 @@ export default function TeamScreen() {
     ? Math.round((totalCompleted / (totalCompleted + totalOverdue)) * 100)
     : 0;
 
-  const currentMonthStats = monthlyStats ? monthlyStats[monthlyStats.length - 1] : null;
-  const monthCompletionPct = currentMonthStats?.completionPct ?? null;
-  const monthDone = currentMonthStats?.done ?? 0;
+  const monthTotal = monthlyStats?.length ?? 0;
+  const monthIdx = selectedMonthIndex !== null ? selectedMonthIndex : monthTotal - 1;
+  const selectedMonthStats = monthlyStats ? monthlyStats[monthIdx] ?? null : null;
+  const monthCompletionPct = selectedMonthStats?.completionPct ?? null;
+  const monthDone = selectedMonthStats?.done ?? 0;
+  const monthLabel = selectedMonthStats?.label ?? "";
 
   // Alphabetically sorted member list
   const members = team?.members ?? [];
@@ -725,9 +730,29 @@ export default function TeamScreen() {
               elevation: 2,
             }}
           >
+            {/* Month navigator row */}
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+              <Pressable
+                onPress={() => setSelectedMonthIndex(Math.max(0, monthIdx - 1))}
+                disabled={monthIdx === 0}
+                style={{ padding: 4 }}
+              >
+                <ChevronLeft size={16} color={monthIdx === 0 ? "#CBD5E1" : "#4361EE"} />
+              </Pressable>
+              <Text style={{ fontSize: 11, fontWeight: "700", color: "#4361EE", letterSpacing: 0.4 }}>
+                {monthLabel}
+              </Text>
+              <Pressable
+                onPress={() => setSelectedMonthIndex(Math.min(monthTotal - 1, monthIdx + 1))}
+                disabled={monthIdx === monthTotal - 1}
+                style={{ padding: 4 }}
+              >
+                <ChevronRight size={16} color={monthIdx === monthTotal - 1 ? "#CBD5E1" : "#4361EE"} />
+              </Pressable>
+            </View>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
               <Text style={{ fontSize: 10, fontWeight: "800", color: "#94A3B8", textTransform: "uppercase", letterSpacing: 1.2 }}>
-                This Month at a Glance
+                At a Glance
               </Text>
               <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 12 }}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
@@ -804,7 +829,7 @@ export default function TeamScreen() {
                 <Text style={{ fontSize: 22, fontWeight: "900", color: "#0F172A" }}>
                   {monthCompletionPct !== null ? `${monthCompletionPct}%` : "—"}
                 </Text>
-                <Text style={{ fontSize: 10, color: "#94A3B8" }}>this month</Text>
+                <Text style={{ fontSize: 10, color: "#94A3B8" }}>{monthLabel || "this month"}</Text>
               </View>
             </View>
           </View>
