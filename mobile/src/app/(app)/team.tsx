@@ -739,17 +739,6 @@ export default function TeamScreen() {
               <Text style={{ fontSize: 10, fontWeight: "800", color: "#94A3B8", textTransform: "uppercase", letterSpacing: 1.2 }}>
                 TEAM AT A GLANCE
               </Text>
-              {(() => {
-                const currentMonth = monthlyStats?.[monthlyStats.length - 1];
-                const pct = currentMonth?.completionPct;
-                const label = currentMonth?.label ?? "";
-                return pct !== null && pct !== undefined ? (
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "#EEF2FF", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}>
-                    <Text style={{ fontSize: 13, fontWeight: "800", color: "#4361EE" }}>{pct}%</Text>
-                    <Text style={{ fontSize: 10, fontWeight: "600", color: "#6366F1" }}>{label}</Text>
-                  </View>
-                ) : null;
-              })()}
             </View>
 
             {/* Chart */}
