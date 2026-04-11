@@ -8,14 +8,6 @@ import {
   Image,
   Pressable,
 } from "react-native";
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-  withTiming,
-  withDelay,
-  runOnJS,
-} from "react-native-reanimated";
 import { authClient } from "@/lib/auth/auth-client";
 import { SESSION_QUERY_KEY } from "@/lib/auth/use-session";
 import { consumePendingSignUp } from "@/lib/auth/pending-signup";
@@ -36,41 +28,12 @@ export default function VerifyOtp() {
   const inputRef = useRef<TextInput>(null);
   const queryClient = useQueryClient();
 
-  // Animation values
-  const circleScale = useSharedValue(0);
-  const circleOpacity = useSharedValue(0);
-  const checkScale = useSharedValue(0);
-  const checkRotate = useSharedValue(-30);
-  const textOpacity = useSharedValue(0);
-
-  const circleStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: circleScale.value }],
-    opacity: circleOpacity.value,
-  }));
-
-  const checkStyle = useAnimatedStyle(() => ({
-    transform: [
-      { scale: checkScale.value },
-      { rotate: `${checkRotate.value}deg` },
-    ],
-  }));
-
-  const textStyle = useAnimatedStyle(() => ({
-    opacity: textOpacity.value,
-  }));
-
-  const navigate = () => router.replace("/(app)/team");
-
-  const runSuccessAnimation = () => {
-    setSuccess(true);
-    circleOpacity.value = withTiming(1, { duration: 150 });
-    circleScale.value = withSpring(1, { damping: 14, stiffness: 160 });
-    checkScale.value = withDelay(350, withSpring(1, { damping: 8, stiffness: 160 }));
-    checkRotate.value = withDelay(350, withSpring(0, { damping: 10, stiffness: 140 }));
-    textOpacity.value = withDelay(600, withTiming(1, { duration: 400 }));
-    // Navigate after animation + pause to let user see it
-    circleScale.value = withDelay(2600, withTiming(1, { duration: 1 }, () => runOnJS(navigate)()));
-  };
+  useEffect(() => {
+    if (success) {
+      const timer = setTimeout(() => router.replace("/(app)/team"), 1800);
+      return () => clearTimeout(timer);
+    }
+  }, [success]);
 
   const handleVerify = async () => {
     if (otp.length < 6) {
@@ -86,7 +49,6 @@ export default function VerifyOtp() {
       setOtp("");
       return;
     }
-    // verifyEmail only marks email as verified — sign in now
     const creds = consumePendingSignUp();
     if (creds) {
       const signInResult = await authClient.signIn.email({ email: creds.email, password: creds.password });
@@ -99,17 +61,14 @@ export default function VerifyOtp() {
     }
     await queryClient.refetchQueries({ queryKey: SESSION_QUERY_KEY });
     setLoading(false);
-    runSuccessAnimation();
+    setSuccess(true);
   };
 
   const handleResend = async () => {
     setResending(true);
     setError(null);
     setResent(false);
-    await authClient.emailOtp.sendVerificationOtp({
-      email: email ?? "",
-      type: "email-verification",
-    });
+    await authClient.emailOtp.sendVerificationOtp({ email: email ?? "", type: "email-verification" });
     setResending(false);
     setResent(true);
     setOtp("");
@@ -117,130 +76,84 @@ export default function VerifyOtp() {
 
   const digits = otp.split("").concat(Array(6).fill("")).slice(0, 6);
 
+  if (success) {
+    return (
+      <View style={{ flex: 1, backgroundColor: "white", alignItems: "center", justifyContent: "center" }}>
+        <StatusBar style="dark" />
+        <View style={{ width: 96, height: 96, borderRadius: 48, backgroundColor: "#22C55E", alignItems: "center", justifyContent: "center", marginBottom: 24 }}>
+          <Text style={{ fontSize: 48, color: "white", lineHeight: 56 }}>✓</Text>
+        </View>
+        <Text style={{ fontSize: 24, fontWeight: "800", color: "#0F172A", marginBottom: 8 }}>Email verified!</Text>
+        <Text style={{ fontSize: 16, color: "#64748B" }}>Taking you to the app…</Text>
+      </View>
+    );
+  }
+
   return (
     <View style={{ flex: 1, backgroundColor: "white" }}>
       <StatusBar style="light" />
       <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
         <SafeAreaView edges={["top"]}>
           <View className="items-center py-10 px-6">
-            <Image
-              source={require("@/assets/alenio-logo-white.png")}
-              style={{ width: 200, height: 72 }}
-              resizeMode="contain"
-            />
+            <Image source={require("@/assets/alenio-logo-white.png")} style={{ width: 200, height: 72 }} resizeMode="contain" />
             <Text className="text-white/80 text-base mt-2">Connect. Execute. Celebrate.</Text>
           </View>
         </SafeAreaView>
       </LinearGradient>
 
       <View className="flex-1 items-center justify-center px-8">
-        {success ? (
-          <View className="items-center">
-            <Animated.View
-              style={[
-                circleStyle,
-                {
-                  width: 100,
-                  height: 100,
-                  borderRadius: 50,
-                  backgroundColor: "#22C55E",
-                  alignItems: "center",
-                  justifyContent: "center",
-                },
-              ]}
-            >
-              <Animated.Text style={[checkStyle, { fontSize: 52, color: "white", lineHeight: 56 }]}>
-                ✓
-              </Animated.Text>
-            </Animated.View>
-            <Animated.View style={textStyle} className="items-center mt-6">
-              <Text className="text-2xl font-bold text-slate-900 mb-2">Email verified!</Text>
-              <Text className="text-slate-500 text-base text-center">Taking you to the app…</Text>
-            </Animated.View>
-          </View>
-        ) : (
-          <>
-            <Text style={{ fontSize: 48 }}>📬</Text>
-            <Text className="text-2xl font-bold text-slate-900 dark:text-white mt-4 mb-2 text-center">
-              Check your email
-            </Text>
-            <Text className="text-slate-500 dark:text-slate-400 text-base text-center mb-8">
-              We sent a 6-digit code to{"\n"}
-              <Text className="font-semibold text-slate-700 dark:text-slate-200">{email}</Text>
-            </Text>
+        <Text style={{ fontSize: 48 }}>📬</Text>
+        <Text className="text-2xl font-bold text-slate-900 mt-4 mb-2 text-center">Check your email</Text>
+        <Text className="text-slate-500 text-base text-center mb-8">
+          We sent a 6-digit code to{"\n"}
+          <Text className="font-semibold text-slate-700">{email}</Text>
+        </Text>
 
-            <Pressable onPress={() => inputRef.current?.focus()} className="w-full mb-6">
-              <View className="flex-row justify-center gap-3">
-                {digits.map((d, i) => (
-                  <View
-                    key={i}
-                    className={`w-12 h-14 rounded-xl items-center justify-center border-2 ${
-                      otp.length === i
-                        ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-950"
-                        : d
-                        ? "border-indigo-300 bg-white dark:bg-slate-800"
-                        : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800"
-                    }`}
-                  >
-                    <Text className="text-2xl font-bold text-slate-900 dark:text-white">{d}</Text>
-                  </View>
-                ))}
+        <Pressable onPress={() => inputRef.current?.focus()} className="w-full mb-6">
+          <View className="flex-row justify-center gap-3">
+            {digits.map((d, i) => (
+              <View
+                key={i}
+                className={`w-12 h-14 rounded-xl items-center justify-center border-2 ${
+                  otp.length === i ? "border-indigo-500 bg-indigo-50" : d ? "border-indigo-300 bg-white" : "border-slate-200 bg-white"
+                }`}
+              >
+                <Text className="text-2xl font-bold text-slate-900">{d}</Text>
               </View>
-              <TextInput
-                ref={inputRef}
-                value={otp}
-                onChangeText={(t) => {
-                  setError(null);
-                  setOtp(t.replace(/[^0-9]/g, "").slice(0, 6));
-                }}
-                keyboardType="number-pad"
-                maxLength={6}
-                autoFocus
-                style={{ position: "absolute", opacity: 0, width: 1, height: 1 }}
-                testID="otp-input"
-              />
-            </Pressable>
+            ))}
+          </View>
+          <TextInput
+            ref={inputRef}
+            value={otp}
+            onChangeText={(t) => { setError(null); setOtp(t.replace(/[^0-9]/g, "").slice(0, 6)); }}
+            keyboardType="number-pad"
+            maxLength={6}
+            autoFocus
+            style={{ position: "absolute", opacity: 0, width: 1, height: 1 }}
+            testID="otp-input"
+          />
+        </Pressable>
 
-            {error ? (
-              <Text className="text-red-500 text-sm mb-4 text-center" testID="error-message">{error}</Text>
-            ) : null}
+        {error ? <Text className="text-red-500 text-sm mb-4 text-center">{error}</Text> : null}
+        {resent ? <Text className="text-green-600 text-sm mb-4 text-center">Code resent! Check your inbox.</Text> : null}
 
-            {resent ? (
-              <Text className="text-green-600 text-sm mb-4 text-center">Code resent! Check your inbox.</Text>
-            ) : null}
+        <TouchableOpacity
+          className="bg-indigo-600 rounded-xl py-4 items-center w-full mb-4"
+          onPress={handleVerify}
+          disabled={loading || otp.length < 6}
+          activeOpacity={0.8}
+          testID="verify-button"
+        >
+          {loading ? <ActivityIndicator color="white" /> : <Text className="text-white font-semibold text-base">Verify Email</Text>}
+        </TouchableOpacity>
 
-            <TouchableOpacity
-              className="bg-indigo-600 rounded-xl py-4 items-center w-full mb-4"
-              onPress={handleVerify}
-              disabled={loading || otp.length < 6}
-              activeOpacity={0.8}
-              testID="verify-button"
-            >
-              {loading ? (
-                <ActivityIndicator color="white" />
-              ) : (
-                <Text className="text-white font-semibold text-base">Verify Email</Text>
-              )}
-            </TouchableOpacity>
+        <TouchableOpacity onPress={handleResend} disabled={resending} className="py-2">
+          {resending ? <ActivityIndicator color="#6366F1" size="small" /> : <Text className="text-indigo-600 text-sm font-medium">Didn't get a code? Resend</Text>}
+        </TouchableOpacity>
 
-            <TouchableOpacity
-              onPress={handleResend}
-              disabled={resending}
-              className="py-2"
-              testID="resend-button"
-            >
-              {resending ? (
-                <ActivityIndicator color="#6366F1" size="small" />
-              ) : (
-                <Text className="text-indigo-600 text-sm font-medium">Didn't get a code? Resend</Text>
-              )}
-            </TouchableOpacity>
-
-            <TouchableOpacity onPress={() => router.replace("/sign-in")} className="mt-4 py-2">
-              <Text className="text-slate-400 text-sm">Back to sign in</Text>
-            </TouchableOpacity>
-          </>
-        )}
+        <TouchableOpacity onPress={() => router.replace("/sign-in")} className="mt-4 py-2">
+          <Text className="text-slate-400 text-sm">Back to sign in</Text>
+        </TouchableOpacity>
       </View>
 
       <View style={{ alignItems: "center", paddingBottom: 16 }}>
