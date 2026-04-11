@@ -268,7 +268,8 @@ export default function ChatScreen() {
               style={{ paddingTop: insets.top + 12, paddingHorizontal: 16, paddingBottom: 16 + WAVE }}
             >
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                <Text style={{ color: "white", fontSize: 20, fontWeight: "800" }}>Chat</Text>
+                <Text style={{ color: "white", fontSize: 20, fontWeight: "800", flex: 1 }}>Chat</Text>
+                <Image source={require("@/assets/alenio-icon.png")} style={{ width: 30, height: 30, borderRadius: 7, position: "absolute", left: "50%", transform: [{ translateX: -15 }] }} />
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                   {activeTeamId && !isDemo ? (
                     <Pressable
@@ -280,7 +281,6 @@ export default function ChatScreen() {
                       <Text style={{ color: "white", fontSize: 12, fontWeight: "600" }}>Add</Text>
                     </Pressable>
                   ) : null}
-                  <Image source={require("@/assets/alenio-icon.png")} style={{ width: 26, height: 26, borderRadius: 6 }} />
                 </View>
               </View>
             </LinearGradient>
