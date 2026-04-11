@@ -34,7 +34,7 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
   const lastReadIds = useUnreadStore((s) => s.lastReadIds);
   const plan = useSubscriptionStore((s) => s.plan);
   const isPro = useSubscriptionStore((s) => s.isPro);
-  const isPaid = plan === "team" || plan === "pro";
+  const isPaid = plan === "team";
   const acknowledgedCounts = useTaskStore((s) => s.acknowledgedCounts);
 
   const { data: conversations = [] } = useQuery({
@@ -195,7 +195,7 @@ export default function AppLayout() {
   });
 
   useEffect(() => {
-    if (subscription) setPlan(subscription.plan as "free" | "team" | "pro");
+    if (subscription) setPlan(subscription.plan as "free" | "team");
   }, [subscription]);
 
   useEffect(() => {
@@ -206,7 +206,7 @@ export default function AppLayout() {
 
   // Free plan only gets chat, team, profile
   // Demo users get all tabs
-  const isPaid = plan === "team" || plan === "pro";
+  const isPaid = plan === "team";
   const hidePaidTabs = !isPaid && !isDemo;
 
   return (

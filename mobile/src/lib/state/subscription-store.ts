@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-export type Plan = "free" | "team" | "pro";
+export type Plan = "free" | "team";
 
 interface SubscriptionStore {
   plan: Plan;
@@ -16,7 +16,7 @@ export const useSubscriptionStore = create<SubscriptionStore>()(
     (set) => ({
       plan: "free",
       isPro: false,
-      setPlan: (plan) => set({ plan, isPro: plan === "pro" }),
+      setPlan: (plan) => set({ plan, isPro: false }),
       setIsPro: (isPro) => set({ isPro }),
     }),
     {

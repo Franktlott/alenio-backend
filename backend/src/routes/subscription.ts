@@ -44,7 +44,6 @@ subscriptionRouter.get("/", async (c) => {
 export const PLAN_PRICING: Record<string, { price: number; memberLimit: number }> = {
   free: { price: 0, memberLimit: 10 },
   team: { price: 19, memberLimit: 25 },
-  pro: { price: 39, memberLimit: 75 },
 };
 
 // POST /api/teams/:teamId/subscription/upgrade
@@ -63,10 +62,10 @@ subscriptionRouter.post("/upgrade", async (c) => {
   }
 
   const body = await c.req.json().catch(() => ({}));
-  const plan: string = body.plan === "team" ? "team" : "pro";
+  const plan: string = body.plan === "team" ? "team" : body.plan;
 
-  if (!PLAN_PRICING[plan]) {
-    return c.json({ error: { message: "Invalid plan. Must be 'team' or 'pro'", code: "VALIDATION_ERROR" } }, 400);
+  if (!plan || !PLAN_PRICING[plan] || plan === "free") {
+    return c.json({ error: { message: "Invalid plan. Must be 'team'", code: "VALIDATION_ERROR" } }, 400);
   }
 
   const currentPeriodEnd = new Date();

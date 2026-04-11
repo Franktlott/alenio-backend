@@ -19,14 +19,14 @@ import { useTeamStore } from "@/lib/state/team-store";
 import { toast } from "burnt";
 
 type Subscription = {
-  plan: "free" | "team" | "pro";
+  plan: "free" | "team";
   status: string;
   currentPeriodEnd: string | null;
 };
 
-type TierPlan = "free" | "team" | "pro";
+type TierPlan = "free" | "team";
 
-const TIER_ORDER: TierPlan[] = ["free", "team", "pro"];
+const TIER_ORDER: TierPlan[] = ["free", "team"];
 
 function planRank(plan: TierPlan): number {
   return TIER_ORDER.indexOf(plan);
@@ -82,20 +82,6 @@ const TIERS: TierConfig[] = [
       { label: "Team Calendar" },
     ],
   },
-  {
-    id: "pro",
-    name: "Pro",
-    price: "$39",
-    priceSubtext: "/mo",
-    memberLimit: "Up to 75 members",
-    accentColor: "#7C3AED",
-    badgeLabel: null,
-    features: [
-      { label: "Everything in Team" },
-      { label: "Analytics & insights", comingSoon: true },
-      { label: "Priority support" },
-    ],
-  },
 ];
 
 export default function SubscriptionScreen() {
@@ -116,8 +102,7 @@ export default function SubscriptionScreen() {
       api.post(`/api/teams/${activeTeamId}/subscription/upgrade`, { plan }),
     onSuccess: (_data, plan) => {
       queryClient.invalidateQueries({ queryKey: ["subscription", activeTeamId] });
-      const label = plan === "team" ? "Team" : "Pro";
-      toast({ title: `Upgraded to ${label}!`, preset: "done" });
+      toast({ title: `Upgraded to Team!`, preset: "done" });
     },
     onError: (e: any) => {
       toast({ title: e?.message ?? "Upgrade failed. Please try again.", preset: "error" });
@@ -139,7 +124,6 @@ export default function SubscriptionScreen() {
   const currentTier = TIERS.find((t) => t.id === currentPlan) ?? TIERS[0];
 
   function planBadgeColors(plan: TierPlan) {
-    if (plan === "pro") return { bg: "#F3E8FF", border: "#C4B5FD", text: "#7C3AED" };
     if (plan === "team") return { bg: "#EFF6FF", border: "#BFDBFE", text: "#4361EE" };
     return { bg: "#F1F5F9", border: "#E2E8F0", text: "#64748B" };
   }
@@ -461,11 +445,7 @@ export default function SubscriptionScreen() {
                     }}
                   >
                     <LinearGradient
-                      colors={
-                        tier.id === "pro"
-                          ? ["#7C3AED", "#9F67F0"]
-                          : ["#4361EE", "#5B78F5"]
-                      }
+                      colors={["#4361EE", "#5B78F5"]}
                       start={{ x: 0, y: 0 }}
                       end={{ x: 1, y: 0 }}
                       style={{

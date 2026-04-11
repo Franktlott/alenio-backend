@@ -20,13 +20,13 @@ export function initRevenueCat(userId?: string) {
   }
 }
 
-export async function purchasePro(): Promise<{ success: boolean; error?: string }> {
+export async function purchaseTeam(): Promise<{ success: boolean; error?: string }> {
   try {
     const offerings = await Purchases.getOfferings();
     const pkg = offerings.current?.availablePackages?.[0];
     if (!pkg) return { success: false, error: "No offerings available. Check RevenueCat dashboard." };
     const { customerInfo } = await Purchases.purchasePackage(pkg);
-    const isActive = typeof customerInfo.entitlements.active["pro"] !== "undefined";
+    const isActive = typeof customerInfo.entitlements.active["team"] !== "undefined";
     return { success: isActive };
   } catch (e: any) {
     if (e?.userCancelled) return { success: false, error: "cancelled" };
@@ -34,12 +34,12 @@ export async function purchasePro(): Promise<{ success: boolean; error?: string 
   }
 }
 
-export async function restorePurchases(): Promise<{ success: boolean; isPro: boolean }> {
+export async function restorePurchases(): Promise<{ success: boolean; isTeam: boolean }> {
   try {
     const customerInfo = await Purchases.restorePurchases();
-    const isPro = typeof customerInfo.entitlements.active["pro"] !== "undefined";
-    return { success: true, isPro };
+    const isTeam = typeof customerInfo.entitlements.active["team"] !== "undefined";
+    return { success: true, isTeam };
   } catch (e) {
-    return { success: false, isPro: false };
+    return { success: false, isTeam: false };
   }
 }
