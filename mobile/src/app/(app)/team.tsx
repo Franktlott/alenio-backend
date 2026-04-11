@@ -498,6 +498,24 @@ export default function TeamScreen() {
   // ------------------------------------------------------------------
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#F0F4FF" }} edges={["top"]} testID="team-screen">
+      <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+        <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 14 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+            <View>
+              <Text style={{ color: "white", fontSize: 18, fontWeight: "700" }}>Team</Text>
+              <Text style={{ color: "rgba(255,255,255,0.7)", fontSize: 11, fontWeight: "500", marginTop: 1 }}>
+                {team?.name ?? ""}
+              </Text>
+            </View>
+            {isPaid ? (
+              <View style={{ alignItems: "flex-end" }}>
+                <Text style={{ color: "white", fontSize: 22, fontWeight: "900" }}>{weekCompletionPct}%</Text>
+                <Text style={{ color: "rgba(255,255,255,0.7)", fontSize: 10, fontWeight: "600" }}>this week</Text>
+              </View>
+            ) : null}
+          </View>
+        </View>
+      </LinearGradient>
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: insets.bottom + 96 }}
@@ -575,25 +593,15 @@ export default function TeamScreen() {
 
             {/* Middle: name + invite code + subtitle */}
             <View style={{ flex: 1 }}>
-              <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" }}>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 18, fontWeight: "900", color: "#1E293B", letterSpacing: 3 }}>
-                    {team?.inviteCode}
-                  </Text>
-                  <Text style={{ fontSize: 13, fontWeight: "700", color: "#1E293B", marginTop: 1 }}>
-                    {team?.name ?? "Team"}
-                  </Text>
-                  <Text style={{ fontSize: 11, color: "#64748B", marginTop: 1 }}>
-                    Share this code to invite team members
-                  </Text>
-                </View>
-                {isPaid ? (
-                  <View style={{ alignItems: "flex-end", marginLeft: 8 }}>
-                    <Text style={{ fontSize: 22, fontWeight: "900", color: "#4361EE" }}>{weekCompletionPct}%</Text>
-                    <Text style={{ fontSize: 10, color: "#64748B", fontWeight: "600" }}>this week</Text>
-                  </View>
-                ) : null}
-              </View>
+              <Text style={{ fontSize: 18, fontWeight: "900", color: "#1E293B", letterSpacing: 3 }}>
+                {team?.inviteCode}
+              </Text>
+              <Text style={{ fontSize: 13, fontWeight: "700", color: "#1E293B", marginTop: 1 }}>
+                {team?.name ?? "Team"}
+              </Text>
+              <Text style={{ fontSize: 11, color: "#64748B", marginTop: 1 }}>
+                Share this code to invite team members
+              </Text>
             </View>
 
             {/* Right: 3 icon buttons stacked */}
