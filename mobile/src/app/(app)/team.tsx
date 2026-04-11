@@ -64,10 +64,10 @@ type JoinRequest = {
 // Line chart component
 // ------------------------------------------------------------------
 const CHART_W = 280;
-const CHART_H = 110;
+const CHART_H = 80;
 const CHART_PAD_L = 36;
 const CHART_PAD_B = 24;
-const CHART_PAD_T = 10;
+const CHART_PAD_T = 6;
 const CHART_PAD_R = 12;
 
 const weeklyData = [60, 65, 77, 79, 84, 98];
@@ -201,8 +201,8 @@ function LeaderboardRow({
       style={{
         flexDirection: "row",
         alignItems: "center",
-        paddingHorizontal: 16,
-        paddingVertical: 12,
+        paddingHorizontal: 14,
+        paddingVertical: 8,
         borderBottomWidth: 1,
         borderBottomColor: "#F0F4FF",
         backgroundColor: isCurrentUser ? "#F0F4FF" : "white",
@@ -613,19 +613,20 @@ export default function TeamScreen() {
         {/* ── 1. HEADER CARD ─────────────────────────────────────────── */}
         <View
           style={{
-            margin: 16,
-            borderRadius: 24,
+            margin: 12,
+            borderRadius: 20,
             backgroundColor: "#E0E9FF",
-            padding: 20,
+            padding: 14,
             shadowColor: "#4361EE",
             shadowOpacity: 0.1,
-            shadowRadius: 16,
+            shadowRadius: 12,
             shadowOffset: { width: 0, height: 4 },
             elevation: 4,
           }}
         >
-          {/* Team avatar */}
-          <View style={{ alignItems: "center", marginBottom: 14 }}>
+          {/* Horizontal row: avatar | name+code | buttons */}
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+            {/* Avatar */}
             <TouchableOpacity
               onPress={() => isOwner && !isDemo ? setPhotoMenuOpen(true) : undefined}
               disabled={uploadingTeamImage}
@@ -634,23 +635,23 @@ export default function TeamScreen() {
             >
               <View
                 style={{
-                  width: 88,
-                  height: 88,
-                  borderRadius: 44,
+                  width: 64,
+                  height: 64,
+                  borderRadius: 32,
                   backgroundColor: "#4361EE30",
                   alignItems: "center",
                   justifyContent: "center",
                   overflow: "hidden",
-                  borderWidth: 3,
+                  borderWidth: 2,
                   borderColor: "#4361EE50",
                 }}
               >
                 {uploadingTeamImage ? (
                   <ActivityIndicator color="#4361EE" />
                 ) : team?.image ? (
-                  <Image source={{ uri: team.image }} style={{ width: 88, height: 88 }} resizeMode="cover" />
+                  <Image source={{ uri: team.image }} style={{ width: 64, height: 64 }} resizeMode="cover" />
                 ) : (
-                  <Text style={{ color: "#4361EE", fontWeight: "900", fontSize: 36 }}>
+                  <Text style={{ color: "#4361EE", fontWeight: "900", fontSize: 26 }}>
                     {team?.name?.[0]?.toUpperCase() ?? "T"}
                   </Text>
                 )}
@@ -659,79 +660,63 @@ export default function TeamScreen() {
                 <View
                   style={{
                     position: "absolute",
-                    bottom: 2,
-                    right: 2,
-                    width: 26,
-                    height: 26,
-                    borderRadius: 13,
+                    bottom: 1,
+                    right: 1,
+                    width: 20,
+                    height: 20,
+                    borderRadius: 10,
                     backgroundColor: "#4361EE",
                     alignItems: "center",
                     justifyContent: "center",
-                    borderWidth: 2,
+                    borderWidth: 1.5,
                     borderColor: "#E0E9FF",
                   }}
                 >
-                  <Camera size={13} color="white" />
+                  <Camera size={10} color="white" />
                 </View>
               ) : null}
             </TouchableOpacity>
 
-            <Text style={{ fontSize: 22, fontWeight: "900", color: "#1E293B", marginTop: 10, textAlign: "center" }}>
-              {team?.name ?? "Team"}
-            </Text>
-            <Text style={{ fontSize: 12, color: "#64748B", marginTop: 2 }}>
-              {members.length} member{members.length !== 1 ? "s" : ""}
-            </Text>
-          </View>
-
-          {/* Invite code */}
-          <View
-            style={{
-              backgroundColor: "rgba(67,97,238,0.1)",
-              borderRadius: 16,
-              padding: 14,
-              marginBottom: 14,
-              borderWidth: 1,
-              borderColor: "rgba(67,97,238,0.18)",
-            }}
-          >
-            <Text style={{ fontSize: 10, fontWeight: "700", color: "#4361EE", textTransform: "uppercase", letterSpacing: 1.2, marginBottom: 4 }}>
-              Invite Code
-            </Text>
-            <Text style={{ fontSize: 30, fontWeight: "900", color: "#4361EE", letterSpacing: 6, textAlign: "center" }}>
-              {team?.inviteCode}
-            </Text>
-          </View>
-
-          {/* 3 icon buttons */}
-          {!isDemo ? (
-            <View style={{ flexDirection: "row", gap: 10 }}>
-              <Pressable
-                onPress={handleCopyCode}
-                style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 12, borderRadius: 14, backgroundColor: "white", borderWidth: 1, borderColor: "#C7D2FE" }}
-                testID="copy-invite-code"
-              >
-                <Copy size={16} color="#4361EE" />
-                <Text style={{ fontSize: 13, fontWeight: "700", color: "#4361EE" }}>Copy</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => setQrModalOpen(true)}
-                style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 12, borderRadius: 14, backgroundColor: "white", borderWidth: 1, borderColor: "#C7D2FE" }}
-                testID="qr-invite-code"
-              >
-                <QrCode size={16} color="#4361EE" />
-                <Text style={{ fontSize: 13, fontWeight: "700", color: "#4361EE" }}>QR</Text>
-              </Pressable>
-              <Pressable
-                onPress={handleShareCode}
-                style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 12, borderRadius: 14, backgroundColor: "#4361EE" }}
-                testID="share-invite-code"
-              >
-                <UserPlus size={16} color="white" />
-                <Text style={{ fontSize: 13, fontWeight: "700", color: "white" }}>Invite</Text>
-              </Pressable>
+            {/* Middle: name + invite code + subtitle */}
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 18, fontWeight: "900", color: "#1E293B", letterSpacing: 3 }}>
+                {team?.inviteCode}
+              </Text>
+              <Text style={{ fontSize: 13, fontWeight: "700", color: "#1E293B", marginTop: 1 }}>
+                {team?.name ?? "Team"}
+              </Text>
+              <Text style={{ fontSize: 11, color: "#64748B", marginTop: 1 }}>
+                Share this code to invite team members
+              </Text>
             </View>
-          ) : null}
+
+            {/* Right: 3 icon buttons stacked */}
+            {!isDemo ? (
+              <View style={{ gap: 6 }}>
+                <Pressable
+                  onPress={handleCopyCode}
+                  style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: "white", borderWidth: 1, borderColor: "#C7D2FE", alignItems: "center", justifyContent: "center" }}
+                  testID="copy-invite-code"
+                >
+                  <Copy size={16} color="#4361EE" />
+                </Pressable>
+                <Pressable
+                  onPress={() => setQrModalOpen(true)}
+                  style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: "white", borderWidth: 1, borderColor: "#C7D2FE", alignItems: "center", justifyContent: "center" }}
+                  testID="qr-invite-code"
+                >
+                  <QrCode size={16} color="#4361EE" />
+                </Pressable>
+                <Pressable
+                  onPress={handleShareCode}
+                  style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: "#4361EE", alignItems: "center", justifyContent: "center" }}
+                  testID="share-invite-code"
+                >
+                  <UserPlus size={16} color="white" />
+                </Pressable>
+              </View>
+            ) : null}
+          </View>
         </View>
 
         {/* ── Pending join requests (owner only) ────────────────────── */}
@@ -808,58 +793,33 @@ export default function TeamScreen() {
         {/* ── 2. THIS WEEK AT A GLANCE ───────────────────────────────── */}
         <View
           style={{
-            marginHorizontal: 16,
-            marginBottom: 12,
-            borderRadius: 20,
+            marginHorizontal: 12,
+            marginBottom: 8,
+            borderRadius: 14,
             backgroundColor: "white",
-            padding: 18,
+            paddingHorizontal: 14,
+            paddingVertical: 10,
             shadowColor: "#000",
             shadowOpacity: 0.05,
-            shadowRadius: 10,
+            shadowRadius: 8,
             shadowOffset: { width: 0, height: 2 },
             elevation: 2,
           }}
         >
-          <Text style={{ fontSize: 10, fontWeight: "800", color: "#94A3B8", textTransform: "uppercase", letterSpacing: 1.2, marginBottom: 14 }}>
-            This Week at a Glance
-          </Text>
-          <View style={{ flexDirection: "row", gap: 12 }}>
-            <View
-              style={{
-                flex: 1,
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 10,
-                backgroundColor: "#F0FDF4",
-                borderRadius: 14,
-                padding: 14,
-              }}
-            >
-              <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#22C55E20", alignItems: "center", justifyContent: "center" }}>
-                <Check size={18} color="#22C55E" />
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+            <Text style={{ fontSize: 10, fontWeight: "800", color: "#94A3B8", textTransform: "uppercase", letterSpacing: 1.2 }}>
+              This Week at a Glance
+            </Text>
+            <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 12 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                <Check size={13} color="#22C55E" />
+                <Text style={{ fontSize: 13, fontWeight: "800", color: "#15803D" }}>{totalCompleted}</Text>
+                <Text style={{ fontSize: 11, color: "#16A34A", fontWeight: "600" }}>tasks completed</Text>
               </View>
-              <View>
-                <Text style={{ fontSize: 22, fontWeight: "900", color: "#15803D" }}>{totalCompleted}</Text>
-                <Text style={{ fontSize: 11, fontWeight: "600", color: "#16A34A" }}>tasks completed</Text>
-              </View>
-            </View>
-            <View
-              style={{
-                flex: 1,
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 10,
-                backgroundColor: totalOverdue > 0 ? "#FEF2F2" : "#F8FAFC",
-                borderRadius: 14,
-                padding: 14,
-              }}
-            >
-              <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: totalOverdue > 0 ? "#EF444420" : "#F1F5F9", alignItems: "center", justifyContent: "center" }}>
-                <AlertTriangle size={18} color={totalOverdue > 0 ? "#EF4444" : "#94A3B8"} />
-              </View>
-              <View>
-                <Text style={{ fontSize: 22, fontWeight: "900", color: totalOverdue > 0 ? "#DC2626" : "#94A3B8" }}>{totalOverdue}</Text>
-                <Text style={{ fontSize: 11, fontWeight: "600", color: totalOverdue > 0 ? "#EF4444" : "#94A3B8" }}>overdue</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                <AlertTriangle size={12} color={totalOverdue > 0 ? "#EF4444" : "#94A3B8"} />
+                <Text style={{ fontSize: 13, fontWeight: "800", color: totalOverdue > 0 ? "#DC2626" : "#94A3B8" }}>{totalOverdue}</Text>
+                <Text style={{ fontSize: 11, color: totalOverdue > 0 ? "#EF4444" : "#94A3B8", fontWeight: "600" }}>overdue</Text>
               </View>
             </View>
           </View>
@@ -868,21 +828,21 @@ export default function TeamScreen() {
         {/* ── 3. TEAM PERFORMANCE CHART ─────────────────────────────── */}
         <View
           style={{
-            marginHorizontal: 16,
-            marginBottom: 12,
-            borderRadius: 20,
+            marginHorizontal: 12,
+            marginBottom: 8,
+            borderRadius: 16,
             backgroundColor: "white",
-            paddingTop: 18,
-            paddingBottom: 16,
-            paddingHorizontal: 16,
+            paddingTop: 12,
+            paddingBottom: 10,
+            paddingHorizontal: 14,
             shadowColor: "#000",
             shadowOpacity: 0.05,
-            shadowRadius: 10,
+            shadowRadius: 8,
             shadowOffset: { width: 0, height: 2 },
             elevation: 2,
           }}
         >
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
             <View>
               <Text style={{ fontSize: 10, fontWeight: "800", color: "#94A3B8", textTransform: "uppercase", letterSpacing: 1.2 }}>
                 Team Performance
@@ -913,14 +873,14 @@ export default function TeamScreen() {
 
           <View
             style={{
-              marginTop: 12,
+              marginTop: 8,
               flexDirection: "row",
               alignItems: "center",
               gap: 6,
               backgroundColor: "#F0FDF4",
-              borderRadius: 10,
-              paddingHorizontal: 12,
-              paddingVertical: 8,
+              borderRadius: 8,
+              paddingHorizontal: 10,
+              paddingVertical: 6,
             }}
           >
             <Text style={{ fontSize: 14, color: "#22C55E" }}>↑</Text>
@@ -931,110 +891,100 @@ export default function TeamScreen() {
         </View>
 
         {/* ── 4. KPI METRIC CARDS ───────────────────────────────────── */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={{ flexGrow: 0 }}
-          contentContainerStyle={{ paddingHorizontal: 16, gap: 10, paddingBottom: 4 }}
-        >
+        <View style={{ flexDirection: "row", marginHorizontal: 12, marginBottom: 8, gap: 8 }}>
           {/* Completion Rate */}
           <View
             style={{
-              width: 150,
+              flex: 1,
               backgroundColor: "white",
-              borderRadius: 18,
-              padding: 16,
-              marginBottom: 12,
+              borderRadius: 14,
+              padding: 12,
               shadowColor: "#000",
               shadowOpacity: 0.05,
-              shadowRadius: 8,
+              shadowRadius: 6,
               shadowOffset: { width: 0, height: 2 },
               elevation: 2,
             }}
           >
-            <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#F0FDF4", alignItems: "center", justifyContent: "center", marginBottom: 10 }}>
-              <CheckCircle2 size={18} color="#22C55E" />
+            <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: "#F0FDF4", alignItems: "center", justifyContent: "center", marginBottom: 6 }}>
+              <CheckCircle2 size={14} color="#22C55E" />
             </View>
-            <Text style={{ fontSize: 10, fontWeight: "700", color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 4 }}>
-              Completion Rate
+            <Text style={{ fontSize: 9, fontWeight: "700", color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 2 }}>
+              Completion
             </Text>
-            <Text style={{ fontSize: 22, fontWeight: "900", color: "#0F172A" }}>87%</Text>
-            <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 2 }}>this week</Text>
-            <View style={{ marginTop: 8, flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: "#F0FDF4", borderRadius: 8, paddingHorizontal: 7, paddingVertical: 3, alignSelf: "flex-start" }}>
-              <Text style={{ fontSize: 10, fontWeight: "700", color: "#22C55E" }}>▲ +5%</Text>
+            <Text style={{ fontSize: 18, fontWeight: "900", color: "#0F172A" }}>87%</Text>
+            <Text style={{ fontSize: 10, color: "#94A3B8" }}>this week</Text>
+            <View style={{ marginTop: 5, backgroundColor: "#F0FDF4", borderRadius: 6, paddingHorizontal: 5, paddingVertical: 2, alignSelf: "flex-start" }}>
+              <Text style={{ fontSize: 9, fontWeight: "700", color: "#22C55E" }}>▲ +5%</Text>
             </View>
-            <Text style={{ fontSize: 9, color: "#94A3B8", marginTop: 2 }}>vs last week</Text>
           </View>
 
           {/* Execution Speed */}
           <View
             style={{
-              width: 150,
+              flex: 1,
               backgroundColor: "white",
-              borderRadius: 18,
-              padding: 16,
-              marginBottom: 12,
+              borderRadius: 14,
+              padding: 12,
               shadowColor: "#000",
               shadowOpacity: 0.05,
-              shadowRadius: 8,
+              shadowRadius: 6,
               shadowOffset: { width: 0, height: 2 },
               elevation: 2,
             }}
           >
-            <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#FFF7ED", alignItems: "center", justifyContent: "center", marginBottom: 10 }}>
-              <Zap size={18} color="#F59E0B" />
+            <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: "#FFF7ED", alignItems: "center", justifyContent: "center", marginBottom: 6 }}>
+              <Zap size={14} color="#F59E0B" />
             </View>
-            <Text style={{ fontSize: 10, fontWeight: "700", color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 4 }}>
-              Execution Speed
+            <Text style={{ fontSize: 9, fontWeight: "700", color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 2 }}>
+              Speed
             </Text>
-            <Text style={{ fontSize: 22, fontWeight: "900", color: "#0F172A" }}>2.3h</Text>
-            <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 2 }}>per task</Text>
-            <View style={{ marginTop: 8, flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: "#F0FDF4", borderRadius: 8, paddingHorizontal: 7, paddingVertical: 3, alignSelf: "flex-start" }}>
-              <Text style={{ fontSize: 10, fontWeight: "700", color: "#22C55E" }}>▲ 18%</Text>
+            <Text style={{ fontSize: 18, fontWeight: "900", color: "#0F172A" }}>2.3h</Text>
+            <Text style={{ fontSize: 10, color: "#94A3B8" }}>per task</Text>
+            <View style={{ marginTop: 5, backgroundColor: "#F0FDF4", borderRadius: 6, paddingHorizontal: 5, paddingVertical: 2, alignSelf: "flex-start" }}>
+              <Text style={{ fontSize: 9, fontWeight: "700", color: "#22C55E" }}>▲ 18%</Text>
             </View>
-            <Text style={{ fontSize: 9, color: "#94A3B8", marginTop: 2 }}>faster</Text>
           </View>
 
           {/* Consistency */}
           <View
             style={{
-              width: 150,
+              flex: 1,
               backgroundColor: "white",
-              borderRadius: 18,
-              padding: 16,
-              marginBottom: 12,
+              borderRadius: 14,
+              padding: 12,
               shadowColor: "#000",
               shadowOpacity: 0.05,
-              shadowRadius: 8,
+              shadowRadius: 6,
               shadowOffset: { width: 0, height: 2 },
               elevation: 2,
             }}
           >
-            <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#FFF1F0", alignItems: "center", justifyContent: "center", marginBottom: 10 }}>
-              <Flame size={18} color="#F97316" />
+            <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: "#FFF1F0", alignItems: "center", justifyContent: "center", marginBottom: 6 }}>
+              <Flame size={14} color="#F97316" />
             </View>
-            <Text style={{ fontSize: 10, fontWeight: "700", color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 4 }}>
+            <Text style={{ fontSize: 9, fontWeight: "700", color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 2 }}>
               Consistency
             </Text>
-            <Text style={{ fontSize: 22, fontWeight: "900", color: "#0F172A" }}>4-day</Text>
-            <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 2 }}>streak</Text>
-            <View style={{ marginTop: 8, flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: "#FFF7ED", borderRadius: 8, paddingHorizontal: 7, paddingVertical: 3, alignSelf: "flex-start" }}>
-              <Text style={{ fontSize: 10, fontWeight: "700", color: "#F97316" }}>Best: 6 days</Text>
+            <Text style={{ fontSize: 18, fontWeight: "900", color: "#0F172A" }}>4-day</Text>
+            <Text style={{ fontSize: 10, color: "#94A3B8" }}>streak</Text>
+            <View style={{ marginTop: 5, backgroundColor: "#FFF7ED", borderRadius: 6, paddingHorizontal: 5, paddingVertical: 2, alignSelf: "flex-start" }}>
+              <Text style={{ fontSize: 9, fontWeight: "700", color: "#F97316" }}>Best: 6d</Text>
             </View>
           </View>
-        </ScrollView>
+        </View>
 
         {/* ── 5. NEEDS ATTENTION BANNER ─────────────────────────────── */}
         {totalOverdue > 0 ? (
           <Pressable
             style={{
-              marginHorizontal: 16,
-              marginBottom: 12,
-              borderRadius: 16,
+              marginHorizontal: 12,
+              marginBottom: 8,
+              borderRadius: 14,
               backgroundColor: "#FFF7ED",
               flexDirection: "row",
               alignItems: "center",
-              padding: 14,
+              padding: 12,
               gap: 10,
               borderWidth: 1,
               borderColor: "#FED7AA",
@@ -1059,14 +1009,14 @@ export default function TeamScreen() {
         {/* ── 6. TEAM LEADERBOARD ───────────────────────────────────── */}
         <View
           style={{
-            marginHorizontal: 16,
-            marginBottom: 12,
-            borderRadius: 20,
+            marginHorizontal: 12,
+            marginBottom: 8,
+            borderRadius: 16,
             backgroundColor: "white",
             overflow: "hidden",
             shadowColor: "#000",
             shadowOpacity: 0.05,
-            shadowRadius: 10,
+            shadowRadius: 8,
             shadowOffset: { width: 0, height: 2 },
             elevation: 2,
           }}
@@ -1142,11 +1092,11 @@ export default function TeamScreen() {
         {isOwner && !isDemo ? (
           <View
             style={{
-              marginHorizontal: 16,
+              marginHorizontal: 12,
               marginBottom: 8,
-              borderRadius: 14,
+              borderRadius: 12,
               backgroundColor: "#EEF2FF",
-              padding: 12,
+              padding: 10,
               flexDirection: "row",
               alignItems: "center",
               gap: 8,
