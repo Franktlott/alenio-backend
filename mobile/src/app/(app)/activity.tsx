@@ -691,8 +691,8 @@ function CelebrationPostCard({ item, activeTeamId, currentUserId, isDemo, showPi
           {/* 3-column main row */}
           <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 12 }}>
             {/* LEFT: icon container */}
-            <View style={{ width: 48, height: 48, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.15)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)", flexShrink: 0 }}>
-              <celebType.Icon size={24} color="white" />
+            <View style={{ width: 48, height: 48, borderRadius: 12, backgroundColor: celebType.bg, alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <celebType.Icon size={24} color={celebType.color} />
             </View>
 
             {/* CENTER: content */}
