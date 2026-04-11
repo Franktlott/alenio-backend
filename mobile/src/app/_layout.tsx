@@ -133,7 +133,6 @@ function RootLayoutNav() {
           <Stack.Screen name="create-task" />
           <Stack.Screen name="create-event" />
           <Stack.Screen name="task-detail" />
-<Stack.Screen name="team-channels" />
           <Stack.Screen name="team-chat" />
           <Stack.Screen name="dm-chat" />
           <Stack.Screen
