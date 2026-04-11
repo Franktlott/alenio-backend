@@ -575,15 +575,25 @@ export default function TeamScreen() {
 
             {/* Middle: name + invite code + subtitle */}
             <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 18, fontWeight: "900", color: "#1E293B", letterSpacing: 3 }}>
-                {team?.inviteCode}
-              </Text>
-              <Text style={{ fontSize: 13, fontWeight: "700", color: "#1E293B", marginTop: 1 }}>
-                {team?.name ?? "Team"}
-              </Text>
-              <Text style={{ fontSize: 11, color: "#64748B", marginTop: 1 }}>
-                Share this code to invite team members
-              </Text>
+              <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 18, fontWeight: "900", color: "#1E293B", letterSpacing: 3 }}>
+                    {team?.inviteCode}
+                  </Text>
+                  <Text style={{ fontSize: 13, fontWeight: "700", color: "#1E293B", marginTop: 1 }}>
+                    {team?.name ?? "Team"}
+                  </Text>
+                  <Text style={{ fontSize: 11, color: "#64748B", marginTop: 1 }}>
+                    Share this code to invite team members
+                  </Text>
+                </View>
+                {isPaid ? (
+                  <View style={{ alignItems: "flex-end", marginLeft: 8 }}>
+                    <Text style={{ fontSize: 22, fontWeight: "900", color: "#4361EE" }}>{weekCompletionPct}%</Text>
+                    <Text style={{ fontSize: 10, color: "#64748B", fontWeight: "600" }}>this week</Text>
+                  </View>
+                ) : null}
+              </View>
             </View>
 
             {/* Right: 3 icon buttons stacked */}
@@ -889,7 +899,9 @@ export default function TeamScreen() {
                   <Text style={{ fontSize: 14, fontWeight: "700", color: "#0F172A" }}>
                     {item.user.name}{isCurrentUser ? " (you)" : ""}
                   </Text>
-                  <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 1 }}>this month</Text>
+                  <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 1 }}>
+                    {item.role === "owner" ? "Owner" : item.role === "team_leader" ? "Team Leader" : "Member"}
+                  </Text>
                 </View>
 
                 {/* Metrics */}
