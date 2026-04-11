@@ -15,7 +15,9 @@ import {
   KeyboardAvoidingView,
   Switch,
   Alert,
+  Dimensions,
 } from "react-native";
+import Svg, { Path } from "react-native-svg";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams, Redirect, useFocusEffect } from "expo-router";
 import { Plus, User, Users, ArrowUpDown, ChevronLeft, ChevronRight, X, CalendarDays, CheckSquare, Calendar, Check, UserRound, Video, VideoOff, Clock } from "lucide-react-native";
@@ -934,27 +936,45 @@ export default function TasksScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#F8FAFC" }} edges={["top"]} testID="tasks-screen">
       {/* Header */}
-      <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 28, borderBottomLeftRadius: 32, borderBottomRightRadius: 32 }}>
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-          <View>
-            <Text style={{ color: "white", fontSize: 20, fontWeight: "800" }}>Execute</Text>
-            <Text style={{ color: "rgba(255,255,255,0.7)", fontSize: 10, fontWeight: "500", marginTop: 1 }}>Task Manager & Calendar</Text>
+      {(() => {
+        const W = Dimensions.get("window").width;
+        const WAVE = 38;
+        return (
+          <View style={{ position: "relative" }}>
+            <LinearGradient
+              colors={["#4361EE", "#7C3AED"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={{ paddingTop: 12, paddingHorizontal: 16, paddingBottom: 16 + WAVE }}
+            >
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                <View>
+                  <Text style={{ color: "white", fontSize: 20, fontWeight: "800" }}>Execute</Text>
+                  <Text style={{ color: "rgba(255,255,255,0.7)", fontSize: 10, fontWeight: "500", marginTop: 1 }}>Task Manager & Calendar</Text>
+                </View>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                  {activeTeamId && !isDemo ? (
+                    <Pressable
+                      onPress={() => setShowAddModal(true)}
+                      style={{ flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "rgba(255,255,255,0.22)", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 }}
+                      testID="header-add-button"
+                    >
+                      <Plus size={13} color="white" />
+                      <Text style={{ color: "white", fontSize: 12, fontWeight: "600" }}>Add</Text>
+                    </Pressable>
+                  ) : null}
+                  <Image source={require("@/assets/alenio-icon.png")} style={{ width: 26, height: 26, borderRadius: 6 }} />
+                </View>
+              </View>
+            </LinearGradient>
+            <View style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: WAVE }}>
+              <Svg width={W} height={WAVE}>
+                <Path d={`M 0 0 Q ${W / 2} ${WAVE} ${W} 0 L ${W} ${WAVE} L 0 ${WAVE} Z`} fill="#F8FAFC" />
+              </Svg>
+            </View>
           </View>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            {activeTeamId && !isDemo ? (
-              <Pressable
-                onPress={() => setShowAddModal(true)}
-                style={{ flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "rgba(255,255,255,0.22)", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 }}
-                testID="header-add-button"
-              >
-                <Plus size={13} color="white" />
-                <Text style={{ color: "white", fontSize: 12, fontWeight: "600" }}>Add</Text>
-              </Pressable>
-            ) : null}
-            <Image source={require("@/assets/alenio-icon.png")} style={{ width: 26, height: 26, borderRadius: 6 }} />
-          </View>
-        </View>
-      </LinearGradient>
+        );
+      })()}
 
       <View style={{ flex: 1 }}>
         {/* Fixed top section: calendar, events, filter tabs */}

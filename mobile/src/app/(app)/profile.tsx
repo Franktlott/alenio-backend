@@ -17,7 +17,9 @@ import {
   Switch,
   Share,
   RefreshControl,
+  Dimensions,
 } from "react-native";
+import Svg, { Path } from "react-native-svg";
 import * as Clipboard from "expo-clipboard";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -415,12 +417,30 @@ export default function ProfileScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#F8FAFC" }} edges={["top"]} testID="profile-screen">
       {/* Header */}
-      <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 28, borderBottomLeftRadius: 32, borderBottomRightRadius: 32 }}>
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-          <Text style={{ color: "white", fontSize: 20, fontWeight: "800" }}>Profile</Text>
-          <Image source={require("@/assets/alenio-icon.png")} style={{ width: 26, height: 26, borderRadius: 6 }} />
-        </View>
-      </LinearGradient>
+      {(() => {
+        const W = Dimensions.get("window").width;
+        const WAVE = 38;
+        return (
+          <View style={{ position: "relative" }}>
+            <LinearGradient
+              colors={["#4361EE", "#7C3AED"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={{ paddingTop: 12, paddingHorizontal: 16, paddingBottom: 16 + WAVE }}
+            >
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                <Text style={{ color: "white", fontSize: 20, fontWeight: "800" }}>Profile</Text>
+                <Image source={require("@/assets/alenio-icon.png")} style={{ width: 26, height: 26, borderRadius: 6 }} />
+              </View>
+            </LinearGradient>
+            <View style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: WAVE }}>
+              <Svg width={W} height={WAVE}>
+                <Path d={`M 0 0 Q ${W / 2} ${WAVE} ${W} 0 L ${W} ${WAVE} L 0 ${WAVE} Z`} fill="#F8FAFC" />
+              </Svg>
+            </View>
+          </View>
+        );
+      })()}
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 88 }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" colors={["#4361EE"]} />}>
         {/* Avatar + name */}

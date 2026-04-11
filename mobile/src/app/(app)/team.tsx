@@ -11,6 +11,7 @@ import {
   Pressable,
   Modal,
   RefreshControl,
+  Dimensions,
 } from "react-native";
 import { toast } from "burnt";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -516,34 +517,41 @@ export default function TeamScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#F8FAFC" }} edges={["top"]} testID="team-screen">
 
-      {/* ── HEADER: full-width gradient with curved bottom ── */}
-      <LinearGradient
-        colors={["#4361EE", "#7C3AED"]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-        style={{
-          paddingTop: 12,
-          paddingHorizontal: 16,
-          paddingBottom: 28,
-          borderBottomLeftRadius: 32,
-          borderBottomRightRadius: 32,
-        }}
-      >
-        <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" }}>
-          <View>
-            <Text style={{ color: "white", fontWeight: "800", fontSize: 20 }}>Team</Text>
-            <Text style={{ color: "rgba(255,255,255,0.72)", fontSize: 11, marginTop: 1 }}>
-              {team?.name ?? ""}
-            </Text>
-          </View>
-          {isPaid ? (
-            <View style={{ alignItems: "flex-end" }}>
-              <Text style={{ color: "white", fontSize: 22, fontWeight: "900", lineHeight: 26 }}>{weekCompletionPct}%</Text>
-              <Text style={{ color: "rgba(255,255,255,0.72)", fontSize: 11, fontWeight: "600", marginTop: 1 }}>this week</Text>
+      {/* ── HEADER: full-width gradient with wave bottom ── */}
+      {(() => {
+        const W = Dimensions.get("window").width;
+        const WAVE = 38;
+        return (
+          <View style={{ position: "relative" }}>
+            <LinearGradient
+              colors={["#4361EE", "#7C3AED"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={{ paddingTop: 12, paddingHorizontal: 16, paddingBottom: 16 + WAVE }}
+            >
+              <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" }}>
+                <View>
+                  <Text style={{ color: "white", fontWeight: "800", fontSize: 20 }}>Team</Text>
+                  <Text style={{ color: "rgba(255,255,255,0.72)", fontSize: 11, marginTop: 1 }}>
+                    {team?.name ?? ""}
+                  </Text>
+                </View>
+                {isPaid ? (
+                  <View style={{ alignItems: "flex-end" }}>
+                    <Text style={{ color: "white", fontSize: 22, fontWeight: "900", lineHeight: 26 }}>{weekCompletionPct}%</Text>
+                    <Text style={{ color: "rgba(255,255,255,0.72)", fontSize: 11, fontWeight: "600", marginTop: 1 }}>this week</Text>
+                  </View>
+                ) : null}
+              </View>
+            </LinearGradient>
+            <View style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: WAVE }}>
+              <Svg width={W} height={WAVE}>
+                <Path d={`M 0 0 Q ${W / 2} ${WAVE} ${W} 0 L ${W} ${WAVE} L 0 ${WAVE} Z`} fill="#F8FAFC" />
+              </Svg>
             </View>
-          ) : null}
-        </View>
-      </LinearGradient>
+          </View>
+        );
+      })()}
 
       <ScrollView
         showsVerticalScrollIndicator={false}
