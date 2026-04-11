@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -9,7 +9,7 @@ import {
   Pressable,
 } from "react-native";
 import { authClient } from "@/lib/auth/auth-client";
-import { SESSION_QUERY_KEY } from "@/lib/auth/use-session";
+import { SESSION_QUERY_KEY, useSession } from "@/lib/auth/use-session";
 import { useQueryClient } from "@tanstack/react-query";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -25,6 +25,13 @@ export default function VerifyOtp() {
   const [resent, setResent] = useState(false);
   const inputRef = useRef<TextInput>(null);
   const queryClient = useQueryClient();
+  const { data: session } = useSession();
+
+  useEffect(() => {
+    if (session?.user) {
+      router.replace("/(app)/team");
+    }
+  }, [session?.user]);
 
   const handleVerify = async () => {
     if (otp.length < 6) {
@@ -40,7 +47,6 @@ export default function VerifyOtp() {
       setOtp("");
     } else {
       await queryClient.refetchQueries({ queryKey: SESSION_QUERY_KEY });
-      router.replace("/(app)/team");
     }
   };
 
