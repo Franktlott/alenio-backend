@@ -671,34 +671,49 @@ function CelebrationPostCard({ item, activeTeamId, currentUserId, isDemo, showPi
         colors={celebType.gradient}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
-        style={{ borderRadius: 20, overflow: "hidden", borderWidth: 1, borderColor: "rgba(255,255,255,0.07)" }}
+        style={{ borderRadius: 16, overflow: "hidden", borderWidth: 1, borderColor: "rgba(255,255,255,0.1)", elevation: 4, shadowColor: "#000", shadowOpacity: 0.25, shadowRadius: 8, shadowOffset: { width: 0, height: 3 } }}
       >
-        <View style={{ padding: 16, gap: 10 }}>
-          {/* Badge row */}
-          <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 8 }}>
-            <View style={{ backgroundColor: "rgba(255,255,255,0.12)", borderRadius: 12, paddingHorizontal: 10, paddingVertical: 5, flexDirection: "row", alignItems: "center", gap: 6 }}>
-              <celebType.Icon size={14} color="rgba(255,255,255,0.9)" />
-              <Text style={{ fontSize: 12, fontWeight: "700", color: "rgba(255,255,255,0.9)", letterSpacing: 0.4 }}>{celebType.label.toUpperCase()}</Text>
+        {/* Watermark icon */}
+        <View style={{ position: "absolute", right: -10, top: -10, opacity: 0.05 }}>
+          <celebType.Icon size={110} color="white" />
+        </View>
+
+        <View style={{ padding: 16, gap: 12 }}>
+          {/* Top row: label + time */}
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "rgba(255,255,255,0.12)", borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4 }}>
+              <celebType.Icon size={11} color="rgba(255,255,255,0.75)" />
+              <Text style={{ fontSize: 10, fontWeight: "700", color: "rgba(255,255,255,0.75)", letterSpacing: 1, textTransform: "uppercase" }}>{celebType.label}</Text>
             </View>
-            <View style={{ marginLeft: "auto", alignItems: "flex-end", gap: 6 }}>
-              <Text style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>{timeAgo(item.createdAt)}</Text>
-              <Image
-                source={require("@/assets/alenio-icon.png")}
-                style={{ width: 26, height: 26, borderRadius: 6, opacity: 0.9 }}
-              />
+            <Text style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", fontWeight: "500" }}>{timeAgo(item.createdAt)}</Text>
+          </View>
+
+          {/* 3-column main row */}
+          <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 12 }}>
+            {/* LEFT: icon container */}
+            <View style={{ width: 48, height: 48, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.15)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)", flexShrink: 0 }}>
+              <celebType.Icon size={24} color="white" />
+            </View>
+
+            {/* CENTER: content */}
+            <View style={{ flex: 1, gap: 2 }}>
+              <Text style={{ fontSize: 18, fontWeight: "800", color: "white", letterSpacing: -0.3 }}>{toName}</Text>
+              <Text style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", fontWeight: "500" }}>Recognized by {fromName}</Text>
+            </View>
+
+            {/* RIGHT: tag badge */}
+            <View style={{ backgroundColor: "rgba(0,0,0,0.2)", borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4, borderWidth: 1, borderColor: "rgba(255,255,255,0.08)", flexShrink: 0 }}>
+              <Text style={{ fontSize: 10, fontWeight: "700", color: "rgba(255,255,255,0.7)", letterSpacing: 0.5 }}>{celebType.tag.toUpperCase()}</Text>
             </View>
           </View>
 
-          {/* Main text */}
-          <View>
-            <Text style={{ fontSize: 20, fontWeight: "800", color: "white" }}>{toName} 🎊</Text>
-            <Text style={{ fontSize: 13, color: "rgba(255,255,255,0.55)", marginTop: 2 }}>celebrated by {fromName}</Text>
-          </View>
+          {/* Divider */}
+          <View style={{ height: 1, backgroundColor: "rgba(255,255,255,0.08)" }} />
 
-          {/* Custom message */}
+          {/* Message */}
           {meta?.message ? (
-            <View style={{ backgroundColor: "rgba(255,255,255,0.08)", borderRadius: 12, padding: 12 }}>
-              <Text style={{ fontSize: 14, color: "rgba(255,255,255,0.85)", lineHeight: 20, fontStyle: "italic" }}>"{meta.message}"</Text>
+            <View style={{ backgroundColor: "rgba(0,0,0,0.15)", borderRadius: 10, padding: 12, borderWidth: 1, borderColor: "rgba(255,255,255,0.06)" }}>
+              <Text style={{ fontSize: 13, color: "rgba(255,255,255,0.8)", lineHeight: 20 }}>"{meta.message}"</Text>
             </View>
           ) : null}
 
