@@ -195,7 +195,10 @@ export default function AppLayout() {
   });
 
   useEffect(() => {
-    if (subscription) setPlan(subscription.plan as "free" | "team");
+    if (subscription) {
+      const plan = subscription.plan === "pro" ? "team" : subscription.plan;
+      setPlan(plan as "free" | "team");
+    }
   }, [subscription]);
 
   useEffect(() => {

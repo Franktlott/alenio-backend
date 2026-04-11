@@ -13,15 +13,19 @@ subscriptionRouter.use("*", authGuard);
 
 // Helper: fetch or create a free subscription for a team
 export async function getTeamSubscription(teamId: string) {
-  return prisma.teamSubscription.upsert({
+  const sub = await prisma.teamSubscription.upsert({
     where: { teamId },
-    create: {
-      teamId,
-      plan: "free",
-      status: "active",
-    },
+    create: { teamId, plan: "free", status: "active" },
     update: {},
   });
+  // Normalize legacy "pro" plan to "team"
+  if (sub.plan === "pro") {
+    return prisma.teamSubscription.update({
+      where: { teamId },
+      data: { plan: "team" },
+    });
+  }
+  return sub;
 }
 
 // GET /api/teams/:teamId/subscription
