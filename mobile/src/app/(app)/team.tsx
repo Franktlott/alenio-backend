@@ -514,52 +514,59 @@ export default function TeamScreen() {
   // Main render
   // ------------------------------------------------------------------
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#F0F4FF" }} edges={["top"]} testID="team-screen">
+    <SafeAreaView style={{ flex: 1, backgroundColor: "#F8FAFC" }} edges={["top"]} testID="team-screen">
 
-      {/* ── HEADER CARD: outer lavender card, gradient top + team info bottom ── */}
-      <View style={{
-        marginHorizontal: 12,
-        marginTop: 8,
-        borderRadius: 24,
-        backgroundColor: "#E0E8FF",
-        overflow: "hidden",
-        shadowColor: "#4361EE",
-        shadowOpacity: 0.18,
-        shadowRadius: 20,
-        shadowOffset: { width: 0, height: 4 },
-        elevation: 8,
-      }}>
-        {/* Gradient title section */}
-        <LinearGradient
-          colors={["#4361EE", "#7C3AED"]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
+      {/* ── HEADER: full-width gradient with curved bottom ── */}
+      <LinearGradient
+        colors={["#4361EE", "#7C3AED"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
         style={{
-            paddingTop: 12,
-            paddingHorizontal: 14,
-            paddingBottom: 22,
-            borderBottomLeftRadius: 22,
-            borderBottomRightRadius: 22,
-          }}
-        >
-          <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" }}>
-            <View>
-              <Text style={{ color: "white", fontWeight: "800", fontSize: 20 }}>Team</Text>
-              <Text style={{ color: "rgba(255,255,255,0.72)", fontSize: 11, marginTop: 1 }}>
-                {team?.name ?? ""}
-              </Text>
-            </View>
-            {isPaid ? (
-              <View style={{ alignItems: "flex-end" }}>
-                <Text style={{ color: "white", fontSize: 22, fontWeight: "900", lineHeight: 26 }}>{weekCompletionPct}%</Text>
-                <Text style={{ color: "rgba(255,255,255,0.72)", fontSize: 11, fontWeight: "600", marginTop: 1 }}>this week</Text>
-              </View>
-            ) : null}
+          paddingTop: 12,
+          paddingHorizontal: 16,
+          paddingBottom: 28,
+          borderBottomLeftRadius: 32,
+          borderBottomRightRadius: 32,
+        }}
+      >
+        <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" }}>
+          <View>
+            <Text style={{ color: "white", fontWeight: "800", fontSize: 20 }}>Team</Text>
+            <Text style={{ color: "rgba(255,255,255,0.72)", fontSize: 11, marginTop: 1 }}>
+              {team?.name ?? ""}
+            </Text>
           </View>
-        </LinearGradient>
+          {isPaid ? (
+            <View style={{ alignItems: "flex-end" }}>
+              <Text style={{ color: "white", fontSize: 22, fontWeight: "900", lineHeight: 26 }}>{weekCompletionPct}%</Text>
+              <Text style={{ color: "rgba(255,255,255,0.72)", fontSize: 11, fontWeight: "600", marginTop: 1 }}>this week</Text>
+            </View>
+          ) : null}
+        </View>
+      </LinearGradient>
 
-        {/* Team info section */}
-        <View style={{ paddingHorizontal: 14, paddingTop: 12, paddingBottom: 12 }}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 96 }}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" colors={["#4361EE"]} />
+        }
+        testID="members-list"
+      >
+
+        {/* ── Team info card ── */}
+        <View style={{
+          marginHorizontal: 12,
+          marginTop: 12,
+          borderRadius: 20,
+          backgroundColor: "white",
+          padding: 14,
+          shadowColor: "#000",
+          shadowOpacity: 0.06,
+          shadowRadius: 8,
+          shadowOffset: { width: 0, height: 2 },
+          elevation: 3,
+        }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
             {/* Avatar */}
             <TouchableOpacity
@@ -592,7 +599,7 @@ export default function TeamScreen() {
                   position: "absolute", bottom: 1, right: 1,
                   width: 20, height: 20, borderRadius: 10,
                   backgroundColor: "#4361EE", alignItems: "center", justifyContent: "center",
-                  borderWidth: 1.5, borderColor: "#E0E8FF",
+                  borderWidth: 1.5, borderColor: "#E2E8F0",
                 }}>
                   <Camera size={10} color="white" />
                 </View>
@@ -617,7 +624,7 @@ export default function TeamScreen() {
               <View style={{ gap: 8 }}>
                 <Pressable
                   onPress={() => setQrModalOpen(true)}
-                  style={{ width: 44, height: 44, borderRadius: 13, backgroundColor: "white", borderWidth: 1, borderColor: "#C7D2FE", alignItems: "center", justifyContent: "center" }}
+                  style={{ width: 44, height: 44, borderRadius: 13, backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#C7D2FE", alignItems: "center", justifyContent: "center" }}
                   testID="qr-invite-code"
                 >
                   <QrCode size={20} color="#4361EE" />
@@ -633,16 +640,6 @@ export default function TeamScreen() {
             ) : null}
           </View>
         </View>
-      </View>
-
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: insets.bottom + 96, paddingTop: 10 }}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" colors={["#4361EE"]} />
-        }
-        testID="members-list"
-      >
 
         {/* ── Pending join requests (owner only) ────────────────────── */}
         {isOwner && incomingRequests.length > 0 ? (

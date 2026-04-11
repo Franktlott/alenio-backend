@@ -936,28 +936,26 @@ export default function FeedScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#F0F4FF" }} edges={["top"]} testID="feed-screen">
+    <SafeAreaView style={{ flex: 1, backgroundColor: "#F8FAFC" }} edges={["top"]} testID="feed-screen">
       {/* Header */}
-      <View style={{ marginHorizontal: 12, marginTop: 8, borderRadius: 24, backgroundColor: "#E0E8FF", overflow: "hidden", shadowColor: "#4361EE", shadowOpacity: 0.15, shadowRadius: 16, shadowOffset: { width: 0, height: 3 }, elevation: 6 }}>
-        <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ paddingHorizontal: 14, paddingTop: 12, paddingBottom: 20, borderBottomLeftRadius: 22, borderBottomRightRadius: 22 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-            <Text style={{ color: "white", fontSize: 20, fontWeight: "800" }}>Feed</Text>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-              {!isDemo ? (
-                <TouchableOpacity
-                  testID="celebrate-button"
-                  onPress={() => { setShowCelebrateModal(true); setCelebrateStep(1); }}
-                  style={{ backgroundColor: "rgba(255,255,255,0.2)", borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5, flexDirection: "row", alignItems: "center", gap: 5 }}
-                >
-                  <Text style={{ fontSize: 12 }}>🎉</Text>
-                  <Text style={{ color: "white", fontSize: 12, fontWeight: "700" }}>Celebrate</Text>
-                </TouchableOpacity>
-              ) : null}
-              <ExpoImage source={require("@/assets/alenio-icon.png")} style={{ width: 26, height: 26, borderRadius: 6 }} contentFit="cover" />
-            </View>
+      <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 28, borderBottomLeftRadius: 32, borderBottomRightRadius: 32 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+          <Text style={{ color: "white", fontSize: 20, fontWeight: "800" }}>Feed</Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            {!isDemo ? (
+              <TouchableOpacity
+                testID="celebrate-button"
+                onPress={() => { setShowCelebrateModal(true); setCelebrateStep(1); }}
+                style={{ backgroundColor: "rgba(255,255,255,0.2)", borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5, flexDirection: "row", alignItems: "center", gap: 5 }}
+              >
+                <Text style={{ fontSize: 12 }}>🎉</Text>
+                <Text style={{ color: "white", fontSize: 12, fontWeight: "700" }}>Celebrate</Text>
+              </TouchableOpacity>
+            ) : null}
+            <ExpoImage source={require("@/assets/alenio-icon.png")} style={{ width: 26, height: 26, borderRadius: 6 }} contentFit="cover" />
           </View>
-        </LinearGradient>
-      </View>
+        </View>
+      </LinearGradient>
 
       {/* Celebrate modal */}
       <Modal visible={showCelebrateModal} transparent animationType="slide" onRequestClose={() => setShowCelebrateModal(false)}>
