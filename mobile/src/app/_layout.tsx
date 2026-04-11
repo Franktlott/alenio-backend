@@ -22,7 +22,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 export const unstable_settings = {
-  initialRouteName: '(app)',
+  initialRouteName: 'sign-in',
 };
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
