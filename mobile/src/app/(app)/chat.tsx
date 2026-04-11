@@ -9,9 +9,12 @@ import {
   Image,
   Pressable,
   RefreshControl,
+  KeyboardAvoidingView,
+  Platform,
+  TextInput,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { LinearGradient } from "expo-linear-gradient";
 import { MessageCircle, Users, Lock, Plus, Hash } from "lucide-react-native";
 import { router } from "expo-router";
@@ -28,6 +31,7 @@ import { useDemoMode } from "@/lib/useDemo";
 import { useSubscriptionStore } from "@/lib/state/subscription-store";
 
 const PINNED_DMS_KEY = "pinned_dms";
+const TOPIC_COLORS = ["#4361EE", "#7C3AED", "#10B981", "#F59E0B", "#EF4444", "#EC4899"];
 
 type Topic = {
   id: string;
@@ -93,6 +97,9 @@ export default function ChatScreen() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [pinnedDmIds, setPinnedDmIds] = useState<string[]>([]);
+  const [showCreateChannel, setShowCreateChannel] = useState(false);
+  const [newChannelName, setNewChannelName] = useState("");
+  const [newChannelColor, setNewChannelColor] = useState("#4361EE");
 
   useEffect(() => {
     AsyncStorage.getItem(PINNED_DMS_KEY).then((val) => {
@@ -151,6 +158,18 @@ export default function ChatScreen() {
     await queryClient.invalidateQueries({ queryKey: ["team", activeTeamId] });
     setRefreshing(false);
   };
+
+  const createChannelMutation = useMutation({
+    mutationFn: ({ name, color }: { name: string; color: string }) =>
+      api.post(`/api/teams/${activeTeamId}/topics`, { name, color }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["topics", activeTeamId] });
+      setShowCreateChannel(false);
+      setNewChannelName("");
+      setNewChannelColor("#4361EE");
+      toast({ title: "Channel created", preset: "done" });
+    },
+  });
 
   if (!activeTeamId) {
     return (
@@ -357,12 +376,69 @@ export default function ChatScreen() {
                 <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 2 }}>Create a group conversation</Text>
               </View>
             </Pressable>
+            <Pressable
+              testID="add-modal-new-channel"
+              onPress={() => { setShowAddModal(false); setShowCreateChannel(true); }}
+              style={{ flexDirection: "row", alignItems: "center", gap: 14, backgroundColor: "#F0FDF4", borderRadius: 16, padding: 16 }}
+            >
+              <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: "#10B981", alignItems: "center", justifyContent: "center" }}>
+                <Hash size={22} color="white" />
+              </View>
+              <View>
+                <Text style={{ fontSize: 15, fontWeight: "700", color: "#0F172A" }}>New Channel</Text>
+                <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 2 }}>Create a topic channel for your team</Text>
+              </View>
+            </Pressable>
           </Pressable>
         </Pressable>
       </Modal>
 
-      {/* Group chat paywall modal */}
-      <Modal visible={showGroupPaywall} transparent animationType="fade" onRequestClose={() => setShowGroupPaywall(false)}>
+      {/* Create Channel modal */}
+      <Modal visible={showCreateChannel} transparent animationType="slide" onRequestClose={() => setShowCreateChannel(false)}>
+        <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }} onPress={() => setShowCreateChannel(false)}>
+          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"}>
+            <Pressable onPress={(e) => e.stopPropagation()}>
+              <View style={{ backgroundColor: "white", borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40 }}>
+                <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: "#E2E8F0", alignSelf: "center", marginBottom: 16 }} />
+                <Text style={{ fontSize: 16, fontWeight: "700", color: "#0F172A", marginBottom: 16 }}>New Channel</Text>
+                <TextInput
+                  value={newChannelName}
+                  onChangeText={setNewChannelName}
+                  placeholder="Channel name..."
+                  placeholderTextColor="#94A3B8"
+                  style={{ borderWidth: 1.5, borderColor: "#E2E8F0", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: "#0F172A", marginBottom: 16 }}
+                  testID="channel-name-input"
+                  autoFocus
+                />
+                <View style={{ flexDirection: "row", gap: 10, marginBottom: 20 }}>
+                  {TOPIC_COLORS.map((color) => (
+                    <Pressable
+                      key={color}
+                      onPress={() => setNewChannelColor(color)}
+                      style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: color, borderWidth: newChannelColor === color ? 3 : 0, borderColor: "white", elevation: newChannelColor === color ? 4 : 0 }}
+                      testID={`channel-color-${color}`}
+                    />
+                  ))}
+                </View>
+                <Pressable
+                  onPress={() => { if (newChannelName.trim()) createChannelMutation.mutate({ name: newChannelName.trim(), color: newChannelColor }); }}
+                  disabled={!newChannelName.trim() || createChannelMutation.isPending}
+                  style={{ height: 48, borderRadius: 14, backgroundColor: "#4361EE", alignItems: "center", justifyContent: "center", opacity: !newChannelName.trim() ? 0.5 : 1 }}
+                  testID="create-channel-submit"
+                >
+                  {createChannelMutation.isPending ? (
+                    <ActivityIndicator color="white" />
+                  ) : (
+                    <Text style={{ color: "white", fontWeight: "700", fontSize: 15 }}>Create Channel</Text>
+                  )}
+                </Pressable>
+              </View>
+            </Pressable>
+          </KeyboardAvoidingView>
+        </Pressable>
+      </Modal>
+
+      {/* Group chat paywall modal */}      <Modal visible={showGroupPaywall} transparent animationType="fade" onRequestClose={() => setShowGroupPaywall(false)}>
         <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.45)", alignItems: "center", justifyContent: "center", paddingHorizontal: 24 }} onPress={() => setShowGroupPaywall(false)}>
           <Pressable onPress={(e) => e.stopPropagation()}>
             <View style={{ backgroundColor: "white", borderRadius: 24, padding: 28, width: "100%", alignItems: "center" }} testID="group-paywall-modal">
