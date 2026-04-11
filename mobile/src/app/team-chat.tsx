@@ -459,7 +459,7 @@ export default function TeamChatScreen() {
           </View>
           <View className="flex-1">
             <Text style={{ color: "white", fontSize: 18, fontWeight: "700" }}>{teamName ?? "Team Chat"}</Text>
-            <Text className="text-white/70 text-xs">{topicName ? `# ${topicName}` : "Main chat"}</Text>
+            <Text className="text-white/70 text-xs">{topicName ? `# ${topicName}` : "Team Chat"}</Text>
           </View>
           {!isDemo ? (
             <TouchableOpacity

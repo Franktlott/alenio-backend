@@ -252,7 +252,7 @@ export default function TeamChannelsScreen() {
             <MessageCircle size={24} color="white" />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 16, fontWeight: "700", color: "#0F172A" }}>Main chat</Text>
+            <Text style={{ fontSize: 16, fontWeight: "700", color: "#0F172A" }}>Team Chat</Text>
             {generalMessages[0] ? (
             <Text style={{ fontSize: 13, color: "#64748B", marginTop: 2 }} numberOfLines={1}>
               {generalMessages[0].sender.name}: {generalMessages[0].content ?? "Sent a photo"}
