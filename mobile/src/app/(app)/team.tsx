@@ -48,6 +48,7 @@ import { router } from "expo-router";
 import type { Team, TeamMember } from "@/lib/types";
 import { NoTeamPlaceholder } from "@/components/NoTeamPlaceholder";
 import { useDemoMode, showDemoAlert } from "@/lib/useDemo";
+import { useSubscriptionStore } from "@/lib/state/subscription-store";
 import Svg, { Path, Circle, Line, Text as SvgText, Polyline } from "react-native-svg";
 
 type JoinRequest = {
@@ -199,6 +200,8 @@ export default function TeamScreen() {
   const { data: session } = useSession();
   const isDemo = useDemoMode();
   const queryClient = useQueryClient();
+  const plan = useSubscriptionStore((s) => s.plan);
+  const isPaid = plan === "team";
 
   const { data: team, isLoading } = useQuery({
     queryKey: ["team", activeTeamId],
@@ -683,100 +686,105 @@ export default function TeamScreen() {
           </View>
         ) : null}
 
-        {/* ── 2. THIS WEEK AT A GLANCE ───────────────────────────────── */}
-        <View
-          style={{
-            marginHorizontal: 12,
-            marginBottom: 8,
-            borderRadius: 14,
-            backgroundColor: "white",
-            paddingHorizontal: 14,
-            paddingVertical: 10,
-            shadowColor: "#000",
-            shadowOpacity: 0.05,
-            shadowRadius: 8,
-            shadowOffset: { width: 0, height: 2 },
-            elevation: 2,
-          }}
-        >
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-            <Text style={{ fontSize: 10, fontWeight: "800", color: "#94A3B8", textTransform: "uppercase", letterSpacing: 1.2 }}>
-              This Week at a Glance
-            </Text>
-            <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 12 }}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                <Check size={13} color="#22C55E" />
-                <Text style={{ fontSize: 13, fontWeight: "800", color: "#15803D" }}>{totalCompleted}</Text>
-                <Text style={{ fontSize: 11, color: "#16A34A", fontWeight: "600" }}>tasks completed</Text>
-              </View>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                <AlertTriangle size={12} color={totalOverdue > 0 ? "#EF4444" : "#94A3B8"} />
-                <Text style={{ fontSize: 13, fontWeight: "800", color: totalOverdue > 0 ? "#DC2626" : "#94A3B8" }}>{totalOverdue}</Text>
-                <Text style={{ fontSize: 11, color: totalOverdue > 0 ? "#EF4444" : "#94A3B8", fontWeight: "600" }}>overdue</Text>
-              </View>
-            </View>
-          </View>
-        </View>
-
-        {/* ── 3. TEAM PERFORMANCE CHART ─────────────────────────────── */}
-        <View
-          style={{
-            marginHorizontal: 12,
-            marginBottom: 8,
-            borderRadius: 16,
-            backgroundColor: "white",
-            paddingTop: 12,
-            paddingBottom: 10,
-            paddingHorizontal: 14,
-            shadowColor: "#000",
-            shadowOpacity: 0.05,
-            shadowRadius: 8,
-            shadowOffset: { width: 0, height: 2 },
-            elevation: 2,
-          }}
-        >
-          <View style={{ marginBottom: 8 }}>
-            <Text style={{ fontSize: 10, fontWeight: "800", color: "#94A3B8", textTransform: "uppercase", letterSpacing: 1.2 }}>
-              Team Performance
-            </Text>
-            <Text style={{ fontSize: 11, color: "#CBD5E1", marginTop: 1 }}>Last 6 months</Text>
-          </View>
-
-          <View style={{ alignItems: "center" }}>
-            <PerformanceChart data={monthlyStats ?? []} />
-          </View>
-        </View>
-
-        {/* ── 4. KPI METRIC CARDS ───────────────────────────────────── */}
-        <View style={{ marginHorizontal: 12, marginBottom: 8 }}>
-          {/* Completion Rate — full width */}
+        {/* ── 2. THIS WEEK AT A GLANCE (paid only) ──────────────────── */}
+        {isPaid ? (
           <View
             style={{
-              backgroundColor: "white",
+              marginHorizontal: 12,
+              marginBottom: 8,
               borderRadius: 14,
-              padding: 12,
+              backgroundColor: "white",
+              paddingHorizontal: 14,
+              paddingVertical: 10,
               shadowColor: "#000",
               shadowOpacity: 0.05,
-              shadowRadius: 6,
+              shadowRadius: 8,
               shadowOffset: { width: 0, height: 2 },
               elevation: 2,
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 12,
             }}
           >
-            <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#F0FDF4", alignItems: "center", justifyContent: "center" }}>
-              <CheckCircle2 size={18} color="#22C55E" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 9, fontWeight: "700", color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 2 }}>
-                Completion Rate
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+              <Text style={{ fontSize: 10, fontWeight: "800", color: "#94A3B8", textTransform: "uppercase", letterSpacing: 1.2 }}>
+                This Week at a Glance
               </Text>
-              <Text style={{ fontSize: 22, fontWeight: "900", color: "#0F172A" }}>{weekCompletionPct}%</Text>
-              <Text style={{ fontSize: 10, color: "#94A3B8" }}>this week</Text>
+              <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 12 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                  <Check size={13} color="#22C55E" />
+                  <Text style={{ fontSize: 13, fontWeight: "800", color: "#15803D" }}>{totalCompleted}</Text>
+                  <Text style={{ fontSize: 11, color: "#16A34A", fontWeight: "600" }}>tasks completed</Text>
+                </View>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                  <AlertTriangle size={12} color={totalOverdue > 0 ? "#EF4444" : "#94A3B8"} />
+                  <Text style={{ fontSize: 13, fontWeight: "800", color: totalOverdue > 0 ? "#DC2626" : "#94A3B8" }}>{totalOverdue}</Text>
+                  <Text style={{ fontSize: 11, color: totalOverdue > 0 ? "#EF4444" : "#94A3B8", fontWeight: "600" }}>overdue</Text>
+                </View>
+              </View>
             </View>
           </View>
-        </View>
+        ) : null}
+
+        {/* ── 3. TEAM PERFORMANCE CHART (paid only) ─────────────────── */}
+        {isPaid ? (
+          <View
+            style={{
+              marginHorizontal: 12,
+              marginBottom: 8,
+              borderRadius: 16,
+              backgroundColor: "white",
+              paddingTop: 12,
+              paddingBottom: 10,
+              paddingHorizontal: 14,
+              shadowColor: "#000",
+              shadowOpacity: 0.05,
+              shadowRadius: 8,
+              shadowOffset: { width: 0, height: 2 },
+              elevation: 2,
+            }}
+          >
+            <View style={{ marginBottom: 8 }}>
+              <Text style={{ fontSize: 10, fontWeight: "800", color: "#94A3B8", textTransform: "uppercase", letterSpacing: 1.2 }}>
+                Team Performance
+              </Text>
+              <Text style={{ fontSize: 11, color: "#CBD5E1", marginTop: 1 }}>Last 6 months</Text>
+            </View>
+
+            <View style={{ alignItems: "center" }}>
+              <PerformanceChart data={monthlyStats ?? []} />
+            </View>
+          </View>
+        ) : null}
+
+        {/* ── 4. KPI METRIC CARDS (paid only) ───────────────────────── */}
+        {isPaid ? (
+          <View style={{ marginHorizontal: 12, marginBottom: 8 }}>
+            <View
+              style={{
+                backgroundColor: "white",
+                borderRadius: 14,
+                padding: 12,
+                shadowColor: "#000",
+                shadowOpacity: 0.05,
+                shadowRadius: 6,
+                shadowOffset: { width: 0, height: 2 },
+                elevation: 2,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 12,
+              }}
+            >
+              <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#F0FDF4", alignItems: "center", justifyContent: "center" }}>
+                <CheckCircle2 size={18} color="#22C55E" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 9, fontWeight: "700", color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 2 }}>
+                  Completion Rate
+                </Text>
+                <Text style={{ fontSize: 22, fontWeight: "900", color: "#0F172A" }}>{weekCompletionPct}%</Text>
+                <Text style={{ fontSize: 10, color: "#94A3B8" }}>this week</Text>
+              </View>
+            </View>
+          </View>
+        ) : null}
 
         {/* ── 5. NEEDS ATTENTION BANNER ─────────────────────────────── */}
         {totalOverdue > 0 ? (
@@ -1053,39 +1061,43 @@ export default function TeamScreen() {
                 </View>
               </LinearGradient>
 
-              <View style={{ flexDirection: "row", paddingHorizontal: 16, gap: 10, marginBottom: 12 }}>
-                <View style={{ flex: 1, backgroundColor: "#FFF7ED", borderRadius: 16, padding: 14, alignItems: "center", gap: 4 }}>
-                  <Text style={{ fontSize: 28, fontWeight: "900", color: "#F97316" }}>{selectedStats?.streak ?? 0}</Text>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                    <Flame size={13} color="#F97316" />
-                    <Text style={{ fontSize: 11, fontWeight: "700", color: "#9A3412" }}>Streak</Text>
+              {isPaid ? (
+                <View style={{ flexDirection: "row", paddingHorizontal: 16, gap: 10, marginBottom: 12 }}>
+                  <View style={{ flex: 1, backgroundColor: "#FFF7ED", borderRadius: 16, padding: 14, alignItems: "center", gap: 4 }}>
+                    <Text style={{ fontSize: 28, fontWeight: "900", color: "#F97316" }}>{selectedStats?.streak ?? 0}</Text>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                      <Flame size={13} color="#F97316" />
+                      <Text style={{ fontSize: 11, fontWeight: "700", color: "#9A3412" }}>Streak</Text>
+                    </View>
+                  </View>
+                  <View style={{ flex: 1, backgroundColor: "#F5F3FF", borderRadius: 16, padding: 14, alignItems: "center", gap: 4 }}>
+                    <Text style={{ fontSize: 28, fontWeight: "900", color: "#7C3AED" }}>{selectedStats?.personalBestStreak ?? 0}</Text>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                      <Star size={13} color="#7C3AED" />
+                      <Text style={{ fontSize: 11, fontWeight: "700", color: "#4C1D95" }}>Personal Best</Text>
+                    </View>
                   </View>
                 </View>
-                <View style={{ flex: 1, backgroundColor: "#F5F3FF", borderRadius: 16, padding: 14, alignItems: "center", gap: 4 }}>
-                  <Text style={{ fontSize: 28, fontWeight: "900", color: "#7C3AED" }}>{selectedStats?.personalBestStreak ?? 0}</Text>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                    <Star size={13} color="#7C3AED" />
-                    <Text style={{ fontSize: 11, fontWeight: "700", color: "#4C1D95" }}>Personal Best</Text>
-                  </View>
-                </View>
-              </View>
+              ) : null}
 
-              <View style={{ flexDirection: "row", paddingHorizontal: 16, gap: 10, marginBottom: 16 }}>
-                <View style={{ flex: 1, backgroundColor: "#EEF2FF", borderRadius: 16, padding: 14, alignItems: "center", gap: 4 }}>
-                  <Text style={{ fontSize: 28, fontWeight: "900", color: "#4361EE" }}>{selectedStats?.activeTasks ?? 0}</Text>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                    <ListChecks size={13} color="#4361EE" />
-                    <Text style={{ fontSize: 11, fontWeight: "700", color: "#3730A3" }}>Active</Text>
+              {isPaid ? (
+                <View style={{ flexDirection: "row", paddingHorizontal: 16, gap: 10, marginBottom: 16 }}>
+                  <View style={{ flex: 1, backgroundColor: "#EEF2FF", borderRadius: 16, padding: 14, alignItems: "center", gap: 4 }}>
+                    <Text style={{ fontSize: 28, fontWeight: "900", color: "#4361EE" }}>{selectedStats?.activeTasks ?? 0}</Text>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                      <ListChecks size={13} color="#4361EE" />
+                      <Text style={{ fontSize: 11, fontWeight: "700", color: "#3730A3" }}>Active</Text>
+                    </View>
+                  </View>
+                  <View style={{ flex: 1, backgroundColor: (selectedStats?.overdueTasks ?? 0) > 0 ? "#FEF2F2" : "#F8FAFC", borderRadius: 16, padding: 14, alignItems: "center", gap: 4 }}>
+                    <Text style={{ fontSize: 28, fontWeight: "900", color: (selectedStats?.overdueTasks ?? 0) > 0 ? "#EF4444" : "#94A3B8" }}>{selectedStats?.overdueTasks ?? 0}</Text>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                      <AlertCircle size={13} color={(selectedStats?.overdueTasks ?? 0) > 0 ? "#EF4444" : "#94A3B8"} />
+                      <Text style={{ fontSize: 11, fontWeight: "700", color: (selectedStats?.overdueTasks ?? 0) > 0 ? "#991B1B" : "#94A3B8" }}>Overdue</Text>
+                    </View>
                   </View>
                 </View>
-                <View style={{ flex: 1, backgroundColor: (selectedStats?.overdueTasks ?? 0) > 0 ? "#FEF2F2" : "#F8FAFC", borderRadius: 16, padding: 14, alignItems: "center", gap: 4 }}>
-                  <Text style={{ fontSize: 28, fontWeight: "900", color: (selectedStats?.overdueTasks ?? 0) > 0 ? "#EF4444" : "#94A3B8" }}>{selectedStats?.overdueTasks ?? 0}</Text>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                    <AlertCircle size={13} color={(selectedStats?.overdueTasks ?? 0) > 0 ? "#EF4444" : "#94A3B8"} />
-                    <Text style={{ fontSize: 11, fontWeight: "700", color: (selectedStats?.overdueTasks ?? 0) > 0 ? "#991B1B" : "#94A3B8" }}>Overdue</Text>
-                  </View>
-                </View>
-              </View>
+              ) : null}
 
               {selectedMember?.joinedAt ? (
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginHorizontal: 16, backgroundColor: "#F8FAFC", borderRadius: 12, padding: 12, marginBottom: 16 }}>
