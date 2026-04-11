@@ -364,7 +364,7 @@ tasksRouter.get("/monthly-completion", async (c) => {
       bucket === undefined || bucket.total === 0
         ? null
         : Math.round((bucket.done / bucket.total) * 100);
-    return { label, year, completionPct };
+    return { label, year, completionPct, done: bucket?.done ?? 0, total: bucket?.total ?? 0 };
   });
 
   return c.json({ data: result });

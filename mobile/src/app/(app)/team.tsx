@@ -221,7 +221,7 @@ export default function TeamScreen() {
   const { data: monthlyStats } = useQuery({
     queryKey: ["monthly-completion", activeTeamId],
     queryFn: () =>
-      api.get<Array<{ label: string; year: number; completionPct: number | null }>>(
+      api.get<Array<{ label: string; year: number; completionPct: number | null; done: number; total: number }>>(
         `/api/teams/${activeTeamId}/tasks/monthly-completion`
       ),
     enabled: !!activeTeamId,
@@ -392,6 +392,7 @@ export default function TeamScreen() {
 
   const currentMonthStats = monthlyStats ? monthlyStats[monthlyStats.length - 1] : null;
   const monthCompletionPct = currentMonthStats?.completionPct ?? null;
+  const monthDone = currentMonthStats?.done ?? 0;
 
   // Alphabetically sorted member list
   const members = team?.members ?? [];
@@ -726,12 +727,12 @@ export default function TeamScreen() {
           >
             <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
               <Text style={{ fontSize: 10, fontWeight: "800", color: "#94A3B8", textTransform: "uppercase", letterSpacing: 1.2 }}>
-                This Week at a Glance
+                This Month at a Glance
               </Text>
               <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 12 }}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
                   <Check size={13} color="#22C55E" />
-                  <Text style={{ fontSize: 13, fontWeight: "800", color: "#15803D" }}>{totalCompleted}</Text>
+                  <Text style={{ fontSize: 13, fontWeight: "800", color: "#15803D" }}>{monthDone}</Text>
                   <Text style={{ fontSize: 11, color: "#16A34A", fontWeight: "600" }}>tasks completed</Text>
                 </View>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
