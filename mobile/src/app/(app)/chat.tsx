@@ -2,17 +2,18 @@ import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
-  FlatList,
+  ScrollView,
   TouchableOpacity,
   ActivityIndicator,
   Modal,
   Image,
   Pressable,
+  RefreshControl,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { LinearGradient } from "expo-linear-gradient";
-import { MessageCircle, Users, ChevronRight, Lock, Plus, Pin } from "lucide-react-native";
+import { MessageCircle, Users, Lock, Plus, Hash } from "lucide-react-native";
 import { router } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
@@ -21,12 +22,27 @@ import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
 import { useTeamStore } from "@/lib/state/team-store";
 import { useUnreadStore } from "@/lib/state/unread-store";
-import type { Conversation } from "@/lib/types";
+import type { Conversation, Team } from "@/lib/types";
 import { NoTeamPlaceholder } from "@/components/NoTeamPlaceholder";
 import { useDemoMode } from "@/lib/useDemo";
 import { useSubscriptionStore } from "@/lib/state/subscription-store";
 
 const PINNED_DMS_KEY = "pinned_dms";
+
+type Topic = {
+  id: string;
+  name: string;
+  color: string;
+  description?: string | null;
+  lastMessage?: {
+    id: string;
+    content: string | null;
+    mediaType?: string | null;
+    createdAt: string;
+    sender: { id: string; name: string | null };
+  } | null;
+  _count?: { messages: number };
+};
 
 function formatTime(dateStr: string) {
   const d = new Date(dateStr);
@@ -38,19 +54,46 @@ function formatTime(dateStr: string) {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
+function AvatarStack({ members }: { members: { image: string | null; name: string | null }[] }) {
+  const shown = members.slice(0, 3);
+  return (
+    <View style={{ flexDirection: "row" }}>
+      {shown.map((m, i) => (
+        <View
+          key={i}
+          style={{
+            width: 28, height: 28, borderRadius: 14,
+            backgroundColor: "#4361EE",
+            borderWidth: 2, borderColor: "white",
+            marginLeft: i === 0 ? 0 : -8,
+            alignItems: "center", justifyContent: "center",
+            overflow: "hidden", zIndex: shown.length - i,
+          }}
+        >
+          {m.image ? (
+            <Image source={{ uri: m.image }} style={{ width: 28, height: 28 }} />
+          ) : (
+            <Text style={{ color: "white", fontSize: 11, fontWeight: "700" }}>
+              {m.name?.[0]?.toUpperCase() ?? "?"}
+            </Text>
+          )}
+        </View>
+      ))}
+    </View>
+  );
+}
+
 export default function ChatScreen() {
   const insets = useSafeAreaInsets();
   const { data: session } = useSession();
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
   const queryClient = useQueryClient();
   const isDemo = useDemoMode();
-  const [fabOpen, setFabOpen] = useState(false);
   const [showGroupPaywall, setShowGroupPaywall] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [pinnedDmIds, setPinnedDmIds] = useState<string[]>([]);
 
-  // Load pinned DMs from AsyncStorage on mount
   useEffect(() => {
     AsyncStorage.getItem(PINNED_DMS_KEY).then((val) => {
       if (val) {
@@ -62,51 +105,22 @@ export default function ChatScreen() {
     });
   }, []);
 
-  // Persist pinned DMs whenever they change
   useEffect(() => {
     AsyncStorage.setItem(PINNED_DMS_KEY, JSON.stringify(pinnedDmIds));
   }, [pinnedDmIds]);
 
-  const handleLongPressDm = async (convId: string) => {
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    if (pinnedDmIds.includes(convId)) {
-      setPinnedDmIds((prev) => prev.filter((id) => id !== convId));
-      toast({ title: "Unpinned", preset: "done" });
-    } else {
-      if (pinnedDmIds.length >= 5) {
-        toast({ title: "Maximum 5 pins reached", preset: "error" });
-        return;
-      }
-      setPinnedDmIds((prev) => [convId, ...prev]);
-      toast({ title: "Pinned", preset: "done" });
-    }
-  };
-
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await queryClient.invalidateQueries({ queryKey: ["conversations"] });
-    setRefreshing(false);
-  };
-
-  const { data: teams } = useQuery({
-    queryKey: ["teams"],
-    queryFn: () => api.get<any[]>("/api/teams"),
-    enabled: !!session?.user,
-  });
-
   const plan = useSubscriptionStore((s) => s.plan);
   const isPaid = plan === "team";
 
-  const { data: conversations = [], isLoading: dmsLoading } = useQuery({
-    queryKey: ["conversations"],
-    queryFn: () => api.get<Conversation[]>("/api/dms"),
-    enabled: !!session?.user,
-    refetchInterval: 5000,
+  const { data: teamDetail } = useQuery({
+    queryKey: ["team", activeTeamId],
+    queryFn: () => api.get<Team>(`/api/teams/${activeTeamId}`),
+    enabled: !!activeTeamId,
   });
 
-  const { data: topics = [] } = useQuery({
+  const { data: topics = [], isLoading: topicsLoading } = useQuery<Topic[]>({
     queryKey: ["topics", activeTeamId],
-    queryFn: () => api.get<any[]>(`/api/teams/${activeTeamId}/topics`),
+    queryFn: () => api.get<Topic[]>(`/api/teams/${activeTeamId}/topics`),
     enabled: !!activeTeamId,
     refetchInterval: 10000,
   });
@@ -118,23 +132,10 @@ export default function ChatScreen() {
     refetchInterval: 10000,
   });
 
-  const currentTeam = teams?.find((t: any) => t.id === activeTeamId);
   const lastReadIds = useUnreadStore((s) => s.lastReadIds);
-  const currentUserId = session?.user?.id ?? "";
-
-  const dmUnreadLastReadIds = Object.fromEntries(
-    conversations.map((conv) => [conv.id, lastReadIds[conv.id] ?? ""])
-  );
-  const { data: dmUnreadCounts = {} } = useQuery({
-    queryKey: ["dm-unread-counts", dmUnreadLastReadIds],
-    queryFn: () => api.post<Record<string, number>>("/api/dms/unread-counts", { lastReadIds: dmUnreadLastReadIds }),
-    enabled: !!session?.user && conversations.length > 0,
-    refetchInterval: 5000,
-  });
-
   const teamChannelLastReadIds: Record<string, string> = {
     [`team:${activeTeamId}`]: lastReadIds[`team:${activeTeamId}`] ?? "",
-    ...Object.fromEntries(topics.map((t: any) => [`topic:${t.id}`, lastReadIds[`topic:${t.id}`] ?? ""])),
+    ...Object.fromEntries(topics.map((t) => [`topic:${t.id}`, lastReadIds[`topic:${t.id}`] ?? ""])),
   };
   const { data: teamUnreadCounts = {} } = useQuery({
     queryKey: ["team-unread-counts", activeTeamId, teamChannelLastReadIds],
@@ -144,21 +145,12 @@ export default function ChatScreen() {
   });
   const teamUnreadCount = Object.values(teamUnreadCounts).reduce((a, b) => a + b, 0);
 
-  // Sort and split conversations into pinned/unpinned
-  const sortedUnpinned = [...conversations]
-    .filter((c) => !pinnedDmIds.includes(c.id))
-    .sort((a, b) => {
-      const aTime = a.lastMessage?.createdAt ?? a.updatedAt;
-      const bTime = b.lastMessage?.createdAt ?? b.updatedAt;
-      return new Date(bTime).getTime() - new Date(aTime).getTime();
-    });
-
-  // Pinned DMs ordered by pin order (front of pinnedDmIds = most recently pinned = shown first)
-  const pinnedConversations = pinnedDmIds
-    .map((id) => conversations.find((c) => c.id === id))
-    .filter((c): c is Conversation => !!c);
-
-  const sortedDms = [...pinnedConversations, ...sortedUnpinned];
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await queryClient.invalidateQueries({ queryKey: ["topics", activeTeamId] });
+    await queryClient.invalidateQueries({ queryKey: ["team", activeTeamId] });
+    setRefreshing(false);
+  };
 
   if (!activeTeamId) {
     return (
@@ -168,88 +160,13 @@ export default function ChatScreen() {
     );
   }
 
-  const renderDmRow = (conv: Conversation, isPinned: boolean) => (
-    <TouchableOpacity
-      key={conv.id}
-      testID={`dm-conversation-${conv.id}`}
-      onPress={() =>
-        router.push({
-          pathname: "/dm-chat",
-          params: {
-            conversationId: conv.id,
-            recipientName: conv.isGroup
-              ? (conv.name ?? "Group")
-              : (conv.recipient?.name ?? "Direct Message"),
-            recipientImage: conv.isGroup ? "" : (conv.recipient?.image ?? ""),
-            isGroup: conv.isGroup ? "true" : "false",
-          },
-        })
-      }
-      onLongPress={() => handleLongPressDm(conv.id)}
-      className="mx-4 mb-2 bg-white dark:bg-slate-800 rounded-2xl p-4 flex-row items-center"
-      style={{
-        shadowColor: "#000",
-        shadowOpacity: 0.05,
-        shadowRadius: 4,
-        shadowOffset: { width: 0, height: 1 },
-        elevation: 1,
-      }}
-    >
-      <View className="w-12 h-12 rounded-full bg-indigo-500 items-center justify-center mr-3 overflow-hidden">
-        {conv.isGroup ? (
-          <Users size={22} color="white" />
-        ) : conv.recipient?.image ? (
-          <Image source={{ uri: conv.recipient.image }} style={{ width: 48, height: 48 }} resizeMode="cover" />
-        ) : (
-          <Text className="text-white font-bold text-lg">
-            {conv.recipient?.name?.[0]?.toUpperCase() ?? "?"}
-          </Text>
-        )}
-      </View>
-      <View className="flex-1">
-        <Text className="font-semibold text-slate-900 dark:text-white">
-          {conv.isGroup ? (conv.name ?? "Group") : (conv.recipient?.name ?? "Unknown")}
-        </Text>
-        {conv.lastMessage ? (
-          <Text
-            className="text-sm text-slate-500 dark:text-slate-400"
-            numberOfLines={1}
-          >
-            {conv.lastMessage.sender.id === session?.user?.id ? "You: " : null}
-            {conv.lastMessage.content}
-          </Text>
-        ) : (
-          <Text className="text-sm text-slate-400 italic">No messages yet</Text>
-        )}
-      </View>
-      <View className="items-end" style={{ gap: 4 }}>
-        {conv.lastMessage ? (
-          <Text className="text-xs text-slate-400">
-            {formatTime(conv.lastMessage.createdAt)}
-          </Text>
-        ) : null}
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-          {isPinned ? (
-            <Pin size={12} color="#4361EE" />
-          ) : null}
-          {(dmUnreadCounts[conv.id] ?? 0) > 0 ? (
-            <View style={{ backgroundColor: "#4361EE", borderRadius: 10, minWidth: 20, height: 20, alignItems: "center", justifyContent: "center", paddingHorizontal: 6 }}>
-              <Text style={{ color: "white", fontSize: 11, fontWeight: "700" }}>{dmUnreadCounts[conv.id]}</Text>
-            </View>
-          ) : (
-            !isPinned ? <ChevronRight size={16} color="#94A3B8" /> : null
-          )}
-        </View>
-      </View>
-    </TouchableOpacity>
-  );
+  const members = teamDetail?.members ?? [];
+  const memberCount = members.length;
+  const topThreeMembers = members.slice(0, 3).map((m) => ({ image: m.user.image ?? null, name: m.user.name ?? null }));
+  const lastGeneralMessage = teamGeneralMessages[0];
 
   return (
-    <SafeAreaView
-      testID="chat-screen"
-      style={{ flex: 1, backgroundColor: "#F8FAFC" }}
-      edges={[]}
-    >
+    <SafeAreaView testID="chat-screen" style={{ flex: 1, backgroundColor: "#F2F3F7" }} edges={[]}>
       {/* Header */}
       <LinearGradient
         colors={["#4361EE", "#7C3AED"]}
@@ -277,104 +194,146 @@ export default function ChatScreen() {
         </View>
       </LinearGradient>
 
-      <FlatList
-        data={[]}
-        contentContainerStyle={{ paddingBottom: insets.bottom + 88 }}
-        ListHeaderComponent={
-          <View>
-            {/* Team Chat section */}
-            <Text className="px-4 pt-4 pb-2 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-              Team Chat
-            </Text>
-            <TouchableOpacity
-              testID="team-chat-button"
-              onPress={() =>
-                router.push({
-                  pathname: "/team-channels",
-                  params: { teamId: activeTeamId ?? "", teamName: currentTeam?.name ?? "" },
-                })
-              }
-              className="mx-4 mb-1 bg-white dark:bg-slate-800 rounded-2xl p-4 flex-row items-center"
-              style={{
-                shadowColor: "#000",
-                shadowOpacity: 0.05,
-                shadowRadius: 4,
-                shadowOffset: { width: 0, height: 1 },
-                elevation: 1,
-              }}
-            >
-              <View className="w-12 h-12 rounded-full bg-indigo-100 dark:bg-indigo-900 items-center justify-center mr-3 overflow-hidden">
-                {currentTeam?.image ? (
-                  <Image source={{ uri: currentTeam.image }} style={{ width: 48, height: 48 }} resizeMode="cover" />
-                ) : (
-                  <Users size={22} color="#4361EE" />
-                )}
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 100 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" />}
+      >
+        {/* ── Team profile card ── */}
+        <View style={{ marginHorizontal: 16, marginTop: 20, backgroundColor: "white", borderRadius: 20, paddingVertical: 20, paddingHorizontal: 16, alignItems: "center", shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 2 }}>
+          <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: "#EEF2FF", overflow: "hidden", marginBottom: 10, borderWidth: 3, borderColor: "white" }}>
+            {teamDetail?.image ? (
+              <Image source={{ uri: teamDetail.image }} style={{ width: 64, height: 64 }} resizeMode="cover" />
+            ) : (
+              <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+                <Users size={28} color="#4361EE" />
               </View>
-              <View className="flex-1">
-                <Text className="font-semibold text-slate-900 dark:text-white">
-                  {currentTeam?.name ?? "Team Chat"}
-                </Text>
-                <Text className="text-sm text-slate-500 dark:text-slate-400">
-                  Channels
-                </Text>
-              </View>
+            )}
+          </View>
+          <Text style={{ fontSize: 18, fontWeight: "700", color: "#0F172A" }}>{teamDetail?.name ?? "Your Team"}</Text>
+          <Text style={{ fontSize: 13, color: "#6B7280", marginTop: 3 }}>
+            {topics.length} {topics.length === 1 ? "channel" : "channels"} · {memberCount} {memberCount === 1 ? "member" : "members"}
+          </Text>
+        </View>
+
+        {/* ── Team Chat card ── */}
+        <Pressable
+          testID="team-chat-button"
+          onPress={() => router.push({ pathname: "/team-channels", params: { teamId: activeTeamId, teamName: teamDetail?.name ?? "" } })}
+          style={{ marginHorizontal: 16, marginTop: 12, backgroundColor: "white", borderRadius: 20, overflow: "hidden", shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 2 }}
+        >
+          {/* Purple accent top border */}
+          <View style={{ height: 3, backgroundColor: "#4361EE" }} />
+          <View style={{ flexDirection: "row", alignItems: "center", padding: 16, gap: 12 }}>
+            <View style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: "#EEF2FF", alignItems: "center", justifyContent: "center" }}>
+              <MessageCircle size={22} color="#4361EE" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 16, fontWeight: "700", color: "#0F172A" }}>Team Chat</Text>
+              <Text style={{ fontSize: 13, color: "#6B7280", marginTop: 1 }}>Primary team space</Text>
+            </View>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
               {teamUnreadCount > 0 ? (
                 <View style={{ backgroundColor: "#4361EE", borderRadius: 10, minWidth: 20, height: 20, alignItems: "center", justifyContent: "center", paddingHorizontal: 6 }}>
                   <Text style={{ color: "white", fontSize: 11, fontWeight: "700" }}>{teamUnreadCount}</Text>
                 </View>
-              ) : (
-                <ChevronRight size={18} color="#94A3B8" />
-              )}
-            </TouchableOpacity>
-
-            {/* DMs section */}
-            <View className="flex-row items-center px-4 pt-5 pb-2">
-              <Text className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-                Direct Messages
-              </Text>
+              ) : null}
+              {topThreeMembers.length > 0 ? <AvatarStack members={topThreeMembers} /> : null}
             </View>
-
-            {dmsLoading ? (
-              <View className="py-8 items-center" testID="dms-loading">
-                <ActivityIndicator color="#4361EE" />
-              </View>
-            ) : null}
-
-            {!dmsLoading && conversations.length === 0 && (
-              <View className="mx-4 bg-white dark:bg-slate-800 rounded-2xl p-5 items-center" testID="dms-empty">
-                <MessageCircle size={32} color="#94A3B8" />
-                <Text className="text-slate-500 text-sm mt-2 text-center">
-                  {"No direct messages yet.\nGo to the Team tab to message a member."}
-                </Text>
-              </View>
-            )}
           </View>
-        }
-        renderItem={null}
-        ListFooterComponent={
-          <View>
-            {/* Pinned DMs */}
-            {pinnedConversations.length > 0 ? (
-              <View>
-                <Text style={{ marginHorizontal: 16, marginBottom: 4, marginTop: 12, fontSize: 11, color: "#94A3B8", fontWeight: "600", textTransform: "uppercase", letterSpacing: 1 }}>
-                  Pinned
-                </Text>
-                {pinnedConversations.map((conv) => renderDmRow(conv, true))}
-              </View>
-            ) : null}
-
-            {/* Unpinned DMs */}
-            {sortedUnpinned.map((conv) => renderDmRow(conv, false))}
-
-            <View style={{ height: 24 }} />
+          <View style={{ height: 1, backgroundColor: "#F1F5F9", marginHorizontal: 16 }} />
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 16, paddingHorizontal: 16, paddingVertical: 10 }}>
+            <Text style={{ fontSize: 12, color: "#6B7280" }}>
+              👥 {memberCount} {memberCount === 1 ? "member" : "members"}
+            </Text>
+            <Text style={{ fontSize: 12, color: "#6B7280" }}>
+              {lastGeneralMessage
+                ? `⏰ ${formatTime(lastGeneralMessage.createdAt)}`
+                : "⏰ No activity yet"}
+            </Text>
           </View>
-        }
-        showsVerticalScrollIndicator={false}
-        onRefresh={onRefresh}
-        refreshing={refreshing}
-      />
+        </Pressable>
 
-      {/* Add / New Conversation choice modal */}
+        {/* ── Channels section ── */}
+        <View style={{ marginHorizontal: 16, marginTop: 24, marginBottom: 10 }}>
+          <Text style={{ fontSize: 20, fontWeight: "700", color: "#0F172A" }}>Channels</Text>
+          <Text style={{ fontSize: 13, color: "#6B7280", marginTop: 2 }}>
+            {topics.length} {topics.length === 1 ? "active space" : "active spaces"}
+          </Text>
+        </View>
+
+        {topicsLoading ? (
+          <View style={{ paddingVertical: 24, alignItems: "center" }}>
+            <ActivityIndicator color="#4361EE" />
+          </View>
+        ) : topics.length === 0 ? (
+          <View style={{ marginHorizontal: 16, backgroundColor: "white", borderRadius: 20, padding: 24, alignItems: "center" }}>
+            <Text style={{ color: "#94A3B8", fontSize: 14 }}>No channels yet</Text>
+          </View>
+        ) : (
+          topics.map((topic) => {
+            const firstLetter = topic.name[0]?.toUpperCase() ?? "#";
+            const isHash = /^[^a-zA-Z]/.test(topic.name);
+            const unreadKey = `topic:${topic.id}`;
+            const unread = teamUnreadCounts[unreadKey] ?? 0;
+            return (
+              <Pressable
+                key={topic.id}
+                testID={`channel-card-${topic.id}`}
+                onPress={() => router.push({ pathname: "/team-chat", params: { teamId: activeTeamId, topicId: topic.id, topicName: topic.name, teamName: teamDetail?.name ?? "" } })}
+                style={{ marginHorizontal: 16, marginBottom: 10, backgroundColor: "white", borderRadius: 20, padding: 16, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 6, shadowOffset: { width: 0, height: 1 }, elevation: 1 }}
+              >
+                <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 12 }}>
+                  {/* Icon */}
+                  <View style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: topic.color + "22", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    {isHash ? (
+                      <Hash size={20} color={topic.color} />
+                    ) : (
+                      <Text style={{ fontSize: 18, fontWeight: "700", color: topic.color }}>{firstLetter}</Text>
+                    )}
+                  </View>
+                  {/* Content */}
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                      <Text style={{ fontSize: 16, fontWeight: "700", color: "#0F172A" }}>{topic.name}</Text>
+                      {topic.description ? (
+                        <View style={{ backgroundColor: "#F1F5F9", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}>
+                          <Text style={{ fontSize: 11, fontWeight: "600", color: "#64748B" }}>{topic.description}</Text>
+                        </View>
+                      ) : unread > 0 ? (
+                        <View style={{ backgroundColor: "#4361EE", borderRadius: 10, minWidth: 20, height: 20, alignItems: "center", justifyContent: "center", paddingHorizontal: 6 }}>
+                          <Text style={{ color: "white", fontSize: 11, fontWeight: "700" }}>{unread}</Text>
+                        </View>
+                      ) : null}
+                    </View>
+                    <Text style={{ fontSize: 13, color: "#6B7280", marginTop: 4 }} numberOfLines={1}>
+                      {topic.lastMessage
+                        ? `${topic.lastMessage.sender.name ?? "Someone"}: ${topic.lastMessage.content ?? "📎 Attachment"}`
+                        : "No posts yet"}
+                    </Text>
+                  </View>
+                </View>
+              </Pressable>
+            );
+          })
+        )}
+
+        {/* ── Create channel button ── */}
+        {!isDemo ? (
+          <View style={{ marginHorizontal: 16, marginTop: 8 }}>
+            <Pressable
+              testID="create-channel-button"
+              onPress={() => router.push({ pathname: "/team-channels", params: { teamId: activeTeamId, teamName: teamDetail?.name ?? "", openCreate: "true" } })}
+              style={{ backgroundColor: "#4361EE", borderRadius: 30, paddingVertical: 16, alignItems: "center", flexDirection: "row", justifyContent: "center", gap: 8 }}
+            >
+              <Plus size={18} color="white" />
+              <Text style={{ color: "white", fontWeight: "700", fontSize: 15 }}>Create channel</Text>
+            </Pressable>
+          </View>
+        ) : null}
+      </ScrollView>
+
+      {/* Add / New Conversation modal */}
       <Modal visible={showAddModal} transparent animationType="fade" onRequestClose={() => setShowAddModal(false)}>
         <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }} onPress={() => setShowAddModal(false)}>
           <Pressable onPress={(e) => e.stopPropagation()} style={{ backgroundColor: "white", borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, gap: 12 }}>
@@ -417,64 +376,31 @@ export default function ChatScreen() {
       </Modal>
 
       {/* Group chat paywall modal */}
-      <Modal
-        visible={showGroupPaywall}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowGroupPaywall(false)}
-      >
-        <Pressable
-          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.45)", alignItems: "center", justifyContent: "center", paddingHorizontal: 24 }}
-          onPress={() => setShowGroupPaywall(false)}
-        >
+      <Modal visible={showGroupPaywall} transparent animationType="fade" onRequestClose={() => setShowGroupPaywall(false)}>
+        <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.45)", alignItems: "center", justifyContent: "center", paddingHorizontal: 24 }} onPress={() => setShowGroupPaywall(false)}>
           <Pressable onPress={(e) => e.stopPropagation()}>
             <View style={{ backgroundColor: "white", borderRadius: 24, padding: 28, width: "100%", alignItems: "center" }} testID="group-paywall-modal">
               <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: "#EEF2FF", alignItems: "center", justifyContent: "center", marginBottom: 14 }}>
                 <Lock size={28} color="#4361EE" />
               </View>
-              <Text style={{ fontSize: 18, fontWeight: "700", color: "#0F172A", textAlign: "center", marginBottom: 8 }}>
-                Group Chats
-              </Text>
+              <Text style={{ fontSize: 18, fontWeight: "700", color: "#0F172A", textAlign: "center", marginBottom: 8 }}>Group Chats</Text>
               <Text style={{ fontSize: 14, color: "#64748B", textAlign: "center", marginBottom: 24, lineHeight: 20 }}>
                 Upgrade to Alenio Team to create group conversations with your team
               </Text>
               <TouchableOpacity
                 onPress={() => { setShowGroupPaywall(false); router.push("/subscription"); }}
                 testID="group-paywall-upgrade-button"
-                style={{
-                  borderRadius: 14,
-                  overflow: "hidden",
-                  width: "100%",
-                  shadowColor: "#4361EE",
-                  shadowOpacity: 0.35,
-                  shadowRadius: 10,
-                  shadowOffset: { width: 0, height: 4 },
-                  elevation: 5,
-                  marginBottom: 10,
-                }}
+                style={{ borderRadius: 14, overflow: "hidden", width: "100%", shadowColor: "#4361EE", shadowOpacity: 0.35, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 5, marginBottom: 10 }}
               >
-                <LinearGradient
-                  colors={["#4361EE", "#7C3AED"]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={{ paddingVertical: 14, alignItems: "center", flexDirection: "row", justifyContent: "center", gap: 8 }}
-                >
+                <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ paddingVertical: 14, alignItems: "center", flexDirection: "row", justifyContent: "center", gap: 8 }}>
                   <Text style={{ color: "white", fontWeight: "700", fontSize: 15 }}>Upgrade to Team Plan</Text>
                   <Text style={{ color: "rgba(255,255,255,0.85)", fontSize: 15 }}>→</Text>
                 </LinearGradient>
               </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => setShowGroupPaywall(false)}
-                style={{ paddingVertical: 10, width: "100%", alignItems: "center" }}
-                testID="group-paywall-dismiss"
-              >
+              <TouchableOpacity onPress={() => setShowGroupPaywall(false)} style={{ paddingVertical: 10, width: "100%", alignItems: "center" }} testID="group-paywall-dismiss">
                 <Text style={{ color: "#94A3B8", fontWeight: "600", fontSize: 14 }}>Not now</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => { setShowGroupPaywall(false); router.push("/subscription"); }}
-                style={{ paddingVertical: 8, width: "100%", alignItems: "center" }}
-                testID="group-paywall-restore"
-              >
+              <TouchableOpacity onPress={() => { setShowGroupPaywall(false); router.push("/subscription"); }} style={{ paddingVertical: 8, width: "100%", alignItems: "center" }} testID="group-paywall-restore">
                 <Text style={{ color: "#CBD5E1", fontSize: 12 }}>Restore Purchases</Text>
               </TouchableOpacity>
             </View>
