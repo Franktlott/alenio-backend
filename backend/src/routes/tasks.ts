@@ -308,6 +308,68 @@ tasksRouter.get("/count", async (c) => {
   return c.json({ data: count });
 });
 
+// GET /api/teams/:teamId/tasks/monthly-completion
+// Returns task completion percentage for each of the last 6 calendar months
+// MUST be before /:taskId routes so Hono doesn't match "monthly-completion" as a taskId
+tasksRouter.get("/monthly-completion", async (c) => {
+  const user = c.get("user")!;
+  const teamId = c.req.param("teamId") as string;
+
+  const membership = await getMembership(user.id, teamId);
+  if (!membership) return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
+
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth(); // 0-indexed
+
+  // Build last 6 calendar months (inclusive of current month)
+  const months: Array<{ year: number; month: number; label: string }> = [];
+  for (let i = 5; i >= 0; i--) {
+    const rawMonth = currentMonth - i;
+    const year = currentYear + Math.floor(rawMonth / 12);
+    const month = ((rawMonth % 12) + 12) % 12;
+    const label = new Date(year, month, 1).toLocaleString("en-US", { month: "short" });
+    months.push({ year, month, label });
+  }
+
+  // Start of the earliest month, end of the current month
+  const earliest = months[0]!;
+  const sixMonthsAgo = new Date(earliest.year, earliest.month, 1);
+  const endOfCurrentMonth = new Date(currentYear, currentMonth + 1, 0, 23, 59, 59, 999);
+
+  // Single query: all tasks with a dueDate in that window
+  const tasks = await prisma.task.findMany({
+    where: {
+      teamId,
+      dueDate: { gte: sixMonthsAgo, lte: endOfCurrentMonth },
+    },
+    select: { status: true, dueDate: true },
+  });
+
+  // Group tasks by year-month key
+  const grouped: Record<string, { total: number; done: number }> = {};
+  for (const task of tasks) {
+    if (!task.dueDate) continue;
+    const d = new Date(task.dueDate);
+    const key = `${d.getFullYear()}-${d.getMonth()}`;
+    if (!grouped[key]) grouped[key] = { total: 0, done: 0 };
+    grouped[key]!.total++;
+    if (task.status === "done") grouped[key]!.done++;
+  }
+
+  const result = months.map(({ year, month, label }) => {
+    const key = `${year}-${month}`;
+    const bucket = grouped[key];
+    const completionPct =
+      bucket === undefined || bucket.total === 0
+        ? null
+        : Math.round((bucket.done / bucket.total) * 100);
+    return { label, year, completionPct };
+  });
+
+  return c.json({ data: result });
+});
+
 // GET /api/teams/:teamId/tasks/:taskId
 tasksRouter.get("/:taskId", async (c) => {
   const user = c.get("user")!;

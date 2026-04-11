@@ -68,31 +68,38 @@ const CHART_PAD_B = 24;
 const CHART_PAD_T = 6;
 const CHART_PAD_R = 12;
 
-const monthlyData = [72, 78, 81, 75, 83, 87];
-const monthLabels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"];
 const yTicks = [60, 80, 100];
 
-function PerformanceChart() {
+function PerformanceChart({ data }: { data: Array<{ label: string; completionPct: number | null }> }) {
   const plotW = CHART_W - CHART_PAD_L - CHART_PAD_R;
   const plotH = CHART_H - CHART_PAD_T - CHART_PAD_B;
   const minY = 55;
   const maxY = 105;
 
-  const toX = (i: number) => CHART_PAD_L + (i / (monthlyData.length - 1)) * plotW;
+  const count = data.length;
+  const toX = (i: number) => count > 1 ? CHART_PAD_L + (i / (count - 1)) * plotW : CHART_PAD_L + plotW / 2;
   const toY = (v: number) => CHART_PAD_T + plotH - ((v - minY) / (maxY - minY)) * plotH;
 
-  const points = monthlyData.map((v: number, i: number) => ({ x: toX(i), y: toY(v) }));
+  // Build array of { x, y, index } only for non-null points
+  const nonNullPoints = data
+    .map((d, i) => d.completionPct !== null ? { x: toX(i), y: toY(d.completionPct), index: i } : null)
+    .filter((p): p is { x: number; y: number; index: number } => p !== null);
 
-  // Build smooth polyline points string
-  const polylinePoints = points.map((p) => `${p.x},${p.y}`).join(" ");
-
-  // Build gradient fill path
-  const firstPt = points[0];
-  const lastPt = points[points.length - 1];
-  const fillPath =
-    `M ${firstPt.x},${toY(minY)} ` +
-    points.map((p) => `L ${p.x},${p.y}`).join(" ") +
-    ` L ${lastPt.x},${toY(minY)} Z`;
+  // Build consecutive segments for line and fill
+  type Segment = Array<{ x: number; y: number; index: number }>;
+  const segments: Segment[] = [];
+  if (nonNullPoints.length > 0) {
+    let current: Segment = [nonNullPoints[0]];
+    for (let k = 1; k < nonNullPoints.length; k++) {
+      if (nonNullPoints[k].index === nonNullPoints[k - 1].index + 1) {
+        current.push(nonNullPoints[k]);
+      } else {
+        segments.push(current);
+        current = [nonNullPoints[k]];
+      }
+    }
+    segments.push(current);
+  }
 
   return (
     <Svg width={CHART_W} height={CHART_H}>
@@ -123,43 +130,59 @@ function PerformanceChart() {
         );
       })}
 
-      {/* Fill area */}
-      <Path d={fillPath} fill="#4361EE" fillOpacity={0.08} />
+      {/* Fill area — one path per segment */}
+      {segments.map((seg, si) => {
+        if (seg.length < 2) return null;
+        const firstPt = seg[0];
+        const lastPt = seg[seg.length - 1];
+        const fillPath =
+          `M ${firstPt.x},${toY(minY)} ` +
+          seg.map((p) => `L ${p.x},${p.y}`).join(" ") +
+          ` L ${lastPt.x},${toY(minY)} Z`;
+        return <Path key={si} d={fillPath} fill="#4361EE" fillOpacity={0.08} />;
+      })}
 
-      {/* Line */}
-      <Polyline
-        points={polylinePoints}
-        fill="none"
-        stroke="#4361EE"
-        strokeWidth={2.5}
-        strokeLinejoin="round"
-        strokeLinecap="round"
-      />
+      {/* Line — one polyline per segment */}
+      {segments.map((seg, si) => {
+        if (seg.length < 2) return null;
+        const polylinePoints = seg.map((p) => `${p.x},${p.y}`).join(" ");
+        return (
+          <Polyline
+            key={si}
+            points={polylinePoints}
+            fill="none"
+            stroke="#4361EE"
+            strokeWidth={2.5}
+            strokeLinejoin="round"
+            strokeLinecap="round"
+          />
+        );
+      })}
 
-      {/* Dots */}
-      {points.map((p, i) => (
+      {/* Dots — only for non-null points */}
+      {nonNullPoints.map((p, k) => (
         <Circle
-          key={i}
+          key={k}
           cx={p.x}
           cy={p.y}
-          r={i === points.length - 1 ? 5 : 3.5}
-          fill={i === points.length - 1 ? "#4361EE" : "white"}
+          r={k === nonNullPoints.length - 1 ? 5 : 3.5}
+          fill={k === nonNullPoints.length - 1 ? "#4361EE" : "white"}
           stroke="#4361EE"
           strokeWidth={2}
         />
       ))}
 
-      {/* X-axis labels */}
-      {points.map((p, i) => (
+      {/* X-axis labels — always shown */}
+      {data.map((d, i) => (
         <SvgText
           key={i}
-          x={p.x}
+          x={toX(i)}
           y={CHART_H - 4}
           fontSize={9}
           fill="#94A3B8"
           textAnchor="middle"
         >
-          {monthLabels[i]}
+          {d.label}
         </SvgText>
       ))}
     </Svg>
@@ -188,6 +211,15 @@ export default function TeamScreen() {
     queryFn: () =>
       api.get<Record<string, { activeTasks: number; overdueTasks: number; streak: number; personalBestStreak: number }>>(
         `/api/teams/${activeTeamId}/tasks/member-stats`
+      ),
+    enabled: !!activeTeamId,
+  });
+
+  const { data: monthlyStats } = useQuery({
+    queryKey: ["monthly-completion", activeTeamId],
+    queryFn: () =>
+      api.get<Array<{ label: string; year: number; completionPct: number | null }>>(
+        `/api/teams/${activeTeamId}/tasks/monthly-completion`
       ),
     enabled: !!activeTeamId,
   });
@@ -329,6 +361,7 @@ export default function TeamScreen() {
     setRefreshing(true);
     await queryClient.invalidateQueries({ queryKey: ["team", activeTeamId] });
     await queryClient.invalidateQueries({ queryKey: ["member-stats", activeTeamId] });
+    await queryClient.invalidateQueries({ queryKey: ["monthly-completion", activeTeamId] });
     setRefreshing(false);
   };
 
@@ -710,25 +743,7 @@ export default function TeamScreen() {
           </View>
 
           <View style={{ alignItems: "center" }}>
-            <PerformanceChart />
-          </View>
-
-          <View
-            style={{
-              marginTop: 8,
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 6,
-              backgroundColor: "#F0FDF4",
-              borderRadius: 8,
-              paddingHorizontal: 10,
-              paddingVertical: 6,
-            }}
-          >
-            <Text style={{ fontSize: 14, color: "#22C55E" }}>↑</Text>
-            <Text style={{ fontSize: 12, fontWeight: "700", color: "#15803D" }}>
-              12% improvement over last 3 weeks
-            </Text>
+            <PerformanceChart data={monthlyStats ?? []} />
           </View>
         </View>
 
