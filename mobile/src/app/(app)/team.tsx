@@ -722,7 +722,7 @@ export default function TeamScreen() {
             {/* Header row: label + month navigator */}
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
               <Text style={{ fontSize: 10, fontWeight: "800", color: "#94A3B8", textTransform: "uppercase", letterSpacing: 1.2 }}>
-                AT A GLANCE
+                TEAM AT A GLANCE
               </Text>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
                 <Check size={13} color="#22C55E" />
