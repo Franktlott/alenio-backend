@@ -1,4 +1,4 @@
-import { Tabs, router } from "expo-router";
+import { Tabs } from "expo-router";
 import { CheckSquare, Users, User, MessageCircle, Activity } from "lucide-react-native";
 import { View, Text, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -130,7 +130,7 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
             key={route.key}
             onPress={() => {
               if (isFocused) return;
-              router.navigate(`/(app)/${route.name}` as any);
+              navigation.navigate(route.name);
             }}
             style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 3 }}
             testID={`tab-${name}`}
