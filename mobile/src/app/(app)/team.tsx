@@ -543,11 +543,7 @@ export default function TeamScreen() {
           <View style={{ position: "absolute", left: 0, right: 0, alignItems: "center" }}>
             <Image source={require("@/assets/alenio-logo-white.png")} style={{ height: 26, width: 90, resizeMode: "contain" }} />
           </View>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            {isPaid ? (
-              <Text style={{ color: "white", fontSize: 20, fontWeight: "900" }}>{weekCompletionPct}%</Text>
-            ) : null}
-          </View>
+          <View />
         </View>
       </LinearGradient>
 
