@@ -219,7 +219,7 @@ export default function ChatScreen() {
         {/* ── Team Chat card ── */}
         <Pressable
           testID="team-chat-button"
-          onPress={() => router.push({ pathname: "/team-channels", params: { teamId: activeTeamId, teamName: teamDetail?.name ?? "" } })}
+          onPress={() => router.push({ pathname: "/team-chat", params: { teamId: activeTeamId, teamName: teamDetail?.name ?? "" } })}
           style={{ marginHorizontal: 16, marginTop: 12, backgroundColor: "white", borderRadius: 20, overflow: "hidden", shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 2 }}
         >
           {/* Purple accent top border */}
@@ -317,20 +317,6 @@ export default function ChatScreen() {
             );
           })
         )}
-
-        {/* ── Create channel button ── */}
-        {!isDemo ? (
-          <View style={{ marginHorizontal: 16, marginTop: 8 }}>
-            <Pressable
-              testID="create-channel-button"
-              onPress={() => router.push({ pathname: "/team-channels", params: { teamId: activeTeamId, teamName: teamDetail?.name ?? "", openCreate: "true" } })}
-              style={{ backgroundColor: "#4361EE", borderRadius: 30, paddingVertical: 16, alignItems: "center", flexDirection: "row", justifyContent: "center", gap: 8 }}
-            >
-              <Plus size={18} color="white" />
-              <Text style={{ color: "white", fontWeight: "700", fontSize: 15 }}>Create channel</Text>
-            </Pressable>
-          </View>
-        ) : null}
       </ScrollView>
 
       {/* Add / New Conversation modal */}
