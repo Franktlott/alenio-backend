@@ -17,6 +17,9 @@ const request = async <T>(
   });
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));
+    if (response.status === 401) {
+      authClient.signOut().catch(() => {});
+    }
     throw new Error(err?.error?.message ?? `Request failed: ${response.status}`);
   }
   return response.json();

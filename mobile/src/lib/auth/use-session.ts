@@ -10,7 +10,8 @@ export const useSession = () => {
       const result = await authClient.getSession();
       return result.data ?? null;
     },
-    staleTime: 1000 * 60 * 5,
+    staleTime: 1000 * 60, // 1 minute
+    refetchInterval: 1000 * 60, // re-check every minute
   });
 };
 
