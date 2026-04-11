@@ -207,10 +207,8 @@ export default function AppLayout() {
     }
   }, [teams, activeTeamId]);
 
-  // Free plan only gets chat, team, profile
-  // Demo users get all tabs
+  // Free plan only gets chat, team, profile (paid tabs filtered in FloatingTabBar)
   const isPaid = plan === "team";
-  const hidePaidTabs = !isPaid && !isDemo;
 
   return (
     <>
@@ -219,9 +217,9 @@ export default function AppLayout() {
         tabBar={(props) => <FloatingTabBar {...props} />}
         screenOptions={{ headerShown: false, animation: 'none', sceneStyle: { backgroundColor: '#fff' } }}
       >
-        <Tabs.Screen name="feed" options={{ href: hidePaidTabs ? null : undefined }} />
+        <Tabs.Screen name="feed" options={{}} />
         <Tabs.Screen name="chat" options={{}} />
-        <Tabs.Screen name="index" options={{ title: "Execute", href: hidePaidTabs ? null : undefined }} />
+        <Tabs.Screen name="index" options={{ title: "Execute" }} />
         <Tabs.Screen name="team" options={{ title: "Team" }} />
         <Tabs.Screen name="calendar" options={{ href: null }} />
         <Tabs.Screen name="profile" options={{ title: "Profile" }} />
