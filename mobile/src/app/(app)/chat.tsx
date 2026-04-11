@@ -100,6 +100,11 @@ export default function ChatScreen() {
   const [showCreateChannel, setShowCreateChannel] = useState(false);
   const [newChannelName, setNewChannelName] = useState("");
   const [newChannelColor, setNewChannelColor] = useState("#4361EE");
+  const [actionTopic, setActionTopic] = useState<Topic | null>(null);
+  const [editTopic, setEditTopic] = useState<Topic | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [deleteTopic, setDeleteTopic] = useState<Topic | null>(null);
 
   useEffect(() => {
     AsyncStorage.getItem(PINNED_DMS_KEY).then((val) => {
@@ -168,6 +173,26 @@ export default function ChatScreen() {
       setNewChannelName("");
       setNewChannelColor("#4361EE");
       toast({ title: "Channel created", preset: "done" });
+    },
+  });
+
+  const updateChannelMutation = useMutation({
+    mutationFn: ({ id, name, description }: { id: string; name: string; description: string }) =>
+      api.patch(`/api/teams/${activeTeamId}/topics/${id}`, { name, description }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["topics", activeTeamId] });
+      setEditTopic(null);
+      toast({ title: "Channel updated", preset: "done" });
+    },
+  });
+
+  const deleteChannelMutation = useMutation({
+    mutationFn: (id: string) =>
+      api.delete(`/api/teams/${activeTeamId}/topics/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["topics", activeTeamId] });
+      setDeleteTopic(null);
+      toast({ title: "Channel deleted", preset: "done" });
     },
   });
 
@@ -300,6 +325,7 @@ export default function ChatScreen() {
                 key={topic.id}
                 testID={`channel-card-${topic.id}`}
                 onPress={() => router.push({ pathname: "/team-chat", params: { teamId: activeTeamId, topicId: topic.id, topicName: topic.name, teamName: teamDetail?.name ?? "" } })}
+                onLongPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setActionTopic(topic); }}
                 style={{ marginHorizontal: 16, marginBottom: 10, backgroundColor: "white", borderRadius: 20, padding: 16, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 6, shadowOffset: { width: 0, height: 1 }, elevation: 1 }}
               >
                 <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 12 }}>
@@ -389,6 +415,123 @@ export default function ChatScreen() {
                 <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 2 }}>Create a topic channel for your team</Text>
               </View>
             </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Channel action sheet */}
+      <Modal visible={!!actionTopic} transparent animationType="slide" onRequestClose={() => setActionTopic(null)}>
+        <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }} onPress={() => setActionTopic(null)}>
+          <Pressable onPress={(e) => e.stopPropagation()}>
+            <View style={{ backgroundColor: "white", borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 36 }}>
+              <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: "#E2E8F0", alignSelf: "center", marginBottom: 16 }} />
+              <Text style={{ fontSize: 15, fontWeight: "700", color: "#0F172A", marginBottom: 16 }}>#{actionTopic?.name}</Text>
+              <Pressable
+                testID="action-edit-channel"
+                onPress={() => {
+                  if (actionTopic) {
+                    setEditName(actionTopic.name);
+                    setEditDescription(actionTopic.description ?? "");
+                    setEditTopic(actionTopic);
+                  }
+                  setActionTopic(null);
+                }}
+                style={{ flexDirection: "row", alignItems: "center", gap: 14, paddingVertical: 14, borderTopWidth: 0.5, borderTopColor: "#F1F5F9" }}
+              >
+                <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: "#EEF2FF", alignItems: "center", justifyContent: "center" }}>
+                  <Hash size={18} color="#4361EE" />
+                </View>
+                <Text style={{ fontSize: 15, fontWeight: "600", color: "#0F172A" }}>Edit channel</Text>
+              </Pressable>
+              <Pressable
+                testID="action-delete-channel"
+                onPress={() => { setDeleteTopic(actionTopic); setActionTopic(null); }}
+                style={{ flexDirection: "row", alignItems: "center", gap: 14, paddingVertical: 14, borderTopWidth: 0.5, borderTopColor: "#F1F5F9" }}
+              >
+                <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: "#FEE2E2", alignItems: "center", justifyContent: "center" }}>
+                  <Text style={{ fontSize: 18 }}>🗑</Text>
+                </View>
+                <Text style={{ fontSize: 15, fontWeight: "600", color: "#EF4444" }}>Delete channel</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Edit channel modal */}
+      <Modal visible={!!editTopic} transparent animationType="slide" onRequestClose={() => setEditTopic(null)}>
+        <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }} onPress={() => setEditTopic(null)}>
+          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"}>
+            <Pressable onPress={(e) => e.stopPropagation()}>
+              <View style={{ backgroundColor: "white", borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40 }}>
+                <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: "#E2E8F0", alignSelf: "center", marginBottom: 16 }} />
+                <Text style={{ fontSize: 16, fontWeight: "700", color: "#0F172A", marginBottom: 16 }}>Edit Channel</Text>
+                <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748B", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>Name</Text>
+                <TextInput
+                  value={editName}
+                  onChangeText={setEditName}
+                  placeholder="Channel name..."
+                  placeholderTextColor="#94A3B8"
+                  style={{ borderWidth: 1.5, borderColor: "#E2E8F0", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: "#0F172A", marginBottom: 14 }}
+                  testID="edit-channel-name-input"
+                />
+                <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748B", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>Description</Text>
+                <TextInput
+                  value={editDescription}
+                  onChangeText={setEditDescription}
+                  placeholder="Short description (optional)..."
+                  placeholderTextColor="#94A3B8"
+                  style={{ borderWidth: 1.5, borderColor: "#E2E8F0", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: "#0F172A", marginBottom: 20 }}
+                  testID="edit-channel-description-input"
+                />
+                <Pressable
+                  onPress={() => { if (editTopic && editName.trim()) updateChannelMutation.mutate({ id: editTopic.id, name: editName.trim(), description: editDescription.trim() }); }}
+                  disabled={!editName.trim() || updateChannelMutation.isPending}
+                  style={{ height: 48, borderRadius: 14, backgroundColor: "#4361EE", alignItems: "center", justifyContent: "center", opacity: !editName.trim() ? 0.5 : 1 }}
+                  testID="edit-channel-submit"
+                >
+                  {updateChannelMutation.isPending ? (
+                    <ActivityIndicator color="white" />
+                  ) : (
+                    <Text style={{ color: "white", fontWeight: "700", fontSize: 15 }}>Save Changes</Text>
+                  )}
+                </Pressable>
+              </View>
+            </Pressable>
+          </KeyboardAvoidingView>
+        </Pressable>
+      </Modal>
+
+      {/* Delete channel confirm modal */}
+      <Modal visible={!!deleteTopic} transparent animationType="fade" onRequestClose={() => setDeleteTopic(null)}>
+        <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)", alignItems: "center", justifyContent: "center", paddingHorizontal: 32 }} onPress={() => setDeleteTopic(null)}>
+          <Pressable onPress={(e) => e.stopPropagation()} style={{ width: "100%", backgroundColor: "white", borderRadius: 20, overflow: "hidden" }}>
+            <View style={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 16, alignItems: "center" }}>
+              <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: "#FEE2E2", alignItems: "center", justifyContent: "center", marginBottom: 12 }}>
+                <Text style={{ fontSize: 20 }}>🗑</Text>
+              </View>
+              <Text style={{ fontSize: 16, fontWeight: "700", color: "#0F172A", marginBottom: 6 }}>Delete channel?</Text>
+              <Text style={{ fontSize: 13, color: "#64748B", textAlign: "center" }}>
+                Delete <Text style={{ fontWeight: "700" }}>#{deleteTopic?.name}</Text>? All messages will be permanently removed.
+              </Text>
+            </View>
+            <View style={{ flexDirection: "row", borderTopWidth: 1, borderTopColor: "#F1F5F9" }}>
+              <Pressable onPress={() => setDeleteTopic(null)} style={{ flex: 1, paddingVertical: 14, alignItems: "center", borderRightWidth: 1, borderRightColor: "#F1F5F9" }} testID="cancel-delete-channel">
+                <Text style={{ fontSize: 15, fontWeight: "500", color: "#64748B" }}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => { if (deleteTopic) deleteChannelMutation.mutate(deleteTopic.id); }}
+                disabled={deleteChannelMutation.isPending}
+                style={{ flex: 1, paddingVertical: 14, alignItems: "center" }}
+                testID="confirm-delete-channel"
+              >
+                {deleteChannelMutation.isPending ? (
+                  <ActivityIndicator size="small" color="#EF4444" />
+                ) : (
+                  <Text style={{ fontSize: 15, fontWeight: "700", color: "#EF4444" }}>Delete</Text>
+                )}
+              </Pressable>
+            </View>
           </Pressable>
         </Pressable>
       </Modal>
