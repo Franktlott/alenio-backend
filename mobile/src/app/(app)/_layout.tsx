@@ -23,7 +23,7 @@ export const unstable_settings = {
 const ALL_TABS = [
   { name: "feed", label: "Feed", Icon: Activity, paidOnly: true },
   { name: "chat", label: "Chat", Icon: MessageCircle, paidOnly: false },
-  { name: "index", label: "Execute", Icon: CheckSquare, paidOnly: true },
+  { name: "execute", label: "Execute", Icon: CheckSquare, paidOnly: true },
   { name: "team", label: "Team", Icon: Users, paidOnly: false },
   { name: "profile", label: "Profile", Icon: User, paidOnly: false },
 ] as const;
@@ -119,7 +119,7 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
         if (!tab) return null;
         const { Icon, label, name } = tab;
         const isChat = name === "chat";
-        const isTasks = name === "index";
+        const isTasks = name === "execute";
         const acknowledgedCount = acknowledgedCounts[activeTeamId ?? ""] ?? 0;
         const newTaskCount = Math.max(0, taskCount - acknowledgedCount);
         const badge = isChat && (unreadCount + teamUnreadCount) > 0 ? (unreadCount + teamUnreadCount)
@@ -221,7 +221,7 @@ export default function AppLayout() {
       >
         <Tabs.Screen name="feed" options={{}} />
         <Tabs.Screen name="chat" options={{}} />
-        <Tabs.Screen name="index" options={{ title: "Execute" }} />
+        <Tabs.Screen name="execute" options={{ title: "Execute" }} />
         <Tabs.Screen name="team" options={{ title: "Team" }} />
         <Tabs.Screen name="calendar" options={{ href: null }} />
         <Tabs.Screen name="profile" options={{ title: "Profile" }} />

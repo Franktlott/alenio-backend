@@ -10,7 +10,7 @@ export default function NotFoundScreen() {
           This screen doesn't exist.
         </Text>
 
-        <Link href="/" testID="go-home-link" className="mt-4 py-4">
+        <Link href="/(app)/team" testID="go-home-link" className="mt-4 py-4">
           <Text className="text-sm text-blue-500">Go to home screen!</Text>
         </Link>
       </View>

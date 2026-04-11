@@ -73,7 +73,7 @@ export default function OnboardingScreen() {
     onSuccess: (team) => {
       setActiveTeamId(team.id);
       queryClient.invalidateQueries({ queryKey: ["teams"] });
-      router.replace("/(app)");
+      router.replace("/(app)/team");
     },
     onError: () => setError("Failed to create team. Please try again."),
   });
@@ -93,7 +93,7 @@ export default function OnboardingScreen() {
         const team = result as Team;
         setActiveTeamId(team.id);
         queryClient.invalidateQueries({ queryKey: ["teams"] });
-        router.replace("/(app)");
+        router.replace("/(app)/team");
       }
     },
     onError: () => setError("Invalid invite code. Please check and try again."),
@@ -128,7 +128,7 @@ export default function OnboardingScreen() {
         if (approved) {
           setActiveTeamId(approved.team.id);
           queryClient.invalidateQueries({ queryKey: ["teams"] });
-          router.replace("/(app)");
+          router.replace("/(app)/team");
         }
       } catch {
         // silently ignore polling errors
@@ -148,7 +148,7 @@ export default function OnboardingScreen() {
       if (approved) {
         setActiveTeamId(approved.team.id);
         queryClient.invalidateQueries({ queryKey: ["teams"] });
-        router.replace("/(app)");
+        router.replace("/(app)/team");
       }
     } catch {
       // ignore
