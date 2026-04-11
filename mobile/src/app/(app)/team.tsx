@@ -212,7 +212,7 @@ export default function TeamScreen() {
   const { data: memberStats } = useQuery({
     queryKey: ["member-stats", activeTeamId],
     queryFn: () =>
-      api.get<Record<string, { activeTasks: number; overdueTasks: number; streak: number; personalBestStreak: number }>>(
+      api.get<Record<string, { activeTasks: number; overdueTasks: number; completedTasks: number; streak: number; personalBestStreak: number }>>(
         `/api/teams/${activeTeamId}/tasks/member-stats`
       ),
     enabled: !!activeTeamId,
@@ -867,7 +867,7 @@ export default function TeamScreen() {
           {/* Member rows */}
           {sortedMembers.map((item: TeamMember) => {
             const stats = memberStats?.[item.userId];
-            const completed = stats?.activeTasks ?? 0;
+            const completed = stats?.completedTasks ?? 0;
             const overdue = stats?.overdueTasks ?? 0;
             const streak = stats?.streak ?? 0;
             const isCurrentUser = item.userId === session?.user?.id;

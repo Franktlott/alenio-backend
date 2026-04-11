@@ -242,16 +242,21 @@ tasksRouter.get("/member-stats", async (c) => {
     userTasks[a.userId]!.push(a.task);
   }
 
-  const statsMap: Record<string, { activeTasks: number; overdueTasks: number; streak: number; personalBestStreak: number }> = {};
+  const statsMap: Record<string, { activeTasks: number; overdueTasks: number; completedTasks: number; streak: number; personalBestStreak: number }> = {};
+
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
   for (const [userId, tasks] of Object.entries(userTasks)) {
     let activeTasks = 0;
     let overdueTasks = 0;
+    let completedTasks = 0;
 
     for (const t of tasks) {
       if (t.status !== "done") {
         activeTasks++;
         if (t.dueDate && t.dueDate < now) overdueTasks++;
+      } else {
+        if (t.completedAt && t.completedAt >= monthStart) completedTasks++;
       }
     }
 
@@ -269,7 +274,7 @@ tasksRouter.get("/member-stats", async (c) => {
       }
     }
 
-    statsMap[userId] = { activeTasks, overdueTasks, streak, personalBestStreak: 0 };
+    statsMap[userId] = { activeTasks, overdueTasks, completedTasks, streak, personalBestStreak: 0 };
   }
 
   // Fetch personalBestStreak for all users in the map
