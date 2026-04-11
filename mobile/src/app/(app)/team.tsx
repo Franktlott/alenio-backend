@@ -390,6 +390,9 @@ export default function TeamScreen() {
     ? Math.round((totalCompleted / (totalCompleted + totalOverdue)) * 100)
     : 0;
 
+  const currentMonthStats = monthlyStats ? monthlyStats[monthlyStats.length - 1] : null;
+  const monthCompletionPct = currentMonthStats?.completionPct ?? null;
+
   // Alphabetically sorted member list
   const members = team?.members ?? [];
   const sortedMembers = [...members].sort((a, b) =>
@@ -797,8 +800,10 @@ export default function TeamScreen() {
                 <Text style={{ fontSize: 9, fontWeight: "700", color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 2 }}>
                   Completion Rate
                 </Text>
-                <Text style={{ fontSize: 22, fontWeight: "900", color: "#0F172A" }}>{weekCompletionPct}%</Text>
-                <Text style={{ fontSize: 10, color: "#94A3B8" }}>this week</Text>
+                <Text style={{ fontSize: 22, fontWeight: "900", color: "#0F172A" }}>
+                  {monthCompletionPct !== null ? `${monthCompletionPct}%` : "—"}
+                </Text>
+                <Text style={{ fontSize: 10, color: "#94A3B8" }}>this month</Text>
               </View>
             </View>
           </View>
