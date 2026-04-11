@@ -268,7 +268,7 @@ export default function ChatScreen() {
               style={{ paddingTop: insets.top + 12, paddingHorizontal: 16, paddingBottom: 16 + WAVE }}
             >
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                <Text style={{ color: "white", fontSize: 20, fontWeight: "800" }}>Messages</Text>
+                <Text style={{ color: "white", fontSize: 20, fontWeight: "800" }}>Chat</Text>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                   {activeTeamId && !isDemo ? (
                     <Pressable
