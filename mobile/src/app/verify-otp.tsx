@@ -9,7 +9,8 @@ import {
   Pressable,
 } from "react-native";
 import { authClient } from "@/lib/auth/auth-client";
-import { useInvalidateSession } from "@/lib/auth/use-session";
+import { SESSION_QUERY_KEY } from "@/lib/auth/use-session";
+import { useQueryClient } from "@tanstack/react-query";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { StatusBar } from "expo-status-bar";
@@ -23,7 +24,7 @@ export default function VerifyOtp() {
   const [error, setError] = useState<string | null>(null);
   const [resent, setResent] = useState(false);
   const inputRef = useRef<TextInput>(null);
-  const invalidateSession = useInvalidateSession();
+  const queryClient = useQueryClient();
 
   const handleVerify = async () => {
     if (otp.length < 6) {
@@ -38,8 +39,8 @@ export default function VerifyOtp() {
       setError(result.error.message ?? "Invalid code. Please try again.");
       setOtp("");
     } else {
-      await invalidateSession();
-      router.replace("/(app)");
+      await queryClient.refetchQueries({ queryKey: SESSION_QUERY_KEY });
+      router.replace("/(app)/team");
     }
   };
 
