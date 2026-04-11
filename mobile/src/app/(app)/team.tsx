@@ -832,24 +832,6 @@ export default function TeamScreen() {
             }}
           >
             <Text style={{ fontSize: 16, fontWeight: "700", color: "#0F172A" }}>Team Members</Text>
-            {!isDemo ? (
-              <Pressable
-                onPress={handleShareCode}
-                style={{
-                  backgroundColor: "#4361EE",
-                  borderRadius: 20,
-                  paddingHorizontal: 14,
-                  paddingVertical: 8,
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 6,
-                }}
-                testID="add-member-button"
-              >
-                <UserPlus size={13} color="white" />
-                <Text style={{ color: "white", fontSize: 13, fontWeight: "700" }}>Add Member</Text>
-              </Pressable>
-            ) : null}
           </View>
 
           {/* Member rows */}
