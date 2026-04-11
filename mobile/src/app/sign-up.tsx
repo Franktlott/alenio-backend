@@ -11,6 +11,7 @@ import {
   ScrollView,
 } from "react-native";
 import { authClient } from "@/lib/auth/auth-client";
+import { setPendingSignUp } from "@/lib/auth/pending-signup";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { StatusBar } from "expo-status-bar";
@@ -62,6 +63,7 @@ export default function SignUp() {
       email: email.trim().toLowerCase(),
       type: "email-verification",
     });
+    setPendingSignUp(email.trim().toLowerCase(), password);
     setLoading(false);
     router.push({ pathname: "/verify-otp", params: { email: email.trim().toLowerCase() } });
   };

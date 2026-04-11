@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { authClient } from "@/lib/auth/auth-client";
 import { SESSION_QUERY_KEY, useSession } from "@/lib/auth/use-session";
+import { consumePendingSignUp } from "@/lib/auth/pending-signup";
 import { useQueryClient } from "@tanstack/react-query";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -41,13 +42,25 @@ export default function VerifyOtp() {
     setError(null);
     setLoading(true);
     const result = await authClient.emailOtp.verifyEmail({ email: email ?? "", otp });
-    setLoading(false);
     if (result.error) {
+      setLoading(false);
       setError(result.error.message ?? "Invalid code. Please try again.");
       setOtp("");
-    } else {
-      await queryClient.refetchQueries({ queryKey: SESSION_QUERY_KEY });
+      return;
     }
+    // verifyEmail only marks email as verified — sign in now
+    const creds = consumePendingSignUp();
+    if (creds) {
+      const signInResult = await authClient.signIn.email({ email: creds.email, password: creds.password });
+      if (signInResult.error) {
+        setLoading(false);
+        setError("Verified! Please sign in to continue.");
+        router.replace("/sign-in");
+        return;
+      }
+    }
+    await queryClient.refetchQueries({ queryKey: SESSION_QUERY_KEY });
+    setLoading(false);
   };
 
   const handleResend = async () => {
