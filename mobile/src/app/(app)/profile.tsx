@@ -413,20 +413,16 @@ export default function ProfileScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1" edges={["top"]} testID="profile-screen">
-      <ImageBackground
-        source={require("@/assets/brand-bg.png")}
-        style={{ flex: 1 }}
-        resizeMode="cover"
-      >
-        <View style={{ flex: 1, backgroundColor: overlayColor }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: "#F0F4FF" }} edges={["top"]} testID="profile-screen">
       {/* Header */}
-      <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
-        <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 14, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-          <Text style={{ flex: 1, color: "white", fontSize: 18, fontWeight: "700" }}>Profile</Text>
-          <Image source={require("@/assets/alenio-icon.png")} style={{ width: 30, height: 30, borderRadius: 6 }} />
-        </View>
-      </LinearGradient>
+      <View style={{ marginHorizontal: 12, marginTop: 8, borderRadius: 24, backgroundColor: "#E0E8FF", overflow: "hidden", shadowColor: "#4361EE", shadowOpacity: 0.15, shadowRadius: 16, shadowOffset: { width: 0, height: 3 }, elevation: 6 }}>
+        <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ paddingHorizontal: 14, paddingTop: 12, paddingBottom: 20, borderBottomLeftRadius: 22, borderBottomRightRadius: 22 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+            <Text style={{ color: "white", fontSize: 20, fontWeight: "800" }}>Profile</Text>
+            <Image source={require("@/assets/alenio-icon.png")} style={{ width: 26, height: 26, borderRadius: 6 }} />
+          </View>
+        </LinearGradient>
+      </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 88 }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" colors={["#4361EE"]} />}>
         {/* Avatar + name */}
@@ -1154,8 +1150,6 @@ export default function ProfileScreen() {
           </KeyboardAvoidingView>
         </Pressable>
       </Modal>
-        </View>
-      </ImageBackground>
     </SafeAreaView>
   );
 }

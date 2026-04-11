@@ -250,36 +250,30 @@ export default function ChatScreen() {
   return (
     <SafeAreaView
       testID="chat-screen"
-      className="flex-1 bg-slate-50 dark:bg-slate-900"
+      style={{ flex: 1, backgroundColor: "#F0F4FF" }}
       edges={["top"]}
     >
       {/* Header */}
-      <LinearGradient
-        colors={["#4361EE", "#7C3AED"]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-      >
-        <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 14 }}>
+      <View style={{ marginHorizontal: 12, marginTop: 8, borderRadius: 24, backgroundColor: "#E0E8FF", overflow: "hidden", shadowColor: "#4361EE", shadowOpacity: 0.15, shadowRadius: 16, shadowOffset: { width: 0, height: 3 }, elevation: 6 }}>
+        <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ paddingHorizontal: 14, paddingTop: 12, paddingBottom: 20, borderBottomLeftRadius: 22, borderBottomRightRadius: 22 }}>
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-            <View style={{ flex: 1 }}>
-              <Text style={{ color: "white", fontSize: 18, fontWeight: "700" }}>Messages</Text>
-            </View>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+            <Text style={{ color: "white", fontSize: 20, fontWeight: "800" }}>Messages</Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
               {activeTeamId && !isDemo ? (
                 <Pressable
                   onPress={() => setShowAddModal(true)}
-                  style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "rgba(255,255,255,0.22)", paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20 }}
+                  style={{ flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "rgba(255,255,255,0.22)", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 }}
                   testID="chat-header-add-button"
                 >
-                  <Plus size={15} color="white" />
-                  <Text style={{ color: "white", fontSize: 13, fontWeight: "600" }}>Add</Text>
+                  <Plus size={13} color="white" />
+                  <Text style={{ color: "white", fontSize: 12, fontWeight: "600" }}>Add</Text>
                 </Pressable>
               ) : null}
-              <Image source={require("@/assets/alenio-icon.png")} style={{ width: 30, height: 30, borderRadius: 6 }} />
+              <Image source={require("@/assets/alenio-icon.png")} style={{ width: 26, height: 26, borderRadius: 6 }} />
             </View>
           </View>
-        </View>
-      </LinearGradient>
+        </LinearGradient>
+      </View>
 
       <FlatList
         data={[]}

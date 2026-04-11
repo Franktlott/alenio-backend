@@ -932,35 +932,31 @@ export default function TasksScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#F8FAFC" }} edges={["top"]} testID="tasks-screen">
-      {/* Blue/purple gradient header */}
-      <LinearGradient
-        colors={["#4361EE", "#7C3AED"]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-      >
-        <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 14 }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: "#F0F4FF" }} edges={["top"]} testID="tasks-screen">
+      {/* Header */}
+      <View style={{ marginHorizontal: 12, marginTop: 8, borderRadius: 24, backgroundColor: "#E0E8FF", overflow: "hidden", shadowColor: "#4361EE", shadowOpacity: 0.15, shadowRadius: 16, shadowOffset: { width: 0, height: 3 }, elevation: 6 }}>
+        <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ paddingHorizontal: 14, paddingTop: 12, paddingBottom: 20, borderBottomLeftRadius: 22, borderBottomRightRadius: 22 }}>
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
             <View>
-              <Text style={{ color: "white", fontSize: 18, fontWeight: "700" }}>Execute</Text>
-              <Text style={{ color: "rgba(255,255,255,0.7)", fontSize: 11, fontWeight: "500", marginTop: 1 }}>Task Manager & Calendar</Text>
+              <Text style={{ color: "white", fontSize: 20, fontWeight: "800" }}>Execute</Text>
+              <Text style={{ color: "rgba(255,255,255,0.7)", fontSize: 10, fontWeight: "500", marginTop: 1 }}>Task Manager & Calendar</Text>
             </View>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
               {activeTeamId && !isDemo ? (
                 <Pressable
                   onPress={() => setShowAddModal(true)}
-                  style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "rgba(255,255,255,0.22)", paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20 }}
+                  style={{ flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "rgba(255,255,255,0.22)", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 }}
                   testID="header-add-button"
                 >
-                  <Plus size={15} color="white" />
-                  <Text style={{ color: "white", fontSize: 13, fontWeight: "600" }}>Add</Text>
+                  <Plus size={13} color="white" />
+                  <Text style={{ color: "white", fontSize: 12, fontWeight: "600" }}>Add</Text>
                 </Pressable>
               ) : null}
-              <Image source={require("@/assets/alenio-icon.png")} style={{ width: 30, height: 30, borderRadius: 6 }} />
+              <Image source={require("@/assets/alenio-icon.png")} style={{ width: 26, height: 26, borderRadius: 6 }} />
             </View>
           </View>
-        </View>
-      </LinearGradient>
+        </LinearGradient>
+      </View>
 
       <View style={{ flex: 1 }}>
         {/* Fixed top section: calendar, events, filter tabs */}

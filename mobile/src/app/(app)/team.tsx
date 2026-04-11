@@ -535,29 +535,31 @@ export default function TeamScreen() {
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
         style={{
-            paddingTop: 14,
-            paddingHorizontal: 16,
-            paddingBottom: 30,
+            paddingTop: 12,
+            paddingHorizontal: 14,
+            paddingBottom: 22,
+            borderBottomLeftRadius: 22,
+            borderBottomRightRadius: 22,
           }}
         >
           <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" }}>
             <View>
-              <Text style={{ color: "white", fontWeight: "800", fontSize: 26 }}>Team</Text>
-              <Text style={{ color: "rgba(255,255,255,0.72)", fontSize: 13, marginTop: 2 }}>
+              <Text style={{ color: "white", fontWeight: "800", fontSize: 20 }}>Team</Text>
+              <Text style={{ color: "rgba(255,255,255,0.72)", fontSize: 11, marginTop: 1 }}>
                 {team?.name ?? ""}
               </Text>
             </View>
             {isPaid ? (
               <View style={{ alignItems: "flex-end" }}>
-                <Text style={{ color: "white", fontSize: 28, fontWeight: "900", lineHeight: 32 }}>{weekCompletionPct}%</Text>
-                <Text style={{ color: "rgba(255,255,255,0.72)", fontSize: 12, fontWeight: "600", marginTop: 2 }}>this week</Text>
+                <Text style={{ color: "white", fontSize: 22, fontWeight: "900", lineHeight: 26 }}>{weekCompletionPct}%</Text>
+                <Text style={{ color: "rgba(255,255,255,0.72)", fontSize: 11, fontWeight: "600", marginTop: 1 }}>this week</Text>
               </View>
             ) : null}
           </View>
         </LinearGradient>
 
-        {/* Team info section — curved top creates the downward bulge on the gradient */}
-        <View style={{ paddingHorizontal: 14, paddingTop: 14, paddingBottom: 14, backgroundColor: "#E0E8FF", borderTopLeftRadius: 22, borderTopRightRadius: 22, marginTop: -20 }}>
+        {/* Team info section */}
+        <View style={{ paddingHorizontal: 14, paddingTop: 12, paddingBottom: 12 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
             {/* Avatar */}
             <TouchableOpacity
