@@ -529,18 +529,10 @@ export default function TeamScreen() {
               end={{ x: 1, y: 0 }}
               style={{ paddingTop: insets.top + 12, paddingHorizontal: 16, paddingBottom: 16 + WAVE }}
             >
-              <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" }}>
-                <View>
-                  <Text style={{ color: "white", fontWeight: "800", fontSize: 20 }}>Team</Text>
-                  <Text style={{ color: "rgba(255,255,255,0.72)", fontSize: 11, marginTop: 1 }}>
-                    {team?.name ?? ""}
-                  </Text>
-                </View>
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                <Text style={{ color: "white", fontWeight: "800", fontSize: 20 }}>Team</Text>
                 {isPaid ? (
-                  <View style={{ alignItems: "flex-end" }}>
-                    <Text style={{ color: "white", fontSize: 22, fontWeight: "900", lineHeight: 26 }}>{weekCompletionPct}%</Text>
-                    <Text style={{ color: "rgba(255,255,255,0.72)", fontSize: 11, fontWeight: "600", marginTop: 1 }}>this week</Text>
-                  </View>
+                  <Text style={{ color: "white", fontSize: 20, fontWeight: "900" }}>{weekCompletionPct}%</Text>
                 ) : null}
               </View>
             </LinearGradient>
