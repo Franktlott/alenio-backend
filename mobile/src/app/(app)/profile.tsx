@@ -652,19 +652,6 @@ export default function ProfileScreen() {
               </View>
               <Text className="text-slate-300 text-base">›</Text>
             </TouchableOpacity>
-            <View className="h-px bg-slate-100 dark:bg-slate-800 mx-4" />
-            <View className="flex-row items-center px-4 py-4">
-              <View className="w-8 h-8 rounded-xl bg-purple-100 items-center justify-center mr-3">
-                <BarChart2 size={16} color="#7C3AED" />
-              </View>
-              <View className="flex-1">
-                <Text className="font-semibold text-slate-900 dark:text-white">Insights</Text>
-                <Text className="text-xs text-slate-400 mt-0.5">Team analytics & performance</Text>
-              </View>
-              <View className="bg-amber-100 rounded-full px-2 py-0.5">
-                <Text className="text-xs font-semibold text-amber-600">Coming Soon</Text>
-              </View>
-            </View>
           </GlassCard>
         </View>
         ) : null}
