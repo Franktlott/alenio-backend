@@ -948,8 +948,8 @@ export default function TeamScreen() {
                 {/* Metrics */}
                 <View style={{ alignItems: "flex-end", gap: 2 }}>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                    <CheckCircle2 size={12} color="#22C55E" />
-                    <Text style={{ fontSize: 12, fontWeight: "700", color: "#0F172A" }}>{completed}</Text>
+                    <Text style={{ fontSize: 14 }}>🔥</Text>
+                    <Text style={{ fontSize: 12, fontWeight: "700", color: "#0F172A" }}>{streak}</Text>
                     {overdue > 0 ? (
                       <>
                         <AlertCircle size={12} color="#EF4444" />
@@ -957,9 +957,6 @@ export default function TeamScreen() {
                       </>
                     ) : null}
                   </View>
-                  {streak > 0 ? (
-                    <Text style={{ fontSize: 11, color: "#F97316", fontWeight: "600" }}>{streak}-day streak</Text>
-                  ) : null}
                 </View>
               </Pressable>
             );
