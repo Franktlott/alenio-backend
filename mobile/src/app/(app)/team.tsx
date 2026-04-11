@@ -349,24 +349,15 @@ export default function TeamScreen() {
 
   const [refreshing, setRefreshing] = useState(false);
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
-  const [selectedMonthIndex, setSelectedMonthIndex] = useState<number | null>(null);
 
-  const monthTotal = monthlyStats?.length ?? 0;
-  const monthIdx = selectedMonthIndex !== null ? selectedMonthIndex : monthTotal - 1;
-  const selectedMonthStats = monthlyStats ? monthlyStats[monthIdx] ?? null : null;
-  const monthCompletionPct = selectedMonthStats?.completionPct ?? null;
-  const monthDone = selectedMonthStats?.done ?? 0;
-  const monthLabel = selectedMonthStats?.label ?? "";
-
-  const _now = new Date();
-  const statsYear = selectedMonthStats?.year ?? _now.getFullYear();
-  const statsMonth = selectedMonthStats?.month ?? _now.getMonth();
+  // Aggregate across all 6 months
+  const totalDone6m = monthlyStats?.reduce((s, m) => s + m.done, 0) ?? 0;
 
   const { data: memberStats } = useQuery({
-    queryKey: ["member-stats", activeTeamId, statsYear, statsMonth],
+    queryKey: ["member-stats", activeTeamId],
     queryFn: () =>
       api.get<Record<string, { activeTasks: number; overdueTasks: number; completedTasks: number; streak: number; personalBestStreak: number }>>(
-        `/api/teams/${activeTeamId}/tasks/member-stats?year=${statsYear}&month=${statsMonth}`
+        `/api/teams/${activeTeamId}/tasks/member-stats`
       ),
     enabled: !!activeTeamId,
   });
@@ -377,7 +368,7 @@ export default function TeamScreen() {
   const onRefresh = async () => {
     setRefreshing(true);
     await queryClient.invalidateQueries({ queryKey: ["team", activeTeamId] });
-    await queryClient.invalidateQueries({ queryKey: ["member-stats", activeTeamId, statsYear, statsMonth] });
+    await queryClient.invalidateQueries({ queryKey: ["member-stats", activeTeamId] });
     await queryClient.invalidateQueries({ queryKey: ["monthly-completion", activeTeamId] });
     setRefreshing(false);
   };
@@ -734,38 +725,14 @@ export default function TeamScreen() {
                 AT A GLANCE
               </Text>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                <Pressable
-                  onPress={() => setSelectedMonthIndex(Math.max(0, monthIdx - 1))}
-                  disabled={monthIdx === 0}
-                  style={{ padding: 4 }}
-                  testID="month-prev"
-                >
-                  <ChevronLeft size={16} color={monthIdx === 0 ? "#CBD5E1" : "#4361EE"} />
-                </Pressable>
-                <Text style={{ fontSize: 13, fontWeight: "700", color: "#4361EE", minWidth: 80, textAlign: "center" }}>
-                  {monthLabel}
-                </Text>
-                <Pressable
-                  onPress={() => setSelectedMonthIndex(Math.min(monthTotal - 1, monthIdx + 1))}
-                  disabled={monthIdx === monthTotal - 1}
-                  style={{ padding: 4 }}
-                  testID="month-next"
-                >
-                  <ChevronRight size={16} color={monthIdx === monthTotal - 1 ? "#CBD5E1" : "#4361EE"} />
-                </Pressable>
+                <Check size={13} color="#22C55E" />
+                <Text style={{ fontSize: 13, fontWeight: "800", color: "#15803D" }}>{totalDone6m}</Text>
+                <Text style={{ fontSize: 11, color: "#16A34A", fontWeight: "600" }}>completed · 6 months</Text>
               </View>
             </View>
 
             {/* Stats row */}
             <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginTop: 10 }}>
-              <View style={{ backgroundColor: "#EEF2FF", borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5 }}>
-                <Text style={{ fontSize: 12, fontWeight: "700", color: "#4361EE" }}>{monthLabel}</Text>
-              </View>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                <Check size={13} color="#22C55E" />
-                <Text style={{ fontSize: 13, fontWeight: "800", color: "#15803D" }}>{monthDone}</Text>
-                <Text style={{ fontSize: 11, color: "#16A34A", fontWeight: "600" }}>tasks completed</Text>
-              </View>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
                 <AlertTriangle size={12} color={totalOverdue > 0 ? "#EF4444" : "#94A3B8"} />
                 <Text style={{ fontSize: 13, fontWeight: "800", color: totalOverdue > 0 ? "#DC2626" : "#94A3B8" }}>{totalOverdue}</Text>
