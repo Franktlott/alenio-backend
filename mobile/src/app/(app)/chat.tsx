@@ -99,6 +99,7 @@ export default function ChatScreen() {
   const [pinnedDmIds, setPinnedDmIds] = useState<string[]>([]);
   const [showCreateChannel, setShowCreateChannel] = useState(false);
   const [newChannelName, setNewChannelName] = useState("");
+  const [newChannelDescription, setNewChannelDescription] = useState("");
   const [newChannelColor, setNewChannelColor] = useState("#4361EE");
   const [actionTopic, setActionTopic] = useState<Topic | null>(null);
   const [editTopic, setEditTopic] = useState<Topic | null>(null);
@@ -165,12 +166,13 @@ export default function ChatScreen() {
   };
 
   const createChannelMutation = useMutation({
-    mutationFn: ({ name, color }: { name: string; color: string }) =>
-      api.post(`/api/teams/${activeTeamId}/topics`, { name, color }),
+    mutationFn: ({ name, description, color }: { name: string; description: string; color: string }) =>
+      api.post(`/api/teams/${activeTeamId}/topics`, { name, description, color }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["topics", activeTeamId] });
       setShowCreateChannel(false);
       setNewChannelName("");
+      setNewChannelDescription("");
       setNewChannelColor("#4361EE");
       toast({ title: "Channel created", preset: "done" });
     },
@@ -553,6 +555,14 @@ export default function ChatScreen() {
                   testID="channel-name-input"
                   autoFocus
                 />
+                <TextInput
+                  value={newChannelDescription}
+                  onChangeText={setNewChannelDescription}
+                  placeholder="Short description (optional)..."
+                  placeholderTextColor="#94A3B8"
+                  style={{ borderWidth: 1.5, borderColor: "#E2E8F0", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: "#0F172A", marginBottom: 16 }}
+                  testID="channel-description-input"
+                />
                 <View style={{ flexDirection: "row", gap: 10, marginBottom: 20 }}>
                   {TOPIC_COLORS.map((color) => (
                     <Pressable
@@ -564,7 +574,7 @@ export default function ChatScreen() {
                   ))}
                 </View>
                 <Pressable
-                  onPress={() => { if (newChannelName.trim()) createChannelMutation.mutate({ name: newChannelName.trim(), color: newChannelColor }); }}
+                  onPress={() => { if (newChannelName.trim()) createChannelMutation.mutate({ name: newChannelName.trim(), description: newChannelDescription.trim(), color: newChannelColor }); }}
                   disabled={!newChannelName.trim() || createChannelMutation.isPending}
                   style={{ height: 48, borderRadius: 14, backgroundColor: "#4361EE", alignItems: "center", justifyContent: "center", opacity: !newChannelName.trim() ? 0.5 : 1 }}
                   testID="create-channel-submit"
