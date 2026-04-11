@@ -210,19 +210,10 @@ export default function TeamScreen() {
     enabled: !!activeTeamId,
   });
 
-  const { data: memberStats } = useQuery({
-    queryKey: ["member-stats", activeTeamId],
-    queryFn: () =>
-      api.get<Record<string, { activeTasks: number; overdueTasks: number; completedTasks: number; streak: number; personalBestStreak: number }>>(
-        `/api/teams/${activeTeamId}/tasks/member-stats`
-      ),
-    enabled: !!activeTeamId,
-  });
-
   const { data: monthlyStats } = useQuery({
     queryKey: ["monthly-completion", activeTeamId],
     queryFn: () =>
-      api.get<Array<{ label: string; year: number; completionPct: number | null; done: number; total: number }>>(
+      api.get<Array<{ label: string; year: number; month: number; completionPct: number | null; done: number; total: number }>>(
         `/api/teams/${activeTeamId}/tasks/monthly-completion`
       ),
     enabled: !!activeTeamId,
@@ -359,13 +350,34 @@ export default function TeamScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
   const [selectedMonthIndex, setSelectedMonthIndex] = useState<number | null>(null);
+
+  const monthTotal = monthlyStats?.length ?? 0;
+  const monthIdx = selectedMonthIndex !== null ? selectedMonthIndex : monthTotal - 1;
+  const selectedMonthStats = monthlyStats ? monthlyStats[monthIdx] ?? null : null;
+  const monthCompletionPct = selectedMonthStats?.completionPct ?? null;
+  const monthDone = selectedMonthStats?.done ?? 0;
+  const monthLabel = selectedMonthStats?.label ?? "";
+
+  const _now = new Date();
+  const statsYear = selectedMonthStats?.year ?? _now.getFullYear();
+  const statsMonth = selectedMonthStats?.month ?? _now.getMonth();
+
+  const { data: memberStats } = useQuery({
+    queryKey: ["member-stats", activeTeamId, statsYear, statsMonth],
+    queryFn: () =>
+      api.get<Record<string, { activeTasks: number; overdueTasks: number; completedTasks: number; streak: number; personalBestStreak: number }>>(
+        `/api/teams/${activeTeamId}/tasks/member-stats?year=${statsYear}&month=${statsMonth}`
+      ),
+    enabled: !!activeTeamId,
+  });
+
   const selectedMember = team?.members?.find((m) => m.userId === selectedMemberId) ?? null;
   const selectedStats = selectedMemberId ? memberStats?.[selectedMemberId] : null;
 
   const onRefresh = async () => {
     setRefreshing(true);
     await queryClient.invalidateQueries({ queryKey: ["team", activeTeamId] });
-    await queryClient.invalidateQueries({ queryKey: ["member-stats", activeTeamId] });
+    await queryClient.invalidateQueries({ queryKey: ["member-stats", activeTeamId, statsYear, statsMonth] });
     await queryClient.invalidateQueries({ queryKey: ["monthly-completion", activeTeamId] });
     setRefreshing(false);
   };
@@ -391,13 +403,6 @@ export default function TeamScreen() {
   const weekCompletionPct = (totalCompleted + totalOverdue) > 0
     ? Math.round((totalCompleted / (totalCompleted + totalOverdue)) * 100)
     : 0;
-
-  const monthTotal = monthlyStats?.length ?? 0;
-  const monthIdx = selectedMonthIndex !== null ? selectedMonthIndex : monthTotal - 1;
-  const selectedMonthStats = monthlyStats ? monthlyStats[monthIdx] ?? null : null;
-  const monthCompletionPct = selectedMonthStats?.completionPct ?? null;
-  const monthDone = selectedMonthStats?.done ?? 0;
-  const monthLabel = selectedMonthStats?.label ?? "";
 
   // Alphabetically sorted member list
   const members = team?.members ?? [];

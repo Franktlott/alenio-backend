@@ -227,6 +227,12 @@ tasksRouter.get("/member-stats", async (c) => {
 
   const now = new Date();
 
+  // Accept optional year/month query params (month is 0-indexed)
+  const yearParam = c.req.query("year");
+  const monthParam = c.req.query("month");
+  const targetYear = yearParam ? parseInt(yearParam) : now.getFullYear();
+  const targetMonth = monthParam !== undefined ? parseInt(monthParam) : now.getMonth();
+
   // Fetch all assigned tasks for this team in one query
   const assignments = await prisma.taskAssignment.findMany({
     where: { task: { teamId } },
@@ -244,7 +250,8 @@ tasksRouter.get("/member-stats", async (c) => {
 
   const statsMap: Record<string, { activeTasks: number; overdueTasks: number; completedTasks: number; streak: number; personalBestStreak: number }> = {};
 
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const monthStart = new Date(targetYear, targetMonth, 1);
+  const monthEnd = new Date(targetYear, targetMonth + 1, 0, 23, 59, 59, 999);
 
   for (const [userId, tasks] of Object.entries(userTasks)) {
     let activeTasks = 0;
@@ -256,7 +263,7 @@ tasksRouter.get("/member-stats", async (c) => {
         activeTasks++;
         if (t.dueDate && t.dueDate < now) overdueTasks++;
       } else {
-        if (t.completedAt && t.completedAt >= monthStart) completedTasks++;
+        if (t.completedAt && t.completedAt >= monthStart && t.completedAt <= monthEnd) completedTasks++;
       }
     }
 
@@ -369,7 +376,7 @@ tasksRouter.get("/monthly-completion", async (c) => {
       bucket === undefined || bucket.total === 0
         ? null
         : Math.round((bucket.done / bucket.total) * 100);
-    return { label, year, completionPct, done: bucket?.done ?? 0, total: bucket?.total ?? 0 };
+    return { label, year, month, completionPct, done: bucket?.done ?? 0, total: bucket?.total ?? 0 };
   });
 
   return c.json({ data: result });
