@@ -217,33 +217,33 @@ export default function CalendarScreen() {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#F8FAFC" }} edges={["top"]} testID="calendar-screen">
+    <SafeAreaView style={{ flex: 1, backgroundColor: "#F8FAFC" }} edges={[]} testID="calendar-screen">
       {/* Header */}
-      <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
-        <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 14 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+      <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ paddingTop: insets.top + 12, paddingHorizontal: 16, paddingBottom: 16 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+          <Text style={{ color: "white", fontSize: 20, fontWeight: "800", flex: 1 }}>
+            {MONTHS[currentMonth.getMonth()]} {currentMonth.getFullYear()}
+          </Text>
+          <View style={{ position: "absolute", left: 0, right: 0, alignItems: "center" }}>
+            <Image source={require("@/assets/alenio-logo-white.png")} style={{ height: 26, width: 90, resizeMode: "contain" }} />
+          </View>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
             <Pressable onPress={prevMonth} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(255,255,255,0.2)", alignItems: "center", justifyContent: "center" }} testID="prev-month-button">
               <ChevronLeft size={20} color="white" />
             </Pressable>
-            <Text style={{ color: "white", fontSize: 18, fontWeight: "700" }}>
-              {MONTHS[currentMonth.getMonth()]} {currentMonth.getFullYear()}
-            </Text>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-              {isOwnerOrLeader && activeTeamId && !isDemo ? (
-                <Pressable
-                  onPress={() => router.push({ pathname: "/create-event", params: { teamId: activeTeamId!, startDate: (selectedDate ?? new Date()).toISOString() } })}
-                  style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "rgba(255,255,255,0.22)", paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20 }}
-                  testID="header-add-event-button"
-                >
-                  <Plus size={15} color="white" />
-                  <Text style={{ color: "white", fontSize: 13, fontWeight: "600" }}>Add Event</Text>
-                </Pressable>
-              ) : null}
-              <Pressable onPress={nextMonth} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(255,255,255,0.2)", alignItems: "center", justifyContent: "center" }} testID="next-month-button">
-                <ChevronRight size={20} color="white" />
+            {isOwnerOrLeader && activeTeamId && !isDemo ? (
+              <Pressable
+                onPress={() => router.push({ pathname: "/create-event", params: { teamId: activeTeamId!, startDate: (selectedDate ?? new Date()).toISOString() } })}
+                style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "rgba(255,255,255,0.22)", paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20 }}
+                testID="header-add-event-button"
+              >
+                <Plus size={15} color="white" />
+                <Text style={{ color: "white", fontSize: 13, fontWeight: "600" }}>Add Event</Text>
               </Pressable>
-              <Image source={require("@/assets/alenio-icon.png")} style={{ width: 30, height: 30, borderRadius: 6 }} />
-            </View>
+            ) : null}
+            <Pressable onPress={nextMonth} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(255,255,255,0.2)", alignItems: "center", justifyContent: "center" }} testID="next-month-button">
+              <ChevronRight size={20} color="white" />
+            </Pressable>
           </View>
         </View>
       </LinearGradient>

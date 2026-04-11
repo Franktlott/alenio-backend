@@ -1,4 +1,4 @@
-import { View, Text, FlatList, ActivityIndicator, Pressable, ScrollView, Modal, TouchableOpacity, Image, TextInput, KeyboardAvoidingView, Platform, Dimensions } from "react-native";
+import { View, Text, FlatList, ActivityIndicator, Pressable, ScrollView, Modal, TouchableOpacity, Image, TextInput, KeyboardAvoidingView, Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -13,7 +13,6 @@ import { NoTeamPlaceholder } from "@/components/NoTeamPlaceholder";
 import { router } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useDemoMode } from "@/lib/useDemo";
-import Svg, { Path } from "react-native-svg";
 
 type CalendarEvent = {
   id: string;
@@ -938,44 +937,32 @@ export default function ActivityScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#F8FAFC" }} edges={[]} testID="activity-screen">
-      {/* Wave header */}
-      {(() => {
-        const W = Dimensions.get("window").width;
-        const WAVE = 38;
-        return (
-          <View style={{ position: "relative" }}>
-            <LinearGradient
-              colors={["#4361EE", "#7C3AED"]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={{ paddingTop: insets.top + 12, paddingHorizontal: 16, paddingBottom: 16 + WAVE }}
-            >
-              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                <Text style={{ color: "white", fontSize: 20, fontWeight: "800" }}>Activity</Text>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                  {!isDemo ? (
-                    <TouchableOpacity
-                      testID="celebrate-button"
-                      onPress={() => { setShowCelebrateModal(true); setCelebrateStep(1); }}
-                      style={{ backgroundColor: "rgba(255,255,255,0.2)", borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5, flexDirection: "row", alignItems: "center", gap: 5 }}
-                    >
-                      <Text style={{ fontSize: 12 }}>🎉</Text>
-                      <Text style={{ color: "white", fontSize: 12, fontWeight: "700" }}>Celebrate</Text>
-                    </TouchableOpacity>
-                  ) : null}
-                  <ExpoImage source={require("@/assets/alenio-icon.png")} style={{ width: 26, height: 26, borderRadius: 6 }} contentFit="cover" />
-                </View>
-              </View>
-            </LinearGradient>
-            {/* SVG wave — background color U-curve makes gradient protrude in center */}
-            <View style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: WAVE }}>
-              <Svg width={W} height={WAVE}>
-                <Path d={`M 0 0 Q ${W / 2} ${WAVE} ${W} 0 L ${W} ${WAVE} L 0 ${WAVE} Z`} fill="#F8FAFC" />
-              </Svg>
-            </View>
+      {/* Header */}
+      <LinearGradient
+        colors={["#4361EE", "#7C3AED"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={{ paddingTop: insets.top + 12, paddingHorizontal: 16, paddingBottom: 16 }}
+      >
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+          <Text style={{ color: "white", fontSize: 20, fontWeight: "800", flex: 1 }}>Activity</Text>
+          <View style={{ position: "absolute", left: 0, right: 0, alignItems: "center" }}>
+            <Image source={require("@/assets/alenio-logo-white.png")} style={{ height: 26, width: 90, resizeMode: "contain" }} />
           </View>
-        );
-      })()}
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            {!isDemo ? (
+              <TouchableOpacity
+                testID="celebrate-button"
+                onPress={() => { setShowCelebrateModal(true); setCelebrateStep(1); }}
+                style={{ backgroundColor: "rgba(255,255,255,0.2)", borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5, flexDirection: "row", alignItems: "center", gap: 5 }}
+              >
+                <Text style={{ fontSize: 12 }}>🎉</Text>
+                <Text style={{ color: "white", fontSize: 12, fontWeight: "700" }}>Celebrate</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
+        </View>
+      </LinearGradient>
 
       {/* Celebrate modal */}
       <Modal visible={showCelebrateModal} transparent animationType="slide" onRequestClose={() => setShowCelebrateModal(false)}>
