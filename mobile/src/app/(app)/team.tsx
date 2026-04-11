@@ -67,7 +67,7 @@ const CHART_W = 280;
 const CHART_H = 80;
 const CHART_PAD_L = 36;
 const CHART_PAD_B = 24;
-const CHART_PAD_T = 6;
+const CHART_PAD_T = 18;
 const CHART_PAD_R = 12;
 
 const yTicks = [60, 80, 100];
@@ -172,6 +172,21 @@ function PerformanceChart({ data }: { data: Array<{ label: string; completionPct
           stroke="#4361EE"
           strokeWidth={2}
         />
+      ))}
+
+      {/* % labels above each dot */}
+      {nonNullPoints.map((p, k) => (
+        <SvgText
+          key={k}
+          x={p.x}
+          y={p.y - 7}
+          fontSize={8}
+          fontWeight="700"
+          fill={k === nonNullPoints.length - 1 ? "#4361EE" : "#64748B"}
+          textAnchor="middle"
+        >
+          {data[p.index]?.completionPct}%
+        </SvgText>
       ))}
 
       {/* X-axis labels — always shown */}
