@@ -727,16 +727,10 @@ export default function TeamScreen() {
               <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
                 <Check size={13} color="#22C55E" />
                 <Text style={{ fontSize: 13, fontWeight: "800", color: "#15803D" }}>{totalDone6m}</Text>
-                <Text style={{ fontSize: 11, color: "#16A34A", fontWeight: "600" }}>completed · 6 months</Text>
-              </View>
-            </View>
-
-            {/* Stats row */}
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginTop: 10 }}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                <AlertTriangle size={12} color={totalOverdue > 0 ? "#EF4444" : "#94A3B8"} />
-                <Text style={{ fontSize: 13, fontWeight: "800", color: totalOverdue > 0 ? "#DC2626" : "#94A3B8" }}>{totalOverdue}</Text>
-                <Text style={{ fontSize: 11, color: totalOverdue > 0 ? "#EF4444" : "#94A3B8", fontWeight: "600" }}>overdue</Text>
+                <Text style={{ fontSize: 11, color: "#16A34A", fontWeight: "600" }}>completed · </Text>
+                <AlertTriangle size={11} color={totalOverdue > 0 ? "#EF4444" : "#94A3B8"} />
+                <Text style={{ fontSize: 11, color: totalOverdue > 0 ? "#DC2626" : "#94A3B8", fontWeight: "700" }}>{totalOverdue} overdue · </Text>
+                <Text style={{ fontSize: 11, color: "#16A34A", fontWeight: "600" }}>6 months</Text>
               </View>
             </View>
 
