@@ -40,6 +40,7 @@ export default function VerifyOtp() {
   const circleScale = useSharedValue(0);
   const circleOpacity = useSharedValue(0);
   const checkScale = useSharedValue(0);
+  const checkRotate = useSharedValue(-30);
   const textOpacity = useSharedValue(0);
 
   const circleStyle = useAnimatedStyle(() => ({
@@ -48,7 +49,10 @@ export default function VerifyOtp() {
   }));
 
   const checkStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: checkScale.value }],
+    transform: [
+      { scale: checkScale.value },
+      { rotate: `${checkRotate.value}deg` },
+    ],
   }));
 
   const textStyle = useAnimatedStyle(() => ({
@@ -59,12 +63,13 @@ export default function VerifyOtp() {
 
   const runSuccessAnimation = () => {
     setSuccess(true);
-    circleOpacity.value = withTiming(1, { duration: 100 });
-    circleScale.value = withSpring(1, { damping: 12, stiffness: 180 });
-    checkScale.value = withDelay(200, withSpring(1, { damping: 10, stiffness: 200 }));
-    textOpacity.value = withDelay(400, withTiming(1, { duration: 300 }));
-    // Navigate after animation settles
-    circleScale.value = withDelay(1400, withTiming(1, { duration: 1 }, () => runOnJS(navigate)()));
+    circleOpacity.value = withTiming(1, { duration: 150 });
+    circleScale.value = withSpring(1, { damping: 14, stiffness: 160 });
+    checkScale.value = withDelay(350, withSpring(1, { damping: 8, stiffness: 160 }));
+    checkRotate.value = withDelay(350, withSpring(0, { damping: 10, stiffness: 140 }));
+    textOpacity.value = withDelay(600, withTiming(1, { duration: 400 }));
+    // Navigate after animation + pause to let user see it
+    circleScale.value = withDelay(2600, withTiming(1, { duration: 1 }, () => runOnJS(navigate)()));
   };
 
   const handleVerify = async () => {
