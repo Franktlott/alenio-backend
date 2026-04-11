@@ -4,7 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api/api";
 import { useTeamStore } from "@/lib/state/team-store";
-import { CheckCircle, UserPlus, UserMinus, Calendar, Activity, UserCheck, Trophy, Flame, Clock, Video, PartyPopper, X } from "lucide-react-native";
+import { CheckCircle, UserPlus, UserMinus, Calendar, Activity, UserCheck, Trophy, Flame, Clock, Video, PartyPopper, X, Star, Award, Zap, Target, Users, Lightbulb, Heart, Flag } from "lucide-react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Image as ExpoImage } from "expo-image";
 import { useState, useEffect, useRef } from "react";
@@ -633,16 +633,16 @@ function PersonalBestCard({ item, activeTeamId, currentUserId, isDemo, showPicke
 }
 
 const CELEBRATION_TYPES = [
-  { key: "shoutout",   emoji: "⭐", label: "Shoutout",        color: "#D97706", bg: "#FFFBEB", gradient: ["#D97706", "#B45309"] as [string,string] },
-  { key: "mvp",        emoji: "🏆", label: "MVP",             color: "#7C3AED", bg: "#EEF2FF", gradient: ["#7C3AED", "#6D28D9"] as [string,string] },
-  { key: "beyond",     emoji: "💪", label: "Above & Beyond",  color: "#059669", bg: "#ECFDF5", gradient: ["#059669", "#047857"] as [string,string] },
-  { key: "rockstar",   emoji: "🚀", label: "Rockstar",        color: "#EA580C", bg: "#FFF7ED", gradient: ["#EA580C", "#C2410C"] as [string,string] },
-  { key: "clutch",     emoji: "🎯", label: "Clutch",          color: "#DC2626", bg: "#FEF2F2", gradient: ["#DC2626", "#B91C1C"] as [string,string] },
-  { key: "teamplayer", emoji: "🤝", label: "Team Player",     color: "#1D4ED8", bg: "#EFF6FF", gradient: ["#1D4ED8", "#1E40AF"] as [string,string] },
-  { key: "bigbrain",   emoji: "💡", label: "Big Brain",       color: "#0891B2", bg: "#ECFEFF", gradient: ["#0891B2", "#0E7490"] as [string,string] },
-  { key: "onfire",     emoji: "🔥", label: "On Fire",         color: "#4338CA", bg: "#EEF2FF", gradient: ["#4338CA", "#3730A3"] as [string,string] },
-  { key: "milestone",  emoji: "🎉", label: "Milestone",       color: "#7C3AED", bg: "#F5F3FF", gradient: ["#7C3AED", "#5B21B6"] as [string,string] },
-  { key: "grateful",   emoji: "❤️", label: "Grateful",        color: "#E11D48", bg: "#FDF2F8", gradient: ["#E11D48", "#BE123C"] as [string,string] },
+  { key: "shoutout",   Icon: Star,        label: "Shoutout",        tag: "Recognition",    color: "#D97706", bg: "#FFFBEB", gradient: ["#92400E", "#B45309"] as [string,string] },
+  { key: "mvp",        Icon: Trophy,      label: "MVP",             tag: "Most Valuable",  color: "#7C3AED", bg: "#EEF2FF", gradient: ["#4C1D95", "#6D28D9"] as [string,string] },
+  { key: "beyond",     Icon: Award,       label: "Above & Beyond",  tag: "Top Performer",  color: "#059669", bg: "#ECFDF5", gradient: ["#064E3B", "#047857"] as [string,string] },
+  { key: "rockstar",   Icon: Zap,         label: "Rockstar",        tag: "High Impact",    color: "#EA580C", bg: "#FFF7ED", gradient: ["#7C2D12", "#C2410C"] as [string,string] },
+  { key: "clutch",     Icon: Target,      label: "Clutch",          tag: "Clutch Play",    color: "#DC2626", bg: "#FEF2F2", gradient: ["#7F1D1D", "#B91C1C"] as [string,string] },
+  { key: "teamplayer", Icon: Users,       label: "Team Player",     tag: "Team Impact",    color: "#1D4ED8", bg: "#EFF6FF", gradient: ["#1E3A8A", "#1E40AF"] as [string,string] },
+  { key: "bigbrain",   Icon: Lightbulb,   label: "Big Brain",       tag: "Problem Solver", color: "#0891B2", bg: "#ECFEFF", gradient: ["#164E63", "#0E7490"] as [string,string] },
+  { key: "onfire",     Icon: Flame,       label: "On Fire",         tag: "On a Roll",      color: "#4338CA", bg: "#EEF2FF", gradient: ["#312E81", "#3730A3"] as [string,string] },
+  { key: "milestone",  Icon: Flag,        label: "Milestone",       tag: "Milestone Hit",  color: "#7C3AED", bg: "#F5F3FF", gradient: ["#4C1D95", "#5B21B6"] as [string,string] },
+  { key: "grateful",   Icon: Heart,       label: "Grateful",        tag: "Team Spirit",    color: "#E11D48", bg: "#FDF2F8", gradient: ["#881337", "#BE123C"] as [string,string] },
 ];
 
 function CelebrationPostCard({ item, activeTeamId, currentUserId, isDemo, showPicker, onOpenPicker, onClosePicker }: { item: ActivityEvent; activeTeamId: string | null; currentUserId: string | undefined; isDemo: boolean; showPicker: boolean; onOpenPicker: () => void; onClosePicker: () => void }) {
@@ -677,7 +677,7 @@ function CelebrationPostCard({ item, activeTeamId, currentUserId, isDemo, showPi
           {/* Badge row */}
           <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 8 }}>
             <View style={{ backgroundColor: "rgba(255,255,255,0.12)", borderRadius: 12, paddingHorizontal: 10, paddingVertical: 5, flexDirection: "row", alignItems: "center", gap: 6 }}>
-              <Text style={{ fontSize: 15 }}>{celebType.emoji}</Text>
+              <celebType.Icon size={14} color="rgba(255,255,255,0.9)" />
               <Text style={{ fontSize: 12, fontWeight: "700", color: "rgba(255,255,255,0.9)", letterSpacing: 0.4 }}>{celebType.label.toUpperCase()}</Text>
             </View>
             <View style={{ marginLeft: "auto", alignItems: "flex-end", gap: 6 }}>
@@ -1027,7 +1027,7 @@ export default function ActivityScreen() {
                           borderWidth: 1.5, borderColor: selected ? ct.color : "transparent",
                         }}
                       >
-                        <Text style={{ fontSize: 16 }}>{ct.emoji}</Text>
+                        <ct.Icon size={16} color={selected ? "white" : "#64748B"} />
                         <Text style={{ fontSize: 13, fontWeight: "700", color: selected ? "white" : "#64748B" }}>{ct.label}</Text>
                       </TouchableOpacity>
                     );
