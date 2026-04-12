@@ -8,7 +8,7 @@ export function renderMentionText(
   isOwn?: boolean
 ) {
   const segments = content.split(/(@\S+)/g);
-  const mentionColor = isOwn ? "#93C5FD" : "#2563EB";
+  const mentionColor = isOwn ? "#4361EE" : "#2563EB";
   return (
     <>
       {segments.map((seg, i) => {
