@@ -10,12 +10,12 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.vibecode.alenio-9iqp9v",
-      "buildNumber": "1",
+      "buildNumber": "2",
       "infoPlist": {
-        "NSCameraUsageDescription": "Alenio uses the camera to take photos and join video calls with your team.",
-        "NSMicrophoneUsageDescription": "Alenio uses the microphone for video calls and voice messages in team chats.",
-        "NSPhotoLibraryUsageDescription": "Alenio accesses your photos to share images in team and direct message chats.",
-        "NSPhotoLibraryAddUsageDescription": "Alenio saves shared media to your photo library.",
+        "NSCameraUsageDescription": "Alenio uses the camera to capture photos inside the app before you publish them.",
+        "NSMicrophoneUsageDescription": "Alenio uses the microphone to record audio tracks that the app attaches to your creations.",
+        "NSPhotoLibraryUsageDescription": "Alenio accesses your photo library to generate thumbnails for your videos.",
+        "NSPhotoLibraryAddUsageDescription": "Alenio saves media you export from the app into your photo library.",
         "UIBackgroundModes": [
           "remote-notification"
         ]
@@ -25,36 +25,36 @@
       "edgeToEdgeEnabled": true,
       "package": "com.vibecode.alenio9iqp9v"
     },
-   "plugins": [
-  "expo-router",
-  "expo-camera",
-  "expo-av",
-  [
-    "expo-image-picker",
-    {
-      "photosPermission": "Alenio accesses your photos to share images in chats."
-    }
-  ],
-  [
-    "expo-notifications",
-    {
-      "sounds": []
-    }
-  ],
-  [
-    "expo-build-properties",
-    {
-      "android": {
-        "compileSdkVersion": 35,
-        "targetSdkVersion": 35,
-        "minSdkVersion": 24,
-        "gradleVersion": "8.10.2",
-        "gradlePluginVersion": "8.7.3",
-        "kotlinVersion": "2.0.21"
-      }
-    }
-  ]
-],
+    "plugins": [
+      "expo-router",
+      "expo-camera",
+      "expo-av",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Alenio accesses your photos to share images in chats."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "sounds": []
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 35,
+            "targetSdkVersion": 35,
+            "minSdkVersion": 24,
+            "gradleVersion": "8.10.2",
+            "gradlePluginVersion": "8.7.3",
+            "kotlinVersion": "2.0.21"
+          }
+        }
+      ]
+    ],
     "experiments": {
       "typedRoutes": true
     },

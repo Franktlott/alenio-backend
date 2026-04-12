@@ -25,13 +25,15 @@
         "distribution": "store"
       },
       "android": {
-        "buildType": "apk"
+        "distribution": "store"
       }
     }
   },
   "submit": {
     "production": {
-      "ios": {}
+      "ios": {
+        "ascAppId": "6761862234"
+      }
     }
   }
 }
