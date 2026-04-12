@@ -169,12 +169,12 @@ export default function SignIn() {
               <Text className="text-xs text-indigo-500 font-medium">Privacy Policy</Text>
             </TouchableOpacity>
           </View>
+
+          <View style={{ alignItems: "center", marginTop: 32, paddingBottom: 8 }}>
+            <Image source={require("@/assets/lotttech-logo.png")} style={{ width: 185, height: 57 }} resizeMode="contain" />
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
-
-      <View style={{ alignItems: "center", paddingBottom: 16 }}>
-        <Image source={require("@/assets/lotttech-logo.png")} style={{ width: 185, height: 57 }} resizeMode="contain" />
-      </View>
     </View>
   );
 }
