@@ -17,6 +17,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api/api";
 import { useTeamStore } from "@/lib/state/team-store";
 import { toast } from "burnt";
+import { restorePurchases, isRevenueCatEnabled } from "@/lib/revenue-cat";
 
 type Subscription = {
   plan: "free" | "team";
@@ -88,6 +89,7 @@ export default function SubscriptionScreen() {
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
   const queryClient = useQueryClient();
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(false);
 
   const { data: subscription, isLoading } = useQuery({
     queryKey: ["subscription", activeTeamId],
@@ -514,6 +516,37 @@ export default function SubscriptionScreen() {
               You'll retain access until the end of your billing period.
             </Text>
           </View>
+        ) : null}
+
+        {/* Restore Purchases */}
+        {isRevenueCatEnabled() ? (
+          <TouchableOpacity
+            onPress={async () => {
+              setIsRestoring(true);
+              try {
+                const result = await restorePurchases();
+                if (result.success && result.isTeam) {
+                  queryClient.invalidateQueries({ queryKey: ["subscription", activeTeamId] });
+                  toast({ title: "Purchases restored!", preset: "done" });
+                } else if (result.success) {
+                  toast({ title: "No active purchases found.", preset: "error" });
+                } else {
+                  toast({ title: "Restore failed. Please try again.", preset: "error" });
+                }
+              } finally {
+                setIsRestoring(false);
+              }
+            }}
+            disabled={isRestoring}
+            testID="restore-purchases-button"
+            style={{ paddingVertical: 16, alignItems: "center" }}
+          >
+            {isRestoring ? (
+              <ActivityIndicator size="small" color="#CBD5E1" />
+            ) : (
+              <Text style={{ color: "#CBD5E1", fontSize: 13 }}>Restore Purchases</Text>
+            )}
+          </TouchableOpacity>
         ) : null}
       </ScrollView>
 

@@ -29,6 +29,7 @@ import type { Conversation, Team } from "@/lib/types";
 import { NoTeamPlaceholder } from "@/components/NoTeamPlaceholder";
 import { useDemoMode } from "@/lib/useDemo";
 import { useSubscriptionStore } from "@/lib/state/subscription-store";
+import { restorePurchases, isRevenueCatEnabled } from "@/lib/revenue-cat";
 
 const PINNED_DMS_KEY = "pinned_dms";
 const TOPIC_COLORS = ["#4361EE", "#7C3AED", "#10B981", "#F59E0B", "#EF4444", "#EC4899"];
@@ -94,6 +95,7 @@ export default function ChatScreen() {
   const queryClient = useQueryClient();
   const isDemo = useDemoMode();
   const [showGroupPaywall, setShowGroupPaywall] = useState(false);
+  const [isRestoringChat, setIsRestoringChat] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [pinnedDmIds, setPinnedDmIds] = useState<string[]>([]);
@@ -617,8 +619,30 @@ export default function ChatScreen() {
               <TouchableOpacity onPress={() => setShowGroupPaywall(false)} style={{ paddingVertical: 10, width: "100%", alignItems: "center" }} testID="group-paywall-dismiss">
                 <Text style={{ color: "#94A3B8", fontWeight: "600", fontSize: 14 }}>Not now</Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => { setShowGroupPaywall(false); router.push("/subscription"); }} style={{ paddingVertical: 8, width: "100%", alignItems: "center" }} testID="group-paywall-restore">
-                <Text style={{ color: "#CBD5E1", fontSize: 12 }}>Restore Purchases</Text>
+              <TouchableOpacity
+                onPress={async () => {
+                  if (!isRevenueCatEnabled()) return;
+                  setIsRestoringChat(true);
+                  try {
+                    const result = await restorePurchases();
+                    setShowGroupPaywall(false);
+                    if (result.success && result.isTeam) {
+                      queryClient.invalidateQueries({ queryKey: ["subscription"] });
+                      toast({ title: "Purchases restored!", preset: "done" });
+                    } else {
+                      toast({ title: "No active purchases found.", preset: "error" });
+                    }
+                  } finally {
+                    setIsRestoringChat(false);
+                  }
+                }}
+                disabled={isRestoringChat}
+                style={{ paddingVertical: 8, width: "100%", alignItems: "center" }} testID="group-paywall-restore">
+                {isRestoringChat ? (
+                  <ActivityIndicator size="small" color="#CBD5E1" />
+                ) : (
+                  <Text style={{ color: "#CBD5E1", fontSize: 12 }}>Restore Purchases</Text>
+                )}
               </TouchableOpacity>
             </View>
           </Pressable>
