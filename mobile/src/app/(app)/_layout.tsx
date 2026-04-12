@@ -90,7 +90,8 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
     if (r.name === "calendar") return false;
     const tab = ALL_TABS.find((t) => t.name === r.name);
     if (!tab) return false;
-    if (tab.paidOnly && !isPaid) return false;
+    if (tab.paidOnly && (!isPaid || !activeTeamId)) return false;
+    if (!activeTeamId && (r.name === "activity" || r.name === "execute")) return false;
     return true;
   });
 
