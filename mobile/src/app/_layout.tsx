@@ -127,6 +127,9 @@ function RootLayoutNav() {
       const data = response.notification.request.content.data as Record<string, string>;
       if (data?.taskId && data?.teamId) {
         router.push({ pathname: '/task-detail', params: { taskId: data.taskId, teamId: data.teamId } });
+      } else if (data?.conversationId) {
+        // DM notification — go to the conversation
+        router.push({ pathname: '/dm-chat', params: { conversationId: data.conversationId } });
       } else if (data?.teamId && data?.teamName !== undefined) {
         // Message notification — go to team chat
         router.push({ pathname: '/team-chat', params: { teamId: data.teamId, teamName: data.teamName, ...(data.topicId ? { topicId: data.topicId } : {}) } });
