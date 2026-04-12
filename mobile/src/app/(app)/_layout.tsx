@@ -138,13 +138,13 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
             <View style={{
               alignItems: "center",
               justifyContent: "center",
-              backgroundColor: isFocused ? "#4361EE" : "transparent",
+              backgroundColor: "transparent",
               borderRadius: 20,
-              paddingHorizontal: isFocused ? 14 : 10,
+              paddingHorizontal: 10,
               paddingVertical: 6,
             }}>
               <View>
-                <Icon size={20} color={isFocused ? "white" : "#94A3B8"} strokeWidth={isFocused ? 2.5 : 1.8} />
+                <Icon size={20} color={isFocused ? "#4361EE" : "#94A3B8"} strokeWidth={isFocused ? 2.5 : 1.8} />
                 {badge ? (
                   <View style={{
                     position: "absolute",
