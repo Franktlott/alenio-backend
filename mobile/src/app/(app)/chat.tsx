@@ -157,6 +157,7 @@ export default function ChatScreen() {
     refetchInterval: 10000,
   });
   const teamUnreadCount = Object.values(teamUnreadCounts).reduce((a, b) => a + b, 0);
+  const teamChatUnreadCount = teamUnreadCounts[`team:${activeTeamId}`] ?? 0;
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -279,9 +280,9 @@ export default function ChatScreen() {
               <Text style={{ fontSize: 13, color: "#6B7280", marginTop: 1 }}>Primary team space</Text>
             </View>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-              {teamUnreadCount > 0 ? (
+              {teamChatUnreadCount > 0 ? (
                 <View style={{ backgroundColor: "#4361EE", borderRadius: 10, minWidth: 20, height: 20, alignItems: "center", justifyContent: "center", paddingHorizontal: 6 }}>
-                  <Text style={{ color: "white", fontSize: 11, fontWeight: "700" }}>{teamUnreadCount}</Text>
+                  <Text style={{ color: "white", fontSize: 11, fontWeight: "700" }}>{teamChatUnreadCount}</Text>
                 </View>
               ) : null}
               {topThreeMembers.length > 0 ? <AvatarStack members={topThreeMembers} /> : null}
