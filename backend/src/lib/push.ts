@@ -26,7 +26,7 @@ export async function sendPushNotification(
         body,
         sound: "default",
         priority: "high",
-        channelId: "default",
+        channelId: "alenio_main",
         data,
       }]),
     });

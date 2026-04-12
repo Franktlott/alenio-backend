@@ -97,11 +97,15 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
 
   // Android requires a notification channel
   if (Platform.OS === "android") {
-    await Notifications.setNotificationChannelAsync("default", {
-      name: "Default",
+    await Notifications.setNotificationChannelAsync("alenio_main", {
+      name: "Alenio Notifications",
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 250, 250, 250],
       lightColor: "#4361EE",
+      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+      enableVibrate: true,
+      enableLights: true,
+      sound: "default",
     });
   }
 
