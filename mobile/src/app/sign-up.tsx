@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { Eye, EyeOff } from "lucide-react-native";
 import {
   View,
   Text,
@@ -22,6 +23,8 @@ export default function SignUp() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -135,33 +138,53 @@ export default function SignUp() {
 
           <View className="mb-4">
             <Text className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Password</Text>
-            <TextInput
-              className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3.5 text-base text-slate-900 dark:text-white"
-              placeholder="••••••••"
-              placeholderTextColor="#94A3B8"
-              secureTextEntry
-              autoComplete="new-password"
-              value={password}
-              onChangeText={(t) => { setPassword(t); setError(null); }}
-              returnKeyType="next"
-              testID="password-input"
-            />
+            <View style={{ position: "relative" }}>
+              <TextInput
+                className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3.5 text-base text-slate-900 dark:text-white"
+                style={{ paddingRight: 48 }}
+                placeholder="••••••••"
+                placeholderTextColor="#94A3B8"
+                secureTextEntry={!showPassword}
+                autoComplete="new-password"
+                value={password}
+                onChangeText={(t) => { setPassword(t); setError(null); }}
+                returnKeyType="next"
+                testID="password-input"
+              />
+              <TouchableOpacity
+                onPress={() => setShowPassword((v) => !v)}
+                style={{ position: "absolute", right: 14, top: 0, bottom: 0, justifyContent: "center" }}
+                testID="toggle-password-visibility"
+              >
+                {showPassword ? <EyeOff size={18} color="#94A3B8" /> : <Eye size={18} color="#94A3B8" />}
+              </TouchableOpacity>
+            </View>
           </View>
 
           <View className="mb-6">
             <Text className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Confirm password</Text>
-            <TextInput
-              className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3.5 text-base text-slate-900 dark:text-white"
-              placeholder="••••••••"
-              placeholderTextColor="#94A3B8"
-              secureTextEntry
-              autoComplete="new-password"
-              value={confirmPassword}
-              onChangeText={(t) => { setConfirmPassword(t); setError(null); }}
-              returnKeyType="done"
-              onSubmitEditing={handleSignUp}
-              testID="confirm-password-input"
-            />
+            <View style={{ position: "relative" }}>
+              <TextInput
+                className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3.5 text-base text-slate-900 dark:text-white"
+                style={{ paddingRight: 48 }}
+                placeholder="••••••••"
+                placeholderTextColor="#94A3B8"
+                secureTextEntry={!showConfirmPassword}
+                autoComplete="new-password"
+                value={confirmPassword}
+                onChangeText={(t) => { setConfirmPassword(t); setError(null); }}
+                returnKeyType="done"
+                onSubmitEditing={handleSignUp}
+                testID="confirm-password-input"
+              />
+              <TouchableOpacity
+                onPress={() => setShowConfirmPassword((v) => !v)}
+                style={{ position: "absolute", right: 14, top: 0, bottom: 0, justifyContent: "center" }}
+                testID="toggle-confirm-password-visibility"
+              >
+                {showConfirmPassword ? <EyeOff size={18} color="#94A3B8" /> : <Eye size={18} color="#94A3B8" />}
+              </TouchableOpacity>
+            </View>
           </View>
 
           {error ? (
