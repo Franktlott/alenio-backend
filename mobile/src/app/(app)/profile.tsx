@@ -43,6 +43,7 @@ const TONES = [
   { id: "none",        label: "None",          url: null,   section: "system" },
   { id: "system",      label: "System Default", url: null,   section: "system" },
   // Custom
+  { id: "synth",       label: "Default",        url: "https://assets.mixkit.co/active_storage/sfx/2574/2574-preview.mp3", section: "custom" },
   { id: "bell",        label: "Bell",           url: "https://assets.mixkit.co/active_storage/sfx/2870/2870-preview.mp3", section: "custom" },
   { id: "tritone",     label: "Tri-tone",       url: "https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3", section: "custom" },
   { id: "chime",       label: "Chime",          url: "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3", section: "custom" },
@@ -54,7 +55,6 @@ const TONES = [
   { id: "note",        label: "Note",           url: "https://assets.mixkit.co/active_storage/sfx/2015/2015-preview.mp3", section: "custom" },
   { id: "popcorn",     label: "Popcorn",        url: "https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3", section: "custom" },
   { id: "pulse",       label: "Pulse",          url: "https://assets.mixkit.co/active_storage/sfx/2573/2573-preview.mp3", section: "custom" },
-  { id: "synth",       label: "Synth",          url: "https://assets.mixkit.co/active_storage/sfx/2574/2574-preview.mp3", section: "custom" },
   { id: "ding",        label: "Ding",           url: "https://assets.mixkit.co/active_storage/sfx/2014/2014-preview.mp3", section: "custom" },
   { id: "achievement", label: "Achievement",    url: "https://assets.mixkit.co/active_storage/sfx/2019/2019-preview.mp3", section: "custom" },
   { id: "beep",        label: "Beep",           url: "https://assets.mixkit.co/active_storage/sfx/2020/2020-preview.mp3", section: "custom" },
