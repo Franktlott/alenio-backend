@@ -103,7 +103,7 @@ export function ChatMessage({
             <View
               className={`rounded-2xl overflow-hidden ${isOwn ? "rounded-tr-sm" : "rounded-tl-sm"}`}
               style={{
-                backgroundColor: isOwn ? "#4361EE" : "white",
+                backgroundColor: isOwn ? "#1E293B" : "#F1F5F9",
                 shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 3,
                 shadowOffset: { width: 0, height: 1 }, elevation: 1,
               }}
@@ -111,15 +111,15 @@ export function ChatMessage({
               {/* Reply preview */}
               {replyTo ? (
                 <View
-                  className={`px-3 pt-2.5 pb-1.5 border-l-4 mx-2 mt-2 rounded-lg flex-row items-center gap-2 ${isOwn ? "border-white/40 bg-white/10" : "border-indigo-400 bg-indigo-50"}`}
+                  className={`px-3 pt-2.5 pb-1.5 border-l-4 mx-2 mt-2 rounded-lg flex-row items-center gap-2 ${isOwn ? "border-white/30 bg-white/10" : "border-blue-400 bg-blue-50"}`}
                   style={{ minWidth: 160 }}
                 >
                   <View style={{ flex: 1 }}>
-                    <Text className={`text-xs font-semibold mb-0.5 ${isOwn ? "text-white/80" : "text-indigo-600"}`}>
+                    <Text className={`text-xs font-semibold mb-0.5 ${isOwn ? "text-slate-300" : "text-blue-600"}`}>
                       {replyTo.sender.name}
                     </Text>
                     <Text
-                      className={`text-xs ${isOwn ? "text-white/70" : "text-slate-500"}`}
+                      className={`text-xs ${isOwn ? "text-slate-400" : "text-slate-500"}`}
                       numberOfLines={1}
                     >
                       {replyTo.content ? replyTo.content : replyTo.mediaType === 'video' ? '🎥 Video' : '📷 Photo'}
@@ -182,7 +182,8 @@ export function ChatMessage({
                     currentUserId,
                     isOwn
                       ? { color: "white", fontSize: 14, lineHeight: 20 }
-                      : { color: "#0F172A", fontSize: 14, lineHeight: 20 }
+                      : { color: "#0F172A", fontSize: 14, lineHeight: 20 },
+                    isOwn
                   )}
                 </Text>
               ) : null}

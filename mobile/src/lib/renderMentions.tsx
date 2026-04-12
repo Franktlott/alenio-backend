@@ -4,9 +4,11 @@ import { Text } from "react-native";
 export function renderMentionText(
   content: string,
   _currentUserId?: string,
-  messageStyle?: object
+  messageStyle?: object,
+  isOwn?: boolean
 ) {
   const segments = content.split(/(@\S+)/g);
+  const mentionColor = isOwn ? "#93C5FD" : "#2563EB";
   return (
     <>
       {segments.map((seg, i) => {
@@ -14,7 +16,7 @@ export function renderMentionText(
           return (
             <Text
               key={i}
-              style={[messageStyle, { color: "#4361EE", fontWeight: "600" }]}
+              style={[messageStyle, { color: mentionColor, fontWeight: "700" }]}
             >
               {seg}
             </Text>
