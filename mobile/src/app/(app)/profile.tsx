@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import * as Notifications from "expo-notifications";
 import { Audio } from "expo-av";
 import {
   View,
@@ -23,7 +24,7 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { ArrowLeft, Camera, LogOut, Pencil, X, Plus, Trash2, Bell, Check, LogOut as LeaveIcon, Crown, Copy, Volume2, ChevronRight, BarChart2 } from "lucide-react-native";
+import { ArrowLeft, Camera, LogOut, Pencil, X, Plus, Trash2, Bell, Check, LogOut as LeaveIcon, Crown, Copy, Volume2, ChevronRight, BarChart2, BellRing } from "lucide-react-native";
 import { authClient } from "@/lib/auth/auth-client";
 import { useInvalidateSession, useSession } from "@/lib/auth/use-session";
 import { router } from "expo-router";
@@ -619,6 +620,7 @@ export default function ProfileScreen() {
               <Pressable
                 onPress={() => setShowTonePicker("dm")}
                 className="flex-row items-center px-4 py-3.5"
+                style={{ borderBottomWidth: 1, borderBottomColor: "rgba(241,245,249,0.8)" }}
                 testID="dm-tone-row"
               >
                 <Volume2 size={18} color="#4361EE" style={{ marginRight: 10 }} />
@@ -626,6 +628,33 @@ export default function ProfileScreen() {
                 <Text className="text-sm text-slate-400 mr-1">
                   {TONES.find(t => t.id === dmToneId)?.label ?? "Default"}
                 </Text>
+                <ChevronRight size={16} color="#94A3B8" />
+              </Pressable>
+              <Pressable
+                onPress={async () => {
+                  const { status } = await Notifications.getPermissionsAsync();
+                  if (status !== "granted") {
+                    const { status: newStatus } = await Notifications.requestPermissionsAsync();
+                    if (newStatus !== "granted") {
+                      toast({ title: "Permission denied", message: "Enable notifications in Settings to test.", haptic: "error" });
+                      return;
+                    }
+                  }
+                  await Notifications.scheduleNotificationAsync({
+                    content: {
+                      title: "Test Notification",
+                      body: "Your notifications are working correctly!",
+                      sound: true,
+                    },
+                    trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: 3 },
+                  });
+                  toast({ title: "Notification scheduled", message: "You'll see it in 3 seconds — background the app!", haptic: "success" });
+                }}
+                className="flex-row items-center px-4 py-3.5"
+                testID="test-notification-btn"
+              >
+                <BellRing size={18} color="#4361EE" style={{ marginRight: 10 }} />
+                <Text className="flex-1 text-sm font-semibold text-slate-900 dark:text-white">Send Test Notification</Text>
                 <ChevronRight size={16} color="#94A3B8" />
               </Pressable>
             </View>
