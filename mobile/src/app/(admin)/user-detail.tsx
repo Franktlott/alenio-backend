@@ -15,6 +15,8 @@ import { StatusBar } from "expo-status-bar";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams } from "expo-router";
 import { ArrowLeft, Mail, User, Trash2, Shield, Calendar, Users } from "lucide-react-native";
+import { authClient } from "@/lib/auth/auth-client";
+import { fetch } from "expo/fetch";
 import { toast } from "burnt";
 
 const BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL!;
@@ -56,8 +58,9 @@ export default function UserDetail() {
     queryFn: async () => {
       const res = await fetch(`${BASE_URL}/api/admin-mobile/users/${userId}`, {
         credentials: "include",
+        headers: { Cookie: authClient.getCookie() },
       });
-      const json = await res.json();
+      const json = await res.json() as { data: AdminUserDetail; error?: { message: string } };
       if (!res.ok) throw new Error(json.error?.message || "Failed to load user");
       return json.data;
     },
@@ -85,11 +88,11 @@ export default function UserDetail() {
     mutationFn: async () => {
       const res = await fetch(`${BASE_URL}/api/admin-mobile/users/${userId}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Cookie: authClient.getCookie() },
         credentials: "include",
         body: JSON.stringify({ name: name.trim(), email: email.trim().toLowerCase() }),
       });
-      const json = await res.json();
+      const json = await res.json() as { data: AdminUserDetail; error?: { message: string } };
       if (!res.ok) throw new Error(json.error?.message || "Update failed");
       return json.data;
     },
@@ -109,8 +112,9 @@ export default function UserDetail() {
       const res = await fetch(`${BASE_URL}/api/admin-mobile/users/${userId}`, {
         method: "DELETE",
         credentials: "include",
+        headers: { Cookie: authClient.getCookie() },
       });
-      const json = await res.json();
+      const json = await res.json() as { data?: { deleted: boolean }; error?: { message: string } };
       if (!res.ok) throw new Error(json.error?.message || "Delete failed");
       return json.data;
     },

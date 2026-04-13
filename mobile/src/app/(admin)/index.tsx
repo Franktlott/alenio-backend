@@ -19,6 +19,7 @@ import { router } from "expo-router";
 import { Search, Users, Building2, CheckSquare, MessageSquare, LogOut, ChevronRight, Shield, Trash2 } from "lucide-react-native";
 import { authClient } from "@/lib/auth/auth-client";
 import { useInvalidateSession } from "@/lib/auth/use-session";
+import { fetch } from "expo/fetch";
 import { toast } from "burnt";
 
 const BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL!;
@@ -44,8 +45,11 @@ function useAdminStats() {
   return useQuery<Stats>({
     queryKey: ["admin", "stats"],
     queryFn: async () => {
-      const res = await fetch(`${BASE_URL}/api/admin-mobile/stats`, { credentials: "include" });
-      const json = await res.json();
+      const res = await fetch(`${BASE_URL}/api/admin-mobile/stats`, {
+        credentials: "include",
+        headers: { Cookie: authClient.getCookie() },
+      });
+      const json = await res.json() as { data: Stats };
       return json.data;
     },
   });
@@ -55,8 +59,11 @@ function useAdminUsers() {
   return useQuery<AdminUser[]>({
     queryKey: ["admin", "users"],
     queryFn: async () => {
-      const res = await fetch(`${BASE_URL}/api/admin-mobile/users`, { credentials: "include" });
-      const json = await res.json();
+      const res = await fetch(`${BASE_URL}/api/admin-mobile/users`, {
+        credentials: "include",
+        headers: { Cookie: authClient.getCookie() },
+      });
+      const json = await res.json() as { data: AdminUser[] };
       return json.data;
     },
   });
@@ -93,8 +100,9 @@ export default function AdminDashboard() {
       const res = await fetch(`${BASE_URL}/api/admin-mobile/users/${userId}`, {
         method: "DELETE",
         credentials: "include",
+        headers: { Cookie: authClient.getCookie() },
       });
-      const json = await res.json();
+      const json = await res.json() as { data?: { deleted: boolean }; error?: { message: string } };
       if (!res.ok) throw new Error(json.error?.message || "Delete failed");
       return json.data;
     },
