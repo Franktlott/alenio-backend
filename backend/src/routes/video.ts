@@ -6,6 +6,7 @@ import { env } from "../env";
 import { prisma } from "../prisma";
 import { auth } from "../auth";
 import { authGuard } from "../middleware/auth-guard";
+import { sendPushToUsers } from "../lib/push";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -94,6 +95,30 @@ videoRouter.post(
       const room = await createRes.json() as { url: string };
       roomUrl = room.url;
     }
+
+    // Fire-and-forget: notify team members that a video call has started
+    void (async () => {
+      const event = await prisma.calendarEvent.findUnique({
+        where: { id: roomId },
+        select: { teamId: true, createdById: true },
+      });
+      if (!event) return;
+
+      const members = await prisma.teamMember.findMany({
+        where: { teamId: event.teamId, userId: { not: event.createdById } },
+        select: { userId: true },
+      });
+      const memberIds = members.map((m) => m.userId);
+      if (memberIds.length > 0) {
+        await sendPushToUsers(
+          memberIds,
+          userName ?? "Someone",
+          "📹 Started a video call — join now!",
+          { teamId: event.teamId, type: "video_call" },
+          "notifMeetings"
+        );
+      }
+    })();
 
     // Create a meeting token so the user's name is pre-filled
     const tokenRes = await fetch("https://api.daily.co/v1/meeting-tokens", {

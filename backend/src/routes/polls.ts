@@ -4,6 +4,7 @@ import { auth } from "../auth";
 import { authGuard } from "../middleware/auth-guard";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
+import { sendPushToUsers } from "../lib/push";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -87,6 +88,24 @@ pollsRouter.post(
         votes: { select: { userId: true, optionId: true } },
       },
     });
+
+    // Fire-and-forget: notify all team members except the creator
+    void (async () => {
+      const members = await prisma.teamMember.findMany({
+        where: { teamId, userId: { not: user.id } },
+        select: { userId: true },
+      });
+      const memberIds = members.map((m) => m.userId);
+      if (memberIds.length > 0) {
+        await sendPushToUsers(
+          memberIds,
+          user.name ?? "Someone",
+          `📊 New poll: ${question}`,
+          { teamId, type: "poll" },
+          "notifMessages"
+        );
+      }
+    })();
 
     return c.json({ data: poll }, 201);
   }

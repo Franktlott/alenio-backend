@@ -494,6 +494,20 @@ tasksRouter.patch("/:taskId", async (c) => {
       metadata: { taskTitle: task.incognito ? null : task.title },
     });
 
+    // Notify the task creator if the completer is someone else
+    if (task.creatorId !== user.id) {
+      void (async () => {
+        const completer = await prisma.user.findUnique({ where: { id: user.id }, select: { name: true } });
+        await sendPushToUsers(
+          [task.creatorId],
+          completer?.name ?? "Someone",
+          `✅ Completed: ${task.title}`,
+          { taskId, teamId, type: "task_completed" },
+          "notifTaskAssigned"
+        );
+      })();
+    }
+
     // Calculate streak: consecutive on-time completions since last overdue (most recent first)
     const streakRows = await prisma.$queryRaw<{ completedAt: string; dueDate: string }[]>`
       SELECT t.completedAt, t.dueDate
