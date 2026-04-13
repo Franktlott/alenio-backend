@@ -816,7 +816,6 @@ export default function TeamScreen() {
             shadowRadius: 8,
             shadowOffset: { width: 0, height: 2 },
             elevation: 2,
-            flex: 1,
           }}
         >
           {/* Header row */}
@@ -835,6 +834,7 @@ export default function TeamScreen() {
           {/* Member rows */}
           <ScrollView
             showsVerticalScrollIndicator={false}
+            style={{ maxHeight: 236 }}
             contentContainerStyle={{ paddingBottom: insets.bottom + 96 }}
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" colors={["#4361EE"]} />
