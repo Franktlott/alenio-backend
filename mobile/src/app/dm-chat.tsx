@@ -263,7 +263,7 @@ export default function DMChatScreen() {
       const newest = messages[messages.length - 1];
       if (newest && newest.senderId !== currentUserId) {
         AsyncStorage.getItem("dm_tone").then(async (toneId) => {
-          const id = toneId ?? "chime";
+          const id = toneId ?? "synth";
           const URLS: Record<string, string> = {
             chime:   "https://assets.mixkit.co/active_storage/sfx/2013/2013-preview.mp3",
             soft:    "https://assets.mixkit.co/active_storage/sfx/2018/2018-preview.mp3",
@@ -271,6 +271,7 @@ export default function DMChatScreen() {
             note:    "https://assets.mixkit.co/active_storage/sfx/2015/2015-preview.mp3",
             glass:   "https://assets.mixkit.co/active_storage/sfx/2308/2308-preview.mp3",
             bloom:   "https://assets.mixkit.co/active_storage/sfx/2017/2017-preview.mp3",
+            synth:   "https://assets.mixkit.co/active_storage/sfx/2574/2574-preview.mp3",
           };
           const url = URLS[id];
           if (url) {
