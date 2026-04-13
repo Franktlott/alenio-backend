@@ -547,14 +547,7 @@ export default function TeamScreen() {
         </View>
       </LinearGradient>
 
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: insets.bottom + 96 }}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" colors={["#4361EE"]} />
-        }
-        testID="members-list"
-      >
+      <View>
 
         {/* ── Team info card ── */}
         <View style={{
@@ -642,6 +635,16 @@ export default function TeamScreen() {
             ) : null}
           </View>
         </View>
+      </View>
+
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 96 }}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" colors={["#4361EE"]} />
+        }
+        testID="members-list"
+      >
 
         {/* ── Pending join requests (owner only) ────────────────────── */}
         {isOwner && incomingRequests.length > 0 ? (
