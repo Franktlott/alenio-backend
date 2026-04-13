@@ -94,6 +94,21 @@ function RootLayoutNav() {
   const [animDone, setAnimDone] = useState(false);
   const [sessionSettled, setSessionSettled] = useState(false);
 
+  // Fetch full user profile to check admin status
+  const { data: me } = useQuery({
+    queryKey: ["me"],
+    queryFn: async () => {
+      const res = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/api/me`, { credentials: "include" });
+      if (!res.ok) return null;
+      const json = await res.json();
+      return json.data as { id: string; name: string; email: string; image: string | null; isAdmin: boolean } | null;
+    },
+    enabled: !!session?.user,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const isAdmin = me?.isAdmin === true;
+
   useEffect(() => {
     SplashScreen.hideAsync();
     // Mark display time done after logo has faded in + shown (500ms + 1800ms)
@@ -110,6 +125,13 @@ function RootLayoutNav() {
       return () => clearTimeout(t);
     }
   }, [isLoading, sessionSettled]);
+
+  // Redirect admin users to admin section once their profile loads
+  useEffect(() => {
+    if (session?.user && isAdmin) {
+      router.replace("/(admin)");
+    }
+  }, [session?.user, isAdmin]);
 
   useEffect(() => {
     if (!session?.user) return;
