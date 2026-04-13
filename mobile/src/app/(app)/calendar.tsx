@@ -225,7 +225,7 @@ export default function CalendarScreen() {
             {MONTHS[currentMonth.getMonth()]} {currentMonth.getFullYear()}
           </Text>
           <View style={{ position: "absolute", left: 0, right: 0, alignItems: "center" }}>
-            <Image source={require("@/assets/alenio-logo-white.png")} style={{ height: 26, width: 90, resizeMode: "contain" }} />
+            <Image source={require("@/assets/alenio-logo-white.png")} style={{ height: 30, width: 104, resizeMode: "contain" }} />
           </View>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
             <Pressable onPress={prevMonth} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(255,255,255,0.2)", alignItems: "center", justifyContent: "center" }} testID="prev-month-button">

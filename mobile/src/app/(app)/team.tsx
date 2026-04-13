@@ -436,7 +436,7 @@ export default function TeamScreen() {
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
               <Text style={{ color: "white", fontSize: 20, fontWeight: "800", flex: 1 }}>Team</Text>
               <View style={{ position: "absolute", left: 0, right: 0, alignItems: "center" }}>
-                <Image source={require("@/assets/alenio-logo-white.png")} style={{ height: 26, width: 90, resizeMode: "contain" }} />
+                <Image source={require("@/assets/alenio-logo-white.png")} style={{ height: 30, width: 104, resizeMode: "contain" }} />
               </View>
               <View />
             </View>
@@ -541,7 +541,7 @@ export default function TeamScreen() {
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
           <Text style={{ color: "white", fontWeight: "800", fontSize: 20, flex: 1 }}>Team</Text>
           <View style={{ position: "absolute", left: 0, right: 0, alignItems: "center" }}>
-            <Image source={require("@/assets/alenio-logo-white.png")} style={{ height: 26, width: 90, resizeMode: "contain" }} />
+            <Image source={require("@/assets/alenio-logo-white.png")} style={{ height: 30, width: 104, resizeMode: "contain" }} />
           </View>
           <View />
         </View>
