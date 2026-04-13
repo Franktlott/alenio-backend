@@ -243,11 +243,7 @@ export default function ChatScreen() {
         </View>
       </LinearGradient>
 
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: insets.bottom + 100 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" />}
-      >
+      <View>
         {/* ── Team profile card ── */}
         <View style={{ marginHorizontal: 16, marginTop: 20, backgroundColor: "white", borderRadius: 20, paddingVertical: 20, paddingHorizontal: 16, alignItems: "center", shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 2 }}>
           <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: "#EEF2FF", overflow: "hidden", marginBottom: 10, borderWidth: 3, borderColor: "white" }}>
@@ -310,7 +306,13 @@ export default function ChatScreen() {
             {topics.length} {topics.length === 1 ? "active space" : "active spaces"}
           </Text>
         </View>
+      </View>
 
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 100 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" />}
+      >
         {topicsLoading ? (
           <View style={{ paddingVertical: 24, alignItems: "center" }}>
             <ActivityIndicator color="#4361EE" />
