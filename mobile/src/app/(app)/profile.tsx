@@ -642,9 +642,10 @@ export default function ProfileScreen() {
                   }
                   await Notifications.scheduleNotificationAsync({
                     content: {
-                      title: "Test Notification",
-                      body: "Your notifications are working correctly!",
+                      title: "Alenio",
+                      body: "👋 Your notifications are set up and working!",
                       sound: true,
+                      data: { type: "test" },
                     },
                     trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: 3 },
                   });
