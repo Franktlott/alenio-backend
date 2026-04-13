@@ -109,41 +109,49 @@ messagesRouter.post("/", async (c) => {
     },
   });
 
-  // Notify other team members
-  const [members, team] = await Promise.all([
-    prisma.teamMember.findMany({
-      where: { teamId, userId: { not: user.id } },
-      select: { userId: true },
-    }),
-    prisma.team.findUnique({ where: { id: teamId }, select: { name: true } }),
-  ]);
-
+  // Fire-and-forget push notifications — do not block the response
   const senderName = user.name ?? "Someone";
-  const messageText = content?.trim() || "📷 Photo";
+  const messageText = content?.trim()
+    ? content.trim().slice(0, 100) + (content.trim().length > 100 ? "…" : "")
+    : "📷 Photo";
+  const capturedTopicId: string | undefined = topicId || undefined;
+  const capturedMentionIds = mentionIds;
 
-  // Build title: "Team Name" or "Team Name > #channel"
-  let notifTitle = team?.name ?? "Alenio";
-  if (topicId) {
-    const topic = await prisma.topic.findUnique({ where: { id: topicId }, select: { name: true } });
-    if (topic) notifTitle = `${notifTitle} › #${topic.name}`;
-  }
+  void (async () => {
+    try {
+      const [members, team] = await Promise.all([
+        prisma.teamMember.findMany({
+          where: { teamId, userId: { not: user.id } },
+          select: { userId: true },
+        }),
+        prisma.team.findUnique({ where: { id: teamId }, select: { name: true } }),
+      ]);
 
-  // Build body: "Sender: message"
-  const notifBody = `${senderName}: ${messageText}`;
+      let notifTitle = team?.name ?? "Alenio";
+      if (capturedTopicId) {
+        const topic = await prisma.topic.findUnique({ where: { id: capturedTopicId }, select: { name: true } });
+        if (topic) notifTitle = `${notifTitle} › #${topic.name}`;
+      }
 
-  const memberIds = members.map((m: any) => m.userId);
-  await sendPushToUsers(memberIds, notifTitle, notifBody, { teamId, teamName: team?.name ?? "", topicId: topicId || undefined }, "notifMessages");
+      const notifBody = `${senderName}: ${messageText}`;
+      const notifData = { teamId, teamName: team?.name ?? "", topicId: capturedTopicId, type: "message" };
+      const memberIds = members.map((m: { userId: string }) => m.userId);
 
-  // Send mention notifications
-  if (mentionIds.length > 0) {
-    await sendPushToUsers(
-      mentionIds,
-      notifTitle,
-      `${senderName} mentioned you: ${messageText}`,
-      { teamId, teamName: team?.name ?? "", topicId: topicId || undefined },
-      "notifMessages"
-    );
-  }
+      await sendPushToUsers(memberIds, notifTitle, notifBody, notifData, "notifMessages");
+
+      if (capturedMentionIds.length > 0) {
+        await sendPushToUsers(
+          capturedMentionIds,
+          notifTitle,
+          `${senderName} mentioned you: ${messageText}`,
+          notifData,
+          "notifMessages"
+        );
+      }
+    } catch {
+      // Silently fail — notifications are non-critical
+    }
+  })();
 
   return c.json({ data: message }, 201);
 });
