@@ -431,7 +431,7 @@ export default function TeamScreen() {
     const myRequest = myPendingRequests[0] ?? null;
     if (myRequest) {
       return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: "#F8FAFC" }} edges={[]}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: "#EEF2FF" }} edges={[]}>
           <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ paddingTop: insets.top + 12, paddingHorizontal: 16, paddingBottom: 16 }}>
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
               <Text style={{ color: "white", fontSize: 20, fontWeight: "800", flex: 1 }}>Team</Text>
@@ -529,7 +529,7 @@ export default function TeamScreen() {
   // Main render
   // ------------------------------------------------------------------
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#F8FAFC" }} edges={[]} testID="team-screen">
+    <SafeAreaView style={{ flex: 1, backgroundColor: "#EEF2FF" }} edges={[]} testID="team-screen">
 
       {/* ── HEADER ── */}
       <LinearGradient
@@ -557,18 +557,22 @@ export default function TeamScreen() {
       >
 
         {/* ── Team info card ── */}
-        <View style={{
-          marginHorizontal: 12,
-          marginTop: 12,
-          borderRadius: 20,
-          backgroundColor: "white",
-          padding: 14,
-          shadowColor: "#000",
-          shadowOpacity: 0.06,
-          shadowRadius: 8,
-          shadowOffset: { width: 0, height: 2 },
-          elevation: 3,
-        }}>
+        <LinearGradient
+          colors={["#4361EE", "#7C3AED"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={{
+            marginHorizontal: 12,
+            marginTop: 12,
+            borderRadius: 20,
+            padding: 14,
+            shadowColor: "#4361EE",
+            shadowOpacity: 0.3,
+            shadowRadius: 12,
+            shadowOffset: { width: 0, height: 4 },
+            elevation: 6,
+          }}
+        >
           <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
             {/* Avatar */}
             <TouchableOpacity
@@ -610,13 +614,13 @@ export default function TeamScreen() {
 
             {/* Middle: invite code + name + subtitle */}
             <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 17, fontWeight: "900", color: "#1E293B", letterSpacing: 3 }}>
+              <Text style={{ fontSize: 17, fontWeight: "900", color: "white", letterSpacing: 3 }}>
                 {team?.inviteCode}
               </Text>
-              <Text style={{ fontSize: 13, fontWeight: "700", color: "#1E293B", marginTop: 2 }}>
+              <Text style={{ fontSize: 13, fontWeight: "700", color: "rgba(255,255,255,0.9)", marginTop: 2 }}>
                 {team?.name ?? "Team"}
               </Text>
-              <Text style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>
+              <Text style={{ fontSize: 11, color: "rgba(255,255,255,0.65)", marginTop: 2 }}>
                 Share this code to invite team members
               </Text>
             </View>
@@ -626,10 +630,10 @@ export default function TeamScreen() {
               <View style={{ gap: 8 }}>
                 <Pressable
                   onPress={() => setQrModalOpen(true)}
-                  style={{ width: 44, height: 44, borderRadius: 13, backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#C7D2FE", alignItems: "center", justifyContent: "center" }}
+                  style={{ width: 44, height: 44, borderRadius: 13, backgroundColor: "rgba(255,255,255,0.2)", borderWidth: 1, borderColor: "rgba(255,255,255,0.3)", alignItems: "center", justifyContent: "center" }}
                   testID="qr-invite-code"
                 >
-                  <QrCode size={20} color="#4361EE" />
+                  <QrCode size={20} color="white" />
                 </Pressable>
                 <Pressable
                   onPress={handleShareCode}
@@ -641,7 +645,7 @@ export default function TeamScreen() {
               </View>
             ) : null}
           </View>
-        </View>
+        </LinearGradient>
 
         {/* ── Pending join requests (owner only) ────────────────────── */}
         {isOwner && incomingRequests.length > 0 ? (
@@ -718,11 +722,13 @@ export default function TeamScreen() {
         {isPaid ? (
           <View
             style={{
-              backgroundColor: "white",
+              backgroundColor: "#EEF2FF",
               borderRadius: 20,
               marginHorizontal: 12,
               marginTop: 10,
               padding: 16,
+              borderWidth: 1,
+              borderColor: "#C7D2FE",
               shadowColor: "#000",
               shadowOpacity: 0.06,
               shadowRadius: 12,
@@ -748,7 +754,7 @@ export default function TeamScreen() {
                 marginTop: 12,
                 paddingTop: 12,
                 borderTopWidth: 1,
-                borderTopColor: "#F1F5F9",
+                borderTopColor: "#C7D2FE",
                 flexDirection: "row",
                 alignItems: "center",
                 gap: 10,
@@ -815,7 +821,7 @@ export default function TeamScreen() {
             marginHorizontal: 12,
             marginTop: 8,
             borderRadius: 20,
-            backgroundColor: "white",
+            backgroundColor: "#F0F4FF",
             overflow: "hidden",
             shadowColor: "#000",
             shadowOpacity: 0.05,
@@ -825,7 +831,10 @@ export default function TeamScreen() {
           }}
         >
           {/* Header row */}
-          <View
+          <LinearGradient
+            colors={["#4361EE", "#7C3AED"]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
             style={{
               flexDirection: "row",
               alignItems: "center",
@@ -834,8 +843,8 @@ export default function TeamScreen() {
               paddingVertical: 14,
             }}
           >
-            <Text style={{ fontSize: 16, fontWeight: "700", color: "#0F172A" }}>Team Members</Text>
-          </View>
+            <Text style={{ fontSize: 16, fontWeight: "700", color: "white" }}>Team Members</Text>
+          </LinearGradient>
 
           {/* Member rows */}
           {sortedMembers.map((item: TeamMember) => {
@@ -855,8 +864,8 @@ export default function TeamScreen() {
                   paddingHorizontal: 14,
                   paddingVertical: 10,
                   borderTopWidth: 1,
-                  borderTopColor: "#F0F4FF",
-                  backgroundColor: isCurrentUser ? "#F0F4FF" : "white",
+                  borderTopColor: "#C7D2FE",
+                  backgroundColor: isCurrentUser ? "#DDE5FF" : "#F0F4FF",
                 }}
               >
                 {/* Avatar */}
