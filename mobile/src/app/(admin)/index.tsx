@@ -49,7 +49,8 @@ function useAdminStats() {
         credentials: "include",
         headers: { Cookie: authClient.getCookie() },
       });
-      const json = await res.json() as { data: Stats };
+      const json = await res.json() as { data: Stats; error?: { message: string } };
+      if (!res.ok) throw new Error(json.error?.message || "Request failed");
       return json.data;
     },
   });
@@ -63,7 +64,8 @@ function useAdminUsers() {
         credentials: "include",
         headers: { Cookie: authClient.getCookie() },
       });
-      const json = await res.json() as { data: AdminUser[] };
+      const json = await res.json() as { data: AdminUser[]; error?: { message: string } };
+      if (!res.ok) throw new Error(json.error?.message || "Request failed");
       return json.data;
     },
   });
@@ -118,6 +120,7 @@ export default function AdminDashboard() {
 
   const handleSignOut = async () => {
     await authClient.signOut();
+    queryClient.clear();
     await invalidateSession();
     setSignOutModal(false);
   };
