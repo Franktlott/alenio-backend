@@ -732,6 +732,37 @@ export default function ProfileScreen() {
             </TouchableOpacity>
           </View>
         )}
+
+        {/* App Info / Environment */}
+        <View className="mx-4 mt-2 mb-8 items-center">
+          <View className="flex-row items-center mb-1" style={{ gap: 6 }}>
+            <View
+              style={{
+                backgroundColor: __DEV__ ? "rgba(234, 179, 8, 0.12)" : "rgba(34, 197, 94, 0.12)",
+                borderRadius: 20,
+                paddingHorizontal: 10,
+                paddingVertical: 3,
+                borderWidth: 1,
+                borderColor: __DEV__ ? "rgba(234, 179, 8, 0.4)" : "rgba(34, 197, 94, 0.4)",
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: 11,
+                  fontWeight: "600",
+                  color: __DEV__ ? "#B45309" : "#15803D",
+                  letterSpacing: 0.5,
+                  textTransform: "uppercase",
+                }}
+              >
+                {__DEV__ ? "Development" : "Production"}
+              </Text>
+            </View>
+          </View>
+          <Text className="text-xs text-slate-400" numberOfLines={1} style={{ maxWidth: "90%" }}>
+            {process.env.EXPO_PUBLIC_BACKEND_URL}
+          </Text>
+        </View>
       </ScrollView>
 
       {/* Tone picker modal */}
