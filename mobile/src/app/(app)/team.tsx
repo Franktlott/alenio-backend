@@ -637,16 +637,7 @@ export default function TeamScreen() {
         </View>
       </View>
 
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: insets.bottom + 96 }}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" colors={["#4361EE"]} />
-        }
-        testID="members-list"
-      >
-
-        {/* ── Pending join requests (owner only) ────────────────────── */}
+      <View>
         {isOwner && incomingRequests.length > 0 ? (
           <View style={{ marginTop: 12, marginBottom: 4 }}>
             <Text style={{ paddingHorizontal: 16, fontSize: 11, fontWeight: "700", color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 8 }}>
@@ -825,6 +816,7 @@ export default function TeamScreen() {
             shadowRadius: 8,
             shadowOffset: { width: 0, height: 2 },
             elevation: 2,
+            flex: 1,
           }}
         >
           {/* Header row */}
@@ -841,6 +833,14 @@ export default function TeamScreen() {
           </View>
 
           {/* Member rows */}
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: insets.bottom + 96 }}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" colors={["#4361EE"]} />
+            }
+            testID="members-list"
+          >
           {sortedMembers.map((item: TeamMember) => {
             const stats = memberStats?.[item.userId];
             const completed = stats?.completedTasks ?? 0;
@@ -916,6 +916,7 @@ export default function TeamScreen() {
               <Text style={{ fontSize: 13, color: "#94A3B8" }}>No members yet</Text>
             </View>
           ) : null}
+          </ScrollView>
         </View>
 
         {/* ── Owner hint row ─────────────────────────────────────────── */}
@@ -939,7 +940,7 @@ export default function TeamScreen() {
             </Text>
           </View>
         ) : null}
-      </ScrollView>
+      </View>
 
       {/* ── QR Code Modal ─────────────────────────────────────────────── */}
       <Modal visible={qrModalOpen} transparent animationType="fade" onRequestClose={() => setQrModalOpen(false)}>
