@@ -67,6 +67,23 @@ adminRouter.get("/api/tasks", async (c) => {
   return c.json({ data: tasks });
 });
 
+// Promote a user to admin (or demote)
+adminRouter.post("/api/promote-user", async (c) => {
+  const { email, isAdmin } = await c.req.json();
+  if (!email) return c.json({ error: "Email required" }, 400);
+
+  const user = await prisma.user.findUnique({ where: { email: email.trim().toLowerCase() } });
+  if (!user) return c.json({ error: "User not found" }, 404);
+
+  const updated = await prisma.user.update({
+    where: { id: user.id },
+    data: { isAdmin: isAdmin !== false },
+    select: { id: true, name: true, email: true, isAdmin: true },
+  });
+
+  return c.json({ data: updated });
+});
+
 // Serve the admin dashboard HTML
 adminRouter.get("/", (c) => {
   const html = `<!DOCTYPE html>

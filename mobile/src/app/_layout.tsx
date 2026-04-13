@@ -4,7 +4,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { AppState, Image, View } from 'react-native';
 import { useColorScheme } from '@/lib/useColorScheme';
-import { QueryClient, QueryClientProvider, focusManager } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, focusManager, useQuery } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { useSession } from '@/lib/auth/use-session';
@@ -151,6 +151,7 @@ function RootLayoutNav() {
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Protected guard={!!session?.user}>
             <Stack.Screen name="(app)" />
+            <Stack.Screen name="(admin)" />
             <Stack.Screen name="onboarding" />
             <Stack.Screen name="create-task" />
             <Stack.Screen name="create-event" />

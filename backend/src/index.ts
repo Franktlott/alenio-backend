@@ -18,6 +18,7 @@ import { subscriptionRouter } from "./routes/subscription";
 import { activityRouter } from "./routes/activity";
 import { topicsRouter } from "./routes/topics";
 import { adminRouter } from "./routes/admin";
+import { adminMobileRouter } from "./routes/admin-mobile";
 import { webRouter } from "./routes/web-app";
 import { pollsRouter } from "./routes/polls";
 import { demoRouter } from "./routes/demo";
@@ -174,6 +175,17 @@ app.patch("/api/profile", async (c) => {
   return c.json({ data: updated });
 });
 
+// Get current user profile with admin flag
+app.get("/api/me", async (c) => {
+  const user = c.get("user");
+  if (!user) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
+  const fullUser = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { id: true, name: true, email: true, image: true, isAdmin: true },
+  });
+  return c.json({ data: fullUser });
+});
+
 // Save push token
 app.post("/api/push-token", async (c) => {
   const user = c.get("user");
@@ -295,6 +307,7 @@ app.route("/api/teams", pollsRouter);
 app.route("/api/demo", demoRouter);
 app.route("/api/video", videoRouter);
 app.route("/admin", adminRouter);
+app.route("/api/admin-mobile", adminMobileRouter);
 app.route("/web", webRouter);
 
 // ── Auto-cleanup job ────────────────────────────────────────────

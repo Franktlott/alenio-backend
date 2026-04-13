@@ -35,6 +35,7 @@ model User {
   notifTaskAssigned Boolean @default(true)
   notifTaskDue      Boolean @default(true)
   notifMeetings     Boolean @default(true)
+  isAdmin           Boolean @default(false)
   joinRequests  JoinRequest[]
   calendarEvents CalendarEvent[]
   activities    TeamActivity[]
