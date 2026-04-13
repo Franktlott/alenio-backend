@@ -16,7 +16,7 @@ import MeetingBanner from "@/components/MeetingBanner";
 const DEMO_EMAIL = "demo@alenio.app";
 
 export const unstable_settings = {
-  initialRouteName: "team",
+  initialRouteName: "chat",
 };
 
 const ALL_TABS = [
@@ -214,7 +214,7 @@ export default function AppLayout() {
   return (
     <>
       <Tabs
-        initialRouteName="team"
+        initialRouteName="chat"
         tabBar={(props) => <FloatingTabBar {...props} />}
         screenOptions={{ headerShown: false, animation: 'none', sceneStyle: { backgroundColor: '#fff' } }}
       >
