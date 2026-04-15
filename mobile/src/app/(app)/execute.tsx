@@ -425,8 +425,8 @@ function TaskRow({ task, onToggle, onPress }: { task: Task; onToggle: () => void
       testID="task-row"
       style={{
         marginHorizontal: 12,
-        marginBottom: 8,
-        borderRadius: 12,
+        marginBottom: 6,
+        borderRadius: 10,
         backgroundColor: "white",
         shadowColor: "#000",
         shadowOffset: { width: 0, height: 1 },
@@ -441,7 +441,7 @@ function TaskRow({ task, onToggle, onPress }: { task: Task; onToggle: () => void
       <View style={{ width: 4, backgroundColor: priority.accentColor }} />
 
       {/* Card content */}
-      <View style={{ flex: 1, paddingHorizontal: 14, paddingVertical: 12 }}>
+      <View style={{ flex: 1, paddingHorizontal: 12, paddingVertical: 9 }}>
 
         {/* Row 1: Checkbox + Title + Priority badge + Time */}
         <View style={{ flexDirection: "row", alignItems: "center" }}>
@@ -452,11 +452,11 @@ function TaskRow({ task, onToggle, onPress }: { task: Task; onToggle: () => void
             style={{ marginRight: 10 }}
           >
             {isDone ? (
-              <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: "#10B981", alignItems: "center", justifyContent: "center" }}>
-                <Text style={{ color: "white", fontSize: 12, fontWeight: "bold" }}>✓</Text>
+              <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: "#10B981", alignItems: "center", justifyContent: "center" }}>
+                <Text style={{ color: "white", fontSize: 11, fontWeight: "bold" }}>✓</Text>
               </View>
             ) : (
-              <View style={{ width: 24, height: 24, borderRadius: 12, borderWidth: 2, borderColor: "#CBD5E1" }} />
+              <View style={{ width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: "#CBD5E1" }} />
             )}
           </Pressable>
 
@@ -466,7 +466,7 @@ function TaskRow({ task, onToggle, onPress }: { task: Task; onToggle: () => void
             <Text
               numberOfLines={1}
               style={{
-                fontSize: 16,
+                fontSize: 14,
                 fontWeight: "700",
                 color: isDone ? "#94A3B8" : "#0F172A",
                 textDecorationLine: isDone ? "line-through" : "none",
@@ -501,7 +501,7 @@ function TaskRow({ task, onToggle, onPress }: { task: Task; onToggle: () => void
 
         {/* Row 2: Avatars + assignee/creator names */}
         {hasAssignmentsOrCreator ? (
-          <View style={{ marginTop: 8, flexDirection: "row", alignItems: "center" }}>
+          <View style={{ marginTop: 6, flexDirection: "row", alignItems: "center" }}>
             {/* Stacked avatars */}
             {task.assignments && task.assignments.length > 0 ? (
               <View style={{ flexDirection: "row", alignItems: "center" }}>
@@ -511,21 +511,21 @@ function TaskRow({ task, onToggle, onPress }: { task: Task; onToggle: () => void
                     <View
                       key={assignment.user?.id ?? index}
                       style={{
-                        width: 28,
-                        height: 28,
-                        borderRadius: 14,
+                        width: 24,
+                        height: 24,
+                        borderRadius: 12,
                         borderWidth: 2,
                         borderColor: "white",
                         overflow: "hidden",
                         backgroundColor: colors.bg,
                         alignItems: "center",
                         justifyContent: "center",
-                        marginLeft: index === 0 ? 0 : -8,
+                        marginLeft: index === 0 ? 0 : -7,
                         zIndex: 2 - index,
                       }}
                     >
                       {assignment.user?.image ? (
-                        <Image source={{ uri: assignment.user.image }} style={{ width: 28, height: 28 }} resizeMode="cover" />
+                        <Image source={{ uri: assignment.user.image }} style={{ width: 24, height: 24 }} resizeMode="cover" />
                       ) : (
                         <Text style={{ fontSize: 10, fontWeight: "700", color: colors.text }}>
                           {assignment.user?.name?.[0]?.toUpperCase() ?? "?"}
@@ -547,19 +547,19 @@ function TaskRow({ task, onToggle, onPress }: { task: Task; onToggle: () => void
 
         {/* Row 3: Date info */}
         {showDateRow ? (
-          <View style={{ marginTop: 6, flexDirection: "row", alignItems: "center" }}>
+          <View style={{ marginTop: 4, flexDirection: "row", alignItems: "center" }}>
             {isDone ? (
               <>
-                <Clock size={12} color="#10B981" />
-                <Text style={{ fontSize: 12, fontWeight: "500", color: "#10B981", marginLeft: 4 }}>
+                <Clock size={11} color="#10B981" />
+                <Text style={{ fontSize: 11, fontWeight: "500", color: "#10B981", marginLeft: 4 }}>
                   {completedDate ? `Done · ${fmtDate(completedDate)}` : "Done"}
                 </Text>
               </>
             ) : dueDate ? (
               <>
-                <Clock size={12} color={overdue ? "#EF4444" : today ? "#EF4444" : "#64748B"} />
+                <Clock size={11} color={overdue ? "#EF4444" : today ? "#EF4444" : "#64748B"} />
                 <Text style={{
-                  fontSize: 12,
+                  fontSize: 11,
                   fontWeight: "500",
                   color: overdue ? "#EF4444" : today ? "#EF4444" : "#64748B",
                   marginLeft: 4,
