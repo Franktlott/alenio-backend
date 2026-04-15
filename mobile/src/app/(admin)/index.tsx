@@ -123,6 +123,7 @@ export default function AdminDashboard() {
     queryClient.clear();
     await invalidateSession();
     setSignOutModal(false);
+    router.replace("/");
   };
 
   const handleDeleteUser = (user: AdminUser) => {
