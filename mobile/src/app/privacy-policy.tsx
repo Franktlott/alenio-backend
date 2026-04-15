@@ -9,7 +9,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { ArrowLeft } from "lucide-react-native";
 
-const LAST_UPDATED = "April 8, 2026";
+const LAST_UPDATED = "April 15, 2026";
 const APP_NAME = "Alenio";
 const COMPANY_NAME = "Lott Technologies Group, LLC";
 const CONTACT_EMAIL = "Info@lotttechnologies.com";
