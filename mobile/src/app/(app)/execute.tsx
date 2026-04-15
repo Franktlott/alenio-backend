@@ -343,10 +343,10 @@ function MiniCalendar({
 }
 
 const PRIORITY_CONFIG = {
-  urgent: { label: "Urgent", bg: "#FEE2E2", text: "#DC2626", flagColor: "#DC2626" },
-  high: { label: "High", bg: "#FEE2E2", text: "#DC2626", flagColor: "#DC2626" },
-  medium: { label: "Medium", bg: "#FEF9C3", text: "#B45309", flagColor: "#F59E0B" },
-  low: { label: "Low", bg: "#DCFCE7", text: "#15803D", flagColor: "#16A34A" },
+  urgent: { label: "Urgent", bg: "#FEE2E2", text: "#DC2626", flagColor: "#DC2626", accentColor: "#DC2626" },
+  high: { label: "High", bg: "#FEE2E2", text: "#DC2626", flagColor: "#DC2626", accentColor: "#DC2626" },
+  medium: { label: "Medium", bg: "#FEF9C3", text: "#B45309", flagColor: "#F59E0B", accentColor: "#F59E0B" },
+  low: { label: "Low", bg: "#DCFCE7", text: "#15803D", flagColor: "#16A34A", accentColor: "#16A34A" },
 };
 
 function EventRow({ event, onLongPress }: { event: CalendarEvent; onLongPress?: () => void }) {
@@ -385,155 +385,208 @@ function TaskRow({ task, onToggle, onPress }: { task: Task; onToggle: () => void
   const isDone = task.status === "done";
   const priority = PRIORITY_CONFIG[task.priority as keyof typeof PRIORITY_CONFIG] ?? PRIORITY_CONFIG.medium;
 
-  const fmt = (d: string | Date) =>
-    new Date(d).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  const fmtDate = (d: string | Date) =>
+    new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+
+  const fmtTime = (d: string | Date) =>
+    new Date(d).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 
   const completedDate = isDone ? (task.completedAt ?? task.updatedAt) : null;
   const dueDate = task.dueDate ?? null;
-  const wasLate = isDone && dueDate && task.completedAt
-    ? new Date(task.completedAt) > new Date(dueDate)
-    : false;
 
-  const getDueInfo = (): { date: string; overdue: boolean; today: boolean; completed: boolean } | null => {
-    if (isDone) return null; // handled separately below
-    if (!dueDate) return null;
+  const getDueStatus = (): { overdue: boolean; today: boolean } => {
+    if (!dueDate) return { overdue: false, today: false };
     const due = new Date(dueDate);
     const now = new Date();
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const dueStart = new Date(due.getFullYear(), due.getMonth(), due.getDate());
-    const overdue = dueStart < todayStart;
-    const today = dueStart.getTime() === todayStart.getTime();
-    const date = fmt(due);
-    return { date, overdue, today, completed: false };
+    return {
+      overdue: dueStart < todayStart,
+      today: dueStart.getTime() === todayStart.getTime(),
+    };
   };
 
-  const dueInfo = getDueInfo();
+  const { overdue, today } = getDueStatus();
+
+  const AVATAR_COLORS = ["#E0E7FF", "#FCE7F3", "#D1FAE5", "#FEF3C7", "#EDE9FE"];
+  const AVATAR_TEXT_COLORS = ["#4361EE", "#BE185D", "#065F46", "#92400E", "#5B21B6"];
+
+  const getAvatarColors = (index: number) => ({
+    bg: AVATAR_COLORS[index % AVATAR_COLORS.length],
+    text: AVATAR_TEXT_COLORS[index % AVATAR_TEXT_COLORS.length],
+  });
+
+  const hasAssignmentsOrCreator = (task.assignments && task.assignments.length > 0) || !!task.creator;
+  const showDateRow = !!dueDate || isDone;
 
   return (
     <Pressable
       onPress={onPress}
-      style={{ paddingHorizontal: 16, paddingVertical: 7, borderBottomWidth: 1, borderBottomColor: "#F1F5F9", backgroundColor: "white", flexDirection: "row", alignItems: "center" }}
       testID="task-row"
+      style={{
+        marginHorizontal: 12,
+        marginBottom: 8,
+        borderRadius: 12,
+        backgroundColor: "white",
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.06,
+        shadowRadius: 4,
+        elevation: 2,
+        flexDirection: "row",
+        overflow: "hidden",
+      }}
     >
-      {/* Checkbox */}
-      <Pressable
-        onPress={onToggle}
-        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        style={{ marginRight: 10 }}
-      >
-        {isDone ? (
-          <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: "#10B981", alignItems: "center", justifyContent: "center" }}>
-            <Text style={{ color: "white", fontSize: 10, fontWeight: "bold" }}>✓</Text>
+      {/* Left accent bar */}
+      <View style={{ width: 4, backgroundColor: priority.accentColor }} />
+
+      {/* Card content */}
+      <View style={{ flex: 1, paddingHorizontal: 14, paddingVertical: 12 }}>
+
+        {/* Row 1: Checkbox + Title + Priority badge + Time */}
+        <View style={{ flexDirection: "row", alignItems: "center" }}>
+          {/* Checkbox */}
+          <Pressable
+            onPress={onToggle}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            style={{ marginRight: 10 }}
+          >
+            {isDone ? (
+              <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: "#10B981", alignItems: "center", justifyContent: "center" }}>
+                <Text style={{ color: "white", fontSize: 12, fontWeight: "bold" }}>✓</Text>
+              </View>
+            ) : (
+              <View style={{ width: 24, height: 24, borderRadius: 12, borderWidth: 2, borderColor: "#CBD5E1" }} />
+            )}
+          </Pressable>
+
+          {/* Title */}
+          <View style={{ flex: 1, flexDirection: "row", alignItems: "center" }}>
+            {task.incognito ? <Text style={{ fontSize: 13, marginRight: 4 }}>🕵️</Text> : null}
+            <Text
+              numberOfLines={1}
+              style={{
+                fontSize: 16,
+                fontWeight: "700",
+                color: isDone ? "#94A3B8" : "#0F172A",
+                textDecorationLine: isDone ? "line-through" : "none",
+                flex: 1,
+              }}
+            >
+              {task.title}
+            </Text>
+
+            {/* Priority badge */}
+            <View style={{
+              flexDirection: "row",
+              alignItems: "center",
+              paddingHorizontal: 8,
+              paddingVertical: 3,
+              borderRadius: 6,
+              backgroundColor: priority.bg,
+              marginLeft: 6,
+            }}>
+              <Text style={{ fontSize: 9, color: priority.text, marginRight: 3 }}>■</Text>
+              <Text style={{ fontSize: 11, fontWeight: "600", color: priority.text }}>{priority.label}</Text>
+            </View>
+          </View>
+
+          {/* Time */}
+          {dueDate && !isDone ? (
+            <View style={{ flexDirection: "row", alignItems: "center", marginLeft: 8 }}>
+              <Text style={{ fontSize: 12, color: "#64748B" }}>→ {fmtTime(dueDate)}</Text>
+            </View>
+          ) : null}
+        </View>
+
+        {/* Row 2: Avatars + assignee/creator names */}
+        {hasAssignmentsOrCreator ? (
+          <View style={{ marginTop: 8, flexDirection: "row", alignItems: "center" }}>
+            {/* Stacked avatars */}
+            {task.assignments && task.assignments.length > 0 ? (
+              <View style={{ flexDirection: "row", alignItems: "center" }}>
+                {task.assignments.slice(0, 2).map((assignment, index) => {
+                  const colors = getAvatarColors(index);
+                  return (
+                    <View
+                      key={assignment.user?.id ?? index}
+                      style={{
+                        width: 28,
+                        height: 28,
+                        borderRadius: 14,
+                        borderWidth: 2,
+                        borderColor: "white",
+                        overflow: "hidden",
+                        backgroundColor: colors.bg,
+                        alignItems: "center",
+                        justifyContent: "center",
+                        marginLeft: index === 0 ? 0 : -8,
+                        zIndex: 2 - index,
+                      }}
+                    >
+                      {assignment.user?.image ? (
+                        <Image source={{ uri: assignment.user.image }} style={{ width: 28, height: 28 }} resizeMode="cover" />
+                      ) : (
+                        <Text style={{ fontSize: 10, fontWeight: "700", color: colors.text }}>
+                          {assignment.user?.name?.[0]?.toUpperCase() ?? "?"}
+                        </Text>
+                      )}
+                    </View>
+                  );
+                })}
+              </View>
+            ) : null}
+
+            {/* Assignee + creator text */}
+            <Text style={{ fontSize: 12, color: "#64748B", marginLeft: 6, flex: 1 }} numberOfLines={1}>
+              {task.assignments?.[0]?.user?.name ?? null}
+              {task.creator?.name ? ` • Assigned by ${task.creator.name}` : null}
+            </Text>
+          </View>
+        ) : null}
+
+        {/* Row 3: Date info */}
+        {showDateRow ? (
+          <View style={{ marginTop: 6, flexDirection: "row", alignItems: "center" }}>
+            {isDone ? (
+              <>
+                <Clock size={12} color="#10B981" />
+                <Text style={{ fontSize: 12, fontWeight: "500", color: "#10B981", marginLeft: 4 }}>
+                  {completedDate ? `Done · ${fmtDate(completedDate)}` : "Done"}
+                </Text>
+              </>
+            ) : dueDate ? (
+              <>
+                <Clock size={12} color={overdue ? "#EF4444" : today ? "#EF4444" : "#64748B"} />
+                <Text style={{
+                  fontSize: 12,
+                  fontWeight: "500",
+                  color: overdue ? "#EF4444" : today ? "#EF4444" : "#64748B",
+                  marginLeft: 4,
+                }}>
+                  {overdue
+                    ? `Overdue · ${fmtDate(dueDate)}`
+                    : today
+                    ? `Today · ${fmtDate(dueDate)}`
+                    : fmtDate(dueDate)}
+                </Text>
+              </>
+            ) : null}
+
+            {/* Recurrence */}
+            {task.recurrenceRule && !isDone ? (
+              <Text style={{ fontSize: 11, color: "#818CF8", marginLeft: 8 }}>↺ {task.recurrenceRule.type}</Text>
+            ) : null}
           </View>
         ) : (
-          <View style={{ width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: "#CBD5E1" }} />
+          /* Recurrence when no date row */
+          task.recurrenceRule && !isDone ? (
+            <View style={{ marginTop: 6, flexDirection: "row", alignItems: "center" }}>
+              <Text style={{ fontSize: 11, color: "#818CF8" }}>↺ {task.recurrenceRule.type}</Text>
+            </View>
+          ) : null
         )}
-      </Pressable>
 
-      {/* Content */}
-      <View style={{ flex: 1 }}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 2 }}>
-          {task.incognito ? <Text style={{ fontSize: 12 }}>🕵️</Text> : null}
-          <Text
-            numberOfLines={1}
-            style={{
-              fontSize: 13,
-              fontWeight: "600",
-              color: isDone ? "#94A3B8" : "#0F172A",
-              textDecorationLine: isDone ? "line-through" : "none",
-              flex: 1,
-            }}
-          >
-            {task.title}
-          </Text>
-        </View>
-
-        {/* Meta row */}
-        <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 5 }}>
-          {/* Priority */}
-          <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 5, paddingVertical: 1, borderRadius: 999, backgroundColor: priority.bg }}>
-            <Text style={{ fontSize: 9, marginRight: 2, color: priority.flagColor }}>⚑</Text>
-            <Text style={{ fontSize: 9, fontWeight: "600", color: priority.text }}>{priority.label}</Text>
-          </View>
-
-          {/* Assignee */}
-          {task.assignments?.[0]?.user ? (
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
-              <View style={{ width: 13, height: 13, borderRadius: 6.5, overflow: "hidden", backgroundColor: "#E0E7FF", alignItems: "center", justifyContent: "center" }}>
-                {task.assignments[0].user.image ? (
-                  <Image source={{ uri: task.assignments[0].user.image }} style={{ width: 13, height: 13 }} resizeMode="cover" />
-                ) : (
-                  <Text style={{ fontSize: 6, fontWeight: "700", color: "#4361EE" }}>
-                    {task.assignments[0].user.name?.[0]?.toUpperCase() ?? "?"}
-                  </Text>
-                )}
-              </View>
-              <Text style={{ fontSize: 9, color: "#94A3B8" }}>
-                {task.assignments[0].user.name ?? task.assignments[0].user.email ?? "Unknown"}
-                {task.assignments.length > 1 ? ` +${task.assignments.length - 1}` : ""}
-              </Text>
-            </View>
-          ) : null}
-
-          {/* Creator */}
-          {task.creator ? (
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
-              <Text style={{ fontSize: 9, color: "#CBD5E1" }}>by</Text>
-              <View style={{ width: 13, height: 13, borderRadius: 6.5, overflow: "hidden", backgroundColor: "#F1F5F9", alignItems: "center", justifyContent: "center" }}>
-                {task.creator.image ? (
-                  <Image source={{ uri: task.creator.image }} style={{ width: 13, height: 13 }} resizeMode="cover" />
-                ) : (
-                  <Text style={{ fontSize: 6, fontWeight: "700", color: "#64748B" }}>
-                    {task.creator.name?.[0]?.toUpperCase() ?? "?"}
-                  </Text>
-                )}
-              </View>
-              <Text style={{ fontSize: 9, color: "#CBD5E1" }}>
-                {task.creator.name ?? task.creator.email ?? "Unknown"}
-              </Text>
-            </View>
-          ) : null}
-
-          {/* Due / completion dates */}
-          {isDone ? (
-            <>
-              {wasLate ? (
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: "#FEF2F2", paddingHorizontal: 5, paddingVertical: 1, borderRadius: 6 }}>
-                  <Text style={{ fontSize: 9, color: "#EF4444", fontWeight: "600" }}>⚠ Late</Text>
-                </View>
-              ) : null}
-              {dueDate ? (
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
-                  <Text style={{ fontSize: 9, color: "#94A3B8" }}>⏱</Text>
-                  <Text style={{ fontSize: 9, color: "#94A3B8" }}>Due {fmt(dueDate)}</Text>
-                </View>
-              ) : null}
-              {completedDate ? (
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
-                  <Text style={{ fontSize: 9, color: wasLate ? "#EF4444" : "#10B981" }}>✓</Text>
-                  <Text style={{ fontSize: 9, color: wasLate ? "#EF4444" : "#10B981" }}>Done {fmt(completedDate)}</Text>
-                </View>
-              ) : null}
-            </>
-          ) : dueInfo ? (
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
-              <Text style={{ fontSize: 9, color: dueInfo.overdue ? "#EF4444" : dueInfo.today ? "#F59E0B" : "#64748B" }}>⏱</Text>
-              <Text style={{
-                fontSize: 9,
-                fontWeight: dueInfo.overdue ? "600" : "400",
-                color: dueInfo.overdue ? "#EF4444" : dueInfo.today ? "#F59E0B" : "#64748B",
-              }}>
-                {dueInfo.today ? `Today · ${dueInfo.date}` : dueInfo.overdue ? `Overdue · ${dueInfo.date}` : dueInfo.date}
-              </Text>
-            </View>
-          ) : null}
-
-          {/* Recurrence */}
-          {task.recurrenceRule && !isDone ? (
-            <Text style={{ fontSize: 9, color: "#818CF8" }}>↺ {task.recurrenceRule.type}</Text>
-          ) : null}
-
-        </View>
       </View>
     </Pressable>
   );
