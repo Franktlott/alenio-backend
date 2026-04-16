@@ -10,14 +10,15 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.vibecode.alenio-9iqp9v",
-      "buildNumber": "3",
+      "buildNumber": "4",
       "infoPlist": {
-        "NSCameraUsageDescription": "Alenio uses your camera for video calls and profile photos.",
-        "NSMicrophoneUsageDescription": "Alenio uses your microphone for team video calls.",
-        "NSPhotoLibraryUsageDescription": "Alenio accesses your photos to share images with your team.",
+        "NSCameraUsageDescription": "Alenio uses the camera to capture photos inside the app before you publish them.",
+        "NSMicrophoneUsageDescription": "Alenio uses the microphone to record audio tracks that the app attaches to your creations.",
+        "NSPhotoLibraryUsageDescription": "Alenio accesses your photo library to generate thumbnails for your videos.",
         "UIBackgroundModes": [
           "remote-notification"
-        ]
+        ],
+        "NSPhotoLibraryAddUsageDescription": "Alenio saves media you export from the app into your photo library."
       }
     },
     "android": {
