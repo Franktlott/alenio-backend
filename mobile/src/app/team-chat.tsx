@@ -1,6 +1,4 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { Audio } from "expo-av";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   View,
   Text,
@@ -409,38 +407,8 @@ export default function TeamChatScreen() {
 
   useEffect(() => {
     if (!messages) return;
-    const count = messages.length;
-    if (count > prevMsgCountRef.current && prevMsgCountRef.current > 0) {
-      const newest = messages[messages.length - 1];
-      if (newest && newest.senderId !== currentUserId) {
-        AsyncStorage.getItem("msg_tone").then(async (toneId) => {
-          const id = toneId ?? "synth";
-          const URLS: Record<string, string> = {
-            chime:   "https://assets.mixkit.co/active_storage/sfx/2013/2013-preview.mp3",
-            soft:    "https://assets.mixkit.co/active_storage/sfx/2018/2018-preview.mp3",
-            ding:    "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3",
-            note:    "https://assets.mixkit.co/active_storage/sfx/2015/2015-preview.mp3",
-            glass:   "https://assets.mixkit.co/active_storage/sfx/2308/2308-preview.mp3",
-            bloom:   "https://assets.mixkit.co/active_storage/sfx/2017/2017-preview.mp3",
-            synth:   "https://assets.mixkit.co/active_storage/sfx/2574/2574-preview.mp3",
-          };
-          const url = URLS[id];
-          if (url) {
-            try {
-              await Audio.setAudioModeAsync({
-                playsInSilentModeIOS: true,
-                allowsRecordingIOS: false,
-                staysActiveInBackground: false,
-              });
-              const { sound } = await Audio.Sound.createAsync({ uri: url }, { shouldPlay: true, volume: 1 });
-              sound.setOnPlaybackStatusUpdate((s) => { if (s.isLoaded && s.didJustFinish) sound.unloadAsync(); });
-            } catch {}
-          }
-        });
-      }
-    }
-    prevMsgCountRef.current = count;
-  }, [messages, currentUserId]);
+    prevMsgCountRef.current = messages.length;
+  }, [messages]);
 
   const items = buildChatList(messages, polls);
 
