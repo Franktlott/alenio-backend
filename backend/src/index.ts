@@ -201,7 +201,7 @@ app.get("/api/notification-preferences", async (c) => {
   if (!user) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
   const prefs = await prisma.user.findUnique({
     where: { id: user.id },
-    select: { notifMessages: true, notifTaskAssigned: true, notifTaskDue: true, notifMeetings: true },
+    select: { notifMessages: true, notifTaskAssigned: true, notifTaskDue: true, notifMeetings: true, notifTone: true },
   });
   return c.json({ data: prefs });
 });
@@ -211,7 +211,7 @@ app.patch("/api/notification-preferences", async (c) => {
   const user = c.get("user");
   if (!user) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
   const body = await c.req.json();
-  const { notifMessages, notifTaskAssigned, notifTaskDue, notifMeetings } = body;
+  const { notifMessages, notifTaskAssigned, notifTaskDue, notifMeetings, notifTone } = body;
   const updated = await prisma.user.update({
     where: { id: user.id },
     data: {
@@ -219,8 +219,9 @@ app.patch("/api/notification-preferences", async (c) => {
       ...(notifTaskAssigned !== undefined ? { notifTaskAssigned } : {}),
       ...(notifTaskDue !== undefined ? { notifTaskDue } : {}),
       ...(notifMeetings !== undefined ? { notifMeetings } : {}),
+      ...(notifTone !== undefined ? { notifTone } : {}),
     },
-    select: { notifMessages: true, notifTaskAssigned: true, notifTaskDue: true, notifMeetings: true },
+    select: { notifMessages: true, notifTaskAssigned: true, notifTaskDue: true, notifMeetings: true, notifTone: true },
   });
   return c.json({ data: updated });
 });

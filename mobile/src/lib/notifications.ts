@@ -10,6 +10,7 @@ import { api } from "./api/api";
 const TONES = [
   { id: "none",        label: "None",          url: null },
   { id: "system",      label: "System Default", url: null },
+  { id: "synth",       label: "Default",        url: "https://assets.mixkit.co/active_storage/sfx/2574/2574-preview.mp3" },
   { id: "bell",        label: "Bell",           url: "https://assets.mixkit.co/active_storage/sfx/2870/2870-preview.mp3" },
   { id: "tritone",     label: "Tri-tone",       url: "https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3" },
   { id: "chime",       label: "Chime",          url: "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" },
@@ -21,7 +22,6 @@ const TONES = [
   { id: "note",        label: "Note",           url: "https://assets.mixkit.co/active_storage/sfx/2015/2015-preview.mp3" },
   { id: "popcorn",     label: "Popcorn",        url: "https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3" },
   { id: "pulse",       label: "Pulse",          url: "https://assets.mixkit.co/active_storage/sfx/2573/2573-preview.mp3" },
-  { id: "synth",       label: "Synth",          url: "https://assets.mixkit.co/active_storage/sfx/2574/2574-preview.mp3" },
   { id: "ding",        label: "Ding",           url: "https://assets.mixkit.co/active_storage/sfx/2014/2014-preview.mp3" },
   { id: "achievement", label: "Achievement",    url: "https://assets.mixkit.co/active_storage/sfx/2019/2019-preview.mp3" },
   { id: "beep",        label: "Beep",           url: "https://assets.mixkit.co/active_storage/sfx/2020/2020-preview.mp3" },
@@ -34,8 +34,8 @@ const TONES = [
   { id: "cheer",       label: "Cheer",          url: "https://assets.mixkit.co/active_storage/sfx/2867/2867-preview.mp3" },
 ];
 
-const MSG_TONE_KEY = "msg_tone";
-const DM_TONE_KEY = "dm_tone";
+export const MSG_TONE_KEY = "msg_tone";
+export const DM_TONE_KEY  = "dm_tone";
 
 // Show notifications when app is in foreground
 Notifications.setNotificationHandler({
@@ -55,8 +55,7 @@ Notifications.setNotificationHandler({
 });
 
 /**
- * Play the user's selected notification tone
- * @param type "msg" for team messages, "dm" for direct messages
+ * Play the user's selected notification tone (foreground only)
  */
 export async function playNotificationTone(type: "msg" | "dm" = "msg"): Promise<void> {
   try {
@@ -89,25 +88,69 @@ export async function playNotificationTone(type: "msg" | "dm" = "msg"): Promise<
   }
 }
 
+/**
+ * Sync the user's message tone preference to the backend so background
+ * push notifications use the correct bundled sound file.
+ */
+export async function syncToneToBackend(toneId: string): Promise<void> {
+  try {
+    await api.patch("/api/notification-preferences", { notifTone: toneId });
+  } catch {
+    // Non-critical
+  }
+}
+
+/**
+ * Create an Android notification channel for each tone.
+ * Channels are permanent on Android — sound cannot be changed after creation,
+ * so we create one channel per tone and route each user's notification to their channel.
+ */
+async function registerAndroidToneChannels(): Promise<void> {
+  if (Platform.OS !== "android") return;
+
+  const baseOptions = {
+    importance: Notifications.AndroidImportance.MAX,
+    vibrationPattern: [0, 250, 250, 250] as number[],
+    lightColor: "#4361EE",
+    lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+    enableVibrate: true,
+    enableLights: true,
+  };
+
+  // Silent channel for "none" tone
+  await Notifications.setNotificationChannelAsync("alenio_silent", {
+    name: "Alenio (Silent)",
+    ...baseOptions,
+    sound: null,
+    enableVibrate: false,
+  });
+
+  // System default channel
+  await Notifications.setNotificationChannelAsync("alenio_main", {
+    name: "Alenio Notifications",
+    ...baseOptions,
+    sound: "default",
+  });
+
+  // One channel per custom tone, using the bundled .wav file
+  const customTones = TONES.filter(t => t.id !== "none" && t.id !== "system");
+  for (const tone of customTones) {
+    await Notifications.setNotificationChannelAsync(`alenio_${tone.id}`, {
+      name: `Alenio (${tone.label})`,
+      ...baseOptions,
+      sound: `${tone.id}.wav`,
+    });
+  }
+}
+
 export async function registerForPushNotificationsAsync(): Promise<string | null> {
   if (!Device.isDevice) {
     // Simulator/emulator — skip silently
     return null;
   }
 
-  // Android requires a notification channel
-  if (Platform.OS === "android") {
-    await Notifications.setNotificationChannelAsync("alenio_main", {
-      name: "Alenio Notifications",
-      importance: Notifications.AndroidImportance.MAX,
-      vibrationPattern: [0, 250, 250, 250],
-      lightColor: "#4361EE",
-      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
-      enableVibrate: true,
-      enableLights: true,
-      sound: "default",
-    });
-  }
+  // Register all Android tone channels
+  await registerAndroidToneChannels();
 
   const { status: existingStatus } = await Notifications.getPermissionsAsync();
   let finalStatus = existingStatus;
@@ -127,6 +170,14 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
   // Save token to backend
   try {
     await api.post("/api/push-token", { token });
+  } catch {
+    // Non-critical
+  }
+
+  // Sync current tone preference to backend
+  try {
+    const toneId = await AsyncStorage.getItem(MSG_TONE_KEY) ?? "synth";
+    await syncToneToBackend(toneId);
   } catch {
     // Non-critical
   }

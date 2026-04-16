@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Audio } from "expo-av";
+import { syncToneToBackend } from "@/lib/notifications";
 import {
   View,
   Text,
@@ -812,6 +813,7 @@ export default function ProfileScreen() {
                           if (showTonePicker === "msg") {
                             setMsgToneId(tone.id);
                             AsyncStorage.setItem(MSG_TONE_KEY, tone.id);
+                            syncToneToBackend(tone.id);
                           } else {
                             setDmToneId(tone.id);
                             AsyncStorage.setItem(DM_TONE_KEY, tone.id);
@@ -842,6 +844,7 @@ export default function ProfileScreen() {
                           if (showTonePicker === "msg") {
                             setMsgToneId(tone.id);
                             AsyncStorage.setItem(MSG_TONE_KEY, tone.id);
+                            syncToneToBackend(tone.id);
                           } else {
                             setDmToneId(tone.id);
                             AsyncStorage.setItem(DM_TONE_KEY, tone.id);

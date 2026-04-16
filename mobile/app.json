@@ -37,7 +37,30 @@
       [
         "expo-notifications",
         {
-          "sounds": []
+          "sounds": [
+            "./src/assets/sounds/bell.wav",
+            "./src/assets/sounds/tritone.wav",
+            "./src/assets/sounds/chime.wav",
+            "./src/assets/sounds/glass.wav",
+            "./src/assets/sounds/aurora.wav",
+            "./src/assets/sounds/chord.wav",
+            "./src/assets/sounds/circles.wav",
+            "./src/assets/sounds/complete.wav",
+            "./src/assets/sounds/note.wav",
+            "./src/assets/sounds/popcorn.wav",
+            "./src/assets/sounds/pulse.wav",
+            "./src/assets/sounds/synth.wav",
+            "./src/assets/sounds/ding.wav",
+            "./src/assets/sounds/achievement.wav",
+            "./src/assets/sounds/beep.wav",
+            "./src/assets/sounds/quickwin.wav",
+            "./src/assets/sounds/digital.wav",
+            "./src/assets/sounds/pop.wav",
+            "./src/assets/sounds/clarity.wav",
+            "./src/assets/sounds/alert.wav",
+            "./src/assets/sounds/softbell.wav",
+            "./src/assets/sounds/cheer.wav"
+          ]
         }
       ],
       [

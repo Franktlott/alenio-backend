@@ -9,6 +9,7 @@ export interface PushPayload {
   body: string;
   data?: Record<string, unknown>;
   channelId?: string;
+  sound?: string;
 }
 
 function chunkArray<T>(arr: T[], size: number): T[][] {
@@ -38,7 +39,7 @@ export async function sendPushNotifications(messages: PushPayload[]): Promise<vo
               to: m.token,
               title: m.title,
               body: m.body,
-              sound: "default",
+              sound: m.sound ?? "default",
               priority: "high",
               channelId: m.channelId ?? "alenio_main",
               data: m.data,
@@ -83,18 +84,29 @@ export async function sendPushToUsers(
 
   const users = await prisma.user.findMany({
     where,
-    select: { pushToken: true },
+    select: { pushToken: true, notifTone: true },
   });
 
   const messages: PushPayload[] = users
     .filter((u) => u.pushToken?.startsWith("ExponentPushToken"))
-    .map((u) => ({
-      token: u.pushToken!,
-      title,
-      body,
-      data,
-      channelId: "alenio_main",
-    }));
+    .map((u) => {
+      const tone = u.notifTone ?? "synth";
+      // "none" = silent, "system" = OS default, anything else = bundled file
+      if (tone === "none") {
+        return { token: u.pushToken!, title, body, data, sound: "none", channelId: "alenio_silent" };
+      }
+      if (tone === "system") {
+        return { token: u.pushToken!, title, body, data, sound: "default", channelId: "alenio_main" };
+      }
+      return {
+        token: u.pushToken!,
+        title,
+        body,
+        data,
+        sound: `${tone}.wav`,
+        channelId: `alenio_${tone}`,
+      };
+    });
 
   await sendPushNotifications(messages);
 }
