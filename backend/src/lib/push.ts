@@ -91,21 +91,15 @@ export async function sendPushToUsers(
     .filter((u) => u.pushToken?.startsWith("ExponentPushToken"))
     .map((u) => {
       const tone = u.notifTone ?? "synth";
-      // "none" = silent, "system" = OS default, anything else = bundled file
+      // "none" = silent channel, everything else uses "default" system sound.
+      // iOS requires the .wav to be in the binary — using "default" guarantees
+      // sound plays on every build without bundling issues.
+      // Android uses channelId for custom sounds (channels are pre-registered on device).
       if (tone === "none") {
         return { token: u.pushToken!, title, body, data, sound: "none", channelId: "alenio_silent" };
       }
-      if (tone === "system") {
-        return { token: u.pushToken!, title, body, data, sound: "default", channelId: "alenio_main" };
-      }
-      return {
-        token: u.pushToken!,
-        title,
-        body,
-        data,
-        sound: `${tone}.wav`,
-        channelId: `alenio_${tone}`,
-      };
+      const channelId = tone === "system" ? "alenio_main" : `alenio_${tone}`;
+      return { token: u.pushToken!, title, body, data, sound: "default", channelId };
     });
 
   await sendPushNotifications(messages);
