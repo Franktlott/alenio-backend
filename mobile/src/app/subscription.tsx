@@ -17,7 +17,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api/api";
 import { useTeamStore } from "@/lib/state/team-store";
 import { toast } from "burnt";
-import { restorePurchases, isRevenueCatEnabled } from "@/lib/revenue-cat";
+import { purchaseTeam, restorePurchases, isRevenueCatEnabled } from "@/lib/revenue-cat";
 
 type Subscription = {
   plan: "free" | "team";
@@ -100,13 +100,22 @@ export default function SubscriptionScreen() {
   const currentPlan: TierPlan = subscription?.plan ?? "free";
 
   const upgradeMutation = useMutation({
-    mutationFn: (plan: TierPlan) =>
-      api.post(`/api/teams/${activeTeamId}/subscription/upgrade`, { plan }),
-    onSuccess: (_data, plan) => {
+    mutationFn: async (plan: TierPlan) => {
+      if (isRevenueCatEnabled()) {
+        const result = await purchaseTeam();
+        if (!result.success) {
+          if (result.error === "cancelled") throw new Error("cancelled");
+          throw new Error(result.error ?? "Purchase failed");
+        }
+      }
+      return api.post(`/api/teams/${activeTeamId}/subscription/upgrade`, { plan });
+    },
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["subscription", activeTeamId] });
-      toast({ title: `Upgraded to Team!`, preset: "done" });
+      toast({ title: "Upgraded to Team!", preset: "done" });
     },
     onError: (e: any) => {
+      if (e?.message === "cancelled") return;
       toast({ title: e?.message ?? "Upgrade failed. Please try again.", preset: "error" });
     },
   });
