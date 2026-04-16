@@ -12,7 +12,7 @@ import { useSession } from '@/lib/auth/use-session';
 import { useEffect, useRef, useState } from 'react';
 import * as Notifications from 'expo-notifications';
 import * as Haptics from 'expo-haptics';
-import { registerForPushNotificationsAsync, playNotificationTone } from '@/lib/notifications';
+import { registerForPushNotificationsAsync } from '@/lib/notifications';
 import { initRevenueCat } from '@/lib/revenue-cat';
 import { fetch } from 'expo/fetch';
 import { authClient } from '@/lib/auth/auth-client';
@@ -143,11 +143,8 @@ function RootLayoutNav() {
     if (!session?.user) return;
     registerForPushNotificationsAsync();
     initRevenueCat(session.user.id);
-    notificationListener.current = Notifications.addNotificationReceivedListener((notification) => {
-      // Play custom notification tone + haptic
-      const data = notification.request.content.data as Record<string, string>;
-      const toneType = data?.conversationId ? "dm" : "msg";
-      playNotificationTone(toneType);
+    notificationListener.current = Notifications.addNotificationReceivedListener(() => {
+      // OS plays the bundled sound from the push payload — just add haptic feedback
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     });
 

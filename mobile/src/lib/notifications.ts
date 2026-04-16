@@ -37,21 +37,16 @@ const TONES = [
 export const MSG_TONE_KEY = "msg_tone";
 export const DM_TONE_KEY  = "dm_tone";
 
-// Show notifications when app is in foreground
+// Show notifications when app is in foreground — always play sound via OS
+// so behaviour matches background/closed state (no network-download delay)
 Notifications.setNotificationHandler({
-  handleNotification: async (notification) => {
-    const data = notification.request.content.data as Record<string, string>;
-    const toneKey = data?.conversationId ? DM_TONE_KEY : MSG_TONE_KEY;
-    const toneId = await AsyncStorage.getItem(toneKey) ?? "synth";
-    const useSystemSound = toneId === "system";
-    return {
-      shouldShowAlert: true,
-      shouldPlaySound: useSystemSound,
-      shouldSetBadge: true,
-      shouldShowBanner: true,
-      shouldShowList: true,
-    };
-  },
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
+  }),
 });
 
 /**
