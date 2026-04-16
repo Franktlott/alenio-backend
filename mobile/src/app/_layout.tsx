@@ -1,3 +1,4 @@
+import { Toaster } from 'burnt/web';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack, router } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
@@ -237,6 +238,7 @@ export default function RootLayout() {
         <KeyboardProvider>
           <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
           <RootLayoutNav />
+          <Toaster />
         </KeyboardProvider>
       </GestureHandlerRootView>
     </QueryClientProvider>
