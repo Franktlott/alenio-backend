@@ -9,14 +9,11 @@ import {
   Image,
   Pressable,
   RefreshControl,
-  KeyboardAvoidingView,
-  Platform,
-  TextInput,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { LinearGradient } from "expo-linear-gradient";
-import { MessageCircle, Users, Lock, Plus, Hash } from "lucide-react-native";
+import { MessageCircle, Users, Lock, Plus } from "lucide-react-native";
 import { router } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
@@ -32,22 +29,6 @@ import { useSubscriptionStore } from "@/lib/state/subscription-store";
 import { restorePurchases, isRevenueCatEnabled } from "@/lib/revenue-cat";
 
 const PINNED_DMS_KEY = "pinned_dms";
-const TOPIC_COLORS = ["#4361EE", "#7C3AED", "#10B981", "#F59E0B", "#EF4444", "#EC4899"];
-
-type Topic = {
-  id: string;
-  name: string;
-  color: string;
-  description?: string | null;
-  lastMessage?: {
-    id: string;
-    content: string | null;
-    mediaType?: string | null;
-    createdAt: string;
-    sender: { id: string; name: string | null };
-  } | null;
-  _count?: { messages: number };
-};
 
 function formatTime(dateStr: string) {
   const d = new Date(dateStr);
@@ -99,15 +80,6 @@ export default function ChatScreen() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [pinnedDmIds, setPinnedDmIds] = useState<string[]>([]);
-  const [showCreateChannel, setShowCreateChannel] = useState(false);
-  const [newChannelName, setNewChannelName] = useState("");
-  const [newChannelDescription, setNewChannelDescription] = useState("");
-  const [newChannelColor, setNewChannelColor] = useState("#4361EE");
-  const [actionTopic, setActionTopic] = useState<Topic | null>(null);
-  const [editTopic, setEditTopic] = useState<Topic | null>(null);
-  const [editName, setEditName] = useState("");
-  const [editDescription, setEditDescription] = useState("");
-  const [deleteTopic, setDeleteTopic] = useState<Topic | null>(null);
 
   useEffect(() => {
     AsyncStorage.getItem(PINNED_DMS_KEY).then((val) => {
@@ -133,13 +105,6 @@ export default function ChatScreen() {
     enabled: !!activeTeamId,
   });
 
-  const { data: topics = [], isLoading: topicsLoading } = useQuery<Topic[]>({
-    queryKey: ["topics", activeTeamId],
-    queryFn: () => api.get<Topic[]>(`/api/teams/${activeTeamId}/topics`),
-    enabled: !!activeTeamId,
-    refetchInterval: 10000,
-  });
-
   const { data: teamGeneralMessages = [] } = useQuery({
     queryKey: ["messages", activeTeamId, "general", "preview"],
     queryFn: () => api.get<any[]>(`/api/teams/${activeTeamId}/messages?topicId=general&limit=1`),
@@ -148,58 +113,40 @@ export default function ChatScreen() {
   });
 
   const lastReadIds = useUnreadStore((s) => s.lastReadIds);
-  const teamChannelLastReadIds: Record<string, string> = {
-    [`team:${activeTeamId}`]: lastReadIds[`team:${activeTeamId}`] ?? "",
-    ...Object.fromEntries(topics.map((t) => [`topic:${t.id}`, lastReadIds[`topic:${t.id}`] ?? ""])),
-  };
+
   const { data: teamUnreadCounts = {} } = useQuery({
-    queryKey: ["team-unread-counts", activeTeamId, teamChannelLastReadIds],
-    queryFn: () => api.post<Record<string, number>>(`/api/teams/${activeTeamId}/messages/unread-counts`, { lastReadIds: teamChannelLastReadIds }),
+    queryKey: ["team-unread-counts", activeTeamId, { [`team:${activeTeamId}`]: lastReadIds[`team:${activeTeamId}`] ?? "" }],
+    queryFn: () => api.post<Record<string, number>>(`/api/teams/${activeTeamId}/messages/unread-counts`, {
+      lastReadIds: { [`team:${activeTeamId}`]: lastReadIds[`team:${activeTeamId}`] ?? "" },
+    }),
     enabled: !!activeTeamId && !!session?.user,
     refetchInterval: 10000,
   });
-  const teamUnreadCount = Object.values(teamUnreadCounts).reduce((a, b) => a + b, 0);
   const teamChatUnreadCount = teamUnreadCounts[`team:${activeTeamId}`] ?? 0;
+
+  // DM conversations
+  const { data: conversations = [], isLoading: conversationsLoading } = useQuery<Conversation[]>({
+    queryKey: ["dms"],
+    queryFn: () => api.get<Conversation[]>("/api/dms"),
+    refetchInterval: 10000,
+  });
+
+  const dmLastReadIds = Object.fromEntries(
+    conversations.map((c) => [`conv:${c.id}`, lastReadIds[`conv:${c.id}`] ?? ""])
+  );
+  const { data: dmUnreadCounts = {} } = useQuery({
+    queryKey: ["dm-unread-counts", dmLastReadIds],
+    queryFn: () => api.post<Record<string, number>>("/api/dms/unread-counts", { lastReadIds: dmLastReadIds }),
+    enabled: conversations.length > 0 && !!session?.user,
+    refetchInterval: 10000,
+  });
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await queryClient.invalidateQueries({ queryKey: ["topics", activeTeamId] });
+    await queryClient.invalidateQueries({ queryKey: ["dms"] });
     await queryClient.invalidateQueries({ queryKey: ["team", activeTeamId] });
     setRefreshing(false);
   };
-
-  const createChannelMutation = useMutation({
-    mutationFn: ({ name, description, color }: { name: string; description: string; color: string }) =>
-      api.post(`/api/teams/${activeTeamId}/topics`, { name, description, color }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["topics", activeTeamId] });
-      setShowCreateChannel(false);
-      setNewChannelName("");
-      setNewChannelDescription("");
-      setNewChannelColor("#4361EE");
-      toast({ title: "Channel created", preset: "done" });
-    },
-  });
-
-  const updateChannelMutation = useMutation({
-    mutationFn: ({ id, name, description }: { id: string; name: string; description: string }) =>
-      api.patch(`/api/teams/${activeTeamId}/topics/${id}`, { name, description }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["topics", activeTeamId] });
-      setEditTopic(null);
-      toast({ title: "Channel updated", preset: "done" });
-    },
-  });
-
-  const deleteChannelMutation = useMutation({
-    mutationFn: (id: string) =>
-      api.delete(`/api/teams/${activeTeamId}/topics/${id}`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["topics", activeTeamId] });
-      setDeleteTopic(null);
-      toast({ title: "Channel deleted", preset: "done" });
-    },
-  });
 
   if (!activeTeamId) {
     return (
@@ -243,29 +190,16 @@ export default function ChatScreen() {
         </View>
       </LinearGradient>
 
-      <View>
-        {/* ── Team profile card ── */}
-        <View style={{ marginHorizontal: 16, marginTop: 20, backgroundColor: "white", borderRadius: 20, paddingVertical: 20, paddingHorizontal: 16, alignItems: "center", shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 2 }}>
-          <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: "#EEF2FF", overflow: "hidden", marginBottom: 10, borderWidth: 3, borderColor: "white" }}>
-            {teamDetail?.image ? (
-              <Image source={{ uri: teamDetail.image }} style={{ width: 64, height: 64 }} resizeMode="cover" />
-            ) : (
-              <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-                <Users size={28} color="#4361EE" />
-              </View>
-            )}
-          </View>
-          <Text style={{ fontSize: 18, fontWeight: "700", color: "#0F172A" }}>{teamDetail?.name ?? "Your Team"}</Text>
-          <Text style={{ fontSize: 13, color: "#6B7280", marginTop: 3 }}>
-            {topics.length} {topics.length === 1 ? "channel" : "channels"} · {memberCount} {memberCount === 1 ? "member" : "members"}
-          </Text>
-        </View>
-
-        {/* ── Team Chat card ── */}
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 100 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" />}
+      >
+        {/* Team Chat card */}
         <Pressable
           testID="team-chat-button"
-          onPress={() => router.push({ pathname: "/team-chat", params: { teamId: activeTeamId, teamName: teamDetail?.name ?? "" } })}
-          style={{ marginHorizontal: 16, marginTop: 12, backgroundColor: "white", borderRadius: 20, overflow: "hidden", shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 2 }}
+          onPress={() => router.push({ pathname: "/team-channels", params: { teamId: activeTeamId, teamName: teamDetail?.name ?? "" } })}
+          style={{ marginHorizontal: 16, marginTop: 20, backgroundColor: "white", borderRadius: 20, overflow: "hidden", shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 2 }}
         >
           {/* Purple accent top border */}
           <View style={{ height: 3, backgroundColor: "#4361EE" }} />
@@ -289,80 +223,84 @@ export default function ChatScreen() {
           <View style={{ height: 1, backgroundColor: "#F1F5F9", marginHorizontal: 16 }} />
           <View style={{ flexDirection: "row", alignItems: "center", gap: 16, paddingHorizontal: 16, paddingVertical: 10 }}>
             <Text style={{ fontSize: 12, color: "#6B7280" }}>
-              👥 {memberCount} {memberCount === 1 ? "member" : "members"}
+              {memberCount} {memberCount === 1 ? "member" : "members"}
             </Text>
             <Text style={{ fontSize: 12, color: "#6B7280" }}>
               {lastGeneralMessage
-                ? `⏰ ${formatTime(lastGeneralMessage.createdAt)}`
-                : "⏰ No activity yet"}
+                ? `Last: ${formatTime(lastGeneralMessage.createdAt)}`
+                : "No activity yet"}
             </Text>
           </View>
         </Pressable>
 
-        {/* ── Channels section ── */}
-        <View style={{ marginHorizontal: 16, marginTop: 24, marginBottom: 10 }}>
-          <Text style={{ fontSize: 20, fontWeight: "700", color: "#0F172A" }}>Channels</Text>
-          <Text style={{ fontSize: 13, color: "#6B7280", marginTop: 2 }}>
-            {topics.length} {topics.length === 1 ? "active space" : "active spaces"}
-          </Text>
+        {/* DMs / Group Messages section */}
+        <View style={{ marginHorizontal: 16, marginTop: 28, marginBottom: 10, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+          <View>
+            <Text style={{ fontSize: 20, fontWeight: "700", color: "#0F172A" }}>Messages</Text>
+            <Text style={{ fontSize: 13, color: "#6B7280", marginTop: 2 }}>Direct & group conversations</Text>
+          </View>
         </View>
-      </View>
 
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: insets.bottom + 100 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" />}
-      >
-        {topicsLoading ? (
+        {conversationsLoading ? (
           <View style={{ paddingVertical: 24, alignItems: "center" }}>
             <ActivityIndicator color="#4361EE" />
           </View>
-        ) : topics.length === 0 ? (
+        ) : conversations.length === 0 ? (
           <View style={{ marginHorizontal: 16, backgroundColor: "white", borderRadius: 20, padding: 24, alignItems: "center" }}>
-            <Text style={{ color: "#94A3B8", fontSize: 14 }}>No channels yet</Text>
+            <Text style={{ color: "#94A3B8", fontSize: 14, marginBottom: 4 }}>No conversations yet</Text>
+            <Text style={{ color: "#CBD5E1", fontSize: 12 }}>Tap + Add to start a DM or group</Text>
           </View>
         ) : (
-          topics.map((topic) => {
-            const firstLetter = topic.name[0]?.toUpperCase() ?? "#";
-            const isHash = /^[^a-zA-Z]/.test(topic.name);
-            const unreadKey = `topic:${topic.id}`;
-            const unread = teamUnreadCounts[unreadKey] ?? 0;
+          conversations.map((conv) => {
+            const unreadCount = dmUnreadCounts[`conv:${conv.id}`] ?? 0;
+            const isGroup = conv.isGroup;
+            const displayName = isGroup
+              ? (conv.name ?? conv.participants?.map((p) => p.name ?? "").join(", ") ?? "Group")
+              : (conv.recipient?.name ?? "Unknown");
+            const avatarImage = isGroup ? null : (conv.recipient?.image ?? null);
+            const avatarInitial = displayName[0]?.toUpperCase() ?? "?";
+            const lastMsg = conv.lastMessage;
+            const timeStr = lastMsg ? formatTime(lastMsg.createdAt) : (conv.updatedAt ? formatTime(conv.updatedAt) : "");
+
             return (
               <Pressable
-                key={topic.id}
-                testID={`channel-card-${topic.id}`}
-                onPress={() => router.push({ pathname: "/team-chat", params: { teamId: activeTeamId, topicId: topic.id, topicName: topic.name, teamName: teamDetail?.name ?? "" } })}
-                onLongPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setActionTopic(topic); }}
-                style={{ marginHorizontal: 16, marginBottom: 10, backgroundColor: "white", borderRadius: 20, padding: 16, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 6, shadowOffset: { width: 0, height: 1 }, elevation: 1 }}
+                key={conv.id}
+                testID={`dm-card-${conv.id}`}
+                onPress={() => router.push({ pathname: "/dm-chat", params: { conversationId: conv.id } })}
+                style={{ marginHorizontal: 16, marginBottom: 10, backgroundColor: "white", borderRadius: 20, padding: 14, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 6, shadowOffset: { width: 0, height: 1 }, elevation: 1 }}
               >
-                <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 12 }}>
-                  {/* Icon */}
-                  <View style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: topic.color + "22", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                    {isHash ? (
-                      <Hash size={20} color={topic.color} />
-                    ) : (
-                      <Text style={{ fontSize: 18, fontWeight: "700", color: topic.color }}>{firstLetter}</Text>
-                    )}
-                  </View>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                  {/* Avatar */}
+                  {isGroup ? (
+                    <View style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: "#F5F3FF", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      <Users size={22} color="#7C3AED" />
+                    </View>
+                  ) : avatarImage ? (
+                    <Image source={{ uri: avatarImage }} style={{ width: 48, height: 48, borderRadius: 14 }} />
+                  ) : (
+                    <View style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: "#EEF2FF", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      <Text style={{ fontSize: 18, fontWeight: "700", color: "#4361EE" }}>{avatarInitial}</Text>
+                    </View>
+                  )}
+
                   {/* Content */}
                   <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 3 }}>
+                      <Text style={{ fontSize: 15, fontWeight: "700", color: "#0F172A", flex: 1 }} numberOfLines={1}>{displayName}</Text>
+                      <Text style={{ fontSize: 11, color: "#94A3B8", marginLeft: 8, flexShrink: 0 }}>{timeStr}</Text>
+                    </View>
                     <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                      <Text style={{ fontSize: 16, fontWeight: "700", color: "#0F172A" }}>{topic.name}</Text>
-                      {topic.description ? (
-                        <View style={{ backgroundColor: "#F1F5F9", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}>
-                          <Text style={{ fontSize: 11, fontWeight: "600", color: "#64748B" }}>{topic.description}</Text>
-                        </View>
-                      ) : unread > 0 ? (
-                        <View style={{ backgroundColor: "#4361EE", borderRadius: 10, minWidth: 20, height: 20, alignItems: "center", justifyContent: "center", paddingHorizontal: 6 }}>
-                          <Text style={{ color: "white", fontSize: 11, fontWeight: "700" }}>{unread}</Text>
+                      <Text style={{ fontSize: 13, color: "#6B7280", flex: 1 }} numberOfLines={1}>
+                        {lastMsg
+                          ? (lastMsg.sender.id === session?.user?.id ? `You: ${lastMsg.content}` : lastMsg.content ?? "Attachment")
+                          : "No messages yet"}
+                      </Text>
+                      {unreadCount > 0 ? (
+                        <View style={{ backgroundColor: "#4361EE", borderRadius: 10, minWidth: 20, height: 20, alignItems: "center", justifyContent: "center", paddingHorizontal: 6, marginLeft: 8, flexShrink: 0 }}>
+                          <Text style={{ color: "white", fontSize: 11, fontWeight: "700" }}>{unreadCount}</Text>
                         </View>
                       ) : null}
                     </View>
-                    <Text style={{ fontSize: 13, color: "#6B7280", marginTop: 4 }} numberOfLines={1}>
-                      {topic.lastMessage
-                        ? `${topic.lastMessage.sender.name ?? "Someone"}: ${topic.lastMessage.content ?? "📎 Attachment"}`
-                        : "No posts yet"}
-                    </Text>
                   </View>
                 </View>
               </Pressable>
@@ -409,190 +347,7 @@ export default function ChatScreen() {
                 <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 2 }}>Create a group conversation</Text>
               </View>
             </Pressable>
-            <Pressable
-              testID="add-modal-new-channel"
-              onPress={() => { setShowAddModal(false); setShowCreateChannel(true); }}
-              style={{ flexDirection: "row", alignItems: "center", gap: 14, backgroundColor: "#F0FDF4", borderRadius: 16, padding: 16 }}
-            >
-              <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: "#10B981", alignItems: "center", justifyContent: "center" }}>
-                <Hash size={22} color="white" />
-              </View>
-              <View>
-                <Text style={{ fontSize: 15, fontWeight: "700", color: "#0F172A" }}>New Channel</Text>
-                <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 2 }}>Create a topic channel for your team</Text>
-              </View>
-            </Pressable>
           </Pressable>
-        </Pressable>
-      </Modal>
-
-      {/* Channel action sheet */}
-      <Modal visible={!!actionTopic} transparent animationType="slide" onRequestClose={() => setActionTopic(null)}>
-        <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }} onPress={() => setActionTopic(null)}>
-          <Pressable onPress={(e) => e.stopPropagation()}>
-            <View style={{ backgroundColor: "white", borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 36 }}>
-              <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: "#E2E8F0", alignSelf: "center", marginBottom: 16 }} />
-              <Text style={{ fontSize: 15, fontWeight: "700", color: "#0F172A", marginBottom: 16 }}>#{actionTopic?.name}</Text>
-              <Pressable
-                testID="action-edit-channel"
-                onPress={() => {
-                  if (actionTopic) {
-                    setEditName(actionTopic.name);
-                    setEditDescription(actionTopic.description ?? "");
-                    setEditTopic(actionTopic);
-                  }
-                  setActionTopic(null);
-                }}
-                style={{ flexDirection: "row", alignItems: "center", gap: 14, paddingVertical: 14, borderTopWidth: 0.5, borderTopColor: "#F1F5F9" }}
-              >
-                <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: "#EEF2FF", alignItems: "center", justifyContent: "center" }}>
-                  <Hash size={18} color="#4361EE" />
-                </View>
-                <Text style={{ fontSize: 15, fontWeight: "600", color: "#0F172A" }}>Edit channel</Text>
-              </Pressable>
-              <Pressable
-                testID="action-delete-channel"
-                onPress={() => { setDeleteTopic(actionTopic); setActionTopic(null); }}
-                style={{ flexDirection: "row", alignItems: "center", gap: 14, paddingVertical: 14, borderTopWidth: 0.5, borderTopColor: "#F1F5F9" }}
-              >
-                <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: "#FEE2E2", alignItems: "center", justifyContent: "center" }}>
-                  <Text style={{ fontSize: 18 }}>🗑</Text>
-                </View>
-                <Text style={{ fontSize: 15, fontWeight: "600", color: "#EF4444" }}>Delete channel</Text>
-              </Pressable>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
-
-      {/* Edit channel modal */}
-      <Modal visible={!!editTopic} transparent animationType="slide" onRequestClose={() => setEditTopic(null)}>
-        <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }} onPress={() => setEditTopic(null)}>
-          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"}>
-            <Pressable onPress={(e) => e.stopPropagation()}>
-              <View style={{ backgroundColor: "white", borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40 }}>
-                <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: "#E2E8F0", alignSelf: "center", marginBottom: 16 }} />
-                <Text style={{ fontSize: 16, fontWeight: "700", color: "#0F172A", marginBottom: 16 }}>Edit Channel</Text>
-                <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748B", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>Name</Text>
-                <TextInput
-                  value={editName}
-                  onChangeText={setEditName}
-                  placeholder="Channel name..."
-                  placeholderTextColor="#94A3B8"
-                  style={{ borderWidth: 1.5, borderColor: "#E2E8F0", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: "#0F172A", marginBottom: 14 }}
-                  testID="edit-channel-name-input"
-                />
-                <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748B", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>Description</Text>
-                <TextInput
-                  value={editDescription}
-                  onChangeText={setEditDescription}
-                  placeholder="Short description (optional)..."
-                  placeholderTextColor="#94A3B8"
-                  style={{ borderWidth: 1.5, borderColor: "#E2E8F0", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: "#0F172A", marginBottom: 20 }}
-                  testID="edit-channel-description-input"
-                />
-                <Pressable
-                  onPress={() => { if (editTopic && editName.trim()) updateChannelMutation.mutate({ id: editTopic.id, name: editName.trim(), description: editDescription.trim() }); }}
-                  disabled={!editName.trim() || updateChannelMutation.isPending}
-                  style={{ height: 48, borderRadius: 14, backgroundColor: "#4361EE", alignItems: "center", justifyContent: "center", opacity: !editName.trim() ? 0.5 : 1 }}
-                  testID="edit-channel-submit"
-                >
-                  {updateChannelMutation.isPending ? (
-                    <ActivityIndicator color="white" />
-                  ) : (
-                    <Text style={{ color: "white", fontWeight: "700", fontSize: 15 }}>Save Changes</Text>
-                  )}
-                </Pressable>
-              </View>
-            </Pressable>
-          </KeyboardAvoidingView>
-        </Pressable>
-      </Modal>
-
-      {/* Delete channel confirm modal */}
-      <Modal visible={!!deleteTopic} transparent animationType="fade" onRequestClose={() => setDeleteTopic(null)}>
-        <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)", alignItems: "center", justifyContent: "center", paddingHorizontal: 32 }} onPress={() => setDeleteTopic(null)}>
-          <Pressable onPress={(e) => e.stopPropagation()} style={{ width: "100%", backgroundColor: "white", borderRadius: 20, overflow: "hidden" }}>
-            <View style={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 16, alignItems: "center" }}>
-              <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: "#FEE2E2", alignItems: "center", justifyContent: "center", marginBottom: 12 }}>
-                <Text style={{ fontSize: 20 }}>🗑</Text>
-              </View>
-              <Text style={{ fontSize: 16, fontWeight: "700", color: "#0F172A", marginBottom: 6 }}>Delete channel?</Text>
-              <Text style={{ fontSize: 13, color: "#64748B", textAlign: "center" }}>
-                Delete <Text style={{ fontWeight: "700" }}>#{deleteTopic?.name}</Text>? All messages will be permanently removed.
-              </Text>
-            </View>
-            <View style={{ flexDirection: "row", borderTopWidth: 1, borderTopColor: "#F1F5F9" }}>
-              <Pressable onPress={() => setDeleteTopic(null)} style={{ flex: 1, paddingVertical: 14, alignItems: "center", borderRightWidth: 1, borderRightColor: "#F1F5F9" }} testID="cancel-delete-channel">
-                <Text style={{ fontSize: 15, fontWeight: "500", color: "#64748B" }}>Cancel</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => { if (deleteTopic) deleteChannelMutation.mutate(deleteTopic.id); }}
-                disabled={deleteChannelMutation.isPending}
-                style={{ flex: 1, paddingVertical: 14, alignItems: "center" }}
-                testID="confirm-delete-channel"
-              >
-                {deleteChannelMutation.isPending ? (
-                  <ActivityIndicator size="small" color="#EF4444" />
-                ) : (
-                  <Text style={{ fontSize: 15, fontWeight: "700", color: "#EF4444" }}>Delete</Text>
-                )}
-              </Pressable>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
-
-      {/* Create Channel modal */}
-      <Modal visible={showCreateChannel} transparent animationType="slide" onRequestClose={() => setShowCreateChannel(false)}>
-        <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }} onPress={() => setShowCreateChannel(false)}>
-          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"}>
-            <Pressable onPress={(e) => e.stopPropagation()}>
-              <View style={{ backgroundColor: "white", borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40 }}>
-                <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: "#E2E8F0", alignSelf: "center", marginBottom: 16 }} />
-                <Text style={{ fontSize: 16, fontWeight: "700", color: "#0F172A", marginBottom: 16 }}>New Channel</Text>
-                <TextInput
-                  value={newChannelName}
-                  onChangeText={setNewChannelName}
-                  placeholder="Channel name..."
-                  placeholderTextColor="#94A3B8"
-                  style={{ borderWidth: 1.5, borderColor: "#E2E8F0", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: "#0F172A", marginBottom: 16 }}
-                  testID="channel-name-input"
-                  autoFocus
-                />
-                <TextInput
-                  value={newChannelDescription}
-                  onChangeText={setNewChannelDescription}
-                  placeholder="Short description (optional)..."
-                  placeholderTextColor="#94A3B8"
-                  style={{ borderWidth: 1.5, borderColor: "#E2E8F0", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: "#0F172A", marginBottom: 16 }}
-                  testID="channel-description-input"
-                />
-                <View style={{ flexDirection: "row", gap: 10, marginBottom: 20 }}>
-                  {TOPIC_COLORS.map((color) => (
-                    <Pressable
-                      key={color}
-                      onPress={() => setNewChannelColor(color)}
-                      style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: color, borderWidth: newChannelColor === color ? 3 : 0, borderColor: "white", elevation: newChannelColor === color ? 4 : 0 }}
-                      testID={`channel-color-${color}`}
-                    />
-                  ))}
-                </View>
-                <Pressable
-                  onPress={() => { if (newChannelName.trim()) createChannelMutation.mutate({ name: newChannelName.trim(), description: newChannelDescription.trim(), color: newChannelColor }); }}
-                  disabled={!newChannelName.trim() || createChannelMutation.isPending}
-                  style={{ height: 48, borderRadius: 14, backgroundColor: "#4361EE", alignItems: "center", justifyContent: "center", opacity: !newChannelName.trim() ? 0.5 : 1 }}
-                  testID="create-channel-submit"
-                >
-                  {createChannelMutation.isPending ? (
-                    <ActivityIndicator color="white" />
-                  ) : (
-                    <Text style={{ color: "white", fontWeight: "700", fontSize: 15 }}>Create Channel</Text>
-                  )}
-                </Pressable>
-              </View>
-            </Pressable>
-          </KeyboardAvoidingView>
         </Pressable>
       </Modal>
 
