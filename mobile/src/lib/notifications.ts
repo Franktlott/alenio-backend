@@ -4,9 +4,6 @@ import Constants from "expo-constants";
 import { Platform } from "react-native";
 import { api } from "./api/api";
 
-export const MSG_TONE_KEY = "msg_tone";
-export const DM_TONE_KEY  = "dm_tone";
-
 // Always show and play sound — OS handles delivery in all app states
 Notifications.setNotificationHandler({
   handleNotification: async () => ({

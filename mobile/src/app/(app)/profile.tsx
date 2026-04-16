@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from "react";
-import { Audio } from "expo-av";
 import {
   View,
   Text,
@@ -22,8 +21,7 @@ import * as Clipboard from "expo-clipboard";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { ArrowLeft, Camera, LogOut, Pencil, X, Plus, Trash2, Bell, Check, LogOut as LeaveIcon, Crown, Copy, Volume2, ChevronRight, BarChart2 } from "lucide-react-native";
+import { ArrowLeft, Camera, LogOut, Pencil, X, Plus, Trash2, Bell, Check, LogOut as LeaveIcon, Crown, Copy, ChevronRight, BarChart2 } from "lucide-react-native";
 import { authClient } from "@/lib/auth/auth-client";
 import { useInvalidateSession, useSession } from "@/lib/auth/use-session";
 import { router } from "expo-router";
@@ -37,54 +35,6 @@ import { toast } from "burnt";
 import type { Team } from "@/lib/types";
 
 const DEMO_EMAIL = "demo@alenio.app";
-
-const TONES = [
-  // System
-  { id: "none",        label: "None",          url: null,   section: "system" },
-  { id: "system",      label: "System Default", url: null,   section: "system" },
-  // Custom
-  { id: "synth",       label: "Default",        url: "https://assets.mixkit.co/active_storage/sfx/2574/2574-preview.mp3", section: "custom" },
-  { id: "bell",        label: "Bell",           url: "https://assets.mixkit.co/active_storage/sfx/2870/2870-preview.mp3", section: "custom" },
-  { id: "tritone",     label: "Tri-tone",       url: "https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3", section: "custom" },
-  { id: "chime",       label: "Chime",          url: "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3", section: "custom" },
-  { id: "glass",       label: "Glass",          url: "https://assets.mixkit.co/active_storage/sfx/2308/2308-preview.mp3", section: "custom" },
-  { id: "aurora",      label: "Aurora",         url: "https://assets.mixkit.co/active_storage/sfx/2013/2013-preview.mp3", section: "custom" },
-  { id: "chord",       label: "Chord",          url: "https://assets.mixkit.co/active_storage/sfx/2017/2017-preview.mp3", section: "custom" },
-  { id: "circles",     label: "Circles",        url: "https://assets.mixkit.co/active_storage/sfx/2572/2572-preview.mp3", section: "custom" },
-  { id: "complete",    label: "Complete",       url: "https://assets.mixkit.co/active_storage/sfx/2018/2018-preview.mp3", section: "custom" },
-  { id: "note",        label: "Note",           url: "https://assets.mixkit.co/active_storage/sfx/2015/2015-preview.mp3", section: "custom" },
-  { id: "popcorn",     label: "Popcorn",        url: "https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3", section: "custom" },
-  { id: "pulse",       label: "Pulse",          url: "https://assets.mixkit.co/active_storage/sfx/2573/2573-preview.mp3", section: "custom" },
-  { id: "ding",        label: "Ding",           url: "https://assets.mixkit.co/active_storage/sfx/2014/2014-preview.mp3", section: "custom" },
-  { id: "achievement", label: "Achievement",    url: "https://assets.mixkit.co/active_storage/sfx/2019/2019-preview.mp3", section: "custom" },
-  { id: "beep",        label: "Beep",           url: "https://assets.mixkit.co/active_storage/sfx/2020/2020-preview.mp3", section: "custom" },
-  { id: "quickwin",    label: "Quick Win",      url: "https://assets.mixkit.co/active_storage/sfx/2359/2359-preview.mp3", section: "custom" },
-  { id: "digital",     label: "Digital",        url: "https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3", section: "custom" },
-  { id: "pop",         label: "Pop",            url: "https://assets.mixkit.co/active_storage/sfx/2357/2357-preview.mp3", section: "custom" },
-  { id: "clarity",     label: "Clarity",        url: "https://assets.mixkit.co/active_storage/sfx/2570/2570-preview.mp3", section: "custom" },
-  { id: "alert",       label: "Alert",          url: "https://assets.mixkit.co/active_storage/sfx/2575/2575-preview.mp3", section: "custom" },
-  { id: "softbell",    label: "Soft Bell",      url: "https://assets.mixkit.co/active_storage/sfx/2868/2868-preview.mp3", section: "custom" },
-  { id: "cheer",       label: "Cheer",          url: "https://assets.mixkit.co/active_storage/sfx/2867/2867-preview.mp3", section: "custom" },
-];
-
-export { TONES };
-export const MSG_TONE_KEY = "msg_tone";
-export const DM_TONE_KEY  = "dm_tone";
-
-async function playTonePreview(url: string | null) {
-  if (!url) return;
-  try {
-    await Audio.setAudioModeAsync({
-      playsInSilentModeIOS: true,
-      allowsRecordingIOS: false,
-      staysActiveInBackground: false,
-    });
-    const { sound } = await Audio.Sound.createAsync({ uri: url }, { shouldPlay: true, volume: 1 });
-    sound.setOnPlaybackStatusUpdate((status) => {
-      if (status.isLoaded && status.didJustFinish) sound.unloadAsync();
-    });
-  } catch {}
-}
 
 type JoinRequestItem = {
   id: string;
@@ -150,16 +100,6 @@ export default function ProfileScreen() {
     setDeleteError(null);
     setDeletePasswordVisible(false);
   };
-
-  // Tone state
-  const [msgToneId, setMsgToneId] = useState<string>("synth");
-  const [dmToneId,  setDmToneId]  = useState<string>("synth");
-  const [showTonePicker, setShowTonePicker] = useState<"msg" | "dm" | null>(null);
-
-  useEffect(() => {
-    AsyncStorage.getItem(MSG_TONE_KEY).then(v => { if (v) setMsgToneId(v); });
-    AsyncStorage.getItem(DM_TONE_KEY).then(v  => { if (v) setDmToneId(v);  });
-  }, []);
 
   // Team edit state
   const [editingTeam, setEditingTeam] = useState<Team | null>(null);
@@ -601,35 +541,6 @@ export default function ProfileScreen() {
                 />
               </View>
             ))}
-            {/* Tone rows */}
-            <View style={{ borderTopWidth: 1, borderTopColor: "rgba(241,245,249,0.8)" }}>
-              <Pressable
-                onPress={() => setShowTonePicker("msg")}
-                className="flex-row items-center px-4 py-3.5"
-                style={{ borderBottomWidth: 1, borderBottomColor: "rgba(241,245,249,0.8)" }}
-                testID="msg-tone-row"
-              >
-                <Volume2 size={18} color="#4361EE" style={{ marginRight: 10 }} />
-                <Text className="flex-1 text-sm font-semibold text-slate-900 dark:text-white">Message Tone</Text>
-                <Text className="text-sm text-slate-400 mr-1">
-                  {TONES.find(t => t.id === msgToneId)?.label ?? "Default"}
-                </Text>
-                <ChevronRight size={16} color="#94A3B8" />
-              </Pressable>
-              <Pressable
-                onPress={() => setShowTonePicker("dm")}
-                className="flex-row items-center px-4 py-3.5"
-                style={{ borderBottomWidth: 1, borderBottomColor: "rgba(241,245,249,0.8)" }}
-                testID="dm-tone-row"
-              >
-                <Volume2 size={18} color="#4361EE" style={{ marginRight: 10 }} />
-                <Text className="flex-1 text-sm font-semibold text-slate-900 dark:text-white">DM Tone</Text>
-                <Text className="text-sm text-slate-400 mr-1">
-                  {TONES.find(t => t.id === dmToneId)?.label ?? "Default"}
-                </Text>
-                <ChevronRight size={16} color="#94A3B8" />
-              </Pressable>
-            </View>
           </GlassCard>
         </View>
 
@@ -764,103 +675,6 @@ export default function ProfileScreen() {
           </Text>
         </View>
       </ScrollView>
-
-      {/* Tone picker modal */}
-      <Modal visible={!!showTonePicker} transparent animationType="slide" onRequestClose={() => setShowTonePicker(null)}>
-        <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "flex-end" }} onPress={() => setShowTonePicker(null)}>
-          <Pressable onPress={(e) => e.stopPropagation()}>
-            <BlurView
-              intensity={70}
-              tint="light"
-              style={{
-                borderTopLeftRadius: 24,
-                borderTopRightRadius: 24,
-                overflow: "hidden",
-                borderWidth: 1,
-                borderBottomWidth: 0,
-                borderColor: "rgba(255,255,255,0.6)",
-              }}
-            >
-              <View
-                style={{
-                  backgroundColor: "rgba(255,255,255,0.85)",
-                  paddingHorizontal: 24,
-                  paddingTop: 24,
-                  paddingBottom: insets.bottom + 24,
-                }}
-              >
-                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-                  <Text style={{ fontSize: 17, fontWeight: "700", color: "#0F172A" }}>
-                    {showTonePicker === "msg" ? "Message Tone" : "DM Tone"}
-                  </Text>
-                  <Pressable onPress={() => setShowTonePicker(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                    <X size={20} color="#94A3B8" />
-                  </Pressable>
-                </View>
-                <Text style={{ fontSize: 13, color: "#94A3B8", marginBottom: 16 }}>Tap to preview</Text>
-                <ScrollView style={{ maxHeight: 400 }} showsVerticalScrollIndicator={false}>
-                  {/* System section */}
-                  <Text style={{ fontSize: 11, fontWeight: "700", color: "#94A3B8", letterSpacing: 0.8, textTransform: "uppercase", marginBottom: 4 }}>System</Text>
-                  {TONES.filter(t => t.section === "system").map((tone) => {
-                    const selected = showTonePicker === "msg" ? tone.id === msgToneId : tone.id === dmToneId;
-                    return (
-                      <Pressable
-                        key={tone.id}
-                        testID={`tone-option-${tone.id}`}
-                        onPress={async () => {
-                          if (tone.id !== "system") await playTonePreview(tone.url);
-                          if (showTonePicker === "msg") {
-                            setMsgToneId(tone.id);
-                            AsyncStorage.setItem(MSG_TONE_KEY, tone.id);
-                          } else {
-                            setDmToneId(tone.id);
-                            AsyncStorage.setItem(DM_TONE_KEY, tone.id);
-                          }
-                        }}
-                        style={{ flexDirection: "row", alignItems: "center", paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: "rgba(241,245,249,0.9)" }}
-                      >
-                        <Text style={{ fontSize: 20, marginRight: 6, color: selected ? "#4361EE" : "#CBD5E1" }}>{selected ? "●" : "○"}</Text>
-                        <View style={{ flex: 1 }}>
-                          <Text style={{ fontSize: 15, fontWeight: selected ? "600" : "400", color: selected ? "#4361EE" : "#1E293B" }}>{tone.label}</Text>
-                          {tone.id === "system" ? (
-                            <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 1 }}>Uses your device's default notification sound</Text>
-                          ) : null}
-                        </View>
-                      </Pressable>
-                    );
-                  })}
-                  {/* Custom section */}
-                  <Text style={{ fontSize: 11, fontWeight: "700", color: "#94A3B8", letterSpacing: 0.8, textTransform: "uppercase", marginTop: 16, marginBottom: 4 }}>Custom Tones</Text>
-                  {TONES.filter(t => t.section === "custom").map((tone) => {
-                    const selected = showTonePicker === "msg" ? tone.id === msgToneId : tone.id === dmToneId;
-                    return (
-                      <Pressable
-                        key={tone.id}
-                        testID={`tone-option-${tone.id}`}
-                        onPress={async () => {
-                          await playTonePreview(tone.url);
-                          if (showTonePicker === "msg") {
-                            setMsgToneId(tone.id);
-                            AsyncStorage.setItem(MSG_TONE_KEY, tone.id);
-                          } else {
-                            setDmToneId(tone.id);
-                            AsyncStorage.setItem(DM_TONE_KEY, tone.id);
-                          }
-                        }}
-                        style={{ flexDirection: "row", alignItems: "center", paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: "rgba(241,245,249,0.9)" }}
-                      >
-                        <Text style={{ fontSize: 20, marginRight: 6, color: selected ? "#4361EE" : "#CBD5E1" }}>{selected ? "●" : "○"}</Text>
-                        <Text style={{ fontSize: 15, fontWeight: selected ? "600" : "400", color: selected ? "#4361EE" : "#1E293B", flex: 1 }}>{tone.label}</Text>
-                        <Text style={{ fontSize: 12, color: "#CBD5E1" }}>▶</Text>
-                      </Pressable>
-                    );
-                  })}
-                </ScrollView>
-              </View>
-            </BlurView>
-          </Pressable>
-        </Pressable>
-      </Modal>
 
       {/* Team edit / delete modal */}
       <Modal visible={!!editingTeam} transparent animationType="slide" onRequestClose={closeEditModal}>
