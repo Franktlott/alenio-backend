@@ -396,7 +396,7 @@ export default function ProfileScreen() {
       getNotifStatus().then((s) => {
         if (cancelled) return;
         setNotifRegStatus(s);
-        if (s?.startsWith("requesting token")) {
+        if (s?.startsWith("requesting token") || s?.startsWith("step 1/2") || s?.startsWith("step 2/2")) {
           timer = setTimeout(poll, 2000);
         }
       });
