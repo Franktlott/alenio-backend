@@ -15,8 +15,17 @@ Notifications.setNotificationHandler({
   }),
 });
 
+// Vibecode EAS project ID — used when app.json doesn't have extra.eas.projectId
+const VIBECODE_PROJECT_ID = "019d58fc-bfb9-73c6-977e-3f3724b60cee";
+
 export async function registerForPushNotificationsAsync(): Promise<string | null> {
-  if (!Device.isDevice) return null;
+  console.log("[notifications] Starting push token registration...");
+  console.log("[notifications] Device.isDevice:", Device.isDevice);
+
+  if (!Device.isDevice) {
+    console.log("[notifications] Not a physical device — skipping push token");
+    return null;
+  }
 
   if (Platform.OS === "android") {
     await Notifications.setNotificationChannelAsync("alenio_main", {
@@ -72,6 +81,7 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
   }
 
   const { status: existingStatus } = await Notifications.getPermissionsAsync();
+  console.log("[notifications] Permission status:", existingStatus);
   let finalStatus = existingStatus;
   if (existingStatus !== "granted") {
     const { status } = await Notifications.requestPermissionsAsync({
@@ -83,21 +93,26 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
       },
     });
     finalStatus = status;
+    console.log("[notifications] Permission after request:", finalStatus);
   }
-  if (finalStatus !== "granted") return null;
-
-  // Only pass projectId if it's a real EAS UUID — slugs cause getExpoPushTokenAsync to fail
-  const easProjectId = Constants.expoConfig?.extra?.eas?.projectId;
-  const tokenResult = await Notifications.getExpoPushTokenAsync(
-    easProjectId ? { projectId: easProjectId } : {}
-  );
-  const token = tokenResult.data;
+  if (finalStatus !== "granted") {
+    console.log("[notifications] Permission denied — cannot register push token");
+    return null;
+  }
 
   try {
-    await api.post("/api/push-token", { token });
-  } catch (err) {
-    console.error("[notifications] Failed to save push token:", err);
-  }
+    const projectId =
+      Constants.expoConfig?.extra?.eas?.projectId ?? VIBECODE_PROJECT_ID;
+    console.log("[notifications] Getting push token with projectId:", projectId);
+    const tokenResult = await Notifications.getExpoPushTokenAsync({ projectId });
+    const token = tokenResult.data;
+    console.log("[notifications] Got token:", token?.substring(0, 40));
 
-  return token;
+    await api.post("/api/push-token", { token });
+    console.log("[notifications] Token saved to backend ✓");
+    return token;
+  } catch (err) {
+    console.error("[notifications] Failed to get/save push token:", err);
+    return null;
+  }
 }
