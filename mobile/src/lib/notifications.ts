@@ -113,10 +113,22 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
   console.log("[notifications] Using projectId:", easProjectId ?? "none (auto-detect)");
 
   try {
+    // Step 1: Get raw APNs device token — hangs if binary lacks push entitlement
+    await saveNotifStatus("step 1/2: getting APNs device token...");
+    const deviceToken = await Promise.race([
+      Notifications.getDevicePushTokenAsync(),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("APNs timed out (10s) — binary may be missing push entitlement in provisioning profile")), 10000)
+      ),
+    ]);
+    console.log("[notifications] Device token type:", deviceToken.type, "data:", String(deviceToken.data).slice(0, 20) + "...");
+    await saveNotifStatus("step 2/2: exchanging with Expo servers...");
+
+    // Step 2: Exchange with Expo's push service
     const tokenResult = await Promise.race([
       Notifications.getExpoPushTokenAsync(easProjectId ? { projectId: easProjectId } : {}),
       new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("timed out after 15s — no response from Expo")), 15000)
+        setTimeout(() => reject(new Error("Expo servers timed out (15s) — check push key on expo.dev")), 15000)
       ),
     ]);
     const token = tokenResult.data;
