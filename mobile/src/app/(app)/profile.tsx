@@ -18,10 +18,11 @@ import {
   RefreshControl,
 } from "react-native";
 import * as Clipboard from "expo-clipboard";
+import * as Notifications from "expo-notifications";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";
-import { ArrowLeft, Camera, LogOut, Pencil, X, Plus, Trash2, Bell, Check, LogOut as LeaveIcon, Crown, Copy, ChevronRight, BarChart2 } from "lucide-react-native";
+import { ArrowLeft, Camera, LogOut, Pencil, X, Plus, Trash2, Bell, Check, LogOut as LeaveIcon, Crown, Copy, ChevronRight, BarChart2, Volume2 } from "lucide-react-native";
 import { authClient } from "@/lib/auth/auth-client";
 import { useInvalidateSession, useSession } from "@/lib/auth/use-session";
 import { router } from "expo-router";
@@ -149,6 +150,19 @@ export default function ProfileScreen() {
       if (ctx?.prev) queryClient.setQueryData(["notification-preferences"], ctx.prev);
     },
   });
+
+  const playPreview = async (tone: string) => {
+    if (tone === "silent") return;
+    const soundFile = tone === "default" ? "default" : `${tone}.wav`;
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: "Sound Preview",
+        body: `Testing ${tone === "default" ? "Default" : tone.charAt(0).toUpperCase() + tone.slice(1)} sound`,
+        sound: soundFile,
+      },
+      trigger: null,
+    });
+  };
 
   // Join requests for the team being edited (owner only)
   const { data: joinRequests = [], refetch: refetchRequests } = useQuery({
@@ -569,17 +583,31 @@ export default function ProfileScreen() {
                 const currentTone = notifPrefs?.notifTone ?? "default";
                 const isSelected = currentTone === item.value || (item.value === "default" && !["bell","chime","alert","silent"].includes(currentTone));
                 return (
-                  <Pressable
+                  <View
                     key={item.value}
-                    testID={`tone-option-${item.value}`}
-                    onPress={() => toneMutation.mutate(item.value)}
                     className="flex-row items-center px-4 py-3.5"
                     style={index < arr.length - 1 ? { borderBottomWidth: 1, borderBottomColor: "rgba(241,245,249,0.8)" } : undefined}
                   >
-                    <Text className="text-base mr-3">{item.emoji}</Text>
-                    <Text className="flex-1 text-sm font-semibold text-slate-900 dark:text-white">{item.label}</Text>
-                    {isSelected ? <Check size={16} color="#4361EE" /> : null}
-                  </Pressable>
+                    <Pressable
+                      className="flex-row items-center flex-1"
+                      onPress={() => toneMutation.mutate(item.value)}
+                      testID={`tone-option-${item.value}`}
+                    >
+                      <Text className="text-base mr-3">{item.emoji}</Text>
+                      <Text className="text-sm font-semibold text-slate-900 dark:text-white">{item.label}</Text>
+                    </Pressable>
+                    {isSelected ? (
+                      <Check size={16} color="#4361EE" />
+                    ) : item.value !== "silent" ? (
+                      <Pressable
+                        onPress={() => playPreview(item.value)}
+                        testID={`tone-preview-${item.value}`}
+                        className="w-8 h-8 rounded-full bg-slate-100 items-center justify-center"
+                      >
+                        <Volume2 size={14} color="#64748B" />
+                      </Pressable>
+                    ) : null}
+                  </View>
                 );
               })}
             </GlassCard>
