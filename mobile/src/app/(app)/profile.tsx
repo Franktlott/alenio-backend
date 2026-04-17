@@ -154,13 +154,16 @@ export default function ProfileScreen() {
   const playPreview = async (tone: string) => {
     if (tone === "silent") return;
     const soundFile = tone === "default" ? "default" : `${tone}.wav`;
+    const channelId = tone === "default" ? "alenio_main" : `alenio_${tone}`;
     await Notifications.scheduleNotificationAsync({
       content: {
         title: "Sound Preview",
         body: `Testing ${tone === "default" ? "Default" : tone.charAt(0).toUpperCase() + tone.slice(1)} sound`,
         sound: soundFile,
       },
-      trigger: null,
+      trigger: Platform.OS === "android"
+        ? { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: 1, channelId }
+        : null,
     });
   };
 
