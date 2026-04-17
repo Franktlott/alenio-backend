@@ -28,7 +28,7 @@ export async function sendPushNotifications(messages: PushPayload[]): Promise<vo
   await Promise.all(
     chunks.map(async (chunk) => {
       try {
-        await fetch(EXPO_PUSH_URL, {
+        const response = await fetch(EXPO_PUSH_URL, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -46,8 +46,11 @@ export async function sendPushNotifications(messages: PushPayload[]): Promise<vo
             }))
           ),
         });
-      } catch {
-        // Silently fail — notifications are non-critical
+        const result = await response.json() as { data?: { status: string; message?: string }[] };
+        const errors = result.data?.filter((r) => r.status !== "ok");
+        if (errors?.length) console.error("[push] Expo push errors:", JSON.stringify(errors));
+      } catch (err) {
+        console.error("[push] Failed to send push notifications:", err);
       }
     })
   );

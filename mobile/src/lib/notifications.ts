@@ -86,12 +86,18 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
   }
   if (finalStatus !== "granted") return null;
 
-  const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? Constants.expoConfig?.slug;
-  const token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
+  // Only pass projectId if it's a real EAS UUID — slugs cause getExpoPushTokenAsync to fail
+  const easProjectId = Constants.expoConfig?.extra?.eas?.projectId;
+  const tokenResult = await Notifications.getExpoPushTokenAsync(
+    easProjectId ? { projectId: easProjectId } : {}
+  );
+  const token = tokenResult.data;
 
   try {
     await api.post("/api/push-token", { token });
-  } catch {}
+  } catch (err) {
+    console.error("[notifications] Failed to save push token:", err);
+  }
 
   return token;
 }
