@@ -7,6 +7,13 @@
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+
+    "extra": {
+      "eas": {
+        "projectId": "f40ec24d-0b09-4cc6-8746-805bd60e9ea2"
+      }
+    },
+
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.vibecode.alenio-9iqp9v",
@@ -15,16 +22,16 @@
         "NSCameraUsageDescription": "Alenio uses the camera to capture photos inside the app before you publish them.",
         "NSMicrophoneUsageDescription": "Alenio uses the microphone to record audio clips that stay with your in-app creations.",
         "NSPhotoLibraryUsageDescription": "Alenio accesses your photo library to generate thumbnails for your videos.",
-        "UIBackgroundModes": [
-          "remote-notification"
-        ],
+        "UIBackgroundModes": ["remote-notification"],
         "NSPhotoLibraryAddUsageDescription": "Alenio saves media you export from the app into your photo library."
       }
     },
+
     "android": {
       "edgeToEdgeEnabled": true,
       "package": "com.vibecode.alenio9iqp9v"
     },
+
     "plugins": [
       "expo-router",
       "expo-camera",
@@ -77,9 +84,11 @@
         }
       ]
     ],
+
     "experiments": {
       "typedRoutes": true
     },
+
     "icon": "./icon.png"
   }
 }
