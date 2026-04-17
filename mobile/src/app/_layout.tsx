@@ -143,9 +143,25 @@ function RootLayoutNav() {
     if (!session?.user) return;
     registerForPushNotificationsAsync();
     initRevenueCat(session.user.id);
-    notificationListener.current = Notifications.addNotificationReceivedListener(() => {
-      // OS plays the bundled sound from the push payload — just add haptic feedback
+    notificationListener.current = Notifications.addNotificationReceivedListener((notification) => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      const data = notification.request.content.data as Record<string, string>;
+      // Refresh the relevant data so the app updates automatically in the foreground
+      if (data?.conversationId) {
+        queryClient.invalidateQueries({ queryKey: ["dms"] });
+      } else if (data?.taskId) {
+        queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      } else if (data?.type === "video_call" || data?.type === "meeting_reminder") {
+        queryClient.invalidateQueries({ queryKey: ["video"] });
+        queryClient.invalidateQueries({ queryKey: ["calendar"] });
+      } else if (data?.type === "join_request" || data?.type === "join_approved" || data?.type === "join_rejected") {
+        queryClient.invalidateQueries({ queryKey: ["teams"] });
+        queryClient.invalidateQueries({ queryKey: ["join-requests"] });
+      } else if (data?.teamId) {
+        // team message, poll, etc.
+        queryClient.invalidateQueries({ queryKey: ["messages"] });
+        queryClient.invalidateQueries({ queryKey: ["unread-counts"] });
+      }
     });
 
     const responseListener = Notifications.addNotificationResponseReceivedListener((response) => {
