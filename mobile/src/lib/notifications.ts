@@ -16,7 +16,10 @@ Notifications.setNotificationHandler({
 });
 
 export async function registerForPushNotificationsAsync(): Promise<string | null> {
-  if (!Device.isDevice) return null;
+  if (!Device.isDevice) {
+    console.log("[notifications] Skipping — not a real device");
+    return null;
+  }
 
   if (Platform.OS === "android") {
     await Notifications.setNotificationChannelAsync("alenio_main", {
@@ -72,6 +75,7 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
   }
 
   const { status: existingStatus } = await Notifications.getPermissionsAsync();
+  console.log("[notifications] Permission status:", existingStatus);
   let finalStatus = existingStatus;
   if (existingStatus !== "granted") {
     const { status } = await Notifications.requestPermissionsAsync({
@@ -83,24 +87,35 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
       },
     });
     finalStatus = status;
+    console.log("[notifications] Permission after request:", finalStatus);
   }
-  if (finalStatus !== "granted") return null;
+  if (finalStatus !== "granted") {
+    console.warn("[notifications] Permission denied — cannot register push token");
+    return null;
+  }
+
+  // Try app.json extra first, then EAS build metadata (auto-populated by EAS builds)
+  const projectIdFromExtra = Constants.expoConfig?.extra?.eas?.projectId as string | undefined;
+  const projectIdFromEas = (Constants.easConfig as { projectId?: string } | undefined)?.projectId;
+  const easProjectId = projectIdFromExtra ?? projectIdFromEas;
+  console.log("[notifications] projectId from extra:", projectIdFromExtra ?? "none");
+  console.log("[notifications] projectId from easConfig:", projectIdFromEas ?? "none");
+  console.log("[notifications] Using projectId:", easProjectId ?? "none (auto-detect)");
 
   try {
-    const easProjectId = Constants.expoConfig?.extra?.eas?.projectId;
-    // Race against a 8-second timeout — getExpoPushTokenAsync can hang in dev
     const tokenResult = await Promise.race([
       Notifications.getExpoPushTokenAsync(easProjectId ? { projectId: easProjectId } : {}),
       new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("push token request timed out")), 8000)
+        setTimeout(() => reject(new Error("push token request timed out after 15s")), 15000)
       ),
     ]);
     const token = tokenResult.data;
+    console.log("[notifications] Token obtained:", token.slice(0, 30) + "...");
     await api.post("/api/push-token", { token });
+    console.log("[notifications] Token saved to backend successfully");
     return token;
   } catch (err) {
-    // In dev/Expo Go this often fails — works correctly in production builds
-    console.warn("[notifications] Push token unavailable:", (err as Error).message);
+    console.warn("[notifications] Push token failed:", (err as Error).message);
     return null;
   }
 }
