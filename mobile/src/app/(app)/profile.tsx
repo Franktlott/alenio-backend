@@ -151,6 +151,19 @@ export default function ProfileScreen() {
     },
   });
 
+  const fireTestNotification = async (title: string, body: string) => {
+    const tone = notifPrefs?.notifTone ?? "default";
+    if (tone === "silent") return;
+    const soundFile = tone === "default" ? "default" : `${tone}.wav`;
+    const channelId = tone === "default" ? "alenio_main" : `alenio_${tone}`;
+    await Notifications.scheduleNotificationAsync({
+      content: { title, body, sound: soundFile },
+      trigger: Platform.OS === "android"
+        ? { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: 1, channelId }
+        : null,
+    });
+  };
+
   const playPreview = async (tone: string) => {
     if (tone === "silent") return;
     const soundFile = tone === "default" ? "default" : `${tone}.wav`;
@@ -548,29 +561,41 @@ export default function ProfileScreen() {
           </View>
           <GlassCard>
             {[
-              { key: "notifMessages" as const, label: "New messages", description: "Team and direct messages" },
-              { key: "notifTaskAssigned" as const, label: "Task assigned", description: "When a task is assigned to you" },
-              { key: "notifTaskDue" as const, label: "Task due reminders", description: "Reminders for upcoming due dates" },
-              { key: "notifMeetings" as const, label: "Meeting reminders", description: "Alerts before video meetings" },
-            ].map((item, index, arr) => (
-              <View
-                key={item.key}
-                className="flex-row items-center px-4 py-3.5"
-                style={index < arr.length - 1 ? { borderBottomWidth: 1, borderBottomColor: "rgba(241,245,249,0.8)" } : undefined}
-              >
-                <View className="flex-1">
-                  <Text className="text-sm font-semibold text-slate-900 dark:text-white">{item.label}</Text>
-                  <Text className="text-xs text-slate-400 mt-0.5">{item.description}</Text>
+              { key: "notifMessages" as const, label: "New messages", description: "Team and direct messages", testTitle: "New Message", testBody: "Alex: Hey, got a minute to review this?" },
+              { key: "notifTaskAssigned" as const, label: "Task assigned", description: "When a task is assigned to you", testTitle: "Task Assigned", testBody: "Build onboarding flow has been assigned to you" },
+              { key: "notifTaskDue" as const, label: "Task due reminders", description: "Reminders for upcoming due dates", testTitle: "Task Due Soon", testBody: "Launch checklist is due in 1 hour" },
+              { key: "notifMeetings" as const, label: "Meeting reminders", description: "Alerts before video meetings", testTitle: "Meeting Starting Soon", testBody: "Weekly standup starts in 5 minutes" },
+            ].map((item, index, arr) => {
+              const isEnabled = notifPrefs?.[item.key] ?? true;
+              return (
+                <View
+                  key={item.key}
+                  className="flex-row items-center px-4 py-3.5"
+                  style={index < arr.length - 1 ? { borderBottomWidth: 1, borderBottomColor: "rgba(241,245,249,0.8)" } : undefined}
+                >
+                  <View className="flex-1">
+                    <Text className="text-sm font-semibold text-slate-900 dark:text-white">{item.label}</Text>
+                    <Text className="text-xs text-slate-400 mt-0.5">{item.description}</Text>
+                  </View>
+                  {isEnabled ? (
+                    <Pressable
+                      onPress={() => fireTestNotification(item.testTitle, item.testBody)}
+                      testID={`notif-test-${item.key}`}
+                      className="w-8 h-8 rounded-full bg-slate-100 items-center justify-center mr-2"
+                    >
+                      <Volume2 size={14} color="#64748B" />
+                    </Pressable>
+                  ) : null}
+                  <Switch
+                    value={isEnabled}
+                    onValueChange={(val) => notifMutation.mutate({ [item.key]: val })}
+                    trackColor={{ false: "#E2E8F0", true: "#6B8EF6" }}
+                    thumbColor="white"
+                    testID={`notif-toggle-${item.key}`}
+                  />
                 </View>
-                <Switch
-                  value={notifPrefs?.[item.key] ?? true}
-                  onValueChange={(val) => notifMutation.mutate({ [item.key]: val })}
-                  trackColor={{ false: "#E2E8F0", true: "#6B8EF6" }}
-                  thumbColor="white"
-                  testID={`notif-toggle-${item.key}`}
-                />
-              </View>
-            ))}
+              );
+            })}
           </GlassCard>
           {/* Sound */}
           <View className="mt-3">
