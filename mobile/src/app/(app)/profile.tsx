@@ -389,7 +389,24 @@ export default function ProfileScreen() {
   const [notifRegStatus, setNotifRegStatus] = useState<string | null>(null);
 
   useEffect(() => {
-    getNotifStatus().then(setNotifRegStatus);
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+
+    const poll = () => {
+      getNotifStatus().then((s) => {
+        if (cancelled) return;
+        setNotifRegStatus(s);
+        if (s?.startsWith("requesting token")) {
+          timer = setTimeout(poll, 2000);
+        }
+      });
+    };
+
+    poll();
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
   }, []);
 
   const [refreshing, setRefreshing] = useState(false);
