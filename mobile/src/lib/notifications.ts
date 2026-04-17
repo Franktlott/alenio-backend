@@ -2,7 +2,12 @@ import * as Notifications from "expo-notifications";
 import * as Device from "expo-device";
 import Constants from "expo-constants";
 import { Platform } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { api } from "./api/api";
+
+const STATUS_KEY = "notif_reg_status";
+export const saveNotifStatus = (msg: string) => AsyncStorage.setItem(STATUS_KEY, msg).catch(() => {});
+export const getNotifStatus = () => AsyncStorage.getItem(STATUS_KEY).catch(() => null);
 
 // Always show and play sound — OS handles delivery in all app states
 Notifications.setNotificationHandler({
@@ -18,6 +23,7 @@ Notifications.setNotificationHandler({
 export async function registerForPushNotificationsAsync(): Promise<string | null> {
   if (!Device.isDevice) {
     console.log("[notifications] Skipping — not a real device");
+    await saveNotifStatus("simulator — push tokens not supported");
     return null;
   }
 
@@ -91,6 +97,7 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
   }
   if (finalStatus !== "granted") {
     console.warn("[notifications] Permission denied — cannot register push token");
+    await saveNotifStatus("permission denied by user");
     return null;
   }
 
@@ -98,6 +105,7 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
   const projectIdFromExtra = Constants.expoConfig?.extra?.eas?.projectId as string | undefined;
   const projectIdFromEas = (Constants.easConfig as { projectId?: string } | undefined)?.projectId;
   const easProjectId = projectIdFromExtra ?? projectIdFromEas;
+  await saveNotifStatus(`requesting token... projectId=${easProjectId ?? "none"}`);
   console.log("[notifications] projectId from extra:", projectIdFromExtra ?? "none");
   console.log("[notifications] projectId from easConfig:", projectIdFromEas ?? "none");
   console.log("[notifications] Using projectId:", easProjectId ?? "none (auto-detect)");
@@ -106,16 +114,19 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
     const tokenResult = await Promise.race([
       Notifications.getExpoPushTokenAsync(easProjectId ? { projectId: easProjectId } : {}),
       new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("push token request timed out after 15s")), 15000)
+        setTimeout(() => reject(new Error("timed out after 15s — no response from Expo")), 15000)
       ),
     ]);
     const token = tokenResult.data;
     console.log("[notifications] Token obtained:", token.slice(0, 30) + "...");
     await api.post("/api/push-token", { token });
+    await saveNotifStatus("registered ✓ " + token.slice(0, 25) + "...");
     console.log("[notifications] Token saved to backend successfully");
     return token;
   } catch (err) {
-    console.warn("[notifications] Push token failed:", (err as Error).message);
+    const msg = (err as Error).message;
+    await saveNotifStatus("failed: " + msg);
+    console.warn("[notifications] Push token failed:", msg);
     return null;
   }
 }

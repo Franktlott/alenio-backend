@@ -25,6 +25,7 @@ import { BlurView } from "expo-blur";
 import { ArrowLeft, Camera, LogOut, Pencil, X, Plus, Trash2, Bell, Check, LogOut as LeaveIcon, Crown, Copy, ChevronRight, BarChart2, Volume2 } from "lucide-react-native";
 import { authClient } from "@/lib/auth/auth-client";
 import { useInvalidateSession, useSession } from "@/lib/auth/use-session";
+import { getNotifStatus } from "@/lib/notifications";
 import { router } from "expo-router";
 import { useMutation, useQuery, useQueryClient, useQueries } from "@tanstack/react-query";
 import { api } from "@/lib/api/api";
@@ -385,6 +386,12 @@ export default function ProfileScreen() {
 
   const avatarUri = localImage ?? user?.image ?? null;
 
+  const [notifRegStatus, setNotifRegStatus] = useState<string | null>(null);
+
+  useEffect(() => {
+    getNotifStatus().then(setNotifRegStatus);
+  }, []);
+
   const [refreshing, setRefreshing] = useState(false);
 
   const onRefresh = async () => {
@@ -598,13 +605,16 @@ export default function ProfileScreen() {
             })}
           </GlassCard>
           {/* Push token status */}
-          <View className="flex-row items-center mt-2 mb-1 px-1" style={{ gap: 6 }}>
-            <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: notifPrefs?.hasToken ? "#22C55E" : "#EF4444" }} />
-            <Text className="text-xs text-slate-400">
-              {notifPrefs?.hasToken
-                ? "Device registered for push notifications"
-                : "Not registered — rebuild the app to activate push notifications"}
-            </Text>
+          <View className="mt-2 mb-1 px-1" style={{ gap: 4 }}>
+            <View className="flex-row items-center" style={{ gap: 6 }}>
+              <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: notifPrefs?.hasToken ? "#22C55E" : "#EF4444" }} />
+              <Text className="text-xs text-slate-400">
+                {notifPrefs?.hasToken ? "Device registered for push notifications" : "Push notifications not registered"}
+              </Text>
+            </View>
+            {notifRegStatus && !notifPrefs?.hasToken ? (
+              <Text className="text-xs text-slate-300 ml-3" selectable>{notifRegStatus}</Text>
+            ) : null}
           </View>
 
           {/* Sound */}
