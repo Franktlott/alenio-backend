@@ -101,13 +101,15 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
     return null;
   }
 
-  // Try app.json extra first, then EAS build metadata (auto-populated by EAS builds)
+  // Try app.json extra → EAS build metadata → Vibecode env var
   const projectIdFromExtra = Constants.expoConfig?.extra?.eas?.projectId as string | undefined;
   const projectIdFromEas = (Constants.easConfig as { projectId?: string } | undefined)?.projectId;
-  const easProjectId = projectIdFromExtra ?? projectIdFromEas;
+  const projectIdFromEnv = process.env.EXPO_PUBLIC_VIBECODE_PROJECT_ID;
+  const easProjectId = projectIdFromExtra ?? projectIdFromEas ?? projectIdFromEnv;
   await saveNotifStatus(`requesting token... projectId=${easProjectId ?? "none"}`);
   console.log("[notifications] projectId from extra:", projectIdFromExtra ?? "none");
   console.log("[notifications] projectId from easConfig:", projectIdFromEas ?? "none");
+  console.log("[notifications] projectId from env:", projectIdFromEnv ?? "none");
   console.log("[notifications] Using projectId:", easProjectId ?? "none (auto-detect)");
 
   try {
