@@ -201,9 +201,9 @@ app.get("/api/notification-preferences", async (c) => {
   if (!user) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
   const prefs = await prisma.user.findUnique({
     where: { id: user.id },
-    select: { notifMessages: true, notifTaskAssigned: true, notifTaskDue: true, notifMeetings: true, notifTone: true },
+    select: { notifMessages: true, notifTaskAssigned: true, notifTaskDue: true, notifMeetings: true, notifTone: true, pushToken: true },
   });
-  return c.json({ data: prefs });
+  return c.json({ data: { ...prefs, hasToken: !!prefs?.pushToken } });
 });
 
 // Update notification preferences

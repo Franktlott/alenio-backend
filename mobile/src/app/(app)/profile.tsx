@@ -117,7 +117,7 @@ export default function ProfileScreen() {
     enabled: !!user,
   });
 
-  type NotifPrefs = { notifMessages: boolean; notifTaskAssigned: boolean; notifTaskDue: boolean; notifMeetings: boolean; notifTone: string };
+  type NotifPrefs = { notifMessages: boolean; notifTaskAssigned: boolean; notifTaskDue: boolean; notifMeetings: boolean; notifTone: string; hasToken: boolean };
 
   const { data: notifPrefs } = useQuery({
     queryKey: ["notification-preferences"],
@@ -597,6 +597,16 @@ export default function ProfileScreen() {
               );
             })}
           </GlassCard>
+          {/* Push token status */}
+          <View className="flex-row items-center mt-2 mb-1 px-1" style={{ gap: 6 }}>
+            <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: notifPrefs?.hasToken ? "#22C55E" : "#EF4444" }} />
+            <Text className="text-xs text-slate-400">
+              {notifPrefs?.hasToken
+                ? "Device registered for push notifications"
+                : "Not registered — rebuild the app to activate push notifications"}
+            </Text>
+          </View>
+
           {/* Sound */}
           <View className="mt-3">
             <Text className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 ml-1">Notification Sound</Text>
