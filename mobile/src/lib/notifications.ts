@@ -15,52 +15,12 @@ Notifications.setNotificationHandler({
   }),
 });
 
-const TONE_NAMES = [
-  "bell",
-  "tritone",
-  "chime",
-  "glass",
-  "aurora",
-  "chord",
-  "circles",
-  "complete",
-  "note",
-  "popcorn",
-  "pulse",
-  "synth",
-  "ding",
-  "achievement",
-  "beep",
-  "quickwin",
-  "digital",
-  "pop",
-  "clarity",
-  "alert",
-  "softbell",
-  "cheer",
-] as const;
-
 export async function registerForPushNotificationsAsync(): Promise<string | null> {
   if (!Device.isDevice) return null;
 
   if (Platform.OS === "android") {
-    // Create a channel for each tone so the OS uses the correct sound
-    for (const tone of TONE_NAMES) {
-      await Notifications.setNotificationChannelAsync(`alenio_${tone}`, {
-        name: `Alenio (${tone})`,
-        importance: Notifications.AndroidImportance.MAX,
-        vibrationPattern: [0, 250, 250, 250],
-        lightColor: "#4361EE",
-        lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
-        enableVibrate: true,
-        enableLights: true,
-        sound: tone,
-      });
-    }
-
-    // System / default channel (maps to "system" tone on the backend)
     await Notifications.setNotificationChannelAsync("alenio_main", {
-      name: "Alenio Notifications",
+      name: "Default",
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 250, 250, 250],
       lightColor: "#4361EE",
@@ -70,9 +30,41 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
       sound: "default",
     });
 
-    // Silent channel — no sound, no vibration
+    await Notifications.setNotificationChannelAsync("alenio_bell", {
+      name: "Bell",
+      importance: Notifications.AndroidImportance.MAX,
+      vibrationPattern: [0, 250, 250, 250],
+      lightColor: "#4361EE",
+      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+      enableVibrate: true,
+      enableLights: true,
+      sound: "bell",
+    });
+
+    await Notifications.setNotificationChannelAsync("alenio_chime", {
+      name: "Chime",
+      importance: Notifications.AndroidImportance.MAX,
+      vibrationPattern: [0, 250, 250, 250],
+      lightColor: "#4361EE",
+      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+      enableVibrate: true,
+      enableLights: true,
+      sound: "chime",
+    });
+
+    await Notifications.setNotificationChannelAsync("alenio_alert", {
+      name: "Alert",
+      importance: Notifications.AndroidImportance.MAX,
+      vibrationPattern: [0, 250, 250, 250],
+      lightColor: "#4361EE",
+      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+      enableVibrate: true,
+      enableLights: true,
+      sound: "alert",
+    });
+
     await Notifications.setNotificationChannelAsync("alenio_silent", {
-      name: "Alenio (Silent)",
+      name: "Silent",
       importance: Notifications.AndroidImportance.MAX,
       sound: null,
       enableVibrate: false,

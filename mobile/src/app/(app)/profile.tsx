@@ -116,7 +116,7 @@ export default function ProfileScreen() {
     enabled: !!user,
   });
 
-  type NotifPrefs = { notifMessages: boolean; notifTaskAssigned: boolean; notifTaskDue: boolean; notifMeetings: boolean };
+  type NotifPrefs = { notifMessages: boolean; notifTaskAssigned: boolean; notifTaskDue: boolean; notifMeetings: boolean; notifTone: string };
 
   const { data: notifPrefs } = useQuery({
     queryKey: ["notification-preferences"],
@@ -133,6 +133,19 @@ export default function ProfileScreen() {
       return { prev };
     },
     onError: (_err, _patch, ctx) => {
+      if (ctx?.prev) queryClient.setQueryData(["notification-preferences"], ctx.prev);
+    },
+  });
+
+  const toneMutation = useMutation({
+    mutationFn: (tone: string) => api.patch<NotifPrefs>("/api/notification-preferences", { notifTone: tone }),
+    onMutate: async (tone) => {
+      await queryClient.cancelQueries({ queryKey: ["notification-preferences"] });
+      const prev = queryClient.getQueryData<NotifPrefs>(["notification-preferences"]);
+      queryClient.setQueryData<NotifPrefs>(["notification-preferences"], (old) => old ? { ...old, notifTone: tone } : old);
+      return { prev };
+    },
+    onError: (_err, _tone, ctx) => {
       if (ctx?.prev) queryClient.setQueryData(["notification-preferences"], ctx.prev);
     },
   });
@@ -542,6 +555,35 @@ export default function ProfileScreen() {
               </View>
             ))}
           </GlassCard>
+          {/* Sound */}
+          <View className="mt-3">
+            <Text className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 ml-1">Notification Sound</Text>
+            <GlassCard>
+              {[
+                { value: "default", label: "Default", emoji: "🔔" },
+                { value: "bell", label: "Bell", emoji: "🔕" },
+                { value: "chime", label: "Chime", emoji: "🎵" },
+                { value: "alert", label: "Alert", emoji: "⚠️" },
+                { value: "silent", label: "Silent", emoji: "🚫" },
+              ].map((item, index, arr) => {
+                const currentTone = notifPrefs?.notifTone ?? "default";
+                const isSelected = currentTone === item.value || (item.value === "default" && !["bell","chime","alert","silent"].includes(currentTone));
+                return (
+                  <Pressable
+                    key={item.value}
+                    testID={`tone-option-${item.value}`}
+                    onPress={() => toneMutation.mutate(item.value)}
+                    className="flex-row items-center px-4 py-3.5"
+                    style={index < arr.length - 1 ? { borderBottomWidth: 1, borderBottomColor: "rgba(241,245,249,0.8)" } : undefined}
+                  >
+                    <Text className="text-base mr-3">{item.emoji}</Text>
+                    <Text className="flex-1 text-sm font-semibold text-slate-900 dark:text-white">{item.label}</Text>
+                    {isSelected ? <Check size={16} color="#4361EE" /> : null}
+                  </Pressable>
+                );
+              })}
+            </GlassCard>
+          </View>
         </View>
 
         {/* Subscription — only visible to Team Leaders */}

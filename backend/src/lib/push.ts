@@ -87,19 +87,19 @@ export async function sendPushToUsers(
     select: { pushToken: true, notifTone: true },
   });
 
+  const TONE_MAP: Record<string, { channelId: string; sound: string }> = {
+    bell:   { channelId: "alenio_bell",   sound: "bell" },
+    chime:  { channelId: "alenio_chime",  sound: "chime" },
+    alert:  { channelId: "alenio_alert",  sound: "alert" },
+    silent: { channelId: "alenio_silent", sound: "none" },
+  };
+  const DEFAULT_TONE = { channelId: "alenio_main", sound: "default" };
+
   const messages: PushPayload[] = users
     .filter((u) => u.pushToken?.startsWith("ExponentPushToken"))
     .map((u) => {
-      const tone = u.notifTone ?? "synth";
-      // "none" = silent channel, everything else uses "default" system sound.
-      // iOS requires the .wav to be in the binary — using "default" guarantees
-      // sound plays on every build without bundling issues.
-      // Android uses channelId for custom sounds (channels are pre-registered on device).
-      if (tone === "none") {
-        return { token: u.pushToken!, title, body, data, sound: "none", channelId: "alenio_silent" };
-      }
-      const channelId = tone === "system" ? "alenio_main" : `alenio_${tone}`;
-      return { token: u.pushToken!, title, body, data, sound: "default", channelId };
+      const { channelId, sound } = TONE_MAP[u.notifTone ?? ""] ?? DEFAULT_TONE;
+      return { token: u.pushToken!, title, body, data, sound, channelId };
     });
 
   await sendPushNotifications(messages);
