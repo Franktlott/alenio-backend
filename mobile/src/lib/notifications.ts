@@ -15,17 +15,8 @@ Notifications.setNotificationHandler({
   }),
 });
 
-// Vibecode EAS project ID — used when app.json doesn't have extra.eas.projectId
-const VIBECODE_PROJECT_ID = "019d58fc-bfb9-73c6-977e-3f3724b60cee";
-
 export async function registerForPushNotificationsAsync(): Promise<string | null> {
-  console.log("[notifications] Starting push token registration...");
-  console.log("[notifications] Device.isDevice:", Device.isDevice);
-
-  if (!Device.isDevice) {
-    console.log("[notifications] Not a physical device — skipping push token");
-    return null;
-  }
+  if (!Device.isDevice) return null;
 
   if (Platform.OS === "android") {
     await Notifications.setNotificationChannelAsync("alenio_main", {
@@ -81,7 +72,6 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
   }
 
   const { status: existingStatus } = await Notifications.getPermissionsAsync();
-  console.log("[notifications] Permission status:", existingStatus);
   let finalStatus = existingStatus;
   if (existingStatus !== "granted") {
     const { status } = await Notifications.requestPermissionsAsync({
@@ -93,26 +83,24 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
       },
     });
     finalStatus = status;
-    console.log("[notifications] Permission after request:", finalStatus);
   }
-  if (finalStatus !== "granted") {
-    console.log("[notifications] Permission denied — cannot register push token");
-    return null;
-  }
+  if (finalStatus !== "granted") return null;
 
   try {
-    const projectId =
-      Constants.expoConfig?.extra?.eas?.projectId ?? VIBECODE_PROJECT_ID;
-    console.log("[notifications] Getting push token with projectId:", projectId);
-    const tokenResult = await Notifications.getExpoPushTokenAsync({ projectId });
+    const easProjectId = Constants.expoConfig?.extra?.eas?.projectId;
+    // Race against a 8-second timeout — getExpoPushTokenAsync can hang in dev
+    const tokenResult = await Promise.race([
+      Notifications.getExpoPushTokenAsync(easProjectId ? { projectId: easProjectId } : {}),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("push token request timed out")), 8000)
+      ),
+    ]);
     const token = tokenResult.data;
-    console.log("[notifications] Got token:", token?.substring(0, 40));
-
     await api.post("/api/push-token", { token });
-    console.log("[notifications] Token saved to backend ✓");
     return token;
   } catch (err) {
-    console.error("[notifications] Failed to get/save push token:", err);
+    // In dev/Expo Go this often fails — works correctly in production builds
+    console.warn("[notifications] Push token unavailable:", (err as Error).message);
     return null;
   }
 }
