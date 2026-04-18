@@ -409,6 +409,30 @@ export default function ProfileScreen() {
     };
   }, []);
 
+  const [pushDebugResult, setPushDebugResult] = useState<string | null>(null);
+  const [pushDebugLoading, setPushDebugLoading] = useState(false);
+
+  const handleCheckNotifStatus = async () => {
+    const status = await getNotifStatus();
+    setPushDebugResult(status ?? "no status returned");
+  };
+
+  const handleSendTestPush = async () => {
+    setPushDebugLoading(true);
+    try {
+      const result = await api.post<{ ok?: boolean; error?: string; token?: string }>("/api/push-test", {});
+      if (result.error) {
+        setPushDebugResult(`Error: ${result.error}`);
+      } else {
+        setPushDebugResult(`Sent to: ${result.token ?? "unknown"}`);
+      }
+    } catch (err: unknown) {
+      setPushDebugResult(`Failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setPushDebugLoading(false);
+    }
+  };
+
   const [refreshing, setRefreshing] = useState(false);
 
   const onRefresh = async () => {
@@ -704,6 +728,37 @@ export default function ProfileScreen() {
           </GlassCard>
         </View>
         ) : null}
+
+        {/* Push Notifications Debug */}
+        <View className="mx-4 mt-5">
+          <Text className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3 ml-1">Push Notifications Debug</Text>
+          <GlassCard>
+            <Pressable
+              onPress={handleCheckNotifStatus}
+              className="px-4 py-3.5 border-b border-slate-100/60"
+              testID="check-notif-status-button"
+            >
+              <Text className="text-sm font-semibold text-indigo-600">Check notification status</Text>
+            </Pressable>
+            <Pressable
+              onPress={handleSendTestPush}
+              disabled={pushDebugLoading}
+              className="px-4 py-3.5"
+              testID="send-test-push-button"
+            >
+              {pushDebugLoading ? (
+                <ActivityIndicator size="small" color="#4361EE" />
+              ) : (
+                <Text className="text-sm font-semibold text-indigo-600">Send test push</Text>
+              )}
+            </Pressable>
+            {pushDebugResult ? (
+              <View className="px-4 pb-3.5 pt-1 border-t border-slate-100/60">
+                <Text className="text-xs text-slate-500" selectable testID="push-debug-result">{pushDebugResult}</Text>
+              </View>
+            ) : null}
+          </GlassCard>
+        </View>
 
         {/* Legal / About */}
         <View className="mx-4 mt-5">

@@ -23,6 +23,7 @@ import { webRouter } from "./routes/web-app";
 import { pollsRouter } from "./routes/polls";
 import { demoRouter } from "./routes/demo";
 import { videoRouter } from "./routes/video";
+import { sendPushNotifications } from "./lib/push";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -195,6 +196,17 @@ app.post("/api/push-token", async (c) => {
   await prisma.user.update({ where: { id: user.id }, data: { pushToken: token } });
   return c.json({ data: { ok: true } });
 });
+// Test push notification (sends a real push to the current user's device)
+app.post("/api/push-test", async (c) => {
+  const user = c.get("user");
+  if (!user) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
+  const record = await prisma.user.findUnique({ where: { id: user.id }, select: { pushToken: true } });
+  const token = record?.pushToken;
+  if (!token) return c.json({ data: { error: "no_token" } });
+  await sendPushNotifications([{ token, title: "Push Test", body: "Your push notifications are working!" }]);
+  return c.json({ data: { ok: true, token: token.substring(0, 30) + "..." } });
+});
+
 // Get notification preferences
 app.get("/api/notification-preferences", async (c) => {
   const user = c.get("user");
