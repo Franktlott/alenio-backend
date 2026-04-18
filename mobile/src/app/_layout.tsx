@@ -141,7 +141,8 @@ function RootLayoutNav() {
 
   useEffect(() => {
     if (!session?.user) return;
-    registerForPushNotificationsAsync();
+    // Delay push registration so auth cookies are fully set before the API call
+    const pushTimer = setTimeout(() => registerForPushNotificationsAsync(), 1500);
     initRevenueCat(session.user.id);
     notificationListener.current = Notifications.addNotificationReceivedListener((notification) => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -181,6 +182,7 @@ function RootLayoutNav() {
     });
 
     return () => {
+      clearTimeout(pushTimer);
       notificationListener.current?.remove();
       responseListener.remove();
     };

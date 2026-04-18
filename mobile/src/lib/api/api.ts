@@ -5,19 +5,21 @@ const baseUrl = process.env.EXPO_PUBLIC_BACKEND_URL!;
 
 const request = async <T>(
   url: string,
-  options: { method?: string; body?: string } = {}
+  options: { method?: string; body?: string; skipSignOut?: boolean } = {}
 ): Promise<T> => {
+  const { method, body, skipSignOut } = options;
   const response = await fetch(`${baseUrl}${url}`, {
-    ...options,
+    method,
+    body,
     credentials: "include",
     headers: {
-      ...(options.body ? { "Content-Type": "application/json" } : {}),
+      ...(body ? { "Content-Type": "application/json" } : {}),
       Cookie: authClient.getCookie(),
     },
   });
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));
-    if (response.status === 401) {
+    if (response.status === 401 && !skipSignOut) {
       authClient.signOut().catch(() => {});
     }
     throw new Error(err?.error?.message ?? `Request failed: ${response.status}`);
@@ -27,8 +29,8 @@ const request = async <T>(
 
 export const api = {
   get: <T>(url: string) => request<{ data: T }>(url).then((r) => r.data),
-  post: <T>(url: string, body: unknown) =>
-    request<{ data: T }>(url, { method: "POST", body: JSON.stringify(body) }).then((r) => r.data),
+  post: <T>(url: string, body: unknown, opts?: { skipSignOut?: boolean }) =>
+    request<{ data: T }>(url, { method: "POST", body: JSON.stringify(body), ...opts }).then((r) => r.data),
   put: <T>(url: string, body: unknown) =>
     request<{ data: T }>(url, { method: "PUT", body: JSON.stringify(body) }).then((r) => r.data),
   delete: async <T>(url: string) => {

@@ -122,6 +122,10 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
       ),
     ]);
     console.log("[notifications] Device token type:", deviceToken.type, "data:", String(deviceToken.data).slice(0, 20) + "...");
+    if (!deviceToken?.data) {
+      await saveNotifStatus("failed: APNs returned empty device token");
+      return null;
+    }
     await saveNotifStatus("step 2/2: exchanging with Expo servers...");
 
     // Step 2: Exchange with Expo's push service
@@ -133,7 +137,7 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
     ]);
     const token = tokenResult.data;
     console.log("[notifications] Token obtained:", token.slice(0, 30) + "...");
-    await api.post("/api/push-token", { token });
+    await api.post("/api/push-token", { token }, { skipSignOut: true });
     await saveNotifStatus("registered ✓ " + token.slice(0, 25) + "...");
     console.log("[notifications] Token saved to backend successfully");
     return token;
