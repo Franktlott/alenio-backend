@@ -139,6 +139,7 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
       return null;
     }
 
+    let lastError = "";
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
         await saveNotifStatus(`getting token (attempt ${attempt}/3)...`);
@@ -154,6 +155,7 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
         return token;
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
+        lastError = msg;
         console.warn(`[notifications] Attempt ${attempt} failed:`, msg);
         if (attempt < 3) {
           await saveNotifStatus(`attempt ${attempt} failed, retrying...`);
@@ -162,7 +164,7 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
       }
     }
 
-    await saveNotifStatus("failed after 3 attempts");
+    await saveNotifStatus(`failed: ${lastError || "unknown error"}`);
     return null;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

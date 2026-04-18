@@ -25,7 +25,7 @@ import { BlurView } from "expo-blur";
 import { ArrowLeft, Camera, LogOut, Pencil, X, Plus, Trash2, Bell, Check, LogOut as LeaveIcon, Crown, Copy, ChevronRight, BarChart2, Volume2 } from "lucide-react-native";
 import { authClient } from "@/lib/auth/auth-client";
 import { useInvalidateSession, useSession } from "@/lib/auth/use-session";
-import { getNotifStatus } from "@/lib/notifications";
+import { getNotifStatus, registerForPushNotificationsAsync } from "@/lib/notifications";
 import { router } from "expo-router";
 import { useMutation, useQuery, useQueryClient, useQueries } from "@tanstack/react-query";
 import { api } from "@/lib/api/api";
@@ -396,7 +396,7 @@ export default function ProfileScreen() {
       getNotifStatus().then((s) => {
         if (cancelled) return;
         setNotifRegStatus(s);
-        if (s?.startsWith("requesting token") || s?.startsWith("step 1/2") || s?.startsWith("step 2/2")) {
+        if (s?.startsWith("getting token") || s?.startsWith("saving token") || s?.startsWith("attempt")) {
           timer = setTimeout(poll, 2000);
         }
       });
@@ -411,10 +411,28 @@ export default function ProfileScreen() {
 
   const [pushDebugResult, setPushDebugResult] = useState<string | null>(null);
   const [pushDebugLoading, setPushDebugLoading] = useState(false);
+  const [retryingPush, setRetryingPush] = useState(false);
 
   const handleCheckNotifStatus = async () => {
     const status = await getNotifStatus();
     setPushDebugResult(status ?? "no status returned");
+  };
+
+  const handleRetryPushRegistration = async () => {
+    setRetryingPush(true);
+    setPushDebugResult(null);
+    try {
+      const token = await registerForPushNotificationsAsync();
+      if (token) {
+        queryClient.invalidateQueries({ queryKey: ["notification-preferences"] });
+        setPushDebugResult("Registered successfully!");
+      } else {
+        const status = await getNotifStatus();
+        setPushDebugResult(status ?? "Registration failed");
+      }
+    } finally {
+      setRetryingPush(false);
+    }
   };
 
   const handleSendTestPush = async () => {
@@ -733,6 +751,18 @@ export default function ProfileScreen() {
         <View className="mx-4 mt-5">
           <Text className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3 ml-1">Push Notifications Debug</Text>
           <GlassCard>
+            <Pressable
+              onPress={handleRetryPushRegistration}
+              disabled={retryingPush}
+              className="px-4 py-3.5 border-b border-slate-100/60"
+              testID="retry-push-registration-button"
+            >
+              {retryingPush ? (
+                <ActivityIndicator size="small" color="#4361EE" />
+              ) : (
+                <Text className="text-sm font-semibold text-indigo-600">Retry push registration</Text>
+              )}
+            </Pressable>
             <Pressable
               onPress={handleCheckNotifStatus}
               className="px-4 py-3.5 border-b border-slate-100/60"
