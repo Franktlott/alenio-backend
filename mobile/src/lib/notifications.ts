@@ -121,9 +121,12 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
       | { projectId?: string }
       | undefined)?.projectId;
 
-    const projectIdFromEnv = process.env.EXPO_PUBLIC_VIBECODE_PROJECT_ID;
+    const projectIdFromEnv = process.env.EXPO_PUBLIC_EAS_PROJECT_ID;
 
-    const projectId = projectIdFromExtra ?? projectIdFromEas ?? projectIdFromEnv;
+    // Fallback to the EAS project ID defined in app.json
+    const HARDCODED_EAS_PROJECT_ID = "f40ec24d-0b09-4cc6-8746-805bd60e9ea2";
+
+    const projectId = projectIdFromExtra ?? projectIdFromEas ?? projectIdFromEnv ?? HARDCODED_EAS_PROJECT_ID;
 
     console.log("[notifications] projectId from extra:", projectIdFromExtra ?? "none");
     console.log("[notifications] projectId from easConfig:", projectIdFromEas ?? "none");
@@ -141,7 +144,7 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
     const tokenResult = await Promise.race([
       Notifications.getExpoPushTokenAsync({ projectId }),
       new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("Expo push token request timed out after 15 seconds")), 15000)
+        setTimeout(() => reject(new Error("Expo push token request timed out after 30 seconds")), 30000)
       ),
     ]);
 
