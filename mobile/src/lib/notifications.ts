@@ -139,33 +139,31 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
       return null;
     }
 
-    await saveNotifStatus("getting Expo push token...");
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        await saveNotifStatus(`getting token (attempt ${attempt}/3)...`);
+        const tokenResult = await Notifications.getExpoPushTokenAsync({ projectId });
+        const token = tokenResult.data;
+        if (!token) throw new Error("empty token");
 
-    const tokenResult = await Promise.race([
-      Notifications.getExpoPushTokenAsync({ projectId }),
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("Expo push token request timed out after 30 seconds")), 30000)
-      ),
-    ]);
+        await saveNotifStatus("saving token to backend...");
+        await api.post("/api/push-token", { token }, { skipSignOut: true });
 
-    const token = tokenResult.data;
-
-    console.log("[notifications] Expo token obtained:", token);
-
-    if (!token) {
-      console.warn("[notifications] Expo token was empty");
-      await saveNotifStatus("empty Expo token");
-      return null;
+        await saveNotifStatus("registered ok");
+        console.log("[notifications] Registered successfully on attempt", attempt);
+        return token;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.warn(`[notifications] Attempt ${attempt} failed:`, msg);
+        if (attempt < 3) {
+          await saveNotifStatus(`attempt ${attempt} failed, retrying...`);
+          await new Promise(r => setTimeout(r, 5000));
+        }
+      }
     }
 
-    await saveNotifStatus("saving token to backend...");
-
-    await api.post("/api/push-token", { token }, { skipSignOut: true });
-
-    console.log("[notifications] Token saved to backend successfully");
-    await saveNotifStatus("registered ok");
-
-    return token;
+    await saveNotifStatus("failed after 3 attempts");
+    return null;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.warn("[notifications] Push registration failed:", message);
