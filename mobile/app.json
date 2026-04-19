@@ -3,32 +3,42 @@
     "name": "Alenio",
     "slug": "alenio",
     "scheme": "vibecode",
-    "version": "1.0.0",
+    "version": "1.0.2",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "extra": {
       "eas": {
-        "projectId": "f40ec24d-0b09-4cc6-8746-805bd60e9ea2"
-      }
+        "projectId": ""
+      },
+      "router": {}
     },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.vibecode.alenio-9iqp9v",
-      "buildNumber": "25",
+      "buildNumber": "26",
+      "entitlements": {
+        "aps-environment": "production"
+      },
       "infoPlist": {
         "NSCameraUsageDescription": "Alenio uses the camera to capture photos inside the app before you publish them.",
         "NSMicrophoneUsageDescription": "Alenio uses the microphone to record audio clips that stay with your in-app creations.",
         "NSPhotoLibraryUsageDescription": "Alenio accesses your photo library to generate thumbnails for your videos.",
         "UIBackgroundModes": [
+          "remote-notification",
           "remote-notification"
         ],
-        "NSPhotoLibraryAddUsageDescription": "Alenio saves media you export from the app into your photo library."
+        "NSPhotoLibraryAddUsageDescription": "Alenio saves media you export from the app into your photo library.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
       "edgeToEdgeEnabled": true,
-      "package": "com.vibecode.alenio9iqp9v"
+      "package": "com.vibecode.alenio9iqp9v",
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "plugins": [
       "expo-router",
@@ -42,6 +52,8 @@
       [
         "expo-notifications",
         {
+          "icon": "./icon.png",
+          "color": "#2D5A3D",
           "sounds": [
             "./src/assets/sounds/bell.wav",
             "./src/assets/sounds/tritone.wav",

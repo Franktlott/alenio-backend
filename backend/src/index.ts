@@ -23,7 +23,8 @@ import { webRouter } from "./routes/web-app";
 import { pollsRouter } from "./routes/polls";
 import { demoRouter } from "./routes/demo";
 import { videoRouter } from "./routes/video";
-import { sendPushNotifications } from "./lib/push";
+import { usersRouter } from "./routes/users";
+import { sendPushNotificationsStrict } from "./lib/push";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -192,8 +193,9 @@ app.post("/api/push-token", async (c) => {
   const user = c.get("user");
   if (!user) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
   const { token } = await c.req.json();
-  if (!token || typeof token !== "string") return c.json({ error: { message: "Token required" } }, 400);
-  await prisma.user.update({ where: { id: user.id }, data: { pushToken: token } });
+  if (token !== null && typeof token !== "string") return c.json({ error: { message: "Token must be string or null" } }, 400);
+  const cleaned = typeof token === "string" ? token.trim() : null;
+  await prisma.user.update({ where: { id: user.id }, data: { pushToken: cleaned && cleaned.length ? cleaned : null } });
   return c.json({ data: { ok: true } });
 });
 // Test push notification (sends a real push to the current user's device)
@@ -202,9 +204,14 @@ app.post("/api/push-test", async (c) => {
   if (!user) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
   const record = await prisma.user.findUnique({ where: { id: user.id }, select: { pushToken: true } });
   const token = record?.pushToken;
-  if (!token) return c.json({ data: { error: "no_token" } });
-  await sendPushNotifications([{ token, title: "Push Test", body: "Your push notifications are working!" }]);
-  return c.json({ data: { ok: true, token: token.substring(0, 30) + "..." } });
+  if (!token) return c.json({ data: { ok: false, error: "no_token" } });
+  try {
+    await sendPushNotificationsStrict([{ token, title: "Push Test", body: "Your push notifications are working!" }]);
+    return c.json({ data: { ok: true, token: token.substring(0, 30) + "..." } });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return c.json({ data: { ok: false, error: msg } });
+  }
 });
 
 // Get notification preferences
@@ -305,6 +312,7 @@ app.delete("/api/user", async (c) => {
 
 // Routes
 app.route("/api/sample", sampleRouter);
+app.route("/api/users", usersRouter);
 app.route("/api/teams", teamsRouter);
 app.route("/api/teams/:teamId/tasks", tasksRouter);
 app.route("/api/tasks/mine", myTasksRouter);

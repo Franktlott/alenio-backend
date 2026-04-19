@@ -1,6 +1,7 @@
 import { prisma } from "../prisma";
 
-const EXPO_PUSH_URL = "https://exp.host/api/v2/push/send";
+// Expo push API endpoint (note the required "/--/").
+const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
 const CHUNK_SIZE = 100;
 
 export interface PushPayload {
@@ -12,6 +13,16 @@ export interface PushPayload {
   sound?: string;
 }
 
+async function parseExpoResponse(response: Response): Promise<{ data?: { status: string; message?: string; details?: unknown; id?: string }[] }> {
+  const text = await response.text();
+  try {
+    return JSON.parse(text) as { data?: { status: string; message?: string; details?: unknown; id?: string }[] };
+  } catch {
+    const preview = text.slice(0, 250).replace(/\s+/g, " ").trim();
+    throw new Error(`Expo response not JSON (HTTP ${response.status}): ${preview || "<empty>"}`);
+  }
+}
+
 function chunkArray<T>(arr: T[], size: number): T[][] {
   const chunks: T[][] = [];
   for (let i = 0; i < arr.length; i += size) {
@@ -20,6 +31,49 @@ function chunkArray<T>(arr: T[], size: number): T[][] {
   return chunks;
 }
 
+async function sendPushChunkStrict(chunk: PushPayload[]): Promise<void> {
+  const response = await fetch(EXPO_PUSH_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      "Accept-Encoding": "gzip, deflate",
+    },
+    body: JSON.stringify(
+      chunk.map((m) => ({
+        to: m.token,
+        title: m.title,
+        body: m.body,
+        sound: m.sound ?? "default",
+        priority: "high",
+        channelId: m.channelId ?? "alenio_main",
+        data: m.data,
+      }))
+    ),
+  });
+
+  const result = await parseExpoResponse(response);
+
+  if (!response.ok) {
+    throw new Error(`Expo push HTTP ${response.status}: ${JSON.stringify(result).slice(0, 500)}`);
+  }
+
+  const errors = result.data?.filter((r) => r.status !== "ok") ?? [];
+  if (errors.length) {
+    throw new Error(`Expo push rejected: ${JSON.stringify(errors).slice(0, 800)}`);
+  }
+}
+
+// Strict sender (throws on any failure). Best for diagnostics and tests.
+export async function sendPushNotificationsStrict(messages: PushPayload[]): Promise<void> {
+  if (messages.length === 0) return;
+  const chunks = chunkArray(messages, CHUNK_SIZE);
+  for (const chunk of chunks) {
+    await sendPushChunkStrict(chunk);
+  }
+}
+
+// Non-strict sender (logs failures but does not throw).
 export async function sendPushNotifications(messages: PushPayload[]): Promise<void> {
   if (messages.length === 0) return;
 
@@ -28,27 +82,7 @@ export async function sendPushNotifications(messages: PushPayload[]): Promise<vo
   await Promise.all(
     chunks.map(async (chunk) => {
       try {
-        const response = await fetch(EXPO_PUSH_URL, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Accept: "application/json",
-          },
-          body: JSON.stringify(
-            chunk.map((m) => ({
-              to: m.token,
-              title: m.title,
-              body: m.body,
-              sound: m.sound ?? "default",
-              priority: "high",
-              channelId: m.channelId ?? "alenio_main",
-              data: m.data,
-            }))
-          ),
-        });
-        const result = await response.json() as { data?: { status: string; message?: string }[] };
-        const errors = result.data?.filter((r) => r.status !== "ok");
-        if (errors?.length) console.error("[push] Expo push errors:", JSON.stringify(errors));
+        await sendPushChunkStrict(chunk);
       } catch (err) {
         console.error("[push] Failed to send push notifications:", err);
       }

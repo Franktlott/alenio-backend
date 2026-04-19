@@ -25,7 +25,7 @@ import { BlurView } from "expo-blur";
 import { ArrowLeft, Camera, LogOut, Pencil, X, Plus, Trash2, Bell, Check, LogOut as LeaveIcon, Crown, Copy, ChevronRight, BarChart2, Volume2 } from "lucide-react-native";
 import { authClient } from "@/lib/auth/auth-client";
 import { useInvalidateSession, useSession } from "@/lib/auth/use-session";
-import { getNotifStatus, registerForPushNotificationsAsync } from "@/lib/notifications";
+import { clearNotifDebugLog, getNotifDebugLog, getNotifStatus, registerForPushNotificationsAsync } from "@/lib/notifications";
 import { router } from "expo-router";
 import { useMutation, useQuery, useQueryClient, useQueries } from "@tanstack/react-query";
 import { api } from "@/lib/api/api";
@@ -387,15 +387,23 @@ export default function ProfileScreen() {
   const avatarUri = localImage ?? user?.image ?? null;
 
   const [notifRegStatus, setNotifRegStatus] = useState<string | null>(null);
+  const [pushLog, setPushLog] = useState<Awaited<ReturnType<typeof getNotifDebugLog>>>([]);
+
+  const refreshPushDebug = async () => {
+    const [status, log] = await Promise.all([getNotifStatus(), getNotifDebugLog()]);
+    setNotifRegStatus(status);
+    setPushLog(log);
+  };
 
   useEffect(() => {
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout>;
 
     const poll = () => {
-      getNotifStatus().then((s) => {
+      Promise.all([getNotifStatus(), getNotifDebugLog()]).then(([s, log]) => {
         if (cancelled) return;
         setNotifRegStatus(s);
+        setPushLog(log);
         if (s?.startsWith("getting token") || s?.startsWith("saving token") || s?.startsWith("attempt")) {
           timer = setTimeout(poll, 2000);
         }
@@ -416,6 +424,7 @@ export default function ProfileScreen() {
   const handleCheckNotifStatus = async () => {
     const status = await getNotifStatus();
     setPushDebugResult(status ?? "no status returned");
+    await refreshPushDebug();
   };
 
   const handleRetryPushRegistration = async () => {
@@ -430,15 +439,64 @@ export default function ProfileScreen() {
         const status = await getNotifStatus();
         setPushDebugResult(status ?? "Registration failed");
       }
+      await refreshPushDebug();
     } finally {
       setRetryingPush(false);
     }
   };
 
+  const handleCheckBackendPushStatus = async () => {
+    try {
+      const result = await api.get<{ hasPushToken: boolean; tokenPreview: string | null }>("/api/users/push-status");
+      setPushDebugResult(result.hasPushToken ? `Backend has token: ${result.tokenPreview ?? "yes"}` : "Backend has no token saved");
+    } catch (err: unknown) {
+      // Fallback for older backends: infer from notification-preferences response
+      try {
+        const prefs = await api.get<{ hasToken?: boolean; pushToken?: string | null }>("/api/notification-preferences");
+        const has = prefs.hasToken === true || !!prefs.pushToken;
+        setPushDebugResult(has ? "Backend has token (via notification-preferences)" : "Backend has no token (via notification-preferences)");
+      } catch {
+        setPushDebugResult(`Backend status failed: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+  };
+
+  const handleClearBackendPushToken = async () => {
+    setPushDebugLoading(true);
+    try {
+      await api.patch<{ ok: true }>("/api/users/push-token", { pushToken: null });
+      await queryClient.invalidateQueries({ queryKey: ["notification-preferences"] });
+      setPushDebugResult("Cleared push token in backend database");
+    } catch (err: unknown) {
+      // Fallback for older backends (legacy endpoint now supports token=null).
+      try {
+        await api.post<{ ok: true }>("/api/push-token", { token: null }, { skipSignOut: true });
+        await queryClient.invalidateQueries({ queryKey: ["notification-preferences"] });
+        setPushDebugResult("Cleared push token in backend database (legacy)");
+      } catch {
+        setPushDebugResult(`Clear failed: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    } finally {
+      setPushDebugLoading(false);
+    }
+  };
+
+  const handleClearLocalDebugLog = async () => {
+    await clearNotifDebugLog();
+    await refreshPushDebug();
+    setPushDebugResult("Cleared local push debug log");
+  };
+
   const handleSendTestPush = async () => {
     setPushDebugLoading(true);
     try {
-      const result = await api.post<{ ok?: boolean; error?: string; token?: string }>("/api/push-test", {});
+      // Prefer the newer /api/users/push-test endpoint; fall back to legacy.
+      let result: { ok?: boolean; error?: string; token?: string } | null = null;
+      try {
+        result = await api.post<{ ok?: boolean; error?: string; token?: string }>("/api/users/push-test", {});
+      } catch {
+        result = await api.post<{ ok?: boolean; error?: string; token?: string }>("/api/push-test", {});
+      }
       if (result.error) {
         setPushDebugResult(`Error: ${result.error}`);
       } else {
@@ -446,6 +504,60 @@ export default function ProfileScreen() {
       }
     } catch (err: unknown) {
       setPushDebugResult(`Failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setPushDebugLoading(false);
+    }
+  };
+
+  const handleDirectTestPush = async () => {
+    setPushDebugLoading(true);
+    try {
+      const token = await registerForPushNotificationsAsync();
+      if (!token) {
+        const status = await getNotifStatus();
+        setPushDebugResult(status ?? "Could not register token for direct test");
+        return;
+      }
+
+      const res = await fetch("https://exp.host/--/api/v2/push/send", {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Accept-Encoding": "gzip, deflate",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          to: token,
+          title: "Push Test",
+          body: "If you see this, push is working ✅",
+          sound: "default",
+          priority: "high",
+          data: { type: "push_debug" },
+        }),
+      });
+
+      const text = await res.text();
+      let json: any = null;
+      try {
+        json = JSON.parse(text);
+      } catch {
+        // ignore
+      }
+
+      if (!res.ok) {
+        setPushDebugResult(`Direct push failed (HTTP ${res.status}): ${text.slice(0, 180)}`);
+        return;
+      }
+
+      const ticket = json?.data ?? null;
+      if (ticket?.status === "error") {
+        setPushDebugResult(`Direct push rejected: ${ticket?.message ?? "error"}`);
+        return;
+      }
+
+      setPushDebugResult(`Direct push sent (ticket=${ticket?.id ?? "n/a"})`);
+    } catch (err: unknown) {
+      setPushDebugResult(`Direct push failed: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setPushDebugLoading(false);
     }
@@ -771,9 +883,16 @@ export default function ProfileScreen() {
               <Text className="text-sm font-semibold text-indigo-600">Check notification status</Text>
             </Pressable>
             <Pressable
+              onPress={handleCheckBackendPushStatus}
+              className="px-4 py-3.5 border-b border-slate-100/60"
+              testID="check-backend-push-status-button"
+            >
+              <Text className="text-sm font-semibold text-indigo-600">Check backend token status</Text>
+            </Pressable>
+            <Pressable
               onPress={handleSendTestPush}
               disabled={pushDebugLoading}
-              className="px-4 py-3.5"
+              className="px-4 py-3.5 border-b border-slate-100/60"
               testID="send-test-push-button"
             >
               {pushDebugLoading ? (
@@ -782,9 +901,58 @@ export default function ProfileScreen() {
                 <Text className="text-sm font-semibold text-indigo-600">Send test push</Text>
               )}
             </Pressable>
+            <Pressable
+              onPress={handleDirectTestPush}
+              disabled={pushDebugLoading}
+              className="px-4 py-3.5 border-b border-slate-100/60"
+              testID="send-direct-test-push-button"
+            >
+              {pushDebugLoading ? (
+                <ActivityIndicator size="small" color="#4361EE" />
+              ) : (
+                <Text className="text-sm font-semibold text-indigo-600">Send direct test push (bypass backend)</Text>
+              )}
+            </Pressable>
+            <Pressable
+              onPress={handleClearBackendPushToken}
+              disabled={pushDebugLoading}
+              className="px-4 py-3.5 border-b border-slate-100/60"
+              testID="clear-backend-push-token-button"
+            >
+              <Text className="text-sm font-semibold text-indigo-600">Clear backend push token</Text>
+            </Pressable>
+            <Pressable
+              onPress={handleClearLocalDebugLog}
+              className="px-4 py-3.5"
+              testID="clear-local-push-debug-log-button"
+            >
+              <Text className="text-sm font-semibold text-indigo-600">Clear local debug log</Text>
+            </Pressable>
             {pushDebugResult ? (
               <View className="px-4 pb-3.5 pt-1 border-t border-slate-100/60">
                 <Text className="text-xs text-slate-500" selectable testID="push-debug-result">{pushDebugResult}</Text>
+              </View>
+            ) : null}
+            {pushLog.length ? (
+              <View className="px-4 pb-4 pt-2 border-t border-slate-100/60">
+                <Text className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Debug log</Text>
+                <View style={{ maxHeight: 220, borderRadius: 12, backgroundColor: "rgba(15, 23, 42, 0.04)", padding: 10 }}>
+                  <ScrollView testID="push-debug-log-scroll">
+                    {pushLog.slice(-25).map((e, idx) => {
+                      const time = new Date(e.ts).toLocaleTimeString();
+                      const line = `${time} • ${e.step} • ${e.status}${e.detail ? ` • ${e.detail}` : ""}`;
+                      return (
+                        <Text
+                          key={`${e.ts}-${idx}`}
+                          style={{ fontSize: 11, color: e.status === "error" ? "#B91C1C" : "#475569", marginBottom: 6 }}
+                          selectable
+                        >
+                          {line}
+                        </Text>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
               </View>
             ) : null}
           </GlassCard>
