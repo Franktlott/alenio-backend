@@ -621,7 +621,7 @@ export default function TasksScreen() {
   const [eventStart, setEventStart] = useState<Date>(new Date());
   const [eventEnd, setEventEnd] = useState<Date>(new Date());
   const [eventColor, setEventColor] = useState("#4361EE");
-  const [eventIsHidden, setEventIsHidden] = useState(false);
+  const [eventIsHidden, setEventIsHidden] = useState(true);
   const [eventIsVideoMeeting, setEventIsVideoMeeting] = useState(false);
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
@@ -759,7 +759,7 @@ export default function TasksScreen() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["calendar-events", activeTeamId] });
       setShowEventModal(false);
-      setEventTitle(""); setEventDescription(""); setEventColor("#4361EE"); setEventIsHidden(false); setEventIsVideoMeeting(false);
+      setEventTitle(""); setEventDescription(""); setEventColor("#4361EE"); setEventIsHidden(true); setEventIsVideoMeeting(false);
     },
   });
 
@@ -770,7 +770,7 @@ export default function TasksScreen() {
       queryClient.invalidateQueries({ queryKey: ["calendar-events", activeTeamId] });
       setShowEventModal(false);
       setEditingEvent(null);
-      setEventTitle(""); setEventDescription(""); setEventColor("#4361EE"); setEventIsHidden(false); setEventIsVideoMeeting(false);
+      setEventTitle(""); setEventDescription(""); setEventColor("#4361EE"); setEventIsHidden(true); setEventIsVideoMeeting(false);
     },
   });
 
@@ -781,7 +781,7 @@ export default function TasksScreen() {
       queryClient.invalidateQueries({ queryKey: ["calendar-events", activeTeamId] });
       setShowEventModal(false);
       setEditingEvent(null);
-      setEventTitle(""); setEventDescription(""); setEventColor("#4361EE"); setEventIsHidden(false); setEventIsVideoMeeting(false);
+      setEventTitle(""); setEventDescription(""); setEventColor("#4361EE"); setEventIsHidden(true); setEventIsVideoMeeting(false);
     },
   });
 
@@ -1652,19 +1652,19 @@ export default function TasksScreen() {
 
               {formError ? <Text style={{ color: "#EF4444", fontSize: 13, marginBottom: 12 }}>{formError}</Text> : null}
 
-              {/* Incognito toggle */}
-              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: "#F8FAFC", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 20, borderWidth: 1.5, borderColor: eventIsHidden ? "#94A3B8" : "#E2E8F0" }}>
+              {/* Visibility toggle */}
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: "#F8FAFC", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 20, borderWidth: 1.5, borderColor: !eventIsHidden ? "#4361EE" : "#E2E8F0" }}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                  <UserRound size={18} color={eventIsHidden ? "#64748B" : "#CBD5E1"} />
+                  <Users size={18} color={!eventIsHidden ? "#4361EE" : "#CBD5E1"} />
                   <View>
-                    <Text style={{ fontSize: 14, fontWeight: "600", color: "#0F172A" }}>Incognito</Text>
-                    <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 1 }}>Only visible to you</Text>
+                    <Text style={{ fontSize: 14, fontWeight: "600", color: "#0F172A" }}>Public</Text>
+                    <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 1 }}>{!eventIsHidden ? "Visible to the whole team" : "Only visible to you"}</Text>
                   </View>
                 </View>
                 <Switch
-                  value={eventIsHidden}
-                  onValueChange={setEventIsHidden}
-                  trackColor={{ false: "#E2E8F0", true: "#64748B" }}
+                  value={!eventIsHidden}
+                  onValueChange={(v) => setEventIsHidden(!v)}
+                  trackColor={{ false: "#E2E8F0", true: "#4361EE" }}
                   thumbColor="white"
                   testID="hidden-toggle"
                 />
