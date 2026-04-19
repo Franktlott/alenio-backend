@@ -1069,7 +1069,7 @@ export default function TasksScreen() {
                 return (
                   <Pressable
                     key={ev.id}
-                    onLongPress={isOwner && !isDemo ? () => openEditEventModal(ev) : undefined}
+                    onLongPress={isOwnerOrLeader && !isDemo ? () => openEditEventModal(ev) : undefined}
                     delayLongPress={400}
                     style={{ backgroundColor: `${ev.color}18`, borderRadius: 12, padding: 12, minWidth: 180, flexDirection: "row", alignItems: "center", gap: 8 }}
                   >
@@ -1397,7 +1397,7 @@ export default function TasksScreen() {
               <Image source={require("@/assets/alenio-icon.png")} style={{ width: 32, height: 32, borderRadius: 8 }} />
               <Text style={{ fontSize: 17, fontWeight: "700", color: "#0F172A" }}>What would you like to add?</Text>
             </View>
-            {isOwner ? (
+            {isOwnerOrLeader ? (
               <Pressable
                 onPress={() => { setShowAddModal(false); openEventModal(); }}
                 style={{ flexDirection: "row", alignItems: "center", gap: 14, backgroundColor: "#F5F3FF", borderRadius: 16, padding: 16 }}
