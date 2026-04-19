@@ -142,6 +142,7 @@ export async function sendPushToUsers(
     .filter((u) => u.pushToken?.startsWith("ExponentPushToken"))
     .map((u) => {
       const { channelId, sound } = TONE_MAP[u.notifTone ?? ""] ?? DEFAULT_TONE;
+      console.log(`[push] user tone: "${u.notifTone ?? "null"}" → channelId: "${channelId}", sound: "${sound}"`);
       return { token: u.pushToken!, title, body, data, sound, channelId };
     });
   console.log(`[push] Sending ${messages.length} message(s) after token format filter`);
