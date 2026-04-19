@@ -705,7 +705,7 @@ tasksRouter.delete("/:taskId/assign/:userId", async (c) => {
   if (task.status === "done") return c.json({ error: { message: "Task is completed. Recall it before making edits.", code: "TASK_COMPLETED" } }, 400);
 
   const isCreator = task.creatorId === user.id;
-  const isAdmin = membership.role === "owner" || membership.role === "admin";
+  const isAdmin = membership.role === "owner" || membership.role === "admin" || membership.role === "team_leader";
   const isSelfUnassign = userId === user.id;
   if (!isCreator && !isAdmin && !isSelfUnassign) {
     return c.json({ error: { message: "Only the task creator or an admin can unassign other members", code: "FORBIDDEN" } }, 403);

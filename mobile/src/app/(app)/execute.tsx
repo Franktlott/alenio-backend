@@ -381,7 +381,7 @@ function EventRow({ event, onLongPress }: { event: CalendarEvent; onLongPress?: 
   );
 }
 
-function TaskRow({ task, onToggle, onPress }: { task: Task; onToggle: () => void; onPress: () => void }) {
+function TaskRow({ task, onToggle, onPress, onLongPress }: { task: Task; onToggle: () => void; onPress: () => void; onLongPress?: () => void }) {
   const isDone = task.status === "done";
   const priority = PRIORITY_CONFIG[task.priority as keyof typeof PRIORITY_CONFIG] ?? PRIORITY_CONFIG.medium;
 
@@ -422,6 +422,8 @@ function TaskRow({ task, onToggle, onPress }: { task: Task; onToggle: () => void
   return (
     <Pressable
       onPress={onPress}
+      onLongPress={onLongPress}
+      delayLongPress={400}
       testID="task-row"
       style={{
         marginHorizontal: 12,
@@ -605,6 +607,7 @@ export default function TasksScreen() {
 
   const [teamCompletedExpanded, setTeamCompletedExpanded] = useState(false);
   const [confirmCompleteTask, setConfirmCompleteTask] = useState<Task | null>(null);
+  const [reassignTask, setReassignTask] = useState<Task | null>(null);
   const [subtaskBlockMessage, setSubtaskBlockMessage] = useState<string | null>(null);
   const [confirmDeleteEvent, setConfirmDeleteEvent] = useState(false);
   const [milestoneModal, setMilestoneModal] = useState<{ count: number; userName: string } | null>(null);
@@ -737,6 +740,19 @@ export default function TasksScreen() {
     setConfirmCompleteTask(task);
   };
 
+  const reassignMutation = useMutation({
+    mutationFn: async ({ task, newUserId }: { task: Task; newUserId: string }) => {
+      for (const assignment of task.assignments) {
+        await api.delete(`/api/teams/${activeTeamId}/tasks/${task.id}/assign/${assignment.userId}`);
+      }
+      await api.post(`/api/teams/${activeTeamId}/tasks/${task.id}/assign`, { userIds: [newUserId] });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tasks", activeTeamId] });
+      setReassignTask(null);
+    },
+  });
+
   const createEventMutation = useMutation({
     mutationFn: (data: object) =>
       api.post(`/api/teams/${activeTeamId}/events`, data),
@@ -843,6 +859,7 @@ export default function TasksScreen() {
   const isOwner = teams?.find((t) => t.id === activeTeamId)?.role === "owner";
   const currentRole = teams?.find((t) => t.id === activeTeamId)?.role ?? "member";
   const isRegularMember = currentRole === "member";
+  const isOwnerOrLeader = currentRole === "owner" || currentRole === "team_leader";
 
   React.useEffect(() => {
     if (filter === "assigned" && isRegularMember) setFilter("all");
@@ -1208,6 +1225,7 @@ export default function TasksScreen() {
                 task={task}
                 onToggle={() => handleToggleTask(task)}
                 onPress={() => router.push({ pathname: "/task-detail", params: { taskId: task.id, teamId: activeTeamId! } })}
+                onLongPress={isOwnerOrLeader && !isDemo && task.assignments.length > 0 ? () => setReassignTask(task) : undefined}
               />
             ))
           )}
@@ -1249,6 +1267,7 @@ export default function TasksScreen() {
                   task={item}
                   onToggle={() => handleToggleTask(item)}
                   onPress={() => router.push({ pathname: "/task-detail", params: { taskId: item.id, teamId: activeTeamId! } })}
+                  onLongPress={isOwnerOrLeader && !isDemo && item.assignments.length > 0 ? () => setReassignTask(item) : undefined}
                 />
               )) : null}
             </View>
@@ -1304,6 +1323,66 @@ export default function TasksScreen() {
               testID="subtask-block-ok"
             >
               <Text style={{ color: "white", fontSize: 15, fontWeight: "700" }}>Got it</Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
+
+      {/* Reassign task modal */}
+      {reassignTask ? (
+        <View style={{ position: "absolute", inset: 0, backgroundColor: "rgba(0,0,0,0.5)", alignItems: "center", justifyContent: "flex-end", zIndex: 102 }}>
+          <View style={{ backgroundColor: "white", borderTopLeftRadius: 24, borderTopRightRadius: 24, width: "100%", paddingBottom: 32, maxHeight: "75%" }}>
+            <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: "#E2E8F0", alignSelf: "center", marginTop: 12, marginBottom: 16 }} />
+            <View style={{ paddingHorizontal: 20, marginBottom: 16 }}>
+              <Text style={{ fontSize: 17, fontWeight: "700", color: "#0F172A", marginBottom: 4 }}>Reassign Task</Text>
+              <Text style={{ fontSize: 13, color: "#64748B" }} numberOfLines={1}>"{reassignTask.title}"</Text>
+              {reassignTask.assignments[0]?.user ? (
+                <View style={{ flexDirection: "row", alignItems: "center", marginTop: 8, backgroundColor: "#F8FAFC", borderRadius: 10, padding: 10, gap: 8 }}>
+                  <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: "#E0E7FF", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                    {reassignTask.assignments[0].user.image ? (
+                      <Image source={{ uri: reassignTask.assignments[0].user.image }} style={{ width: 28, height: 28 }} />
+                    ) : (
+                      <Text style={{ fontSize: 11, fontWeight: "700", color: "#4361EE" }}>{reassignTask.assignments[0].user.name?.[0]?.toUpperCase() ?? "?"}</Text>
+                    )}
+                  </View>
+                  <Text style={{ fontSize: 13, color: "#64748B" }}>Currently: <Text style={{ fontWeight: "600", color: "#0F172A" }}>{reassignTask.assignments[0].user.name}</Text></Text>
+                </View>
+              ) : null}
+            </View>
+            <Text style={{ fontSize: 12, fontWeight: "600", color: "#94A3B8", paddingHorizontal: 20, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 }}>Select new assignee</Text>
+            <ScrollView style={{ maxHeight: 320 }} contentContainerStyle={{ paddingHorizontal: 20, gap: 6 }}>
+              {(teamData?.members ?? [])
+                .filter((m) => !reassignTask.assignments.some((a) => a.userId === m.userId))
+                .map((member) => (
+                  <Pressable
+                    key={member.userId}
+                    onPress={() => reassignMutation.mutate({ task: reassignTask, newUserId: member.userId })}
+                    style={{ flexDirection: "row", alignItems: "center", gap: 12, padding: 12, borderRadius: 12, backgroundColor: "#F8FAFC" }}
+                    testID="reassign-member-row"
+                  >
+                    <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#E0E7FF", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                      {member.user?.image ? (
+                        <Image source={{ uri: member.user.image }} style={{ width: 36, height: 36 }} />
+                      ) : (
+                        <Text style={{ fontSize: 14, fontWeight: "700", color: "#4361EE" }}>{member.user?.name?.[0]?.toUpperCase() ?? "?"}</Text>
+                      )}
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 14, fontWeight: "600", color: "#0F172A" }}>{member.user?.name}</Text>
+                      <Text style={{ fontSize: 12, color: "#94A3B8", textTransform: "capitalize" }}>{member.role.replace("_", " ")}</Text>
+                    </View>
+                    {reassignMutation.isPending ? null : (
+                      <View style={{ width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: "#CBD5E1" }} />
+                    )}
+                  </Pressable>
+                ))}
+            </ScrollView>
+            <Pressable
+              onPress={() => setReassignTask(null)}
+              style={{ marginHorizontal: 20, marginTop: 12, paddingVertical: 14, borderRadius: 12, alignItems: "center", backgroundColor: "#F1F5F9" }}
+              testID="reassign-cancel"
+            >
+              <Text style={{ fontSize: 15, fontWeight: "600", color: "#64748B" }}>Cancel</Text>
             </Pressable>
           </View>
         </View>
