@@ -14,7 +14,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { X, Calendar, Trash2, UserRound, Video, Clock } from "lucide-react-native";
+import { X, Calendar, Trash2, UserRound, Video, Clock, Users } from "lucide-react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api/api";
@@ -68,7 +68,7 @@ export default function CreateEventScreen() {
   const [eventStart, setEventStart] = useState<Date>(defaultStart);
   const [eventEnd, setEventEnd] = useState<Date>(defaultEnd);
   const [eventColor, setEventColor] = useState(initialColor ?? "#4361EE");
-  const [isHidden, setIsHidden] = useState(eventIsHidden === "true");
+  const [isHidden, setIsHidden] = useState(eventIsHidden !== undefined ? eventIsHidden === "true" : true);
   const [isVideoMeeting, setIsVideoMeeting] = useState(eventIsVideoMeeting === "true");
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
@@ -455,19 +455,19 @@ export default function CreateEventScreen() {
           </>
         ) : null}
 
-        {/* Hidden toggle */}
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: "white", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 14, borderWidth: 1.5, borderColor: isHidden ? "#94A3B8" : "#E2E8F0" }}>
+        {/* Visibility toggle */}
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: "white", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 14, borderWidth: 1.5, borderColor: !isHidden ? "#4361EE" : "#E2E8F0" }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-            <UserRound size={18} color={isHidden ? "#64748B" : "#CBD5E1"} />
+            <Users size={18} color={!isHidden ? "#4361EE" : "#CBD5E1"} />
             <View>
-              <Text style={{ fontSize: 14, fontWeight: "600", color: "#0F172A" }}>Incognito</Text>
-              <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 1 }}>Only visible to you</Text>
+              <Text style={{ fontSize: 14, fontWeight: "600", color: "#0F172A" }}>Public</Text>
+              <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 1 }}>{!isHidden ? "Visible to the whole team" : "Only visible to you"}</Text>
             </View>
           </View>
           <Switch
-            value={isHidden}
-            onValueChange={setIsHidden}
-            trackColor={{ false: "#E2E8F0", true: "#64748B" }}
+            value={!isHidden}
+            onValueChange={(v) => setIsHidden(!v)}
+            trackColor={{ false: "#E2E8F0", true: "#4361EE" }}
             thumbColor="white"
             testID="hidden-toggle"
           />
