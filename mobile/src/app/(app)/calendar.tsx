@@ -12,7 +12,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { ChevronLeft, ChevronRight, Plus, Calendar, UserRound, Video } from "lucide-react-native";
+import { ChevronLeft, ChevronRight, Plus, Calendar, UserRound, Video, Lock, Globe } from "lucide-react-native";
 import { router } from "expo-router";
 import { api } from "@/lib/api/api";
 import { useTeamStore } from "@/lib/state/team-store";
@@ -388,7 +388,7 @@ export default function CalendarScreen() {
                           }}
                         >
                           <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 3 }}>
-                            {bar.isHidden ? <UserRound size={10} color="white" style={{ marginRight: 2 }} /> : null}
+                            {bar.isHidden ? <Lock size={8} color="white" style={{ marginRight: 2 }} /> : null}
                             {bar.isVideoMeeting ? <Video size={9} color="white" style={{ marginRight: 2 }} /> : null}
                             <Text style={{ color: "white", fontSize: 9, fontWeight: "600", lineHeight: 13, flex: 1 }} numberOfLines={1}>
                               {bar.title}
@@ -460,21 +460,26 @@ export default function CalendarScreen() {
                         router.push({ pathname: "/create-event", params: { teamId: activeTeamId!, eventId: event.id, eventTitle: event.title, eventDescription: event.description ?? "", eventColor: event.color, startDate: event.startDate, eventEndDate: event.endDate ?? event.startDate, eventIsHidden: String(event.isHidden ?? false), eventIsVideoMeeting: String(event.isVideoMeeting ?? false) } });
                       }
                     }}
-                    style={{ backgroundColor: "white", borderRadius: 14, padding: 14, borderLeftWidth: 4, borderLeftColor: event.color, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 4, shadowOffset: { width: 0, height: 1 }, elevation: 1 }}
+                    style={{ backgroundColor: event.isHidden ? "#F8FAFC" : "white", borderRadius: 14, padding: 14, borderLeftWidth: 4, borderLeftColor: event.isHidden ? "#94A3B8" : event.color, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 4, shadowOffset: { width: 0, height: 1 }, elevation: 1 }}
                     testID={`event-item-${event.id}`}
                   >
                     <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                      <View style={{ flexDirection: "row", alignItems: "center", flex: 1 }}>
-                        <Text style={{ fontSize: 14, fontWeight: "700", color: "#0F172A", flex: 1 }} numberOfLines={1}>{event.title}</Text>
-                        {event.isVideoMeeting ? <Video size={13} color="#4361EE" style={{ marginLeft: 4 }} /> : null}
-                        {event.isHidden ? <UserRound size={13} color="#94A3B8" style={{ marginLeft: 4 }} /> : null}
+                      <View style={{ flexDirection: "row", alignItems: "center", flex: 1, gap: 6 }}>
+                        <Text style={{ fontSize: 14, fontWeight: "700", color: event.isHidden ? "#64748B" : "#0F172A", flex: 1 }} numberOfLines={1}>{event.title}</Text>
+                        {event.isVideoMeeting ? <Video size={13} color="#4361EE" /> : null}
                       </View>
-                      <View style={{ backgroundColor: event.color + "20", paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 }}>
-                        <Text style={{ fontSize: 10, fontWeight: "600", color: event.color }}>
-                          {event.endDate && !isSameDay(new Date(event.startDate), new Date(event.endDate))
-                            ? `${new Date(event.startDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${new Date(event.endDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
-                            : "Event"}
-                        </Text>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: event.isHidden ? "#E2E8F0" : "#DCFCE7", paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10 }}>
+                          {event.isHidden ? <Lock size={9} color="#64748B" /> : <Globe size={9} color="#16A34A" />}
+                          <Text style={{ fontSize: 10, fontWeight: "700", color: event.isHidden ? "#64748B" : "#16A34A" }}>{event.isHidden ? "Private" : "Public"}</Text>
+                        </View>
+                        <View style={{ backgroundColor: event.color + "20", paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 }}>
+                          <Text style={{ fontSize: 10, fontWeight: "600", color: event.color }}>
+                            {event.endDate && !isSameDay(new Date(event.startDate), new Date(event.endDate))
+                              ? `${new Date(event.startDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${new Date(event.endDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
+                              : "Event"}
+                          </Text>
+                        </View>
                       </View>
                     </View>
                     {!event.allDay ? (

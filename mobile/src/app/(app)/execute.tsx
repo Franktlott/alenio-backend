@@ -18,7 +18,7 @@ import {
 } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams, Redirect, useFocusEffect } from "expo-router";
-import { Plus, User, Users, ArrowUpDown, ChevronLeft, ChevronRight, X, CalendarDays, CheckSquare, Calendar, Check, UserRound, Video, VideoOff, Clock } from "lucide-react-native";
+import { Plus, User, Users, ArrowUpDown, ChevronLeft, ChevronRight, X, CalendarDays, CheckSquare, Calendar, Check, UserRound, Video, VideoOff, Clock, Lock, Globe } from "lucide-react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -1071,13 +1071,17 @@ export default function TasksScreen() {
                     key={ev.id}
                     onLongPress={isOwnerOrLeader && !isDemo ? () => openEditEventModal(ev) : undefined}
                     delayLongPress={400}
-                    style={{ backgroundColor: `${ev.color}18`, borderRadius: 12, padding: 12, minWidth: 180, flexDirection: "row", alignItems: "center", gap: 8 }}
+                    style={{ backgroundColor: ev.isHidden ? "#F8FAFC" : `${ev.color}18`, borderRadius: 12, padding: 12, minWidth: 180, flexDirection: "row", alignItems: "center", gap: 8 }}
                   >
-                    <View style={{ width: 3, borderRadius: 2, alignSelf: "stretch", backgroundColor: ev.color }} />
+                    <View style={{ width: 3, borderRadius: 2, alignSelf: "stretch", backgroundColor: ev.isHidden ? "#94A3B8" : ev.color }} />
                     <View style={{ flex: 1 }}>
                       <View style={{ flexDirection: "row", alignItems: "center", gap: 5, marginBottom: 2 }}>
                         {ev.isVideoMeeting ? <Video size={12} color="#4361EE" /> : null}
-                        <Text style={{ fontSize: 13, fontWeight: "600", color: "#0F172A", flex: 1 }} numberOfLines={1}>{ev.title}</Text>
+                        <Text style={{ fontSize: 13, fontWeight: "600", color: ev.isHidden ? "#64748B" : "#0F172A", flex: 1 }} numberOfLines={1}>{ev.title}</Text>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 2, backgroundColor: ev.isHidden ? "#E2E8F0" : "#DCFCE7", paddingHorizontal: 5, paddingVertical: 1, borderRadius: 6 }}>
+                          {ev.isHidden ? <Lock size={8} color="#64748B" /> : <Globe size={8} color="#16A34A" />}
+                          <Text style={{ fontSize: 9, fontWeight: "700", color: ev.isHidden ? "#64748B" : "#16A34A" }}>{ev.isHidden ? "Private" : "Public"}</Text>
+                        </View>
                       </View>
                       <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
                         <CalendarDays size={10} color="#64748B" />
