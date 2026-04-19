@@ -131,9 +131,9 @@ export async function sendPushToUsers(
   console.log(`[push] DB found ${users.length}/${userIds.length} users with token${prefKey ? ` + ${prefKey}=true` : ""}`);
 
   const TONE_MAP: Record<string, { channelId: string; sound: string }> = {
-    bell:   { channelId: "alenio_bell",   sound: "bell" },
-    chime:  { channelId: "alenio_chime",  sound: "chime" },
-    alert:  { channelId: "alenio_alert",  sound: "alert" },
+    bell:   { channelId: "alenio_bell",   sound: "bell.wav" },
+    chime:  { channelId: "alenio_chime",  sound: "chime.wav" },
+    alert:  { channelId: "alenio_alert",  sound: "alert.wav" },
     silent: { channelId: "alenio_silent", sound: "none" },
   };
   const DEFAULT_TONE = { channelId: "alenio_main", sound: "default" };

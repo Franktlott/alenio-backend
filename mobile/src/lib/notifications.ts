@@ -92,6 +92,10 @@ Notifications.setNotificationHandler({
 async function setupAndroidChannels() {
   if (Platform.OS !== "android") return;
 
+  // Delete before recreating — Android locks channel settings (incl. sound) on first creation.
+  const channelIds = ["alenio_main", "alenio_bell", "alenio_chime", "alenio_alert", "alenio_silent"];
+  await Promise.all(channelIds.map((id) => Notifications.deleteNotificationChannelAsync(id)));
+
   await Notifications.setNotificationChannelAsync("alenio_main", {
     name: "Default",
     importance: Notifications.AndroidImportance.MAX,
