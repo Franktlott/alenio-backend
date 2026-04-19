@@ -83,8 +83,9 @@ export async function sendPushNotifications(messages: PushPayload[]): Promise<vo
     chunks.map(async (chunk) => {
       try {
         await sendPushChunkStrict(chunk);
+        console.log(`[push] ✅ Sent ${chunk.length} notification(s) to Expo successfully`);
       } catch (err) {
-        console.error("[push] Failed to send push notifications:", err);
+        console.error("[push] ❌ Failed to send push notifications:", err);
       }
     })
   );
@@ -109,7 +110,11 @@ export async function sendPushToUsers(
   data?: Record<string, unknown>,
   prefKey?: NotifPrefKey
 ): Promise<void> {
-  if (userIds.length === 0) return;
+  console.log(`[push] sendPushToUsers — userIds: ${userIds.length}, prefKey: ${prefKey ?? "none"}, title: "${title}"`);
+  if (userIds.length === 0) {
+    console.log("[push] No userIds provided, skipping");
+    return;
+  }
 
   const where: Record<string, unknown> = {
     id: { in: userIds },
@@ -123,6 +128,7 @@ export async function sendPushToUsers(
     where,
     select: { pushToken: true, notifTone: true },
   });
+  console.log(`[push] DB found ${users.length}/${userIds.length} users with token${prefKey ? ` + ${prefKey}=true` : ""}`);
 
   const TONE_MAP: Record<string, { channelId: string; sound: string }> = {
     bell:   { channelId: "alenio_bell",   sound: "bell" },
@@ -138,6 +144,7 @@ export async function sendPushToUsers(
       const { channelId, sound } = TONE_MAP[u.notifTone ?? ""] ?? DEFAULT_TONE;
       return { token: u.pushToken!, title, body, data, sound, channelId };
     });
+  console.log(`[push] Sending ${messages.length} message(s) after token format filter`);
 
   await sendPushNotifications(messages);
 }
