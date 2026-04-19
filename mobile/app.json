@@ -3,7 +3,7 @@
     "name": "Alenio",
     "slug": "alenio",
     "scheme": "vibecode",
-    "version": "1.0.2",
+    "version": "1.0.02",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -25,7 +25,6 @@
         "NSMicrophoneUsageDescription": "Alenio uses the microphone to record audio clips that stay with your in-app creations.",
         "NSPhotoLibraryUsageDescription": "Alenio accesses your photo library to generate thumbnails for your videos.",
         "UIBackgroundModes": [
-          "remote-notification",
           "remote-notification"
         ],
         "NSPhotoLibraryAddUsageDescription": "Alenio saves media you export from the app into your photo library.",
