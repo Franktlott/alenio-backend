@@ -890,18 +890,6 @@ export default function ProfileScreen() {
               <Text className="text-sm font-semibold text-indigo-600">Check backend token status</Text>
             </Pressable>
             <Pressable
-              onPress={handleSendTestPush}
-              disabled={pushDebugLoading}
-              className="px-4 py-3.5 border-b border-slate-100/60"
-              testID="send-test-push-button"
-            >
-              {pushDebugLoading ? (
-                <ActivityIndicator size="small" color="#4361EE" />
-              ) : (
-                <Text className="text-sm font-semibold text-indigo-600">Send test push</Text>
-              )}
-            </Pressable>
-            <Pressable
               onPress={handleDirectTestPush}
               disabled={pushDebugLoading}
               className="px-4 py-3.5 border-b border-slate-100/60"
@@ -910,7 +898,7 @@ export default function ProfileScreen() {
               {pushDebugLoading ? (
                 <ActivityIndicator size="small" color="#4361EE" />
               ) : (
-                <Text className="text-sm font-semibold text-indigo-600">Send direct test push (bypass backend)</Text>
+                <Text className="text-sm font-semibold text-indigo-600">Test push</Text>
               )}
             </Pressable>
             <Pressable
