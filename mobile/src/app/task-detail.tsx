@@ -182,7 +182,7 @@ export default function TaskDetailScreen() {
             <ArrowLeft size={22} color="white" />
           </TouchableOpacity>
           <Text style={{ flex: 1, marginLeft: 12, color: "white", fontSize: 18, fontWeight: "700" }} numberOfLines={1}>
-            {task.incognito ? "🕵️ " : ""}{task.title}
+            {task.incognito ? "🕵️ " : ""}{task.isJoint ? "🤝 " : ""}{task.title}
           </Text>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
             {canEdit && isEditMode ? (

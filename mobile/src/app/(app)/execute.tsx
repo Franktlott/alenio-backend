@@ -481,6 +481,7 @@ function TaskRow({ task, onToggle, onPress, onLongPress }: { task: Task; onToggl
           <View style={{ flex: 1, marginRight: 6 }}>
             <View style={{ flexDirection: "row", alignItems: "center" }}>
               {task.incognito ? <Text style={{ fontSize: 12, marginRight: 3 }}>🕵️</Text> : null}
+              {task.isJoint ? <Text style={{ fontSize: 12, marginRight: 3 }}>🤝</Text> : null}
               <Text
                 numberOfLines={2}
                 style={{
