@@ -132,6 +132,13 @@ export interface TaskTemplate {
   createdAt: string;
   attachmentUrl?: string | null;
   subtasks?: { title: string; order: number }[];
+  isRecurring?: boolean;
+  recurrenceType?: RecurrenceType | null;
+  recurrenceInterval?: number | null;
+  recurrenceDaysOfWeek?: string | null;
+  recurrenceDayOfMonth?: number | null;
+  incognito?: boolean;
+  isJoint?: boolean;
 }
 
 export interface CalendarEvent {

@@ -55,6 +55,13 @@ const createTemplateSchema = z.object({
     .array(z.object({ title: z.string(), order: z.number() }))
     .optional()
     .nullable(),
+  isRecurring: z.boolean().optional(),
+  recurrenceType: z.enum(["daily", "weekly", "monthly"]).optional().nullable(),
+  recurrenceInterval: z.number().int().positive().optional().nullable(),
+  recurrenceDaysOfWeek: z.string().optional().nullable(),
+  recurrenceDayOfMonth: z.number().int().optional().nullable(),
+  incognito: z.boolean().optional(),
+  isJoint: z.boolean().optional(),
 });
 
 // POST /api/teams/:teamId/templates
@@ -70,7 +77,7 @@ templatesRouter.post(
       return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
     }
 
-    const { title, description, priority, attachmentUrl, subtasks } = c.req.valid("json");
+    const { title, description, priority, attachmentUrl, subtasks, isRecurring, recurrenceType, recurrenceInterval, recurrenceDaysOfWeek, recurrenceDayOfMonth, incognito, isJoint } = c.req.valid("json");
 
     const template = await prisma.taskTemplate.create({
       data: {
@@ -79,6 +86,13 @@ templatesRouter.post(
         priority: priority ?? "medium",
         attachmentUrl: attachmentUrl ?? null,
         subtasks: subtasks ? JSON.stringify(subtasks) : null,
+        isRecurring: isRecurring ?? false,
+        recurrenceType: recurrenceType ?? null,
+        recurrenceInterval: recurrenceInterval ?? null,
+        recurrenceDaysOfWeek: recurrenceDaysOfWeek ?? null,
+        recurrenceDayOfMonth: recurrenceDayOfMonth ?? null,
+        incognito: incognito ?? false,
+        isJoint: isJoint ?? false,
         teamId,
         createdById: user.id,
       },
@@ -100,6 +114,13 @@ const updateTemplateSchema = z.object({
     .array(z.object({ title: z.string(), order: z.number() }))
     .optional()
     .nullable(),
+  isRecurring: z.boolean().optional(),
+  recurrenceType: z.enum(["daily", "weekly", "monthly"]).optional().nullable(),
+  recurrenceInterval: z.number().int().positive().optional().nullable(),
+  recurrenceDaysOfWeek: z.string().optional().nullable(),
+  recurrenceDayOfMonth: z.number().int().optional().nullable(),
+  incognito: z.boolean().optional(),
+  isJoint: z.boolean().optional(),
 });
 
 // PATCH /api/teams/:teamId/templates/:templateId
@@ -128,7 +149,7 @@ templatesRouter.patch(
       return c.json({ error: { message: "Only the creator can update this template", code: "FORBIDDEN" } }, 403);
     }
 
-    const { title, description, priority, attachmentUrl, subtasks } = c.req.valid("json");
+    const { title, description, priority, attachmentUrl, subtasks, isRecurring, recurrenceType, recurrenceInterval, recurrenceDaysOfWeek, recurrenceDayOfMonth, incognito, isJoint } = c.req.valid("json");
 
     const updated = await prisma.taskTemplate.update({
       where: { id: templateId },
@@ -138,6 +159,13 @@ templatesRouter.patch(
         ...(priority !== undefined && { priority }),
         ...(attachmentUrl !== undefined && { attachmentUrl: attachmentUrl ?? null }),
         ...(subtasks !== undefined && { subtasks: subtasks ? JSON.stringify(subtasks) : null }),
+        ...(isRecurring !== undefined && { isRecurring }),
+        ...(recurrenceType !== undefined && { recurrenceType: recurrenceType ?? null }),
+        ...(recurrenceInterval !== undefined && { recurrenceInterval: recurrenceInterval ?? null }),
+        ...(recurrenceDaysOfWeek !== undefined && { recurrenceDaysOfWeek: recurrenceDaysOfWeek ?? null }),
+        ...(recurrenceDayOfMonth !== undefined && { recurrenceDayOfMonth: recurrenceDayOfMonth ?? null }),
+        ...(incognito !== undefined && { incognito }),
+        ...(isJoint !== undefined && { isJoint }),
       },
       include: {
         createdBy: { select: { id: true, name: true, email: true, image: true } },

@@ -116,6 +116,17 @@ export default function CreateTaskScreen() {
     if (t.subtasks && t.subtasks.length > 0) {
       setSubtaskTitles(t.subtasks.map((s) => s.title));
     }
+    if (t.isRecurring) {
+      setIsRecurring(true);
+      if (t.recurrenceType) setRecurrenceType(t.recurrenceType);
+      if (t.recurrenceInterval) setRecurrenceInterval(String(t.recurrenceInterval));
+      if (t.recurrenceDaysOfWeek != null) setSelectedDayOfWeek(parseInt(t.recurrenceDaysOfWeek));
+      if (t.recurrenceDayOfMonth != null) setSelectedDayOfMonth(t.recurrenceDayOfMonth);
+    } else {
+      setIsRecurring(false);
+    }
+    setIsIncognito(t.incognito ?? false);
+    setIsJoint(t.isJoint ?? false);
     setShowTemplatePicker(false);
   };
 
@@ -126,20 +137,43 @@ export default function CreateTaskScreen() {
     }
     setSavingTemplate(true);
     try {
+      let templateAttachmentUrl: string | undefined;
+      if (attachmentUri) {
+        if (attachmentUri.startsWith("file://") || attachmentUri.startsWith("/")) {
+          setUploadingPhoto(true);
+          const filename = attachmentUri.split("/").pop() ?? "photo.jpg";
+          const uploaded = await uploadFile(attachmentUri, filename, "image/jpeg");
+          templateAttachmentUrl = uploaded.url;
+          setUploadingPhoto(false);
+        } else {
+          templateAttachmentUrl = attachmentUri;
+        }
+      }
       await api.post(`/api/teams/${teamId}/templates`, {
         title: title.trim(),
         description: description.trim() || undefined,
         priority,
-        attachmentUrl: attachmentUri || undefined,
+        attachmentUrl: templateAttachmentUrl || undefined,
         subtasks: subtaskTitles.map((s, i) => ({ title: s, order: i })),
+        isRecurring,
+        recurrenceType: isRecurring ? recurrenceType : undefined,
+        recurrenceInterval: isRecurring ? parseInt(recurrenceInterval) || 1 : undefined,
+        recurrenceDaysOfWeek: isRecurring && recurrenceType === "weekly" && selectedDayOfWeek !== null
+          ? String(selectedDayOfWeek)
+          : undefined,
+        recurrenceDayOfMonth: isRecurring && recurrenceType === "monthly" && selectedDayOfMonth !== null
+          ? selectedDayOfMonth
+          : undefined,
+        incognito: isIncognito,
+        isJoint,
       });
       queryClient.invalidateQueries({ queryKey: ["templates", teamId] });
       setError(null);
-      // Show a brief visual cue via the icon
     } catch {
       setError("Failed to save template");
     } finally {
       setSavingTemplate(false);
+      setUploadingPhoto(false);
     }
   };
 
