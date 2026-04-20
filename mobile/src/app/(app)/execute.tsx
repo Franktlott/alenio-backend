@@ -1629,21 +1629,21 @@ export default function TasksScreen() {
                     </View>
                   </View>
                   {showStartTimePicker ? (
-                    <View style={{ backgroundColor: "#F8FAFC", borderRadius: 14, marginTop: 8, overflow: "hidden", borderWidth: 1, borderColor: "#E2E8F0" }}>
+                    <View style={{ backgroundColor: "#F8FAFC", borderRadius: 14, marginTop: 8, borderWidth: 1, borderColor: "#E2E8F0" }}>
                       <View style={{ flexDirection: "row", justifyContent: "space-between", paddingHorizontal: 16, paddingTop: 10, paddingBottom: 4 }}>
                         <Text style={{ fontSize: 13, fontWeight: "600", color: "#64748B" }}>Start Time</Text>
                         <Pressable onPress={() => setShowStartTimePicker(false)}><Text style={{ fontSize: 13, fontWeight: "700", color: "#4361EE" }}>Done</Text></Pressable>
                       </View>
-                      <DateTimePicker value={eventStart} mode="time" display="spinner" onChange={(_e, d) => { if (d) setEventStart(prev => { const n = new Date(prev); n.setHours(d.getHours(), d.getMinutes()); return n; }); }} style={{ alignSelf: "center" }} />
+                      <DateTimePicker value={eventStart} mode="time" display="spinner" onChange={(_e, d) => { if (d) setEventStart(prev => { const n = new Date(prev); n.setHours(d.getHours(), d.getMinutes()); return n; }); }} style={{ height: 216 }} />
                     </View>
                   ) : null}
                   {showEndTimePicker ? (
-                    <View style={{ backgroundColor: "#F8FAFC", borderRadius: 14, marginTop: 8, overflow: "hidden", borderWidth: 1, borderColor: "#E2E8F0" }}>
+                    <View style={{ backgroundColor: "#F8FAFC", borderRadius: 14, marginTop: 8, borderWidth: 1, borderColor: "#E2E8F0" }}>
                       <View style={{ flexDirection: "row", justifyContent: "space-between", paddingHorizontal: 16, paddingTop: 10, paddingBottom: 4 }}>
                         <Text style={{ fontSize: 13, fontWeight: "600", color: "#64748B" }}>End Time</Text>
                         <Pressable onPress={() => setShowEndTimePicker(false)}><Text style={{ fontSize: 13, fontWeight: "700", color: "#7C3AED" }}>Done</Text></Pressable>
                       </View>
-                      <DateTimePicker value={eventEnd} mode="time" display="spinner" onChange={(_e, d) => { if (d) setEventEnd(prev => { const n = new Date(prev); n.setHours(d.getHours(), d.getMinutes()); return n; }); }} style={{ alignSelf: "center" }} />
+                      <DateTimePicker value={eventEnd} mode="time" display="spinner" onChange={(_e, d) => { if (d) setEventEnd(prev => { const n = new Date(prev); n.setHours(d.getHours(), d.getMinutes()); return n; }); }} style={{ height: 216 }} />
                     </View>
                   ) : null}
                 </View>
