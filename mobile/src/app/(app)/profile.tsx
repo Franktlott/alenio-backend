@@ -1038,7 +1038,7 @@ export default function ProfileScreen() {
             >
               <Text className="text-sm text-slate-400">Delete Account</Text>
             </TouchableOpacity>
-            <Text className="text-xs text-slate-400 text-center px-6">For God so loved the world that he gave his one and only Son, that whoever believes in him shall not perish but have eternal life.</Text>
+            <Text className="text-xs text-slate-400 text-center">John 3:16</Text>
           </View>
         )}
 
