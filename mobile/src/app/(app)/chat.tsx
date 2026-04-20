@@ -217,7 +217,7 @@ export default function ChatScreen() {
             </View>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
               {teamChatUnreadCount > 0 ? (
-                <View style={{ backgroundColor: "#4361EE", borderRadius: 10, minWidth: 20, height: 20, alignItems: "center", justifyContent: "center", paddingHorizontal: 6 }}>
+                <View style={{ backgroundColor: "#EF4444", borderRadius: 10, minWidth: 20, height: 20, alignItems: "center", justifyContent: "center", paddingHorizontal: 6 }}>
                   <Text style={{ color: "white", fontSize: 11, fontWeight: "700" }}>{teamChatUnreadCount}</Text>
                 </View>
               ) : null}
@@ -300,7 +300,7 @@ export default function ChatScreen() {
                           : "No messages yet"}
                       </Text>
                       {unreadCount > 0 ? (
-                        <View style={{ backgroundColor: "#4361EE", borderRadius: 10, minWidth: 20, height: 20, alignItems: "center", justifyContent: "center", paddingHorizontal: 6, marginLeft: 8, flexShrink: 0 }}>
+                        <View style={{ backgroundColor: "#EF4444", borderRadius: 10, minWidth: 20, height: 20, alignItems: "center", justifyContent: "center", paddingHorizontal: 6, marginLeft: 8, flexShrink: 0 }}>
                           <Text style={{ color: "white", fontSize: 11, fontWeight: "700" }}>{unreadCount}</Text>
                         </View>
                       ) : null}

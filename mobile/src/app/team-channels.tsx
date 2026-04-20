@@ -222,7 +222,7 @@ export default function TeamChannelsScreen() {
             </View>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
               {teamChatUnreadCount > 0 ? (
-                <View style={{ backgroundColor: "#4361EE", borderRadius: 10, minWidth: 20, height: 20, alignItems: "center", justifyContent: "center", paddingHorizontal: 6 }}>
+                <View style={{ backgroundColor: "#EF4444", borderRadius: 10, minWidth: 20, height: 20, alignItems: "center", justifyContent: "center", paddingHorizontal: 6 }}>
                   <Text style={{ color: "white", fontSize: 11, fontWeight: "700" }}>{teamChatUnreadCount}</Text>
                 </View>
               ) : null}
@@ -300,7 +300,7 @@ export default function TeamChannelsScreen() {
                           <Text style={{ fontSize: 11, fontWeight: "600", color: "#64748B" }}>{topic.description}</Text>
                         </View>
                       ) : unread > 0 ? (
-                        <View style={{ backgroundColor: "#4361EE", borderRadius: 10, minWidth: 20, height: 20, alignItems: "center", justifyContent: "center", paddingHorizontal: 6 }}>
+                        <View style={{ backgroundColor: "#EF4444", borderRadius: 10, minWidth: 20, height: 20, alignItems: "center", justifyContent: "center", paddingHorizontal: 6 }}>
                           <Text style={{ color: "white", fontSize: 11, fontWeight: "700" }}>{unread}</Text>
                         </View>
                       ) : null}
