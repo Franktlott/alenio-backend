@@ -580,6 +580,7 @@ export default function TasksScreen() {
   const [teamCompletedExpanded, setTeamCompletedExpanded] = useState(false);
   const [confirmCompleteTask, setConfirmCompleteTask] = useState<Task | null>(null);
   const [reassignTask, setReassignTask] = useState<Task | null>(null);
+  const [confirmReassign, setConfirmReassign] = useState<{ task: Task; newUserId: string; newUserName: string } | null>(null);
   const [subtaskBlockMessage, setSubtaskBlockMessage] = useState<string | null>(null);
   const [confirmDeleteEvent, setConfirmDeleteEvent] = useState(false);
   const [milestoneModal, setMilestoneModal] = useState<{ count: number; userName: string } | null>(null);
@@ -1333,7 +1334,7 @@ export default function TasksScreen() {
                 .map((member) => (
                   <Pressable
                     key={member.userId}
-                    onPress={() => reassignTask && reassignMutation.mutate({ task: reassignTask, newUserId: member.userId })}
+                    onPress={() => reassignTask && setConfirmReassign({ task: reassignTask, newUserId: member.userId, newUserName: member.user?.name ?? "this person" })}
                     style={{ flexDirection: "row", alignItems: "center", gap: 12, padding: 12, borderRadius: 12, backgroundColor: "#F8FAFC" }}
                     testID="reassign-member-row"
                   >
@@ -1361,6 +1362,44 @@ export default function TasksScreen() {
             >
               <Text style={{ fontSize: 15, fontWeight: "600", color: "#64748B" }}>Cancel</Text>
             </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Reassign confirmation modal */}
+      <Modal visible={!!confirmReassign} transparent animationType="fade" onRequestClose={() => setConfirmReassign(null)}>
+        <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.55)", justifyContent: "center", alignItems: "center", paddingHorizontal: 24 }} onPress={() => setConfirmReassign(null)}>
+          <Pressable onPress={(e) => e.stopPropagation()} style={{ backgroundColor: "white", borderRadius: 20, width: "100%", padding: 24 }}>
+            <Text style={{ fontSize: 17, fontWeight: "700", color: "#0F172A", marginBottom: 6 }}>Reassign Task?</Text>
+            <Text style={{ fontSize: 14, color: "#64748B", marginBottom: 4 }} numberOfLines={2}>
+              {`"${confirmReassign?.task.title}"`}
+            </Text>
+            <Text style={{ fontSize: 14, color: "#64748B", marginBottom: 20 }}>
+              {"Will be reassigned to "}
+              <Text style={{ fontWeight: "700", color: "#0F172A" }}>{confirmReassign?.newUserName}</Text>
+              {"."}
+            </Text>
+            <View style={{ flexDirection: "row", gap: 10 }}>
+              <Pressable
+                onPress={() => setConfirmReassign(null)}
+                style={{ flex: 1, paddingVertical: 13, borderRadius: 12, alignItems: "center", backgroundColor: "#F1F5F9" }}
+                testID="reassign-confirm-cancel"
+              >
+                <Text style={{ fontSize: 15, fontWeight: "600", color: "#64748B" }}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  if (!confirmReassign) return;
+                  reassignMutation.mutate({ task: confirmReassign.task, newUserId: confirmReassign.newUserId });
+                  setConfirmReassign(null);
+                  setReassignTask(null);
+                }}
+                style={{ flex: 1, paddingVertical: 13, borderRadius: 12, alignItems: "center", backgroundColor: "#4361EE" }}
+                testID="reassign-confirm-submit"
+              >
+                <Text style={{ fontSize: 15, fontWeight: "600", color: "white" }}>Reassign</Text>
+              </Pressable>
+            </View>
           </Pressable>
         </Pressable>
       </Modal>
