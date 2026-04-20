@@ -1505,7 +1505,7 @@ export default function TasksScreen() {
             ) : null}
 
             <ScrollView
-              style={{ paddingHorizontal: 20 }}
+              style={{ flex: 1, paddingHorizontal: 20 }}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
               contentContainerStyle={{ paddingBottom: 40 }}
