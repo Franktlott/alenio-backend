@@ -21,9 +21,9 @@
         "aps-environment": "production"
       },
       "infoPlist": {
-        "NSCameraUsageDescription": "Alenio uses the camera to capture photos inside the app before you publish them.",
-        "NSMicrophoneUsageDescription": "Alenio uses the microphone to record audio clips that stay with your in-app creations.",
-        "NSPhotoLibraryUsageDescription": "Alenio accesses your photo library to generate thumbnails for your videos.",
+        "NSCameraUsageDescription": "Alenio uses the camera to take photos for messages and to scan team invite QR codes.",
+        "NSMicrophoneUsageDescription": "Alenio uses the microphone so you can speak during team video calls.",
+        "NSPhotoLibraryUsageDescription": "Alenio accesses your photos to share images in chat and set profile and team pictures.",
         "UIBackgroundModes": [
           "remote-notification"
         ],
@@ -43,9 +43,17 @@
       "expo-router",
       "expo-camera",
       [
+        "expo-media-library",
+        {
+          "photosPermission": "Alenio accesses your photos to share images in chat and set profile and team pictures.",
+          "savePhotosPermission": "Alenio saves media you download from messages into your photo library.",
+          "isAccessMediaLocationEnabled": false
+        }
+      ],
+      [
         "expo-image-picker",
         {
-          "photosPermission": "Alenio accesses your photos to share images in chats."
+          "photosPermission": "Alenio accesses your photos to share images in chat and set profile and team pictures."
         }
       ],
       [
