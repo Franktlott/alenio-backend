@@ -14,6 +14,15 @@ type Variables = {
 const tasksRouter = new Hono<{ Variables: Variables }>();
 tasksRouter.use("*", authGuard);
 
+const subtasksInclude = {
+  orderBy: { order: "asc" as const },
+  include: {
+    completions: {
+      include: { user: { select: { id: true, name: true, image: true } } },
+    },
+  },
+};
+
 // Helper: compute next due date for recurrence
 function getNextDueDate(
   type: string,
@@ -193,7 +202,7 @@ tasksRouter.get("/", async (c) => {
       assignments: {
         include: { user: { select: { id: true, name: true, email: true, image: true } } },
       },
-      subtasks: { orderBy: { order: 'asc' } },
+      subtasks: subtasksInclude,
       recurrenceRule: true,
       creator: { select: { id: true, name: true, email: true } },
     },
@@ -225,7 +234,7 @@ tasksRouter.post("/", async (c) => {
 
   const taskInclude = {
     assignments: { include: { user: { select: { id: true, name: true, email: true, image: true } } } },
-    subtasks: { orderBy: { order: 'asc' } },
+    subtasks: subtasksInclude,
     recurrenceRule: true,
     creator: { select: { id: true, name: true, email: true } },
   } as const;
@@ -516,7 +525,7 @@ tasksRouter.get("/:taskId", async (c) => {
     where: { id: taskId, teamId },
     include: {
       assignments: { include: { user: { select: { id: true, name: true, email: true, image: true } } } },
-      subtasks: { orderBy: { order: 'asc' } },
+      subtasks: subtasksInclude,
       recurrenceRule: true,
       creator: { select: { id: true, name: true, email: true } },
     },
@@ -597,7 +606,7 @@ tasksRouter.patch("/:taskId", async (c) => {
     },
     include: {
       assignments: { include: { user: { select: { id: true, name: true, email: true, image: true } } } },
-      subtasks: { orderBy: { order: 'asc' } },
+      subtasks: subtasksInclude,
       recurrenceRule: true,
       creator: { select: { id: true, name: true, email: true } },
     },
@@ -740,7 +749,7 @@ tasksRouter.post("/:taskId/assign", async (c) => {
     where: { id: taskId },
     include: {
       assignments: { include: { user: { select: { id: true, name: true, email: true, image: true } } } },
-      subtasks: { orderBy: { order: 'asc' } },
+      subtasks: subtasksInclude,
       recurrenceRule: true,
       creator: { select: { id: true, name: true, email: true } },
     },
@@ -828,12 +837,32 @@ tasksRouter.patch("/:taskId/subtasks/:subtaskId", async (c) => {
   if (task.status === "done") return c.json({ error: { message: "Task is completed. Recall it before making edits.", code: "TASK_COMPLETED" } }, 400);
 
   const body = await c.req.json();
+
+  // For joint tasks toggling completion: track per-user via SubtaskCompletion
+  if (task.isJoint && body.completed !== undefined) {
+    if (body.completed) {
+      await prisma.subtaskCompletion.upsert({
+        where: { subtaskId_userId: { subtaskId, userId: user.id } },
+        create: { subtaskId, userId: user.id },
+        update: {},
+      });
+    } else {
+      await prisma.subtaskCompletion.deleteMany({ where: { subtaskId, userId: user.id } });
+    }
+    const subtask = await prisma.subtask.findUnique({
+      where: { id: subtaskId },
+      include: subtasksInclude.include,
+    });
+    return c.json({ data: subtask });
+  }
+
   const subtask = await prisma.subtask.update({
     where: { id: subtaskId },
     data: {
       ...(body.title !== undefined ? { title: body.title.trim() } : {}),
       ...(body.completed !== undefined ? { completed: body.completed } : {}),
     },
+    include: subtasksInclude.include,
   });
   return c.json({ data: subtask });
 });

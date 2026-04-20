@@ -19,7 +19,7 @@ import { ArrowLeft, Trash2, RefreshCw, UserPlus, X, Check, Plus, Square, CheckSq
 import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
 import { toast } from "burnt";
-import type { Task, TaskStatus, Team, Subtask } from "@/lib/types";
+import type { Task, TaskStatus, Team, Subtask, SubtaskCompletion } from "@/lib/types";
 import { useDemoMode } from "@/lib/useDemo";
 
 const STATUS_OPTIONS: { label: string; value: TaskStatus; color: string }[] = [
@@ -115,7 +115,12 @@ export default function TaskDetailScreen() {
       queryClient.invalidateQueries({ queryKey: ["task", taskId, teamId] });
       if (variables.completed && !isCompleted) {
         const subtasks = task?.subtasks ?? [];
-        const incompleteSubtasks = subtasks.filter((s) => !s.completed);
+        const isJointTask = task?.isJoint === true;
+        const incompleteSubtasks = subtasks.filter((s) =>
+          isJointTask
+            ? !(s.completions ?? []).some((c: SubtaskCompletion) => c.userId === currentUserId)
+            : !s.completed
+        );
         if (incompleteSubtasks.length === 1 && incompleteSubtasks[0].id === variables.subtaskId && subtasks.length > 0) {
           setShowDoneConfirm(true);
         }
@@ -286,7 +291,11 @@ export default function TaskDetailScreen() {
                   key={s.value}
                   onPress={() => {
                     if (s.value === "done" && !isCompleted) {
-                      const incomplete = (task.subtasks ?? []).filter((st) => !st.completed);
+                      const incomplete = (task.subtasks ?? []).filter((st) =>
+                        task.isJoint
+                          ? !(st.completions ?? []).some((c: SubtaskCompletion) => c.userId === currentUserId)
+                          : !st.completed
+                      );
                       if (incomplete.length > 0) {
                         setShowSubtaskBlock(true);
                       } else {
@@ -313,7 +322,16 @@ export default function TaskDetailScreen() {
         {/* Subtasks */}
         {(() => {
           const subtasks = task.subtasks ?? [];
-          const completedCount = subtasks.filter((s) => s.completed).length;
+          const isJointTask = task.isJoint === true;
+
+          const isSubtaskDoneForMe = (s: Subtask) =>
+            isJointTask
+              ? (s.completions ?? []).some((c: SubtaskCompletion) => c.userId === currentUserId)
+              : s.completed;
+
+          const completedCount = isJointTask
+            ? subtasks.filter((s) => isSubtaskDoneForMe(s)).length
+            : subtasks.filter((s) => s.completed).length;
           const totalCount = subtasks.length;
           return (
             <View className="mb-4">
@@ -324,26 +342,58 @@ export default function TaskDetailScreen() {
               </View>
               {subtasks.length > 0 && (
                 <View className="mb-2" style={{ gap: 2 }}>
-                  {subtasks.map((subtask) => (
+                  {subtasks.map((subtask) => {
+                    const doneForMe = isSubtaskDoneForMe(subtask);
+                    const completions = subtask.completions ?? [];
+                    return (
                     <TouchableOpacity
                       key={subtask.id}
-                      onPress={() => toggleSubtaskMutation.mutate({ subtaskId: subtask.id, completed: !subtask.completed })}
+                      onPress={() => toggleSubtaskMutation.mutate({ subtaskId: subtask.id, completed: !doneForMe })}
                       disabled={isCompleted || toggleSubtaskMutation.isPending || isDemo}
                       testID={`subtask-toggle-${subtask.id}`}
                       style={{ flexDirection: "row", alignItems: "center", paddingVertical: 10, paddingHorizontal: 4, gap: 10 }}
                       activeOpacity={0.6}
                     >
-                      {subtask.completed ? (
+                      {doneForMe ? (
                         <CheckSquare size={22} color="#10B981" />
                       ) : (
                         <Square size={22} color="#94A3B8" />
                       )}
                       <Text
                         className="flex-1 text-sm text-slate-900 dark:text-white"
-                        style={subtask.completed ? { textDecorationLine: "line-through", color: "#94A3B8" } : undefined}
+                        style={doneForMe ? { textDecorationLine: "line-through", color: "#94A3B8" } : undefined}
                       >
                         {subtask.title}
                       </Text>
+                      {isJointTask && completions.length > 0 ? (
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: -6 }}>
+                          {completions.slice(0, 3).map((c: SubtaskCompletion) => (
+                            <View
+                              key={c.userId}
+                              style={{
+                                width: 22, height: 22, borderRadius: 11,
+                                backgroundColor: "#4361EE",
+                                borderWidth: 1.5, borderColor: "white",
+                                alignItems: "center", justifyContent: "center",
+                                overflow: "hidden",
+                              }}
+                            >
+                              {c.user.image ? (
+                                <Image source={{ uri: c.user.image }} style={{ width: 22, height: 22, borderRadius: 11 }} />
+                              ) : (
+                                <Text style={{ fontSize: 9, fontWeight: "700", color: "white" }}>
+                                  {c.user.name?.charAt(0).toUpperCase() ?? "?"}
+                                </Text>
+                              )}
+                            </View>
+                          ))}
+                          {completions.length > 3 ? (
+                            <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: "#94A3B8", borderWidth: 1.5, borderColor: "white", alignItems: "center", justifyContent: "center" }}>
+                              <Text style={{ fontSize: 8, fontWeight: "700", color: "white" }}>+{completions.length - 3}</Text>
+                            </View>
+                          ) : null}
+                        </View>
+                      ) : null}
                       {isEditable ? (
                         <TouchableOpacity
                           onPress={() => deleteSubtaskMutation.mutate(subtask.id)}
@@ -356,7 +406,8 @@ export default function TaskDetailScreen() {
                         </TouchableOpacity>
                       ) : null}
                     </TouchableOpacity>
-                  ))}
+                    );
+                  })}
                 </View>
               )}
               {isEditable ? (

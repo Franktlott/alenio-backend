@@ -44,6 +44,7 @@ model User {
   activityReactions TeamActivityReaction[]
   pollsCreated  Poll[]     @relation("PollCreatedBy")
   pollVotes     PollVote[] @relation("PollVoteUser")
+  subtaskCompletions SubtaskCompletion[]
 }
 
 model Session {
@@ -161,6 +162,18 @@ model Subtask {
   task        Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
   createdAt   DateTime @default(now())
   order       Int      @default(0)
+  completions SubtaskCompletion[]
+}
+
+model SubtaskCompletion {
+  id          String   @id @default(cuid())
+  subtaskId   String
+  userId      String
+  subtask     Subtask  @relation(fields: [subtaskId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  completedAt DateTime @default(now())
+
+  @@unique([subtaskId, userId])
 }
 
 model TaskAssignment {

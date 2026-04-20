@@ -39,6 +39,14 @@ export interface RecurrenceRule {
   nextDueAt?: string | null;
 }
 
+export interface SubtaskCompletion {
+  id: string;
+  subtaskId: string;
+  userId: string;
+  completedAt: string;
+  user: { id: string; name: string; image?: string | null };
+}
+
 export interface Subtask {
   id: string;
   title: string;
@@ -46,6 +54,7 @@ export interface Subtask {
   taskId: string;
   order: number;
   createdAt: string;
+  completions?: SubtaskCompletion[];
 }
 
 export interface Task {
