@@ -770,7 +770,7 @@ export default function ProfileScreen() {
                     <Text className="text-sm font-semibold text-slate-900 dark:text-white">{item.label}</Text>
                     <Text className="text-xs text-slate-400 mt-0.5">{item.description}</Text>
                   </View>
-                  {isEnabled ? (
+                  {false ? (
                     <Pressable
                       onPress={() => fireTestNotification(item.testTitle, item.testBody)}
                       testID={`notif-test-${item.key}`}
