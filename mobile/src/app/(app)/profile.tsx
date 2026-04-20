@@ -595,20 +595,20 @@ export default function ProfileScreen() {
       </LinearGradient>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 88 }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" colors={["#4361EE"]} />}>
-        {/* Nature photo banner + avatar hero */}
-        <View style={{ alignItems: "center", paddingBottom: 24, paddingHorizontal: 16 }}>
-          {/* Banner image */}
-          <View style={{ width: "100%", height: 160, overflow: "hidden" }}>
-            <Image
-              source={{ uri: natureImageUrl }}
-              style={{ width: "100%", height: 160, resizeMode: "cover" }}
-            />
-            <LinearGradient
-              colors={["transparent", "rgba(248,250,252,0.8)"]}
-              style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 60 }}
-            />
-          </View>
+        {/* Nature photo banner — full bleed */}
+        <View style={{ height: 160, overflow: "hidden" }}>
+          <Image
+            source={{ uri: natureImageUrl }}
+            style={{ width: "100%", height: 160, resizeMode: "cover" }}
+          />
+          <LinearGradient
+            colors={["transparent", "rgba(248,250,252,0.9)"]}
+            style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 70 }}
+          />
+        </View>
 
+        {/* Avatar + name hero */}
+        <View style={{ alignItems: "center", paddingBottom: 24, paddingHorizontal: 16 }}>
           {/* Avatar — pulled up to overlap the banner */}
           <TouchableOpacity
             onPress={handlePhotoPress}
