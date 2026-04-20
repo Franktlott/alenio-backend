@@ -657,7 +657,14 @@ tasksRouter.patch("/:taskId", async (c) => {
       teamId,
       userId: user.id,
       type: "task_completed",
-      metadata: { taskTitle: task.incognito ? null : task.title },
+      metadata: {
+        taskTitle: task.incognito ? null : task.title,
+        assignees: updated.assignments.map((a) => ({
+          id: a.userId,
+          name: a.user.name,
+          image: a.user.image ?? null,
+        })),
+      },
     });
 
     // Notify the task creator if the completer is someone else

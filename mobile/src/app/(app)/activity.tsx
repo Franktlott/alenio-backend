@@ -122,7 +122,7 @@ type ActivityEvent = {
   id: string;
   type: "task_completed" | "member_joined" | "member_removed" | "calendar_event_added" | "task_assigned" | "task_milestone" | "personal_best" | "celebration";
   createdAt: string;
-  metadata: { taskTitle?: string; taskTitles?: string[]; taskCount?: number; eventTitle?: string; eventTitles?: string[]; eventCount?: number; startDate?: string; allDay?: boolean; userName?: string; count?: number; incognito?: boolean; assigneeName?: string; isVideoMeeting?: boolean; targetUserId?: string; targetName?: string; targetUserImage?: string | null; celebrationType?: string; message?: string | null } | null;
+  metadata: { taskTitle?: string; taskTitles?: string[]; taskCount?: number; eventTitle?: string; eventTitles?: string[]; eventCount?: number; startDate?: string; allDay?: boolean; userName?: string; count?: number; incognito?: boolean; assigneeName?: string; isVideoMeeting?: boolean; targetUserId?: string; targetName?: string; targetUserImage?: string | null; celebrationType?: string; message?: string | null; assignees?: { id: string; name: string; image: string | null }[] } | null;
   user: { id: string; name: string; image: string | null } | null;
   reactions: Record<string, { count: number; userIds: string[]; users: { id: string; name: string }[] }>;
 };
@@ -920,6 +920,51 @@ function ActivityItem({ item, activeTeamId, currentUserId, isDemo, showPicker, o
           <Text style={{ fontSize: 14, color: "#334155", lineHeight: 20 }}>
             {config.getMessage(item)}
           </Text>
+
+          {/* Task assignees row (inline, no separate card) */}
+          {item.type === "task_completed" && item.metadata?.assignees && item.metadata.assignees.length > 0 ? (() => {
+            const assignees = item.metadata.assignees!;
+            const visible = assignees.slice(0, 3);
+            const overflow = assignees.length - 3;
+            const names = assignees.length <= 2
+              ? assignees.map((a) => a.name).join(" & ")
+              : assignees.length === 3
+                ? `${assignees[0]!.name}, ${assignees[1]!.name} & ${assignees[2]!.name}`
+                : `${assignees[0]!.name}, ${assignees[1]!.name} & ${overflow + 1} others`;
+            return (
+              <View style={{ flexDirection: "row", alignItems: "center", marginTop: 6, gap: 6 }}>
+                <View style={{ flexDirection: "row", alignItems: "center" }}>
+                  {visible.map((a, i) => (
+                    <View
+                      key={a.id}
+                      style={{
+                        width: 20, height: 20, borderRadius: 10,
+                        backgroundColor: "#4361EE",
+                        borderWidth: 1.5, borderColor: "white",
+                        alignItems: "center", justifyContent: "center",
+                        overflow: "hidden",
+                        marginLeft: i === 0 ? 0 : -5,
+                      }}
+                    >
+                      {a.image ? (
+                        <ExpoImage source={{ uri: a.image }} style={{ width: 20, height: 20 }} contentFit="cover" />
+                      ) : (
+                        <Text style={{ fontSize: 8, fontWeight: "700", color: "white" }}>
+                          {a.name.charAt(0).toUpperCase()}
+                        </Text>
+                      )}
+                    </View>
+                  ))}
+                  {overflow > 0 ? (
+                    <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: "#94A3B8", borderWidth: 1.5, borderColor: "white", alignItems: "center", justifyContent: "center", marginLeft: -5 }}>
+                      <Text style={{ fontSize: 7, fontWeight: "700", color: "white" }}>+{overflow}</Text>
+                    </View>
+                  ) : null}
+                </View>
+                <Text style={{ fontSize: 12, color: "#64748B" }}>{names}</Text>
+              </View>
+            );
+          })() : null}
 
           {/* Event date/time + video badge */}
           {item.type === "calendar_event_added" && item.metadata?.startDate ? (
