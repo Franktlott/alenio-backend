@@ -552,10 +552,21 @@ function TaskRow({ task, onToggle, onPress, onLongPress }: { task: Task; onToggl
           <View style={{ marginTop: 4, flexDirection: "row", alignItems: "center" }}>
             {isDone ? (
               <>
-                <Clock size={11} color="#10B981" />
-                <Text style={{ fontSize: 11, fontWeight: "500", color: "#10B981", marginLeft: 4 }}>
-                  {completedDate ? `Done · ${fmtDate(completedDate)}` : "Done"}
-                </Text>
+                {(() => {
+                  const wasCompletedLate = task.dueDate && task.completedAt && new Date(task.completedAt) > new Date(task.dueDate);
+                  const doneColor = wasCompletedLate ? "#F97316" : "#10B981";
+                  const doneLabel = wasCompletedLate
+                    ? (completedDate ? `Done overdue · ${fmtDate(completedDate)}` : "Done overdue")
+                    : (completedDate ? `Done · ${fmtDate(completedDate)}` : "Done");
+                  return (
+                    <>
+                      <Clock size={11} color={doneColor} />
+                      <Text style={{ fontSize: 11, fontWeight: "500", color: doneColor, marginLeft: 4 }}>
+                        {doneLabel}
+                      </Text>
+                    </>
+                  );
+                })()}
               </>
             ) : dueDate ? (
               <>

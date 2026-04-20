@@ -493,14 +493,19 @@ export default function TaskDetailScreen() {
               </Text>
             </View>
           ) : null}
-          {task.completedAt ? (
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-              <Text style={{ fontSize: 11, color: "#10B981" }}>✓</Text>
-              <Text className="text-xs text-emerald-500">
-                Completed {new Date(task.completedAt).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })}
-              </Text>
-            </View>
-          ) : null}
+          {task.completedAt ? (() => {
+            const completedOverdue = task.completedAt && task.dueDate
+              ? new Date(task.completedAt) > new Date(task.dueDate)
+              : false;
+            return (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <Text style={{ fontSize: 11, color: completedOverdue ? "#F97316" : "#10B981" }}>✓</Text>
+                <Text className={completedOverdue ? "text-xs text-orange-500" : "text-xs text-emerald-500"}>
+                  {completedOverdue ? "Completed overdue" : "Completed"} {new Date(task.completedAt).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })}
+                </Text>
+              </View>
+            );
+          })() : null}
         </View>
 
         <View style={{ height: 32 }} />
