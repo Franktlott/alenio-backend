@@ -93,6 +93,12 @@ async function calculateAndAwardStreak(
     }
   }
 
+  // Persist streak so it survives task deletion
+  await prisma.teamMember.update({
+    where: { userId_teamId: { userId, teamId } },
+    data: { currentStreak: streak },
+  });
+
   const isMilestone = streak === 5 || streak === 10 || streak === 15 || (streak >= 20 && streak % 10 === 0);
   if (isMilestone) {
     milestoneCount = streak;
@@ -352,6 +358,14 @@ tasksRouter.get("/member-stats", async (c) => {
     },
   });
 
+  // Fetch stored streaks from TeamMember (persists through task deletion)
+  const teamMembers = await prisma.teamMember.findMany({
+    where: { teamId },
+    select: { userId: true, currentStreak: true },
+  });
+  const storedStreaks: Record<string, number> = {};
+  for (const m of teamMembers) storedStreaks[m.userId] = m.currentStreak;
+
   // Group by userId
   const userTasks: Record<string, { status: string; dueDate: Date | null; completedAt: Date | null }[]> = {};
   for (const a of assignments) {
@@ -378,21 +392,17 @@ tasksRouter.get("/member-stats", async (c) => {
       }
     }
 
-    // Streak: consecutive on-time completions from most recent, stopping at first overdue
-    const doneTasks = tasks
-      .filter((t) => t.status === "done" && t.completedAt != null && t.dueDate != null)
-      .sort((a, b) => new Date(b.completedAt!).getTime() - new Date(a.completedAt!).getTime());
-
-    let streak = 0;
-    for (const t of doneTasks) {
-      if (new Date(t.completedAt!) <= new Date(t.dueDate!)) {
-        streak++;
-      } else {
-        break;
-      }
-    }
+    // Use the stored streak (set at task completion time, survives task deletion)
+    const streak = storedStreaks[userId] ?? 0;
 
     statsMap[userId] = { activeTasks, overdueTasks, completedTasks, streak, personalBestStreak: 0 };
+  }
+
+  // Also include members with no tasks but a stored streak
+  for (const m of teamMembers) {
+    if (!statsMap[m.userId]) {
+      statsMap[m.userId] = { activeTasks: 0, overdueTasks: 0, completedTasks: 0, streak: m.currentStreak, personalBestStreak: 0 };
+    }
   }
 
   // Fetch personalBestStreak for all users in the map

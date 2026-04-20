@@ -117,13 +117,14 @@ model TeamSubscription {
 }
 
 model TeamMember {
-  id       String @id @default(cuid())
-  role     String @default("member")
-  userId   String
-  teamId   String
-  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  team     Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  joinedAt DateTime @default(now())
+  id            String @id @default(cuid())
+  role          String @default("member")
+  userId        String
+  teamId        String
+  user          User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  team          Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  joinedAt      DateTime @default(now())
+  currentStreak Int    @default(0)
 
   @@unique([userId, teamId])
 }
