@@ -298,64 +298,64 @@ function CelebrationCard({ item, activeTeamId, currentUserId, isDemo, showPicker
   const variant = parseInt(item.id.replace(/[^0-9]/g, '').slice(0, 6) || '0', 10) % NUM_CELEBRATION_VARIANTS;
 
   type CelebrationTheme = {
-    gradient: [string, string, string];
-    badgeGradient: [string, string, string];
-    badgeBg: string;
-    badgeTextColor: string;
+    borderColor: string;
+    accentColor: string;
+    circleBg: string;
+    buttonBg: string;
     emoji: string;
-    particleColor: string;
     headline: string;
     sub: string;
+    nameHeadline: string;
   };
 
   let theme: CelebrationTheme;
   switch (variant) {
     case 1:
       theme = {
-        gradient: ["#C084FC", "#A855F7", "#7C3AED"] as [string, string, string],
-        badgeGradient: ["#F3E8FF", "#DDD6FE", "#C4B5FD"] as [string, string, string],
-        badgeBg: "rgba(255,255,255,0.25)",
-        badgeTextColor: "#ffffff",
+        borderColor: "#A855F7",
+        accentColor: "#A855F7",
+        circleBg: "rgba(168,85,247,0.12)",
+        buttonBg: "#A855F7",
         emoji: "🚀",
-        particleColor: "#F3E8FF",
-        headline: `${name} is absolutely CRUSHING IT! 🚀💜`,
+        headline: "CRUSHING IT! 🚀💜",
         sub: "Top performer streak!",
+        nameHeadline: `${name} is absolutely crushing it!`,
       };
       break;
     case 2:
       theme = {
-        gradient: ["#34D399", "#10B981", "#059669"] as [string, string, string],
-        badgeGradient: ["#ECFDF5", "#A7F3D0", "#6EE7B7"] as [string, string, string],
-        badgeBg: "rgba(255,255,255,0.25)",
-        badgeTextColor: "#ffffff",
+        borderColor: "#10B981",
+        accentColor: "#10B981",
+        circleBg: "rgba(16,185,129,0.12)",
+        buttonBg: "#10B981",
         emoji: "💎",
-        particleColor: "#D1FAE5",
-        headline: `${name} is playing at a LEGENDARY level! 💎`,
+        headline: "LEGENDARY level! 💎",
         sub: "Consistency is power 🌿",
+        nameHeadline: `${name} is playing at a legendary level!`,
       };
       break;
     case 3:
       theme = {
-        gradient: ["#FB7185", "#F43F5E", "#E11D48"] as [string, string, string],
-        badgeGradient: ["#FFE4E6", "#FECDD3", "#FDA4AF"] as [string, string, string],
-        badgeBg: "rgba(255,255,255,0.25)",
-        badgeTextColor: "#ffffff",
+        borderColor: "#F43F5E",
+        accentColor: "#F43F5E",
+        circleBg: "rgba(244,63,94,0.12)",
+        buttonBg: "#F43F5E",
         emoji: "⚡",
-        particleColor: "#FFE4E6",
-        headline: `${name} is UNSTOPPABLE right now! ⚡🔥`,
+        headline: "UNSTOPPABLE! ⚡🔥",
         sub: "On fire, no breaks! 💥",
+        nameHeadline: `${name} is unstoppable right now!`,
       };
       break;
     default:
       theme = {
-        gradient: ["#FBBF24", "#F59E0B", "#D97706"] as [string, string, string],
-        badgeGradient: ["#FEF9C3", "#FEF08A", "#FDE047"] as [string, string, string],
-        badgeBg: "rgba(255,255,255,0.25)",
-        badgeTextColor: "#ffffff",
+        borderColor: "#F59E0B",
+        accentColor: "#F59E0B",
+        circleBg: "rgba(245,158,11,0.12)",
+        buttonBg: "#F59E0B",
         emoji: "⭐",
-        particleColor: "#FEF9C3",
-        headline: `${name} hit an INSANE milestone! 🏆✨`,
-        sub: "New Alenio record!",
+        headline: "INSANE milestone! 🏆✨",
+        sub: "New record!",
+        nameHeadline: `${name} hit an insane milestone!`,
       };
       break;
   }
@@ -376,83 +376,91 @@ function CelebrationCard({ item, activeTeamId, currentUserId, isDemo, showPicker
       style={{ marginHorizontal: 16, marginVertical: 6 }}
       testID={`milestone-card-${item.id}`}
     >
-      <LinearGradient
-        colors={theme.gradient}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={{ borderRadius: 20, overflow: "hidden" }}
+      <View
+        style={{
+          backgroundColor: "#FFFFFF",
+          borderRadius: 20,
+          borderWidth: 2,
+          borderColor: theme.borderColor,
+          padding: 16,
+          shadowColor: theme.borderColor,
+          shadowOffset: { width: 0, height: 0 },
+          shadowOpacity: 0.25,
+          shadowRadius: 12,
+          elevation: 6,
+        }}
       >
-        {/* Sparkle particles */}
-        <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }} pointerEvents="none">
-          {[
-            { top: 12, left: 24, size: 10, opacity: 0.6 },
-            { top: 28, left: 60, size: 7, opacity: 0.4 },
-            { top: 8, right: 32, size: 9, opacity: 0.5 },
-            { top: 20, right: 70, size: 6, opacity: 0.35 },
-            { top: 50, left: 16, size: 6, opacity: 0.3 },
-            { top: 44, right: 20, size: 8, opacity: 0.45 },
-            { bottom: 48, left: 40, size: 7, opacity: 0.3 },
-            { bottom: 32, right: 50, size: 6, opacity: 0.35 },
-          ].map((s, i) => (
-            <Text key={i} style={{ position: "absolute", top: (s as any).top, left: (s as any).left, right: (s as any).right, bottom: (s as any).bottom, fontSize: s.size, opacity: s.opacity, color: theme.particleColor }}>✦</Text>
-          ))}
-        </View>
-        <Image
-          source={require("@/assets/alenio-icon.png")}
-          style={{ position: "absolute", top: 12, right: 12, width: 28, height: 28, borderRadius: 6, opacity: 0.9 }}
-        />
-
-        <View style={{ padding: 14, alignItems: "center", gap: 8 }}>
-          {/* Badge */}
-          <View style={{ alignItems: "center", marginTop: 0 }}>
-            <LinearGradient
-              colors={theme.badgeGradient}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={{ borderRadius: 16, padding: 2 }}
+        {/* Main horizontal body */}
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
+          {/* Left column: logo + emoji circle */}
+          <View style={{ alignItems: "center", gap: 6 }}>
+            <Image
+              source={require("@/assets/alenio-icon.png")}
+              style={{ width: 20, height: 20, borderRadius: 5, opacity: 0.85 }}
+            />
+            <View
+              style={{
+                width: 70,
+                height: 70,
+                borderRadius: 35,
+                backgroundColor: theme.circleBg,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
             >
-              <View style={{ backgroundColor: theme.badgeBg, borderRadius: 14, paddingHorizontal: 20, paddingVertical: 10, alignItems: "center", minWidth: 80 }}>
-                <Text style={{ fontSize: 18, lineHeight: 28 }}>{theme.emoji}</Text>
-                <Text style={{ fontSize: 40, fontWeight: "900", color: theme.badgeTextColor, lineHeight: 44 }}>{count}</Text>
-              </View>
-            </LinearGradient>
-          </View>
-
-          {/* Text */}
-          <View style={{ alignItems: "center", gap: 4 }}>
-            <Text style={{ fontSize: 12, color: "rgba(255,255,255,0.7)", fontWeight: "500" }}>tasks in a row</Text>
-            <Text style={{ fontSize: 14, fontWeight: "800", color: "white", textAlign: "center" }}>
-              {theme.headline}
-            </Text>
-            <Text style={{ fontSize: 11, color: "rgba(255,255,255,0.75)" }}>{theme.sub}</Text>
-          </View>
-
-          {/* Footer: avatar + time */}
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", width: "100%", marginTop: 2 }}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-              <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.2)", borderWidth: 1, borderColor: "#FFD70040", overflow: "hidden", alignItems: "center", justifyContent: "center" }}>
-                {item.user?.image ? (
-                  <ExpoImage source={{ uri: item.user.image }} style={{ width: 24, height: 24 }} contentFit="cover" />
-                ) : (
-                  <Text style={{ fontSize: 11, fontWeight: "700", color: theme.badgeTextColor }}>{name[0].toUpperCase()}</Text>
-                )}
-              </View>
-              <Text style={{ fontSize: 11, color: "rgba(255,255,255,0.8)" }}>{name}</Text>
+              <Text style={{ fontSize: 34 }}>{theme.emoji}</Text>
             </View>
-            <Text style={{ fontSize: 11, color: "rgba(255,255,255,0.6)" }}>{timeAgo(item.createdAt)}</Text>
           </View>
 
-          <ReactionRow
-            activityId={item.id}
-            teamId={activeTeamId}
-            reactions={item.reactions ?? {}}
-            currentUserId={currentUserId}
-            onToggleReaction={toggleReaction}
-            showPicker={showPicker}
-            onClosePicker={onClosePicker}
-          />
+          {/* Right column: count + headline + sub + button */}
+          <View style={{ flex: 1, gap: 2 }}>
+            <View style={{ flexDirection: "row", alignItems: "baseline", gap: 6 }}>
+              <Text style={{ fontSize: 52, fontWeight: "900", color: theme.accentColor, lineHeight: 56 }}>{count}</Text>
+              <Text style={{ fontSize: 11, color: "#64748B", fontWeight: "500" }}>tasks completed</Text>
+            </View>
+            <Text style={{ fontSize: 14, fontWeight: "800", color: theme.accentColor }}>{theme.headline}</Text>
+            <Text style={{ fontSize: 12, color: "#64748B" }}>{theme.sub}</Text>
+            <Pressable
+              style={{
+                backgroundColor: theme.buttonBg,
+                borderRadius: 20,
+                paddingHorizontal: 16,
+                paddingVertical: 8,
+                alignSelf: "flex-start",
+                marginTop: 8,
+              }}
+              onPress={() => router.push("/(app)" as any)}
+            >
+              <Text style={{ fontSize: 12, fontWeight: "700", color: "#FFFFFF" }}>Let's go! 🎉</Text>
+            </Pressable>
+          </View>
         </View>
-      </LinearGradient>
+
+        {/* Footer: avatar + name | timestamp */}
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", width: "100%", marginTop: 14 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: theme.circleBg, borderWidth: 1, borderColor: theme.borderColor + "40", overflow: "hidden", alignItems: "center", justifyContent: "center" }}>
+              {item.user?.image ? (
+                <ExpoImage source={{ uri: item.user.image }} style={{ width: 24, height: 24 }} contentFit="cover" />
+              ) : (
+                <Text style={{ fontSize: 11, fontWeight: "700", color: theme.accentColor }}>{name[0].toUpperCase()}</Text>
+              )}
+            </View>
+            <Text style={{ fontSize: 11, color: "#64748B" }}>{name}</Text>
+          </View>
+          <Text style={{ fontSize: 11, color: "#94A3B8" }}>{timeAgo(item.createdAt)}</Text>
+        </View>
+
+        <ReactionRow
+          activityId={item.id}
+          teamId={activeTeamId}
+          reactions={item.reactions ?? {}}
+          currentUserId={currentUserId}
+          onToggleReaction={toggleReaction}
+          showPicker={showPicker}
+          onClosePicker={onClosePicker}
+        />
+      </View>
     </Pressable>
   );
 }
