@@ -437,9 +437,10 @@ export default function CreateTaskScreen() {
                 <Text style={{ fontSize: 12, color: "#EF4444", fontWeight: "600" }}>*</Text>
               </View>
               <View style={{ gap: 8 }}>
-                {members.filter((m: TeamMember) => m.userId !== session?.user?.id).map((m: TeamMember) => {
+                {members.map((m: TeamMember) => {
                   const isSelected = selectedAssignees.includes(m.userId);
-                  const displayName = m.user.name || m.user.email || "Unknown";
+                  const isMe = m.userId === session?.user?.id;
+                  const displayName = (m.user.name || m.user.email || "Unknown") + (isMe ? " (You)" : "");
                   return (
                     <TouchableOpacity
                       key={m.id}
