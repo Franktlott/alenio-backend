@@ -127,14 +127,14 @@ messagesRouter.post("/", async (c) => {
         prisma.team.findUnique({ where: { id: teamId }, select: { name: true } }),
       ]);
 
-      let channelPrefix = `#general`;
+      let channelPrefix = `#Team Chat`;
       if (capturedTopicId) {
         const topic = await prisma.topic.findUnique({ where: { id: capturedTopicId }, select: { name: true } });
         if (topic) channelPrefix = `#${topic.name}`;
       }
 
-      const notifTitle = senderName;
-      const notifBody = `${channelPrefix}: ${messageText}`;
+      const notifTitle = team?.name ?? senderName;
+      const notifBody = `${senderName}: ${messageText}`;
       const notifData = { teamId, teamName: team?.name ?? "", topicId: capturedTopicId, type: "message" };
       const memberIds = members.map((m: { userId: string }) => m.userId);
 
@@ -144,7 +144,7 @@ messagesRouter.post("/", async (c) => {
         await sendPushToUsers(
           capturedMentionIds,
           notifTitle,
-          `${channelPrefix}: mentioned you — ${messageText}`,
+          `${channelPrefix}: ${senderName} mentioned you — ${messageText}`,
           notifData,
           "notifMessages",
           teamId

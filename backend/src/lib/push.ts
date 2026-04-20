@@ -112,7 +112,8 @@ export async function sendPushToUsers(
   body: string,
   data?: Record<string, unknown>,
   prefKey?: NotifPrefKey,
-  teamId?: string
+  teamId?: string,
+  imageOverride?: string
 ): Promise<void> {
   console.log(`[push] sendPushToUsers — userIds: ${userIds.length}, prefKey: ${prefKey ?? "none"}, title: "${title}"`);
   if (userIds.length === 0) {
@@ -134,10 +135,12 @@ export async function sendPushToUsers(
   });
   console.log(`[push] DB found ${users.length}/${userIds.length} users with token${prefKey ? ` + ${prefKey}=true` : ""}`);
 
-  // Resolve notification image: team logo if available, else Alenio logo
+  // Resolve notification image: imageOverride > team logo > Alenio logo
   const ALENIO_LOGO_URL = `${env.BACKEND_URL}/static/alenio-logo.png`;
   let notifImageUrl = ALENIO_LOGO_URL;
-  if (teamId) {
+  if (imageOverride) {
+    notifImageUrl = imageOverride;
+  } else if (teamId) {
     const team = await prisma.team.findUnique({ where: { id: teamId }, select: { image: true } });
     notifImageUrl = team?.image ?? ALENIO_LOGO_URL;
   }

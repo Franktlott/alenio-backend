@@ -3,6 +3,7 @@ import { prisma } from "../prisma";
 import { auth } from "../auth";
 import { authGuard } from "../middleware/auth-guard";
 import { sendPushToUsers } from "../lib/push";
+import { env } from "../env";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -330,7 +331,11 @@ dmsRouter.post("/:conversationId/messages", async (c) => {
         ? `${senderName}: ${msgText}`
         : msgText;
 
-      await sendPushToUsers(otherIds, notifTitle, notifBody, { conversationId }, "notifMessages");
+      const senderRecord = await prisma.user.findUnique({ where: { id: user.id }, select: { image: true } });
+      const ALENIO_LOGO_URL = `${env.BACKEND_URL}/static/alenio-logo.png`;
+      const senderImage = senderRecord?.image ?? ALENIO_LOGO_URL;
+
+      await sendPushToUsers(otherIds, notifTitle, notifBody, { conversationId }, "notifMessages", undefined, senderImage);
     }
   }
 
