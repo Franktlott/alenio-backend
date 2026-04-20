@@ -1561,7 +1561,7 @@ export default function TasksScreen() {
                     <Text style={{ fontSize: 14, fontWeight: "600", color: "#0F172A" }}>Start Date</Text>
                     <Pressable onPress={() => setShowStartPicker(false)}><Text style={{ color: "#4361EE", fontWeight: "600", fontSize: 15 }}>Done</Text></Pressable>
                   </View>
-                  <DateTimePicker value={eventStart} mode="date" display="spinner" onChange={(_e, d) => { if (d) { setEventStart(d); if (d > eventEnd) setEventEnd(d); } }} />
+                  <DateTimePicker value={eventStart} mode="date" display="spinner" style={{ height: 180 }} onChange={(_e, d) => { if (d) { setEventStart(d); if (d > eventEnd) setEventEnd(d); } }} />
                 </View>
               ) : null}
 
@@ -1572,7 +1572,7 @@ export default function TasksScreen() {
                     <Text style={{ fontSize: 14, fontWeight: "600", color: "#0F172A" }}>End Date</Text>
                     <Pressable onPress={() => setShowEndPicker(false)}><Text style={{ color: "#7C3AED", fontWeight: "600", fontSize: 15 }}>Done</Text></Pressable>
                   </View>
-                  <DateTimePicker value={eventEnd} mode="date" display="spinner" minimumDate={eventStart} onChange={(_e, d) => { if (d) setEventEnd(d); }} />
+                  <DateTimePicker value={eventEnd} mode="date" display="spinner" minimumDate={eventStart} style={{ height: 180 }} onChange={(_e, d) => { if (d) setEventEnd(d); }} />
                 </View>
               ) : null}
 
