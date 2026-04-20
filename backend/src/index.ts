@@ -24,6 +24,7 @@ import { pollsRouter } from "./routes/polls";
 import { demoRouter } from "./routes/demo";
 import { videoRouter } from "./routes/video";
 import { usersRouter } from "./routes/users";
+import { ogPreviewRouter } from "./routes/og-preview";
 import { sendPushNotificationsStrict } from "./lib/push";
 
 type Variables = {
@@ -326,6 +327,7 @@ app.route("/api/teams", activityRouter);
 app.route("/api/teams", topicsRouter);
 app.route("/api/teams", pollsRouter);
 app.route("/api/demo", demoRouter);
+app.route("/api/og-preview", ogPreviewRouter);
 app.route("/api/video", videoRouter);
 app.route("/admin", adminRouter);
 app.route("/api/admin-mobile", adminMobileRouter);

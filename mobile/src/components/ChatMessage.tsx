@@ -5,6 +5,7 @@ import {
   Image,
   TouchableOpacity,
   Pressable,
+  Linking,
 } from "react-native";
 import { GestureDetector, Gesture } from "react-native-gesture-handler";
 import { runOnJS } from "react-native-reanimated";
@@ -13,6 +14,61 @@ import { Play } from "lucide-react-native";
 import * as VideoThumbnails from "expo-video-thumbnails";
 import type { MessageReaction } from "@/lib/types";
 import { renderMentionText } from "@/lib/renderMentions";
+import { useQuery } from "@tanstack/react-query";
+
+const URL_REGEX = /https?:\/\/[^\s<>"{}|\\^`[\]]+/gi;
+
+function extractFirstUrl(text: string): string | null {
+  return text.match(URL_REGEX)?.[0] ?? null;
+}
+
+type OgData = { title: string | null; image: string | null; domain: string | null; url: string };
+
+function LinkPreview({ url, isOwn }: { url: string; isOwn: boolean }) {
+  const { data } = useQuery<OgData>({
+    queryKey: ["og-preview", url],
+    queryFn: async () => {
+      const res = await fetch(
+        `${process.env.EXPO_PUBLIC_BACKEND_URL}/api/og-preview?url=${encodeURIComponent(url)}`
+      );
+      const json = await res.json() as { data: OgData };
+      return json.data;
+    },
+    staleTime: Infinity,
+    retry: false,
+  });
+
+  if (!data || (!data.title && !data.image)) return null;
+
+  return (
+    <Pressable
+      onPress={() => Linking.openURL(url)}
+      style={{
+        marginTop: 6,
+        borderRadius: 12,
+        overflow: "hidden",
+        backgroundColor: isOwn ? "#E0E7FF" : "#F8FAFC",
+        borderWidth: 1,
+        borderColor: isOwn ? "#C7D2FE" : "#E2E8F0",
+        width: 220,
+      }}
+    >
+      {data.image ? (
+        <Image source={{ uri: data.image }} style={{ width: 220, height: 120 }} resizeMode="cover" />
+      ) : null}
+      <View style={{ padding: 10, gap: 2 }}>
+        {data.title ? (
+          <Text style={{ fontSize: 13, fontWeight: "600", color: "#0F172A" }} numberOfLines={2}>
+            {data.title}
+          </Text>
+        ) : null}
+        {data.domain ? (
+          <Text style={{ fontSize: 11, color: "#64748B" }}>{data.domain}</Text>
+        ) : null}
+      </View>
+    </Pressable>
+  );
+}
 
 interface ChatMessageProps {
   id: string;
@@ -188,6 +244,12 @@ export function ChatMessage({
                 </Text>
               ) : null}
             </View>
+
+            {/* Link preview */}
+            {content ? (() => {
+              const url = extractFirstUrl(content);
+              return url ? <LinkPreview url={url} isOwn={isOwn} /> : null;
+            })() : null}
 
             {/* Timestamp */}
             <View className={`flex-row items-center mt-1 mx-1 gap-1 ${isOwn ? "justify-end" : "justify-start"}`}>
