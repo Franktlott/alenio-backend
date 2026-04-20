@@ -70,6 +70,30 @@ async function getMembership(userId: string, teamId: string) {
   });
 }
 
+// Recalculate and store streak without awarding milestones (used on recall)
+async function recalculateStreak(userId: string, teamId: string) {
+  const streakRows = await prisma.$queryRaw<{ completedAt: string; dueDate: string }[]>`
+    SELECT t.completedAt, t.dueDate
+    FROM Task t
+    JOIN TaskAssignment ta ON ta.taskId = t.id
+    WHERE t.teamId = ${teamId}
+    AND ta.userId = ${userId}
+    AND t.status = 'done'
+    AND t.completedAt IS NOT NULL
+    AND t.dueDate IS NOT NULL
+    ORDER BY t.completedAt DESC
+  `;
+  let streak = 0;
+  for (const row of streakRows) {
+    if (new Date(row.completedAt) <= new Date(row.dueDate)) streak++;
+    else break;
+  }
+  await prisma.teamMember.update({
+    where: { userId_teamId: { userId, teamId } },
+    data: { currentStreak: streak },
+  });
+}
+
 // Streak helper: calculate streak and award milestone/personal-best for a single user
 async function calculateAndAwardStreak(
   userId: string,
@@ -586,11 +610,23 @@ tasksRouter.patch("/:taskId", async (c) => {
   }
 
   if (status === "done") {
-    const incompleteSubtasks = await prisma.subtask.count({
-      where: { taskId, completed: false },
-    });
-    if (incompleteSubtasks > 0) {
-      return c.json({ error: { message: `Complete all subtasks first (${incompleteSubtasks} remaining)`, code: "SUBTASKS_INCOMPLETE" } }, 400);
+    if (task.isJoint) {
+      // For joint tasks, check if the current user has completed all subtasks via SubtaskCompletion
+      const subtasks = await prisma.subtask.findMany({ where: { taskId }, select: { id: true } });
+      const completedByMe = await prisma.subtaskCompletion.count({
+        where: { subtaskId: { in: subtasks.map((s) => s.id) }, userId: user.id },
+      });
+      const remaining = subtasks.length - completedByMe;
+      if (remaining > 0) {
+        return c.json({ error: { message: `Complete all subtasks first (${remaining} remaining)`, code: "SUBTASKS_INCOMPLETE" } }, 400);
+      }
+    } else {
+      const incompleteSubtasks = await prisma.subtask.count({
+        where: { taskId, completed: false },
+      });
+      if (incompleteSubtasks > 0) {
+        return c.json({ error: { message: `Complete all subtasks first (${incompleteSubtasks} remaining)`, code: "SUBTASKS_INCOMPLETE" } }, 400);
+      }
     }
   }
 
@@ -648,7 +684,7 @@ tasksRouter.patch("/:taskId", async (c) => {
       user.name
     ));
 
-    // For joint tasks, also award streak credit to every other assignee in parallel
+    // For joint tasks, also award streak credit to every other assignee — await so errors surface
     if (task.isJoint) {
       const allAssignments = await prisma.taskAssignment.findMany({ where: { taskId } });
       const otherAssigneeIds = allAssignments.map((a) => a.userId).filter((id) => id !== user.id);
@@ -657,7 +693,7 @@ tasksRouter.patch("/:taskId", async (c) => {
           where: { id: { in: otherAssigneeIds } },
           select: { id: true, name: true },
         });
-        void Promise.all(
+        await Promise.all(
           otherUsers.map((ou) =>
             calculateAndAwardStreak(ou.id, teamId, task.title, task.incognito, ou.name)
           )
@@ -695,6 +731,14 @@ tasksRouter.patch("/:taskId", async (c) => {
         },
       });
     }
+  }
+
+  // On recall (done → todo/in_progress): recalculate streaks for all assignees so stored value is accurate
+  if (task.status === "done" && status !== undefined && status !== "done") {
+    const allAssignments = await prisma.taskAssignment.findMany({ where: { taskId } });
+    await Promise.all(
+      allAssignments.map((a) => recalculateStreak(a.userId, teamId))
+    );
   }
 
   return c.json({ data: updated, ...(milestoneCount !== null ? { milestone: milestoneCount } : {}), ...(personalBestCount !== null ? { comeback: personalBestCount } : {}) });
