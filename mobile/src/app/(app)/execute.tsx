@@ -792,7 +792,7 @@ export default function TasksScreen() {
       : new Date();
     setEventTitle(""); setEventDescription("");
     setEventStart(d); setEventEnd(d);
-    setEventColor("#4361EE"); setEventIsHidden(false); setEventIsVideoMeeting(false); setFormError(null);
+    setEventColor("#4361EE"); setEventIsHidden(true); setEventIsVideoMeeting(false); setFormError(null);
     setShowEventModal(true);
   };
 
