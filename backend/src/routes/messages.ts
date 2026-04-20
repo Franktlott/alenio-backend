@@ -138,7 +138,7 @@ messagesRouter.post("/", async (c) => {
       const notifData = { teamId, teamName: team?.name ?? "", topicId: capturedTopicId, type: "message" };
       const memberIds = members.map((m: { userId: string }) => m.userId);
 
-      await sendPushToUsers(memberIds, notifTitle, notifBody, notifData, "notifMessages");
+      await sendPushToUsers(memberIds, notifTitle, notifBody, notifData, "notifMessages", teamId);
 
       if (capturedMentionIds.length > 0) {
         await sendPushToUsers(
@@ -146,7 +146,8 @@ messagesRouter.post("/", async (c) => {
           notifTitle,
           `${channelPrefix}: mentioned you — ${messageText}`,
           notifData,
-          "notifMessages"
+          "notifMessages",
+          teamId
         );
       }
     } catch {

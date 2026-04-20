@@ -102,7 +102,8 @@ pollsRouter.post(
           user.name ?? "Someone",
           `📊 New poll: ${question}`,
           { teamId, type: "poll" },
-          "notifMessages"
+          "notifMessages",
+          teamId
         );
       }
     })();

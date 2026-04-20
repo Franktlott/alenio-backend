@@ -198,7 +198,8 @@ tasksRouter.post("/", async (c) => {
       "New task assigned",
       tasks[0]?.title ?? "You have a new task",
       { taskId: tasks[0]?.id, teamId },
-      "notifTaskAssigned"
+      "notifTaskAssigned",
+      teamId
     );
   }
 
@@ -503,7 +504,8 @@ tasksRouter.patch("/:taskId", async (c) => {
           completer?.name ?? "Someone",
           `✅ Completed: ${task.title}`,
           { taskId, teamId, type: "task_completed" },
-          "notifTaskAssigned"
+          "notifTaskAssigned",
+          teamId
         );
       })();
     }
@@ -674,7 +676,7 @@ tasksRouter.post("/:taskId/assign", async (c) => {
   const assignedUserIds = (userIds as string[]).filter((id) => id !== user.id);
   if (assignedUserIds.length > 0) {
     const taskForNotif = await prisma.task.findFirst({ where: { id: taskId }, select: { title: true } });
-    await sendPushToUsers(assignedUserIds, "New task assigned", taskForNotif?.title ?? "You have a new task", { taskId, teamId }, "notifTaskAssigned");
+    await sendPushToUsers(assignedUserIds, "New task assigned", taskForNotif?.title ?? "You have a new task", { taskId, teamId }, "notifTaskAssigned", teamId);
   }
 
   // Log activity for each newly assigned user

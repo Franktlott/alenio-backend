@@ -62,7 +62,8 @@ async function scheduleEventReminders(
           "Meeting Reminder",
           `${eventTitle} ${formatReminderLabel(mins)}`,
           { eventId, type: "meeting_reminder" },
-          "notifMeetings"
+          "notifMeetings",
+          teamId
         );
       } catch {
         // Non-critical

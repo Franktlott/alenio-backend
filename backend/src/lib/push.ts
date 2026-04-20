@@ -1,4 +1,5 @@
 import { prisma } from "../prisma";
+import { env } from "../env";
 
 // Expo push API endpoint (note the required "/--/").
 const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
@@ -11,6 +12,7 @@ export interface PushPayload {
   data?: Record<string, unknown>;
   channelId?: string;
   sound?: string;
+  image?: string;
 }
 
 async function parseExpoResponse(response: Response): Promise<{ data?: { status: string; message?: string; details?: unknown; id?: string }[] }> {
@@ -48,6 +50,7 @@ async function sendPushChunkStrict(chunk: PushPayload[]): Promise<void> {
         priority: "high",
         channelId: m.channelId ?? "alenio_main",
         data: m.data,
+        ...(m.image ? { image: m.image } : {}),
       }))
     ),
   });
@@ -108,7 +111,8 @@ export async function sendPushToUsers(
   title: string,
   body: string,
   data?: Record<string, unknown>,
-  prefKey?: NotifPrefKey
+  prefKey?: NotifPrefKey,
+  teamId?: string
 ): Promise<void> {
   console.log(`[push] sendPushToUsers — userIds: ${userIds.length}, prefKey: ${prefKey ?? "none"}, title: "${title}"`);
   if (userIds.length === 0) {
@@ -130,6 +134,14 @@ export async function sendPushToUsers(
   });
   console.log(`[push] DB found ${users.length}/${userIds.length} users with token${prefKey ? ` + ${prefKey}=true` : ""}`);
 
+  // Resolve notification image: team logo if available, else Alenio logo
+  const ALENIO_LOGO_URL = `${env.BACKEND_URL}/static/alenio-logo.png`;
+  let notifImageUrl = ALENIO_LOGO_URL;
+  if (teamId) {
+    const team = await prisma.team.findUnique({ where: { id: teamId }, select: { image: true } });
+    notifImageUrl = team?.image ?? ALENIO_LOGO_URL;
+  }
+
   const TONE_MAP: Record<string, { channelId: string; sound: string }> = {
     bell:   { channelId: "alenio_bell",   sound: "bell.wav" },
     chime:  { channelId: "alenio_chime",  sound: "chime.wav" },
@@ -143,7 +155,7 @@ export async function sendPushToUsers(
     .map((u) => {
       const { channelId, sound } = TONE_MAP[u.notifTone ?? ""] ?? DEFAULT_TONE;
       console.log(`[push] user tone: "${u.notifTone ?? "null"}" → channelId: "${channelId}", sound: "${sound}"`);
-      return { token: u.pushToken!, title, body, data, sound, channelId };
+      return { token: u.pushToken!, title, body, data, sound, channelId, image: notifImageUrl };
     });
   console.log(`[push] Sending ${messages.length} message(s) after token format filter`);
 

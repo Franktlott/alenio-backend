@@ -115,7 +115,8 @@ videoRouter.post(
           userName ?? "Someone",
           "📹 Started a video call — join now!",
           { teamId: event.teamId, type: "video_call" },
-          "notifMeetings"
+          "notifMeetings",
+          event.teamId
         );
       }
     })();
