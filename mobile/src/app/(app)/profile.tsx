@@ -1036,7 +1036,7 @@ export default function ProfileScreen() {
         )}
 
         {/* App Info / Environment */}
-        <View className="mx-4 mt-2 mb-8 items-center">
+        {false ? (<View className="mx-4 mt-2 mb-8 items-center">
           <View className="flex-row items-center mb-1" style={{ gap: 6 }}>
             <View
               style={{
@@ -1064,7 +1064,7 @@ export default function ProfileScreen() {
           <Text className="text-xs text-slate-400" numberOfLines={1} style={{ maxWidth: "90%" }}>
             {process.env.EXPO_PUBLIC_BACKEND_URL}
           </Text>
-        </View>
+        </View>) : null}
       </ScrollView>
 
       {/* Team edit / delete modal */}
