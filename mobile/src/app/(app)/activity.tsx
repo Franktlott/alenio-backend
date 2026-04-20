@@ -383,6 +383,7 @@ function CelebrationCard({ item, activeTeamId, currentUserId, isDemo, showPicker
           borderWidth: 2,
           borderColor: theme.borderColor,
           padding: 16,
+          overflow: "hidden",
           shadowColor: theme.borderColor,
           shadowOffset: { width: 0, height: 0 },
           shadowOpacity: 0.25,
@@ -390,14 +391,16 @@ function CelebrationCard({ item, activeTeamId, currentUserId, isDemo, showPicker
           elevation: 6,
         }}
       >
+        {/* Logo watermark top-right */}
+        <Image
+          source={require("@/assets/alenio-icon.png")}
+          style={{ position: "absolute", top: 12, right: 14, width: 36, height: 36, borderRadius: 8, opacity: 0.9 }}
+        />
+
         {/* Main horizontal body */}
         <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
-          {/* Left column: logo + emoji circle */}
-          <View style={{ alignItems: "center", gap: 6 }}>
-            <Image
-              source={require("@/assets/alenio-icon.png")}
-              style={{ width: 20, height: 20, borderRadius: 5, opacity: 0.85 }}
-            />
+          {/* Left column: emoji circle */}
+          <View style={{ alignItems: "center" }}>
             <View
               style={{
                 width: 70,
