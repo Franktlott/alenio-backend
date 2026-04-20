@@ -573,6 +573,9 @@ export default function ProfileScreen() {
     setRefreshing(false);
   };
 
+  const todaySeed = new Date().toISOString().split('T')[0].replace(/-/g, '');
+  const natureImageUrl = `https://picsum.photos/seed/${todaySeed}/800/320`;
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#F8FAFC" }} edges={[]} testID="profile-screen">
       {/* Header */}
@@ -592,16 +595,28 @@ export default function ProfileScreen() {
       </LinearGradient>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 88 }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" colors={["#4361EE"]} />}>
-        {/* Avatar + name */}
-        <View className="items-center pt-8 pb-6 px-4">
-          {/* Avatar */}
+        {/* Nature photo banner + avatar hero */}
+        <View style={{ alignItems: "center", paddingBottom: 24, paddingHorizontal: 16 }}>
+          {/* Banner image */}
+          <View style={{ width: "100%", height: 160, overflow: "hidden" }}>
+            <Image
+              source={{ uri: natureImageUrl }}
+              style={{ width: "100%", height: 160, resizeMode: "cover" }}
+            />
+            <LinearGradient
+              colors={["transparent", "rgba(248,250,252,0.8)"]}
+              style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 60 }}
+            />
+          </View>
+
+          {/* Avatar — pulled up to overlap the banner */}
           <TouchableOpacity
             onPress={handlePhotoPress}
             disabled={uploadMutation.isPending || isDemo}
-            className="mb-4"
+            style={{ marginTop: -48, marginBottom: 16 }}
             testID="avatar-upload-button"
           >
-            <View className="w-24 h-24 rounded-full overflow-hidden bg-indigo-100 items-center justify-center">
+            <View className="w-24 h-24 rounded-full overflow-hidden bg-indigo-100 items-center justify-center" style={{ borderWidth: 3, borderColor: "#F8FAFC" }}>
               {uploadMutation.isPending ? (
                 <ActivityIndicator color="#4361EE" testID="upload-loading-indicator" />
               ) : avatarUri ? (
