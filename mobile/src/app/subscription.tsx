@@ -71,7 +71,7 @@ const TIERS: TierConfig[] = [
   {
     id: "team",
     name: "Team",
-    price: "$19",
+    price: "$19.99",
     priceSubtext: "/mo",
     memberLimit: "Up to 25 members",
     accentColor: "#4361EE",
