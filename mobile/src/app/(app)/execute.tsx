@@ -792,6 +792,7 @@ export default function TasksScreen() {
       queryClient.invalidateQueries({ queryKey: ["calendar-events", activeTeamId] });
       setShowEventModal(false);
       setEditingEvent(null);
+      setConfirmDeleteEvent(false);
       setEventTitle(""); setEventDescription(""); setEventColor("#4361EE"); setEventIsHidden(true); setEventIsVideoMeeting(false);
     },
   });
@@ -803,7 +804,7 @@ export default function TasksScreen() {
       : new Date();
     setEventTitle(""); setEventDescription("");
     setEventStart(d); setEventEnd(d);
-    setEventColor("#4361EE"); setEventIsHidden(true); setEventIsVideoMeeting(false); setFormError(null);
+    setEventColor("#4361EE"); setEventIsHidden(true); setEventIsVideoMeeting(false); setFormError(null); setConfirmDeleteEvent(false);
     setShowEventModal(true);
   };
 
