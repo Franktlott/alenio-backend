@@ -204,9 +204,13 @@ export default function ChatScreen() {
           {/* Purple accent top border */}
           <View style={{ height: 3, backgroundColor: "#4361EE" }} />
           <View style={{ flexDirection: "row", alignItems: "center", padding: 16, gap: 12 }}>
-            <View style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: "#EEF2FF", alignItems: "center", justifyContent: "center" }}>
-              <MessageCircle size={22} color="#4361EE" />
-            </View>
+            {teamDetail?.image ? (
+              <Image source={{ uri: teamDetail.image }} style={{ width: 48, height: 48, borderRadius: 14 }} />
+            ) : (
+              <View style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: "#EEF2FF", alignItems: "center", justifyContent: "center" }}>
+                <MessageCircle size={22} color="#4361EE" />
+              </View>
+            )}
             <View style={{ flex: 1 }}>
               <Text style={{ fontSize: 16, fontWeight: "700", color: "#0F172A" }}>Team Chat</Text>
               <Text style={{ fontSize: 13, color: "#6B7280", marginTop: 1 }}>Primary team space</Text>
