@@ -583,6 +583,7 @@ export default function TasksScreen() {
 
   const [teamCompletedExpanded, setTeamCompletedExpanded] = useState(false);
   const [confirmCompleteTask, setConfirmCompleteTask] = useState<Task | null>(null);
+  const [actionMenuTask, setActionMenuTask] = useState<Task | null>(null);
   const [reassignTask, setReassignTask] = useState<Task | null>(null);
   const [confirmReassign, setConfirmReassign] = useState<{ task: Task; newUserId: string; newUserName: string } | null>(null);
   const [subtaskBlockMessage, setSubtaskBlockMessage] = useState<string | null>(null);
@@ -1207,7 +1208,7 @@ export default function TasksScreen() {
                 task={task}
                 onToggle={() => handleToggleTask(task)}
                 onPress={() => router.push({ pathname: "/task-detail", params: { taskId: task.id, teamId: activeTeamId! } })}
-                onLongPress={isOwnerOrLeader && !isDemo && task.assignments.length > 0 && task.status !== "done" ? () => setReassignTask(task) : undefined}
+                onLongPress={!isDemo ? () => setActionMenuTask(task) : undefined}
               />
             ))
           )}
@@ -1309,6 +1310,50 @@ export default function TasksScreen() {
           </View>
         </View>
       ) : null}
+
+      {/* Task action menu */}
+      <Modal visible={!!actionMenuTask} transparent animationType="fade" onRequestClose={() => setActionMenuTask(null)}>
+        <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" }} onPress={() => setActionMenuTask(null)}>
+          <Pressable onPress={(e) => e.stopPropagation()} style={{ backgroundColor: "white", borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 36, paddingTop: 8 }}>
+            <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: "#E2E8F0", alignSelf: "center", marginBottom: 16 }} />
+            <Text style={{ fontSize: 13, fontWeight: "600", color: "#94A3B8", paddingHorizontal: 20, marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 }} numberOfLines={1}>
+              {actionMenuTask?.title}
+            </Text>
+            {/* View / Edit */}
+            <Pressable
+              onPress={() => {
+                setActionMenuTask(null);
+                router.push({ pathname: "/task-detail", params: { taskId: actionMenuTask!.id, teamId: activeTeamId! } });
+              }}
+              style={{ flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: 20, paddingVertical: 16 }}
+            >
+              <Text style={{ fontSize: 20 }}>✏️</Text>
+              <Text style={{ fontSize: 16, fontWeight: "500", color: "#0F172A" }}>View / Edit</Text>
+            </Pressable>
+            {/* Reassign — owners/leaders only, undone tasks with assignees */}
+            {isOwnerOrLeader && actionMenuTask?.status !== "done" && (actionMenuTask?.assignments.length ?? 0) > 0 ? (
+              <Pressable
+                onPress={() => {
+                  const t = actionMenuTask!;
+                  setActionMenuTask(null);
+                  setReassignTask(t);
+                }}
+                style={{ flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: 20, paddingVertical: 16 }}
+              >
+                <Text style={{ fontSize: 20 }}>🔄</Text>
+                <Text style={{ fontSize: 16, fontWeight: "500", color: "#0F172A" }}>Reassign</Text>
+              </Pressable>
+            ) : null}
+            {/* Cancel */}
+            <Pressable
+              onPress={() => setActionMenuTask(null)}
+              style={{ marginHorizontal: 20, marginTop: 8, paddingVertical: 14, borderRadius: 12, alignItems: "center", backgroundColor: "#F1F5F9" }}
+            >
+              <Text style={{ fontSize: 15, fontWeight: "600", color: "#64748B" }}>Cancel</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {/* Reassign task modal */}
       <Modal visible={!!reassignTask} transparent animationType="slide" onRequestClose={() => setReassignTask(null)}>
