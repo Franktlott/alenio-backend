@@ -573,8 +573,17 @@ export default function ProfileScreen() {
     setRefreshing(false);
   };
 
-  const todaySeed = new Date().toISOString().split('T')[0].replace(/-/g, '');
-  const natureImageUrl = `https://picsum.photos/seed/${todaySeed}/800/320`;
+  const workspacePhotos = [
+    "photo-1497366216548-37526070297c", // clean desk with coffee and laptop
+    "photo-1484480974693-6ca0a78fb36b", // notebook and pen planning
+    "photo-1517842645767-c639042777db", // morning coffee and journal
+    "photo-1434030216411-0b793f4b4173", // person writing at desk
+    "photo-1488190211105-8b0e65b80b4e", // flatlay of workspace items
+    "photo-1507003211169-0a1dd7228f2d", // minimal modern desk setup
+    "photo-1531297484001-80022131f5a1", // laptop on clean white desk
+  ];
+  const dayIndex = new Date().getDay();
+  const natureImageUrl = `https://images.unsplash.com/${workspacePhotos[dayIndex]}?w=800&h=320&fit=crop&auto=format&q=80`;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#F8FAFC" }} edges={[]} testID="profile-screen">
