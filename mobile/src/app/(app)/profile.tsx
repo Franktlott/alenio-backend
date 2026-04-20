@@ -573,17 +573,17 @@ export default function ProfileScreen() {
     setRefreshing(false);
   };
 
-  const workspacePhotos = [
-    "photo-1497366216548-37526070297c", // clean desk with coffee and laptop
-    "photo-1484480974693-6ca0a78fb36b", // notebook and pen planning
-    "photo-1517842645767-c639042777db", // morning coffee and journal
-    "photo-1434030216411-0b793f4b4173", // person writing at desk
-    "photo-1488190211105-8b0e65b80b4e", // flatlay of workspace items
-    "photo-1507003211169-0a1dd7228f2d", // minimal modern desk setup
-    "photo-1531297484001-80022131f5a1", // laptop on clean white desk
+  const dailyGradients: [string, string, string][] = [
+    ["#1E3A8A", "#4338CA", "#6D28D9"], // Sun — deep blue → indigo
+    ["#0F766E", "#0D9488", "#059669"], // Mon — teal → emerald
+    ["#7C3AED", "#A855F7", "#DB2777"], // Tue — violet → rose
+    ["#B45309", "#D97706", "#EA580C"], // Wed — amber → orange
+    ["#1D4ED8", "#2563EB", "#0284C7"], // Thu — blue → sky
+    ["#4338CA", "#6366F1", "#8B5CF6"], // Fri — indigo → purple
+    ["#0369A1", "#0284C7", "#0891B2"], // Sat — ocean blue → cyan
   ];
   const dayIndex = new Date().getDay();
-  const natureImageUrl = `https://images.unsplash.com/${workspacePhotos[dayIndex]}?w=800&h=320&fit=crop&auto=format&q=80`;
+  const todayGradient = dailyGradients[dayIndex];
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#F8FAFC" }} edges={[]} testID="profile-screen">
@@ -604,17 +604,18 @@ export default function ProfileScreen() {
       </LinearGradient>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 88 }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" colors={["#4361EE"]} />}>
-        {/* Nature photo banner — full bleed */}
-        <View style={{ height: 160, overflow: "hidden" }}>
-          <Image
-            source={{ uri: natureImageUrl }}
-            style={{ width: "100%", height: 160, resizeMode: "cover" }}
-          />
+        {/* Daily gradient banner — full bleed */}
+        <LinearGradient
+          colors={todayGradient}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={{ height: 160 }}
+        >
           <LinearGradient
             colors={["transparent", "rgba(248,250,252,0.9)"]}
             style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 70 }}
           />
-        </View>
+        </LinearGradient>
 
         {/* Avatar + name hero */}
         <View style={{ alignItems: "center", paddingBottom: 24, paddingHorizontal: 16 }}>
