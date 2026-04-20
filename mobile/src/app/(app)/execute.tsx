@@ -1533,7 +1533,7 @@ export default function TasksScreen() {
               <View style={{ flexDirection: "row", gap: 10, marginBottom: 20 }}>
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748B", marginBottom: 6 }}>Start Date</Text>
-                  <Pressable onPress={() => setShowStartPicker(true)} style={{ borderWidth: 1.5, borderColor: "#4361EE", borderRadius: 12, paddingHorizontal: 10, paddingVertical: 10, flexDirection: "row", alignItems: "center", backgroundColor: "#4361EE0D" }}>
+                  <Pressable onPress={() => { setShowEndPicker(false); setShowStartPicker(true); }} style={{ borderWidth: 1.5, borderColor: "#4361EE", borderRadius: 12, paddingHorizontal: 10, paddingVertical: 10, flexDirection: "row", alignItems: "center", backgroundColor: "#4361EE0D" }}>
                     <Calendar size={13} color="#4361EE" />
                     <Text style={{ fontSize: 12, fontWeight: "500", color: "#4361EE", marginLeft: 6 }}>
                       {eventStart.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
@@ -1542,7 +1542,7 @@ export default function TasksScreen() {
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748B", marginBottom: 6 }}>End Date</Text>
-                  <Pressable onPress={() => setShowEndPicker(true)} style={{ borderWidth: 1.5, borderColor: "#7C3AED", borderRadius: 12, paddingHorizontal: 10, paddingVertical: 10, flexDirection: "row", alignItems: "center", backgroundColor: "#7C3AED0D" }}>
+                  <Pressable onPress={() => { setShowStartPicker(false); setShowEndPicker(true); }} style={{ borderWidth: 1.5, borderColor: "#7C3AED", borderRadius: 12, paddingHorizontal: 10, paddingVertical: 10, flexDirection: "row", alignItems: "center", backgroundColor: "#7C3AED0D" }}>
                     <Calendar size={13} color="#7C3AED" />
                     <Text style={{ fontSize: 12, fontWeight: "500", color: "#7C3AED", marginLeft: 6 }}>
                       {eventEnd.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
@@ -1551,37 +1551,34 @@ export default function TasksScreen() {
                 </View>
               </View>
 
-              {showStartPicker && Platform.OS === "ios" ? (
-                <Modal visible transparent animationType="slide">
-                  <View style={{ flex: 1, justifyContent: "flex-end" }}>
-                    <View style={{ backgroundColor: "white", borderTopLeftRadius: 24, borderTopRightRadius: 24 }}>
-                      <View style={{ flexDirection: "row", justifyContent: "space-between", paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 }}>
-                        <Pressable onPress={() => setShowStartPicker(false)}><Text style={{ color: "#64748B", fontSize: 15 }}>Cancel</Text></Pressable>
-                        <Pressable onPress={() => setShowStartPicker(false)}><Text style={{ color: "#4361EE", fontWeight: "600", fontSize: 15 }}>Done</Text></Pressable>
-                      </View>
-                      <DateTimePicker value={eventStart} mode="date" display="inline" onChange={(_e, d) => { if (d) { setEventStart(d); if (d > eventEnd) setEventEnd(d); } }} />
-                      <View style={{ height: 20 }} />
+              {showStartPicker ? (
+                Platform.OS === "ios" ? (
+                  <View style={{ backgroundColor: "#F8FAFC", borderRadius: 16, marginBottom: 14, overflow: "hidden" }}>
+                    <View style={{ flexDirection: "row", justifyContent: "space-between", paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4 }}>
+                      <Pressable onPress={() => setShowStartPicker(false)}><Text style={{ color: "#64748B", fontSize: 15 }}>Cancel</Text></Pressable>
+                      <Text style={{ fontSize: 14, fontWeight: "600", color: "#0F172A" }}>Start Date</Text>
+                      <Pressable onPress={() => setShowStartPicker(false)}><Text style={{ color: "#4361EE", fontWeight: "600", fontSize: 15 }}>Done</Text></Pressable>
                     </View>
+                    <DateTimePicker value={eventStart} mode="date" display="inline" onChange={(_e, d) => { if (d) { setEventStart(d); if (d > eventEnd) setEventEnd(d); } }} />
                   </View>
-                </Modal>
-              ) : showStartPicker ? (
-                <DateTimePicker value={eventStart} mode="date" display="default" onChange={(_e, d) => { setShowStartPicker(false); if (d) { setEventStart(d); if (d > eventEnd) setEventEnd(d); } }} />
+                ) : (
+                  <DateTimePicker value={eventStart} mode="date" display="default" onChange={(_e, d) => { setShowStartPicker(false); if (d) { setEventStart(d); if (d > eventEnd) setEventEnd(d); } }} />
+                )
               ) : null}
 
-              {showEndPicker && Platform.OS === "ios" ? (                <Modal visible transparent animationType="slide">
-                  <View style={{ flex: 1, justifyContent: "flex-end" }}>
-                    <View style={{ backgroundColor: "white", borderTopLeftRadius: 24, borderTopRightRadius: 24 }}>
-                      <View style={{ flexDirection: "row", justifyContent: "space-between", paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 }}>
-                        <Pressable onPress={() => setShowEndPicker(false)}><Text style={{ color: "#64748B", fontSize: 15 }}>Cancel</Text></Pressable>
-                        <Pressable onPress={() => setShowEndPicker(false)}><Text style={{ color: "#7C3AED", fontWeight: "600", fontSize: 15 }}>Done</Text></Pressable>
-                      </View>
-                      <DateTimePicker value={eventEnd} mode="date" display="inline" onChange={(_e, d) => { if (d) setEventEnd(d); }} />
-                      <View style={{ height: 20 }} />
+              {showEndPicker ? (
+                Platform.OS === "ios" ? (
+                  <View style={{ backgroundColor: "#F8FAFC", borderRadius: 16, marginBottom: 14, overflow: "hidden" }}>
+                    <View style={{ flexDirection: "row", justifyContent: "space-between", paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4 }}>
+                      <Pressable onPress={() => setShowEndPicker(false)}><Text style={{ color: "#64748B", fontSize: 15 }}>Cancel</Text></Pressable>
+                      <Text style={{ fontSize: 14, fontWeight: "600", color: "#0F172A" }}>End Date</Text>
+                      <Pressable onPress={() => setShowEndPicker(false)}><Text style={{ color: "#7C3AED", fontWeight: "600", fontSize: 15 }}>Done</Text></Pressable>
                     </View>
+                    <DateTimePicker value={eventEnd} mode="date" display="inline" minimumDate={eventStart} onChange={(_e, d) => { if (d) setEventEnd(d); }} />
                   </View>
-                </Modal>
-              ) : showEndPicker ? (
-                <DateTimePicker value={eventEnd} mode="date" display="default" onChange={(_e, d) => { setShowEndPicker(false); if (d) setEventEnd(d); }} />
+                ) : (
+                  <DateTimePicker value={eventEnd} mode="date" display="default" minimumDate={eventStart} onChange={(_e, d) => { setShowEndPicker(false); if (d) setEventEnd(d); }} />
+                )
               ) : null}
 
               {/* Video Meeting toggle */}
