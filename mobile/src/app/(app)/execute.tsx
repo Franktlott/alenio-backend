@@ -408,16 +408,24 @@ function TaskRow({ task, onToggle, onPress, onLongPress }: { task: Task; onToggl
 
   const { overdue, today } = getDueStatus();
 
-  const AVATAR_COLORS = ["#E0E7FF", "#FCE7F3", "#D1FAE5", "#FEF3C7", "#EDE9FE"];
-  const AVATAR_TEXT_COLORS = ["#4361EE", "#BE185D", "#065F46", "#92400E", "#5B21B6"];
+  // Icon circle background: priority accent at 15% opacity
+  const iconCircleBg = priority.accentColor + "26"; // 26 hex = ~15% opacity
 
-  const getAvatarColors = (index: number) => ({
-    bg: AVATAR_COLORS[index % AVATAR_COLORS.length],
-    text: AVATAR_TEXT_COLORS[index % AVATAR_TEXT_COLORS.length],
-  });
+  // First assignee name
+  const firstAssigneeName = task.assignments?.[0]?.user?.name ?? null;
 
-  const hasAssignmentsOrCreator = (task.assignments && task.assignments.length > 0) || !!task.creator;
-  const showDateRow = !!dueDate || isDone;
+  // Due time color
+  const dueTimeColor = overdue || today ? "#EF4444" : "#64748B";
+
+  // Done status label
+  const getDoneLabel = (): { label: string; color: string } => {
+    const wasLate = task.dueDate && task.completedAt && new Date(task.completedAt) > new Date(task.dueDate);
+    const color = wasLate ? "#F97316" : "#10B981";
+    const label = wasLate
+      ? (completedDate ? `Done overdue · ${fmtDate(completedDate)}` : "Done overdue")
+      : (completedDate ? `Done · ${fmtDate(completedDate)}` : "Done");
+    return { label, color };
+  };
 
   return (
     <Pressable
@@ -428,177 +436,130 @@ function TaskRow({ task, onToggle, onPress, onLongPress }: { task: Task; onToggl
       style={{
         marginHorizontal: 12,
         marginBottom: 6,
-        borderRadius: 10,
+        borderRadius: 14,
         backgroundColor: "white",
         shadowColor: "#000",
         shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.06,
+        shadowOpacity: 0.07,
         shadowRadius: 4,
         elevation: 2,
-        flexDirection: "row",
-        overflow: "hidden",
       }}
     >
-      {/* Left accent bar */}
-      <View style={{ width: 4, backgroundColor: priority.accentColor }} />
+      <View style={{ paddingHorizontal: 12, paddingVertical: 9 }}>
 
-      {/* Card content */}
-      <View style={{ flex: 1, paddingHorizontal: 12, paddingVertical: 9 }}>
-
-        {/* Row 1: Checkbox + Title + Priority badge + Time */}
-        <View style={{ flexDirection: "row", alignItems: "center" }}>
-          {/* Checkbox */}
+        {/* Row 1: Icon circle + Title + 3-dot menu */}
+        <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
+          {/* Icon circle — tapping toggles done state */}
           <Pressable
             onPress={onToggle}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            style={{ marginRight: 10 }}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 16,
+              backgroundColor: isDone ? "#D1FAE5" : iconCircleBg,
+              alignItems: "center",
+              justifyContent: "center",
+              marginRight: 10,
+              marginTop: 1,
+              flexShrink: 0,
+            }}
           >
             {isDone ? (
-              <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: "#10B981", alignItems: "center", justifyContent: "center" }}>
-                <Text style={{ color: "white", fontSize: 11, fontWeight: "bold" }}>✓</Text>
-              </View>
+              <Text style={{ fontSize: 14, color: "#10B981", fontWeight: "700" }}>✓</Text>
             ) : (
-              <View style={{ width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: "#CBD5E1" }} />
+              <Text style={{ fontSize: 13, fontWeight: "700", color: priority.accentColor }}>
+                {priority.label[0]}
+              </Text>
             )}
           </Pressable>
 
-          {/* Title */}
-          <View style={{ flex: 1, flexDirection: "row", alignItems: "center" }}>
-            {task.incognito ? <Text style={{ fontSize: 13, marginRight: 4 }}>🕵️</Text> : null}
-            <Text
-              numberOfLines={1}
-              style={{
-                fontSize: 14,
-                fontWeight: "700",
-                color: isDone ? "#94A3B8" : "#0F172A",
-                textDecorationLine: isDone ? "line-through" : "none",
-                flex: 1,
-              }}
-            >
-              {task.title}
-            </Text>
+          {/* Title + assignee */}
+          <View style={{ flex: 1, marginRight: 6 }}>
+            <View style={{ flexDirection: "row", alignItems: "center" }}>
+              {task.incognito ? <Text style={{ fontSize: 12, marginRight: 3 }}>🕵️</Text> : null}
+              <Text
+                numberOfLines={2}
+                style={{
+                  fontSize: 14,
+                  fontWeight: "600",
+                  color: isDone ? "#94A3B8" : "#0F172A",
+                  textDecorationLine: isDone ? "line-through" : "none",
+                  lineHeight: 19,
+                  flex: 1,
+                }}
+              >
+                {task.title}
+              </Text>
+            </View>
+            {firstAssigneeName ? (
+              <Text numberOfLines={1} style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>
+                {"Assigned to: "}
+                {firstAssigneeName}
+              </Text>
+            ) : null}
+          </View>
 
-            {/* Priority badge */}
+          {/* 3-dot menu */}
+          <Pressable
+            onPress={onLongPress}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+            style={{ paddingLeft: 4, paddingTop: 2 }}
+          >
+            <Text style={{ fontSize: 18, color: "#94A3B8", lineHeight: 20 }}>{"⋮"}</Text>
+          </Pressable>
+        </View>
+
+        {/* Row 2: Priority pill | star placeholder | status/done badge | clock + due time | recurrence */}
+        <View style={{ flexDirection: "row", alignItems: "center", marginTop: 7, gap: 6 }}>
+          {/* Priority pill */}
+          <View style={{
+            flexDirection: "row",
+            alignItems: "center",
+            paddingHorizontal: 7,
+            paddingVertical: 2,
+            borderRadius: 20,
+            backgroundColor: priority.bg,
+          }}>
+            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: priority.accentColor, marginRight: 4 }} />
+            <Text style={{ fontSize: 11, fontWeight: "600", color: priority.text }}>{priority.label}</Text>
+          </View>
+
+          {/* Done status badge */}
+          {isDone ? (
             <View style={{
               flexDirection: "row",
               alignItems: "center",
-              paddingHorizontal: 8,
-              paddingVertical: 3,
-              borderRadius: 6,
-              backgroundColor: priority.bg,
-              marginLeft: 6,
+              paddingHorizontal: 7,
+              paddingVertical: 2,
+              borderRadius: 20,
+              backgroundColor: "#D1FAE5",
             }}>
-              <Text style={{ fontSize: 9, color: priority.text, marginRight: 3 }}>■</Text>
-              <Text style={{ fontSize: 11, fontWeight: "600", color: priority.text }}>{priority.label}</Text>
-            </View>
-          </View>
-
-          {/* Time */}
-          {dueDate && !isDone ? (
-            <View style={{ flexDirection: "row", alignItems: "center", marginLeft: 8 }}>
-              <Text style={{ fontSize: 12, color: "#64748B" }}>→ {fmtTime(dueDate)}</Text>
+              <Text style={{ fontSize: 11, fontWeight: "600", color: "#059669" }}>
+                {getDoneLabel().label}
+              </Text>
             </View>
           ) : null}
-        </View>
 
-        {/* Row 2: Avatars + assignee/creator names */}
-        {hasAssignmentsOrCreator ? (
-          <View style={{ marginTop: 6, flexDirection: "row", alignItems: "center" }}>
-            {/* Stacked avatars */}
-            {task.assignments && task.assignments.length > 0 ? (
-              <View style={{ flexDirection: "row", alignItems: "center" }}>
-                {task.assignments.slice(0, 2).map((assignment, index) => {
-                  const colors = getAvatarColors(index);
-                  return (
-                    <View
-                      key={assignment.user?.id ?? index}
-                      style={{
-                        width: 24,
-                        height: 24,
-                        borderRadius: 12,
-                        borderWidth: 2,
-                        borderColor: "white",
-                        overflow: "hidden",
-                        backgroundColor: colors.bg,
-                        alignItems: "center",
-                        justifyContent: "center",
-                        marginLeft: index === 0 ? 0 : -7,
-                        zIndex: 2 - index,
-                      }}
-                    >
-                      {assignment.user?.image ? (
-                        <Image source={{ uri: assignment.user.image }} style={{ width: 24, height: 24 }} resizeMode="cover" />
-                      ) : (
-                        <Text style={{ fontSize: 10, fontWeight: "700", color: colors.text }}>
-                          {assignment.user?.name?.[0]?.toUpperCase() ?? "?"}
-                        </Text>
-                      )}
-                    </View>
-                  );
-                })}
-              </View>
-            ) : null}
-
-            {/* Assignee + creator text */}
-            <Text style={{ fontSize: 12, color: "#64748B", marginLeft: 6, flex: 1 }} numberOfLines={1}>
-              {task.assignments?.[0]?.user?.name ?? null}
-              {task.creator?.name ? ` • Assigned by ${task.creator.name}` : null}
-            </Text>
-          </View>
-        ) : null}
-
-        {/* Row 3: Date info */}
-        {showDateRow ? (
-          <View style={{ marginTop: 4, flexDirection: "row", alignItems: "center" }}>
-            {isDone ? (
-              <>
-                {(() => {
-                  const wasCompletedLate = task.dueDate && task.completedAt && new Date(task.completedAt) > new Date(task.dueDate);
-                  const doneColor = wasCompletedLate ? "#F97316" : "#10B981";
-                  const doneLabel = wasCompletedLate
-                    ? (completedDate ? `Done overdue · ${fmtDate(completedDate)}` : "Done overdue")
-                    : (completedDate ? `Done · ${fmtDate(completedDate)}` : "Done");
-                  return (
-                    <>
-                      <Clock size={11} color={doneColor} />
-                      <Text style={{ fontSize: 11, fontWeight: "500", color: doneColor, marginLeft: 4 }}>
-                        {doneLabel}
-                      </Text>
-                    </>
-                  );
-                })()}
-              </>
-            ) : dueDate ? (
-              <>
-                <Clock size={11} color={overdue ? "#EF4444" : today ? "#EF4444" : "#64748B"} />
-                <Text style={{
-                  fontSize: 11,
-                  fontWeight: "500",
-                  color: overdue ? "#EF4444" : today ? "#EF4444" : "#64748B",
-                  marginLeft: 4,
-                }}>
-                  {overdue
-                    ? `Overdue · ${fmtDate(dueDate)}`
-                    : today
-                    ? `Today · ${fmtDate(dueDate)}`
-                    : fmtDate(dueDate)}
-                </Text>
-              </>
-            ) : null}
-
-            {/* Recurrence */}
-            {task.recurrenceRule && !isDone ? (
-              <Text style={{ fontSize: 11, color: "#818CF8", marginLeft: 8 }}>↺ {task.recurrenceRule.type}</Text>
-            ) : null}
-          </View>
-        ) : (
-          /* Recurrence when no date row */
-          task.recurrenceRule && !isDone ? (
-            <View style={{ marginTop: 6, flexDirection: "row", alignItems: "center" }}>
-              <Text style={{ fontSize: 11, color: "#818CF8" }}>↺ {task.recurrenceRule.type}</Text>
+          {/* Due time */}
+          {dueDate && !isDone ? (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
+              <Clock size={11} color={dueTimeColor} />
+              <Text style={{ fontSize: 11, fontWeight: "500", color: dueTimeColor }}>
+                {overdue
+                  ? `Overdue · ${fmtDate(dueDate)}`
+                  : today
+                  ? `Today · ${fmtTime(dueDate)}`
+                  : fmtTime(dueDate)}
+              </Text>
             </View>
-          ) : null
-        )}
+          ) : null}
+
+          {/* Recurrence indicator */}
+          {task.recurrenceRule && !isDone ? (
+            <Text style={{ fontSize: 11, color: "#818CF8" }}>{"↺"}</Text>
+          ) : null}
+        </View>
 
       </View>
     </Pressable>
