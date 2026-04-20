@@ -73,7 +73,7 @@ activityRouter.post(
       prisma.teamMember.findUnique({ where: { userId_teamId: { userId: user.id, teamId } } }),
       prisma.teamMember.findUnique({
         where: { userId_teamId: { userId: targetUserId, teamId } },
-        include: { user: { select: { id: true, name: true } } },
+        include: { user: { select: { id: true, name: true, image: true } } },
       }),
     ]);
     if (!membership) return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
@@ -87,6 +87,7 @@ activityRouter.post(
         metadata: JSON.stringify({
           targetUserId,
           targetName: targetMember.user.name,
+          targetUserImage: targetMember.user.image ?? null,
           celebrationType,
           message: message?.trim() || null,
         }),

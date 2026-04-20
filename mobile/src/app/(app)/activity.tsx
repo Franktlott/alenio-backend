@@ -39,7 +39,7 @@ type ActivityEvent = {
   id: string;
   type: "task_completed" | "member_joined" | "member_removed" | "calendar_event_added" | "task_assigned" | "task_milestone" | "personal_best" | "celebration";
   createdAt: string;
-  metadata: { taskTitle?: string; taskTitles?: string[]; taskCount?: number; eventTitle?: string; eventTitles?: string[]; eventCount?: number; startDate?: string; allDay?: boolean; userName?: string; count?: number; incognito?: boolean; assigneeName?: string; isVideoMeeting?: boolean; targetUserId?: string; targetName?: string; celebrationType?: string; message?: string | null } | null;
+  metadata: { taskTitle?: string; taskTitles?: string[]; taskCount?: number; eventTitle?: string; eventTitles?: string[]; eventCount?: number; startDate?: string; allDay?: boolean; userName?: string; count?: number; incognito?: boolean; assigneeName?: string; isVideoMeeting?: boolean; targetUserId?: string; targetName?: string; targetUserImage?: string | null; celebrationType?: string; message?: string | null } | null;
   user: { id: string; name: string; image: string | null } | null;
   reactions: Record<string, { count: number; userIds: string[]; users: { id: string; name: string }[] }>;
 };
@@ -698,9 +698,13 @@ function CelebrationPostCard({ item, activeTeamId, currentUserId, isDemo, showPi
 
           {/* 3-column main row */}
           <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 12 }}>
-            {/* LEFT: icon container */}
-            <View style={{ width: 48, height: 48, borderRadius: 12, backgroundColor: celebType.bg, alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-              <celebType.Icon size={24} color={celebType.color} />
+            {/* LEFT: target user photo or icon fallback */}
+            <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: celebType.bg, alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden" }}>
+              {meta?.targetUserImage ? (
+                <ExpoImage source={{ uri: meta.targetUserImage }} style={{ width: 48, height: 48 }} contentFit="cover" />
+              ) : (
+                <celebType.Icon size={24} color={celebType.color} />
+              )}
             </View>
 
             {/* CENTER: content */}
