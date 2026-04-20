@@ -502,7 +502,7 @@ function TaskRow({ task, onToggle, onPress, onLongPress }: { task: Task; onToggl
 
           {/* 3-dot menu */}
           <Pressable
-            onPress={onLongPress}
+            onPress={(e) => { e.stopPropagation(); onLongPress?.(); }}
             hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
             style={{ paddingLeft: 4, paddingTop: 2 }}
           >
