@@ -61,6 +61,96 @@ async function getMembership(userId: string, teamId: string) {
   });
 }
 
+// Streak helper: calculate streak and award milestone/personal-best for a single user
+async function calculateAndAwardStreak(
+  userId: string,
+  teamId: string,
+  taskTitle: string,
+  taskIncognito: boolean,
+  userName: string | null
+): Promise<{ milestoneCount: number | null; personalBestCount: number | null }> {
+  let milestoneCount: number | null = null;
+  let personalBestCount: number | null = null;
+
+  // Consecutive on-time completions since last overdue (most recent first)
+  const streakRows = await prisma.$queryRaw<{ completedAt: string; dueDate: string }[]>`
+    SELECT t.completedAt, t.dueDate
+    FROM Task t
+    JOIN TaskAssignment ta ON ta.taskId = t.id
+    WHERE t.teamId = ${teamId}
+    AND ta.userId = ${userId}
+    AND t.status = 'done'
+    AND t.completedAt IS NOT NULL
+    AND t.dueDate IS NOT NULL
+    ORDER BY t.completedAt DESC
+  `;
+  let streak = 0;
+  for (const row of streakRows) {
+    if (new Date(row.completedAt) <= new Date(row.dueDate)) {
+      streak++;
+    } else {
+      break;
+    }
+  }
+
+  const isMilestone = streak === 5 || streak === 10 || streak === 15 || (streak >= 20 && streak % 10 === 0);
+  if (isMilestone) {
+    milestoneCount = streak;
+    await logActivity({
+      teamId,
+      userId,
+      type: "task_milestone",
+      metadata: { count: streak, userName, incognito: taskIncognito },
+    });
+  }
+
+  const fullUser = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { personalBestStreak: true, personalBestCelebrated: true },
+  });
+
+  if (streak === 0) {
+    // Task was completed late — reset the flag so the next comeback can be celebrated
+    if (fullUser?.personalBestCelebrated) {
+      await prisma.user.update({ where: { id: userId }, data: { personalBestCelebrated: false } });
+    }
+  } else if (fullUser && streak >= fullUser.personalBestStreak && fullUser.personalBestStreak > 0) {
+    if (!fullUser.personalBestCelebrated) {
+      // First time crossing the personal best in this comeback — check for late task history
+      const hadLateTask = await prisma.$queryRaw<{ count: number }[]>`
+        SELECT COUNT(*) as count
+        FROM Task t
+        JOIN TaskAssignment ta ON ta.taskId = t.id
+        WHERE ta.userId = ${userId}
+        AND t.status = 'done'
+        AND t.completedAt IS NOT NULL
+        AND t.dueDate IS NOT NULL
+        AND t.completedAt > t.dueDate
+      `;
+      const lateCount = Number(hadLateTask[0]?.count ?? 0);
+      if (lateCount > 0) {
+        // Celebrate once and mark as celebrated — won't fire again until next streak break
+        await prisma.user.update({ where: { id: userId }, data: { personalBestStreak: streak, personalBestCelebrated: true } });
+        personalBestCount = streak;
+        await logActivity({
+          teamId,
+          userId,
+          type: "personal_best",
+          metadata: { count: streak, userName, incognito: taskIncognito },
+        });
+      } else {
+        // No late history yet — update PB silently
+        await prisma.user.update({ where: { id: userId }, data: { personalBestStreak: streak } });
+      }
+    } else {
+      // Already celebrated this comeback — just update PB silently
+      await prisma.user.update({ where: { id: userId }, data: { personalBestStreak: streak } });
+    }
+  }
+
+  return { milestoneCount, personalBestCount };
+}
+
 // GET /api/teams/:teamId/tasks
 tasksRouter.get("/", async (c) => {
   const user = c.get("user")!;
@@ -530,75 +620,29 @@ tasksRouter.patch("/:taskId", async (c) => {
       })();
     }
 
-    // Calculate streak: consecutive on-time completions since last overdue (most recent first)
-    const streakRows = await prisma.$queryRaw<{ completedAt: string; dueDate: string }[]>`
-      SELECT t.completedAt, t.dueDate
-      FROM Task t
-      JOIN TaskAssignment ta ON ta.taskId = t.id
-      WHERE t.teamId = ${teamId}
-      AND ta.userId = ${user.id}
-      AND t.status = 'done'
-      AND t.completedAt IS NOT NULL
-      AND t.dueDate IS NOT NULL
-      ORDER BY t.completedAt DESC
-    `;
-    let streak = 0;
-    for (const row of streakRows) {
-      if (new Date(row.completedAt) <= new Date(row.dueDate)) {
-        streak++;
-      } else {
-        break;
-      }
-    }
-    const isMilestone = streak === 5 || streak === 10 || streak === 15 || (streak >= 20 && streak % 10 === 0);
-    if (isMilestone) {
-      milestoneCount = streak;
-      await logActivity({
-        teamId,
-        userId: user.id,
-        type: "task_milestone",
-        metadata: { count: streak, userName: user.name, incognito: task.incognito },
-      });
-    }
+    // Award streak credit to the completing user
+    ({ milestoneCount, personalBestCount } = await calculateAndAwardStreak(
+      user.id,
+      teamId,
+      task.title,
+      task.incognito,
+      user.name
+    ));
 
-    const fullUser = await prisma.user.findUnique({ where: { id: user.id }, select: { personalBestStreak: true, personalBestCelebrated: true } });
-
-    if (streak === 0) {
-      // Task was completed late — reset the flag so the next comeback can be celebrated
-      if (fullUser?.personalBestCelebrated) {
-        await prisma.user.update({ where: { id: user.id }, data: { personalBestCelebrated: false } });
-      }
-    } else if (fullUser && streak >= fullUser.personalBestStreak && fullUser.personalBestStreak > 0) {
-      if (!fullUser.personalBestCelebrated) {
-        // First time crossing the personal best in this comeback — check for late task history
-        const hadLateTask = await prisma.$queryRaw<{ count: number }[]>`
-          SELECT COUNT(*) as count
-          FROM Task t
-          JOIN TaskAssignment ta ON ta.taskId = t.id
-          WHERE ta.userId = ${user.id}
-          AND t.status = 'done'
-          AND t.completedAt IS NOT NULL
-          AND t.dueDate IS NOT NULL
-          AND t.completedAt > t.dueDate
-        `;
-        const lateCount = Number(hadLateTask[0]?.count ?? 0);
-        if (lateCount > 0) {
-          // Celebrate once and mark as celebrated — won't fire again until next streak break
-          await prisma.user.update({ where: { id: user.id }, data: { personalBestStreak: streak, personalBestCelebrated: true } });
-          personalBestCount = streak;
-          await logActivity({
-            teamId,
-            userId: user.id,
-            type: "personal_best",
-            metadata: { count: streak, userName: user.name, incognito: task.incognito },
-          });
-        } else {
-          // No late history yet — update PB silently
-          await prisma.user.update({ where: { id: user.id }, data: { personalBestStreak: streak } });
-        }
-      } else {
-        // Already celebrated this comeback — just update PB silently
-        await prisma.user.update({ where: { id: user.id }, data: { personalBestStreak: streak } });
+    // For joint tasks, also award streak credit to every other assignee in parallel
+    if (task.isJoint) {
+      const allAssignments = await prisma.taskAssignment.findMany({ where: { taskId } });
+      const otherAssigneeIds = allAssignments.map((a) => a.userId).filter((id) => id !== user.id);
+      if (otherAssigneeIds.length > 0) {
+        const otherUsers = await prisma.user.findMany({
+          where: { id: { in: otherAssigneeIds } },
+          select: { id: true, name: true },
+        });
+        void Promise.all(
+          otherUsers.map((ou) =>
+            calculateAndAwardStreak(ou.id, teamId, task.title, task.incognito, ou.name)
+          )
+        );
       }
     }
 
