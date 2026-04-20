@@ -15,7 +15,10 @@ import {
   KeyboardAvoidingView,
   Switch,
   Alert,
+  Dimensions,
 } from "react-native";
+
+const SCREEN_HEIGHT = Dimensions.get("window").height;
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams, Redirect, useFocusEffect } from "expo-router";
 import { Plus, User, Users, ArrowUpDown, ChevronLeft, ChevronRight, X, CalendarDays, CheckSquare, Calendar, Check, UserRound, Video, VideoOff, Clock, Lock, Globe } from "lucide-react-native";
@@ -1505,7 +1508,7 @@ export default function TasksScreen() {
             ) : null}
 
             <ScrollView
-              style={{ flex: 1, paddingHorizontal: 20 }}
+              style={{ paddingHorizontal: 20, maxHeight: SCREEN_HEIGHT * 0.72 }}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
               contentContainerStyle={{ paddingBottom: 40 }}
