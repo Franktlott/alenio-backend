@@ -573,17 +573,17 @@ export default function ProfileScreen() {
     setRefreshing(false);
   };
 
-  const dailyGradients: [string, string, string][] = [
-    ["#1E3A8A", "#4338CA", "#6D28D9"], // Sun — deep blue → indigo
-    ["#0F766E", "#0D9488", "#059669"], // Mon — teal → emerald
-    ["#7C3AED", "#A855F7", "#DB2777"], // Tue — violet → rose
-    ["#B45309", "#D97706", "#EA580C"], // Wed — amber → orange
-    ["#1D4ED8", "#2563EB", "#0284C7"], // Thu — blue → sky
-    ["#4338CA", "#6366F1", "#8B5CF6"], // Fri — indigo → purple
-    ["#0369A1", "#0284C7", "#0891B2"], // Sat — ocean blue → cyan
+  const naturePhotos = [
+    "photo-1506905925346-21bda4d32df4", // Sun — misty mountain lake
+    "photo-1448375240586-882707db888b", // Mon — golden forest path
+    "photo-1500534314209-a25ddb2bd429", // Tue — ocean cliffs at sunrise
+    "photo-1418985991508-e47386d96a71", // Wed — snowy pine forest
+    "photo-1469854523086-cc02fe5d8800", // Thu — desert dunes at dusk
+    "photo-1432405972618-c60b0225b8f9", // Fri — waterfall in jungle
+    "photo-1531366936337-7c912a4589a7", // Sat — aurora over mountains
   ];
   const dayIndex = new Date().getDay();
-  const todayGradient = dailyGradients[dayIndex];
+  const natureImageUrl = `https://images.unsplash.com/${naturePhotos[dayIndex]}?w=800&h=320&fit=crop&auto=format&q=80`;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#F8FAFC" }} edges={[]} testID="profile-screen">
@@ -604,18 +604,14 @@ export default function ProfileScreen() {
       </LinearGradient>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 88 }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" colors={["#4361EE"]} />}>
-        {/* Daily gradient banner — full bleed */}
-        <LinearGradient
-          colors={todayGradient}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={{ height: 160 }}
-        >
+        {/* Nature photo banner — full bleed */}
+        <View style={{ height: 160, overflow: "hidden" }}>
+          <Image source={{ uri: natureImageUrl }} style={{ width: "100%", height: 160, resizeMode: "cover" }} />
           <LinearGradient
             colors={["transparent", "rgba(248,250,252,0.9)"]}
             style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 70 }}
           />
-        </LinearGradient>
+        </View>
 
         {/* Avatar + name hero */}
         <View style={{ alignItems: "center", paddingBottom: 24, paddingHorizontal: 16 }}>
