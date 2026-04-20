@@ -19,6 +19,7 @@ import { useTeamStore } from "@/lib/state/team-store";
 import { useSession } from "@/lib/auth/use-session";
 import type { Task, Team } from "@/lib/types";
 import { useDemoMode } from "@/lib/useDemo";
+import { useSubscriptionStore } from "@/lib/state/subscription-store";
 
 type CalendarEvent = {
   id: string;
@@ -165,6 +166,10 @@ export default function CalendarScreen() {
   const myRole = (activeTeam as (Team & { role?: string }) | undefined)?.role ?? "";
   const isOwnerOrLeader = myRole === "owner" || myRole === "team_leader";
 
+  const plan = useSubscriptionStore((s) => s.plan);
+  const isPaid = plan === "team";
+  const canAddEvent = isOwnerOrLeader || isPaid;
+
   const { data: events = [], isLoading: eventsLoading } = useQuery({
     queryKey: ["calendar-events", activeTeamId],
     queryFn: () => api.get<CalendarEvent[]>(`/api/teams/${activeTeamId}/events`),
@@ -231,9 +236,9 @@ export default function CalendarScreen() {
             <Pressable onPress={prevMonth} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(255,255,255,0.2)", alignItems: "center", justifyContent: "center" }} testID="prev-month-button">
               <ChevronLeft size={20} color="white" />
             </Pressable>
-            {isOwnerOrLeader && activeTeamId && !isDemo ? (
+            {canAddEvent && activeTeamId && !isDemo ? (
               <Pressable
-                onPress={() => router.push({ pathname: "/create-event", params: { teamId: activeTeamId!, startDate: (selectedDate ?? new Date()).toISOString() } })}
+                onPress={() => router.push({ pathname: "/create-event", params: { teamId: activeTeamId!, startDate: (selectedDate ?? new Date()).toISOString(), myRole: myRole } })}
                 style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "rgba(255,255,255,0.22)", paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20 }}
                 testID="header-add-event-button"
               >
@@ -428,9 +433,9 @@ export default function CalendarScreen() {
               <Text style={{ fontSize: 14, fontWeight: "700", color: "#0F172A" }}>
                 {selectedDate.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
               </Text>
-              {isOwnerOrLeader && !isDemo ? (
+              {canAddEvent && !isDemo ? (
                 <Pressable
-                  onPress={() => router.push({ pathname: "/create-event", params: { teamId: activeTeamId!, startDate: selectedDate.toISOString() } })}
+                  onPress={() => router.push({ pathname: "/create-event", params: { teamId: activeTeamId!, startDate: selectedDate.toISOString(), myRole: myRole } })}
                   style={{ flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "#4361EE", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 }}
                   testID="add-event-button"
                 >

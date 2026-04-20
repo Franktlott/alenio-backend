@@ -152,8 +152,20 @@ calendarRouter.post(
     const membership = await prisma.teamMember.findUnique({
       where: { userId_teamId: { userId: user.id, teamId } },
     });
-    if (!membership || !["owner","team_leader"].includes(membership.role)) {
-      return c.json({ error: { message: "Only team owners can create events", code: "FORBIDDEN" } }, 403);
+    if (!membership) {
+      return c.json({ error: { message: "You are not a member of this team", code: "FORBIDDEN" } }, 403);
+    }
+
+    const isOwnerOrLeader = ["owner", "team_leader"].includes(membership.role);
+    let forcePrivate = false;
+
+    if (!isOwnerOrLeader) {
+      const subscription = await prisma.teamSubscription.findUnique({ where: { teamId } });
+      const isPaid = subscription && ["team", "pro"].includes(subscription.plan);
+      if (!isPaid) {
+        return c.json({ error: { message: "Only team owners can create events on the free plan", code: "FORBIDDEN" } }, 403);
+      }
+      forcePrivate = true;
     }
 
     const reminderMins = body.reminderMinutes ?? [];
@@ -166,7 +178,7 @@ calendarRouter.post(
         endDate: body.endDate ? new Date(body.endDate) : null,
         allDay: body.allDay ?? true,
         color: body.color ?? "#4361EE",
-        isHidden: body.isHidden ?? false,
+        isHidden: forcePrivate ? true : (body.isHidden ?? false),
         isVideoMeeting: body.isVideoMeeting ?? false,
         reminderMinutes: JSON.stringify(reminderMins),
         teamId,

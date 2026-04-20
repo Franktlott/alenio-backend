@@ -40,7 +40,7 @@ const EVENT_COLORS = ["#4361EE", "#7C3AED", "#10B981", "#F59E0B", "#EF4444", "#E
 export default function CreateEventScreen() {
   const {
     teamId, startDate, eventId, eventTitle: initialTitle, eventDescription: initialDescription,
-    eventColor: initialColor, eventEndDate, eventIsHidden, eventIsVideoMeeting,
+    eventColor: initialColor, eventEndDate, eventIsHidden, eventIsVideoMeeting, myRole,
   } = useLocalSearchParams<{
     teamId: string;
     startDate?: string;
@@ -51,7 +51,10 @@ export default function CreateEventScreen() {
     eventEndDate?: string;
     eventIsHidden?: string;
     eventIsVideoMeeting?: string;
+    myRole?: string;
   }>();
+
+  const isOwnerOrLeader = myRole === "owner" || myRole === "team_leader";
 
   const queryClient = useQueryClient();
   const isEditing = !!eventId;
@@ -456,22 +459,24 @@ export default function CreateEventScreen() {
         ) : null}
 
         {/* Visibility toggle */}
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: "white", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 14, borderWidth: 1.5, borderColor: !isHidden ? "#4361EE" : "#E2E8F0" }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-            <Users size={18} color={!isHidden ? "#4361EE" : "#CBD5E1"} />
-            <View>
-              <Text style={{ fontSize: 14, fontWeight: "600", color: "#0F172A" }}>Public</Text>
-              <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 1 }}>{!isHidden ? "Visible to the whole team" : "Only visible to you"}</Text>
+        {isOwnerOrLeader ? (
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: "white", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 14, borderWidth: 1.5, borderColor: !isHidden ? "#4361EE" : "#E2E8F0" }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+              <Users size={18} color={!isHidden ? "#4361EE" : "#CBD5E1"} />
+              <View>
+                <Text style={{ fontSize: 14, fontWeight: "600", color: "#0F172A" }}>Public</Text>
+                <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 1 }}>{!isHidden ? "Visible to the whole team" : "Only visible to you"}</Text>
+              </View>
             </View>
+            <Switch
+              value={!isHidden}
+              onValueChange={(v) => setIsHidden(!v)}
+              trackColor={{ false: "#E2E8F0", true: "#4361EE" }}
+              thumbColor="white"
+              testID="hidden-toggle"
+            />
           </View>
-          <Switch
-            value={!isHidden}
-            onValueChange={(v) => setIsHidden(!v)}
-            trackColor={{ false: "#E2E8F0", true: "#4361EE" }}
-            thumbColor="white"
-            testID="hidden-toggle"
-          />
-        </View>
+        ) : null}
 
         {/* Color picker */}
         <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748B", marginBottom: 10 }}>Color</Text>
