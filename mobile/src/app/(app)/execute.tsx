@@ -1334,7 +1334,11 @@ export default function TasksScreen() {
                 .map((member) => (
                   <Pressable
                     key={member.userId}
-                    onPress={() => reassignTask && setConfirmReassign({ task: reassignTask, newUserId: member.userId, newUserName: member.user?.name ?? "this person" })}
+                    onPress={() => {
+                      if (!reassignTask) return;
+                      setConfirmReassign({ task: reassignTask, newUserId: member.userId, newUserName: member.user?.name ?? "this person" });
+                      setReassignTask(null);
+                    }}
                     style={{ flexDirection: "row", alignItems: "center", gap: 12, padding: 12, borderRadius: 12, backgroundColor: "#F8FAFC" }}
                     testID="reassign-member-row"
                   >
