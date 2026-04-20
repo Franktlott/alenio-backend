@@ -1240,7 +1240,7 @@ export default function TasksScreen() {
                 task={task}
                 onToggle={() => handleToggleTask(task)}
                 onPress={() => router.push({ pathname: "/task-detail", params: { taskId: task.id, teamId: activeTeamId! } })}
-                onLongPress={isOwnerOrLeader && !isDemo && task.assignments.length > 0 ? () => setReassignTask(task) : undefined}
+                onLongPress={isOwnerOrLeader && !isDemo && task.assignments.length > 0 && task.status !== "done" ? () => setReassignTask(task) : undefined}
               />
             ))
           )}
@@ -1282,7 +1282,7 @@ export default function TasksScreen() {
                   task={item}
                   onToggle={() => handleToggleTask(item)}
                   onPress={() => router.push({ pathname: "/task-detail", params: { taskId: item.id, teamId: activeTeamId! } })}
-                  onLongPress={isOwnerOrLeader && !isDemo && item.assignments.length > 0 ? () => setReassignTask(item) : undefined}
+                  onLongPress={isOwnerOrLeader && !isDemo && item.assignments.length > 0 && item.status !== "done" ? () => setReassignTask(item) : undefined}
                 />
               )) : null}
             </View>
@@ -1344,14 +1344,14 @@ export default function TasksScreen() {
       ) : null}
 
       {/* Reassign task modal */}
-      {reassignTask ? (
-        <View style={{ position: "absolute", inset: 0, backgroundColor: "rgba(0,0,0,0.5)", alignItems: "center", justifyContent: "flex-end", zIndex: 102 }}>
-          <View style={{ backgroundColor: "white", borderTopLeftRadius: 24, borderTopRightRadius: 24, width: "100%", paddingBottom: 32, maxHeight: "75%" }}>
+      <Modal visible={!!reassignTask} transparent animationType="slide" onRequestClose={() => setReassignTask(null)}>
+        <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }} onPress={() => setReassignTask(null)}>
+          <Pressable onPress={(e) => e.stopPropagation()} style={{ backgroundColor: "white", borderTopLeftRadius: 24, borderTopRightRadius: 24, width: "100%", paddingBottom: 32, maxHeight: "75%" }}>
             <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: "#E2E8F0", alignSelf: "center", marginTop: 12, marginBottom: 16 }} />
             <View style={{ paddingHorizontal: 20, marginBottom: 16 }}>
               <Text style={{ fontSize: 17, fontWeight: "700", color: "#0F172A", marginBottom: 4 }}>Reassign Task</Text>
-              <Text style={{ fontSize: 13, color: "#64748B" }} numberOfLines={1}>"{reassignTask.title}"</Text>
-              {reassignTask.assignments[0]?.user ? (
+              <Text style={{ fontSize: 13, color: "#64748B" }} numberOfLines={1}>"{reassignTask?.title}"</Text>
+              {reassignTask?.assignments[0]?.user ? (
                 <View style={{ flexDirection: "row", alignItems: "center", marginTop: 8, backgroundColor: "#F8FAFC", borderRadius: 10, padding: 10, gap: 8 }}>
                   <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: "#E0E7FF", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
                     {reassignTask.assignments[0].user.image ? (
@@ -1367,11 +1367,11 @@ export default function TasksScreen() {
             <Text style={{ fontSize: 12, fontWeight: "600", color: "#94A3B8", paddingHorizontal: 20, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 }}>Select new assignee</Text>
             <ScrollView style={{ maxHeight: 320 }} contentContainerStyle={{ paddingHorizontal: 20, gap: 6 }}>
               {(teamData?.members ?? [])
-                .filter((m) => !reassignTask.assignments.some((a) => a.userId === m.userId))
+                .filter((m) => !reassignTask?.assignments.some((a) => a.userId === m.userId))
                 .map((member) => (
                   <Pressable
                     key={member.userId}
-                    onPress={() => reassignMutation.mutate({ task: reassignTask, newUserId: member.userId })}
+                    onPress={() => reassignTask && reassignMutation.mutate({ task: reassignTask, newUserId: member.userId })}
                     style={{ flexDirection: "row", alignItems: "center", gap: 12, padding: 12, borderRadius: 12, backgroundColor: "#F8FAFC" }}
                     testID="reassign-member-row"
                   >
@@ -1399,9 +1399,9 @@ export default function TasksScreen() {
             >
               <Text style={{ fontSize: 15, fontWeight: "600", color: "#64748B" }}>Cancel</Text>
             </Pressable>
-          </View>
-        </View>
-      ) : null}
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {/* Add choice modal */}
       <Modal visible={showAddModal} transparent animationType="fade" onRequestClose={() => setShowAddModal(false)}>
