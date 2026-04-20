@@ -48,6 +48,7 @@ export default function CreateTaskScreen() {
   const [selectedAssignees, setSelectedAssignees] = useState<string[]>([]);
   const [isRecurring, setIsRecurring] = useState(false);
   const [isIncognito, setIsIncognito] = useState(false);
+  const [isJoint, setIsJoint] = useState(false);
   const [recurrenceType, setRecurrenceType] = useState<RecurrenceType>("weekly");
   const [recurrenceInterval, setRecurrenceInterval] = useState("1");
   const [selectedDayOfWeek, setSelectedDayOfWeek] = useState<number | null>(null);
@@ -184,6 +185,7 @@ export default function CreateTaskScreen() {
       dueDate: dueDate!.toISOString(),
       assigneeIds: selectedAssignees,
       incognito: isIncognito,
+      isJoint: isJoint || undefined,
       recurrence: isRecurring
         ? {
             type: recurrenceType,
@@ -200,11 +202,13 @@ export default function CreateTaskScreen() {
   };
 
   const toggleAssignee = (userId: string) => {
-    setSelectedAssignees((prev) =>
-      prev.includes(userId)
+    setSelectedAssignees((prev) => {
+      const next = prev.includes(userId)
         ? prev.filter((id) => id !== userId)
-        : [...prev, userId]
-    );
+        : [...prev, userId];
+      if (next.length < 2) setIsJoint(false);
+      return next;
+    });
   };
 
   const addSubtask = () => {
@@ -474,6 +478,38 @@ export default function CreateTaskScreen() {
                   );
                 })}
               </View>
+            </View>
+          ) : null}
+
+          {/* Joint Task — only shown when 2+ assignees selected */}
+          {selectedAssignees.length >= 2 ? (
+            <View className="py-4 border-b border-slate-100 dark:border-slate-800">
+              <View className="flex-row items-center justify-between">
+                <View style={{ flex: 1, marginRight: 12 }}>
+                  <Text className="text-sm font-semibold text-slate-500">Joint Task</Text>
+                  <Text className="text-xs text-slate-400 mt-0.5">
+                    Everyone works on one shared task
+                  </Text>
+                </View>
+                <Switch
+                  value={isJoint}
+                  onValueChange={(val) => setIsJoint(val)}
+                  trackColor={{ false: "#E2E8F0", true: "#6B8EF6" }}
+                  thumbColor="white"
+                  testID="joint-task-switch"
+                />
+              </View>
+              {isJoint ? (
+                <View
+                  className="mt-3 px-3 py-2.5 rounded-xl"
+                  style={{ backgroundColor: "#EFF6FF" }}
+                  testID="joint-task-banner"
+                >
+                  <Text className="text-xs text-blue-600">
+                    Subtasks are shared — completing one marks it done for the whole team.
+                  </Text>
+                </View>
+              ) : null}
             </View>
           ) : null}
 

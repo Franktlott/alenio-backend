@@ -224,10 +224,21 @@ export default function TaskDetailScreen() {
         </View>
 
         {/* Title */}
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 12 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: task.isJoint ? 8 : 12 }}>
           {task.incognito ? <Text style={{ fontSize: 20 }}>🕵️</Text> : null}
           <Text className="text-2xl font-bold text-slate-900 dark:text-white" style={{ flex: 1 }}>{task.title}</Text>
         </View>
+        {task.isJoint ? (
+          <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 12 }}>
+            <View
+              style={{ flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, backgroundColor: "#4338CA" }}
+              testID="joint-task-badge"
+            >
+              <Text style={{ fontSize: 13 }}>🤝</Text>
+              <Text style={{ fontSize: 11, fontWeight: "700", color: "white", letterSpacing: 0.3 }}>Joint Task</Text>
+            </View>
+          </View>
+        ) : null}
 
         {/* Description */}
         {task.description ? (
@@ -423,6 +434,15 @@ export default function TaskDetailScreen() {
             </View>
           </View>
 
+          {task.isJoint ? (
+            <View
+              className="mb-2 px-3 py-2 rounded-xl"
+              style={{ backgroundColor: "#EFF6FF" }}
+              testID="joint-assignees-note"
+            >
+              <Text className="text-xs text-blue-600">All assignees work on this task together.</Text>
+            </View>
+          ) : null}
           {task.assignments && task.assignments.length > 0 ? (
             <View style={{ gap: 8 }}>
               {task.assignments.map((a) => (

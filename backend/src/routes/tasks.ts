@@ -121,7 +121,7 @@ tasksRouter.post("/", async (c) => {
   }
 
   const body = await c.req.json();
-  const { title, description, priority, dueDate, assigneeIds, recurrence, attachmentUrl, incognito } = body;
+  const { title, description, priority, dueDate, assigneeIds, recurrence, attachmentUrl, incognito, isJoint, subtasks } = body;
 
   if (!title?.trim()) {
     return c.json({ error: { message: "Title is required", code: "VALIDATION_ERROR" } }, 400);
@@ -134,11 +134,17 @@ tasksRouter.post("/", async (c) => {
     creator: { select: { id: true, name: true, email: true } },
   } as const;
 
+  const dueDateObj = dueDate ? new Date(dueDate) : null;
+
+  const subtaskList: { title: string; order: number }[] = Array.isArray(subtasks)
+    ? subtasks.map((s: { title: string }, i: number) => ({ title: s.title.trim(), order: i }))
+    : [];
+
   const baseTaskData = {
     title: title.trim(),
     description: description?.trim(),
     priority: priority || "medium",
-    dueDate: dueDate ? new Date(dueDate) : null,
+    dueDate: dueDateObj,
     incognito: incognito === true,
     teamId,
     creatorId: user.id,
@@ -165,24 +171,38 @@ tasksRouter.post("/", async (c) => {
 
   let tasks: Awaited<ReturnType<typeof prisma.task.create>>[];
 
-  if (ids.length <= 1) {
+  if (isJoint === true && ids.length > 1) {
+    // Joint task: one task shared by all assignees
+    const task = await prisma.task.create({
+      data: {
+        ...baseTaskData,
+        isJoint: true,
+        assignments: { create: ids.map((uid: string) => ({ userId: uid })) },
+        ...(subtaskList.length > 0 ? { subtasks: { create: subtaskList } } : {}),
+      },
+      include: taskInclude,
+    });
+    tasks = [task];
+  } else if (ids.length <= 1) {
     // Single task (0 or 1 assignee)
     const task = await prisma.task.create({
       data: {
         ...baseTaskData,
         ...(ids.length === 1 ? { assignments: { create: [{ userId: ids[0]! }] } } : {}),
+        ...(subtaskList.length > 0 ? { subtasks: { create: subtaskList } } : {}),
       },
       include: taskInclude,
     });
     tasks = [task];
   } else {
-    // One task per assignee
+    // One task per assignee (existing behavior)
     tasks = await Promise.all(
       ids.map((assigneeId) =>
         prisma.task.create({
           data: {
             ...baseTaskData,
             assignments: { create: [{ userId: assigneeId }] },
+            ...(subtaskList.length > 0 ? { subtasks: { create: subtaskList } } : {}),
           },
           include: taskInclude,
         })
