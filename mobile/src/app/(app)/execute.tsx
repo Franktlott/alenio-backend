@@ -1234,7 +1234,7 @@ export default function TasksScreen() {
               ) : null}
             </View>
           ) : (
-            tasks.slice(0, visibleCount).map((task) => (
+            tasks.slice(0, filter === "all" ? tasks.length : visibleCount).map((task) => (
               <TaskRow
                 key={task.id}
                 task={task}
@@ -1244,7 +1244,7 @@ export default function TasksScreen() {
               />
             ))
           )}
-          {tasks.length > visibleCount ? (
+          {filter !== "all" && tasks.length > visibleCount ? (
             <Pressable
               onPress={() => setVisibleCount(v => v + 5)}
               className="mx-4 mb-2 py-3 rounded-2xl items-center"
