@@ -575,7 +575,6 @@ export default function TasksScreen() {
   const insets = useSafeAreaInsets();
   const { openModal } = useLocalSearchParams<{ openModal?: string }>();
   const [filter, setFilter] = useState<FilterTab>("all");
-  const [visibleCount, setVisibleCount] = useState<number>(7);
   const [sort, setSort] = useState<SortMode>("due");
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
   const [memberDropdownOpen, setMemberDropdownOpen] = useState(false);
@@ -606,6 +605,9 @@ export default function TasksScreen() {
   const [showStartTimePicker, setShowStartTimePicker] = useState(false);
   const [showEndTimePicker, setShowEndTimePicker] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [visibleCount, setVisibleCount] = useState<number>(7);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState<boolean>(false);
   const { data: session } = useSession();
   const isDemo = useDemoMode();
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
@@ -634,10 +636,31 @@ export default function TasksScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
+    setNextCursor(null);
     await queryClient.invalidateQueries({ queryKey: ["tasks", activeTeamId, "mine"] });
     await queryClient.invalidateQueries({ queryKey: ["tasks", activeTeamId, "team"] });
     await queryClient.invalidateQueries({ queryKey: ["calendar-events", activeTeamId] });
     setRefreshing(false);
+  };
+
+  const handleLoadMore = async () => {
+    if (!activeTeamId || !nextCursor || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const result = await api.get<{ tasks: Task[]; nextCursor: string | null }>(
+        `/api/teams/${activeTeamId}/tasks?myTasks=true&cursor=${nextCursor}&limit=50`
+      );
+      queryClient.setQueryData<{ tasks: Task[]; nextCursor: string | null }>(
+        ["tasks", activeTeamId, "mine"],
+        (prev) => ({
+          tasks: [...(prev?.tasks ?? []), ...result.tasks],
+          nextCursor: result.nextCursor,
+        })
+      );
+      setNextCursor(result.nextCursor);
+    } finally {
+      setLoadingMore(false);
+    }
   };
 
   const { data: teams, isLoading: teamsLoading } = useQuery({
@@ -653,18 +676,27 @@ export default function TasksScreen() {
   }, [teams, activeTeamId, setActiveTeamId]);
 
   // My tasks (assigned to me, or created by me with no assignment) — Active & Completed tabs
-  const { data: allTasks = [], isLoading } = useQuery({
+  const { data: myTasksData, isLoading } = useQuery({
     queryKey: ["tasks", activeTeamId, "mine"],
-    queryFn: () => api.get<Task[]>(`/api/teams/${activeTeamId}/tasks?myTasks=true`),
+    queryFn: async () => {
+      const result = await api.get<{ tasks: Task[]; nextCursor: string | null }>(`/api/teams/${activeTeamId}/tasks?myTasks=true`);
+      setNextCursor(result.nextCursor);
+      return result;
+    },
     enabled: !!activeTeamId,
   });
+  const allTasks: Task[] = myTasksData?.tasks ?? [];
 
   // Tasks I created — used for Team tab (will filter client-side for assigned-to-others)
-  const { data: teamTasks = [] } = useQuery({
+  const { data: teamTasksData } = useQuery({
     queryKey: ["tasks", activeTeamId, "team"],
-    queryFn: () => api.get<Task[]>(`/api/teams/${activeTeamId}/tasks?creatorId=me`),
+    queryFn: async () => {
+      const result = await api.get<{ tasks: Task[]; nextCursor: string | null }>(`/api/teams/${activeTeamId}/tasks?creatorId=me`);
+      return result;
+    },
     enabled: !!activeTeamId && filter === "assigned",
   });
+  const teamTasks: Task[] = teamTasksData?.tasks ?? [];
 
   // Team members for the member filter (Team tab only)
   const { data: teamData } = useQuery({
@@ -1215,11 +1247,27 @@ export default function TasksScreen() {
           {tasks.length > visibleCount ? (
             <Pressable
               onPress={() => setVisibleCount(v => v + 7)}
-              className="mx-4 mb-4 py-3 rounded-2xl items-center"
+              className="mx-4 mb-2 py-3 rounded-2xl items-center"
               style={{ backgroundColor: '#F1F5F9' }}
+              testID="show-more-button"
             >
               <Text className="text-sm font-semibold text-slate-600">
                 Show {Math.min(7, tasks.length - visibleCount)} more
+              </Text>
+            </Pressable>
+          ) : null}
+          {filter !== "assigned" && nextCursor !== null ? (
+            <Pressable
+              onPress={handleLoadMore}
+              style={{ marginHorizontal: 16, marginBottom: 4, paddingVertical: 12, borderRadius: 16, alignItems: "center", backgroundColor: "#EEF2FF", flexDirection: "row", justifyContent: "center", gap: 8 }}
+              testID="load-more-button"
+              disabled={loadingMore}
+            >
+              {loadingMore ? (
+                <ActivityIndicator size="small" color="#4361EE" testID="load-more-indicator" />
+              ) : null}
+              <Text style={{ fontSize: 13, fontWeight: "600", color: "#4361EE" }}>
+                {loadingMore ? "Loading..." : "Load more tasks"}
               </Text>
             </Pressable>
           ) : null}

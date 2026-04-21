@@ -147,6 +147,7 @@ webRouter.get("/api/teams/:id/tasks", async (c) => {
       creator: { select: { id: true, name: true } },
     },
     orderBy: { createdAt: "desc" },
+    take: 100,
   });
   return c.json({ data: tasks });
 });

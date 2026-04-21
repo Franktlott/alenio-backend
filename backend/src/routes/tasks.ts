@@ -203,7 +203,9 @@ tasksRouter.get("/", async (c) => {
     return c.json({ error: { message: "Task manager requires Alenio Team or Pro", code: "SUBSCRIPTION_REQUIRED" } }, 403);
   }
 
-  const { status, priority, assigneeId, creatorId, myTasks } = c.req.query();
+  const { status, priority, assigneeId, creatorId, myTasks, cursor } = c.req.query();
+  const rawLimit = Number(c.req.query("limit") ?? 50);
+  const limit = Math.min(isNaN(rawLimit) || rawLimit < 1 ? 50 : rawLimit, 200);
 
   const resolvedAssigneeId = assigneeId === "me" ? user.id : assigneeId;
 
@@ -231,9 +233,14 @@ tasksRouter.get("/", async (c) => {
       creator: { select: { id: true, name: true, email: true } },
     },
     orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
+    take: limit,
+    ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
   });
 
-  return c.json({ data: tasks });
+  const lastTask = tasks.length === limit ? tasks[tasks.length - 1] : undefined;
+  const nextCursor = lastTask?.id ?? null;
+
+  return c.json({ data: { tasks, nextCursor } });
 });
 
 // POST /api/teams/:teamId/tasks
