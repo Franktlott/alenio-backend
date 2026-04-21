@@ -416,10 +416,11 @@ export default function CreateTaskScreen() {
                     <DateTimePicker
                       value={dueDate ?? new Date()}
                       mode="date"
-                      display="inline"
+                      display="spinner"
                       minimumDate={isRegularMember ? new Date() : undefined}
                       onChange={(_e, date) => { if (date) { date.setHours(23, 59, 59, 0); setDueDate(date); setError(null); } }}
                       testID="date-time-picker"
+                      style={{ height: 200 }}
                     />
                     <View style={{ height: 20 }} />
                   </View>
