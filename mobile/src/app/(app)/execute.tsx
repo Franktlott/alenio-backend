@@ -1804,7 +1804,7 @@ export default function TasksScreen() {
               end={{ x: 1, y: 1 }}
               style={{ borderRadius: 28, padding: 3 }}
             >
-              <View style={{ backgroundColor: "#FFFBEB", borderRadius: 26, padding: 28, alignItems: "center", gap: 12 }}>
+              <View style={{ backgroundColor: "#FCD34D", borderRadius: 26, padding: 28, alignItems: "center", gap: 12 }}>
                 {/* Logo + Trophy */}
                 <View style={{ alignItems: "center", gap: 4 }}>
                   <Image source={require("@/assets/alenio-icon.png")} style={{ width: 40, height: 40, borderRadius: 10, marginBottom: 4 }} />
@@ -1852,7 +1852,7 @@ export default function TasksScreen() {
               end={{ x: 1, y: 1 }}
               style={{ borderRadius: 28, padding: 3 }}
             >
-              <View style={{ backgroundColor: "#FFFBEB", borderRadius: 26, padding: 28, alignItems: "center", gap: 14 }}>
+              <View style={{ backgroundColor: "#FCD34D", borderRadius: 26, padding: 28, alignItems: "center", gap: 14 }}>
                 <Image source={require("@/assets/alenio-icon.png")} style={{ width: 36, height: 36, borderRadius: 9 }} />
                 <View style={{ alignItems: "center", gap: 6 }}>
                   <Text style={{ fontSize: 56 }}>🔥</Text>
