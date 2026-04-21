@@ -230,16 +230,9 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
           void Application.getIosPushNotificationServiceEnvironmentAsync().catch(() => null);
         }
 
-        await appendNotifDebug({ step: "device-token", status: "info" });
-        const devicePushToken = await withTimeout(
-          Notifications.getDevicePushTokenAsync(),
-          15_000,
-          "getDevicePushTokenAsync"
-        );
-
         await appendNotifDebug({ step: "expo-token", status: "info" });
         const tokenResult = await withTimeout(
-          Notifications.getExpoPushTokenAsync({ projectId, devicePushToken: devicePushToken as any }),
+          Notifications.getExpoPushTokenAsync({ projectId }),
           30_000,
           "getExpoPushTokenAsync"
         );
