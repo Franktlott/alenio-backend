@@ -462,33 +462,36 @@ function CelebrationCard({ item, activeTeamId, currentUserId, isDemo, showPicker
         colors={["#F59E0B", "#EF4444"]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
-        style={{ borderRadius: 28, padding: 3 }}
+        style={{ borderRadius: 20, padding: 2 }}
       >
-        <View style={{ backgroundColor: "#FCD34D", borderRadius: 26, padding: 24, alignItems: "center", gap: 12 }}>
-          {/* Logo + Trophy */}
-          <View style={{ alignItems: "center", gap: 4 }}>
-            <Image source={require("@/assets/alenio-icon.png")} style={{ width: 40, height: 40, borderRadius: 10, marginBottom: 4 }} />
-            <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: "#FEF3C7", alignItems: "center", justifyContent: "center" }}>
-              <Text style={{ fontSize: 36 }}>🏆</Text>
+        <View style={{ backgroundColor: "#FCD34D", borderRadius: 19, padding: 14, gap: 10 }}>
+          {/* Main row: trophy + info */}
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+            {/* Trophy circle */}
+            <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: "#FEF3C7", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <Text style={{ fontSize: 24 }}>🏆</Text>
             </View>
+            {/* Text */}
+            <View style={{ flex: 1, gap: 1 }}>
+              <Text style={{ fontSize: 10, fontWeight: "700", color: "#D97706", letterSpacing: 1.2, textTransform: "uppercase" }}>Milestone Reached!</Text>
+              <View style={{ flexDirection: "row", alignItems: "baseline", gap: 4 }}>
+                <Text style={{ fontSize: 28, fontWeight: "800", color: "#F59E0B", lineHeight: 32 }}>{count}</Text>
+                <Text style={{ fontSize: 12, fontWeight: "600", color: "#92400E" }}>tasks on time</Text>
+              </View>
+              <Text style={{ fontSize: 12, color: "#B45309" }}>{name} · Keep it up 🔥</Text>
+            </View>
+            {/* Logo */}
+            <Image source={require("@/assets/alenio-icon.png")} style={{ width: 28, height: 28, borderRadius: 7, flexShrink: 0 }} />
           </View>
 
-          <Text style={{ fontSize: 13, fontWeight: "700", color: "#D97706", letterSpacing: 1.5, textTransform: "uppercase" }}>Milestone Reached!</Text>
-
-          <Text style={{ fontSize: 44, fontWeight: "800", color: "#F59E0B", lineHeight: 48 }}>{count}</Text>
-          <Text style={{ fontSize: 16, fontWeight: "600", color: "#92400E", textAlign: "center", lineHeight: 22 }}>
-            {name} completed{"\n"}{count} tasks on time!
-          </Text>
-          <Text style={{ fontSize: 13, color: "#B45309", textAlign: "center" }}>Keep up the incredible streak 🔥</Text>
-
-          {/* Footer: avatar + name | timestamp */}
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", width: "100%", marginTop: 4, paddingTop: 12, borderTopWidth: 1, borderTopColor: "#F59E0B40" }}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-              <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: "#FEF3C7", overflow: "hidden", alignItems: "center", justifyContent: "center" }}>
+          {/* Footer: timestamp + reactions */}
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingTop: 8, borderTopWidth: 1, borderTopColor: "#F59E0B40" }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+              <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: "#FEF3C7", overflow: "hidden", alignItems: "center", justifyContent: "center" }}>
                 {item.user?.image ? (
-                  <ExpoImage source={{ uri: item.user.image }} style={{ width: 24, height: 24 }} contentFit="cover" />
+                  <ExpoImage source={{ uri: item.user.image }} style={{ width: 20, height: 20 }} contentFit="cover" />
                 ) : (
-                  <Text style={{ fontSize: 11, fontWeight: "700", color: "#D97706" }}>{name[0].toUpperCase()}</Text>
+                  <Text style={{ fontSize: 9, fontWeight: "700", color: "#D97706" }}>{name[0].toUpperCase()}</Text>
                 )}
               </View>
               <Text style={{ fontSize: 11, color: "#92400E", fontWeight: "600" }}>{name}</Text>
