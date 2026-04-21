@@ -49,6 +49,7 @@ export default function CreateTaskScreen() {
   const [isRecurring, setIsRecurring] = useState(false);
   const [isIncognito, setIsIncognito] = useState(false);
   const [isJoint, setIsJoint] = useState(false);
+  const [showSplitConfirm, setShowSplitConfirm] = useState(false);
   const [recurrenceType, setRecurrenceType] = useState<RecurrenceType>("weekly");
   const [recurrenceInterval, setRecurrenceInterval] = useState("1");
   const [selectedDayOfWeek, setSelectedDayOfWeek] = useState<number | null>(null);
@@ -202,16 +203,8 @@ export default function CreateTaskScreen() {
     onError: () => setError("Failed to create task. Please try again."),
   });
 
-  const handleCreate = () => {
-    if (!title.trim()) {
-      setError("Please enter a task title");
-      return;
-    }
-    if (selectedAssignees.length === 0) {
-      setError("Please assign this task to at least one person");
-      return;
-    }
-    setError(null);
+  const confirmCreate = () => {
+    setShowSplitConfirm(false);
     createMutation.mutate({
       title: title.trim(),
       description: description.trim() || undefined,
@@ -233,6 +226,23 @@ export default function CreateTaskScreen() {
           }
         : undefined,
     });
+  };
+
+  const handleCreate = () => {
+    if (!title.trim()) {
+      setError("Please enter a task title");
+      return;
+    }
+    if (selectedAssignees.length === 0) {
+      setError("Please assign this task to at least one person");
+      return;
+    }
+    setError(null);
+    if (selectedAssignees.length >= 2 && !isJoint) {
+      setShowSplitConfirm(true);
+      return;
+    }
+    confirmCreate();
   };
 
   const toggleAssignee = (userId: string) => {
@@ -812,6 +822,43 @@ export default function CreateTaskScreen() {
             </View>
           </TouchableOpacity>
         </TouchableOpacity>
+      </Modal>
+
+      {/* Split confirm modal */}
+      <Modal visible={showSplitConfirm} transparent animationType="fade" onRequestClose={() => setShowSplitConfirm(false)}>
+        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center", paddingHorizontal: 24 }}>
+          <View className="bg-white dark:bg-slate-800 rounded-2xl p-6 w-full" style={{ shadowColor: "#000", shadowOpacity: 0.2, shadowRadius: 24 }}>
+            <Text className="text-base font-bold text-slate-900 dark:text-white mb-3">Creating separate tasks</Text>
+            <Text className="text-sm text-slate-600 dark:text-slate-300 mb-1">
+              {"You've selected "}
+              <Text style={{ fontWeight: "bold" }}>{selectedAssignees.length} people</Text>
+              {" without enabling Joint Task. This will create "}
+              <Text style={{ fontWeight: "bold" }}>{selectedAssignees.length} separate tasks</Text>
+              {" — one for each person."}
+            </Text>
+            <Text className="text-sm text-slate-600 dark:text-slate-300 mb-5">
+              {"\nEnable Joint Task if you want everyone working on the same shared task."}
+            </Text>
+            <TouchableOpacity
+              onPress={() => { setIsJoint(true); setShowSplitConfirm(false); }}
+              className="py-3 rounded-xl items-center mb-3"
+              style={{ backgroundColor: "#4361EE" }}
+              testID="split-confirm-enable-joint"
+            >
+              <Text className="text-sm font-semibold text-white">Enable Joint Task</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={confirmCreate}
+              className="py-3 rounded-xl items-center border"
+              style={{ borderColor: "#CBD5E1" }}
+              testID="split-confirm-create-separate"
+            >
+              <Text className="text-sm font-semibold text-slate-600 dark:text-slate-300">
+                {`Create ${selectedAssignees.length} separate tasks`}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       </Modal>
 
       {/* Template picker modal */}
