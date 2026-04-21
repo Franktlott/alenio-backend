@@ -605,7 +605,7 @@ export default function TasksScreen() {
   const [showStartTimePicker, setShowStartTimePicker] = useState(false);
   const [showEndTimePicker, setShowEndTimePicker] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
-  const [visibleCount, setVisibleCount] = useState<number>(7);
+  const [visibleCount, setVisibleCount] = useState<number>(5);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState<boolean>(false);
   const { data: session } = useSession();
@@ -884,7 +884,7 @@ export default function TasksScreen() {
   }, [filter]);
 
   useEffect(() => {
-    setVisibleCount(7);
+    setVisibleCount(5);
   }, [filter]);
 
   // Active: tasks assigned to me (or mine with no assignment), open
@@ -1246,13 +1246,13 @@ export default function TasksScreen() {
           )}
           {tasks.length > visibleCount ? (
             <Pressable
-              onPress={() => setVisibleCount(v => v + 7)}
+              onPress={() => setVisibleCount(v => v + 5)}
               className="mx-4 mb-2 py-3 rounded-2xl items-center"
               style={{ backgroundColor: '#F1F5F9' }}
               testID="show-more-button"
             >
               <Text className="text-sm font-semibold text-slate-600">
-                Show {Math.min(7, tasks.length - visibleCount)} more
+                Show {Math.min(5, tasks.length - visibleCount)} more
               </Text>
             </Pressable>
           ) : null}
