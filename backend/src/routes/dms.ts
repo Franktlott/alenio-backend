@@ -478,16 +478,16 @@ dmsRouter.post("/unread-counts", async (c) => {
 
   const counts: Record<string, number> = {};
 
+  const validLastReadIds = Object.values(lastReadIds).filter((id): id is string => Boolean(id));
+  const lastReadMessages = await prisma.directMessage.findMany({
+    where: { id: { in: validLastReadIds } },
+    select: { id: true, createdAt: true },
+  });
+  const lastReadMap = Object.fromEntries(lastReadMessages.map((m) => [m.id, m.createdAt]));
+
   await Promise.all(
     Object.entries(lastReadIds).map(async ([convId, lastReadId]) => {
-      let afterDate: Date | null = null;
-      if (lastReadId) {
-        const msg = await prisma.directMessage.findUnique({
-          where: { id: lastReadId },
-          select: { createdAt: true },
-        });
-        if (msg) afterDate = msg.createdAt;
-      }
+      const afterDate: Date | null = lastReadId ? (lastReadMap[lastReadId] ?? null) : null;
       counts[convId] = await prisma.directMessage.count({
         where: {
           conversationId: convId,

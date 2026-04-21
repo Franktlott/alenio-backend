@@ -353,13 +353,17 @@ tasksRouter.post("/", async (c) => {
   }
 
   // Log activity for each assignee
+  const assignedUsersForLog = await prisma.user.findMany({
+    where: { id: { in: ids } },
+    select: { id: true, name: true },
+  });
+  const userNameMapForLog = Object.fromEntries(assignedUsersForLog.map((u) => [u.id, u.name ?? ""]));
   for (const assigneeId of ids) {
-    const assignedUser = await prisma.user.findUnique({ where: { id: assigneeId }, select: { name: true } });
     await logActivity({
       teamId,
       userId: assigneeId,
       type: "task_assigned",
-      metadata: { taskTitles: incognito ? [] : [title.trim()], taskCount: 1, assigneeName: assignedUser?.name ?? "" },
+      metadata: { taskTitles: incognito ? [] : [title.trim()], taskCount: 1, assigneeName: userNameMapForLog[assigneeId] ?? "" },
     });
   }
 
@@ -814,13 +818,17 @@ tasksRouter.post("/:taskId/assign", async (c) => {
   }
 
   // Log activity for each newly assigned user
+  const assignedUsersForAssignLog = await prisma.user.findMany({
+    where: { id: { in: userIds as string[] } },
+    select: { id: true, name: true },
+  });
+  const assignUserNameMap = Object.fromEntries(assignedUsersForAssignLog.map((u) => [u.id, u.name ?? ""]));
   for (const assignedUserId of userIds as string[]) {
-    const assignedUser = await prisma.user.findUnique({ where: { id: assignedUserId }, select: { name: true } });
     await logActivity({
       teamId,
       userId: assignedUserId,
       type: "task_assigned",
-      metadata: { taskTitles: [task.title], taskCount: 1, assigneeName: assignedUser?.name ?? "" },
+      metadata: { taskTitles: [task.title], taskCount: 1, assigneeName: assignUserNameMap[assignedUserId] ?? "" },
     });
   }
 
