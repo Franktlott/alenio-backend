@@ -1852,7 +1852,7 @@ export default function TasksScreen() {
               end={{ x: 1, y: 1 }}
               style={{ borderRadius: 28, padding: 3 }}
             >
-              <View style={{ backgroundColor: "#0F0F0F", borderRadius: 26, padding: 28, alignItems: "center", gap: 14 }}>
+              <View style={{ backgroundColor: "#FFFBEB", borderRadius: 26, padding: 28, alignItems: "center", gap: 14 }}>
                 <Image source={require("@/assets/alenio-icon.png")} style={{ width: 36, height: 36, borderRadius: 9 }} />
                 <View style={{ alignItems: "center", gap: 6 }}>
                   <Text style={{ fontSize: 56 }}>🔥</Text>
@@ -1861,22 +1861,22 @@ export default function TasksScreen() {
                   </View>
                 </View>
                 <View style={{ alignItems: "center", gap: 4 }}>
-                  <Text style={{ fontSize: 64, fontWeight: "900", color: "white", lineHeight: 68 }}>
+                  <Text style={{ fontSize: 64, fontWeight: "900", color: "#F59E0B", lineHeight: 68 }}>
                     {personalBestModal?.count}
                   </Text>
-                  <Text style={{ fontSize: 14, color: "#9CA3AF", fontWeight: "600" }}>tasks in a row</Text>
+                  <Text style={{ fontSize: 14, color: "#D97706", fontWeight: "600" }}>tasks in a row</Text>
                 </View>
                 <View style={{ alignItems: "center", gap: 6 }}>
-                  <Text style={{ fontSize: 20, fontWeight: "800", color: "white", textAlign: "center" }}>
+                  <Text style={{ fontSize: 20, fontWeight: "800", color: "#92400E", textAlign: "center" }}>
                     You're back! 💪
                   </Text>
-                  <Text style={{ fontSize: 13, color: "#D1D5DB", textAlign: "center", lineHeight: 20 }}>
+                  <Text style={{ fontSize: 13, color: "#B45309", textAlign: "center", lineHeight: 20 }}>
                     {personalBestModal?.userName} just matched their{"\n"}personal best streak after a setback.
                   </Text>
                 </View>
                 <Pressable
                   onPress={() => setPersonalBestModal(null)}
-                  style={{ marginTop: 4, backgroundColor: "#F97316", paddingHorizontal: 40, paddingVertical: 14, borderRadius: 24, width: "100%" }}
+                  style={{ marginTop: 4, backgroundColor: "#F59E0B", paddingHorizontal: 40, paddingVertical: 14, borderRadius: 24, width: "100%" }}
                 >
                   <Text style={{ color: "white", fontWeight: "800", fontSize: 16, textAlign: "center" }}>Keep the streak alive 🔥</Text>
                 </Pressable>
