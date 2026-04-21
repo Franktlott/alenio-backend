@@ -461,7 +461,7 @@ function CelebrationCard({ item, activeTeamId, currentUserId, isDemo, showPicker
     >
       <View
         style={{
-          backgroundColor: "#FFFFFF",
+          backgroundColor: "#FFFBEB",
           borderRadius: 20,
           borderWidth: 2,
           borderColor: theme.borderColor,
