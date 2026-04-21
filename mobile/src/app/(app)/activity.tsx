@@ -454,99 +454,59 @@ function CelebrationCard({ item, activeTeamId, currentUserId, isDemo, showPicker
 
   return (
     <Pressable
-      onPress={() => router.push("/(app)" as any)}
       onLongPress={isDemo ? undefined : onOpenPicker}
-      style={{ marginHorizontal: 16, marginVertical: 6 }}
+      style={{ marginHorizontal: 16, marginVertical: 6, shadowColor: "#F59E0B", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 8 }}
       testID={`milestone-card-${item.id}`}
     >
-      <View
-        style={{
-          backgroundColor: "#FCD34D",
-          borderRadius: 20,
-          borderWidth: 2,
-          borderColor: theme.borderColor,
-          padding: 16,
-          overflow: "hidden",
-          shadowColor: theme.borderColor,
-          shadowOffset: { width: 0, height: 0 },
-          shadowOpacity: 0.25,
-          shadowRadius: 12,
-          elevation: 6,
-        }}
+      <LinearGradient
+        colors={["#F59E0B", "#EF4444"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={{ borderRadius: 28, padding: 3 }}
       >
-        {/* Logo watermark top-right */}
-        <Image
-          source={require("@/assets/alenio-icon.png")}
-          style={{ position: "absolute", top: 12, right: 14, width: 36, height: 36, borderRadius: 8, opacity: 0.9 }}
-        />
-
-        {/* Main horizontal body */}
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
-          {/* Left column: emoji circle */}
-          <View style={{ alignItems: "center" }}>
-            <View
-              style={{
-                width: 70,
-                height: 70,
-                borderRadius: 35,
-                backgroundColor: theme.circleBg,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <Text style={{ fontSize: 34 }}>{theme.emoji}</Text>
+        <View style={{ backgroundColor: "#FCD34D", borderRadius: 26, padding: 24, alignItems: "center", gap: 12 }}>
+          {/* Logo + Trophy */}
+          <View style={{ alignItems: "center", gap: 4 }}>
+            <Image source={require("@/assets/alenio-icon.png")} style={{ width: 40, height: 40, borderRadius: 10, marginBottom: 4 }} />
+            <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: "#FEF3C7", alignItems: "center", justifyContent: "center" }}>
+              <Text style={{ fontSize: 36 }}>🏆</Text>
             </View>
           </View>
 
-          {/* Right column: count + headline + sub + button */}
-          <View style={{ flex: 1, gap: 2 }}>
-            <View style={{ flexDirection: "row", alignItems: "baseline", gap: 6 }}>
-              <Text style={{ fontSize: 52, fontWeight: "900", color: theme.accentColor, lineHeight: 56 }}>{count}</Text>
-              <Text style={{ fontSize: 11, color: "#64748B", fontWeight: "500" }}>tasks completed</Text>
+          <Text style={{ fontSize: 13, fontWeight: "700", color: "#D97706", letterSpacing: 1.5, textTransform: "uppercase" }}>Milestone Reached!</Text>
+
+          <Text style={{ fontSize: 44, fontWeight: "800", color: "#F59E0B", lineHeight: 48 }}>{count}</Text>
+          <Text style={{ fontSize: 16, fontWeight: "600", color: "#92400E", textAlign: "center", lineHeight: 22 }}>
+            {name} completed{"\n"}{count} tasks on time!
+          </Text>
+          <Text style={{ fontSize: 13, color: "#B45309", textAlign: "center" }}>Keep up the incredible streak 🔥</Text>
+
+          {/* Footer: avatar + name | timestamp */}
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", width: "100%", marginTop: 4, paddingTop: 12, borderTopWidth: 1, borderTopColor: "#F59E0B40" }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: "#FEF3C7", overflow: "hidden", alignItems: "center", justifyContent: "center" }}>
+                {item.user?.image ? (
+                  <ExpoImage source={{ uri: item.user.image }} style={{ width: 24, height: 24 }} contentFit="cover" />
+                ) : (
+                  <Text style={{ fontSize: 11, fontWeight: "700", color: "#D97706" }}>{name[0].toUpperCase()}</Text>
+                )}
+              </View>
+              <Text style={{ fontSize: 11, color: "#92400E", fontWeight: "600" }}>{name}</Text>
             </View>
-            <Text style={{ fontSize: 14, fontWeight: "800", color: theme.accentColor }}>{theme.headline}</Text>
-            <Text style={{ fontSize: 12, color: "#64748B" }}>{theme.sub}</Text>
-            <Pressable
-              style={{
-                backgroundColor: theme.buttonBg,
-                borderRadius: 20,
-                paddingHorizontal: 16,
-                paddingVertical: 8,
-                alignSelf: "flex-start",
-                marginTop: 8,
-              }}
-              onPress={() => router.push("/(app)" as any)}
-            >
-              <Text style={{ fontSize: 12, fontWeight: "700", color: "#FFFFFF" }}>Let's go! 🎉</Text>
-            </Pressable>
+            <Text style={{ fontSize: 11, color: "#B45309" }}>{timeAgo(item.createdAt)}</Text>
           </View>
+
+          <ReactionRow
+            activityId={item.id}
+            teamId={activeTeamId}
+            reactions={item.reactions ?? {}}
+            currentUserId={currentUserId}
+            onToggleReaction={toggleReaction}
+            showPicker={showPicker}
+            onClosePicker={onClosePicker}
+          />
         </View>
-
-        {/* Footer: avatar + name | timestamp */}
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", width: "100%", marginTop: 14 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: theme.circleBg, borderWidth: 1, borderColor: theme.borderColor + "40", overflow: "hidden", alignItems: "center", justifyContent: "center" }}>
-              {item.user?.image ? (
-                <ExpoImage source={{ uri: item.user.image }} style={{ width: 24, height: 24 }} contentFit="cover" />
-              ) : (
-                <Text style={{ fontSize: 11, fontWeight: "700", color: theme.accentColor }}>{name[0].toUpperCase()}</Text>
-              )}
-            </View>
-            <Text style={{ fontSize: 11, color: "#64748B" }}>{name}</Text>
-          </View>
-          <Text style={{ fontSize: 11, color: "#94A3B8" }}>{timeAgo(item.createdAt)}</Text>
-        </View>
-
-        <ReactionRow
-          activityId={item.id}
-          teamId={activeTeamId}
-          reactions={item.reactions ?? {}}
-          currentUserId={currentUserId}
-          onToggleReaction={toggleReaction}
-          showPicker={showPicker}
-          onClosePicker={onClosePicker}
-        />
-      </View>
+      </LinearGradient>
     </Pressable>
   );
 }
