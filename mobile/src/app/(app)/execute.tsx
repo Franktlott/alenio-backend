@@ -545,7 +545,7 @@ function TaskRow({ task, onToggle, onPress, onLongPress }: { task: Task; onToggl
             </View>
           ) : null}
 
-          {/* Due time */}
+          {/* Due date */}
           {dueDate && !isDone ? (
             <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
               <Clock size={11} color={dueTimeColor} />
@@ -554,7 +554,7 @@ function TaskRow({ task, onToggle, onPress, onLongPress }: { task: Task; onToggl
                   ? `Overdue · ${fmtDate(dueDate)}`
                   : today
                   ? `Today · ${fmtTime(dueDate)}`
-                  : fmtTime(dueDate)}
+                  : fmtDate(dueDate)}
               </Text>
             </View>
           ) : null}
