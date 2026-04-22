@@ -502,14 +502,7 @@ export default function ProfileScreen() {
           <View style={{ position: "absolute", left: 0, right: 0, alignItems: "center" }}>
             <Image source={require("@/assets/alenio-logo-white.png")} style={{ height: 30, width: 104, resizeMode: "contain" }} />
           </View>
-          <Pressable
-            onPress={() => router.push("/settings")}
-            className="w-9 h-9 rounded-full items-center justify-center"
-            style={{ backgroundColor: "rgba(255,255,255,0.2)" }}
-            testID="settings-button"
-          >
-            <Settings size={18} color="white" />
-          </Pressable>
+          <View style={{ width: 36 }} />
         </View>
       </LinearGradient>
 
@@ -752,6 +745,26 @@ export default function ProfileScreen() {
             ) : null}
           </GlassCard>
         </View>) : null}
+
+        {/* Settings */}
+        <View className="mx-4 mt-5">
+          <GlassCard>
+            <Pressable
+              className="flex-row items-center px-4 py-4"
+              onPress={() => router.push("/settings")}
+              testID="settings-card"
+            >
+              <View className="w-8 h-8 rounded-xl bg-slate-100 items-center justify-center mr-3">
+                <Settings size={16} color="#4361EE" />
+              </View>
+              <View className="flex-1">
+                <Text className="text-sm font-semibold text-slate-900">Settings</Text>
+                <Text className="text-xs text-slate-400 mt-0.5">Notifications and preferences</Text>
+              </View>
+              <ChevronRight size={16} color="#CBD5E1" />
+            </Pressable>
+          </GlassCard>
+        </View>
 
         {/* Legal / About */}
         <View className="mx-4 mt-5">
