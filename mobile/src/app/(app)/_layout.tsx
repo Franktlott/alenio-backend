@@ -216,7 +216,7 @@ export default function AppLayout() {
       <Tabs
         initialRouteName="chat"
         tabBar={(props) => <FloatingTabBar {...props} />}
-        screenOptions={{ headerShown: false, animation: 'none', sceneStyle: { backgroundColor: '#fff' } }}
+        screenOptions={{ headerShown: false, animation: 'none', sceneStyle: { backgroundColor: '#4361EE' } }}
       >
         <Tabs.Screen name="activity" options={{}} />
         <Tabs.Screen name="chat" options={{}} />
