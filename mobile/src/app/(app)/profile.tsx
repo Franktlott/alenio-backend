@@ -810,43 +810,18 @@ export default function ProfileScreen() {
         </View>
 
         {/* Sign out */}
-        {showSignOutConfirm ? (
-          <View className="mx-4 mt-5">
-            <GlassCard>
-              <View className="p-4">
-                <Text className="text-sm font-semibold text-slate-700 dark:text-white text-center mb-4">Sign out of your account?</Text>
-                <View className="flex-row" style={{ gap: 10 }}>
-                  <TouchableOpacity
-                    onPress={() => setShowSignOutConfirm(false)}
-                    className="flex-1 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-700 items-center"
-                  >
-                    <Text className="font-semibold text-slate-600 dark:text-slate-300">Cancel</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={handleSignOut}
-                    className="flex-1 py-2.5 rounded-xl bg-red-500 items-center"
-                    testID="confirm-sign-out-button"
-                  >
-                    <Text className="font-semibold text-white">Sign out</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </GlassCard>
-          </View>
-        ) : (
-          <View className="mx-4 mt-5">
-            <GlassCard>
-              <TouchableOpacity
-                className="flex-row items-center px-4 py-4"
-                onPress={() => setShowSignOutConfirm(true)}
-                testID="sign-out-button"
-              >
-                <LogOut size={20} color="#EF4444" />
-                <Text className="flex-1 ml-3 text-red-500 font-medium">Sign out</Text>
-              </TouchableOpacity>
-            </GlassCard>
-          </View>
-        )}
+        <View className="mx-4 mt-5">
+          <GlassCard>
+            <TouchableOpacity
+              className="flex-row items-center px-4 py-4"
+              onPress={() => setShowSignOutConfirm(true)}
+              testID="sign-out-button"
+            >
+              <LogOut size={20} color="#EF4444" />
+              <Text className="flex-1 ml-3 text-red-500 font-medium">Sign out</Text>
+            </TouchableOpacity>
+          </GlassCard>
+        </View>
 
         {/* Delete Account */}
         {!isDemo && (
@@ -1064,6 +1039,35 @@ export default function ProfileScreen() {
       </Modal>
 
       {/* Leave team confirmation modal */}
+      <Modal visible={showSignOutConfirm} transparent animationType="fade" onRequestClose={() => setShowSignOutConfirm(false)}>
+        <Pressable className="flex-1 bg-black/40 items-center justify-center px-6" onPress={() => setShowSignOutConfirm(false)}>
+          <Pressable onPress={(e) => e.stopPropagation()}>
+            <View className="bg-white dark:bg-slate-800 rounded-2xl p-6 w-full">
+              <Text className="text-lg font-bold text-slate-900 dark:text-white text-center mb-2">Sign out?</Text>
+              <Text className="text-sm text-slate-500 dark:text-slate-400 text-center mb-6">
+                You'll need to sign in again to access your account.
+              </Text>
+              <View className="flex-row" style={{ gap: 10 }}>
+                <TouchableOpacity
+                  onPress={() => setShowSignOutConfirm(false)}
+                  className="flex-1 py-3 rounded-xl bg-slate-100 dark:bg-slate-700 items-center"
+                  testID="cancel-sign-out-button"
+                >
+                  <Text className="font-semibold text-slate-600 dark:text-slate-300">Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={handleSignOut}
+                  className="flex-1 py-3 rounded-xl bg-red-500 items-center"
+                  testID="confirm-sign-out-button"
+                >
+                  <Text className="font-semibold text-white">Sign out</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
       <Modal visible={!!leavingTeam} transparent animationType="fade" onRequestClose={() => setLeavingTeam(null)}>
         <Pressable className="flex-1 bg-black/40 items-center justify-center px-6" onPress={() => setLeavingTeam(null)}>
           <Pressable onPress={(e) => e.stopPropagation()}>
