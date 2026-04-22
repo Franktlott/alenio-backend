@@ -243,6 +243,15 @@ function RootLayoutNav() {
                 headerShown: false,
               }}
             />
+            <Stack.Screen
+              name="feedback"
+              options={{
+                presentation: 'formSheet',
+                sheetAllowedDetents: [0.75],
+                sheetGrabberVisible: true,
+                headerShown: false,
+              }}
+            />
           </Stack.Protected>
           <Stack.Protected guard={!session?.user}>
             <Stack.Screen name="sign-in" />

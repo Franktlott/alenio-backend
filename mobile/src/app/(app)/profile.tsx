@@ -22,7 +22,7 @@ import * as Notifications from "expo-notifications";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";
-import { ArrowLeft, Camera, LogOut, Pencil, X, Plus, Trash2, Bell, Check, LogOut as LeaveIcon, Crown, Copy, ChevronRight, BarChart2, Volume2, Settings } from "lucide-react-native";
+import { ArrowLeft, Camera, LogOut, Pencil, X, Plus, Trash2, Bell, Check, LogOut as LeaveIcon, Crown, Copy, ChevronRight, BarChart2, Volume2, Settings, MessageSquare } from "lucide-react-native";
 import { authClient } from "@/lib/auth/auth-client";
 import { useInvalidateSession, useSession } from "@/lib/auth/use-session";
 import { clearNotifDebugLog, getNotifDebugLog, getNotifStatus, registerForPushNotificationsAsync } from "@/lib/notifications";
@@ -746,7 +746,7 @@ export default function ProfileScreen() {
           </GlassCard>
         </View>) : null}
 
-        {/* Settings */}
+        {/* Settings + Feedback */}
         <View className="mx-4 mt-5">
           <GlassCard>
             <Pressable
@@ -760,6 +760,21 @@ export default function ProfileScreen() {
               <View className="flex-1">
                 <Text className="text-sm font-semibold text-slate-900">Settings</Text>
                 <Text className="text-xs text-slate-400 mt-0.5">Notifications and preferences</Text>
+              </View>
+              <ChevronRight size={16} color="#CBD5E1" />
+            </Pressable>
+            <View style={{ height: 1, backgroundColor: "rgba(241,245,249,0.8)", marginHorizontal: 16 }} />
+            <Pressable
+              className="flex-row items-center px-4 py-4"
+              onPress={() => router.push("/feedback")}
+              testID="feedback-card"
+            >
+              <View className="w-8 h-8 rounded-xl bg-indigo-50 items-center justify-center mr-3">
+                <MessageSquare size={16} color="#4361EE" />
+              </View>
+              <View className="flex-1">
+                <Text className="text-sm font-semibold text-slate-900">Send Feedback</Text>
+                <Text className="text-xs text-slate-400 mt-0.5">Help us improve the app</Text>
               </View>
               <ChevronRight size={16} color="#CBD5E1" />
             </Pressable>
