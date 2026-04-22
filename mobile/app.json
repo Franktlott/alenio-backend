@@ -32,6 +32,7 @@
       }
     },
     "android": {
+      "googleServicesFile": "./google-services.json",
       "edgeToEdgeEnabled": true,
       "package": "com.vibecode.alenio9iqp9v",
       "permissions": [
