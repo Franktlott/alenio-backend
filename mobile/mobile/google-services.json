@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "342378307961",
+    "project_id": "alenio-c2738",
+    "storage_bucket": "alenio-c2738.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:342378307961:android:da4dd1619f339e58d18fa8",
+        "android_client_info": {
+          "package_name": "com.vibecode.alenio9iqp9v"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAxEEhBejbTG7quPA24nynOj2GQ515xvoc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
