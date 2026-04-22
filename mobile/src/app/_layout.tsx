@@ -234,6 +234,15 @@ function RootLayoutNav() {
               }}
             />
             <Stack.Screen name="subscription" />
+            <Stack.Screen
+              name="settings"
+              options={{
+                presentation: 'formSheet',
+                sheetAllowedDetents: [0.9],
+                sheetGrabberVisible: true,
+                headerShown: false,
+              }}
+            />
           </Stack.Protected>
           <Stack.Protected guard={!session?.user}>
             <Stack.Screen name="sign-in" />

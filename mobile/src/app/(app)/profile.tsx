@@ -22,7 +22,7 @@ import * as Notifications from "expo-notifications";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";
-import { ArrowLeft, Camera, LogOut, Pencil, X, Plus, Trash2, Bell, Check, LogOut as LeaveIcon, Crown, Copy, ChevronRight, BarChart2, Volume2 } from "lucide-react-native";
+import { ArrowLeft, Camera, LogOut, Pencil, X, Plus, Trash2, Bell, Check, LogOut as LeaveIcon, Crown, Copy, ChevronRight, BarChart2, Volume2, Settings } from "lucide-react-native";
 import { authClient } from "@/lib/auth/auth-client";
 import { useInvalidateSession, useSession } from "@/lib/auth/use-session";
 import { clearNotifDebugLog, getNotifDebugLog, getNotifStatus, registerForPushNotificationsAsync } from "@/lib/notifications";
@@ -117,69 +117,6 @@ export default function ProfileScreen() {
     queryFn: () => api.get<Team[]>("/api/teams"),
     enabled: !!user,
   });
-
-  type NotifPrefs = { notifMessages: boolean; notifTaskAssigned: boolean; notifTaskDue: boolean; notifMeetings: boolean; notifTone: string; hasToken: boolean };
-
-  const { data: notifPrefs } = useQuery({
-    queryKey: ["notification-preferences"],
-    queryFn: () => api.get<NotifPrefs>("/api/notification-preferences"),
-    enabled: !!user,
-  });
-
-  const notifMutation = useMutation({
-    mutationFn: (patch: Partial<NotifPrefs>) => api.patch<NotifPrefs>("/api/notification-preferences", patch),
-    onMutate: async (patch) => {
-      await queryClient.cancelQueries({ queryKey: ["notification-preferences"] });
-      const prev = queryClient.getQueryData<NotifPrefs>(["notification-preferences"]);
-      queryClient.setQueryData<NotifPrefs>(["notification-preferences"], (old) => old ? { ...old, ...patch } : old);
-      return { prev };
-    },
-    onError: (_err, _patch, ctx) => {
-      if (ctx?.prev) queryClient.setQueryData(["notification-preferences"], ctx.prev);
-    },
-  });
-
-  const toneMutation = useMutation({
-    mutationFn: (tone: string) => api.patch<NotifPrefs>("/api/notification-preferences", { notifTone: tone }),
-    onMutate: async (tone) => {
-      await queryClient.cancelQueries({ queryKey: ["notification-preferences"] });
-      const prev = queryClient.getQueryData<NotifPrefs>(["notification-preferences"]);
-      queryClient.setQueryData<NotifPrefs>(["notification-preferences"], (old) => old ? { ...old, notifTone: tone } : old);
-      return { prev };
-    },
-    onError: (_err, _tone, ctx) => {
-      if (ctx?.prev) queryClient.setQueryData(["notification-preferences"], ctx.prev);
-    },
-  });
-
-  const fireTestNotification = async (title: string, body: string) => {
-    const tone = notifPrefs?.notifTone ?? "default";
-    if (tone === "silent") return;
-    const soundFile = tone === "default" ? "default" : `${tone}.wav`;
-    const channelId = tone === "default" ? "alenio_main" : `alenio_${tone}`;
-    await Notifications.scheduleNotificationAsync({
-      content: { title, body, sound: soundFile },
-      trigger: Platform.OS === "android"
-        ? { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: 1, channelId }
-        : null,
-    });
-  };
-
-  const playPreview = async (tone: string) => {
-    if (tone === "silent") return;
-    const soundFile = tone === "default" ? "default" : `${tone}.wav`;
-    const channelId = tone === "default" ? "alenio_main" : `alenio_${tone}`;
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title: "Sound Preview",
-        body: `Testing ${tone === "default" ? "Default" : tone.charAt(0).toUpperCase() + tone.slice(1)} sound`,
-        sound: soundFile,
-      },
-      trigger: Platform.OS === "android"
-        ? { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: 1, channelId }
-        : null,
-    });
-  };
 
   // Join requests for the team being edited (owner only)
   const { data: joinRequests = [], refetch: refetchRequests } = useQuery({
@@ -386,37 +323,6 @@ export default function ProfileScreen() {
 
   const avatarUri = localImage ?? user?.image ?? null;
 
-  const [notifRegStatus, setNotifRegStatus] = useState<string | null>(null);
-  const [pushLog, setPushLog] = useState<Awaited<ReturnType<typeof getNotifDebugLog>>>([]);
-
-  const refreshPushDebug = async () => {
-    const [status, log] = await Promise.all([getNotifStatus(), getNotifDebugLog()]);
-    setNotifRegStatus(status);
-    setPushLog(log);
-  };
-
-  useEffect(() => {
-    let cancelled = false;
-    let timer: ReturnType<typeof setTimeout>;
-
-    const poll = () => {
-      Promise.all([getNotifStatus(), getNotifDebugLog()]).then(([s, log]) => {
-        if (cancelled) return;
-        setNotifRegStatus(s);
-        setPushLog(log);
-        if (s?.startsWith("getting token") || s?.startsWith("saving token") || s?.startsWith("attempt")) {
-          timer = setTimeout(poll, 2000);
-        }
-      });
-    };
-
-    poll();
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, []);
-
   const [pushDebugResult, setPushDebugResult] = useState<string | null>(null);
   const [pushDebugLoading, setPushDebugLoading] = useState(false);
   const [retryingPush, setRetryingPush] = useState(false);
@@ -424,7 +330,6 @@ export default function ProfileScreen() {
   const handleCheckNotifStatus = async () => {
     const status = await getNotifStatus();
     setPushDebugResult(status ?? "no status returned");
-    await refreshPushDebug();
   };
 
   const handleRetryPushRegistration = async () => {
@@ -439,7 +344,6 @@ export default function ProfileScreen() {
         const status = await getNotifStatus();
         setPushDebugResult(status ?? "Registration failed");
       }
-      await refreshPushDebug();
     } finally {
       setRetryingPush(false);
     }
@@ -483,7 +387,6 @@ export default function ProfileScreen() {
 
   const handleClearLocalDebugLog = async () => {
     await clearNotifDebugLog();
-    await refreshPushDebug();
     setPushDebugResult("Cleared local push debug log");
   };
 
@@ -599,7 +502,14 @@ export default function ProfileScreen() {
           <View style={{ position: "absolute", left: 0, right: 0, alignItems: "center" }}>
             <Image source={require("@/assets/alenio-logo-white.png")} style={{ height: 30, width: 104, resizeMode: "contain" }} />
           </View>
-          <View />
+          <Pressable
+            onPress={() => router.push("/settings")}
+            className="w-9 h-9 rounded-full items-center justify-center"
+            style={{ backgroundColor: "rgba(255,255,255,0.2)" }}
+            testID="settings-button"
+          >
+            <Settings size={18} color="white" />
+          </Pressable>
         </View>
       </LinearGradient>
 
@@ -752,105 +662,6 @@ export default function ProfileScreen() {
           </GlassCard>
         </View>
 
-        {/* Notifications */}
-        <View className="mx-4 mt-5">
-          <View className="flex-row items-center mb-3" style={{ gap: 6 }}>
-            <Bell size={13} color="#94A3B8" />
-            <Text className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Notifications</Text>
-          </View>
-          <GlassCard>
-            {[
-              { key: "notifMessages" as const, label: "New messages", description: "Team and direct messages", testTitle: "New Message", testBody: "Alex: Hey, got a minute to review this?" },
-              { key: "notifTaskAssigned" as const, label: "Task assigned", description: "When a task is assigned to you", testTitle: "Task Assigned", testBody: "Build onboarding flow has been assigned to you" },
-              { key: "notifTaskDue" as const, label: "Task due reminders", description: "Reminders for upcoming due dates", testTitle: "Task Due Soon", testBody: "Launch checklist is due in 1 hour" },
-              { key: "notifMeetings" as const, label: "Meeting reminders", description: "Alerts before video meetings", testTitle: "Meeting Starting Soon", testBody: "Weekly standup starts in 5 minutes" },
-            ].map((item, index, arr) => {
-              const isEnabled = notifPrefs?.[item.key] ?? true;
-              return (
-                <View
-                  key={item.key}
-                  className="flex-row items-center px-4 py-3.5"
-                  style={index < arr.length - 1 ? { borderBottomWidth: 1, borderBottomColor: "rgba(241,245,249,0.8)" } : undefined}
-                >
-                  <View className="flex-1">
-                    <Text className="text-sm font-semibold text-slate-900 dark:text-white">{item.label}</Text>
-                    <Text className="text-xs text-slate-400 mt-0.5">{item.description}</Text>
-                  </View>
-                  {false ? (
-                    <Pressable
-                      onPress={() => fireTestNotification(item.testTitle, item.testBody)}
-                      testID={`notif-test-${item.key}`}
-                      className="w-8 h-8 rounded-full bg-slate-100 items-center justify-center mr-2"
-                    >
-                      <Volume2 size={14} color="#64748B" />
-                    </Pressable>
-                  ) : null}
-                  <Switch
-                    value={isEnabled}
-                    onValueChange={(val) => notifMutation.mutate({ [item.key]: val })}
-                    trackColor={{ false: "#E2E8F0", true: "#6B8EF6" }}
-                    thumbColor="white"
-                    testID={`notif-toggle-${item.key}`}
-                  />
-                </View>
-              );
-            })}
-          </GlassCard>
-          {/* Push token status */}
-          <View className="mt-2 mb-1 px-1" style={{ gap: 4 }}>
-            <View className="flex-row items-center" style={{ gap: 6 }}>
-              <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: notifPrefs?.hasToken ? "#22C55E" : "#EF4444" }} />
-            </View>
-            {notifRegStatus && !notifPrefs?.hasToken ? (
-              <Text className="text-xs text-slate-300 ml-3" selectable>{notifRegStatus}</Text>
-            ) : null}
-          </View>
-
-          {/* Sound */}
-          <View className="mt-3">
-            <Text className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 ml-1">Notification Sound</Text>
-            <GlassCard>
-              {[
-                { value: "default", label: "Default", emoji: "🔔" },
-                { value: "bell", label: "Bell", emoji: "🔕" },
-                { value: "chime", label: "Chime", emoji: "🎵" },
-                { value: "alert", label: "Alert", emoji: "⚠️" },
-                { value: "silent", label: "Silent", emoji: "🚫" },
-              ].map((item, index, arr) => {
-                const currentTone = notifPrefs?.notifTone ?? "default";
-                const isSelected = currentTone === item.value || (item.value === "default" && !["bell","chime","alert","silent"].includes(currentTone));
-                return (
-                  <View
-                    key={item.value}
-                    className="flex-row items-center px-4 py-3.5"
-                    style={index < arr.length - 1 ? { borderBottomWidth: 1, borderBottomColor: "rgba(241,245,249,0.8)" } : undefined}
-                  >
-                    <Pressable
-                      className="flex-row items-center flex-1"
-                      onPress={() => toneMutation.mutate(item.value)}
-                      testID={`tone-option-${item.value}`}
-                    >
-                      <Text className="text-base mr-3">{item.emoji}</Text>
-                      <Text className="text-sm font-semibold text-slate-900 dark:text-white">{item.label}</Text>
-                    </Pressable>
-                    {isSelected ? (
-                      <Check size={16} color="#4361EE" />
-                    ) : item.value !== "silent" ? (
-                      <Pressable
-                        onPress={() => playPreview(item.value)}
-                        testID={`tone-preview-${item.value}`}
-                        className="w-8 h-8 rounded-full bg-slate-100 items-center justify-center"
-                      >
-                        <Volume2 size={14} color="#64748B" />
-                      </Pressable>
-                    ) : null}
-                  </View>
-                );
-              })}
-            </GlassCard>
-          </View>
-        </View>
-
         {/* Subscription — only visible to Team Leaders */}
         {teams.some((t) => (t as Team & { role?: string }).role === "owner") ? (
         <View className="mx-4 mt-5">
@@ -937,28 +748,6 @@ export default function ProfileScreen() {
             {pushDebugResult ? (
               <View className="px-4 pb-3.5 pt-1 border-t border-slate-100/60">
                 <Text className="text-xs text-slate-500" selectable testID="push-debug-result">{pushDebugResult}</Text>
-              </View>
-            ) : null}
-            {pushLog.length ? (
-              <View className="px-4 pb-4 pt-2 border-t border-slate-100/60">
-                <Text className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Debug log</Text>
-                <View style={{ maxHeight: 220, borderRadius: 12, backgroundColor: "rgba(15, 23, 42, 0.04)", padding: 10 }}>
-                  <ScrollView testID="push-debug-log-scroll">
-                    {pushLog.slice(-25).map((e, idx) => {
-                      const time = new Date(e.ts).toLocaleTimeString();
-                      const line = `${time} • ${e.step} • ${e.status}${e.detail ? ` • ${e.detail}` : ""}`;
-                      return (
-                        <Text
-                          key={`${e.ts}-${idx}`}
-                          style={{ fontSize: 11, color: e.status === "error" ? "#B91C1C" : "#475569", marginBottom: 6 }}
-                          selectable
-                        >
-                          {line}
-                        </Text>
-                      );
-                    })}
-                  </ScrollView>
-                </View>
               </View>
             ) : null}
           </GlassCard>
