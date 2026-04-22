@@ -141,7 +141,7 @@ function PerformanceChart({ data, dark }: { data: Array<{ label: string; complet
           `M ${firstPt.x},${toY(minY)} ` +
           seg.map((p) => `L ${p.x},${p.y}`).join(" ") +
           ` L ${lastPt.x},${toY(minY)} Z`;
-        return <Path key={si} d={fillPath} fill={dark ? "#60A5FA" : "#4361EE"} fillOpacity={dark ? 0.14 : 0.08} />;
+        return <Path key={si} d={fillPath} fill="#4361EE" fillOpacity={0.08} />;
       })}
 
       {/* Line — one polyline per segment */}
@@ -712,23 +712,26 @@ export default function TeamScreen() {
         {isPaid ? (
           <View
             style={{
-              backgroundColor: "#0A1628",
-              borderRadius: 16,
+              backgroundColor: "white",
+              borderRadius: 20,
               marginHorizontal: 12,
               marginTop: 10,
-              padding: 20,
-              borderWidth: 1,
-              borderColor: "rgba(255,255,255,0.07)",
+              padding: 16,
+              shadowColor: "#000",
+              shadowOpacity: 0.06,
+              shadowRadius: 12,
+              shadowOffset: { width: 0, height: 3 },
+              elevation: 3,
             }}
           >
             {/* Header row */}
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-              <Text style={{ fontSize: 10, fontWeight: "700", color: "rgba(255,255,255,0.4)", textTransform: "uppercase", letterSpacing: 1.5 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+              <Text style={{ fontSize: 10, fontWeight: "800", color: "#94A3B8", textTransform: "uppercase", letterSpacing: 1.2 }}>
                 Team at a Glance
               </Text>
               {avgCompletionPct !== null ? (
-                <View style={{ backgroundColor: "rgba(96,165,250,0.12)", borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 }}>
-                  <Text style={{ fontSize: 11, fontWeight: "700", color: "#60A5FA" }}>
+                <View style={{ backgroundColor: "#EEF2FF", borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 }}>
+                  <Text style={{ fontSize: 11, fontWeight: "700", color: "#4361EE" }}>
                     {avgCompletionPct}% AVG
                   </Text>
                 </View>
@@ -737,39 +740,39 @@ export default function TeamScreen() {
 
             {/* Chart */}
             <View style={{ alignItems: "center" }}>
-              <PerformanceChart data={monthlyStats ?? []} dark />
+              <PerformanceChart data={monthlyStats ?? []} />
             </View>
 
             {/* Footer */}
             <View
               style={{
-                marginTop: 16,
-                paddingTop: 16,
+                marginTop: 12,
+                paddingTop: 12,
                 borderTopWidth: 1,
-                borderTopColor: "rgba(255,255,255,0.07)",
+                borderTopColor: "#F1F5F9",
                 flexDirection: "row",
                 alignItems: "center",
-                gap: 12,
+                gap: 10,
               }}
             >
-              <Text style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", flex: 1 }}>
+              <Text style={{ fontSize: 12, color: "#64748B", flex: 1 }}>
                 6-month completion rate{" "}
-                <Text style={{ fontWeight: "800", color: "#F8FAFC" }}>
+                <Text style={{ fontWeight: "800", color: "#0F172A" }}>
                   {avgCompletionPct !== null ? `${avgCompletionPct}%` : "—"}
                 </Text>
               </Text>
-              <View style={{ width: 72, height: 4, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.08)", overflow: "hidden" }}>
+              <View style={{ width: 72, height: 4, borderRadius: 2, backgroundColor: "#EEF2FF", overflow: "hidden" }}>
                 <View
                   style={{
                     height: 4,
                     borderRadius: 2,
-                    backgroundColor: "#3B82F6",
+                    backgroundColor: "#4361EE",
                     width: `${avgCompletionPct ?? 0}%`,
                   }}
                 />
               </View>
-              <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: "rgba(96,165,250,0.12)", alignItems: "center", justifyContent: "center" }}>
-                <CheckCircle2 size={13} color="#60A5FA" />
+              <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: "#EEF2FF", alignItems: "center", justifyContent: "center" }}>
+                <CheckCircle2 size={13} color="#4361EE" />
               </View>
             </View>
           </View>
