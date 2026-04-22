@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -35,7 +35,7 @@ const PRIORITY_COLORS: Record<string, string> = {
 };
 
 export default function TaskDetailScreen() {
-  const { taskId, teamId } = useLocalSearchParams<{ taskId: string; teamId: string }>();
+  const { taskId, teamId, startEdit } = useLocalSearchParams<{ taskId: string; teamId: string; startEdit?: string }>();
   const { data: session } = useSession();
   const isDemo = useDemoMode();
   const queryClient = useQueryClient();
@@ -46,6 +46,9 @@ export default function TaskDetailScreen() {
   const [showSubtaskBlock, setShowSubtaskBlock] = useState(false);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState<string>("");
   const [isEditMode, setIsEditMode] = useState(false);
+  const [draftTitle, setDraftTitle] = useState<string>("");
+  const [draftDescription, setDraftDescription] = useState<string>("");
+  const [draftPriority, setDraftPriority] = useState<string>("");
 
   const { data: task, isLoading } = useQuery({
     queryKey: ["task", taskId, teamId],
@@ -142,8 +145,26 @@ export default function TaskDetailScreen() {
   const isSelfAssigned = !!currentUserId && assignedIds.has(currentUserId);
   const isCreator = !!currentUserId && task?.creator?.id === currentUserId && !isDemo;
   const isCompleted = task?.status === "done";
-  const canEdit = isCreator && !isCompleted;
+  const isOwnerOrLeader = team?.role === "owner" || team?.role === "team_leader" || team?.role === "admin";
+  const canEdit = (isCreator || isOwnerOrLeader) && !isCompleted;
   const isEditable = canEdit && isEditMode;
+
+  useEffect(() => {
+    if (task && startEdit === "1" && canEdit) {
+      setDraftTitle(task.title);
+      setDraftDescription(task.description ?? "");
+      setDraftPriority(task.priority);
+      setIsEditMode(true);
+    }
+  }, [task?.id, startEdit]);
+
+  useEffect(() => {
+    if (isEditMode && task) {
+      setDraftTitle(task.title);
+      setDraftDescription(task.description ?? "");
+      setDraftPriority(task.priority);
+    }
+  }, [isEditMode]);
 
   const handleToggleMember = (userId: string) => {
     if (assignedIds.has(userId)) {
@@ -191,11 +212,39 @@ export default function TaskDetailScreen() {
           </Text>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
             {canEdit && isEditMode ? (
-              <TouchableOpacity
-                onPress={() => setIsEditMode(false)}
-                testID="edit-mode-button"
-              >
-                <Text style={{ color: "white", fontSize: 14, fontWeight: "700" }}>Done</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                <TouchableOpacity
+                  onPress={() => setIsEditMode(false)}
+                  testID="cancel-edit-button"
+                >
+                  <Text style={{ color: "rgba(255,255,255,0.7)", fontSize: 14, fontWeight: "500" }}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => {
+                    updateMutation.mutate(
+                      { title: draftTitle.trim() || task.title, description: draftDescription.trim() || undefined, priority: draftPriority as Task["priority"] },
+                      { onSuccess: () => setIsEditMode(false) }
+                    );
+                  }}
+                  disabled={updateMutation.isPending}
+                  testID="save-edit-button"
+                >
+                  {updateMutation.isPending ? (
+                    <ActivityIndicator size="small" color="white" />
+                  ) : (
+                    <Text style={{ color: "white", fontSize: 14, fontWeight: "700" }}>Save</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            ) : null}
+            {canEdit && !isEditMode ? (
+              <TouchableOpacity onPress={() => {
+                setDraftTitle(task.title);
+                setDraftDescription(task.description ?? "");
+                setDraftPriority(task.priority);
+                setIsEditMode(true);
+              }} testID="enter-edit-button">
+                <Pencil size={18} color="white" />
               </TouchableOpacity>
             ) : null}
             {isCreator && !isEditMode ? (
@@ -216,22 +265,56 @@ export default function TaskDetailScreen() {
       <ScrollView className="flex-1 px-4" showsVerticalScrollIndicator={false}>
         {/* Priority indicator */}
         <View className="flex-row items-center mt-4 mb-2" style={{ gap: 8 }}>
-          <View className="w-3 h-3 rounded-full" style={{ backgroundColor: PRIORITY_COLORS[task.priority] ?? "#94A3B8" }} />
-          <Text className="text-xs font-semibold uppercase tracking-wide" style={{ color: PRIORITY_COLORS[task.priority] ?? "#94A3B8" }}>
-            {task.priority} priority
-          </Text>
-          {task.recurrenceRule ? (
-            <View className="flex-row items-center ml-2" style={{ gap: 4 }}>
-              <RefreshCw size={12} color="#64748B" />
-              <Text className="text-xs text-slate-500 capitalize">{task.recurrenceRule.type}</Text>
-            </View>
-          ) : null}
+          {isEditMode ? (
+            <>
+              <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748B", marginRight: 4 }}>Priority:</Text>
+              {["urgent", "high", "medium", "low"].map((p) => (
+                <TouchableOpacity
+                  key={p}
+                  onPress={() => setDraftPriority(p)}
+                  style={{
+                    paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12,
+                    backgroundColor: draftPriority === p ? (PRIORITY_COLORS[p] ?? "#94A3B8") + "20" : "transparent",
+                    borderWidth: 1,
+                    borderColor: draftPriority === p ? (PRIORITY_COLORS[p] ?? "#94A3B8") : "#E2E8F0",
+                  }}
+                  testID={`priority-${p}`}
+                >
+                  <Text style={{ fontSize: 11, fontWeight: "600", textTransform: "capitalize", color: draftPriority === p ? (PRIORITY_COLORS[p] ?? "#94A3B8") : "#94A3B8" }}>{p}</Text>
+                </TouchableOpacity>
+              ))}
+            </>
+          ) : (
+            <>
+              <View className="w-3 h-3 rounded-full" style={{ backgroundColor: PRIORITY_COLORS[task.priority] ?? "#94A3B8" }} />
+              <Text className="text-xs font-semibold uppercase tracking-wide" style={{ color: PRIORITY_COLORS[task.priority] ?? "#94A3B8" }}>
+                {task.priority} priority
+              </Text>
+              {task.recurrenceRule ? (
+                <View className="flex-row items-center ml-2" style={{ gap: 4 }}>
+                  <RefreshCw size={12} color="#64748B" />
+                  <Text className="text-xs text-slate-500 capitalize">{task.recurrenceRule.type}</Text>
+                </View>
+              ) : null}
+            </>
+          )}
         </View>
 
         {/* Title */}
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: task.isJoint ? 8 : 12 }}>
           {task.incognito ? <Text style={{ fontSize: 20 }}>🕵️</Text> : null}
-          <Text className="text-2xl font-bold text-slate-900 dark:text-white" style={{ flex: 1 }}>{task.title}</Text>
+          {isEditMode ? (
+            <TextInput
+              value={draftTitle}
+              onChangeText={setDraftTitle}
+              style={{ flex: 1, fontSize: 24, fontWeight: "700", color: "#0F172A", borderBottomWidth: 1, borderBottomColor: "#4361EE", paddingBottom: 4 }}
+              placeholder="Task title"
+              placeholderTextColor="#94A3B8"
+              testID="edit-title-input"
+            />
+          ) : (
+            <Text className="text-2xl font-bold text-slate-900 dark:text-white" style={{ flex: 1 }}>{task.title}</Text>
+          )}
         </View>
         {task.isJoint ? (
           <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 12 }}>
@@ -246,7 +329,17 @@ export default function TaskDetailScreen() {
         ) : null}
 
         {/* Description */}
-        {task.description ? (
+        {isEditMode ? (
+          <TextInput
+            value={draftDescription}
+            onChangeText={setDraftDescription}
+            multiline
+            style={{ fontSize: 15, color: "#475569", marginBottom: 16, borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 10, padding: 10, minHeight: 80 }}
+            placeholder="Add a description..."
+            placeholderTextColor="#94A3B8"
+            testID="edit-description-input"
+          />
+        ) : task.description ? (
           <Text className="text-base text-slate-600 dark:text-slate-400 mb-4 leading-relaxed">{task.description}</Text>
         ) : null}
 
@@ -448,7 +541,7 @@ export default function TaskDetailScreen() {
           <View className="flex-row items-center justify-between mb-2">
             <Text className="text-sm font-semibold text-slate-500">Assignees</Text>
             <View className="flex-row" style={{ gap: 8 }}>
-              {isCreator && isEditMode ? (
+              {isEditable ? (
                 <TouchableOpacity
                   testID="assign-to-me-button"
                   onPress={() => currentUserId && handleToggleMember(currentUserId)}
@@ -471,7 +564,7 @@ export default function TaskDetailScreen() {
                   )}
                 </TouchableOpacity>
               ) : null}
-              {isCreator && isEditMode ? (
+              {isEditable ? (
                 <TouchableOpacity
                   testID="manage-assignees-button"
                   onPress={() => setShowAssignModal(true)}
@@ -511,7 +604,7 @@ export default function TaskDetailScreen() {
                     </Text>
                     <Text className="text-xs text-slate-500">{a.user.email}</Text>
                   </View>
-                  {isCreator && isEditMode ? (
+                  {isEditable ? (
                   <TouchableOpacity
                     onPress={() => unassignMutation.mutate(a.userId)}
                     disabled={unassignMutation.isPending}

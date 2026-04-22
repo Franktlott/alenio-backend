@@ -1367,16 +1367,16 @@ export default function TasksScreen() {
             <Text style={{ fontSize: 13, fontWeight: "600", color: "#94A3B8", paddingHorizontal: 20, marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 }} numberOfLines={1}>
               {actionMenuTask?.title}
             </Text>
-            {/* View / Edit */}
+            {/* Edit */}
             <Pressable
               onPress={() => {
                 setActionMenuTask(null);
-                router.push({ pathname: "/task-detail", params: { taskId: actionMenuTask!.id, teamId: activeTeamId! } });
+                router.push({ pathname: "/task-detail", params: { taskId: actionMenuTask!.id, teamId: activeTeamId!, startEdit: "1" } });
               }}
               style={{ flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: 20, paddingVertical: 16 }}
             >
               <Text style={{ fontSize: 20 }}>✏️</Text>
-              <Text style={{ fontSize: 16, fontWeight: "500", color: "#0F172A" }}>View / Edit</Text>
+              <Text style={{ fontSize: 16, fontWeight: "500", color: "#0F172A" }}>Edit</Text>
             </Pressable>
             {/* Reassign — owners/leaders only, undone tasks with assignees */}
             {isOwnerOrLeader && actionMenuTask?.status !== "done" && (actionMenuTask?.assignments.length ?? 0) > 0 ? (
