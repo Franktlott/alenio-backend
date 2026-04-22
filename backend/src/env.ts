@@ -19,6 +19,8 @@ const envSchema = z.object({
   // Email (Resend)
   RESEND_API_KEY: z.string().optional(),
   FROM_EMAIL: z.string().optional().default("noreply@yourdomain.com"),
+  // Mobile app deep link scheme (e.g. "alenio" for production, "vibecode" for sandbox)
+  APP_SCHEME: z.string().optional().default("vibecode"),
   // Daily.co video
   DAILY_API_KEY: z.string().optional(),
   // Twilio SMS
