@@ -554,14 +554,19 @@ export default function TeamScreen() {
           marginHorizontal: 12,
           marginTop: 12,
           borderRadius: 20,
-          backgroundColor: "white",
-          padding: 14,
-          shadowColor: "#000",
-          shadowOpacity: 0.06,
-          shadowRadius: 8,
-          shadowOffset: { width: 0, height: 2 },
-          elevation: 3,
+          overflow: "hidden",
+          shadowColor: "#4361EE",
+          shadowOpacity: 0.3,
+          shadowRadius: 12,
+          shadowOffset: { width: 0, height: 4 },
+          elevation: 5,
         }}>
+          <LinearGradient
+            colors={["#4361EE", "#7C3AED"]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={{ padding: 14 }}
+          >
           <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
             {/* Avatar */}
             <TouchableOpacity
@@ -574,17 +579,17 @@ export default function TeamScreen() {
                 width: 64,
                 height: 64,
                 borderRadius: 32,
-                backgroundColor: "#C7D2FE",
+                backgroundColor: "rgba(255,255,255,0.22)",
                 alignItems: "center",
                 justifyContent: "center",
                 overflow: "hidden",
               }}>
                 {uploadingTeamImage ? (
-                  <ActivityIndicator color="#4361EE" />
+                  <ActivityIndicator color="white" />
                 ) : team?.image ? (
                   <Image source={{ uri: team.image }} style={{ width: 64, height: 64 }} resizeMode="cover" />
                 ) : (
-                  <Text style={{ color: "#4361EE", fontWeight: "900", fontSize: 26 }}>
+                  <Text style={{ color: "white", fontWeight: "900", fontSize: 26 }}>
                     {team?.name?.[0]?.toUpperCase() ?? "T"}
                   </Text>
                 )}
@@ -593,8 +598,8 @@ export default function TeamScreen() {
                 <View style={{
                   position: "absolute", bottom: 1, right: 1,
                   width: 20, height: 20, borderRadius: 10,
-                  backgroundColor: "#4361EE", alignItems: "center", justifyContent: "center",
-                  borderWidth: 1.5, borderColor: "#E2E8F0",
+                  backgroundColor: "rgba(255,255,255,0.3)", alignItems: "center", justifyContent: "center",
+                  borderWidth: 1.5, borderColor: "rgba(255,255,255,0.5)",
                 }}>
                   <Camera size={10} color="white" />
                 </View>
@@ -603,13 +608,13 @@ export default function TeamScreen() {
 
             {/* Middle: invite code + name + subtitle */}
             <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 17, fontWeight: "900", color: "#1E293B", letterSpacing: 3 }}>
+              <Text style={{ fontSize: 17, fontWeight: "900", color: "white", letterSpacing: 3 }}>
                 {team?.inviteCode}
               </Text>
-              <Text style={{ fontSize: 13, fontWeight: "700", color: "#1E293B", marginTop: 2 }}>
+              <Text style={{ fontSize: 13, fontWeight: "700", color: "white", marginTop: 2 }}>
                 {team?.name ?? "Team"}
               </Text>
-              <Text style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>
+              <Text style={{ fontSize: 11, color: "rgba(255,255,255,0.65)", marginTop: 2 }}>
                 Share this code to invite team members
               </Text>
             </View>
@@ -619,14 +624,14 @@ export default function TeamScreen() {
               <View style={{ gap: 8 }}>
                 <Pressable
                   onPress={() => setQrModalOpen(true)}
-                  style={{ width: 44, height: 44, borderRadius: 13, backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#C7D2FE", alignItems: "center", justifyContent: "center" }}
+                  style={{ width: 44, height: 44, borderRadius: 13, backgroundColor: "rgba(255,255,255,0.18)", borderWidth: 1, borderColor: "rgba(255,255,255,0.25)", alignItems: "center", justifyContent: "center" }}
                   testID="qr-invite-code"
                 >
-                  <QrCode size={20} color="#4361EE" />
+                  <QrCode size={20} color="white" />
                 </Pressable>
                 <Pressable
                   onPress={handleShareCode}
-                  style={{ width: 44, height: 44, borderRadius: 13, backgroundColor: "#4361EE", alignItems: "center", justifyContent: "center" }}
+                  style={{ width: 44, height: 44, borderRadius: 13, backgroundColor: "rgba(255,255,255,0.25)", alignItems: "center", justifyContent: "center" }}
                   testID="share-invite-code"
                 >
                   <UserPlus size={20} color="white" />
@@ -634,6 +639,7 @@ export default function TeamScreen() {
               </View>
             ) : null}
           </View>
+          </LinearGradient>
         </View>
       </View>
 
