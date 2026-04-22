@@ -72,7 +72,7 @@ const CHART_PAD_R = 12;
 
 const yTicks = [60, 80, 100];
 
-function PerformanceChart({ data }: { data: Array<{ label: string; completionPct: number | null }> }) {
+function PerformanceChart({ data, dark }: { data: Array<{ label: string; completionPct: number | null }>; dark?: boolean }) {
   const plotW = CHART_W - CHART_PAD_L - CHART_PAD_R;
   const plotH = CHART_H - CHART_PAD_T - CHART_PAD_B;
   const minY = 55;
@@ -115,7 +115,7 @@ function PerformanceChart({ data }: { data: Array<{ label: string; completionPct
               y1={cy}
               x2={CHART_W - CHART_PAD_R}
               y2={cy}
-              stroke="#E0E7FF"
+              stroke={dark ? "rgba(255,255,255,0.08)" : "#E0E7FF"}
               strokeWidth={1}
               strokeDasharray="3,3"
             />
@@ -123,7 +123,7 @@ function PerformanceChart({ data }: { data: Array<{ label: string; completionPct
               x={CHART_PAD_L - 4}
               y={cy + 4}
               fontSize={9}
-              fill="#94A3B8"
+              fill={dark ? "rgba(255,255,255,0.35)" : "#94A3B8"}
               textAnchor="end"
             >
               {tick}%
@@ -141,7 +141,7 @@ function PerformanceChart({ data }: { data: Array<{ label: string; completionPct
           `M ${firstPt.x},${toY(minY)} ` +
           seg.map((p) => `L ${p.x},${p.y}`).join(" ") +
           ` L ${lastPt.x},${toY(minY)} Z`;
-        return <Path key={si} d={fillPath} fill="#4361EE" fillOpacity={0.08} />;
+        return <Path key={si} d={fillPath} fill={dark ? "#60A5FA" : "#4361EE"} fillOpacity={dark ? 0.14 : 0.08} />;
       })}
 
       {/* Line — one polyline per segment */}
@@ -153,7 +153,7 @@ function PerformanceChart({ data }: { data: Array<{ label: string; completionPct
             key={si}
             points={polylinePoints}
             fill="none"
-            stroke="#4361EE"
+            stroke={dark ? "#60A5FA" : "#4361EE"}
             strokeWidth={2.5}
             strokeLinejoin="round"
             strokeLinecap="round"
@@ -168,8 +168,8 @@ function PerformanceChart({ data }: { data: Array<{ label: string; completionPct
           cx={p.x}
           cy={p.y}
           r={k === nonNullPoints.length - 1 ? 5 : 3.5}
-          fill={k === nonNullPoints.length - 1 ? "#4361EE" : "white"}
-          stroke="#4361EE"
+          fill={k === nonNullPoints.length - 1 ? (dark ? "#60A5FA" : "#4361EE") : (dark ? "#0A1628" : "white")}
+          stroke={dark ? "#60A5FA" : "#4361EE"}
           strokeWidth={2}
         />
       ))}
@@ -182,7 +182,7 @@ function PerformanceChart({ data }: { data: Array<{ label: string; completionPct
           y={p.y - 7}
           fontSize={8}
           fontWeight="700"
-          fill={k === nonNullPoints.length - 1 ? "#4361EE" : "#64748B"}
+          fill={k === nonNullPoints.length - 1 ? (dark ? "#60A5FA" : "#4361EE") : (dark ? "rgba(255,255,255,0.45)" : "#64748B")}
           textAnchor="middle"
         >
           {data[p.index]?.completionPct}%
@@ -196,7 +196,7 @@ function PerformanceChart({ data }: { data: Array<{ label: string; completionPct
           x={toX(i)}
           y={CHART_H - 4}
           fontSize={9}
-          fill="#94A3B8"
+          fill={dark ? "rgba(255,255,255,0.35)" : "#94A3B8"}
           textAnchor="middle"
         >
           {d.label}
@@ -712,60 +712,64 @@ export default function TeamScreen() {
         {isPaid ? (
           <View
             style={{
-              backgroundColor: "white",
-              borderRadius: 20,
+              backgroundColor: "#0A1628",
+              borderRadius: 16,
               marginHorizontal: 12,
               marginTop: 10,
-              padding: 16,
-              shadowColor: "#000",
-              shadowOpacity: 0.06,
-              shadowRadius: 12,
-              shadowOffset: { width: 0, height: 3 },
-              elevation: 3,
+              padding: 20,
+              borderWidth: 1,
+              borderColor: "rgba(255,255,255,0.07)",
             }}
           >
             {/* Header row */}
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-              <Text style={{ fontSize: 10, fontWeight: "800", color: "#94A3B8", textTransform: "uppercase", letterSpacing: 1.2 }}>
-                TEAM AT A GLANCE
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+              <Text style={{ fontSize: 10, fontWeight: "700", color: "rgba(255,255,255,0.4)", textTransform: "uppercase", letterSpacing: 1.5 }}>
+                Team at a Glance
               </Text>
+              {avgCompletionPct !== null ? (
+                <View style={{ backgroundColor: "rgba(96,165,250,0.12)", borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 }}>
+                  <Text style={{ fontSize: 11, fontWeight: "700", color: "#60A5FA" }}>
+                    {avgCompletionPct}% AVG
+                  </Text>
+                </View>
+              ) : null}
             </View>
 
             {/* Chart */}
-            <View style={{ alignItems: "center", marginTop: 12 }}>
-              <PerformanceChart data={monthlyStats ?? []} />
+            <View style={{ alignItems: "center" }}>
+              <PerformanceChart data={monthlyStats ?? []} dark />
             </View>
 
-            {/* Footer: avg completion rate + progress bar */}
+            {/* Footer */}
             <View
               style={{
-                marginTop: 12,
-                paddingTop: 12,
+                marginTop: 16,
+                paddingTop: 16,
                 borderTopWidth: 1,
-                borderTopColor: "#F1F5F9",
+                borderTopColor: "rgba(255,255,255,0.07)",
                 flexDirection: "row",
                 alignItems: "center",
-                gap: 10,
+                gap: 12,
               }}
             >
-              <Text style={{ fontSize: 12, color: "#64748B" }}>
-                Last 6 months completion rate{" "}
-                <Text style={{ fontWeight: "800", color: "#0F172A" }}>
+              <Text style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", flex: 1 }}>
+                6-month completion rate{" "}
+                <Text style={{ fontWeight: "800", color: "#F8FAFC" }}>
                   {avgCompletionPct !== null ? `${avgCompletionPct}%` : "—"}
                 </Text>
               </Text>
-              <View style={{ flex: 1, height: 6, borderRadius: 3, backgroundColor: "#EEF2FF", overflow: "hidden" }}>
+              <View style={{ width: 72, height: 4, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.08)", overflow: "hidden" }}>
                 <View
                   style={{
-                    height: 6,
-                    borderRadius: 3,
-                    backgroundColor: "#22C55E",
+                    height: 4,
+                    borderRadius: 2,
+                    backgroundColor: "#3B82F6",
                     width: `${avgCompletionPct ?? 0}%`,
                   }}
                 />
               </View>
-              <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: "#F0FDF4", alignItems: "center", justifyContent: "center" }}>
-                <CheckCircle2 size={14} color="#22C55E" />
+              <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: "rgba(96,165,250,0.12)", alignItems: "center", justifyContent: "center" }}>
+                <CheckCircle2 size={13} color="#60A5FA" />
               </View>
             </View>
           </View>
