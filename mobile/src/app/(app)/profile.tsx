@@ -502,7 +502,13 @@ export default function ProfileScreen() {
           <View style={{ position: "absolute", left: 0, right: 0, alignItems: "center" }}>
             <Image source={require("@/assets/alenio-logo-white.png")} style={{ height: 30, width: 104, resizeMode: "contain" }} />
           </View>
-          <View style={{ width: 36 }} />
+          <Pressable
+            onPress={() => setShowSignOutConfirm(true)}
+            style={{ width: 36, height: 36, alignItems: "center", justifyContent: "center" }}
+            testID="sign-out-icon-button"
+          >
+            <LogOut size={20} color="rgba(255,255,255,0.85)" />
+          </Pressable>
         </View>
       </LinearGradient>
 
