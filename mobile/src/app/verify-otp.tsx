@@ -43,48 +43,57 @@ export default function VerifyOtp() {
     setError(null);
     setLoading(true);
 
-    const result = await authClient.emailOtp.verifyEmail({ email: email ?? "", otp });
-    if (result.error) {
-      setLoading(false);
-      setError(result.error.message ?? "Invalid code. Please try again.");
-      setOtp("");
-      return;
-    }
+    try {
+      const result = await authClient.emailOtp.verifyEmail({ email: email ?? "", otp });
+      if (result.error) {
+        setError(result.error.message ?? "Invalid code. Please try again.");
+        setOtp("");
+        return;
+      }
 
-    // Grab pending creds before any async calls consume them
-    const creds = consumePendingSignUp();
+      // Grab pending creds before any async calls consume them
+      const creds = consumePendingSignUp();
 
-    // verifyEmail may have established a session — check before signing in again
-    await queryClient.refetchQueries({ queryKey: SESSION_QUERY_KEY });
-    const session = queryClient.getQueryData<{ user: any }>(SESSION_QUERY_KEY);
-    if (session?.user) {
-      setSuccess(true);
-      return;
-    }
-
-    // No session yet — sign in with the credentials stored during sign-up
-    if (creds) {
-      const signInResult = await authClient.signIn.email({ email: creds.email, password: creds.password });
-      if (!signInResult.error) {
-        await queryClient.refetchQueries({ queryKey: SESSION_QUERY_KEY });
+      // verifyEmail may have established a session — check before signing in again
+      await queryClient.refetchQueries({ queryKey: SESSION_QUERY_KEY });
+      const session = queryClient.getQueryData<{ user: any }>(SESSION_QUERY_KEY);
+      if (session?.user) {
         setSuccess(true);
         return;
       }
-    }
 
-    // Email is verified — let the user sign in manually
-    setLoading(false);
-    router.replace("/sign-in");
+      // No session yet — sign in with the credentials stored during sign-up
+      if (creds) {
+        const signInResult = await authClient.signIn.email({ email: creds.email, password: creds.password });
+        if (!signInResult.error) {
+          await queryClient.refetchQueries({ queryKey: SESSION_QUERY_KEY });
+          setSuccess(true);
+          return;
+        }
+      }
+
+      // Email is verified — let the user sign in manually
+      router.replace("/sign-in");
+    } catch {
+      setError("Something went wrong. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleResend = async () => {
     setResending(true);
     setError(null);
     setResent(false);
-    await authClient.emailOtp.sendVerificationOtp({ email: email ?? "", type: "email-verification" });
-    setResending(false);
-    setResent(true);
-    setOtp("");
+    try {
+      await authClient.emailOtp.sendVerificationOtp({ email: email ?? "", type: "email-verification" });
+      setResent(true);
+      setOtp("");
+    } catch {
+      setError("Failed to resend code. Please try again.");
+    } finally {
+      setResending(false);
+    }
   };
 
   const digits = otp.split("").concat(Array(6).fill("")).slice(0, 6);
