@@ -992,9 +992,6 @@ export default function ActivityScreen() {
   const [celebrateType, setCelebrateType] = useState<string>(CELEBRATION_TYPES[0]!.key);
   const [celebrateMessage, setCelebrateMessage] = useState("");
   const hintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [previewItems, setPreviewItems] = useState<ActivityEvent[]>([]);
-  const [previewCounter, setPreviewCounter] = useState<number>(0);
-  const [previewPanelOpen, setPreviewPanelOpen] = useState<boolean>(false);
   const [tickNow, setTickNow] = useState<number>(Date.now());
 
   useEffect(() => {
@@ -1108,63 +1105,6 @@ export default function ActivityScreen() {
         </View>
       </LinearGradient>
 
-      {/* Preview panel */}
-      <View testID="preview-panel" style={{ backgroundColor: "#F8FAFC", borderBottomWidth: 1, borderBottomColor: "#E2E8F0", paddingHorizontal: 12, paddingVertical: 6 }}>
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "flex-end" }}>
-          <TouchableOpacity
-            testID="preview-panel-toggle"
-            onPress={() => setPreviewPanelOpen((v) => !v)}
-            style={{ backgroundColor: "#E2E8F0", borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4, flexDirection: "row", alignItems: "center", gap: 4 }}
-          >
-            <Text style={{ fontSize: 11 }}>🎨</Text>
-            <Text style={{ fontSize: 11, fontWeight: "600", color: "#64748B" }}>Preview</Text>
-            <Text style={{ fontSize: 11, color: "#94A3B8" }}>{previewPanelOpen ? "▲" : "▼"}</Text>
-          </TouchableOpacity>
-        </View>
-        {previewPanelOpen ? (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={{ paddingVertical: 6, gap: 6, flexDirection: "row" }}>
-            {([
-              { label: "🏆 M1", type: "task_milestone" as const, variant: 0 },
-              { label: "🏆 M2", type: "task_milestone" as const, variant: 1 },
-              { label: "🏆 M3", type: "task_milestone" as const, variant: 2 },
-              { label: "🏆 M4", type: "task_milestone" as const, variant: 3 },
-              { label: "💪 PB1", type: "personal_best" as const, variant: 0 },
-              { label: "💪 PB2", type: "personal_best" as const, variant: 1 },
-              { label: "💪 PB3", type: "personal_best" as const, variant: 2 },
-            ]).map((btn) => (
-              <TouchableOpacity
-                key={btn.label}
-                testID={`preview-btn-${btn.label}`}
-                onPress={() => {
-                  const c = previewCounter;
-                  const newId = `preview-${c * 10 + btn.variant}`;
-                  const newItem: ActivityEvent = {
-                    id: newId,
-                    type: btn.type,
-                    createdAt: new Date().toISOString(),
-                    metadata: { count: 25 },
-                    user: { id: "preview-user", name: "You", image: null },
-                    reactions: {},
-                  };
-                  setPreviewItems((prev) => [newItem, ...prev]);
-                  setPreviewCounter((n) => n + 1);
-                }}
-                style={{ backgroundColor: "#E2E8F0", borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 }}
-              >
-                <Text style={{ fontSize: 12, fontWeight: "600", color: "#334155" }}>{btn.label}</Text>
-              </TouchableOpacity>
-            ))}
-            <TouchableOpacity
-              testID="preview-btn-clear"
-              onPress={() => setPreviewItems([])}
-              style={{ backgroundColor: "#FEE2E2", borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 }}
-            >
-              <Text style={{ fontSize: 12, fontWeight: "600", color: "#DC2626" }}>🗑 Clear</Text>
-            </TouchableOpacity>
-          </ScrollView>
-        ) : null}
-      </View>
-
       {/* Celebrate modal */}
       <Modal visible={showCelebrateModal} transparent animationType="slide" onRequestClose={() => setShowCelebrateModal(false)}>
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
@@ -1276,7 +1216,7 @@ export default function ActivityScreen() {
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }} testID="loading-indicator">
           <ActivityIndicator color="#4361EE" />
         </View>
-      ) : previewItems.length === 0 && activities.length === 0 ? (
+      ) : activities.length === 0 ? (
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 40 }} testID="empty-state">
           <Activity size={48} color="#CBD5E1" />
           <Text style={{ fontSize: 17, fontWeight: "700", color: "#94A3B8", marginTop: 16, textAlign: "center" }}>
@@ -1288,7 +1228,7 @@ export default function ActivityScreen() {
         </View>
       ) : (
         <FlatList
-          data={[...previewItems, ...activities]}
+          data={activities}
           keyExtractor={(item) => item.id}
           ListHeaderComponent={activeMeeting ? <ActivityMeetingRow meeting={activeMeeting} now={tickNow} /> : null}
           renderItem={({ item, index }) => (
