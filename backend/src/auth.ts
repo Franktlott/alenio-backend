@@ -85,17 +85,21 @@ export const auth = betterAuth({
     enabled: true,
     requireEmailVerification: true,
     sendResetPassword: async ({ user, url }: { user: { email: string }, url: string }) => {
+      console.log("[auth] sendResetPassword url:", url);
       // Extract token and build a deep link that opens the Alenio app directly
       let resetUrl = url;
       try {
         const parsed = new URL(url);
-        const token = parsed.searchParams.get("token");
-        if (token) {
+        // Better Auth may use "token" or embed it in the path
+        const token = parsed.searchParams.get("token") ?? parsed.pathname.split("/").pop();
+        console.log("[auth] extracted token:", token ? token.slice(0, 12) + "…" : null);
+        if (token && token.length > 10) {
           resetUrl = `vibecode://reset-password?token=${encodeURIComponent(token)}`;
         }
       } catch {
         // fall back to original URL
       }
+      console.log("[auth] reset deep link:", resetUrl.slice(0, 60));
       const cta = `<table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:16px;">
         <tr><td align="center" bgcolor="#5B7FFF" style="background:#5B7FFF;border-radius:13px;">
           <a href="${resetUrl}" style="display:block;color:#ffffff;font-size:16px;font-weight:700;text-decoration:none;padding:15px 0;text-align:center;border-radius:13px;">Reset Password</a>
