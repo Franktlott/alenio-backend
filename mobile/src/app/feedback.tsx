@@ -6,7 +6,7 @@ import { useMutation } from "@tanstack/react-query";
 import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
 import { toast } from "burnt";
-import { Check } from "lucide-react-native";
+import { Check, X } from "lucide-react-native";
 
 const CATEGORIES = ["General", "Bug", "Feature Request"] as const;
 type Category = typeof CATEGORIES[number];
@@ -53,14 +53,26 @@ export default function FeedbackScreen() {
   }
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: "#F8FAFC" }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+      {/* Header */}
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingTop: 20, paddingBottom: 12 }}>
+        <View>
+          <Text style={{ fontSize: 20, fontWeight: "800", color: "#1E293B" }}>Send Feedback</Text>
+          <Text style={{ fontSize: 13, color: "#94A3B8", marginTop: 2 }}>Help us make the app better.</Text>
+        </View>
+        <Pressable
+          onPress={() => router.back()}
+          testID="close-feedback"
+          style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#F1F5F9", alignItems: "center", justifyContent: "center" }}
+        >
+          <X size={18} color="#64748B" />
+        </Pressable>
+      </View>
       <ScrollView
-        style={{ flex: 1, backgroundColor: "#F8FAFC" }}
-        contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 32 }}
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: insets.bottom + 32 }}
         keyboardShouldPersistTaps="handled"
       >
-        <Text style={{ fontSize: 20, fontWeight: "800", color: "#1E293B", marginBottom: 4 }}>Send Feedback</Text>
-        <Text style={{ fontSize: 13, color: "#94A3B8", marginBottom: 24 }}>Help us make the app better.</Text>
 
         {/* Category */}
         <Text style={{ fontSize: 12, fontWeight: "600", color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10 }}>Category</Text>
