@@ -30,7 +30,7 @@ export default function FeedbackScreen() {
       }),
     onSuccess: () => {
       setSubmitted(true);
-      setTimeout(() => router.back(), 2000);
+      setTimeout(() => router.back(), 5000);
     },
     onError: () => {
       toast({ title: "Failed to send feedback", preset: "error" });
