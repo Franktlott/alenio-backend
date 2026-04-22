@@ -199,42 +199,42 @@ export default function ChatScreen() {
         <Pressable
           testID="team-chat-button"
           onPress={() => router.push({ pathname: "/team-channels", params: { teamId: activeTeamId, teamName: teamDetail?.name ?? "" } })}
-          style={{ marginHorizontal: 16, marginTop: 20, backgroundColor: "white", borderRadius: 20, overflow: "hidden", shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 2 }}
+          style={{ marginHorizontal: 16, marginTop: 20, borderRadius: 20, overflow: "hidden", shadowColor: "#4361EE", shadowOpacity: 0.3, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 5 }}
         >
-          {/* Purple accent top border */}
-          <View style={{ height: 3, backgroundColor: "#4361EE" }} />
-          <View style={{ flexDirection: "row", alignItems: "center", padding: 16, gap: 12 }}>
-            {teamDetail?.image ? (
-              <Image source={{ uri: teamDetail.image }} style={{ width: 48, height: 48, borderRadius: 14 }} />
-            ) : (
-              <View style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: "#EEF2FF", alignItems: "center", justifyContent: "center" }}>
-                <MessageCircle size={22} color="#4361EE" />
-              </View>
-            )}
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 16, fontWeight: "700", color: "#0F172A" }}>Team Chat</Text>
-              <Text style={{ fontSize: 13, color: "#6B7280", marginTop: 1 }}>Primary team space</Text>
-            </View>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-              {teamChatUnreadCount > 0 ? (
-                <View style={{ backgroundColor: "#EF4444", borderRadius: 10, minWidth: 20, height: 20, alignItems: "center", justifyContent: "center", paddingHorizontal: 6 }}>
-                  <Text style={{ color: "white", fontSize: 11, fontWeight: "700" }}>{teamChatUnreadCount}</Text>
+          <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ padding: 16 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+              {teamDetail?.image ? (
+                <Image source={{ uri: teamDetail.image }} style={{ width: 48, height: 48, borderRadius: 14, borderWidth: 2, borderColor: "rgba(255,255,255,0.3)" }} />
+              ) : (
+                <View style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: "rgba(255,255,255,0.18)", alignItems: "center", justifyContent: "center" }}>
+                  <MessageCircle size={22} color="white" />
                 </View>
-              ) : null}
-              {topThreeMembers.length > 0 ? <AvatarStack members={topThreeMembers} /> : null}
+              )}
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 16, fontWeight: "700", color: "white" }}>Team Chat</Text>
+                <Text style={{ fontSize: 13, color: "rgba(255,255,255,0.7)", marginTop: 1 }}>Primary team space</Text>
+              </View>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                {teamChatUnreadCount > 0 ? (
+                  <View style={{ backgroundColor: "#EF4444", borderRadius: 10, minWidth: 20, height: 20, alignItems: "center", justifyContent: "center", paddingHorizontal: 6 }}>
+                    <Text style={{ color: "white", fontSize: 11, fontWeight: "700" }}>{teamChatUnreadCount}</Text>
+                  </View>
+                ) : null}
+                {topThreeMembers.length > 0 ? <AvatarStack members={topThreeMembers} /> : null}
+              </View>
             </View>
-          </View>
-          <View style={{ height: 1, backgroundColor: "#F1F5F9", marginHorizontal: 16 }} />
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 16, paddingHorizontal: 16, paddingVertical: 10 }}>
-            <Text style={{ fontSize: 12, color: "#6B7280" }}>
-              {memberCount} {memberCount === 1 ? "member" : "members"}
-            </Text>
-            <Text style={{ fontSize: 12, color: "#6B7280" }}>
-              {lastGeneralMessage
-                ? `Last: ${formatTime(lastGeneralMessage.createdAt)}`
-                : "No activity yet"}
-            </Text>
-          </View>
+            <View style={{ height: 1, backgroundColor: "rgba(255,255,255,0.15)", marginTop: 14, marginBottom: 10 }} />
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 16 }}>
+              <Text style={{ fontSize: 12, color: "rgba(255,255,255,0.7)" }}>
+                {memberCount} {memberCount === 1 ? "member" : "members"}
+              </Text>
+              <Text style={{ fontSize: 12, color: "rgba(255,255,255,0.7)" }}>
+                {lastGeneralMessage
+                  ? `Last: ${formatTime(lastGeneralMessage.createdAt)}`
+                  : "No activity yet"}
+              </Text>
+            </View>
+          </LinearGradient>
         </Pressable>
 
         {/* DMs / Group Messages section */}
