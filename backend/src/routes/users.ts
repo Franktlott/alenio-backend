@@ -26,6 +26,14 @@ usersRouter.patch("/push-token", zValidator("json", pushTokenSchema), async (c) 
   const user = c.get("user")!;
   const { pushToken } = c.req.valid("json");
 
+  if (pushToken) {
+    // Clear this token from any other account so one device = one recipient
+    await prisma.user.updateMany({
+      where: { pushToken, NOT: { id: user.id } },
+      data: { pushToken: null },
+    });
+  }
+
   await prisma.user.update({
     where: { id: user.id },
     data: { pushToken: pushToken ?? null },
