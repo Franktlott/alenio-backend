@@ -79,13 +79,13 @@ function ensurePushTokenListener() {
   pushTokenListener = Notifications.addPushTokenListener(() => {});
 }
 
-// Show notifications while app is open
+// Suppress system alerts when app is in the foreground
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
-    shouldPlaySound: true,
+    shouldPlaySound: false,
     shouldSetBadge: true,
-    shouldShowBanner: true,
-    shouldShowList: true,
+    shouldShowBanner: false,
+    shouldShowList: false,
   }),
 });
 
