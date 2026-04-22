@@ -97,15 +97,19 @@ videoRouter.post(
     }
 
     // Fire-and-forget: notify team members that a video call has started
+    const callInitiatorId = c.get("user")?.id ?? null;
     void (async () => {
       const event = await prisma.calendarEvent.findUnique({
         where: { id: roomId },
-        select: { teamId: true, createdById: true },
+        select: { teamId: true },
       });
       if (!event) return;
 
       const members = await prisma.teamMember.findMany({
-        where: { teamId: event.teamId, userId: { not: event.createdById } },
+        where: {
+          teamId: event.teamId,
+          ...(callInitiatorId ? { userId: { not: callInitiatorId } } : {}),
+        },
         select: { userId: true },
       });
       const memberIds = members.map((m) => m.userId);
