@@ -881,7 +881,7 @@ export default function ProfileScreen() {
         ) : null}
 
         {/* Push Notifications Debug — hidden, preserved for future use */}
-        {true ? (<View className="mx-4 mt-5">
+        {false ? (<View className="mx-4 mt-5">
           <Text className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3 ml-1">Push Notifications Debug</Text>
           <GlassCard>
             <Pressable
