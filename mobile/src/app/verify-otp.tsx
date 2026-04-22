@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   Image,
   Pressable,
+  AppState,
 } from "react-native";
 import { authClient } from "@/lib/auth/auth-client";
 import { SESSION_QUERY_KEY } from "@/lib/auth/use-session";
@@ -25,8 +26,19 @@ export default function VerifyOtp() {
   const [error, setError] = useState<string | null>(null);
   const [resent, setResent] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [focused, setFocused] = useState(false);
   const inputRef = useRef<TextInput>(null);
   const queryClient = useQueryClient();
+
+  // Re-focus when the app comes back to the foreground
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") {
+        setTimeout(() => inputRef.current?.focus(), 150);
+      }
+    });
+    return () => sub.remove();
+  }, []);
 
   useEffect(() => {
     if (success) {
@@ -34,6 +46,10 @@ export default function VerifyOtp() {
       return () => clearTimeout(timer);
     }
   }, [success]);
+
+  const focusInput = () => {
+    setTimeout(() => inputRef.current?.focus(), 50);
+  };
 
   const handleVerify = async () => {
     if (otp.length < 6) {
@@ -51,10 +67,8 @@ export default function VerifyOtp() {
         return;
       }
 
-      // Grab pending creds before any async calls consume them
       const creds = consumePendingSignUp();
 
-      // verifyEmail may have established a session — check before signing in again
       await queryClient.refetchQueries({ queryKey: SESSION_QUERY_KEY });
       const session = queryClient.getQueryData<{ user: any }>(SESSION_QUERY_KEY);
       if (session?.user) {
@@ -62,7 +76,6 @@ export default function VerifyOtp() {
         return;
       }
 
-      // No session yet — sign in with the credentials stored during sign-up
       if (creds) {
         const signInResult = await authClient.signIn.email({ email: creds.email, password: creds.password });
         if (!signInResult.error) {
@@ -72,7 +85,6 @@ export default function VerifyOtp() {
         }
       }
 
-      // Email is verified — let the user sign in manually
       router.replace("/sign-in");
     } catch {
       setError("Something went wrong. Please try again.");
@@ -123,7 +135,7 @@ export default function VerifyOtp() {
         </SafeAreaView>
       </LinearGradient>
 
-      <View className="flex-1 items-center justify-center px-8">
+      <Pressable style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 32 }} onPress={focusInput}>
         <Text style={{ fontSize: 48 }}>📬</Text>
         <Text className="text-2xl font-bold text-slate-900 mt-4 mb-2 text-center">Check your email</Text>
         <Text className="text-slate-500 text-base text-center mb-8">
@@ -131,42 +143,58 @@ export default function VerifyOtp() {
           <Text className="font-semibold text-slate-700">{email}</Text>
         </Text>
 
-        <Pressable onPress={() => inputRef.current?.focus()} className="w-full mb-6">
-          <View className="flex-row justify-center gap-3">
+        <View style={{ width: "100%", marginBottom: 8 }}>
+          <View style={{ flexDirection: "row", justifyContent: "center", gap: 10 }}>
             {digits.map((d, i) => (
               <View
                 key={i}
-                className={`w-12 h-14 rounded-xl items-center justify-center border-2 ${
-                  otp.length === i ? "border-indigo-500 bg-indigo-50" : d ? "border-indigo-300 bg-white" : "border-slate-200 bg-white"
-                }`}
+                style={{
+                  width: 48,
+                  height: 56,
+                  borderRadius: 12,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderWidth: 2,
+                  borderColor: otp.length === i && focused ? "#4361EE" : d ? "#A5B4FC" : focused ? "#E2E8F0" : "#CBD5E1",
+                  backgroundColor: otp.length === i && focused ? "#EEF2FF" : "white",
+                }}
               >
-                <Text className="text-2xl font-bold text-slate-900">{d}</Text>
+                <Text style={{ fontSize: 24, fontWeight: "700", color: "#0F172A" }}>{d}</Text>
               </View>
             ))}
           </View>
+
           <TextInput
             ref={inputRef}
             value={otp}
             onChangeText={(t) => { setError(null); setOtp(t.replace(/[^0-9]/g, "").slice(0, 6)); }}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
             keyboardType="number-pad"
             maxLength={6}
             autoFocus
             style={{ position: "absolute", opacity: 0, width: 1, height: 1 }}
             testID="otp-input"
           />
-        </Pressable>
+        </View>
+
+        {!focused && otp.length < 6 ? (
+          <TouchableOpacity onPress={focusInput} style={{ marginBottom: 16, paddingVertical: 8, paddingHorizontal: 20, borderRadius: 20, backgroundColor: "#EEF2FF" }}>
+            <Text style={{ color: "#4361EE", fontSize: 14, fontWeight: "600" }}>Tap here to enter code</Text>
+          </TouchableOpacity>
+        ) : <View style={{ height: 24 }} />}
 
         {error ? <Text className="text-red-500 text-sm mb-4 text-center">{error}</Text> : null}
         {resent ? <Text className="text-green-600 text-sm mb-4 text-center">Code resent! Check your inbox.</Text> : null}
 
         <TouchableOpacity
-          className="bg-indigo-600 rounded-xl py-4 items-center w-full mb-4"
+          style={{ backgroundColor: "#4361EE", borderRadius: 12, paddingVertical: 16, alignItems: "center", width: "100%", marginBottom: 16, opacity: loading || otp.length < 6 ? 0.5 : 1 }}
           onPress={handleVerify}
           disabled={loading || otp.length < 6}
           activeOpacity={0.8}
           testID="verify-button"
         >
-          {loading ? <ActivityIndicator color="white" /> : <Text className="text-white font-semibold text-base">Verify Email</Text>}
+          {loading ? <ActivityIndicator color="white" /> : <Text style={{ color: "white", fontWeight: "600", fontSize: 16 }}>Verify Email</Text>}
         </TouchableOpacity>
 
         <TouchableOpacity onPress={handleResend} disabled={resending} className="py-2">
@@ -176,7 +204,7 @@ export default function VerifyOtp() {
         <TouchableOpacity onPress={() => router.replace("/sign-in")} className="mt-4 py-2">
           <Text className="text-slate-400 text-sm">Back to sign in</Text>
         </TouchableOpacity>
-      </View>
+      </Pressable>
 
       <View style={{ alignItems: "center", paddingBottom: 16 }}>
         <Image source={require("@/assets/lotttech-logo.png")} style={{ width: 185, height: 57 }} resizeMode="contain" />
