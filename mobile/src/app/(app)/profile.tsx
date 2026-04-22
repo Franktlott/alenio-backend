@@ -800,9 +800,6 @@ export default function ProfileScreen() {
           <View className="mt-2 mb-1 px-1" style={{ gap: 4 }}>
             <View className="flex-row items-center" style={{ gap: 6 }}>
               <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: notifPrefs?.hasToken ? "#22C55E" : "#EF4444" }} />
-              <Text className="text-xs text-slate-400">
-                {notifPrefs?.hasToken ? "Device registered for push notifications" : "Push notifications not registered"}
-              </Text>
             </View>
             {notifRegStatus && !notifPrefs?.hasToken ? (
               <Text className="text-xs text-slate-300 ml-3" selectable>{notifRegStatus}</Text>
