@@ -18,8 +18,10 @@ feedbackRouter.post(
     const { message, category, userName, userEmail } = c.req.valid("json");
 
     if (!env.RESEND_API_KEY) {
+      console.error("[feedback] RESEND_API_KEY is not set");
       return c.json({ error: { message: "Email service not configured", code: "NOT_CONFIGURED" } }, 500);
     }
+    console.log("[feedback] FROM_EMAIL:", env.FROM_EMAIL);
 
     const resend = new Resend(env.RESEND_API_KEY);
     const categoryLabel = category ? `[${category}] ` : "";
@@ -43,6 +45,7 @@ feedbackRouter.post(
     });
 
     if (error) {
+      console.error("[feedback] Resend error:", JSON.stringify(error));
       return c.json({ error: { message: "Failed to send feedback", code: "SEND_ERROR" } }, 500);
     }
 
