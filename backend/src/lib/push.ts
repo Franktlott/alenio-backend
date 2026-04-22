@@ -34,9 +34,10 @@ function chunkArray<T>(arr: T[], size: number): T[][] {
   return chunks;
 }
 
-async function checkReceiptsAfterDelay(ids: string[]): Promise<void> {
+async function checkReceiptsAfterDelay(receiptIdToToken: Record<string, string>): Promise<void> {
   await new Promise((r) => setTimeout(r, 30_000));
   try {
+    const ids = Object.keys(receiptIdToToken);
     const res = await fetch(EXPO_RECEIPTS_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
@@ -44,11 +45,26 @@ async function checkReceiptsAfterDelay(ids: string[]): Promise<void> {
     });
     const json = await res.json() as { data?: Record<string, { status: string; message?: string; details?: { error?: string } }> };
     const receipts = json.data ?? {};
+
+    const tokensToInvalidate: string[] = [];
     for (const [id, receipt] of Object.entries(receipts)) {
       if (receipt.status !== "ok") {
         console.error(`[push] ❌ Receipt error for ${id}: ${receipt.message ?? ""} (${receipt.details?.error ?? "unknown"})`);
+        if (receipt.details?.error === "DeviceNotRegistered" || receipt.details?.error === "InvalidCredentials") {
+          const token = receiptIdToToken[id];
+          if (token) tokensToInvalidate.push(token);
+        }
       }
     }
+
+    if (tokensToInvalidate.length > 0) {
+      await prisma.user.updateMany({
+        where: { pushToken: { in: tokensToInvalidate } },
+        data: { pushToken: null },
+      });
+      console.log(`[push] Cleared ${tokensToInvalidate.length} invalid push token(s)`);
+    }
+
     const errors = Object.values(receipts).filter((r) => r.status !== "ok");
     if (errors.length === 0) {
       console.log(`[push] ✅ All ${ids.length} receipt(s) confirmed delivered`);
@@ -91,9 +107,14 @@ async function sendPushChunkStrict(chunk: PushPayload[]): Promise<void> {
     throw new Error(`Expo push rejected: ${JSON.stringify(errors).slice(0, 800)}`);
   }
 
-  const receiptIds = result.data?.filter((r) => r.status === "ok" && r.id).map((r) => r.id!) ?? [];
-  if (receiptIds.length > 0) {
-    void checkReceiptsAfterDelay(receiptIds);
+  const receiptIdToToken: Record<string, string> = {};
+  result.data?.forEach((r, i) => {
+    if (r.status === "ok" && r.id && chunk[i]) {
+      receiptIdToToken[r.id] = chunk[i]!.token;
+    }
+  });
+  if (Object.keys(receiptIdToToken).length > 0) {
+    void checkReceiptsAfterDelay(receiptIdToToken);
   }
 }
 
