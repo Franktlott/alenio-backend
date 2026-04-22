@@ -3,6 +3,7 @@ import { env } from "../env";
 
 // Expo push API endpoint (note the required "/--/").
 const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
+const EXPO_RECEIPTS_URL = "https://exp.host/--/api/v2/push/getReceipts";
 const CHUNK_SIZE = 100;
 
 export interface PushPayload {
@@ -31,6 +32,30 @@ function chunkArray<T>(arr: T[], size: number): T[][] {
     chunks.push(arr.slice(i, i + size));
   }
   return chunks;
+}
+
+async function checkReceiptsAfterDelay(ids: string[]): Promise<void> {
+  await new Promise((r) => setTimeout(r, 30_000));
+  try {
+    const res = await fetch(EXPO_RECEIPTS_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({ ids }),
+    });
+    const json = await res.json() as { data?: Record<string, { status: string; message?: string; details?: { error?: string } }> };
+    const receipts = json.data ?? {};
+    for (const [id, receipt] of Object.entries(receipts)) {
+      if (receipt.status !== "ok") {
+        console.error(`[push] ❌ Receipt error for ${id}: ${receipt.message ?? ""} (${receipt.details?.error ?? "unknown"})`);
+      }
+    }
+    const errors = Object.values(receipts).filter((r) => r.status !== "ok");
+    if (errors.length === 0) {
+      console.log(`[push] ✅ All ${ids.length} receipt(s) confirmed delivered`);
+    }
+  } catch (err) {
+    console.warn("[push] Failed to check receipts:", err);
+  }
 }
 
 async function sendPushChunkStrict(chunk: PushPayload[]): Promise<void> {
@@ -64,6 +89,11 @@ async function sendPushChunkStrict(chunk: PushPayload[]): Promise<void> {
   const errors = result.data?.filter((r) => r.status !== "ok") ?? [];
   if (errors.length) {
     throw new Error(`Expo push rejected: ${JSON.stringify(errors).slice(0, 800)}`);
+  }
+
+  const receiptIds = result.data?.filter((r) => r.status === "ok" && r.id).map((r) => r.id!) ?? [];
+  if (receiptIds.length > 0) {
+    void checkReceiptsAfterDelay(receiptIds);
   }
 }
 
@@ -154,7 +184,7 @@ export async function sendPushToUsers(
   const DEFAULT_TONE = { channelId: "alenio_main", sound: "default" };
 
   const messages: PushPayload[] = users
-    .filter((u) => u.pushToken?.startsWith("ExponentPushToken"))
+    .filter((u) => u.pushToken?.startsWith("ExponentPushToken") || u.pushToken?.startsWith("ExpoPushToken"))
     .map((u) => {
       const { channelId, sound } = TONE_MAP[u.notifTone ?? ""] ?? DEFAULT_TONE;
       console.log(`[push] user tone: "${u.notifTone ?? "null"}" → channelId: "${channelId}", sound: "${sound}"`);
