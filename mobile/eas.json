@@ -11,10 +11,7 @@
       }
     },
     "preview": {
-      "distribution": "internal",
-      "android": {
-        "googleServicesFile": "$GOOGLE_SERVICES_JSON"
-      }
+      "distribution": "internal"
     },
     "production": {
       "env": {
@@ -31,8 +28,7 @@
         "distribution": "store"
       },
       "android": {
-        "distribution": "store",
-        "googleServicesFile": "$GOOGLE_SERVICES_JSON"
+        "distribution": "store"
       }
     }
   },
