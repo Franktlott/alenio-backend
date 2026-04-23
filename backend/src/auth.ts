@@ -86,11 +86,25 @@ export const auth = betterAuth({
     enabled: true,
     requireEmailVerification: true,
     sendResetPassword: async ({ user, url }: { user: { email: string }, url: string }) => {
-      // Use the HTTPS URL directly — Gmail blocks custom scheme links (alenio://)
-      // The /reset-password backend route redirects to the app deep link
+      // Extract the raw token from Better Auth's URL so the email links directly to our
+      // /reset-password redirect route — bypassing Better Auth's GET handler which
+      // invalidates the token on visit, before the app even opens.
+      let emailUrl = url;
+      try {
+        const parsed = new URL(url);
+        // Token is either the last path segment or a query param
+        const token =
+          parsed.searchParams.get("token") ??
+          parsed.pathname.split("/").filter(Boolean).pop();
+        if (token && token.length > 8) {
+          emailUrl = `${env.BACKEND_URL}/reset-password?token=${encodeURIComponent(token)}`;
+        }
+      } catch {
+        // fall back to original url
+      }
       const cta = `<table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:16px;">
         <tr><td align="center" bgcolor="#5B7FFF" style="background:#5B7FFF;border-radius:13px;">
-          <a href="${url}" style="display:block;color:#ffffff;font-size:16px;font-weight:700;text-decoration:none;padding:15px 0;text-align:center;border-radius:13px;">Reset Password</a>
+          <a href="${emailUrl}" style="display:block;color:#ffffff;font-size:16px;font-weight:700;text-decoration:none;padding:15px 0;text-align:center;border-radius:13px;">Reset Password</a>
         </td></tr>
       </table>`;
       await sendEmail(
