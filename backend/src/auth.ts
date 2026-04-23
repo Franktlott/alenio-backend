@@ -6,6 +6,12 @@ import { Resend } from "resend";
 import { prisma } from "./prisma";
 import { env } from "./env";
 
+// Embed logos as base64 so they always display regardless of email client image blocking
+const alenioLogoB64 = Buffer.from(await Bun.file(`${import.meta.dir}/../static/alenio-logo.png`).arrayBuffer()).toString("base64");
+const lotttechLogoB64 = Buffer.from(await Bun.file(`${import.meta.dir}/../static/lotttech-logo.png`).arrayBuffer()).toString("base64");
+const alenioLogoSrc = `data:image/png;base64,${alenioLogoB64}`;
+const lotttechLogoSrc = `data:image/png;base64,${lotttechLogoB64}`;
+
 const sendEmail = async (to: string, subject: string, html: string) => {
   if (!env.RESEND_API_KEY) {
     console.warn("[auth] RESEND_API_KEY not set, skipping email");
@@ -17,9 +23,9 @@ const sendEmail = async (to: string, subject: string, html: string) => {
   else console.log("[auth] Email sent, id:", data?.id);
 };
 
-const emailCard = (label: string, title: string, body: string, ctaHtml: string, backendUrl: string) => {
-  const logoUrl = `${backendUrl}/static/alenio-logo.png`;
-  const lotttechLogoUrl = `${backendUrl}/static/lotttech-logo.png`;
+const emailCard = (label: string, title: string, body: string, ctaHtml: string, _backendUrl: string) => {
+  const logoUrl = alenioLogoSrc;
+  const lotttechLogoUrl = lotttechLogoSrc;
   return `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
