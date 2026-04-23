@@ -279,8 +279,8 @@ app.get("/api/users/search", async (c) => {
         { id: { not: user.id } }, // exclude self
         {
           OR: [
-            { name: { contains: q } },
-            { email: { contains: q } },
+            { name: { contains: q, mode: 'insensitive' } },
+            { email: { contains: q, mode: 'insensitive' } },
           ],
         },
       ],
