@@ -4,6 +4,6 @@ builder = "nixpacks"
 [deploy]
 startCommand = "ENVIRONMENT=production bash scripts/start"
 healthcheckPath = "/health"
-healthcheckTimeout = 60
+healthcheckTimeout = 300
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 3
