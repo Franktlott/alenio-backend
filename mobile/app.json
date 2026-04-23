@@ -2,7 +2,7 @@
   "expo": {
     "name": "Alenio",
     "slug": "alenio",
-    "scheme": "vibecode",
+    "scheme": "alenio",
     "version": "1.0.03",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
