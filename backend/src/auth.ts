@@ -115,6 +115,7 @@ export const auth = betterAuth({
     },
   },
   trustedOrigins: [
+    "alenio://*",
     "vibecode://*",
     "exp://*/*",
     "http://localhost:*",
