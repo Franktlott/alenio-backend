@@ -121,6 +121,25 @@ app.get("/email-verified", (c) => {
 </html>`);
 });
 
+// Password reset deep-link redirect — email buttons use HTTPS (Gmail allows it),
+// this route converts to the app scheme so iOS/Android opens the app
+import { env as appEnv } from "./env";
+app.get("/reset-password", (c) => {
+  const token = c.req.query("token");
+  if (!token) return c.text("Missing token", 400);
+  const deepLink = `${appEnv.APP_SCHEME}://reset-password?token=${encodeURIComponent(token)}`;
+  return c.html(`<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<meta http-equiv="refresh" content="0;url=${deepLink}">
+<title>Redirecting…</title></head>
+<body style="font-family:sans-serif;text-align:center;padding:40px;">
+<p>Opening Alenio…</p>
+<p style="margin-top:16px;font-size:14px;color:#64748B;">
+  <a href="${deepLink}" style="color:#4361EE;">Tap here if the app doesn't open</a>
+</p>
+</body></html>`);
+});
+
 // Static assets
 app.get("/static/:filename", async (c) => {
   const { filename } = c.req.param();

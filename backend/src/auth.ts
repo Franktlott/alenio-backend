@@ -6,11 +6,6 @@ import { Resend } from "resend";
 import { prisma } from "./prisma";
 import { env } from "./env";
 
-// Embed logos as base64 so they always display regardless of email client image blocking
-const alenioLogoB64 = Buffer.from(await Bun.file(`${import.meta.dir}/../static/alenio-logo.png`).arrayBuffer()).toString("base64");
-const lotttechLogoB64 = Buffer.from(await Bun.file(`${import.meta.dir}/../static/lotttech-logo.png`).arrayBuffer()).toString("base64");
-const alenioLogoSrc = `data:image/png;base64,${alenioLogoB64}`;
-const lotttechLogoSrc = `data:image/png;base64,${lotttechLogoB64}`;
 
 const sendEmail = async (to: string, subject: string, html: string) => {
   if (!env.RESEND_API_KEY) {
@@ -23,9 +18,9 @@ const sendEmail = async (to: string, subject: string, html: string) => {
   else console.log("[auth] Email sent, id:", data?.id);
 };
 
-const emailCard = (label: string, title: string, body: string, ctaHtml: string, _backendUrl: string) => {
-  const logoUrl = alenioLogoSrc;
-  const lotttechLogoUrl = lotttechLogoSrc;
+const emailCard = (label: string, title: string, body: string, ctaHtml: string, backendUrl: string) => {
+  const logoUrl = `${backendUrl}/static/alenio-logo.png`;
+  const lotttechLogoUrl = `${backendUrl}/static/lotttech-logo.png`;
   return `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
@@ -91,20 +86,11 @@ export const auth = betterAuth({
     enabled: true,
     requireEmailVerification: true,
     sendResetPassword: async ({ user, url }: { user: { email: string }, url: string }) => {
-      // Extract token and build a deep link that opens the app directly
-      let resetUrl = url;
-      try {
-        const parsed = new URL(url);
-        const token = parsed.searchParams.get("token") ?? parsed.pathname.split("/").pop();
-        if (token && token.length > 10) {
-          resetUrl = `${env.APP_SCHEME}://reset-password?token=${encodeURIComponent(token)}`;
-        }
-      } catch {
-        // fall back to original URL
-      }
+      // Use the HTTPS URL directly — Gmail blocks custom scheme links (alenio://)
+      // The /reset-password backend route redirects to the app deep link
       const cta = `<table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:16px;">
         <tr><td align="center" bgcolor="#5B7FFF" style="background:#5B7FFF;border-radius:13px;">
-          <a href="${resetUrl}" style="display:block;color:#ffffff;font-size:16px;font-weight:700;text-decoration:none;padding:15px 0;text-align:center;border-radius:13px;">Reset Password</a>
+          <a href="${url}" style="display:block;color:#ffffff;font-size:16px;font-weight:700;text-decoration:none;padding:15px 0;text-align:center;border-radius:13px;">Reset Password</a>
         </td></tr>
       </table>`;
       await sendEmail(
