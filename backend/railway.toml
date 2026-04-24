@@ -1,5 +1,6 @@
 [build]
-builder = "nixpacks"
+builder = "dockerfile"
+dockerfilePath = "Dockerfile"
 
 [deploy]
 startCommand = "NODE_ENV=production bun install && bunx prisma generate && bunx prisma db push --accept-data-loss && exec bun src/index.ts"
