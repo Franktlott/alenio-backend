@@ -27,7 +27,7 @@ import { MentionPicker } from "@/components/MentionPicker";
 import type { DirectMessage, MessageReaction, Conversation } from "@/lib/types";
 import * as Clipboard from "expo-clipboard";
 import ReanimatedSwipeable from "react-native-gesture-handler/ReanimatedSwipeable";
-import Reanimated, { useAnimatedStyle, interpolate } from "react-native-reanimated";
+import Reanimated, { useAnimatedStyle, interpolate, type SharedValue } from "react-native-reanimated";
 import * as FileSystem from "expo-file-system";
 import * as MediaLibrary from "expo-media-library";
 import { useUnreadStore } from "@/lib/state/unread-store";
@@ -38,7 +38,7 @@ import { useMention } from "@/lib/useMention";
 
 const REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🔥'];
 
-function DeleteAction({ drag, onDelete }: { drag: Reanimated.SharedValue<number>; onDelete: () => void }) {
+function DeleteAction({ drag, onDelete }: { drag: SharedValue<number>; onDelete: () => void }) {
   const styleAnimation = useAnimatedStyle(() => ({
     opacity: interpolate(drag.value, [-80, -40], [1, 0], "clamp"),
     transform: [{ scale: interpolate(drag.value, [-80, -40], [1, 0.7], "clamp") }],
@@ -226,7 +226,7 @@ export default function DMChatScreen() {
         return;
       }
       const ext = mediaType === "video" ? "mp4" : "jpg";
-      const localUri = `${FileSystem.cacheDirectory}download_${Date.now()}.${ext}`;
+      const localUri = `${FileSystem.Paths.cache.uri}download_${Date.now()}.${ext}`;
       const { uri } = await FileSystem.downloadAsync(mediaUrl, localUri);
       await MediaLibrary.saveToLibraryAsync(uri);
       await FileSystem.deleteAsync(uri, { idempotent: true });
