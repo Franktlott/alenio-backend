@@ -1,5 +1,5 @@
 import { fetch } from "expo/fetch";
-import { authClient } from "../auth/auth-client";
+import { authClient, getAuthHeaders } from "../auth/auth-client";
 
 const baseUrl = process.env.EXPO_PUBLIC_BACKEND_URL!;
 
@@ -8,13 +8,14 @@ const request = async <T>(
   options: { method?: string; body?: string; skipSignOut?: boolean } = {}
 ): Promise<T> => {
   const { method, body, skipSignOut } = options;
+  const authHeaders = await getAuthHeaders();
   const response = await fetch(`${baseUrl}${url}`, {
     method,
     body,
     credentials: "include",
     headers: {
       ...(body ? { "Content-Type": "application/json" } : {}),
-      Cookie: authClient.getCookie(),
+      ...authHeaders,
     },
   });
   if (!response.ok) {
@@ -34,10 +35,11 @@ export const api = {
   put: <T>(url: string, body: unknown) =>
     request<{ data: T }>(url, { method: "PUT", body: JSON.stringify(body) }).then((r) => r.data),
   delete: async <T>(url: string) => {
+    const authHeaders = await getAuthHeaders();
     const response = await fetch(`${baseUrl}${url}`, {
       method: "DELETE",
       credentials: "include",
-      headers: { Cookie: authClient.getCookie() },
+      headers: authHeaders,
     });
     if (!response.ok) {
       const err = await response.json().catch(() => ({}));

@@ -17,7 +17,7 @@ import { StatusBar } from "expo-status-bar";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
 import { Search, Users, Building2, CheckSquare, MessageSquare, LogOut, ChevronRight, Shield, Trash2 } from "lucide-react-native";
-import { authClient } from "@/lib/auth/auth-client";
+import { authClient, getAuthHeaders } from "@/lib/auth/auth-client";
 import { useInvalidateSession } from "@/lib/auth/use-session";
 import { fetch } from "expo/fetch";
 import { toast } from "burnt";
@@ -45,9 +45,10 @@ function useAdminStats() {
   return useQuery<Stats>({
     queryKey: ["admin", "stats"],
     queryFn: async () => {
+      const authHeaders = await getAuthHeaders();
       const res = await fetch(`${BASE_URL}/api/admin-mobile/stats`, {
         credentials: "include",
-        headers: { Cookie: authClient.getCookie() },
+        headers: authHeaders,
       });
       const json = await res.json() as { data: Stats; error?: { message: string } };
       if (!res.ok) throw new Error(json.error?.message || "Request failed");
@@ -60,9 +61,10 @@ function useAdminUsers() {
   return useQuery<AdminUser[]>({
     queryKey: ["admin", "users"],
     queryFn: async () => {
+      const authHeaders = await getAuthHeaders();
       const res = await fetch(`${BASE_URL}/api/admin-mobile/users`, {
         credentials: "include",
-        headers: { Cookie: authClient.getCookie() },
+        headers: authHeaders,
       });
       const json = await res.json() as { data: AdminUser[]; error?: { message: string } };
       if (!res.ok) throw new Error(json.error?.message || "Request failed");
@@ -99,10 +101,11 @@ export default function AdminDashboard() {
 
   const deleteMutation = useMutation({
     mutationFn: async (userId: string) => {
+      const authHeaders = await getAuthHeaders();
       const res = await fetch(`${BASE_URL}/api/admin-mobile/users/${userId}`, {
         method: "DELETE",
         credentials: "include",
-        headers: { Cookie: authClient.getCookie() },
+        headers: authHeaders,
       });
       const json = await res.json() as { data?: { deleted: boolean }; error?: { message: string } };
       if (!res.ok) throw new Error(json.error?.message || "Delete failed");

@@ -81,7 +81,7 @@ config.resolver = {
     // Handle relative ../shared/* imports (fallback for unmigrated legacy code)
     // These imports are incorrect (resolve to wrong location) but we redirect them
     // to the actual shared folder for backwards compatibility
-    // IMPORTANT: Only apply to user code, NOT node_modules (e.g., better-auth has its own internal shared/)
+    // IMPORTANT: Only apply to user code, NOT node_modules with their own internals
     if (sharedFolderExists && !context.originModulePath?.includes("node_modules")) {
       const relativeSharedMatch = moduleName.match(/^(?:\.\.\/)+shared\/(.+)$/);
       if (relativeSharedMatch) {
@@ -90,19 +90,6 @@ config.resolver = {
         console.log(`[Metro Resolve] RELATIVE SHARED: ${moduleName} -> ${resolvedPath}`);
         return context.resolveRequest(context, resolvedPath, platform);
       }
-    }
-
-    // Fix better-auth ESM resolution: Metro resolves to .cjs but package only ships .mjs
-    // Intercept .cjs paths and redirect to .mjs
-    if (moduleName.includes("better-auth") && moduleName.endsWith(".cjs")) {
-      const mjsPath = moduleName.replace(/\.cjs$/, ".mjs");
-      return context.resolveRequest(context, mjsPath, platform);
-    }
-
-    // Fix @better-auth/expo incorrectly importing metro-config (dev-time only)
-    // This import shouldn't exist in client code - mock it
-    if (moduleName.includes("@expo/metro-config") || moduleName.includes("async-require")) {
-      return { type: "empty" };
     }
 
     // Mock native-only modules on web

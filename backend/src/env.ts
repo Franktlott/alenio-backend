@@ -10,8 +10,8 @@ const envSchema = z.object({
   NODE_ENV: z.string().optional(),
   // Database
   DATABASE_URL: z.string().default("file:./dev.db"),
-  // Better Auth
-  BETTER_AUTH_SECRET: z.string(),
+  // Neon Auth
+  NEON_AUTH_URL: z.string().url(),
   // Backend URL
   BACKEND_URL: z.string().default("http://localhost:3000"),
   // Admin Dashboard

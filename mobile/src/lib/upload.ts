@@ -1,4 +1,4 @@
-import { authClient } from "./auth/auth-client";
+import { getAuthHeaders } from "./auth/auth-client";
 
 type UploadResult = {
   id: string;
@@ -17,13 +17,12 @@ export async function uploadFile(
 
   const formData = new FormData();
   formData.append("file", { uri, type: mimeType, name: filename } as any);
+  const authHeaders = await getAuthHeaders();
 
   const response = await fetch(`${BACKEND_URL}/api/upload`, {
     method: "POST",
     body: formData,
-    headers: {
-      Cookie: authClient.getCookie(),
-    },
+    headers: authHeaders,
   });
 
   const data = await response.json();

@@ -16,17 +16,17 @@
     "typescript": "5.8.3"
   },
   "dependencies": {
-    "@better-auth/expo": "^1.5.6",
     "@hono/node-server": "1.12.0",
     "@hono/zod-validator": "^0.7.6",
+    "@neondatabase/auth": "^0.2.0-beta.1",
     "@prisma/client": "6",
     "@vibecodeapp/backend-sdk": "^1.0.1",
     "@vibecodeapp/cloud-studio": "^0.2.4",
     "@vibecodeapp/proxy": "^2.0.3",
     "bcryptjs": "^3.0.3",
-    "better-auth": "^1.5.6",
     "done": "^1.1.8",
     "hono": "4.6.0",
+    "jose": "^6.2.2",
     "resend": "^6.10.0",
     "zod": "4.1.11"
   }

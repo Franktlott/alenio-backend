@@ -2,8 +2,8 @@ import "@vibecodeapp/proxy"; // DO NOT REMOVE OTHERWISE VIBECODE PROXY WILL NOT 
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
-import "./env";
-import { auth } from "./auth";
+import { env } from "./env";
+import { getSessionFromHeaders, type AppSession, type AppUser, verifyEmailPassword } from "./auth";
 import { prisma } from "./prisma";
 import { sampleRouter } from "./routes/sample";
 import { teamsRouter } from "./routes/teams";
@@ -29,8 +29,8 @@ import { feedbackRouter } from "./routes/feedback";
 import { sendPushNotificationsStrict } from "./lib/push";
 
 type Variables = {
-  user: typeof auth.$Infer.Session.user | null;
-  session: typeof auth.$Infer.Session.session | null;
+  user: AppUser | null;
+  session: AppSession | null;
 };
 
 const app = new Hono<{ Variables: Variables }>();
@@ -59,20 +59,32 @@ app.use("*", logger());
 
 // Auth session middleware - populates user/session for all routes
 app.use("*", async (c, next) => {
-  const session = await auth.api.getSession({ headers: c.req.raw.headers });
-  if (!session) {
+  const session = await getSessionFromHeaders(c.req.raw.headers);
+  if (!session || !session.user.email) {
     c.set("user", null);
     c.set("session", null);
   } else {
-    c.set("user", session.user);
+    const user = await prisma.user.upsert({
+      where: { id: session.user.id },
+      update: {
+        email: session.user.email,
+        name: session.user.name ?? session.user.email.split("@")[0] ?? "User",
+        image: session.user.image ?? undefined,
+      },
+      create: {
+        id: session.user.id,
+        email: session.user.email,
+        name: session.user.name ?? session.user.email.split("@")[0] ?? "User",
+        image: session.user.image ?? undefined,
+        emailVerified: true,
+      },
+      select: { id: true, email: true, name: true, image: true },
+    });
+    c.set("user", user);
     c.set("session", session.session);
   }
   await next();
 });
-
-// Auth handler - use all methods and broad path matching for Better Auth
-app.all("/api/auth/*", (c) => auth.handler(c.req.raw));
-app.all("/api/auth/**", (c) => auth.handler(c.req.raw));
 
 // Health check endpoint
 app.get("/health", (c) => c.json({ status: "ok" }));
@@ -308,10 +320,8 @@ app.delete("/api/user", async (c) => {
   if (!fullUser) return c.json({ error: { message: "User not found", code: "NOT_FOUND" } }, 404);
 
   try {
-    const result = await auth.api.signInEmail({
-      body: { email: fullUser.email, password },
-    });
-    if (!result) throw new Error("Sign-in failed");
+    const verified = await verifyEmailPassword(fullUser.email, password);
+    if (!verified) throw new Error("Sign-in failed");
   } catch {
     return c.json({ error: { message: "Incorrect password", code: "INVALID_PASSWORD" } }, 401);
   }

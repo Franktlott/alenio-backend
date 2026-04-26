@@ -1,12 +1,12 @@
 import { Hono } from "hono";
 import { prisma } from "../prisma";
-import { auth } from "../auth";
+import { getSessionFromHeaders } from "../auth";
 
 const webRouter = new Hono();
 
 // Helper: get session from cookie
 async function getWebSession(c: any) {
-  return await auth.api.getSession({ headers: c.req.raw.headers });
+  return await getSessionFromHeaders(c.req.raw.headers);
 }
 
 // ── API: me ──────────────────────────────────────────────────────────────────

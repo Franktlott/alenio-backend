@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { prisma } from "../prisma";
-import { auth } from "../auth";
+import { createEmailPasswordUser } from "../auth";
 
 const demoRouter = new Hono();
 
@@ -15,10 +15,7 @@ demoRouter.post("/login", async (c) => {
     let demoUser = await prisma.user.findUnique({ where: { email: DEMO_EMAIL } });
 
     if (!demoUser) {
-      // Create via Better Auth so the password is properly hashed
-      await auth.api.signUpEmail({
-        body: { email: DEMO_EMAIL, password: DEMO_PASSWORD, name: "Alex Chen" },
-      });
+      await createEmailPasswordUser(DEMO_EMAIL, DEMO_PASSWORD, "Alex Chen");
       demoUser = await prisma.user.findUnique({ where: { email: DEMO_EMAIL } });
       if (!demoUser) return c.json({ error: { message: "Failed to create demo user" } }, 500);
     }

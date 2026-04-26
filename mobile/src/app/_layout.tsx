@@ -15,7 +15,7 @@ import * as Haptics from 'expo-haptics';
 import { registerForPushNotificationsAsync } from '@/lib/notifications';
 import { initRevenueCat } from '@/lib/revenue-cat';
 import { fetch } from 'expo/fetch';
-import { authClient } from '@/lib/auth/auth-client';
+import { getAuthHeaders } from '@/lib/auth/auth-client';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -101,9 +101,10 @@ function RootLayoutNav() {
   const { data: me } = useQuery({
     queryKey: ["me"],
     queryFn: async () => {
+      const authHeaders = await getAuthHeaders();
       const res = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/api/me`, {
         credentials: "include",
-        headers: { Cookie: authClient.getCookie() },
+        headers: authHeaders,
       });
       if (!res.ok) return null;
       const json = await res.json() as { data: { id: string; name: string; email: string; image: string | null; isAdmin: boolean } | null };

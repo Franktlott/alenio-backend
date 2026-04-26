@@ -14,6 +14,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { StatusBar } from "expo-status-bar";
 import { router } from "expo-router";
+import { authClient } from "@/lib/auth/auth-client";
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState("");
@@ -31,20 +32,13 @@ export default function ForgotPassword() {
 
     setLoading(true);
     try {
-      const baseURL = process.env.EXPO_PUBLIC_BACKEND_URL!;
-      const res = await fetch(`${baseURL}/api/auth/request-password-reset`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: email.trim().toLowerCase(),
-          redirectTo: `${baseURL}/reset-password`,
-        }),
+      const result = await authClient.forgetPassword.emailOtp({
+        email: email.trim().toLowerCase(),
       });
-      if (res.ok) {
+      if (!result.error) {
         setSuccess(true);
       } else {
-        const json = await res.json().catch(() => ({})) as { message?: string };
-        setError(json.message ?? "Something went wrong. Please try again.");
+        setError(result.error.message ?? "Something went wrong. Please try again.");
       }
     } catch {
       setError("Network error. Please check your connection and try again.");

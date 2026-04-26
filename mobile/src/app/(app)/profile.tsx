@@ -23,7 +23,7 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";
 import { ArrowLeft, Camera, LogOut, Pencil, X, Plus, Trash2, Bell, Check, LogOut as LeaveIcon, Crown, Copy, ChevronRight, BarChart2, Volume2, Settings, MessageSquare } from "lucide-react-native";
-import { authClient } from "@/lib/auth/auth-client";
+import { authClient, getAuthHeaders } from "@/lib/auth/auth-client";
 import { useInvalidateSession, useSession } from "@/lib/auth/use-session";
 import { clearNotifDebugLog, getNotifDebugLog, getNotifStatus, registerForPushNotificationsAsync } from "@/lib/notifications";
 import { router } from "expo-router";
@@ -231,9 +231,10 @@ export default function ProfileScreen() {
 
   const deleteAccountMutation = useMutation({
     mutationFn: async () => {
+      const authHeaders = await getAuthHeaders();
       const res = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/api/user`, {
         method: "DELETE",
-        headers: { "Content-Type": "application/json", Cookie: authClient.getCookie() },
+        headers: { "Content-Type": "application/json", ...authHeaders },
         credentials: "include",
         body: JSON.stringify({ password: deletePassword }),
       });

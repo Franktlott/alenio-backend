@@ -8,12 +8,10 @@
     "ios": "expo start --ios",
     "web": "DARK_MODE=class expo start --web",
     "lint": "expo lint",
-    "typecheck": "tsc --noEmit",
-    "postinstall": "node -e \"const fs=require('fs');const f='node_modules/@better-auth/expo/dist/client.js';let c=fs.readFileSync(f,'utf8');if(!c.includes('import * as _ExpoNetwork')){c=c.replace(\\\"import Constants from \\\\\\\"expo-constants\\\\\\\";\\\",\\\"import Constants from \\\\\\\"expo-constants\\\\\\\";\\\\nimport * as _ExpoNetwork from \\\\\\\"expo-network\\\\\\\";\\\");}c=c.replace(/Promise\\\\.resolve\\\\(__require\\\\(\\\"expo-network\\\"\\\\)\\\\)/g,'Promise.resolve(_ExpoNetwork)');c=c.replace(/import\\\\(\\\"expo-network\\\"\\\\)/g,'Promise.resolve(_ExpoNetwork)');fs.writeFileSync(f,c);\""
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@babel/plugin-proposal-export-namespace-from": "^7.18.9",
-    "@better-auth/expo": "^1.5.6",
     "@bottom-tabs/react-navigation": "^0.12.2",
     "@codeherence/react-native-header": "^1.0.0",
     "@expo-google-fonts/ibm-plex-sans": "^0.4.1",
@@ -42,8 +40,8 @@
     "@shopify/flash-list": "1.7.6",
     "@shopify/react-native-skia": "v2.0.3",
     "@tanstack/react-query": "5.90.2",
+    "@neondatabase/auth": "^0.2.0-beta.1",
     "@vibecodeapp/sdk": "^0.4.14",
-    "better-auth": "^1.5.6",
     "burnt": "^0.13.0",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
