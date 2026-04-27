@@ -317,12 +317,17 @@ export default function TeamScreen() {
       quality: 0.8,
     });
     if (result.canceled || !result.assets[0]) return;
+    if (!activeTeamId) return;
     setUploadingTeamImage(true);
     try {
-      const uploaded = await uploadFile(result.assets[0].uri, "team-photo.jpg", "image/jpeg");
+      const uploaded = await uploadFile(result.assets[0].uri, "team-photo.jpg", "image/jpeg", {
+        purpose: "team",
+        teamId: activeTeamId,
+      });
       updateTeamImageMutation.mutate(uploaded.url);
-    } catch {
-      toast({ title: "Failed to upload photo", preset: "error" });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Upload failed";
+      Alert.alert("Failed to upload photo", message);
     } finally {
       setUploadingTeamImage(false);
     }

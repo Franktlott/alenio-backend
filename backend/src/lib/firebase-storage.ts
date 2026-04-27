@@ -1,6 +1,15 @@
 import { initializeApp, cert, getApps } from "firebase-admin/app";
 import { getStorage } from "firebase-admin/storage";
-import { env } from "../env";
+
+/** Read Firebase settings from process.env (avoids stale parsed env after .env edits + hot reload). */
+function getFirebaseEnv() {
+  return {
+    projectId: process.env.FIREBASE_PROJECT_ID?.trim(),
+    clientEmail: process.env.FIREBASE_CLIENT_EMAIL?.trim(),
+    privateKey: process.env.FIREBASE_PRIVATE_KEY,
+    storageBucket: process.env.FIREBASE_STORAGE_BUCKET?.trim(),
+  };
+}
 
 type UploadResult = {
   id: string;
@@ -12,12 +21,8 @@ type UploadResult = {
 };
 
 function hasFirebaseStorageConfig() {
-  return !!(
-    env.FIREBASE_PROJECT_ID &&
-    env.FIREBASE_CLIENT_EMAIL &&
-    env.FIREBASE_PRIVATE_KEY &&
-    env.FIREBASE_STORAGE_BUCKET
-  );
+  const e = getFirebaseEnv();
+  return !!(e.projectId && e.clientEmail && e.privateKey && e.storageBucket);
 }
 
 /** Normalize private key from Railway / JSON (handles \n escapes and stray quotes). */
@@ -37,22 +42,24 @@ function normalizeBucketName(bucket: string): string {
   return value;
 }
 
-/** Bucket IDs to try: legacy appspot + console default domain. */
+/** Bucket IDs to try: exact env value first, then legacy *.appspot.com fallback. */
 function bucketCandidates(): string[] {
-  const raw = env.FIREBASE_STORAGE_BUCKET!.trim();
+  const raw = getFirebaseEnv().storageBucket!.trim();
   const normalized = normalizeBucketName(raw);
-  return raw === normalized ? [raw] : [normalized, raw];
+  // New Firebase projects often only have *.firebasestorage.app; appspot may 404.
+  return raw === normalized ? [raw] : [raw, normalized];
 }
 
 function ensureFirebaseStorageInitialized() {
   if (!hasFirebaseStorageConfig()) return false;
   if (getApps().length > 0) return true;
+  const e = getFirebaseEnv();
   const [primary] = bucketCandidates();
   initializeApp({
     credential: cert({
-      projectId: env.FIREBASE_PROJECT_ID,
-      clientEmail: env.FIREBASE_CLIENT_EMAIL,
-      privateKey: normalizePrivateKey(env.FIREBASE_PRIVATE_KEY!),
+      projectId: e.projectId,
+      clientEmail: e.clientEmail,
+      privateKey: normalizePrivateKey(e.privateKey!),
     }),
     storageBucket: primary,
   });
@@ -68,25 +75,147 @@ function formatStorageError(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+function isStorageNotFound(err: unknown): boolean {
+  const code =
+    err && typeof err === "object" && "code" in err ? (err as { code?: number | string }).code : undefined;
+  return code === 404;
+}
+
 function sanitizeFilename(filename: string): string {
   return filename.replace(/[^a-zA-Z0-9._-]/g, "_");
 }
 
+/** Stable read URL via Firebase token (no time-limited GCS signing). */
+function firebaseDownloadMediaUrl(bucketId: string, objectPath: string, downloadToken: string): string {
+  const pathEnc = encodeURIComponent(objectPath);
+  const bucketEnc = encodeURIComponent(bucketId);
+  return `https://firebasestorage.googleapis.com/v0/b/${bucketEnc}/o/${pathEnc}?alt=media&token=${encodeURIComponent(
+    downloadToken
+  )}`;
+}
+
+function pickFirebaseDownloadToken(
+  fromUpload: string,
+  gcsUserMetadata: Record<string, string> | undefined
+): string {
+  if (gcsUserMetadata) {
+    for (const [k, v] of Object.entries(gcsUserMetadata)) {
+      if (k.toLowerCase() === "firebasestoragedownloadtokens" && v?.trim()) {
+        return v.trim().split(",")[0]!.trim();
+      }
+    }
+  }
+  return fromUpload;
+}
+
+/** Parsed object in a bucket we manage (env bucket or its legacy alias). */
+function parseObjectFromStorageUrl(url: string): { bucketId: string; objectPath: string } | null {
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return null;
+  }
+
+  const isOurBucket = (bucketId: string) => {
+    const norm = normalizeBucketName(bucketId);
+    for (const c of bucketCandidates()) {
+      if (c === bucketId || normalizeBucketName(c) === norm) return true;
+    }
+    return false;
+  };
+
+  // https://storage.googleapis.com/BUCKET/path/to/object?...
+  if (u.hostname === "storage.googleapis.com" || u.hostname === "commondatastorage.googleapis.com") {
+    const raw = u.pathname.replace(/^\//, "");
+    const slash = raw.indexOf("/");
+    if (slash <= 0) return null;
+    const bucketId = raw.slice(0, slash);
+    const objectPath = decodeURIComponent(raw.slice(slash + 1).replace(/\+/g, " "));
+    if (!objectPath || !isOurBucket(bucketId)) return null;
+    return { bucketId, objectPath };
+  }
+
+  // https://BUCKET.storage.googleapis.com/object-path
+  const vhost = u.hostname.match(/^(.+)\.storage\.googleapis\.com$/);
+  const vhostBucket = vhost?.[1];
+  if (vhostBucket) {
+    const objectPath = decodeURIComponent(u.pathname.replace(/^\//, "").replace(/\+/g, " "));
+    if (!objectPath || !isOurBucket(vhostBucket)) return null;
+    return { bucketId: vhostBucket, objectPath };
+  }
+
+  // https://firebasestorage.googleapis.com/v0/b/BUCKET/o/ENCODED?...
+  if (u.hostname === "firebasestorage.googleapis.com") {
+    const m = u.pathname.match(/^\/v0\/b\/([^/]+)\/o\/(.+)$/);
+    const bucketId = m?.[1];
+    const encodedPath = m?.[2];
+    if (!bucketId || !encodedPath) return null;
+    const objectPath = decodeURIComponent(encodedPath.replace(/\+/g, " "));
+    if (!objectPath || !isOurBucket(bucketId)) return null;
+    return { bucketId, objectPath };
+  }
+
+  return null;
+}
+
+/**
+ * Best-effort delete when `url` points at an object in this backend's Storage bucket(s).
+ * No-ops for OAuth / external URLs or unparseable links.
+ */
+export async function deleteStorageObjectByUrlIfOwned(url: string | null | undefined): Promise<void> {
+  if (!url?.trim()) return;
+  if (!hasFirebaseStorageConfig()) return;
+  const parsed = parseObjectFromStorageUrl(url.trim());
+  if (!parsed) return;
+  if (!ensureFirebaseStorageInitialized()) return;
+
+  for (const bucketId of bucketCandidates()) {
+    try {
+      const bucket = getStorage().bucket(bucketId);
+      const target = bucket.file(parsed.objectPath);
+      await target.delete();
+      return;
+    } catch (e) {
+      if (isStorageNotFound(e)) continue;
+      return;
+    }
+  }
+}
+
+export type UploadSlot = "generic" | "profile" | "team";
+
 export async function uploadFileToFirebaseStorage(params: {
   userId: string;
   file: File;
+  slot?: UploadSlot;
+  /** Required when slot is "team". */
+  teamId?: string;
 }): Promise<UploadResult> {
   const initialized = ensureFirebaseStorageInitialized();
   if (!initialized) {
     throw new Error("Firebase Storage is not configured on the backend");
   }
 
-  const { userId, file } = params;
+  const { userId, file, teamId } = params;
+  const slot = params.slot ?? "generic";
+  if (slot === "team" && !teamId?.trim()) {
+    throw new Error("teamId is required for team photo uploads");
+  }
+
   const safeName = sanitizeFilename(file.name || "upload");
   const objectId = crypto.randomUUID();
-  const storagePath = `users/${userId}/uploads/${Date.now()}-${objectId}-${safeName}`;
+  let storagePath: string;
+  if (slot === "profile") {
+    storagePath = `users/${userId}/profile/avatar`;
+  } else if (slot === "team") {
+    storagePath = `teams/${teamId!.trim()}/photo`;
+  } else {
+    storagePath = `users/${userId}/uploads/${Date.now()}-${objectId}-${safeName}`;
+  }
   const bytes = Buffer.from(await file.arrayBuffer());
   const contentType = file.type || "application/octet-stream";
+  const downloadToken: string = crypto.randomUUID();
 
   let lastErr: unknown;
   for (const bucketId of bucketCandidates()) {
@@ -99,19 +228,22 @@ export async function uploadFileToFirebaseStorage(params: {
         metadata: {
           contentType,
           metadata: {
+            firebaseStorageDownloadTokens: downloadToken,
             uploadedByUserId: userId,
             originalFilename: file.name || "upload",
           },
         },
       });
 
-      // String date for expires is unreliable across SDK versions; use ms timestamp.
-      const expiresMs = Date.now() + 1000 * 60 * 60 * 24 * 365 * 10;
-      const [url] = await target.getSignedUrl({
-        version: "v4",
-        action: "read",
-        expires: expiresMs,
-      });
+      let urlToken = downloadToken;
+      try {
+        const [meta] = await target.getMetadata();
+        const userMeta = meta.metadata as Record<string, string> | undefined;
+        urlToken = pickFirebaseDownloadToken(downloadToken, userMeta);
+      } catch {
+        /* use upload-time token if metadata read fails */
+      }
+      const url = firebaseDownloadMediaUrl(bucketId, storagePath, urlToken);
 
       return {
         id: objectId,
@@ -131,4 +263,34 @@ export async function uploadFileToFirebaseStorage(params: {
 
 export function isFirebaseStorageConfigured() {
   return hasFirebaseStorageConfig();
+}
+
+/**
+ * Deletes every Storage object under `users/{userId}/` (profile, uploads, etc.).
+ * Best-effort: does not throw (account deletion should still succeed if Storage fails).
+ */
+export async function deleteAllUserStorageObjects(userId: string): Promise<void> {
+  const id = userId?.trim();
+  if (!id) return;
+  if (!hasFirebaseStorageConfig()) return;
+  if (!ensureFirebaseStorageInitialized()) return;
+
+  const prefix = `users/${id}/`;
+
+  for (const bucketId of bucketCandidates()) {
+    try {
+      const bucket = getStorage().bucket(bucketId);
+      const [files] = await bucket.getFiles({ prefix });
+      for (const file of files) {
+        try {
+          await file.delete({ ignoreNotFound: true });
+        } catch {
+          /* continue with remaining objects */
+        }
+      }
+      return;
+    } catch {
+      /* try next bucket alias */
+    }
+  }
 }

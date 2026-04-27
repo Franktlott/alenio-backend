@@ -11,7 +11,8 @@ import {
   Image,
   ScrollView,
 } from "react-native";
-import { authClient, clearAccessToken } from "@/lib/auth/auth-client";
+import { authClient, clearAccessToken, setAccessTokenFromAuthData } from "@/lib/auth/auth-client";
+import { provisionBackendUserAfterAuth } from "@/lib/auth/sync-backend-user";
 import { setPendingSignUp } from "@/lib/auth/pending-signup";
 import { formatAuthFlowError } from "@/lib/auth/auth-errors";
 import { markSessionSignedOut } from "@/lib/auth/use-session";
@@ -60,6 +61,10 @@ export default function SignUp() {
         router.replace("/sign-in");
         return;
       }
+
+      // Persist Neon Auth UID, email, and profile to the app database while session/token may still be present.
+      setAccessTokenFromAuthData(result);
+      await provisionBackendUserAfterAuth();
 
       const sent = await authClient.emailOtp.sendVerificationOtp({
         email: emailNorm,

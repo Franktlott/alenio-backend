@@ -23,6 +23,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { runSignInDiagnostics } from "@/lib/sign-in-diagnostics";
 import { fetch } from "expo/fetch";
 import { readJsonSafe } from "@/lib/api/api";
+import { provisionBackendUserAfterAuth } from "@/lib/auth/sync-backend-user";
 
 const SIGN_IN_BUILD_MARKER = process.env.EXPO_PUBLIC_SIGNIN_BUILD_MARKER ?? "signin-marker-2026-04-27-01";
 
@@ -111,6 +112,7 @@ export default function SignIn() {
           setError("Sign-in did not establish a session. Please try again.");
           return;
         }
+        await provisionBackendUserAfterAuth();
         const authHeaders = await getAuthHeaders();
         const backendSessionRes = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/api/me/debug`, {
           credentials: "include",

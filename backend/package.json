@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "bun run --hot src/index.ts",
     "start": "bun run src/index.ts",
-    "studio": "cloud-studio --port 3001 --hostname 0.0.0.0",
+    "studio": "bunx prisma studio",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
@@ -20,9 +20,6 @@
     "@hono/zod-validator": "^0.7.6",
     "@neondatabase/auth": "^0.2.0-beta.1",
     "@prisma/client": "6",
-    "@vibecodeapp/backend-sdk": "^1.0.1",
-    "@vibecodeapp/cloud-studio": "^0.2.4",
-    "@vibecodeapp/proxy": "^2.0.3",
     "bcryptjs": "^3.0.3",
     "done": "^1.1.8",
     "firebase-admin": "^13.8.0",

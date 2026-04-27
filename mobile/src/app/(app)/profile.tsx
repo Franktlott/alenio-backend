@@ -16,6 +16,7 @@ import {
   Switch,
   Share,
   RefreshControl,
+  Alert,
 } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import * as Notifications from "expo-notifications";
@@ -89,6 +90,8 @@ export default function ProfileScreen() {
 
   // Profile state
   const [localImage, setLocalImage] = useState<string | null>(null);
+  /** URI whose load genuinely failed (not cancelled). RN may fire onError when a prior load is aborted on uri change. */
+  const [avatarFailedUri, setAvatarFailedUri] = useState<string | null>(null);
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
 
   // Delete account state
@@ -167,19 +170,19 @@ export default function ProfileScreen() {
       const file = source === "library" ? await pickImage() : await takePhoto();
       if (!file) throw new Error("cancelled");
       setLocalImage(file.uri);
-      const uploaded = await uploadFile(file.uri, file.filename, file.mimeType);
+      const uploaded = await uploadFile(file.uri, file.filename, file.mimeType, { purpose: "profile" });
       await api.patch("/api/profile", { image: uploaded.url });
       return uploaded.url;
     },
-    onSuccess: () => invalidateSession(),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: SESSION_QUERY_KEY });
+      setLocalImage(null);
+    },
     onError: (err: Error) => {
       setLocalImage(null);
       if (err.message !== "cancelled") {
-        toast({
-          title: "Could not update photo",
-          message: err.message,
-          preset: "error",
-        });
+        // Native Alert shows the full server message; Burnt toasts often hide the subtitle on Android.
+        Alert.alert("Could not update photo", err.message || "Something went wrong. Try again.");
       }
     },
   });
@@ -302,9 +305,14 @@ export default function ProfileScreen() {
       quality: 0.8,
     });
     if (result.canceled || !result.assets[0]) return;
+    const teamBeingEdited = editingTeam;
+    if (!teamBeingEdited) return;
     setUploadingTeamImage(true);
     try {
-      const uploaded = await uploadFile(result.assets[0].uri, "team-photo.jpg", "image/jpeg");
+      const uploaded = await uploadFile(result.assets[0].uri, "team-photo.jpg", "image/jpeg", {
+        purpose: "team",
+        teamId: teamBeingEdited.id,
+      });
       setEditTeamImage(uploaded.url);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Upload failed";
@@ -345,6 +353,12 @@ export default function ProfileScreen() {
   };
 
   const avatarUri = localImage ?? user?.image ?? null;
+  const avatarInitial = user?.name?.trim()?.[0]?.toUpperCase() ?? "?";
+  const showAvatarImage = !!avatarUri && avatarFailedUri !== avatarUri;
+
+  useEffect(() => {
+    setAvatarFailedUri(null);
+  }, [avatarUri]);
 
   const [pushDebugResult, setPushDebugResult] = useState<string | null>(null);
   const [pushDebugLoading, setPushDebugLoading] = useState(false);
@@ -554,16 +568,50 @@ export default function ProfileScreen() {
             style={{ marginTop: -48, marginBottom: 16 }}
             testID="avatar-upload-button"
           >
-            <View className="w-24 h-24 rounded-full overflow-hidden bg-indigo-100 items-center justify-center" style={{ borderWidth: 3, borderColor: "#F8FAFC" }}>
+            <View
+              className="w-24 h-24 rounded-full overflow-hidden bg-indigo-100"
+              style={{ borderWidth: 3, borderColor: "#F8FAFC", position: "relative" }}
+            >
+              <View
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+                pointerEvents="none"
+              >
+                <Text className="text-indigo-600 text-4xl font-bold">{avatarInitial}</Text>
+              </View>
+              {showAvatarImage ? (
+                <Image
+                  key={avatarUri}
+                  source={{ uri: avatarUri }}
+                  style={{ position: "absolute", top: 0, left: 0, width: 96, height: 96 }}
+                  resizeMode="cover"
+                  onError={() => setAvatarFailedUri(avatarUri)}
+                  testID="profile-avatar-image"
+                />
+              ) : null}
               {uploadMutation.isPending ? (
-                <ActivityIndicator color="#4361EE" testID="upload-loading-indicator" />
-              ) : avatarUri ? (
-                <Image source={{ uri: avatarUri }} style={{ width: 96, height: 96 }} resizeMode="cover" />
-              ) : (
-                <Text className="text-indigo-600 text-4xl font-bold">
-                  {user?.name?.[0]?.toUpperCase() ?? "?"}
-                </Text>
-              )}
+                <View
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: "rgba(255,255,255,0.55)",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <ActivityIndicator color="#4361EE" testID="upload-loading-indicator" />
+                </View>
+              ) : null}
             </View>
             {!isDemo ? (
               <View className="absolute bottom-0 right-0 w-7 h-7 rounded-full bg-indigo-600 items-center justify-center border-2 border-white">

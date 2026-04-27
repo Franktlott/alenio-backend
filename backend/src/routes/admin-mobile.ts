@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { deleteAllUserStorageObjects } from "../lib/firebase-storage";
 import { prisma } from "../prisma";
 import { auth } from "../auth";
 
@@ -120,6 +121,7 @@ adminMobileRouter.delete("/users/:id", async (c) => {
   await prisma.topic.deleteMany({ where: { createdById: id } });
   await prisma.taskTemplate.deleteMany({ where: { createdById: id } });
   await prisma.task.deleteMany({ where: { creatorId: id } });
+  await deleteAllUserStorageObjects(id);
   await prisma.user.delete({ where: { id } });
 
   return c.json({ data: { deleted: true } });
