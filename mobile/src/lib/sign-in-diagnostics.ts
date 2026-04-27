@@ -132,6 +132,9 @@ export async function runSignInDiagnostics(): Promise<string> {
               appUserFound?: boolean;
               database?: string;
               buildMarker?: string;
+              neonAuthUserFound?: boolean;
+              matchedBy?: string;
+              finalAuthenticatedUserId?: string;
             };
             error?: { code?: string; message?: string };
           };
@@ -140,11 +143,21 @@ export async function runSignInDiagnostics(): Promise<string> {
           const appUserFound = j.data?.appUserFound;
           const db = j.data?.database;
           const marker = j.data?.buildMarker;
+          const neonAuthUserFound = j.data?.neonAuthUserFound;
+          const matchedBy = j.data?.matchedBy;
+          const finalAuthenticatedUserId = j.data?.finalAuthenticatedUserId;
           const errCode = j.error?.code;
           const errMsg = j.error?.message;
           push(lines, "  auth authenticated", authenticated === true ? "yes" : authenticated === false ? "no" : "unknown");
+          push(
+            lines,
+            "  neon auth user found",
+            neonAuthUserFound === true ? "yes" : neonAuthUserFound === false ? "no" : "unknown",
+          );
           push(lines, "  auth user id", authUserId ?? "(none)");
           push(lines, "  app user row found", typeof appUserFound === "boolean" ? String(appUserFound) : "unknown");
+          if (matchedBy) push(lines, "  matched by", matchedBy);
+          if (finalAuthenticatedUserId) push(lines, "  final authenticated user id", finalAuthenticatedUserId);
           if (db) push(lines, "  api database (debug)", db);
           if (marker) push(lines, "  backend marker (debug)", marker);
           if (errCode || errMsg) push(lines, "  auth error", `${errCode ?? "UNKNOWN"} ${errMsg ?? ""}`.trim());

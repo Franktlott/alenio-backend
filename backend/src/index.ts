@@ -32,6 +32,13 @@ import { getDatabasePublicSummary } from "./lib/database-public-summary";
 type Variables = {
   user: AppUser | null;
   session: AppSession | null;
+  authDebug: {
+    neonAuthUserFound: boolean;
+    matchedBy: "auth_user_id" | "email" | "created" | "none";
+    authUserId: string | null;
+    authEmail: string | null;
+    finalAuthenticatedUserId: string | null;
+  } | null;
 };
 
 const app = new Hono<{ Variables: Variables }>();
@@ -65,55 +72,96 @@ app.use("*", async (c, next) => {
   if (!session) {
     c.set("user", null);
     c.set("session", null);
+    c.set("authDebug", {
+      neonAuthUserFound: false,
+      matchedBy: "none",
+      authUserId: null,
+      authEmail: null,
+      finalAuthenticatedUserId: null,
+    });
   } else {
     let user: { id: string; email: string; name: string; image: string | null } | null = null;
     const sessionEmail = session.user.email?.trim() ?? null;
-    if (sessionEmail) {
-      try {
-        user = await prisma.user.upsert({
-          where: { id: session.user.id },
-          update: {
+    let matchedBy: "auth_user_id" | "email" | "created" | "none" = "none";
+
+    // 1) Primary lookup by Neon auth user id.
+    user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { id: true, email: true, name: true, image: true },
+    });
+    if (user) {
+      matchedBy = "auth_user_id";
+      if (sessionEmail && user.email !== sessionEmail) {
+        user = await prisma.user.update({
+          where: { id: user.id },
+          data: {
             email: sessionEmail,
-            name: session.user.name ?? sessionEmail.split("@")[0] ?? "User",
-            image: session.user.image ?? undefined,
-          },
-          create: {
-            id: session.user.id,
-            email: sessionEmail,
-            name: session.user.name ?? sessionEmail.split("@")[0] ?? "User",
-            image: session.user.image ?? undefined,
-            emailVerified: true,
+            name: session.user.name ?? user.name ?? sessionEmail.split("@")[0] ?? "User",
+            image: session.user.image ?? user.image ?? undefined,
           },
           select: { id: true, email: true, name: true, image: true },
         });
-      } catch (err) {
-        // Legacy migration path: email already exists under a different user ID.
-        // In that case, use the existing row so auth can continue.
-        const code = (err as { code?: string } | null)?.code;
-        if (code === "P2002") {
-          user = await prisma.user.findUnique({
-            where: { email: sessionEmail },
-            select: { id: true, email: true, name: true, image: true },
-          });
-        } else {
-          throw err;
-        }
       }
-    } else {
-      // Some token/session payloads may omit email; recover from app DB by user ID.
-      user = await prisma.user.findUnique({
-        where: { id: session.user.id },
+    } else if (sessionEmail) {
+      // 2) Fallback by email to avoid duplicate rows for existing users.
+      const byEmail = await prisma.user.findUnique({
+        where: { email: sessionEmail },
         select: { id: true, email: true, name: true, image: true },
       });
+      if (byEmail) {
+        matchedBy = "email";
+        user = byEmail;
+      } else {
+        // 3) Provision a new app user row.
+        try {
+          user = await prisma.user.create({
+            data: {
+              id: session.user.id,
+              email: sessionEmail,
+              name: session.user.name ?? sessionEmail.split("@")[0] ?? "User",
+              image: session.user.image ?? undefined,
+              emailVerified: true,
+            },
+            select: { id: true, email: true, name: true, image: true },
+          });
+          matchedBy = "created";
+        } catch (err) {
+          const code = (err as { code?: string } | null)?.code;
+          // Concurrent create race: pick existing by email.
+          if (code === "P2002") {
+            user = await prisma.user.findUnique({
+              where: { email: sessionEmail },
+              select: { id: true, email: true, name: true, image: true },
+            });
+            matchedBy = user ? "email" : "none";
+          } else {
+            throw err;
+          }
+        }
+      }
     }
     if (!user) {
       c.set("user", null);
       c.set("session", null);
+      c.set("authDebug", {
+        neonAuthUserFound: true,
+        matchedBy: "none",
+        authUserId: session.user.id,
+        authEmail: sessionEmail,
+        finalAuthenticatedUserId: null,
+      });
       await next();
       return;
     }
     c.set("user", user);
     c.set("session", session.session);
+    c.set("authDebug", {
+      neonAuthUserFound: true,
+      matchedBy,
+      authUserId: session.user.id,
+      authEmail: sessionEmail,
+      finalAuthenticatedUserId: user.id,
+    });
   }
   await next();
 });
@@ -259,12 +307,19 @@ app.get("/api/me", async (c) => {
 app.get("/api/me/debug", async (c) => {
   const user = c.get("user");
   const session = c.get("session");
+  const authDebug = c.get("authDebug");
   if (!user || !session) {
     return c.json({
       error: { message: "Unauthorized", code: "UNAUTHORIZED" },
       data: {
         authenticated: false,
         database: getDatabasePublicSummary(),
+        buildMarker: BACKEND_BUILD_MARKER,
+        neonAuthUserFound: authDebug?.neonAuthUserFound ?? false,
+        appUserFound: false,
+        matchedBy: authDebug?.matchedBy ?? "none",
+        authUserId: authDebug?.authUserId ?? null,
+        finalAuthenticatedUserId: null,
       },
     }, 401);
   }
@@ -288,7 +343,12 @@ app.get("/api/me/debug", async (c) => {
       database: getDatabasePublicSummary(),
       buildMarker: BACKEND_BUILD_MARKER,
       authUserId: user.id,
+      neonAuthUserFound: authDebug?.neonAuthUserFound ?? true,
       appUserFound: !!dbUser,
+      matchedBy: authDebug?.matchedBy ?? "auth_user_id",
+      authProviderUserId: authDebug?.authUserId ?? user.id,
+      authProviderEmail: authDebug?.authEmail ?? user.email ?? null,
+      finalAuthenticatedUserId: authDebug?.finalAuthenticatedUserId ?? user.id,
       appUser: dbUser,
       sessionExpiresAt: session.expiresAt ?? null,
     },

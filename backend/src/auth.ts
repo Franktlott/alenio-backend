@@ -39,18 +39,14 @@ export const auth = {
 function readBearerToken(headers: Headers): string | null {
   const authHeader = headers.get("authorization");
   if (!authHeader) return null;
-  const [scheme, token] = authHeader.split(" ");
-  if (!scheme || !token || scheme.toLowerCase() !== "bearer") return null;
-  return token.trim();
+  const match = authHeader.match(/^Bearer\s+(.+)$/i);
+  const token = match?.[1]?.trim();
+  return token?.length ? token : null;
 }
 
 async function getSessionFromNeon(token: string): Promise<{ user: AppUser; expiresAt: Date | null } | null> {
   try {
     const result = await neonAuthClient.getSession({
-      query: {
-        disableCookieCache: true,
-        disableRefresh: true,
-      },
       fetchOptions: {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -84,9 +80,23 @@ export async function getSessionFromHeaders(headers: Headers): Promise<{ user: A
   const token = readBearerToken(headers);
   if (!token) return null;
   try {
-    const verified = await jwtVerify(token, jwks, { algorithms: ["RS256"] });
+    const tokenLooksLikeJwt = token.split(".").length === 3;
+    if (!tokenLooksLikeJwt) {
+      throw new Error("Bearer token is not JWT-shaped");
+    }
+    const verified = await jwtVerify(token, jwks);
     const claims = verified.payload as DecodedClaims;
-    if (!claims.sub) return null;
+    if (!claims.sub) {
+      const neon = await getSessionFromNeon(token);
+      if (!neon) return null;
+      return {
+        user: neon.user,
+        session: {
+          token,
+          expiresAt: neon.expiresAt,
+        },
+      };
+    }
     let userId = claims.sub;
     let email = claims.email ?? null;
     let name = claims.name ?? claims.preferred_username ?? null;
