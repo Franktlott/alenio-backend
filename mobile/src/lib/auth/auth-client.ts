@@ -57,13 +57,24 @@ function nativeAuthFetch(input: RequestInfo | URL, init?: RequestInit): Promise<
   if (neonAuthOrigin && !headers.has("Origin")) {
     headers.set("Origin", neonAuthOrigin);
   }
-  return (expoFetch as typeof fetch)(input, { ...init, headers });
+  if (neonAuthOrigin && !headers.has("Referer")) {
+    headers.set("Referer", `${neonAuthOrigin}/`);
+  }
+  // RN often cannot reliably send browser cookies/origin semantics.
+  // Use token-based session transport to avoid Better Auth cookie CSRF origin checks.
+  return (expoFetch as typeof fetch)(input, { ...init, headers, credentials: "omit" });
 }
 
 /** Neon Auth + Expo fetch; sets Origin so CSRF / callback checks succeed on native. */
 export const authClient = createAuthClient(neonAuthUrl, {
   adapter: BetterAuthVanillaAdapter({
     fetchOptions: {
+      headers: neonAuthOrigin
+        ? {
+            Origin: neonAuthOrigin,
+            Referer: `${neonAuthOrigin}/`,
+          }
+        : undefined,
       customFetchImpl: nativeAuthFetch as typeof fetch,
     },
   }),
@@ -77,16 +88,31 @@ type SessionShape = {
   } | null;
 };
 
+let inMemoryAccessToken: string | null = null;
+
 function pickSessionToken(data: SessionShape | null): string | null {
   const session = data?.session;
   return session?.accessToken ?? session?.access_token ?? session?.token ?? null;
+}
+
+export function setAccessToken(token: string | null | undefined) {
+  inMemoryAccessToken = token?.trim() ? token.trim() : null;
+}
+
+export function clearAccessToken() {
+  inMemoryAccessToken = null;
 }
 
 export async function getAccessToken(): Promise<string | null> {
   const result = await authClient.getSession();
   const data = (result?.data ?? null) as SessionShape | null;
   let token = pickSessionToken(data);
-  if (token) return token;
+  if (token) {
+    setAccessToken(token);
+    return token;
+  }
+
+  if (inMemoryAccessToken) return inMemoryAccessToken;
 
   // Fallback: bypass potential stale client cache and force a network read once.
   try {
@@ -100,7 +126,12 @@ export async function getAccessToken(): Promise<string | null> {
     // ignore and return null below
   }
 
-  return token;
+  if (token) {
+    setAccessToken(token);
+    return token;
+  }
+
+  return inMemoryAccessToken;
 }
 
 export async function getAuthHeaders(): Promise<Record<string, string>> {

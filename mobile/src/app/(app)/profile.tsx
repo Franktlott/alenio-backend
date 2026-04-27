@@ -23,8 +23,8 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";
 import { ArrowLeft, Camera, LogOut, Pencil, X, Plus, Trash2, Bell, Check, LogOut as LeaveIcon, Crown, Copy, ChevronRight, BarChart2, Volume2, Settings, MessageSquare } from "lucide-react-native";
-import { authClient, getAuthHeaders } from "@/lib/auth/auth-client";
-import { useInvalidateSession, useSession } from "@/lib/auth/use-session";
+import { authClient, clearAccessToken, getAuthHeaders } from "@/lib/auth/auth-client";
+import { SESSION_QUERY_KEY, markSessionSignedOut, useInvalidateSession, useSession } from "@/lib/auth/use-session";
 import { clearNotifDebugLog, getNotifDebugLog, getNotifStatus, registerForPushNotificationsAsync } from "@/lib/notifications";
 import { router } from "expo-router";
 import { useMutation, useQuery, useQueryClient, useQueries } from "@tanstack/react-query";
@@ -245,6 +245,7 @@ export default function ProfileScreen() {
     },
     onSuccess: async () => {
       closeDeleteModal();
+      clearAccessToken();
       await authClient.signOut();
       await invalidateSession();
       queryClient.clear();
@@ -317,10 +318,23 @@ export default function ProfileScreen() {
   };
 
   const handleSignOut = async () => {
-    await authClient.signOut();
-    await invalidateSession();
+    setShowSignOutConfirm(false);
+    markSessionSignedOut();
+    clearAccessToken();
+    queryClient.setQueryData(SESSION_QUERY_KEY, null);
+    try {
+      await authClient.signOut();
+    } catch {
+      // continue cleanup even if remote sign-out call fails
+    }
+    try {
+      await invalidateSession();
+    } catch {
+      // continue cleanup even if query invalidation errors
+    }
     queryClient.clear();
     setActiveTeamId(null);
+    router.replace("/sign-in");
   };
 
   const avatarUri = localImage ?? user?.image ?? null;

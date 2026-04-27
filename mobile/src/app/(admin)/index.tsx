@@ -17,8 +17,8 @@ import { StatusBar } from "expo-status-bar";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
 import { Search, Users, Building2, CheckSquare, MessageSquare, LogOut, ChevronRight, Shield, Trash2 } from "lucide-react-native";
-import { authClient, getAuthHeaders } from "@/lib/auth/auth-client";
-import { useInvalidateSession } from "@/lib/auth/use-session";
+import { authClient, clearAccessToken, getAuthHeaders } from "@/lib/auth/auth-client";
+import { SESSION_QUERY_KEY, markSessionSignedOut, useInvalidateSession } from "@/lib/auth/use-session";
 import { fetch } from "expo/fetch";
 import { readJsonSafe } from "@/lib/api/api";
 import { toast } from "burnt";
@@ -123,11 +123,18 @@ export default function AdminDashboard() {
   });
 
   const handleSignOut = async () => {
-    await authClient.signOut();
+    markSessionSignedOut();
+    clearAccessToken();
+    queryClient.setQueryData(SESSION_QUERY_KEY, null);
+    try {
+      await authClient.signOut();
+    } catch {
+      // continue logout cleanup even if remote sign-out fails
+    }
     queryClient.clear();
     await invalidateSession();
     setSignOutModal(false);
-    router.replace("/");
+    router.replace("/sign-in");
   };
 
   const handleDeleteUser = (user: AdminUser) => {

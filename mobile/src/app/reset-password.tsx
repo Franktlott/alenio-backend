@@ -12,13 +12,14 @@ import {
   ScrollView,
 } from "react-native";
 import { authClient } from "@/lib/auth/auth-client";
+import { formatAuthFlowError } from "@/lib/auth/auth-errors";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { StatusBar } from "expo-status-bar";
 import { router, useLocalSearchParams } from "expo-router";
 
 export default function ResetPassword() {
-  const { token } = useLocalSearchParams<{ token: string }>();
+  const { token, email, otp } = useLocalSearchParams<{ token?: string; email?: string; otp?: string }>();
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showNewPassword, setShowNewPassword] = useState(false);
@@ -29,6 +30,8 @@ export default function ResetPassword() {
 
   const handleSubmit = async () => {
     setError(null);
+    const emailNorm = (email ?? "").trim().toLowerCase();
+    const otpNorm = (otp ?? "").replace(/\D/g, "");
 
     if (!newPassword) {
       setError("Please enter a new password");
@@ -42,22 +45,44 @@ export default function ResetPassword() {
       setError("Passwords do not match");
       return;
     }
-    if (!token) {
-      setError("Invalid or missing reset token. Please request a new reset link.");
-      return;
-    }
-
     setLoading(true);
-    const result = await authClient.resetPassword({
-      newPassword,
-      token,
-    });
-    setLoading(false);
+    try {
+      if (typeof token === "string" && token.trim()) {
+        const result = await authClient.resetPassword({
+          newPassword,
+          token,
+        });
+        if (result.error) {
+          setError(result.error.message ?? "Failed to reset password. The link may have expired.");
+        } else {
+          setSuccess(true);
+        }
+        return;
+      }
 
-    if (result.error) {
-      setError(result.error.message ?? "Failed to reset password. The link may have expired.");
-    } else {
-      setSuccess(true);
+      if (!emailNorm) {
+        setError("Missing email. Go back and request a reset code again.");
+        return;
+      }
+      if (otpNorm.length < 6) {
+        setError("Enter the 6-digit code from your email.");
+        return;
+      }
+
+      const otpResult = await authClient.emailOtp.resetPassword({
+        email: emailNorm,
+        otp: otpNorm,
+        password: newPassword,
+      });
+      if (otpResult.error) {
+        setError(otpResult.error.message ?? "Failed to reset password. Check your code and try again.");
+      } else {
+        setSuccess(true);
+      }
+    } catch (err) {
+      setError(formatAuthFlowError(err));
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -84,7 +109,9 @@ export default function ResetPassword() {
         >
           <Text className="text-slate-900 dark:text-white text-2xl font-bold mb-2">New password</Text>
           <Text className="text-slate-500 dark:text-slate-400 text-sm mb-8">
-            Choose a strong password for your account.
+            {typeof token === "string" && token.trim()
+              ? "Choose a strong password for your account."
+              : "Choose a strong password for your account."}
           </Text>
 
           {success ? (
@@ -100,6 +127,12 @@ export default function ResetPassword() {
 
           {!success ? (
             <>
+              {email ? (
+                <Text className="text-xs text-slate-500 dark:text-slate-400 mb-3" testID="reset-password-email">
+                  Resetting password for {email}
+                </Text>
+              ) : null}
+
               <View className="mb-4">
                 <Text className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">New password</Text>
                 <View style={{ position: "relative" }}>

@@ -61,26 +61,42 @@ app.use("*", logger());
 // Auth session middleware - populates user/session for all routes
 app.use("*", async (c, next) => {
   const session = await getSessionFromHeaders(c.req.raw.headers);
-  if (!session || !session.user.email) {
+  if (!session) {
     c.set("user", null);
     c.set("session", null);
   } else {
-    const user = await prisma.user.upsert({
-      where: { id: session.user.id },
-      update: {
-        email: session.user.email,
-        name: session.user.name ?? session.user.email.split("@")[0] ?? "User",
-        image: session.user.image ?? undefined,
-      },
-      create: {
-        id: session.user.id,
-        email: session.user.email,
-        name: session.user.name ?? session.user.email.split("@")[0] ?? "User",
-        image: session.user.image ?? undefined,
-        emailVerified: true,
-      },
-      select: { id: true, email: true, name: true, image: true },
-    });
+    let user: { id: string; email: string; name: string; image: string | null } | null = null;
+    const sessionEmail = session.user.email?.trim() ?? null;
+    if (sessionEmail) {
+      user = await prisma.user.upsert({
+        where: { id: session.user.id },
+        update: {
+          email: sessionEmail,
+          name: session.user.name ?? sessionEmail.split("@")[0] ?? "User",
+          image: session.user.image ?? undefined,
+        },
+        create: {
+          id: session.user.id,
+          email: sessionEmail,
+          name: session.user.name ?? sessionEmail.split("@")[0] ?? "User",
+          image: session.user.image ?? undefined,
+          emailVerified: true,
+        },
+        select: { id: true, email: true, name: true, image: true },
+      });
+    } else {
+      // Some token/session payloads may omit email; recover from app DB by user ID.
+      user = await prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: { id: true, email: true, name: true, image: true },
+      });
+    }
+    if (!user) {
+      c.set("user", null);
+      c.set("session", null);
+      await next();
+      return;
+    }
     c.set("user", user);
     c.set("session", session.session);
   }

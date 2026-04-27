@@ -21,6 +21,7 @@ import { api } from "@/lib/api/api";
 import { useTeamStore } from "@/lib/state/team-store";
 import type { Team } from "@/lib/types";
 import { runSignInDiagnostics } from "@/lib/sign-in-diagnostics";
+import { useSession } from "@/lib/auth/use-session";
 
 type JoinResult =
   | { status: "pending"; teamName: string; requestId: string }
@@ -41,6 +42,7 @@ const cardShadow = {
 };
 
 export default function OnboardingScreen() {
+  const { data: session, isLoading: isSessionLoading } = useSession();
   const [mode, setMode] = useState<"create" | "join">("create");
   const [teamName, setTeamName] = useState("");
   const [inviteCode, setInviteCode] = useState("");
@@ -50,6 +52,7 @@ export default function OnboardingScreen() {
     teamName: string;
   } | null>(null);
   const [isPolling, setIsPolling] = useState(false);
+  const [cooldownUntilMs, setCooldownUntilMs] = useState<number>(0);
   const [diagOpen, setDiagOpen] = useState(false);
   const [diagLoading, setDiagLoading] = useState(false);
   const [diagReport, setDiagReport] = useState<string>("");
@@ -72,6 +75,16 @@ export default function OnboardingScreen() {
     if (alreadyOwnsTeam) setMode("join");
   }, [alreadyOwnsTeam]);
 
+  useEffect(() => {
+    if (isSessionLoading) return;
+    if (!session?.user) {
+      router.replace({
+        pathname: "/sign-in",
+        params: { reason: "session-required" },
+      });
+    }
+  }, [isSessionLoading, session?.user]);
+
   const createMutation = useMutation({
     mutationFn: () => api.post<Team>("/api/teams", { name: teamName }),
     onSuccess: (team) => {
@@ -81,6 +94,12 @@ export default function OnboardingScreen() {
     },
     onError: (err: unknown) => {
       const rawMsg = err instanceof Error ? err.message : "";
+      if (/too many requests|over.*rate.*limit|429/i.test(rawMsg)) {
+        const waitMs = 20_000;
+        setCooldownUntilMs(Date.now() + waitMs);
+        setError("Too many requests right now. Please wait 20 seconds, then try again.");
+        return;
+      }
       const isOwnerLimit =
         /already own a team/i.test(rawMsg) ||
         /team_limit_reached/i.test(rawMsg) ||
@@ -112,7 +131,16 @@ export default function OnboardingScreen() {
         router.replace("/(app)/team");
       }
     },
-    onError: () => setError("Invalid invite code. Please check and try again."),
+    onError: (err: unknown) => {
+      const rawMsg = err instanceof Error ? err.message : "";
+      if (/too many requests|over.*rate.*limit|429/i.test(rawMsg)) {
+        const waitMs = 20_000;
+        setCooldownUntilMs(Date.now() + waitMs);
+        setError("Too many requests right now. Please wait 20 seconds, then try again.");
+        return;
+      }
+      setError(rawMsg || "Invalid invite code. Please check and try again.");
+    },
   });
 
   const handleBarcodeScan = ({ data }: { data: string }) => {
@@ -187,10 +215,16 @@ export default function OnboardingScreen() {
     }
   };
 
-  const isLoading = createMutation.isPending || joinMutation.isPending;
+  const isCoolingDown = Date.now() < cooldownUntilMs;
+  const isLoading = createMutation.isPending || joinMutation.isPending || isCoolingDown;
 
   const handleSubmit = () => {
     setError(null);
+    if (Date.now() < cooldownUntilMs) {
+      const seconds = Math.max(1, Math.ceil((cooldownUntilMs - Date.now()) / 1000));
+      setError(`Please wait ${seconds}s before trying again.`);
+      return;
+    }
     if (mode === "create") {
       if (!teamName.trim()) {
         setError("Please enter a team name");
@@ -396,8 +430,12 @@ export default function OnboardingScreen() {
                 disabled={isLoading}
                 testID="submit-button"
               >
-                {isLoading ? (
+                {joinMutation.isPending ? (
                   <ActivityIndicator color="white" />
+                ) : isCoolingDown ? (
+                  <Text style={{ color: "white", fontWeight: "600", fontSize: 15 }}>
+                    Please wait {Math.max(1, Math.ceil((cooldownUntilMs - Date.now()) / 1000))}s
+                  </Text>
                 ) : (
                   <Text style={{ color: "white", fontWeight: "600", fontSize: 15 }}>Join Team</Text>
                 )}
@@ -478,8 +516,12 @@ export default function OnboardingScreen() {
                 disabled={isLoading}
                 testID="submit-button"
               >
-                {isLoading ? (
+                {createMutation.isPending ? (
                   <ActivityIndicator color="white" />
+                ) : isCoolingDown ? (
+                  <Text style={{ color: "white", fontWeight: "600", fontSize: 15 }}>
+                    Please wait {Math.max(1, Math.ceil((cooldownUntilMs - Date.now()) / 1000))}s
+                  </Text>
                 ) : (
                   <Text style={{ color: "white", fontWeight: "600", fontSize: 15 }}>Create Team</Text>
                 )}

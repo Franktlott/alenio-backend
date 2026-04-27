@@ -1,5 +1,5 @@
 import { fetch } from "expo/fetch";
-import { authClient, getAccessToken, getAuthHeaders } from "../auth/auth-client";
+import { authClient, clearAccessToken, getAccessToken, getAuthHeaders } from "../auth/auth-client";
 
 const baseUrl = process.env.EXPO_PUBLIC_BACKEND_URL!;
 
@@ -54,6 +54,7 @@ const request = async <T>(
   if (!response.ok) {
     const err = await readJsonSafe<ApiErrorBody>(response);
     if (response.status === 401 && !skipSignOut) {
+      clearAccessToken();
       authClient.signOut().catch(() => {});
     }
     throw new Error(err?.error?.message ?? `Request failed: ${response.status}`);

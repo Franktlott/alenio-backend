@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Eye, EyeOff } from "lucide-react-native";
 import {
   View,
@@ -13,16 +13,17 @@ import {
   Modal,
   Pressable,
 } from "react-native";
-import { authClient, getEmailAuthCallbackUrl } from "@/lib/auth/auth-client";
-import { isEmailNotVerifiedError } from "@/lib/auth/auth-errors";
-import { useInvalidateSession } from "@/lib/auth/use-session";
+import { authClient, getEmailAuthCallbackUrl, setAccessToken } from "@/lib/auth/auth-client";
+import { formatAuthFlowError, isEmailNotVerifiedError } from "@/lib/auth/auth-errors";
+import { clearSignedOutMark, useInvalidateSession } from "@/lib/auth/use-session";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { StatusBar } from "expo-status-bar";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { runSignInDiagnostics } from "@/lib/sign-in-diagnostics";
 
 export default function SignIn() {
+  const { reason } = useLocalSearchParams<{ reason?: string }>();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -32,6 +33,12 @@ export default function SignIn() {
   const [diagLoading, setDiagLoading] = useState(false);
   const [diagReport, setDiagReport] = useState<string>("");
   const invalidateSession = useInvalidateSession();
+
+  useEffect(() => {
+    if (reason === "session-required") {
+      setError("Please sign in again to continue.");
+    }
+  }, [reason]);
 
   const handleRunDiagnostics = async () => {
     setDiagOpen(true);
@@ -59,30 +66,36 @@ export default function SignIn() {
     }
     setLoading(true);
     const emailNorm = email.trim().toLowerCase();
-    const result = await authClient.signIn.email({
-      email: emailNorm,
-      password,
-      callbackURL: getEmailAuthCallbackUrl(),
-    });
-    if (result.error && isEmailNotVerifiedError(result.error)) {
-      const sent = await authClient.emailOtp.sendVerificationOtp({
+    try {
+      const result = await authClient.signIn.email({
         email: emailNorm,
-        type: "email-verification",
+        password,
+        callbackURL: getEmailAuthCallbackUrl(),
       });
-      setLoading(false);
-      if (sent.error) {
-        setError(sent.error.message ?? "Could not send verification code. Try again in a moment.");
+      if (result.error && isEmailNotVerifiedError(result.error)) {
+        const sent = await authClient.emailOtp.sendVerificationOtp({
+          email: emailNorm,
+          type: "email-verification",
+        });
+        if (sent.error) {
+          setError(sent.error.message ?? "Could not send verification code. Try again in a moment.");
+          return;
+        }
+        router.replace({ pathname: "/verify-otp", params: { email: emailNorm } });
         return;
       }
-      router.replace({ pathname: "/verify-otp", params: { email: emailNorm } });
-      return;
-    }
-    setLoading(false);
-    if (result.error) {
-      const msg = result.error.message ?? "";
-      setError(msg || "Invalid email or password. Please try again.");
-    } else {
-      await invalidateSession();
+      if (result.error) {
+        const msg = result.error.message ?? "";
+        setError(msg || "Invalid email or password. Please try again.");
+      } else {
+        setAccessToken((result.data as { token?: string } | null)?.token ?? null);
+        clearSignedOutMark();
+        await invalidateSession();
+      }
+    } catch (err) {
+      setError(formatAuthFlowError(err));
+    } finally {
+      setLoading(false);
     }
   };
 

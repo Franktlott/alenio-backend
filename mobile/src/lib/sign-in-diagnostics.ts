@@ -80,7 +80,19 @@ export async function runSignInDiagnostics(): Promise<string> {
       // Authenticated debug probe: confirms whether backend sees a valid session/token.
       try {
         const authHeaders = await getAuthHeaders();
-        const meRes = await fetch(`${base}/api/me/debug`, { headers: authHeaders });
+        push(lines, "Auth header present", authHeaders.Authorization ? "yes" : "no");
+        let meRes = await fetch(`${base}/api/me/debug`, {
+          credentials: "include",
+          headers: authHeaders,
+        });
+        // Session hydration can lag on native right after sign-in; retry once.
+        if (meRes.status === 401) {
+          const freshHeaders = await getAuthHeaders();
+          meRes = await fetch(`${base}/api/me/debug`, {
+            credentials: "include",
+            headers: freshHeaders,
+          });
+        }
         const meText = await meRes.text();
         push(lines, "GET /api/me/debug", `${meRes.status} ${meRes.ok ? "OK" : "FAIL"}`);
         try {

@@ -14,7 +14,7 @@ import {
 import { authClient, getEmailAuthCallbackUrl } from "@/lib/auth/auth-client";
 import { setPendingSignUp } from "@/lib/auth/pending-signup";
 import { formatAuthFlowError } from "@/lib/auth/auth-errors";
-import { useInvalidateSession } from "@/lib/auth/use-session";
+import { clearSignedOutMark, useInvalidateSession } from "@/lib/auth/use-session";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { StatusBar } from "expo-status-bar";
@@ -95,6 +95,7 @@ export default function SignUp() {
       }
 
       try {
+        clearSignedOutMark();
         await invalidateSession();
       } catch (refreshErr) {
         console.warn("[sign-up] Session refresh after sign-up failed:", refreshErr);

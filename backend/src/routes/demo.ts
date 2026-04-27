@@ -46,34 +46,40 @@ async function seedDemoData(ownerId: string) {
   };
 
   // ── Fake team members (no auth accounts needed) ──────────────────────────
-  // Use fixed deterministic IDs so we always have string (never undefined)
-  const SARAH  = "demo-sarah-m";
-  const MARCUS = "demo-marcus-j";
-  const JORDAN = "demo-jordan-l";
-  const ELENA  = "demo-elena-r";
-  const TYLER  = "demo-tyler-p";
-
+  // Always use returned DB IDs so repeated seeds don't break foreign keys.
   const memberDefs = [
-    { id: SARAH,  name: "Sarah Mitchell",  email: "sarah.m@alenio-demo.app" },
-    { id: MARCUS, name: "Marcus Johnson",  email: "marcus.j@alenio-demo.app" },
-    { id: JORDAN, name: "Jordan Lee",      email: "jordan.l@alenio-demo.app" },
-    { id: ELENA,  name: "Elena Rodriguez", email: "elena.r@alenio-demo.app" },
-    { id: TYLER,  name: "Tyler Park",      email: "tyler.p@alenio-demo.app" },
-  ];
+    { seedId: "demo-sarah-m", name: "Sarah Mitchell", email: "sarah.m@alenio-demo.app" },
+    { seedId: "demo-marcus-j", name: "Marcus Johnson", email: "marcus.j@alenio-demo.app" },
+    { seedId: "demo-jordan-l", name: "Jordan Lee", email: "jordan.l@alenio-demo.app" },
+    { seedId: "demo-elena-r", name: "Elena Rodriguez", email: "elena.r@alenio-demo.app" },
+    { seedId: "demo-tyler-p", name: "Tyler Park", email: "tyler.p@alenio-demo.app" },
+  ] as const;
 
+  const memberIdsByEmail = new Map<string, string>();
   for (const m of memberDefs) {
-    await prisma.user.upsert({
+    const user = await prisma.user.upsert({
       where: { email: m.email },
-      update: {},
-      create: { id: m.id, name: m.name, email: m.email, emailVerified: true, updatedAt: now },
+      update: { name: m.name, emailVerified: true },
+      create: {
+        id: m.seedId,
+        name: m.name,
+        email: m.email,
+        emailVerified: true,
+        updatedAt: now,
+      },
+      select: { id: true, email: true },
     });
+    memberIdsByEmail.set(user.email, user.id);
   }
 
-  const sarah  = SARAH;
-  const marcus = MARCUS;
-  const jordan = JORDAN;
-  const elena  = ELENA;
-  const tyler  = TYLER;
+  const sarah = memberIdsByEmail.get("sarah.m@alenio-demo.app");
+  const marcus = memberIdsByEmail.get("marcus.j@alenio-demo.app");
+  const jordan = memberIdsByEmail.get("jordan.l@alenio-demo.app");
+  const elena = memberIdsByEmail.get("elena.r@alenio-demo.app");
+  const tyler = memberIdsByEmail.get("tyler.p@alenio-demo.app");
+  if (!sarah || !marcus || !jordan || !elena || !tyler) {
+    throw new Error("Failed to resolve seeded member IDs");
+  }
 
   // ── Team ─────────────────────────────────────────────────────────────────
   const team = await prisma.team.create({

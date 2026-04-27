@@ -15,6 +15,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { StatusBar } from "expo-status-bar";
 import { router } from "expo-router";
 import { authClient } from "@/lib/auth/auth-client";
+import { formatAuthFlowError } from "@/lib/auth/auth-errors";
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState("");
@@ -37,11 +38,12 @@ export default function ForgotPassword() {
       });
       if (!result.error) {
         setSuccess(true);
+        router.replace({ pathname: "/verify-reset-code", params: { email: email.trim().toLowerCase() } });
       } else {
         setError(result.error.message ?? "Something went wrong. Please try again.");
       }
-    } catch {
-      setError("Network error. Please check your connection and try again.");
+    } catch (err) {
+      setError(formatAuthFlowError(err));
     } finally {
       setLoading(false);
     }
@@ -70,7 +72,7 @@ export default function ForgotPassword() {
         >
           <Text className="text-slate-900 dark:text-white text-2xl font-bold mb-2">Reset password</Text>
           <Text className="text-slate-500 dark:text-slate-400 text-sm mb-8">
-            Enter your email and we'll send you a link to reset your password.
+            Enter your email and we'll send you a code to reset your password.
           </Text>
 
           {success ? (
@@ -79,7 +81,7 @@ export default function ForgotPassword() {
               testID="success-message"
             >
               <Text className="text-green-700 dark:text-green-400 text-sm font-medium">
-                Check your email for a reset link
+                Check your email for a reset code
               </Text>
             </View>
           ) : null}
