@@ -20,6 +20,14 @@ function hasFirebaseStorageConfig() {
   );
 }
 
+function normalizeBucketName(bucket: string): string {
+  const value = bucket.trim();
+  if (value.endsWith(".firebasestorage.app")) {
+    return value.replace(/\.firebasestorage\.app$/i, ".appspot.com");
+  }
+  return value;
+}
+
 function ensureFirebaseStorageInitialized() {
   if (!hasFirebaseStorageConfig()) return false;
   if (getApps().length > 0) return true;
@@ -29,7 +37,7 @@ function ensureFirebaseStorageInitialized() {
       clientEmail: env.FIREBASE_CLIENT_EMAIL,
       privateKey: env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
     }),
-    storageBucket: env.FIREBASE_STORAGE_BUCKET,
+    storageBucket: normalizeBucketName(env.FIREBASE_STORAGE_BUCKET!),
   });
   return true;
 }
