@@ -25,6 +25,7 @@
     "@vibecodeapp/proxy": "^2.0.3",
     "bcryptjs": "^3.0.3",
     "done": "^1.1.8",
+    "firebase-admin": "^13.8.0",
     "hono": "4.6.0",
     "jose": "^6.2.2",
     "resend": "^6.10.0",
