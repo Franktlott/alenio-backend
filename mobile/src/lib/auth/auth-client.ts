@@ -3,6 +3,7 @@ import { BetterAuthVanillaAdapter } from "@neondatabase/auth/vanilla/adapters";
 import Constants from "expo-constants";
 import { fetch as expoFetch } from "expo/fetch";
 import * as Linking from "expo-linking";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const neonAuthUrl = process.env.EXPO_PUBLIC_NEON_AUTH_URL;
 
@@ -89,6 +90,7 @@ type SessionShape = {
 };
 
 let inMemoryAccessToken: string | null = null;
+const ACCESS_TOKEN_KEY = "alenio:access-token";
 
 function pickSessionToken(data: SessionShape | null): string | null {
   const session = data?.session;
@@ -96,23 +98,107 @@ function pickSessionToken(data: SessionShape | null): string | null {
 }
 
 export function setAccessToken(token: string | null | undefined) {
-  inMemoryAccessToken = token?.trim() ? token.trim() : null;
+  const normalized = token?.trim() ? token.trim() : null;
+  inMemoryAccessToken = normalized;
+  if (normalized) {
+    AsyncStorage.setItem(ACCESS_TOKEN_KEY, normalized).catch(() => {});
+  } else {
+    AsyncStorage.removeItem(ACCESS_TOKEN_KEY).catch(() => {});
+  }
 }
 
 export function clearAccessToken() {
   inMemoryAccessToken = null;
+  AsyncStorage.removeItem(ACCESS_TOKEN_KEY).catch(() => {});
+}
+
+function pickTokenFromUnknown(data: unknown): string | null {
+  if (!data || typeof data !== "object") return null;
+  const rec = data as Record<string, unknown>;
+  const direct =
+    (typeof rec.token === "string" ? rec.token : null) ??
+    (typeof rec.accessToken === "string" ? rec.accessToken : null) ??
+    (typeof rec.access_token === "string" ? rec.access_token : null) ??
+    (typeof rec.sessionToken === "string" ? rec.sessionToken : null) ??
+    (typeof rec.bearerToken === "string" ? rec.bearerToken : null);
+  if (direct) return direct;
+  const nestedSession = rec.session;
+  if (nestedSession && typeof nestedSession === "object") {
+    const s = nestedSession as Record<string, unknown>;
+    return (
+      (typeof s.token === "string" ? s.token : null) ??
+      (typeof s.accessToken === "string" ? s.accessToken : null) ??
+      (typeof s.access_token === "string" ? s.access_token : null) ??
+      (typeof s.sessionToken === "string" ? s.sessionToken : null) ??
+      (typeof s.bearerToken === "string" ? s.bearerToken : null)
+    );
+  }
+  return null;
+}
+
+function looksLikeJwt(v: string): boolean {
+  return v.split(".").length === 3;
+}
+
+function deepFindToken(data: unknown, depth = 0): string | null {
+  if (!data || depth > 5) return null;
+  if (typeof data === "string") {
+    return looksLikeJwt(data) ? data : null;
+  }
+  if (Array.isArray(data)) {
+    for (const item of data) {
+      const found = deepFindToken(item, depth + 1);
+      if (found) return found;
+    }
+    return null;
+  }
+  if (typeof data !== "object") return null;
+  const rec = data as Record<string, unknown>;
+  const keyCandidates = ["token", "accessToken", "access_token", "sessionToken", "bearerToken", "jwt"];
+  for (const key of keyCandidates) {
+    const val = rec[key];
+    if (typeof val === "string" && val.trim()) return val.trim();
+  }
+  for (const val of Object.values(rec)) {
+    const found = deepFindToken(val, depth + 1);
+    if (found) return found;
+  }
+  return null;
+}
+
+export function setAccessTokenFromAuthData(data: unknown): string | null {
+  const token = pickTokenFromUnknown(data) ?? deepFindToken(data);
+  if (token) setAccessToken(token);
+  return token;
 }
 
 export async function getAccessToken(): Promise<string | null> {
-  const result = await authClient.getSession();
-  const data = (result?.data ?? null) as SessionShape | null;
-  let token = pickSessionToken(data);
+  if (inMemoryAccessToken) return inMemoryAccessToken;
+  try {
+    const stored = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
+    if (stored?.trim()) {
+      inMemoryAccessToken = stored.trim();
+      return inMemoryAccessToken;
+    }
+  } catch {
+    // ignore storage read errors and continue
+  }
+
+  let token: string | null = null;
+  try {
+    const result = await authClient.getSession();
+    const data = (result?.data ?? null) as SessionShape | null;
+    token =
+      pickSessionToken(data) ??
+      pickTokenFromUnknown(result?.data ?? null) ??
+      pickTokenFromUnknown(result ?? null);
+  } catch {
+    token = null;
+  }
   if (token) {
     setAccessToken(token);
     return token;
   }
-
-  if (inMemoryAccessToken) return inMemoryAccessToken;
 
   // Fallback: bypass potential stale client cache and force a network read once.
   try {
@@ -121,7 +207,10 @@ export async function getAccessToken(): Promise<string | null> {
         headers: { "X-Force-Fetch": "1" },
       },
     } as never);
-    token = pickSessionToken((forced?.data ?? null) as SessionShape | null);
+    token =
+      pickSessionToken((forced?.data ?? null) as SessionShape | null) ??
+      pickTokenFromUnknown(forced?.data ?? null) ??
+      pickTokenFromUnknown(forced ?? null);
   } catch {
     // ignore and return null below
   }

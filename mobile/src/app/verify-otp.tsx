@@ -14,7 +14,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { StatusBar } from "expo-status-bar";
 import { router, useLocalSearchParams } from "expo-router";
-import { authClient, getEmailAuthCallbackUrl, setAccessToken } from "@/lib/auth/auth-client";
+import { authClient, getEmailAuthCallbackUrl, setAccessTokenFromAuthData } from "@/lib/auth/auth-client";
 import { formatAuthFlowError } from "@/lib/auth/auth-errors";
 import { clearPendingSignUp, getPendingSignUp } from "@/lib/auth/pending-signup";
 import { clearSignedOutMark, useInvalidateSession } from "@/lib/auth/use-session";
@@ -62,7 +62,8 @@ export default function VerifyOtp() {
           );
           return;
         }
-        setAccessToken((result.data as { token?: string | null } | null)?.token ?? null);
+        setAccessTokenFromAuthData(result ?? null);
+        setAccessTokenFromAuthData(result.data ?? null);
       } catch (e) {
         setError(formatAuthFlowError(e));
         return;
@@ -81,7 +82,8 @@ export default function VerifyOtp() {
               callbackURL: getEmailAuthCallbackUrl(),
             });
             if (!si.error) {
-              setAccessToken((si.data as { token?: string } | null)?.token ?? null);
+              setAccessTokenFromAuthData(si ?? null);
+              setAccessTokenFromAuthData(si.data ?? null);
               await invalidateSession();
               sessionRes = await authClient.getSession();
             }

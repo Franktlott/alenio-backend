@@ -4,7 +4,7 @@ import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 import { fetch } from "expo/fetch";
 import { getNotifDebugLog, getNotifStatus } from "./notifications";
-import { getAuthHeaders } from "./auth/auth-client";
+import { authClient, getAuthHeaders, getAccessToken } from "./auth/auth-client";
 
 function push(lines: string[], label: string, value: string) {
   lines.push(`${label}: ${value}`);
@@ -79,6 +79,26 @@ export async function runSignInDiagnostics(): Promise<string> {
 
       // Authenticated debug probe: confirms whether backend sees a valid session/token.
       try {
+        const accessToken = await getAccessToken();
+        push(lines, "Local token present", accessToken ? "yes" : "no");
+        if (accessToken) {
+          push(lines, "Local token prefix", `${accessToken.slice(0, 16)}…`);
+        }
+        try {
+          const localSession = await authClient.getSession();
+          const sessionData = (localSession?.data ?? null) as Record<string, unknown> | null;
+          push(lines, "Local session user", sessionData && typeof sessionData.user === "object" ? "yes" : "no");
+          const sessionObj = sessionData && typeof sessionData.session === "object"
+            ? (sessionData.session as Record<string, unknown>)
+            : null;
+          const sessionToken =
+            (typeof sessionObj?.token === "string" ? sessionObj.token : null) ??
+            (typeof sessionObj?.accessToken === "string" ? sessionObj.accessToken : null) ??
+            (typeof sessionObj?.access_token === "string" ? sessionObj.access_token : null);
+          push(lines, "Local session token field", sessionToken ? "yes" : "no");
+        } catch {
+          push(lines, "Local session probe", "failed");
+        }
         const authHeaders = await getAuthHeaders();
         push(lines, "Auth header present", authHeaders.Authorization ? "yes" : "no");
         let meRes = await fetch(`${base}/api/me/debug`, {

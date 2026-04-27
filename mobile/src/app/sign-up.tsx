@@ -11,7 +11,7 @@ import {
   Image,
   ScrollView,
 } from "react-native";
-import { authClient, getEmailAuthCallbackUrl } from "@/lib/auth/auth-client";
+import { authClient, getEmailAuthCallbackUrl, setAccessTokenFromAuthData } from "@/lib/auth/auth-client";
 import { setPendingSignUp } from "@/lib/auth/pending-signup";
 import { formatAuthFlowError } from "@/lib/auth/auth-errors";
 import { clearSignedOutMark, useInvalidateSession } from "@/lib/auth/use-session";
@@ -66,7 +66,8 @@ export default function SignUp() {
       }
 
       const user = result.data?.user;
-      const token = result.data?.token;
+      setAccessTokenFromAuthData(result ?? null);
+      const token = setAccessTokenFromAuthData(result.data ?? null);
 
       if (!user) {
         setError("Account could not be confirmed. Please try signing in.");

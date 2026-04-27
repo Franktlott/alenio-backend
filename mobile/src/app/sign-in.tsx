@@ -13,7 +13,7 @@ import {
   Modal,
   Pressable,
 } from "react-native";
-import { authClient, getEmailAuthCallbackUrl, setAccessToken } from "@/lib/auth/auth-client";
+import { authClient, getEmailAuthCallbackUrl, setAccessTokenFromAuthData } from "@/lib/auth/auth-client";
 import { formatAuthFlowError, isEmailNotVerifiedError } from "@/lib/auth/auth-errors";
 import { clearSignedOutMark, useInvalidateSession } from "@/lib/auth/use-session";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -88,7 +88,8 @@ export default function SignIn() {
         const msg = result.error.message ?? "";
         setError(msg || "Invalid email or password. Please try again.");
       } else {
-        setAccessToken((result.data as { token?: string } | null)?.token ?? null);
+        setAccessTokenFromAuthData(result ?? null);
+        setAccessTokenFromAuthData(result.data ?? null);
         clearSignedOutMark();
         await invalidateSession();
       }
