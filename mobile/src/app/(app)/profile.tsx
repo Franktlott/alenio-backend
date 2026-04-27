@@ -16,6 +16,7 @@ import {
   Switch,
   Share,
   RefreshControl,
+  Alert,
 } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import * as Notifications from "expo-notifications";
@@ -180,11 +181,8 @@ export default function ProfileScreen() {
     onError: (err: Error) => {
       setLocalImage(null);
       if (err.message !== "cancelled") {
-        toast({
-          title: "Could not update photo",
-          message: err.message,
-          preset: "error",
-        });
+        // Native Alert shows the full server message; Burnt toasts often hide the subtitle on Android.
+        Alert.alert("Could not update photo", err.message || "Something went wrong. Try again.");
       }
     },
   });

@@ -325,8 +325,9 @@ export default function TeamScreen() {
         teamId: activeTeamId,
       });
       updateTeamImageMutation.mutate(uploaded.url);
-    } catch {
-      toast({ title: "Failed to upload photo", preset: "error" });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Upload failed";
+      Alert.alert("Failed to upload photo", message);
     } finally {
       setUploadingTeamImage(false);
     }

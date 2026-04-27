@@ -210,13 +210,16 @@ export async function uploadFileToFirebaseStorage(params: {
         },
       });
 
-      // V4 signed URLs: max expiration is 7 days (604800s).
-      const maxReadUrlMs = 7 * 24 * 60 * 60 * 1000 - 120_000;
-      const expiresMs = Date.now() + maxReadUrlMs;
+      // v4 read URLs: GCS caps the (expiration − signing time) window at 604800s exactly.
+      // @google-cloud/storage compares in seconds with float math; stay well under to avoid
+      // "Max allowed expiration is seven days (604800 seconds)" on some hosts / clocks.
+      const MAX_V4_READ_SECONDS = 604800;
+      const SAFETY_SECONDS = 3600; // 1h under the hard cap
+      const expiresAt = new Date(Date.now() + (MAX_V4_READ_SECONDS - SAFETY_SECONDS) * 1000);
       const [url] = await target.getSignedUrl({
         version: "v4",
         action: "read",
-        expires: expiresMs,
+        expires: expiresAt,
       });
 
       return {

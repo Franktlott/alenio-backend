@@ -262,24 +262,30 @@ app.post("/api/upload", async (c) => {
     }, 503);
   }
 
-  const formData = await c.req.formData();
-  const file = formData.get("file");
-  const purposeRaw = formData.get("purpose")?.toString().trim();
-  const teamIdRaw = formData.get("teamId")?.toString().trim();
-
-  if (!file || !(file instanceof File)) {
-    return c.json({ error: { message: "No file provided", code: "VALIDATION_ERROR" } }, 400);
-  }
-
-  const purpose = purposeRaw === "profile" || purposeRaw === "team" ? purposeRaw : "generic";
-  if (purpose === "team" && !teamIdRaw) {
-    return c.json(
-      { error: { message: "teamId is required for team photo uploads", code: "VALIDATION_ERROR" } },
-      400
-    );
-  }
-
   try {
+    const formData = await c.req.formData();
+    const rawEntry = formData.get("file");
+    const purposeRaw = formData.get("purpose")?.toString().trim();
+    const teamIdRaw = formData.get("teamId")?.toString().trim();
+
+    if (rawEntry == null || typeof rawEntry === "string") {
+      return c.json({ error: { message: "No file provided", code: "VALIDATION_ERROR" } }, 400);
+    }
+
+    const body = rawEntry as File | Blob;
+    const file =
+      body instanceof File
+        ? body
+        : new File([body], "upload", { type: body.type || "application/octet-stream" });
+
+    const purpose = purposeRaw === "profile" || purposeRaw === "team" ? purposeRaw : "generic";
+    if (purpose === "team" && !teamIdRaw) {
+      return c.json(
+        { error: { message: "teamId is required for team photo uploads", code: "VALIDATION_ERROR" } },
+        400
+      );
+    }
+
     if (purpose === "team" && teamIdRaw) {
       const membership = await prisma.teamMember.findUnique({
         where: { userId_teamId: { userId: user.id, teamId: teamIdRaw } },
