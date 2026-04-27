@@ -174,7 +174,13 @@ export default function ProfileScreen() {
     onSuccess: () => invalidateSession(),
     onError: (err: Error) => {
       setLocalImage(null);
-      if (err.message !== "cancelled") toast({ title: "Could not update photo", preset: "error" });
+      if (err.message !== "cancelled") {
+        toast({
+          title: "Could not update photo",
+          message: err.message,
+          preset: "error",
+        });
+      }
     },
   });
 
@@ -300,8 +306,9 @@ export default function ProfileScreen() {
     try {
       const uploaded = await uploadFile(result.assets[0].uri, "team-photo.jpg", "image/jpeg");
       setEditTeamImage(uploaded.url);
-    } catch {
-      toast({ title: "Failed to upload photo", preset: "error" });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Upload failed";
+      toast({ title: "Failed to upload photo", message, preset: "error" });
     } finally {
       setUploadingTeamImage(false);
     }

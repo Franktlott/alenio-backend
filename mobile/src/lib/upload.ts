@@ -26,7 +26,11 @@ export async function uploadFile(
     headers: authHeaders,
   });
 
-  const data = await readJsonSafe<{ data: UploadResult; error?: { message?: string } }>(response);
-  if (!response.ok) throw new Error(data?.error?.message || "Upload failed");
+  const data = await readJsonSafe<{ data: UploadResult; error?: { message?: string; code?: string } }>(response);
+  if (!response.ok) {
+    const code = data?.error?.code ? `${data.error.code}: ` : "";
+    const message = data?.error?.message || `Upload failed (HTTP ${response.status})`;
+    throw new Error(`${code}${message}`);
+  }
   return data?.data as UploadResult;
 }
