@@ -89,7 +89,23 @@ function sanitizeFilename(filename: string): string {
 function firebaseDownloadMediaUrl(bucketId: string, objectPath: string, downloadToken: string): string {
   const pathEnc = encodeURIComponent(objectPath);
   const bucketEnc = encodeURIComponent(bucketId);
-  return `https://firebasestorage.googleapis.com/v0/b/${bucketEnc}/o/${pathEnc}?alt=media&token=${downloadToken}`;
+  return `https://firebasestorage.googleapis.com/v0/b/${bucketEnc}/o/${pathEnc}?alt=media&token=${encodeURIComponent(
+    downloadToken
+  )}`;
+}
+
+function pickFirebaseDownloadToken(
+  fromUpload: string,
+  gcsUserMetadata: Record<string, string> | undefined
+): string {
+  if (gcsUserMetadata) {
+    for (const [k, v] of Object.entries(gcsUserMetadata)) {
+      if (k.toLowerCase() === "firebasestoragedownloadtokens" && v?.trim()) {
+        return v.trim().split(",")[0]!.trim();
+      }
+    }
+  }
+  return fromUpload;
 }
 
 /** Parsed object in a bucket we manage (env bucket or its legacy alias). */
@@ -199,7 +215,7 @@ export async function uploadFileToFirebaseStorage(params: {
   }
   const bytes = Buffer.from(await file.arrayBuffer());
   const contentType = file.type || "application/octet-stream";
-  const downloadToken = crypto.randomUUID();
+  const downloadToken: string = crypto.randomUUID();
 
   let lastErr: unknown;
   for (const bucketId of bucketCandidates()) {
@@ -219,7 +235,15 @@ export async function uploadFileToFirebaseStorage(params: {
         },
       });
 
-      const url = firebaseDownloadMediaUrl(bucketId, storagePath, downloadToken);
+      let urlToken = downloadToken;
+      try {
+        const [meta] = await target.getMetadata();
+        const userMeta = meta.metadata as Record<string, string> | undefined;
+        urlToken = pickFirebaseDownloadToken(downloadToken, userMeta);
+      } catch {
+        /* use upload-time token if metadata read fails */
+      }
+      const url = firebaseDownloadMediaUrl(bucketId, storagePath, urlToken);
 
       return {
         id: objectId,
