@@ -15,6 +15,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { StatusBar } from "expo-status-bar";
 import { router, useLocalSearchParams } from "expo-router";
 import { authClient, setAccessTokenFromAuthData } from "@/lib/auth/auth-client";
+import { provisionBackendUserAfterAuth } from "@/lib/auth/sync-backend-user";
 import { formatAuthFlowError } from "@/lib/auth/auth-errors";
 import { clearPendingSignUp, getPendingSignUp } from "@/lib/auth/pending-signup";
 import { clearSignedOutMark, useInvalidateSession } from "@/lib/auth/use-session";
@@ -95,6 +96,7 @@ export default function VerifyOtp() {
       }
 
       if (sessionRes.data?.user) {
+        await provisionBackendUserAfterAuth();
         clearSignedOutMark();
         router.replace("/");
       } else {
