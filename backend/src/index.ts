@@ -1,4 +1,3 @@
-import "@vibecodeapp/proxy"; // DO NOT REMOVE OTHERWISE VIBECODE PROXY WILL NOT WORK
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
@@ -28,7 +27,12 @@ import { ogPreviewRouter } from "./routes/og-preview";
 import { feedbackRouter } from "./routes/feedback";
 import { sendPushNotificationsStrict } from "./lib/push";
 import { getDatabasePublicSummary } from "./lib/database-public-summary";
-import { isFirebaseStorageConfigured, uploadFileToFirebaseStorage } from "./lib/firebase-storage";
+import {
+  deleteAllUserStorageObjects,
+  deleteStorageObjectByUrlIfOwned,
+  isFirebaseStorageConfigured,
+  uploadFileToFirebaseStorage,
+} from "./lib/firebase-storage";
 
 type Variables = {
   user: AppUser | null;
@@ -49,11 +53,6 @@ const BACKEND_BUILD_MARKER = env.BACKEND_BUILD_MARKER;
 const allowed = [
   /^http:\/\/localhost(:\d+)?$/,
   /^http:\/\/127\.0\.0\.1(:\d+)?$/,
-  /^https:\/\/[a-z0-9-]+\.dev\.vibecode\.run$/,
-  /^https:\/\/[a-z0-9-]+\.vibecode\.run$/,
-  /^https:\/\/[a-z0-9-]+\.vibecodeapp\.com$/,
-  /^https:\/\/[a-z0-9-]+\.vibecode\.dev$/,
-  /^https:\/\/vibecode\.dev$/,
 ];
 
 app.use(
@@ -265,12 +264,57 @@ app.post("/api/upload", async (c) => {
 
   const formData = await c.req.formData();
   const file = formData.get("file");
+  const purposeRaw = formData.get("purpose")?.toString().trim();
+  const teamIdRaw = formData.get("teamId")?.toString().trim();
 
   if (!file || !(file instanceof File)) {
     return c.json({ error: { message: "No file provided", code: "VALIDATION_ERROR" } }, 400);
   }
 
+  const purpose = purposeRaw === "profile" || purposeRaw === "team" ? purposeRaw : "generic";
+  if (purpose === "team" && !teamIdRaw) {
+    return c.json(
+      { error: { message: "teamId is required for team photo uploads", code: "VALIDATION_ERROR" } },
+      400
+    );
+  }
+
   try {
+    if (purpose === "team" && teamIdRaw) {
+      const membership = await prisma.teamMember.findUnique({
+        where: { userId_teamId: { userId: user.id, teamId: teamIdRaw } },
+      });
+      if (!membership || !["owner", "team_leader"].includes(membership.role)) {
+        return c.json({ error: { message: "Only team owners can change the team photo", code: "FORBIDDEN" } }, 403);
+      }
+      const team = await prisma.team.findUnique({
+        where: { id: teamIdRaw },
+        select: { image: true },
+      });
+      await deleteStorageObjectByUrlIfOwned(team?.image ?? undefined);
+      const uploaded = await uploadFileToFirebaseStorage({
+        userId: user.id,
+        file,
+        slot: "team",
+        teamId: teamIdRaw,
+      });
+      return c.json({ data: uploaded });
+    }
+
+    if (purpose === "profile") {
+      const row = await prisma.user.findUnique({
+        where: { id: user.id },
+        select: { image: true },
+      });
+      await deleteStorageObjectByUrlIfOwned(row?.image ?? undefined);
+      const uploaded = await uploadFileToFirebaseStorage({
+        userId: user.id,
+        file,
+        slot: "profile",
+      });
+      return c.json({ data: uploaded });
+    }
+
     const uploaded = await uploadFileToFirebaseStorage({
       userId: user.id,
       file,
@@ -517,6 +561,7 @@ app.delete("/api/user", async (c) => {
   await prisma.topic.deleteMany({ where: { createdById: uid } });
   await prisma.taskTemplate.deleteMany({ where: { createdById: uid } });
   await prisma.task.deleteMany({ where: { creatorId: uid } });
+  await deleteAllUserStorageObjects(uid);
   // Delete user (cascades: sessions, accounts, team memberships, reactions, etc.)
   await prisma.user.delete({ where: { id: uid } });
 

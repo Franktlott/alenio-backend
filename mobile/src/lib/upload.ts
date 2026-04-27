@@ -9,15 +9,20 @@ type UploadResult = {
   sizeBytes: number;
 };
 
+export type UploadPurpose = "profile" | "team";
+
 export async function uploadFile(
   uri: string,
   filename: string,
-  mimeType: string
+  mimeType: string,
+  options?: { purpose?: UploadPurpose; teamId?: string }
 ): Promise<UploadResult> {
   const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL!;
 
   const formData = new FormData();
   formData.append("file", { uri, type: mimeType, name: filename } as any);
+  if (options?.purpose) formData.append("purpose", options.purpose);
+  if (options?.teamId) formData.append("teamId", options.teamId);
   const authHeaders = await getAuthHeaders();
 
   const response = await fetch(`${BACKEND_URL}/api/upload`, {
