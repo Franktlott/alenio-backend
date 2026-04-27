@@ -20,6 +20,15 @@ function hasFirebaseStorageConfig() {
   );
 }
 
+/** Normalize private key from Railway / JSON (handles \n escapes and stray quotes). */
+function normalizePrivateKey(raw: string): string {
+  let k = raw.trim();
+  if ((k.startsWith('"') && k.endsWith('"')) || (k.startsWith("'") && k.endsWith("'"))) {
+    k = k.slice(1, -1);
+  }
+  return k.replace(/\\n/g, "\n").replace(/\r\n/g, "\n");
+}
+
 function normalizeBucketName(bucket: string): string {
   const value = bucket.trim();
   if (value.endsWith(".firebasestorage.app")) {
@@ -28,18 +37,35 @@ function normalizeBucketName(bucket: string): string {
   return value;
 }
 
+/** Bucket IDs to try: legacy appspot + console default domain. */
+function bucketCandidates(): string[] {
+  const raw = env.FIREBASE_STORAGE_BUCKET!.trim();
+  const normalized = normalizeBucketName(raw);
+  return raw === normalized ? [raw] : [normalized, raw];
+}
+
 function ensureFirebaseStorageInitialized() {
   if (!hasFirebaseStorageConfig()) return false;
   if (getApps().length > 0) return true;
+  const [primary] = bucketCandidates();
   initializeApp({
     credential: cert({
       projectId: env.FIREBASE_PROJECT_ID,
       clientEmail: env.FIREBASE_CLIENT_EMAIL,
-      privateKey: env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
+      privateKey: normalizePrivateKey(env.FIREBASE_PRIVATE_KEY!),
     }),
-    storageBucket: normalizeBucketName(env.FIREBASE_STORAGE_BUCKET!),
+    storageBucket: primary,
   });
   return true;
+}
+
+function formatStorageError(err: unknown): string {
+  if (err && typeof err === "object" && "code" in err) {
+    const code = (err as { code?: string }).code;
+    const msg = err instanceof Error ? err.message : String(err);
+    return code ? `${code}: ${msg}` : msg;
+  }
+  return err instanceof Error ? err.message : String(err);
 }
 
 function sanitizeFilename(filename: string): string {
@@ -59,34 +85,48 @@ export async function uploadFileToFirebaseStorage(params: {
   const safeName = sanitizeFilename(file.name || "upload");
   const objectId = crypto.randomUUID();
   const storagePath = `users/${userId}/uploads/${Date.now()}-${objectId}-${safeName}`;
-  const bucket = getStorage().bucket();
-  const target = bucket.file(storagePath);
-
   const bytes = Buffer.from(await file.arrayBuffer());
-  await target.save(bytes, {
-    resumable: false,
-    metadata: {
-      contentType: file.type || "application/octet-stream",
-      metadata: {
-        uploadedByUserId: userId,
-        originalFilename: file.name || "upload",
-      },
-    },
-  });
+  const contentType = file.type || "application/octet-stream";
 
-  const [url] = await target.getSignedUrl({
-    action: "read",
-    expires: "2500-01-01",
-  });
+  let lastErr: unknown;
+  for (const bucketId of bucketCandidates()) {
+    try {
+      const bucket = getStorage().bucket(bucketId);
+      const target = bucket.file(storagePath);
 
-  return {
-    id: objectId,
-    url,
-    originalFilename: file.name || safeName,
-    contentType: file.type || "application/octet-stream",
-    sizeBytes: file.size ?? bytes.length,
-    storagePath,
-  };
+      await target.save(bytes, {
+        resumable: false,
+        metadata: {
+          contentType,
+          metadata: {
+            uploadedByUserId: userId,
+            originalFilename: file.name || "upload",
+          },
+        },
+      });
+
+      // String date for expires is unreliable across SDK versions; use ms timestamp.
+      const expiresMs = Date.now() + 1000 * 60 * 60 * 24 * 365 * 10;
+      const [url] = await target.getSignedUrl({
+        version: "v4",
+        action: "read",
+        expires: expiresMs,
+      });
+
+      return {
+        id: objectId,
+        url,
+        originalFilename: file.name || safeName,
+        contentType,
+        sizeBytes: file.size ?? bytes.length,
+        storagePath,
+      };
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+
+  throw new Error(formatStorageError(lastErr));
 }
 
 export function isFirebaseStorageConfigured() {
