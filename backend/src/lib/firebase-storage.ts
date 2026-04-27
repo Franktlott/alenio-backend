@@ -210,10 +210,12 @@ export async function uploadFileToFirebaseStorage(params: {
         },
       });
 
-      // v4 signing can throw "Max allowed expiration is seven days" when second-level
-      // rounding makes (expiration − accessibleAt) > 604800. v2 read URLs skip that check.
-      const ttlMs = 6 * 24 * 60 * 60 * 1000; // 6 days — under GCS signed-URL limits
-      const expiresAt = new Date(Date.now() + ttlMs);
+      // v4 signing rejects (expiration − now) > 604800s; boundary + float noise can throw
+      // "Max allowed expiration is seven days". Keep read URLs short and cap hard under the limit.
+      const SEVEN_DAYS_SEC = 7 * 24 * 60 * 60;
+      // Stay comfortably under GCS’s 604800s v4 limit (boundary + float noise can throw).
+      const ttlSeconds = Math.min(5 * 24 * 60 * 60, SEVEN_DAYS_SEC - 3600);
+      const expiresAt = new Date(Date.now() + ttlSeconds * 1000);
       const [url] = await target.getSignedUrl({
         version: "v2",
         action: "read",

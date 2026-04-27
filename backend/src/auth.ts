@@ -61,7 +61,10 @@ async function getSessionFromNeon(token: string): Promise<{ user: AppUser; expir
       | null
       | undefined;
     const userId = data?.user?.id;
-    if (!userId) return null;
+    if (!userId) {
+      console.warn("[auth] getSessionFromNeon: response had no user id (token present but not recognized on this Neon Auth project?)");
+      return null;
+    }
     return {
       user: {
         id: userId,
@@ -71,14 +74,17 @@ async function getSessionFromNeon(token: string): Promise<{ user: AppUser; expir
       },
       expiresAt: data?.session?.expiresAt ? new Date(data.session.expiresAt) : null,
     };
-  } catch {
+  } catch (err) {
+    console.warn("[auth] getSessionFromNeon failed; check NEON_AUTH_URL matches the app’s EXPO_PUBLIC_NEON_AUTH_URL", err);
     return null;
   }
 }
 
 export async function getSessionFromHeaders(headers: Headers): Promise<{ user: AppUser; session: AppSession } | null> {
   const token = readBearerToken(headers);
-  if (!token) return null;
+  if (!token) {
+    return null;
+  }
   try {
     const tokenLooksLikeJwt = token.split(".").length === 3;
     if (!tokenLooksLikeJwt) {
@@ -88,7 +94,10 @@ export async function getSessionFromHeaders(headers: Headers): Promise<{ user: A
     const claims = verified.payload as DecodedClaims;
     if (!claims.sub) {
       const neon = await getSessionFromNeon(token);
-      if (!neon) return null;
+      if (!neon) {
+        console.warn("[auth] verified JWT has no sub and getSessionFromNeon returned null");
+        return null;
+      }
       return {
         user: neon.user,
         session: {
@@ -123,17 +132,23 @@ export async function getSessionFromHeaders(headers: Headers): Promise<{ user: A
         expiresAt,
       },
     };
-  } catch {
-    // Fallback for non-JWT/rotated token formats: ask Neon Auth directly.
+  } catch (jwtErr) {
+    // Signature/issuer mismatch or non-JWS: try Neon’s session API with the same server as NEON_AUTH_URL.
     const neon = await getSessionFromNeon(token);
-    if (!neon) return null;
-      return {
-        user: neon.user,
-        session: {
-          token,
-          expiresAt: neon.expiresAt,
-        },
-      };
+    if (!neon) {
+      console.warn(
+        "[auth] could not establish session: JWT verify failed and getSessionFromNeon returned null. Same NEON_AUTH host as the mobile app?",
+        jwtErr,
+      );
+      return null;
+    }
+    return {
+      user: neon.user,
+      session: {
+        token,
+        expiresAt: neon.expiresAt,
+      },
+    };
   }
 }
 
