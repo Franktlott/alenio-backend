@@ -35,6 +35,7 @@ type Variables = {
 };
 
 const app = new Hono<{ Variables: Variables }>();
+const BACKEND_BUILD_MARKER = env.BACKEND_BUILD_MARKER;
 
 // CORS middleware - validates origin against allowlist
 const allowed = [
@@ -119,7 +120,7 @@ app.use("*", async (c, next) => {
 
 // Health check endpoint (database = which store this API instance uses; no secrets)
 app.get("/health", (c) =>
-  c.json({ status: "ok", database: getDatabasePublicSummary() })
+  c.json({ status: "ok", database: getDatabasePublicSummary(), buildMarker: BACKEND_BUILD_MARKER })
 );
 
 // Email verified success page
@@ -285,6 +286,7 @@ app.get("/api/me/debug", async (c) => {
     data: {
       authenticated: true,
       database: getDatabasePublicSummary(),
+      buildMarker: BACKEND_BUILD_MARKER,
       authUserId: user.id,
       appUserFound: !!dbUser,
       appUser: dbUser,

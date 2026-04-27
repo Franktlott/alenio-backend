@@ -24,6 +24,8 @@ import { runSignInDiagnostics } from "@/lib/sign-in-diagnostics";
 import { fetch } from "expo/fetch";
 import { readJsonSafe } from "@/lib/api/api";
 
+const SIGN_IN_BUILD_MARKER = process.env.EXPO_PUBLIC_SIGNIN_BUILD_MARKER ?? "signin-marker-2026-04-27-01";
+
 export default function SignIn() {
   const { reason } = useLocalSearchParams<{ reason?: string }>();
   const [email, setEmail] = useState("");
@@ -266,6 +268,11 @@ export default function SignIn() {
 
           <View style={{ alignItems: "center", marginTop: 32, paddingBottom: 8 }}>
             <Image source={require("@/assets/lotttech-logo.png")} style={{ width: 185, height: 57 }} resizeMode="contain" />
+          </View>
+          <View style={{ alignItems: "center", marginTop: 10, paddingBottom: 8 }}>
+            <Text className="text-[11px] text-slate-400 dark:text-slate-500" testID="signin-build-marker">
+              Build code: {SIGN_IN_BUILD_MARKER}
+            </Text>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>

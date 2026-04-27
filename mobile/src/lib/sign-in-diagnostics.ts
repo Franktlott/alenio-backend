@@ -63,10 +63,14 @@ export async function runSignInDiagnostics(): Promise<string> {
       const text = await res.text();
       push(lines, "GET /health", `${res.status} ${res.ok ? "OK" : "FAIL"} — ${text.slice(0, 200)}`);
       let apiDatabase: string | null = null;
+      let apiBuildMarker: string | null = null;
       try {
-        const j = JSON.parse(text) as { database?: unknown };
+        const j = JSON.parse(text) as { database?: unknown; buildMarker?: unknown };
         if (typeof j.database === "string" && j.database.trim()) {
           apiDatabase = j.database.trim();
+        }
+        if (typeof j.buildMarker === "string" && j.buildMarker.trim()) {
+          apiBuildMarker = j.buildMarker.trim();
         }
       } catch {
         /* non-JSON body */
@@ -75,6 +79,11 @@ export async function runSignInDiagnostics(): Promise<string> {
         lines,
         "Current database (this API)",
         apiDatabase ?? "(not reported — older server or non-JSON response)",
+      );
+      push(
+        lines,
+        "Backend marker (this API)",
+        apiBuildMarker ?? "(not reported — older server or non-JSON response)",
       );
 
       // Authenticated debug probe: confirms whether backend sees a valid session/token.
@@ -122,6 +131,7 @@ export async function runSignInDiagnostics(): Promise<string> {
               authUserId?: string;
               appUserFound?: boolean;
               database?: string;
+              buildMarker?: string;
             };
             error?: { code?: string; message?: string };
           };
@@ -129,12 +139,14 @@ export async function runSignInDiagnostics(): Promise<string> {
           const authUserId = j.data?.authUserId;
           const appUserFound = j.data?.appUserFound;
           const db = j.data?.database;
+          const marker = j.data?.buildMarker;
           const errCode = j.error?.code;
           const errMsg = j.error?.message;
           push(lines, "  auth authenticated", authenticated === true ? "yes" : authenticated === false ? "no" : "unknown");
           push(lines, "  auth user id", authUserId ?? "(none)");
           push(lines, "  app user row found", typeof appUserFound === "boolean" ? String(appUserFound) : "unknown");
           if (db) push(lines, "  api database (debug)", db);
+          if (marker) push(lines, "  backend marker (debug)", marker);
           if (errCode || errMsg) push(lines, "  auth error", `${errCode ?? "UNKNOWN"} ${errMsg ?? ""}`.trim());
         } catch {
           push(lines, "  /api/me/debug body", meText.slice(0, 200) || "(empty)");

@@ -14,6 +14,8 @@ const envSchema = z.object({
   NEON_AUTH_URL: z.string().url(),
   // Backend URL
   BACKEND_URL: z.string().default("http://localhost:3000"),
+  // Build marker for quick deploy verification
+  BACKEND_BUILD_MARKER: z.string().optional().default("backend-marker-2026-04-27-01"),
   // Admin Dashboard
   ADMIN_PASSWORD: z.string().optional().default("admin123"),
   // Email (Resend)
