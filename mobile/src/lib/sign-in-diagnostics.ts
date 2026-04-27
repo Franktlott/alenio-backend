@@ -64,13 +64,26 @@ export async function runSignInDiagnostics(): Promise<string> {
       push(lines, "GET /health", `${res.status} ${res.ok ? "OK" : "FAIL"} — ${text.slice(0, 200)}`);
       let apiDatabase: string | null = null;
       let apiBuildMarker: string | null = null;
+      let apiStorageProvider: string | null = null;
+      let apiStorageConfigured: boolean | null = null;
       try {
-        const j = JSON.parse(text) as { database?: unknown; buildMarker?: unknown };
+        const j = JSON.parse(text) as {
+          database?: unknown;
+          buildMarker?: unknown;
+          storageProvider?: unknown;
+          storageConfigured?: unknown;
+        };
         if (typeof j.database === "string" && j.database.trim()) {
           apiDatabase = j.database.trim();
         }
         if (typeof j.buildMarker === "string" && j.buildMarker.trim()) {
           apiBuildMarker = j.buildMarker.trim();
+        }
+        if (typeof j.storageProvider === "string" && j.storageProvider.trim()) {
+          apiStorageProvider = j.storageProvider.trim();
+        }
+        if (typeof j.storageConfigured === "boolean") {
+          apiStorageConfigured = j.storageConfigured;
         }
       } catch {
         /* non-JSON body */
@@ -84,6 +97,12 @@ export async function runSignInDiagnostics(): Promise<string> {
         lines,
         "Backend marker (this API)",
         apiBuildMarker ?? "(not reported — older server or non-JSON response)",
+      );
+      push(lines, "Upload provider (this API)", apiStorageProvider ?? "(not reported)");
+      push(
+        lines,
+        "Upload configured (this API)",
+        apiStorageConfigured === null ? "(not reported)" : apiStorageConfigured ? "yes" : "no",
       );
 
       // Authenticated debug probe: confirms whether backend sees a valid session/token.

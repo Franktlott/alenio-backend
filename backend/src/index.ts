@@ -28,6 +28,7 @@ import { ogPreviewRouter } from "./routes/og-preview";
 import { feedbackRouter } from "./routes/feedback";
 import { sendPushNotificationsStrict } from "./lib/push";
 import { getDatabasePublicSummary } from "./lib/database-public-summary";
+import { isFirebaseStorageConfigured, uploadFileToFirebaseStorage } from "./lib/firebase-storage";
 
 type Variables = {
   user: AppUser | null;
@@ -168,7 +169,13 @@ app.use("*", async (c, next) => {
 
 // Health check endpoint (database = which store this API instance uses; no secrets)
 app.get("/health", (c) =>
-  c.json({ status: "ok", database: getDatabasePublicSummary(), buildMarker: BACKEND_BUILD_MARKER })
+  c.json({
+    status: "ok",
+    database: getDatabasePublicSummary(),
+    buildMarker: BACKEND_BUILD_MARKER,
+    storageProvider: "firebase",
+    storageConfigured: isFirebaseStorageConfigured(),
+  })
 );
 
 // Email verified success page
@@ -243,10 +250,18 @@ app.get("/static/:filename", async (c) => {
   return new Response(file);
 });
 
-// File upload endpoint - proxies to Vibecode storage
+// File upload endpoint - stores uploads in Firebase Storage
 app.post("/api/upload", async (c) => {
   const user = c.get("user");
   if (!user) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
+  if (!isFirebaseStorageConfigured()) {
+    return c.json({
+      error: {
+        message: "File storage is not configured yet. Add Firebase Storage env vars on backend.",
+        code: "STORAGE_NOT_CONFIGURED",
+      },
+    }, 503);
+  }
 
   const formData = await c.req.formData();
   const file = formData.get("file");
@@ -255,21 +270,54 @@ app.post("/api/upload", async (c) => {
     return c.json({ error: { message: "No file provided", code: "VALIDATION_ERROR" } }, 400);
   }
 
-  const storageForm = new FormData();
-  storageForm.append("file", file);
+  try {
+    const uploaded = await uploadFileToFirebaseStorage({
+      userId: user.id,
+      file,
+    });
+    return c.json({ data: uploaded });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Upload failed";
+    return c.json({ error: { message, code: "UPLOAD_ERROR" } }, 500);
+  }
+});
 
-  const response = await fetch("https://storage.vibecodeapp.com/v1/files/upload", {
-    method: "POST",
-    body: storageForm,
-  });
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({}));
-    return c.json({ error: { message: (error as any).error || "Upload failed", code: "UPLOAD_ERROR" } }, 500);
+// Upload smoke test - verifies Firebase upload wiring end-to-end
+app.post("/api/upload/smoke", async (c) => {
+  const user = c.get("user");
+  if (!user) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
+  if (!isFirebaseStorageConfigured()) {
+    return c.json({
+      error: {
+        message: "File storage is not configured yet. Add Firebase Storage env vars on backend.",
+        code: "STORAGE_NOT_CONFIGURED",
+      },
+    }, 503);
   }
 
-  const result = await response.json() as { file: { id: string; url: string; originalFilename: string; contentType: string; sizeBytes: number } };
-  return c.json({ data: result.file });
+  try {
+    const content = `upload-smoke-test ${new Date().toISOString()} user=${user.id}`;
+    const file = new File([content], "upload-smoke-test.txt", { type: "text/plain" });
+    const uploaded = await uploadFileToFirebaseStorage({
+      userId: user.id,
+      file,
+    });
+    return c.json({
+      data: {
+        ok: true,
+        provider: "firebase",
+        uploaded,
+      },
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Upload smoke test failed";
+    return c.json({
+      error: {
+        message,
+        code: "UPLOAD_SMOKE_TEST_FAILED",
+      },
+    }, 500);
+  }
 });
 
 // Update profile (name and/or image)
