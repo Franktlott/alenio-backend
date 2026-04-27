@@ -17,6 +17,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { ArrowLeft, Mail, User, Trash2, Shield, Calendar, Users } from "lucide-react-native";
 import { getAuthHeaders } from "@/lib/auth/auth-client";
 import { fetch } from "expo/fetch";
+import { readJsonSafe } from "@/lib/api/api";
 import { toast } from "burnt";
 
 const BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL!;
@@ -61,9 +62,9 @@ export default function UserDetail() {
         credentials: "include",
         headers: authHeaders,
       });
-      const json = await res.json() as { data: AdminUserDetail; error?: { message: string } };
-      if (!res.ok) throw new Error(json.error?.message || "Failed to load user");
-      return json.data;
+      const json = await readJsonSafe<{ data: AdminUserDetail; error?: { message: string } }>(res);
+      if (!res.ok) throw new Error(json?.error?.message || "Failed to load user");
+      return json?.data as AdminUserDetail;
     },
     enabled: !!userId,
   });
@@ -94,9 +95,9 @@ export default function UserDetail() {
         credentials: "include",
         body: JSON.stringify({ name: name.trim(), email: email.trim().toLowerCase() }),
       });
-      const json = await res.json() as { data: AdminUserDetail; error?: { message: string } };
-      if (!res.ok) throw new Error(json.error?.message || "Update failed");
-      return json.data;
+      const json = await readJsonSafe<{ data: AdminUserDetail; error?: { message: string } }>(res);
+      if (!res.ok) throw new Error(json?.error?.message || "Update failed");
+      return json?.data as AdminUserDetail;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
@@ -117,9 +118,9 @@ export default function UserDetail() {
         credentials: "include",
         headers: authHeaders,
       });
-      const json = await res.json() as { data?: { deleted: boolean }; error?: { message: string } };
-      if (!res.ok) throw new Error(json.error?.message || "Delete failed");
-      return json.data;
+      const json = await readJsonSafe<{ data?: { deleted: boolean }; error?: { message: string } }>(res);
+      if (!res.ok) throw new Error(json?.error?.message || "Delete failed");
+      return json?.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "users"] });

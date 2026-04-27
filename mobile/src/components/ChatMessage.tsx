@@ -15,6 +15,7 @@ import * as VideoThumbnails from "expo-video-thumbnails";
 import type { MessageReaction } from "@/lib/types";
 import { renderMentionText } from "@/lib/renderMentions";
 import { useQuery } from "@tanstack/react-query";
+import { readJsonSafe } from "@/lib/api/api";
 
 const URL_REGEX = /https?:\/\/[^\s<>"{}|\\^`[\]]+/gi;
 
@@ -31,8 +32,8 @@ function LinkPreview({ url, isOwn }: { url: string; isOwn: boolean }) {
       const res = await fetch(
         `${process.env.EXPO_PUBLIC_BACKEND_URL}/api/og-preview?url=${encodeURIComponent(url)}`
       );
-      const json = await res.json() as { data: OgData };
-      return json.data;
+      const json = await readJsonSafe<{ data: OgData }>(res);
+      return json?.data as OgData;
     },
     staleTime: Infinity,
     retry: false,

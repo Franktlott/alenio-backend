@@ -226,7 +226,12 @@ export default function DMChatScreen() {
         return;
       }
       const ext = mediaType === "video" ? "mp4" : "jpg";
-      const localUri = `${FileSystem.Paths.cache.uri}download_${Date.now()}.${ext}`;
+      const baseDir = FileSystem.cacheDirectory ?? FileSystem.documentDirectory;
+      if (!baseDir) {
+        toast({ title: "Storage not available on this device", preset: "error" });
+        return;
+      }
+      const localUri = `${baseDir}download_${Date.now()}.${ext}`;
       const { uri } = await FileSystem.downloadAsync(mediaUrl, localUri);
       await MediaLibrary.saveToLibraryAsync(uri);
       await FileSystem.deleteAsync(uri, { idempotent: true });

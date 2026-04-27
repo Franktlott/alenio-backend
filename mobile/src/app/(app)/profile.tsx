@@ -29,6 +29,7 @@ import { clearNotifDebugLog, getNotifDebugLog, getNotifStatus, registerForPushNo
 import { router } from "expo-router";
 import { useMutation, useQuery, useQueryClient, useQueries } from "@tanstack/react-query";
 import { api } from "@/lib/api/api";
+import { readJsonSafe } from "@/lib/api/api";
 import { uploadFile } from "@/lib/upload";
 import { pickImage, takePhoto } from "@/lib/file-picker";
 import * as ImagePicker from "expo-image-picker";
@@ -238,9 +239,9 @@ export default function ProfileScreen() {
         credentials: "include",
         body: JSON.stringify({ password: deletePassword }),
       });
-      const json = await res.json();
+      const json = await readJsonSafe<{ data?: unknown; error?: { message?: string } }>(res);
       if (!res.ok) throw new Error(json?.error?.message ?? "Failed to delete account");
-      return json.data;
+      return json?.data;
     },
     onSuccess: async () => {
       closeDeleteModal();

@@ -1,31 +1,65 @@
 import { fetch } from "expo/fetch";
-import { authClient, getAuthHeaders } from "../auth/auth-client";
+import { authClient, getAccessToken, getAuthHeaders } from "../auth/auth-client";
 
 const baseUrl = process.env.EXPO_PUBLIC_BACKEND_URL!;
+
+type ApiErrorBody = { error?: { message?: string } };
+
+export const readJsonSafe = async <T>(response: Response): Promise<T | null> => {
+  if (response.status === 204 || response.status === 205) return null;
+  const maybeJson = response as Response & { json?: () => Promise<unknown>; text?: () => Promise<string> };
+  if (typeof maybeJson.json === "function") {
+    return (await maybeJson.json().catch(() => null)) as T | null;
+  }
+  if (typeof maybeJson.text === "function") {
+    const raw = await maybeJson.text().catch(() => "");
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw) as T;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+};
 
 const request = async <T>(
   url: string,
   options: { method?: string; body?: string; skipSignOut?: boolean } = {}
 ): Promise<T> => {
   const { method, body, skipSignOut } = options;
-  const authHeaders = await getAuthHeaders();
-  const response = await fetch(`${baseUrl}${url}`, {
-    method,
-    body,
-    credentials: "include",
-    headers: {
-      ...(body ? { "Content-Type": "application/json" } : {}),
-      ...authHeaders,
-    },
-  });
+  let authHeaders = await getAuthHeaders();
+  const doFetch = (headers: Record<string, string>) =>
+    fetch(`${baseUrl}${url}`, {
+      method,
+      body,
+      credentials: "include",
+      headers: {
+        ...(body ? { "Content-Type": "application/json" } : {}),
+        ...headers,
+      },
+    });
+
+  let response = await doFetch(authHeaders);
+
+  // RN auth state can lag briefly after sign-in/verification; retry once with a fresh token.
+  if (response.status === 401 && !skipSignOut) {
+    const freshToken = await getAccessToken();
+    if (freshToken) {
+      authHeaders = { ...authHeaders, Authorization: `Bearer ${freshToken}` };
+      response = await doFetch(authHeaders);
+    }
+  }
+
   if (!response.ok) {
-    const err = await response.json().catch(() => ({}));
+    const err = await readJsonSafe<ApiErrorBody>(response);
     if (response.status === 401 && !skipSignOut) {
       authClient.signOut().catch(() => {});
     }
     throw new Error(err?.error?.message ?? `Request failed: ${response.status}`);
   }
-  return response.json();
+  const parsed = await readJsonSafe<T>(response);
+  return (parsed ?? ({} as T));
 };
 
 export const api = {
@@ -35,18 +69,30 @@ export const api = {
   put: <T>(url: string, body: unknown) =>
     request<{ data: T }>(url, { method: "PUT", body: JSON.stringify(body) }).then((r) => r.data),
   delete: async <T>(url: string) => {
-    const authHeaders = await getAuthHeaders();
-    const response = await fetch(`${baseUrl}${url}`, {
-      method: "DELETE",
-      credentials: "include",
-      headers: authHeaders,
-    });
+    let authHeaders = await getAuthHeaders();
+    const doDelete = (headers: Record<string, string>) =>
+      fetch(`${baseUrl}${url}`, {
+        method: "DELETE",
+        credentials: "include",
+        headers,
+      });
+
+    let response = await doDelete(authHeaders);
+    if (response.status === 401) {
+      const freshToken = await getAccessToken();
+      if (freshToken) {
+        authHeaders = { ...authHeaders, Authorization: `Bearer ${freshToken}` };
+        response = await doDelete(authHeaders);
+      }
+    }
+
     if (!response.ok) {
-      const err = await response.json().catch(() => ({}));
+      const err = await readJsonSafe<ApiErrorBody>(response);
       throw new Error(err?.error?.message ?? `Request failed: ${response.status}`);
     }
-    if (response.status === 204) return undefined as T;
-    return response.json().then((r: { data: T }) => r.data);
+    if (response.status === 204 || response.status === 205) return undefined as T;
+    const parsed = await readJsonSafe<{ data: T }>(response);
+    return parsed?.data as T;
   },
   patch: <T>(url: string, body: unknown) =>
     request<{ data: T }>(url, { method: "PATCH", body: JSON.stringify(body) }).then((r) => r.data),

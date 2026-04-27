@@ -1,4 +1,5 @@
 import { getAuthHeaders } from "./auth/auth-client";
+import { readJsonSafe } from "./api/api";
 
 type UploadResult = {
   id: string;
@@ -25,7 +26,7 @@ export async function uploadFile(
     headers: authHeaders,
   });
 
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error?.message || "Upload failed");
-  return data.data;
+  const data = await readJsonSafe<{ data: UploadResult; error?: { message?: string } }>(response);
+  if (!response.ok) throw new Error(data?.error?.message || "Upload failed");
+  return data?.data as UploadResult;
 }

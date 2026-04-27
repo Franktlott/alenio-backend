@@ -7,8 +7,8 @@ export const setPendingSignUp = (email: string, password: string) => {
   pending = { email, password };
 };
 
-export const consumePendingSignUp = () => {
-  const creds = pending;
+export const getPendingSignUp = () => pending;
+
+export const clearPendingSignUp = () => {
   pending = null;
-  return creds;
 };

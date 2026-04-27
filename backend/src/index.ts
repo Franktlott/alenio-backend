@@ -27,6 +27,7 @@ import { usersRouter } from "./routes/users";
 import { ogPreviewRouter } from "./routes/og-preview";
 import { feedbackRouter } from "./routes/feedback";
 import { sendPushNotificationsStrict } from "./lib/push";
+import { getDatabasePublicSummary } from "./lib/database-public-summary";
 
 type Variables = {
   user: AppUser | null;
@@ -86,8 +87,10 @@ app.use("*", async (c, next) => {
   await next();
 });
 
-// Health check endpoint
-app.get("/health", (c) => c.json({ status: "ok" }));
+// Health check endpoint (database = which store this API instance uses; no secrets)
+app.get("/health", (c) =>
+  c.json({ status: "ok", database: getDatabasePublicSummary() })
+);
 
 // Email verified success page
 app.get("/email-verified", (c) => {
@@ -219,6 +222,45 @@ app.get("/api/me", async (c) => {
     select: { id: true, name: true, email: true, image: true, isAdmin: true },
   });
   return c.json({ data: fullUser });
+});
+
+// Debug: confirm auth session + app user row + active database target
+app.get("/api/me/debug", async (c) => {
+  const user = c.get("user");
+  const session = c.get("session");
+  if (!user || !session) {
+    return c.json({
+      error: { message: "Unauthorized", code: "UNAUTHORIZED" },
+      data: {
+        authenticated: false,
+        database: getDatabasePublicSummary(),
+      },
+    }, 401);
+  }
+
+  const dbUser = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      image: true,
+      emailVerified: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+  });
+
+  return c.json({
+    data: {
+      authenticated: true,
+      database: getDatabasePublicSummary(),
+      authUserId: user.id,
+      appUserFound: !!dbUser,
+      appUser: dbUser,
+      sessionExpiresAt: session.expiresAt ?? null,
+    },
+  });
 });
 
 // Save push token

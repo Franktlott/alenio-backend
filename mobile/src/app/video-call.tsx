@@ -11,6 +11,7 @@ import { ChevronLeft, Video, PhoneOff, Share2, Monitor, Mail, X, Check } from "l
 import { useSession } from "@/lib/auth/use-session";
 import { useCameraPermissions, useMicrophonePermissions } from "expo-camera";
 import { api } from "@/lib/api/api";
+import { readJsonSafe } from "@/lib/api/api";
 
 const alenioLogo = require("@/assets/alenio-logo-white.png");
 
@@ -75,8 +76,8 @@ export default function VideoCallScreen() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ roomId, userName }),
         });
-        const json = await res.json();
-        if (!res.ok || !json.data?.url) {
+        const json = await readJsonSafe<{ data?: { url?: string; token?: string } }>(res);
+        if (!res.ok || !json?.data?.url) {
           setError("Could not start call.");
           setPhase("error");
           return;

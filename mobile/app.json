@@ -16,7 +16,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.vibecode.alenio-9iqp9v",
-      "buildNumber": "36",
+      "buildNumber": "37",
       "entitlements": {
         "aps-environment": "production"
       },
@@ -105,6 +105,7 @@
     "experiments": {
       "typedRoutes": true
     },
-    "icon": "./icon.png"
+    "icon": "./icon.png",
+    "owner": "lotttechnologies"
   }
 }

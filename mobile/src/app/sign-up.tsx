@@ -11,9 +11,10 @@ import {
   Image,
   ScrollView,
 } from "react-native";
-import { authClient } from "@/lib/auth/auth-client";
-import { SESSION_QUERY_KEY } from "@/lib/auth/use-session";
-import { useQueryClient } from "@tanstack/react-query";
+import { authClient, getEmailAuthCallbackUrl } from "@/lib/auth/auth-client";
+import { setPendingSignUp } from "@/lib/auth/pending-signup";
+import { formatAuthFlowError } from "@/lib/auth/auth-errors";
+import { useInvalidateSession } from "@/lib/auth/use-session";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { StatusBar } from "expo-status-bar";
@@ -27,7 +28,7 @@ export default function SignUp() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [success, setSuccess] = useState(false);
-  const queryClient = useQueryClient();
+  const invalidateSession = useInvalidateSession();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -42,6 +43,11 @@ export default function SignUp() {
     setError(null);
     if (!name.trim()) { setError("Please enter your name"); return; }
     if (!email.trim()) { setError("Please enter your email address"); return; }
+    const emailNorm = email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailNorm)) {
+      setError("Please enter a valid email address");
+      return;
+    }
     if (!password) { setError("Please enter a password"); return; }
     if (password.length < 8) { setError("Password must be at least 8 characters"); return; }
     if (password !== confirmPassword) { setError("Passwords do not match"); return; }
@@ -50,39 +56,73 @@ export default function SignUp() {
     try {
       const result = await authClient.signUp.email({
         name: name.trim(),
-        email: email.trim().toLowerCase(),
+        email: emailNorm,
         password,
+        callbackURL: getEmailAuthCallbackUrl(),
       });
       if (result.error) {
         setError(result.error.message ?? "Failed to create account. Please try again.");
         return;
       }
-      const signInResult = await authClient.signIn.email({
-        email: email.trim().toLowerCase(),
-        password,
-      });
-      if (signInResult.error) {
-        setError(signInResult.error.message ?? "Account created. Please sign in.");
+
+      const user = result.data?.user;
+      const token = result.data?.token;
+
+      if (!user) {
+        setError("Account could not be confirmed. Please try signing in.");
         router.replace("/sign-in");
         return;
       }
-      await queryClient.refetchQueries({ queryKey: SESSION_QUERY_KEY });
+
+      // Better Auth: if requireEmailVerification (or autoSignIn off), sign-up returns user + no token.
+      // Do not call sign-in here — that looks like a failed login before verification.
+      if (!token) {
+        const sent = await authClient.emailOtp.sendVerificationOtp({
+          email: emailNorm,
+          type: "email-verification",
+        });
+        if (sent.error) {
+          setError(
+            sent.error.message ??
+              "Account created. We could not send a verification code — try signing in to receive one.",
+          );
+          router.replace("/sign-in");
+          return;
+        }
+        setPendingSignUp(emailNorm, password);
+        router.replace({ pathname: "/verify-otp", params: { email: emailNorm } });
+        return;
+      }
+
+      try {
+        await invalidateSession();
+      } catch (refreshErr) {
+        console.warn("[sign-up] Session refresh after sign-up failed:", refreshErr);
+      }
       setSuccess(true);
-    } catch {
-      setError("Something went wrong. Please try again.");
+    } catch (err) {
+      console.warn("[sign-up]", err);
+      setError(formatAuthFlowError(err));
     } finally {
       setLoading(false);
     }
   };
   if (success) {
     return (
-      <View style={{ flex: 1, backgroundColor: "white", alignItems: "center", justifyContent: "center" }}>
+      <View
+        className="flex-1 bg-white dark:bg-slate-900 items-center justify-center px-6"
+        testID="sign-up-success-screen"
+      >
         <StatusBar style="dark" />
-        <View style={{ width: 96, height: 96, borderRadius: 48, backgroundColor: "#22C55E", alignItems: "center", justifyContent: "center", marginBottom: 24 }}>
-          <Text style={{ fontSize: 48, color: "white", lineHeight: 56 }}>✓</Text>
+        <View className="w-24 h-24 rounded-full bg-emerald-500 items-center justify-center mb-6">
+          <Text className="text-5xl text-white leading-[56px]">✓</Text>
         </View>
-        <Text style={{ fontSize: 24, fontWeight: "800", color: "#0F172A", marginBottom: 8 }}>Email verified!</Text>
-        <Text style={{ fontSize: 16, color: "#64748B" }}>Taking you to the app…</Text>
+        <Text className="text-2xl font-extrabold text-slate-900 dark:text-white mb-2 text-center">
+          {"You're all set"}
+        </Text>
+        <Text className="text-base text-slate-500 dark:text-slate-400 text-center">
+          Account created and signed in. Opening your workspace…
+        </Text>
       </View>
     );
   }

@@ -20,6 +20,7 @@ import { Search, Users, Building2, CheckSquare, MessageSquare, LogOut, ChevronRi
 import { authClient, getAuthHeaders } from "@/lib/auth/auth-client";
 import { useInvalidateSession } from "@/lib/auth/use-session";
 import { fetch } from "expo/fetch";
+import { readJsonSafe } from "@/lib/api/api";
 import { toast } from "burnt";
 
 const BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL!;
@@ -50,9 +51,9 @@ function useAdminStats() {
         credentials: "include",
         headers: authHeaders,
       });
-      const json = await res.json() as { data: Stats; error?: { message: string } };
-      if (!res.ok) throw new Error(json.error?.message || "Request failed");
-      return json.data;
+      const json = await readJsonSafe<{ data: Stats; error?: { message: string } }>(res);
+      if (!res.ok) throw new Error(json?.error?.message || "Request failed");
+      return json?.data as Stats;
     },
   });
 }
@@ -66,9 +67,9 @@ function useAdminUsers() {
         credentials: "include",
         headers: authHeaders,
       });
-      const json = await res.json() as { data: AdminUser[]; error?: { message: string } };
-      if (!res.ok) throw new Error(json.error?.message || "Request failed");
-      return json.data;
+      const json = await readJsonSafe<{ data: AdminUser[]; error?: { message: string } }>(res);
+      if (!res.ok) throw new Error(json?.error?.message || "Request failed");
+      return json?.data as AdminUser[];
     },
   });
 }
@@ -107,9 +108,9 @@ export default function AdminDashboard() {
         credentials: "include",
         headers: authHeaders,
       });
-      const json = await res.json() as { data?: { deleted: boolean }; error?: { message: string } };
-      if (!res.ok) throw new Error(json.error?.message || "Delete failed");
-      return json.data;
+      const json = await readJsonSafe<{ data?: { deleted: boolean }; error?: { message: string } }>(res);
+      if (!res.ok) throw new Error(json?.error?.message || "Delete failed");
+      return json?.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "users"] });

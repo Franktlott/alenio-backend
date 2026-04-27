@@ -7,7 +7,7 @@ import { AppState, Image, View } from 'react-native';
 import { useColorScheme } from '@/lib/useColorScheme';
 import { QueryClient, QueryClientProvider, focusManager, useQuery } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { KeyboardProvider } from 'react-native-keyboard-controller';
+import { SafeKeyboardProvider } from '@/lib/safe-keyboard-controller';
 import { useSession } from '@/lib/auth/use-session';
 import { useEffect, useRef, useState } from 'react';
 import * as Notifications from 'expo-notifications';
@@ -16,6 +16,7 @@ import { registerForPushNotificationsAsync } from '@/lib/notifications';
 import { initRevenueCat } from '@/lib/revenue-cat';
 import { fetch } from 'expo/fetch';
 import { getAuthHeaders } from '@/lib/auth/auth-client';
+import { readJsonSafe } from '@/lib/api/api';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -107,8 +108,8 @@ function RootLayoutNav() {
         headers: authHeaders,
       });
       if (!res.ok) return null;
-      const json = await res.json() as { data: { id: string; name: string; email: string; image: string | null; isAdmin: boolean } | null };
-      return json.data;
+      const json = await readJsonSafe<{ data: { id: string; name: string; email: string; image: string | null; isAdmin: boolean } | null }>(res);
+      return json?.data ?? null;
     },
     enabled: !!session?.user,
     staleTime: 5 * 60 * 1000,
@@ -259,8 +260,8 @@ function RootLayoutNav() {
             <Stack.Screen name="sign-up" />
             <Stack.Screen name="forgot-password" />
             <Stack.Screen name="reset-password" />
+            <Stack.Screen name="verify-otp" />
           </Stack.Protected>
-          <Stack.Screen name="verify-otp" />
           <Stack.Screen name="privacy-policy" />
           <Stack.Screen name="terms-of-service" />
         </Stack>
@@ -276,11 +277,11 @@ export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       <GestureHandlerRootView style={{ flex: 1 }}>
-        <KeyboardProvider>
+        <SafeKeyboardProvider>
           <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
           <RootLayoutNav />
           <Toaster />
-        </KeyboardProvider>
+        </SafeKeyboardProvider>
       </GestureHandlerRootView>
     </QueryClientProvider>
   );
