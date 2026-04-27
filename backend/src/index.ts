@@ -68,22 +68,36 @@ app.use("*", async (c, next) => {
     let user: { id: string; email: string; name: string; image: string | null } | null = null;
     const sessionEmail = session.user.email?.trim() ?? null;
     if (sessionEmail) {
-      user = await prisma.user.upsert({
-        where: { id: session.user.id },
-        update: {
-          email: sessionEmail,
-          name: session.user.name ?? sessionEmail.split("@")[0] ?? "User",
-          image: session.user.image ?? undefined,
-        },
-        create: {
-          id: session.user.id,
-          email: sessionEmail,
-          name: session.user.name ?? sessionEmail.split("@")[0] ?? "User",
-          image: session.user.image ?? undefined,
-          emailVerified: true,
-        },
-        select: { id: true, email: true, name: true, image: true },
-      });
+      try {
+        user = await prisma.user.upsert({
+          where: { id: session.user.id },
+          update: {
+            email: sessionEmail,
+            name: session.user.name ?? sessionEmail.split("@")[0] ?? "User",
+            image: session.user.image ?? undefined,
+          },
+          create: {
+            id: session.user.id,
+            email: sessionEmail,
+            name: session.user.name ?? sessionEmail.split("@")[0] ?? "User",
+            image: session.user.image ?? undefined,
+            emailVerified: true,
+          },
+          select: { id: true, email: true, name: true, image: true },
+        });
+      } catch (err) {
+        // Legacy migration path: email already exists under a different user ID.
+        // In that case, use the existing row so auth can continue.
+        const code = (err as { code?: string } | null)?.code;
+        if (code === "P2002") {
+          user = await prisma.user.findUnique({
+            where: { email: sessionEmail },
+            select: { id: true, email: true, name: true, image: true },
+          });
+        } else {
+          throw err;
+        }
+      }
     } else {
       // Some token/session payloads may omit email; recover from app DB by user ID.
       user = await prisma.user.findUnique({

@@ -87,23 +87,23 @@ export async function getSessionFromHeaders(headers: Headers): Promise<{ user: A
     const verified = await jwtVerify(token, jwks, { algorithms: ["RS256"] });
     const claims = verified.payload as DecodedClaims;
     if (!claims.sub) return null;
+    let userId = claims.sub;
     let email = claims.email ?? null;
     let name = claims.name ?? claims.preferred_username ?? null;
     let image = claims.picture ?? null;
     let expiresAt = claims.exp ? new Date(claims.exp * 1000) : null;
-    // Some Neon JWTs omit profile claims. Enrich from Neon Auth session using bearer token.
-    if (!email) {
-      const neon = await getSessionFromNeon(token);
-      if (neon?.user.id === claims.sub) {
-        email = neon.user.email ?? email;
-        name = neon.user.name ?? name;
-        image = neon.user.image ?? image;
-        expiresAt = neon.expiresAt ?? expiresAt;
-      }
+    // Neon session is the most reliable source of identity/profile across token variants.
+    const neon = await getSessionFromNeon(token);
+    if (neon?.user.id) {
+      userId = neon.user.id;
+      email = neon.user.email ?? email;
+      name = neon.user.name ?? name;
+      image = neon.user.image ?? image;
+      expiresAt = neon.expiresAt ?? expiresAt;
     }
     return {
       user: {
-        id: claims.sub,
+        id: userId,
         email,
         name,
         image,
