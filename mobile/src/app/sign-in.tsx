@@ -13,7 +13,7 @@ import {
   Modal,
   Pressable,
 } from "react-native";
-import { authClient, getEmailAuthCallbackUrl, setAccessTokenFromAuthData } from "@/lib/auth/auth-client";
+import { authClient, setAccessTokenFromAuthData } from "@/lib/auth/auth-client";
 import { formatAuthFlowError, isEmailNotVerifiedError } from "@/lib/auth/auth-errors";
 import { clearSignedOutMark, useInvalidateSession } from "@/lib/auth/use-session";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -70,7 +70,6 @@ export default function SignIn() {
       const result = await authClient.signIn.email({
         email: emailNorm,
         password,
-        callbackURL: getEmailAuthCallbackUrl(),
       });
       if (result.error && isEmailNotVerifiedError(result.error)) {
         const sent = await authClient.emailOtp.sendVerificationOtp({
