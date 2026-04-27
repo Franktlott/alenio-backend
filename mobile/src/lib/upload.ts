@@ -55,10 +55,6 @@ export async function uploadFile(
         message +=
           " Check the Firebase service account has Storage Admin (or similar) and FIREBASE_STORAGE_BUCKET matches your project.";
       }
-      if (m.includes("seven days") || m.includes("604800")) {
-        message +=
-          " The server signed URL TTL was invalid; redeploy the latest backend (signed read URLs are capped under 7 days).";
-      }
     }
 
     throw new Error(`${prefix}${message}`);

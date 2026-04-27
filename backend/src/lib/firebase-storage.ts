@@ -85,6 +85,13 @@ function sanitizeFilename(filename: string): string {
   return filename.replace(/[^a-zA-Z0-9._-]/g, "_");
 }
 
+/** Stable read URL via Firebase token (no time-limited GCS signing). */
+function firebaseDownloadMediaUrl(bucketId: string, objectPath: string, downloadToken: string): string {
+  const pathEnc = encodeURIComponent(objectPath);
+  const bucketEnc = encodeURIComponent(bucketId);
+  return `https://firebasestorage.googleapis.com/v0/b/${bucketEnc}/o/${pathEnc}?alt=media&token=${downloadToken}`;
+}
+
 /** Parsed object in a bucket we manage (env bucket or its legacy alias). */
 function parseObjectFromStorageUrl(url: string): { bucketId: string; objectPath: string } | null {
   let u: URL;
@@ -192,6 +199,7 @@ export async function uploadFileToFirebaseStorage(params: {
   }
   const bytes = Buffer.from(await file.arrayBuffer());
   const contentType = file.type || "application/octet-stream";
+  const downloadToken = crypto.randomUUID();
 
   let lastErr: unknown;
   for (const bucketId of bucketCandidates()) {
@@ -204,23 +212,14 @@ export async function uploadFileToFirebaseStorage(params: {
         metadata: {
           contentType,
           metadata: {
+            firebaseStorageDownloadTokens: downloadToken,
             uploadedByUserId: userId,
             originalFilename: file.name || "upload",
           },
         },
       });
 
-      // v4 signing rejects (expiration − now) > 604800s; boundary + float noise can throw
-      // "Max allowed expiration is seven days". Keep read URLs short and cap hard under the limit.
-      const SEVEN_DAYS_SEC = 7 * 24 * 60 * 60;
-      // Stay comfortably under GCS’s 604800s v4 limit (boundary + float noise can throw).
-      const ttlSeconds = Math.min(5 * 24 * 60 * 60, SEVEN_DAYS_SEC - 3600);
-      const expiresAt = new Date(Date.now() + ttlSeconds * 1000);
-      const [url] = await target.getSignedUrl({
-        version: "v2",
-        action: "read",
-        expires: expiresAt,
-      });
+      const url = firebaseDownloadMediaUrl(bucketId, storagePath, downloadToken);
 
       return {
         id: objectId,
