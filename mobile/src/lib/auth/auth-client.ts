@@ -172,6 +172,21 @@ export function setAccessTokenFromAuthData(data: unknown): string | null {
   return token;
 }
 
+async function getJwtTokenFromClient(): Promise<string | null> {
+  const client = authClient as unknown as {
+    getJWTToken?: () => Promise<unknown>;
+    getJwtToken?: () => Promise<unknown>;
+  };
+  try {
+    const value = client.getJWTToken ? await client.getJWTToken() : client.getJwtToken ? await client.getJwtToken() : null;
+    if (typeof value === "string" && value.trim()) return value.trim();
+    const picked = pickTokenFromUnknown(value) ?? deepFindToken(value);
+    return picked ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export async function getAccessToken(): Promise<string | null> {
   if (inMemoryAccessToken) return inMemoryAccessToken;
   try {
@@ -184,7 +199,13 @@ export async function getAccessToken(): Promise<string | null> {
     // ignore storage read errors and continue
   }
 
-  let token: string | null = null;
+  let token = await getJwtTokenFromClient();
+  if (token) {
+    setAccessToken(token);
+    return token;
+  }
+
+  token = null;
   try {
     const result = await authClient.getSession();
     const data = (result?.data ?? null) as SessionShape | null;
@@ -215,6 +236,12 @@ export async function getAccessToken(): Promise<string | null> {
     // ignore and return null below
   }
 
+  if (token) {
+    setAccessToken(token);
+    return token;
+  }
+
+  token = await getJwtTokenFromClient();
   if (token) {
     setAccessToken(token);
     return token;

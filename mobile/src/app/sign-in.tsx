@@ -13,14 +13,16 @@ import {
   Modal,
   Pressable,
 } from "react-native";
-import { authClient, setAccessTokenFromAuthData } from "@/lib/auth/auth-client";
+import { authClient, clearAccessToken, getAccessToken, getAuthHeaders, setAccessTokenFromAuthData } from "@/lib/auth/auth-client";
 import { formatAuthFlowError, isEmailNotVerifiedError } from "@/lib/auth/auth-errors";
-import { clearSignedOutMark, useInvalidateSession } from "@/lib/auth/use-session";
+import { clearSignedOutMark, markSessionSignedOut, useInvalidateSession } from "@/lib/auth/use-session";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { StatusBar } from "expo-status-bar";
 import { router, useLocalSearchParams } from "expo-router";
 import { runSignInDiagnostics } from "@/lib/sign-in-diagnostics";
+import { fetch } from "expo/fetch";
+import { readJsonSafe } from "@/lib/api/api";
 
 export default function SignIn() {
   const { reason } = useLocalSearchParams<{ reason?: string }>();
@@ -80,6 +82,8 @@ export default function SignIn() {
           setError(sent.error.message ?? "Could not send verification code. Try again in a moment.");
           return;
         }
+        clearAccessToken();
+        markSessionSignedOut(60_000);
         router.replace({ pathname: "/verify-otp", params: { email: emailNorm } });
         return;
       }
@@ -87,10 +91,39 @@ export default function SignIn() {
         const msg = result.error.message ?? "";
         setError(msg || "Invalid email or password. Please try again.");
       } else {
-        setAccessTokenFromAuthData(result ?? null);
-        setAccessTokenFromAuthData(result.data ?? null);
+        const tokenFromResult =
+          setAccessTokenFromAuthData(result ?? null) ??
+          setAccessTokenFromAuthData(result.data ?? null);
         clearSignedOutMark();
         await invalidateSession();
+        const sessionRes = await authClient.getSession({
+          fetchOptions: {
+            headers: { "X-Force-Fetch": "1" },
+          },
+        } as never);
+        const tokenFromSession =
+          setAccessTokenFromAuthData(sessionRes ?? null) ??
+          setAccessTokenFromAuthData(sessionRes.data ?? null);
+        const tokenFromClient = await getAccessToken();
+        if (!sessionRes.data?.user || (!tokenFromResult && !tokenFromSession && !tokenFromClient)) {
+          setError("Sign-in did not establish a session. Please try again.");
+          return;
+        }
+        const authHeaders = await getAuthHeaders();
+        const backendSessionRes = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/api/me/debug`, {
+          credentials: "include",
+          headers: authHeaders,
+        });
+        const backendJson = await readJsonSafe<{
+          data?: { authenticated?: boolean };
+          error?: { message?: string };
+        }>(backendSessionRes);
+        if (!backendSessionRes.ok || backendJson?.data?.authenticated !== true) {
+          const msg = backendJson?.error?.message ?? "Backend session is not established yet.";
+          setError(`${msg} Please verify your email or try signing in again.`);
+          return;
+        }
+        router.replace("/");
       }
     } catch (err) {
       setError(formatAuthFlowError(err));

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { Eye, EyeOff } from "lucide-react-native";
 import {
   View,
@@ -11,10 +11,10 @@ import {
   Image,
   ScrollView,
 } from "react-native";
-import { authClient, getEmailAuthCallbackUrl, setAccessTokenFromAuthData } from "@/lib/auth/auth-client";
+import { authClient, clearAccessToken } from "@/lib/auth/auth-client";
 import { setPendingSignUp } from "@/lib/auth/pending-signup";
 import { formatAuthFlowError } from "@/lib/auth/auth-errors";
-import { clearSignedOutMark, useInvalidateSession } from "@/lib/auth/use-session";
+import { markSessionSignedOut } from "@/lib/auth/use-session";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { StatusBar } from "expo-status-bar";
@@ -27,17 +27,8 @@ export default function SignUp() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [success, setSuccess] = useState(false);
-  const invalidateSession = useInvalidateSession();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (success) {
-      const timer = setTimeout(() => router.replace("/(app)/team"), 1800);
-      return () => clearTimeout(timer);
-    }
-  }, [success]);
 
   const handleSignUp = async () => {
     setError(null);
@@ -58,50 +49,34 @@ export default function SignUp() {
         name: name.trim(),
         email: emailNorm,
         password,
-        callbackURL: getEmailAuthCallbackUrl(),
       });
       if (result.error) {
         setError(result.error.message ?? "Failed to create account. Please try again.");
         return;
       }
 
-      const user = result.data?.user;
-      setAccessTokenFromAuthData(result ?? null);
-      const token = setAccessTokenFromAuthData(result.data ?? null);
-
-      if (!user) {
+      if (!result.data?.user) {
         setError("Account could not be confirmed. Please try signing in.");
         router.replace("/sign-in");
         return;
       }
 
-      // Better Auth: if requireEmailVerification (or autoSignIn off), sign-up returns user + no token.
-      // Do not call sign-in here — that looks like a failed login before verification.
-      if (!token) {
-        const sent = await authClient.emailOtp.sendVerificationOtp({
-          email: emailNorm,
-          type: "email-verification",
-        });
-        if (sent.error) {
-          setError(
-            sent.error.message ??
-              "Account created. We could not send a verification code — try signing in to receive one.",
-          );
-          router.replace("/sign-in");
-          return;
-        }
-        setPendingSignUp(emailNorm, password);
-        router.replace({ pathname: "/verify-otp", params: { email: emailNorm } });
+      const sent = await authClient.emailOtp.sendVerificationOtp({
+        email: emailNorm,
+        type: "email-verification",
+      });
+      if (sent.error) {
+        setError(
+          sent.error.message ??
+            "Account created, but we could not send a verification code. Please try signing in and resend the code.",
+        );
+        router.replace("/sign-in");
         return;
       }
-
-      try {
-        clearSignedOutMark();
-        await invalidateSession();
-      } catch (refreshErr) {
-        console.warn("[sign-up] Session refresh after sign-up failed:", refreshErr);
-      }
-      setSuccess(true);
+      clearAccessToken();
+      markSessionSignedOut(60_000);
+      setPendingSignUp(emailNorm, password);
+      router.replace({ pathname: "/verify-otp", params: { email: emailNorm } });
     } catch (err) {
       console.warn("[sign-up]", err);
       setError(formatAuthFlowError(err));
@@ -109,25 +84,6 @@ export default function SignUp() {
       setLoading(false);
     }
   };
-  if (success) {
-    return (
-      <View
-        className="flex-1 bg-white dark:bg-slate-900 items-center justify-center px-6"
-        testID="sign-up-success-screen"
-      >
-        <StatusBar style="dark" />
-        <View className="w-24 h-24 rounded-full bg-emerald-500 items-center justify-center mb-6">
-          <Text className="text-5xl text-white leading-[56px]">✓</Text>
-        </View>
-        <Text className="text-2xl font-extrabold text-slate-900 dark:text-white mb-2 text-center">
-          {"You're all set"}
-        </Text>
-        <Text className="text-base text-slate-500 dark:text-slate-400 text-center">
-          Account created and signed in. Opening your workspace…
-        </Text>
-      </View>
-    );
-  }
 
   const header = (
     <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>

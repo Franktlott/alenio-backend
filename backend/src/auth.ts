@@ -44,6 +44,42 @@ function readBearerToken(headers: Headers): string | null {
   return token.trim();
 }
 
+async function getSessionFromNeon(token: string): Promise<{ user: AppUser; expiresAt: Date | null } | null> {
+  try {
+    const result = await neonAuthClient.getSession({
+      query: {
+        disableCookieCache: true,
+        disableRefresh: true,
+      },
+      fetchOptions: {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    } as never);
+    const data = result.data as
+      | {
+          user?: { id?: string; email?: string | null; name?: string | null; image?: string | null };
+          session?: { expiresAt?: Date | string | null };
+        }
+      | null
+      | undefined;
+    const userId = data?.user?.id;
+    if (!userId) return null;
+    return {
+      user: {
+        id: userId,
+        email: data?.user?.email ?? null,
+        name: data?.user?.name ?? null,
+        image: data?.user?.image ?? null,
+      },
+      expiresAt: data?.session?.expiresAt ? new Date(data.session.expiresAt) : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function getSessionFromHeaders(headers: Headers): Promise<{ user: AppUser; session: AppSession } | null> {
   const token = readBearerToken(headers);
   if (!token) return null;
@@ -51,56 +87,43 @@ export async function getSessionFromHeaders(headers: Headers): Promise<{ user: A
     const verified = await jwtVerify(token, jwks, { algorithms: ["RS256"] });
     const claims = verified.payload as DecodedClaims;
     if (!claims.sub) return null;
+    let email = claims.email ?? null;
+    let name = claims.name ?? claims.preferred_username ?? null;
+    let image = claims.picture ?? null;
+    let expiresAt = claims.exp ? new Date(claims.exp * 1000) : null;
+    // Some Neon JWTs omit profile claims. Enrich from Neon Auth session using bearer token.
+    if (!email) {
+      const neon = await getSessionFromNeon(token);
+      if (neon?.user.id === claims.sub) {
+        email = neon.user.email ?? email;
+        name = neon.user.name ?? name;
+        image = neon.user.image ?? image;
+        expiresAt = neon.expiresAt ?? expiresAt;
+      }
+    }
     return {
       user: {
         id: claims.sub,
-        email: claims.email ?? null,
-        name: claims.name ?? claims.preferred_username ?? null,
-        image: claims.picture ?? null,
+        email,
+        name,
+        image,
       },
       session: {
         token,
-        expiresAt: claims.exp ? new Date(claims.exp * 1000) : null,
+        expiresAt,
       },
     };
   } catch {
     // Fallback for non-JWT/rotated token formats: ask Neon Auth directly.
-    try {
-      const result = await neonAuthClient.getSession({
-        query: {
-          disableCookieCache: true,
-          disableRefresh: true,
-        },
-        fetchOptions: {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        },
-      } as never);
-      const data = result.data as
-        | {
-            user?: { id?: string; email?: string | null; name?: string | null; image?: string | null };
-            session?: { expiresAt?: Date | string | null };
-          }
-        | null
-        | undefined;
-      const userId = data?.user?.id;
-      if (!userId) return null;
+    const neon = await getSessionFromNeon(token);
+    if (!neon) return null;
       return {
-        user: {
-          id: userId,
-          email: data?.user?.email ?? null,
-          name: data?.user?.name ?? null,
-          image: data?.user?.image ?? null,
-        },
+        user: neon.user,
         session: {
           token,
-          expiresAt: data?.session?.expiresAt ? new Date(data.session.expiresAt) : null,
+          expiresAt: neon.expiresAt,
         },
       };
-    } catch {
-      return null;
-    }
   }
 }
 

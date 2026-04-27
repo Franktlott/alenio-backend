@@ -115,6 +115,7 @@ function RootLayoutNav() {
     staleTime: 5 * 60 * 1000,
   });
 
+  const hasBackendSession = !!session?.user && !!me?.id;
   const isAdmin = me?.isAdmin === true;
 
   useEffect(() => {
@@ -136,13 +137,13 @@ function RootLayoutNav() {
 
   // Redirect admin users to admin section once their profile loads
   useEffect(() => {
-    if (session?.user && isAdmin) {
+    if (hasBackendSession && isAdmin) {
       router.replace("/(admin)");
     }
-  }, [session?.user, isAdmin]);
+  }, [hasBackendSession, isAdmin]);
 
   useEffect(() => {
-    if (!session?.user) return;
+    if (!hasBackendSession) return;
     // Delay push registration so auth cookies are fully set before the API call
     const pushTimer = setTimeout(() => registerForPushNotificationsAsync(), 1500);
     const appStateSubscription = AppState.addEventListener("change", (nextState) => {
@@ -194,13 +195,13 @@ function RootLayoutNav() {
       notificationListener.current?.remove();
       responseListener.remove();
     };
-  }, [session?.user?.id]);
+  }, [hasBackendSession, session?.user?.id]);
 
   return (
     <View style={{ flex: 1 }}>
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
         <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Protected guard={!!session?.user}>
+          <Stack.Protected guard={hasBackendSession}>
             <Stack.Screen name="(app)" />
             <Stack.Screen name="(admin)" />
             <Stack.Screen name="onboarding" />
@@ -255,7 +256,7 @@ function RootLayoutNav() {
               }}
             />
           </Stack.Protected>
-          <Stack.Protected guard={!session?.user}>
+          <Stack.Protected guard={!hasBackendSession}>
             <Stack.Screen name="sign-in" />
             <Stack.Screen name="sign-up" />
             <Stack.Screen name="forgot-password" />
