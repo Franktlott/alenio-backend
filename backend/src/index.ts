@@ -27,6 +27,7 @@ import { ogPreviewRouter } from "./routes/og-preview";
 import { feedbackRouter } from "./routes/feedback";
 import { sendPushNotificationsStrict } from "./lib/push";
 import { getDatabasePublicSummary } from "./lib/database-public-summary";
+import { syncAppUserFromNeonAuth } from "./lib/ensure-app-user";
 import {
   deleteAllUserStorageObjects,
   deleteStorageObjectByUrlIfOwned,
@@ -80,67 +81,18 @@ app.use("*", async (c, next) => {
       finalAuthenticatedUserId: null,
     });
   } else {
-    let user: { id: string; email: string; name: string; image: string | null } | null = null;
     const sessionEmail = session.user.email?.trim() ?? null;
-    let matchedBy: "auth_user_id" | "email" | "created" | "none" = "none";
+    const synced = await syncAppUserFromNeonAuth(session.user);
+    const user = synced?.user ?? null;
+    const matchedBy: "auth_user_id" | "email" | "created" | "none" = synced?.matchedBy ?? "none";
 
-    // 1) Primary lookup by Neon auth user id.
-    user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: { id: true, email: true, name: true, image: true },
-    });
-    if (user) {
-      matchedBy = "auth_user_id";
-      if (sessionEmail && user.email !== sessionEmail) {
-        user = await prisma.user.update({
-          where: { id: user.id },
-          data: {
-            email: sessionEmail,
-            name: session.user.name ?? user.name ?? sessionEmail.split("@")[0] ?? "User",
-            image: session.user.image ?? user.image ?? undefined,
-          },
-          select: { id: true, email: true, name: true, image: true },
-        });
-      }
-    } else if (sessionEmail) {
-      // 2) Fallback by email to avoid duplicate rows for existing users.
-      const byEmail = await prisma.user.findUnique({
-        where: { email: sessionEmail },
-        select: { id: true, email: true, name: true, image: true },
-      });
-      if (byEmail) {
-        matchedBy = "email";
-        user = byEmail;
-      } else {
-        // 3) Provision a new app user row.
-        try {
-          user = await prisma.user.create({
-            data: {
-              id: session.user.id,
-              email: sessionEmail,
-              name: session.user.name ?? sessionEmail.split("@")[0] ?? "User",
-              image: session.user.image ?? undefined,
-              emailVerified: true,
-            },
-            select: { id: true, email: true, name: true, image: true },
-          });
-          matchedBy = "created";
-        } catch (err) {
-          const code = (err as { code?: string } | null)?.code;
-          // Concurrent create race: pick existing by email.
-          if (code === "P2002") {
-            user = await prisma.user.findUnique({
-              where: { email: sessionEmail },
-              select: { id: true, email: true, name: true, image: true },
-            });
-            matchedBy = user ? "email" : "none";
-          } else {
-            throw err;
-          }
-        }
-      }
-    }
     if (!user) {
+      console.error(
+        "[auth-middleware] Neon session accepted but Prisma user row was not created or found; see [ensure-app-user] logs. authUserId=",
+        session.user.id,
+        "email=",
+        sessionEmail ?? "null",
+      );
       c.set("user", null);
       c.set("session", null);
       c.set("authDebug", {
@@ -167,15 +119,37 @@ app.use("*", async (c, next) => {
 });
 
 // Health check endpoint (database = which store this API instance uses; no secrets)
-app.get("/health", (c) =>
-  c.json({
+app.get("/health", (c) => {
+  let authProjectHint: string | null = null;
+  try {
+    authProjectHint = new URL(env.NEON_AUTH_URL).hostname;
+  } catch {
+    authProjectHint = null;
+  }
+  return c.json({
     status: "ok",
     database: getDatabasePublicSummary(),
     buildMarker: BACKEND_BUILD_MARKER,
     storageProvider: "firebase",
     storageConfigured: isFirebaseStorageConfigured(),
-  })
-);
+    /** Compare with EXPO_PUBLIC_NEON_AUTH_URL from the app — hostnames must be the same Neon Auth project. */
+    neonAuthHostname: authProjectHint,
+  });
+});
+
+/** Explicit Neon Auth → Prisma user sync (middleware already runs sync; this is for the mobile app right after sign-up / verify). */
+app.post("/api/auth/sync-user", (c) => {
+  const user = c.get("user");
+  if (!user) {
+    return c.json({ ok: false, error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
+  }
+  const debug = c.get("authDebug");
+  return c.json({
+    ok: true,
+    user: { id: user.id, email: user.email, name: user.name, image: user.image },
+    matchedBy: debug?.matchedBy ?? null,
+  });
+});
 
 // Email verified success page
 app.get("/email-verified", (c) => {
