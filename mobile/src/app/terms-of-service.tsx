@@ -8,11 +8,12 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { ArrowLeft } from "lucide-react-native";
-
-const LAST_UPDATED = "April 15, 2026";
-const APP_NAME = "Alenio";
-const COMPANY_NAME = "Lott Technologies Group, LLC";
-const CONTACT_EMAIL = "Info@lotttechnologies.com";
+import {
+  LEGAL_APP_NAME as APP_NAME,
+  LEGAL_COMPANY_NAME as COMPANY_NAME,
+  LEGAL_CONTACT_EMAIL as CONTACT_EMAIL,
+  LEGAL_LAST_UPDATED as LAST_UPDATED,
+} from "@/lib/legal-constants";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -101,7 +102,7 @@ export default function TermsOfService() {
 
         <Section title="5. User Content">
           <Body>
-            You retain ownership of content you create and share within {APP_NAME}. By posting content, you grant {COMPANY_NAME} a non-exclusive, worldwide, royalty-free licence to host, store, and display that content solely for the purpose of operating and providing the service. You are solely responsible for your content and represent that it does not violate any third-party rights.
+            You retain ownership of content you create and share within {APP_NAME}. By posting content, you grant {COMPANY_NAME} a non-exclusive, worldwide, royalty-free license to host, store, and display that content solely for the purpose of operating and providing the service. You are solely responsible for your content and represent that it does not violate any third-party rights.
           </Body>
         </Section>
 
@@ -124,7 +125,7 @@ export default function TermsOfService() {
 
         <Section title="7. Intellectual Property">
           <Body>
-            All intellectual property rights in {APP_NAME}, including but not limited to the software, design, logos, trademarks, and content created by {COMPANY_NAME}, are owned by or licenced to {COMPANY_NAME}. You may not copy, modify, distribute, sell, or lease any part of the App or its content without our prior written consent.
+            All intellectual property rights in {APP_NAME}, including but not limited to the software, design, logos, trademarks, and content created by {COMPANY_NAME}, are owned by or licensed to {COMPANY_NAME}. You may not copy, modify, distribute, sell, or lease any part of the App or its content without our prior written consent.
           </Body>
         </Section>
 
@@ -185,7 +186,7 @@ export default function TermsOfService() {
 
         <Section title="16. Governing Law">
           <Body>
-            These Terms shall be governed by and construed in accordance with applicable law. Any disputes arising from these Terms or your use of {APP_NAME} shall be resolved through good-faith negotiation or, failing that, through binding arbitration or the courts of competent jurisdiction.
+            These Terms shall be governed by and construed in accordance with the laws of the United States and the laws of the State where {COMPANY_NAME} is organized, without regard to conflict-of-law principles. Any disputes arising from these Terms or your use of {APP_NAME} shall be resolved through good-faith negotiation first; if unresolved, exclusively in the state and federal courts located in that jurisdiction (unless applicable law requires otherwise).
           </Body>
         </Section>
 

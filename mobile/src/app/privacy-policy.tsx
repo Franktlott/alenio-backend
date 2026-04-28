@@ -8,11 +8,12 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { ArrowLeft } from "lucide-react-native";
-
-const LAST_UPDATED = "April 15, 2026";
-const APP_NAME = "Alenio";
-const COMPANY_NAME = "Lott Technologies Group, LLC";
-const CONTACT_EMAIL = "Info@lotttechnologies.com";
+import {
+  LEGAL_APP_NAME as APP_NAME,
+  LEGAL_COMPANY_NAME as COMPANY_NAME,
+  LEGAL_CONTACT_EMAIL as CONTACT_EMAIL,
+  LEGAL_LAST_UPDATED as LAST_UPDATED,
+} from "@/lib/legal-constants";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -66,7 +67,7 @@ export default function PrivacyPolicy() {
           <Body>We collect the following types of information:</Body>
           <View className="mt-2">
             <Bullet>
-              <Text className="font-semibold">Account Information:</Text> Name, email address, and password when you create an account.
+              <Text className="font-semibold">Account Information:</Text> Name, email address, and credentials when you create an account (including email verification through our authentication provider).
             </Bullet>
             <Bullet>
               <Text className="font-semibold">Profile Information:</Text> Profile photo and any optional details you choose to add.
@@ -78,7 +79,7 @@ export default function PrivacyPolicy() {
               <Text className="font-semibold">Team &amp; Collaboration Data:</Text> Team names, membership information, channels, and associated content.
             </Bullet>
             <Bullet>
-              <Text className="font-semibold">Video Call Data:</Text> When you use video meetings, your display name is shared with the video call provider (Daily.co) to identify you during the call. We do not record or store video or audio content.
+              <Text className="font-semibold">Video Call Data:</Text> When you use video meetings, your display name is shared with the video call provider (Daily.co) to identify you during the call. We do not record or store video or audio content from meetings on our servers.
             </Bullet>
             <Bullet>
               <Text className="font-semibold">Device Information:</Text> Device type, operating system, push notification tokens, and app version.
@@ -110,7 +111,7 @@ export default function PrivacyPolicy() {
               <Text className="font-semibold">Within Your Team:</Text> Content you share (messages, tasks, reactions) is visible to members of your team as part of the App's core functionality.
             </Bullet>
             <Bullet>
-              <Text className="font-semibold">Service Providers:</Text> We use third-party services including RevenueCat (subscription management), Expo/Apple/Google (push notifications), and cloud infrastructure providers. These providers are contractually bound to protect your data.
+              <Text className="font-semibold">Service Providers:</Text> We use third-party services including Neon (database and authentication for accounts and app data), RevenueCat (subscription management), Google Firebase (Android push notifications via FCM and cloud storage for uploaded media such as attachments and profile images), Expo and Apple/Google (push infrastructure and app distribution), Daily.co (video meetings), Resend (email delivery for certain product or support messages), and other cloud infrastructure providers. These providers process data under their respective terms and privacy policies and are engaged to protect your information.
             </Bullet>
             <Bullet>
               <Text className="font-semibold">Legal Requirements:</Text> We may disclose your information if required by law or to protect our rights, users, or the public.
@@ -166,11 +167,13 @@ export default function PrivacyPolicy() {
         <Section title="8. Third-Party Services">
           <Body>The App integrates with the following third-party services, each governed by their own privacy policies:</Body>
           <View className="mt-2">
-            <Bullet>Apple Push Notification Service (APNs) — iOS push notifications</Bullet>
-            <Bullet>Firebase Cloud Messaging (FCM) — Android push notifications</Bullet>
-            <Bullet>RevenueCat — Subscription and in-app purchase management</Bullet>
-            <Bullet>Expo — App infrastructure and over-the-air updates</Bullet>
-            <Bullet>Daily.co — Video call infrastructure. Your display name is passed to Daily.co to identify you during video meetings. Video and audio streams are processed by Daily.co and are not stored by us. Daily.co's privacy policy applies to data processed on their platform.</Bullet>
+            <Bullet>Neon — Database hosting and authentication (sign-in, sessions, and application data storage).</Bullet>
+            <Bullet>Apple Push Notification Service (APNs) — iOS push notifications.</Bullet>
+            <Bullet>Google Firebase — Firebase Cloud Messaging (FCM) for Android push notifications; Firebase Storage for user-uploaded files and media where the App stores attachments.</Bullet>
+            <Bullet>RevenueCat — Subscription and in-app purchase management.</Bullet>
+            <Bullet>Resend — Transactional email (for example when you submit feedback or when we send operational emails).</Bullet>
+            <Bullet>Expo — App infrastructure and updates.</Bullet>
+            <Bullet>Daily.co — Video call infrastructure. Your display name is passed to Daily.co to identify you during video meetings. Video and audio streams are processed by Daily.co and are not stored by {COMPANY_NAME}. Daily.co's terms and privacy policy apply to their processing.</Bullet>
           </View>
         </Section>
 

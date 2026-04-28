@@ -430,7 +430,7 @@ export default function TeamScreen() {
   // ------------------------------------------------------------------
   if (!hasHydrated) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: "#F0F4FF", alignItems: "center", justifyContent: "center" }} edges={["top"]}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: "#F2F3F7", alignItems: "center", justifyContent: "center" }} edges={["top"]}>
         <ActivityIndicator color="#4361EE" size="large" />
       </SafeAreaView>
     );
@@ -440,7 +440,7 @@ export default function TeamScreen() {
     const myRequest = myPendingRequests[0] ?? null;
     if (myRequest) {
       return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: "#F8FAFC" }} edges={[]}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: "#F2F3F7" }} edges={[]}>
           <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ paddingTop: insets.top + 12, paddingHorizontal: 16, paddingBottom: 16 }}>
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
               <Text style={{ color: "white", fontSize: 20, fontWeight: "800", flex: 1 }}>Team</Text>
@@ -512,7 +512,7 @@ export default function TeamScreen() {
       );
     }
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: "#F0F4FF" }} edges={["top"]}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: "#F2F3F7" }} edges={["top"]}>
         <NoTeamPlaceholder />
       </SafeAreaView>
     );
@@ -520,7 +520,7 @@ export default function TeamScreen() {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: "#F0F4FF", alignItems: "center", justifyContent: "center" }} testID="loading-indicator">
+      <SafeAreaView style={{ flex: 1, backgroundColor: "#F2F3F7", alignItems: "center", justifyContent: "center" }} testID="loading-indicator">
         <ActivityIndicator color="#4361EE" />
       </SafeAreaView>
     );
@@ -538,7 +538,7 @@ export default function TeamScreen() {
   // Main render
   // ------------------------------------------------------------------
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#F8FAFC" }} edges={[]} testID="team-screen">
+    <SafeAreaView style={{ flex: 1, backgroundColor: "#F2F3F7" }} edges={[]} testID="team-screen">
 
       {/* ── HEADER ── */}
       <LinearGradient
@@ -883,8 +883,8 @@ export default function TeamScreen() {
                   paddingHorizontal: 14,
                   paddingVertical: 10,
                   borderTopWidth: 1,
-                  borderTopColor: "#F0F4FF",
-                  backgroundColor: isCurrentUser ? "#F0F4FF" : "white",
+                  borderTopColor: "#F1F5F9",
+                  backgroundColor: isCurrentUser ? "#F1F5F9" : "white",
                 }}
               >
                 {/* Avatar */}
