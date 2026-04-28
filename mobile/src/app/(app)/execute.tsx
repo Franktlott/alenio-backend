@@ -21,7 +21,7 @@ import {
 const SCREEN_HEIGHT = Dimensions.get("window").height;
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams, Redirect, useFocusEffect } from "expo-router";
-import { Plus, User, Users, ArrowUpDown, ChevronLeft, ChevronRight, X, CalendarDays, CheckSquare, Calendar, Check, UserRound, Video, VideoOff, Clock, Lock, Globe } from "lucide-react-native";
+import { Plus, User, Users, ArrowUpDown, ChevronLeft, ChevronRight, X, CalendarDays, CheckSquare, Calendar, Check, UserRound, Video, VideoOff, Clock, Lock, Globe, ClipboardList } from "lucide-react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -922,6 +922,8 @@ export default function TasksScreen() {
     return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
   });
 
+  const showTasksEmptyState = !isLoading && tasks.length === 0;
+
   const currentYear = new Date().getFullYear();
   const holidays = [...getUSHolidays(currentYear), ...getUSHolidays(currentYear + 1)];
 
@@ -1215,23 +1217,59 @@ export default function TasksScreen() {
         </View>
 
         {/* Scrollable task list */}
-        <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" colors={["#4361EE"]} />}>
+        <ScrollView
+          style={{ flex: 1 }}
+          showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" colors={["#4361EE"]} />}
+          contentContainerStyle={
+            showTasksEmptyState
+              ? {
+                  flexGrow: 1,
+                  justifyContent: "center",
+                  paddingTop: 8,
+                  // Floating tab bar: absolute bottom insets.bottom+12, height 64 — keep empty state clear
+                  paddingBottom: insets.bottom + 12 + 64 + 16,
+                }
+              : undefined
+          }
+        >
           {/* Task list */}
           {isLoading ? (
             <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: 40 }} testID="loading-indicator">
               <ActivityIndicator color="#4361EE" />
             </View>
           ) : tasks.length === 0 ? (
-            <View style={{ alignItems: "center", justifyContent: "center", paddingHorizontal: 24, paddingVertical: 40 }} testID="empty-state">
-              <Text style={{ fontSize: 40, marginBottom: 12 }}>✓</Text>
-              <Text style={{ fontSize: 17, fontWeight: "600", color: "#94A3B8" }}>
+            <View style={{ alignItems: "center", paddingHorizontal: 20, paddingVertical: 12 }} testID="empty-state">
+              <View style={{ width: 88, height: 88, borderRadius: 44, backgroundColor: "#E8EEFF", alignItems: "center", justifyContent: "center", marginBottom: 14 }}>
+                <ClipboardList size={40} color="#4361EE" strokeWidth={2} />
+                <View
+                  style={{
+                    position: "absolute",
+                    bottom: 6,
+                    right: 6,
+                    width: 28,
+                    height: 28,
+                    borderRadius: 14,
+                    backgroundColor: "#4361EE",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderWidth: 2,
+                    borderColor: "#E8EEFF",
+                  }}
+                >
+                  <Check size={14} color="white" strokeWidth={3} />
+                </View>
+              </View>
+              <Text style={{ fontSize: 17, fontWeight: "700", color: "#0F172A", marginBottom: 4, textAlign: "center" }}>
                 {filter === "completed" ? "No completed tasks" : filter === "assigned" ? "No tasks assigned to others" : "No active tasks"}
               </Text>
-              {filter === "all" && !selectedDay ? (
-                <Text style={{ color: "#CBD5E1", fontSize: 13, marginTop: 4, textAlign: "center" }}>
-                  Tap the + button to create your first task or event
-                </Text>
-              ) : null}
+              <Text style={{ fontSize: 13, color: "#64748B", textAlign: "center", lineHeight: 18, maxWidth: 280 }}>
+                {filter === "completed"
+                  ? "Finished tasks will appear here when you complete them."
+                  : filter === "assigned"
+                    ? "Create a task and assign it to a teammate to see it here."
+                    : "You're all caught up. Time to plan your next win."}
+              </Text>
             </View>
           ) : (
             tasks.slice(0, filter === "all" ? tasks.length : visibleCount).map((task) => (

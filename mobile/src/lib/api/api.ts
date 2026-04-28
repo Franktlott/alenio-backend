@@ -1,5 +1,5 @@
 import { fetch } from "expo/fetch";
-import { authClient, clearAccessToken, getAccessToken, getAuthHeaders } from "../auth/auth-client";
+import { authClient, clearAccessToken, getAuthHeaders, refreshSessionTokens } from "../auth/auth-client";
 
 const baseUrl = process.env.EXPO_PUBLIC_BACKEND_URL!;
 
@@ -42,11 +42,11 @@ const request = async <T>(
 
   let response = await doFetch(authHeaders);
 
-  // RN auth state can lag briefly after sign-in/verification; retry once with a fresh token.
+  // Same pattern as consumer apps: rotate JWT via Neon Auth before treating 401 as logged out.
   if (response.status === 401 && !skipSignOut) {
-    const freshToken = await getAccessToken();
-    if (freshToken) {
-      authHeaders = { ...authHeaders, Authorization: `Bearer ${freshToken}` };
+    const recovered = await refreshSessionTokens();
+    if (recovered) {
+      authHeaders = await getAuthHeaders();
       response = await doFetch(authHeaders);
     }
   }
@@ -80,15 +80,19 @@ export const api = {
 
     let response = await doDelete(authHeaders);
     if (response.status === 401) {
-      const freshToken = await getAccessToken();
-      if (freshToken) {
-        authHeaders = { ...authHeaders, Authorization: `Bearer ${freshToken}` };
+      const recovered = await refreshSessionTokens();
+      if (recovered) {
+        authHeaders = await getAuthHeaders();
         response = await doDelete(authHeaders);
       }
     }
 
     if (!response.ok) {
       const err = await readJsonSafe<ApiErrorBody>(response);
+      if (response.status === 401) {
+        clearAccessToken();
+        authClient.signOut().catch(() => {});
+      }
       throw new Error(err?.error?.message ?? `Request failed: ${response.status}`);
     }
     if (response.status === 204 || response.status === 205) return undefined as T;

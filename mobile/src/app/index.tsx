@@ -1,29 +1,31 @@
 import { Redirect } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
-import { fetch } from 'expo/fetch';
-import { getAuthHeaders } from '@/lib/auth/auth-client';
-import { readJsonSafe } from '@/lib/api/api';
+import { ActivityIndicator, View } from 'react-native';
 import { useSession } from '@/lib/auth/use-session';
+import { fetchMeUser, ME_QUERY_KEY } from '@/lib/auth/me-query';
 
+/** Gate: session + `/api/me` must succeed before entering `(app)` (matches root `Stack.Protected`). */
 export default function Index() {
-  const { data: session, isLoading } = useSession();
-  const { data: me, isLoading: isMeLoading } = useQuery({
-    queryKey: ["me", "index-gate"],
-    queryFn: async () => {
-      const authHeaders = await getAuthHeaders();
-      const res = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/api/me`, {
-        credentials: "include",
-        headers: authHeaders,
-      });
-      if (!res.ok) return null;
-      const json = await readJsonSafe<{ data: { id: string } | null }>(res);
-      return json?.data ?? null;
-    },
+  const { data: session, isLoading: sessionLoading } = useSession();
+  const { data: me, isPending: mePending, isFetching: meFetching } = useQuery({
+    queryKey: ME_QUERY_KEY,
+    queryFn: fetchMeUser,
     enabled: !!session?.user,
-    staleTime: 30_000,
+    staleTime: 5 * 60 * 1000,
   });
 
-  if (isLoading || (session?.user && isMeLoading)) return null;
+  const waitingForSession = sessionLoading;
+  /** Until `/api/me` returns a user id, root guard stays false — keep spinner (RQ v5-safe). */
+  const waitingForProfile = !!session?.user && !me?.id && (mePending || meFetching);
+
+  if (waitingForSession || waitingForProfile) {
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F8FAFC' }}>
+        <ActivityIndicator size="large" color="#4361EE" />
+      </View>
+    );
+  }
+
   if (session?.user && me?.id) return <Redirect href="/(app)/team" />;
   return <Redirect href="/sign-in" />;
 }

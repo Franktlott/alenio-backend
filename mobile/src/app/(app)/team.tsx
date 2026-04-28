@@ -11,6 +11,7 @@ import {
   Pressable,
   Modal,
   RefreshControl,
+  Dimensions,
 } from "react-native";
 import { toast } from "burnt";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -63,24 +64,27 @@ type JoinRequest = {
 // ------------------------------------------------------------------
 // Line chart component
 // ------------------------------------------------------------------
-const CHART_W = 280;
-const CHART_H = 80;
-const CHART_PAD_L = 36;
-const CHART_PAD_B = 24;
-const CHART_PAD_T = 18;
-const CHART_PAD_R = 12;
-
 const yTicks = [60, 80, 100];
 
 function PerformanceChart({ data, dark }: { data: Array<{ label: string; completionPct: number | null }>; dark?: boolean }) {
-  const plotW = CHART_W - CHART_PAD_L - CHART_PAD_R;
-  const plotH = CHART_H - CHART_PAD_T - CHART_PAD_B;
+  const screenW = Dimensions.get("window").width;
+  // Card: marginHorizontal 12 + paddingLeft 16 + paddingRight 20 → inset from screen edges for SVG width
+  const chartW = Math.max(300, Math.min(screenW - 60, 440));
+  const chartH = 120;
+  const padL = 40;
+  const padB = 28;
+  const padT = 22;
+  /** Extra room so top-of-dot labels like "100%" are not clipped at the SVG edge */
+  const padR = 30;
+
+  const plotW = chartW - padL - padR;
+  const plotH = chartH - padT - padB;
   const minY = 55;
   const maxY = 105;
 
   const count = data.length;
-  const toX = (i: number) => count > 1 ? CHART_PAD_L + (i / (count - 1)) * plotW : CHART_PAD_L + plotW / 2;
-  const toY = (v: number) => CHART_PAD_T + plotH - ((v - minY) / (maxY - minY)) * plotH;
+  const toX = (i: number) => (count > 1 ? padL + (i / (count - 1)) * plotW : padL + plotW / 2);
+  const toY = (v: number) => padT + plotH - ((v - minY) / (maxY - minY)) * plotH;
 
   // Build array of { x, y, index } only for non-null points
   const nonNullPoints = data
@@ -104,25 +108,25 @@ function PerformanceChart({ data, dark }: { data: Array<{ label: string; complet
   }
 
   return (
-    <Svg width={CHART_W} height={CHART_H}>
+    <Svg width={chartW} height={chartH}>
       {/* Y-axis grid lines and labels */}
       {yTicks.map((tick) => {
         const cy = toY(tick);
         return (
           <React.Fragment key={tick}>
             <Line
-              x1={CHART_PAD_L}
+              x1={padL}
               y1={cy}
-              x2={CHART_W - CHART_PAD_R}
+              x2={chartW - padR}
               y2={cy}
               stroke={dark ? "rgba(255,255,255,0.08)" : "#E0E7FF"}
               strokeWidth={1}
               strokeDasharray="3,3"
             />
             <SvgText
-              x={CHART_PAD_L - 4}
+              x={padL - 4}
               y={cy + 4}
-              fontSize={9}
+              fontSize={10}
               fill={dark ? "rgba(255,255,255,0.35)" : "#94A3B8"}
               textAnchor="end"
             >
@@ -194,8 +198,8 @@ function PerformanceChart({ data, dark }: { data: Array<{ label: string; complet
         <SvgText
           key={i}
           x={toX(i)}
-          y={CHART_H - 4}
-          fontSize={9}
+          y={chartH - 4}
+          fontSize={10}
           fill={dark ? "rgba(255,255,255,0.35)" : "#94A3B8"}
           textAnchor="middle"
         >
@@ -611,15 +615,15 @@ export default function TeamScreen() {
               ) : null}
             </TouchableOpacity>
 
-            {/* Middle: invite code + name + subtitle */}
+            {/* Middle: team name (primary) + invite code + subtitle */}
             <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 17, fontWeight: "900", color: "white", letterSpacing: 3 }}>
-                {team?.inviteCode}
-              </Text>
-              <Text style={{ fontSize: 13, fontWeight: "700", color: "white", marginTop: 2 }}>
+              <Text style={{ fontSize: 22, fontWeight: "800", color: "white", letterSpacing: -0.3 }} numberOfLines={2}>
                 {team?.name ?? "Team"}
               </Text>
-              <Text style={{ fontSize: 11, color: "rgba(255,255,255,0.65)", marginTop: 2 }}>
+              <Text style={{ fontSize: 14, fontWeight: "700", color: "rgba(255,255,255,0.92)", letterSpacing: 2, marginTop: 6 }}>
+                {team?.inviteCode}
+              </Text>
+              <Text style={{ fontSize: 11, color: "rgba(255,255,255,0.65)", marginTop: 3 }}>
                 Share this code to invite team members
               </Text>
             </View>
@@ -727,7 +731,10 @@ export default function TeamScreen() {
               borderRadius: 20,
               marginHorizontal: 12,
               marginTop: 10,
-              padding: 16,
+              paddingTop: 16,
+              paddingBottom: 16,
+              paddingLeft: 16,
+              paddingRight: 20,
               shadowColor: "#000",
               shadowOpacity: 0.06,
               shadowRadius: 12,
@@ -750,40 +757,40 @@ export default function TeamScreen() {
             </View>
 
             {/* Chart */}
-            <View style={{ alignItems: "center" }}>
+            <View style={{ alignItems: "center", overflow: "visible" }}>
               <PerformanceChart data={monthlyStats ?? []} />
             </View>
 
             {/* Footer */}
             <View
               style={{
-                marginTop: 12,
-                paddingTop: 12,
+                marginTop: 10,
+                paddingTop: 10,
                 borderTopWidth: 1,
                 borderTopColor: "#F1F5F9",
                 flexDirection: "row",
                 alignItems: "center",
-                gap: 10,
+                gap: 8,
               }}
             >
-              <Text style={{ fontSize: 12, color: "#64748B", flex: 1 }}>
+              <Text style={{ fontSize: 10, lineHeight: 14, color: "#64748B", flex: 1 }}>
                 6-month completion rate{" "}
-                <Text style={{ fontWeight: "800", color: "#0F172A" }}>
+                <Text style={{ fontSize: 10, fontWeight: "800", color: "#0F172A" }}>
                   {avgCompletionPct !== null ? `${avgCompletionPct}%` : "—"}
                 </Text>
               </Text>
-              <View style={{ width: 72, height: 4, borderRadius: 2, backgroundColor: "#EEF2FF", overflow: "hidden" }}>
+              <View style={{ width: 64, height: 3, borderRadius: 2, backgroundColor: "#EEF2FF", overflow: "hidden" }}>
                 <View
                   style={{
-                    height: 4,
+                    height: 3,
                     borderRadius: 2,
                     backgroundColor: "#4361EE",
                     width: `${avgCompletionPct ?? 0}%`,
                   }}
                 />
               </View>
-              <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: "#EEF2FF", alignItems: "center", justifyContent: "center" }}>
-                <CheckCircle2 size={13} color="#4361EE" />
+              <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: "#EEF2FF", alignItems: "center", justifyContent: "center" }}>
+                <CheckCircle2 size={12} color="#4361EE" />
               </View>
             </View>
           </View>

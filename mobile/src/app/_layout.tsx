@@ -14,9 +14,8 @@ import * as Notifications from 'expo-notifications';
 import * as Haptics from 'expo-haptics';
 import { registerForPushNotificationsAsync } from '@/lib/notifications';
 import { initRevenueCat } from '@/lib/revenue-cat';
-import { fetch } from 'expo/fetch';
-import { getAuthHeaders } from '@/lib/auth/auth-client';
-import { readJsonSafe } from '@/lib/api/api';
+import { fetchMeUser, ME_QUERY_KEY } from '@/lib/auth/me-query';
+import { ensureSessionFreshOnForeground } from '@/lib/auth/auth-client';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -100,17 +99,8 @@ function RootLayoutNav() {
 
   // Fetch full user profile to check admin status
   const { data: me } = useQuery({
-    queryKey: ["me"],
-    queryFn: async () => {
-      const authHeaders = await getAuthHeaders();
-      const res = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/api/me`, {
-        credentials: "include",
-        headers: authHeaders,
-      });
-      if (!res.ok) return null;
-      const json = await readJsonSafe<{ data: { id: string; name: string; email: string; image: string | null; isAdmin: boolean } | null }>(res);
-      return json?.data ?? null;
-    },
+    queryKey: ME_QUERY_KEY,
+    queryFn: fetchMeUser,
     enabled: !!session?.user,
     staleTime: 5 * 60 * 1000,
   });
@@ -134,6 +124,14 @@ function RootLayoutNav() {
       return () => clearTimeout(t);
     }
   }, [isLoading, sessionSettled]);
+
+  // Rotate JWT when returning from background if expiry is soon (consumer-app style persistence).
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void ensureSessionFreshOnForeground();
+    });
+    return () => sub.remove();
+  }, []);
 
   // Redirect admin users to admin section once their profile loads
   useEffect(() => {

@@ -79,15 +79,38 @@ function ensurePushTokenListener() {
   pushTokenListener = Notifications.addPushTokenListener(() => {});
 }
 
-// Suppress system alerts when app is in the foreground
+const PREVIEW_DATA_KEY = "alenioSoundPreview";
+
+/** Foreground behavior: hide normal pushes (token flow unchanged). Allow sound for Settings → sound preview only. */
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldPlaySound: false,
-    shouldSetBadge: true,
-    shouldShowBanner: false,
-    shouldShowList: false,
-  }),
+  handleNotification: async (notification) => {
+    const data = notification.request.content.data as Record<string, unknown> | undefined;
+    const isSoundPreview = data?.[PREVIEW_DATA_KEY] === true;
+    if (isSoundPreview) {
+      return {
+        shouldPlaySound: true,
+        shouldSetBadge: false,
+        shouldShowBanner: true,
+        shouldShowList: true,
+      };
+    }
+    return {
+      shouldPlaySound: false,
+      shouldSetBadge: true,
+      shouldShowBanner: false,
+      shouldShowList: false,
+    };
+  },
 });
+
+export const notificationPreviewDataKey = PREVIEW_DATA_KEY;
+
+/** Call before local sound preview on Android if channels were never created (e.g. opened Settings before push registration). */
+export async function ensureAndroidChannelsForPreview(): Promise<void> {
+  if (Platform.OS !== "android") return;
+  const main = await Notifications.getNotificationChannelAsync("alenio_main").catch(() => null);
+  if (!main) await setupAndroidChannels();
+}
 
 async function setupAndroidChannels() {
   if (Platform.OS !== "android") return;

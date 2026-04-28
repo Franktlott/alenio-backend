@@ -13,7 +13,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { LinearGradient } from "expo-linear-gradient";
-import { MessageCircle, Users, Lock, Plus } from "lucide-react-native";
+import { MessageCircle, Users, Lock, Plus, Sparkles } from "lucide-react-native";
 import { router } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
@@ -250,9 +250,33 @@ export default function ChatScreen() {
             <ActivityIndicator color="#4361EE" />
           </View>
         ) : conversations.length === 0 ? (
-          <View style={{ marginHorizontal: 16, backgroundColor: "white", borderRadius: 20, padding: 24, alignItems: "center" }}>
-            <Text style={{ color: "#94A3B8", fontSize: 14, marginBottom: 4 }}>No conversations yet</Text>
-            <Text style={{ color: "#CBD5E1", fontSize: 12 }}>Tap + Add to start a DM or group</Text>
+          <View style={{ alignItems: "center", paddingHorizontal: 20, paddingVertical: 16 }} testID="conversations-empty-state">
+            <View style={{ width: 88, height: 88, borderRadius: 44, backgroundColor: "#E8EEFF", alignItems: "center", justifyContent: "center", marginBottom: 14 }}>
+              <MessageCircle size={40} color="#4361EE" strokeWidth={2} />
+              <View
+                style={{
+                  position: "absolute",
+                  bottom: 6,
+                  right: 6,
+                  width: 28,
+                  height: 28,
+                  borderRadius: 14,
+                  backgroundColor: "#4361EE",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderWidth: 2,
+                  borderColor: "#E8EEFF",
+                }}
+              >
+                <Sparkles size={14} color="white" strokeWidth={2} />
+              </View>
+            </View>
+            <Text style={{ fontSize: 17, fontWeight: "700", color: "#0F172A", marginBottom: 4, textAlign: "center" }}>
+              No conversations yet
+            </Text>
+            <Text style={{ fontSize: 13, color: "#64748B", textAlign: "center", lineHeight: 18, maxWidth: 280 }}>
+              Big moments often begin as small hellos. Reach out to a teammate—alignment, ideas, and wins start in threads like these.
+            </Text>
           </View>
         ) : (
           conversations.map((conv) => {

@@ -31,6 +31,7 @@ import { router } from "expo-router";
 import { useMutation, useQuery, useQueryClient, useQueries } from "@tanstack/react-query";
 import { api } from "@/lib/api/api";
 import { readJsonSafe } from "@/lib/api/api";
+import { ME_QUERY_KEY } from "@/lib/auth/me-query";
 import { uploadFile } from "@/lib/upload";
 import { pickImage, takePhoto } from "@/lib/file-picker";
 import * as ImagePicker from "expo-image-picker";
@@ -122,6 +123,14 @@ export default function ProfileScreen() {
     enabled: !!user,
   });
 
+  /** Backend profile (includes `image` from DB); auth session often omits photo URL — same source as team member avatars. */
+  const { data: meProfile } = useQuery({
+    queryKey: ME_QUERY_KEY,
+    queryFn: () =>
+      api.get<{ id: string; name: string; email: string; image: string | null; isAdmin?: boolean }>("/api/me"),
+    enabled: !!user,
+  });
+
   // Join requests for the team being edited (owner only)
   const { data: joinRequests = [], refetch: refetchRequests } = useQuery({
     queryKey: ["join-requests", editingTeam?.id],
@@ -176,6 +185,7 @@ export default function ProfileScreen() {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: SESSION_QUERY_KEY });
+      await queryClient.invalidateQueries({ queryKey: ME_QUERY_KEY });
       setLocalImage(null);
     },
     onError: (err: Error) => {
@@ -352,8 +362,10 @@ export default function ProfileScreen() {
     router.replace("/sign-in");
   };
 
-  const avatarUri = localImage ?? user?.image ?? null;
-  const avatarInitial = user?.name?.trim()?.[0]?.toUpperCase() ?? "?";
+  const displayName = meProfile?.name ?? user?.name;
+  const displayEmail = meProfile?.email ?? user?.email;
+  const avatarUri = localImage ?? meProfile?.image ?? user?.image ?? null;
+  const avatarInitial = displayName?.trim()?.[0]?.toUpperCase() ?? "?";
   const showAvatarImage = !!avatarUri && avatarFailedUri !== avatarUri;
 
   useEffect(() => {
@@ -507,6 +519,8 @@ export default function ProfileScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
+    await queryClient.invalidateQueries({ queryKey: ME_QUERY_KEY });
+    await queryClient.invalidateQueries({ queryKey: SESSION_QUERY_KEY });
     await queryClient.invalidateQueries({ queryKey: ["teams"] });
     await queryClient.invalidateQueries({ queryKey: ["notification-preferences"] });
     await queryClient.invalidateQueries({ queryKey: ["join-requests", editingTeam?.id] });
@@ -621,9 +635,9 @@ export default function ProfileScreen() {
           </TouchableOpacity>
 
           {/* Name */}
-          <Text style={{ fontSize: 20, fontWeight: "700", color: nameColor, marginBottom: 4 }}>{user?.name}</Text>
+          <Text style={{ fontSize: 20, fontWeight: "700", color: nameColor, marginBottom: 4 }}>{displayName}</Text>
 
-          <Text style={{ fontSize: 14, color: emailColor }}>{user?.email}</Text>
+          <Text style={{ fontSize: 14, color: emailColor }}>{displayEmail}</Text>
         </View>
 
         {/* Teams */}

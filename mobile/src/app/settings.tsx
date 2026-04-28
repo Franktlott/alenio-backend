@@ -13,7 +13,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";
 import { Bell, Check, Volume2, X } from "lucide-react-native";
 import { useSession } from "@/lib/auth/use-session";
-import { getNotifDebugLog, getNotifStatus } from "@/lib/notifications";
+import { ensureAndroidChannelsForPreview, getNotifDebugLog, getNotifStatus, notificationPreviewDataKey } from "@/lib/notifications";
 import { router } from "expo-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api/api";
@@ -99,6 +99,7 @@ export default function SettingsScreen() {
 
   const playPreview = async (tone: string) => {
     if (tone === "silent") return;
+    await ensureAndroidChannelsForPreview();
     const soundFile = tone === "default" ? "default" : `${tone}.wav`;
     const channelId = tone === "default" ? "alenio_main" : `alenio_${tone}`;
     await Notifications.scheduleNotificationAsync({
@@ -106,6 +107,7 @@ export default function SettingsScreen() {
         title: "Sound Preview",
         body: `Testing ${tone === "default" ? "Default" : tone.charAt(0).toUpperCase() + tone.slice(1)} sound`,
         sound: soundFile,
+        data: { [notificationPreviewDataKey]: true },
       },
       trigger:
         Platform.OS === "android"

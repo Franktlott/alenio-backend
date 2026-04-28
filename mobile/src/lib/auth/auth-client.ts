@@ -140,6 +140,108 @@ function looksLikeJwt(v: string): boolean {
   return v.split(".").length === 3;
 }
 
+/** JWT `exp` claim in ms, or null if missing / not a JWT payload. */
+function decodeJwtExpMs(token: string): number | null {
+  try {
+    const parts = token.split(".");
+    if (parts.length !== 3) return null;
+    let base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const pad = base64.length % 4;
+    if (pad) base64 += "=".repeat(4 - pad);
+    let decoded: string;
+    if (typeof atob !== "undefined") {
+      decoded = atob(base64);
+    } else if (typeof Buffer !== "undefined") {
+      decoded = Buffer.from(base64, "base64").toString("utf8");
+    } else {
+      return null;
+    }
+    const payload = JSON.parse(decoded) as { exp?: number };
+    return typeof payload.exp === "number" ? payload.exp * 1000 : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Refresh access token this many minutes before JWT expiry (consumer-app style stay logged in). */
+const REFRESH_BEFORE_EXPIRY_MS = 5 * 60 * 1000;
+/** Clock skew: treat JWT as expired this many ms before `exp`. */
+const JWT_EXPIRY_SKEW_MS = 30 * 1000;
+
+function shouldProactivelyRefreshJwt(token: string): boolean {
+  const expMs = decodeJwtExpMs(token);
+  if (!expMs) return false;
+  return expMs - REFRESH_BEFORE_EXPIRY_MS <= Date.now();
+}
+
+function isJwtExpiredBeyondGrace(token: string): boolean {
+  const expMs = decodeJwtExpMs(token);
+  if (!expMs) return false;
+  return Date.now() >= expMs - JWT_EXPIRY_SKEW_MS;
+}
+
+let refreshInFlight: Promise<boolean> | null = null;
+
+/**
+ * Ask Neon Auth for an updated session/JWT using the current bearer (force network).
+ * Call when a JWT is near expiry or after a 401, before signing the user out.
+ */
+export async function refreshSessionTokens(): Promise<boolean> {
+  if (refreshInFlight) return refreshInFlight;
+
+  const run = async (): Promise<boolean> => {
+    try {
+      let bearer = inMemoryAccessToken?.trim() ?? null;
+      if (!bearer) {
+        try {
+          bearer = (await AsyncStorage.getItem(ACCESS_TOKEN_KEY))?.trim() ?? null;
+        } catch {
+          bearer = null;
+        }
+      }
+      if (!bearer) return false;
+
+      const forced = await authClient.getSession({
+        fetchOptions: {
+          headers: {
+            "X-Force-Fetch": "1",
+            Authorization: `Bearer ${bearer}`,
+          },
+        },
+      } as never);
+
+      const next =
+        setAccessTokenFromAuthData(forced?.data ?? null) ??
+        setAccessTokenFromAuthData(forced ?? null);
+      return !!next;
+    } catch {
+      return false;
+    }
+  };
+
+  refreshInFlight = run().finally(() => {
+    refreshInFlight = null;
+  });
+  return refreshInFlight;
+}
+
+/** When returning to the app, refresh if the access token expires within this window. */
+const FOREGROUND_REFRESH_WITHIN_MS = 12 * 60 * 1000;
+
+export async function ensureSessionFreshOnForeground(): Promise<void> {
+  try {
+    let token = inMemoryAccessToken?.trim() ?? null;
+    if (!token) token = (await AsyncStorage.getItem(ACCESS_TOKEN_KEY))?.trim() ?? null;
+    if (!token || !looksLikeJwt(token)) return;
+    const expMs = decodeJwtExpMs(token);
+    if (!expMs) return;
+    if (expMs - Date.now() > FOREGROUND_REFRESH_WITHIN_MS) return;
+    await refreshSessionTokens();
+  } catch {
+    /* ignore */
+  }
+}
+
 function deepFindToken(data: unknown, depth = 0): string | null {
   if (!data || depth > 5) return null;
   if (typeof data === "string") {
@@ -188,18 +290,35 @@ async function getJwtTokenFromClient(): Promise<string | null> {
 }
 
 export async function getAccessToken(): Promise<string | null> {
-  if (inMemoryAccessToken) return inMemoryAccessToken;
-  try {
-    const stored = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
-    if (stored?.trim()) {
-      inMemoryAccessToken = stored.trim();
-      return inMemoryAccessToken;
+  async function loadFromStorage(): Promise<string | null> {
+    if (inMemoryAccessToken?.trim()) return inMemoryAccessToken.trim();
+    try {
+      const stored = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
+      if (stored?.trim()) {
+        inMemoryAccessToken = stored.trim();
+        return inMemoryAccessToken;
+      }
+    } catch {
+      // ignore storage read errors and continue
     }
-  } catch {
-    // ignore storage read errors and continue
+    return null;
   }
 
-  let token = await getJwtTokenFromClient();
+  let token = await loadFromStorage();
+
+  if (token && looksLikeJwt(token)) {
+    if (shouldProactivelyRefreshJwt(token) || isJwtExpiredBeyondGrace(token)) {
+      await refreshSessionTokens();
+      token = await loadFromStorage();
+    }
+    if (token && (!looksLikeJwt(token) || !isJwtExpiredBeyondGrace(token))) {
+      return token.trim();
+    }
+  } else if (token?.trim()) {
+    return token.trim();
+  }
+
+  token = await getJwtTokenFromClient();
   if (token) {
     setAccessToken(token);
     return token;

@@ -20,7 +20,6 @@ import { CameraView, useCameraPermissions } from "expo-camera";
 import { api } from "@/lib/api/api";
 import { useTeamStore } from "@/lib/state/team-store";
 import type { Team } from "@/lib/types";
-import { runSignInDiagnostics } from "@/lib/sign-in-diagnostics";
 import { useSession } from "@/lib/auth/use-session";
 
 type JoinResult =
@@ -53,10 +52,6 @@ export default function OnboardingScreen() {
   } | null>(null);
   const [isPolling, setIsPolling] = useState(false);
   const [cooldownUntilMs, setCooldownUntilMs] = useState<number>(0);
-  const [diagOpen, setDiagOpen] = useState(false);
-  const [diagLoading, setDiagLoading] = useState(false);
-  const [diagReport, setDiagReport] = useState<string>("");
-
   const queryClient = useQueryClient();
   const setActiveTeamId = useTeamStore((s) => s.setActiveTeamId);
   const insets = useSafeAreaInsets();
@@ -198,20 +193,6 @@ export default function OnboardingScreen() {
       // ignore
     } finally {
       setIsPolling(false);
-    }
-  };
-
-  const handleRunDiagnostics = async () => {
-    setDiagOpen(true);
-    setDiagLoading(true);
-    setDiagReport("");
-    try {
-      const report = await runSignInDiagnostics();
-      setDiagReport(report);
-    } catch (e) {
-      setDiagReport(`Diagnostics failed:\n${e instanceof Error ? e.message : String(e)}`);
-    } finally {
-      setDiagLoading(false);
     }
   };
 
@@ -535,28 +516,6 @@ export default function OnboardingScreen() {
               </TouchableOpacity>
             </View>
           )}
-
-          <Pressable
-            style={{
-              marginTop: 16,
-              borderWidth: 1,
-              borderColor: "#CBD5E1",
-              borderRadius: 12,
-              paddingVertical: 12,
-              paddingHorizontal: 12,
-              backgroundColor: "white",
-            }}
-            onPress={handleRunDiagnostics}
-            disabled={diagLoading}
-            testID="onboarding-diagnostics-button"
-          >
-            <Text style={{ color: "#475569", fontSize: 13, fontWeight: "600", textAlign: "center" }}>
-              Diagnose connection
-            </Text>
-            <Text style={{ color: "#94A3B8", fontSize: 12, textAlign: "center", marginTop: 4 }}>
-              Check auth, backend, database, and push setup
-            </Text>
-          </Pressable>
         </ScrollView>
       </KeyboardAvoidingView>
 
@@ -622,73 +581,6 @@ export default function OnboardingScreen() {
             </View>
           </CameraView>
         </View>
-      </Modal>
-
-      <Modal
-        visible={diagOpen}
-        animationType="fade"
-        transparent
-        onRequestClose={() => setDiagOpen(false)}
-        testID="onboarding-diagnostics-modal"
-      >
-        <Pressable
-          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.55)", justifyContent: "flex-end" }}
-          onPress={() => setDiagOpen(false)}
-          testID="onboarding-diagnostics-backdrop"
-        >
-          <Pressable
-            style={{
-              backgroundColor: "white",
-              borderTopLeftRadius: 24,
-              borderTopRightRadius: 24,
-              maxHeight: "85%",
-              borderTopWidth: 1,
-              borderLeftWidth: 1,
-              borderRightWidth: 1,
-              borderColor: "#E2E8F0",
-            }}
-            onPress={(ev) => ev.stopPropagation()}
-          >
-            <View style={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 12, borderBottomWidth: 1, borderColor: "#E2E8F0" }}>
-              <Text style={{ fontSize: 18, fontWeight: "600", color: "#0F172A" }}>
-                Connection diagnostics
-              </Text>
-              <Text style={{ color: "#64748B", fontSize: 12, marginTop: 4 }}>
-                Use this report for support if auth or team setup fails.
-              </Text>
-            </View>
-            <ScrollView
-              style={{ maxHeight: 420 }}
-              contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 16 }}
-              keyboardShouldPersistTaps="handled"
-              testID="onboarding-diagnostics-scroll"
-            >
-              {diagLoading ? (
-                <View style={{ paddingVertical: 48, alignItems: "center" }} testID="onboarding-diagnostics-loading">
-                  <ActivityIndicator size="large" color="#6366F1" />
-                  <Text style={{ color: "#64748B", fontSize: 13, marginTop: 14 }}>Running checks...</Text>
-                </View>
-              ) : (
-                <Text
-                  style={{ fontSize: 12, lineHeight: 18, color: "#1E293B", fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace" }}
-                  selectable
-                  testID="onboarding-diagnostics-report"
-                >
-                  {diagReport || "—"}
-                </Text>
-              )}
-            </ScrollView>
-            <View style={{ paddingHorizontal: 20, paddingBottom: 24, paddingTop: 8 }}>
-              <Pressable
-                style={{ backgroundColor: "#4F46E5", borderRadius: 12, paddingVertical: 14, alignItems: "center" }}
-                onPress={() => setDiagOpen(false)}
-                testID="onboarding-diagnostics-close"
-              >
-                <Text style={{ color: "white", fontWeight: "600" }}>Close</Text>
-              </Pressable>
-            </View>
-          </Pressable>
-        </Pressable>
       </Modal>
     </SafeAreaView>
   );

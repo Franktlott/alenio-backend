@@ -14,11 +14,13 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { StatusBar } from "expo-status-bar";
 import { router, useLocalSearchParams } from "expo-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { authClient, setAccessTokenFromAuthData } from "@/lib/auth/auth-client";
 import { provisionBackendUserAfterAuth } from "@/lib/auth/sync-backend-user";
 import { formatAuthFlowError } from "@/lib/auth/auth-errors";
 import { clearPendingSignUp, getPendingSignUp } from "@/lib/auth/pending-signup";
 import { clearSignedOutMark, useInvalidateSession } from "@/lib/auth/use-session";
+import { fetchMeUser, ME_QUERY_KEY } from "@/lib/auth/me-query";
 
 /** Better Auth defaults to 6; some projects use longer OTPs. */
 const OTP_MIN_LEN = 6;
@@ -35,6 +37,7 @@ export default function VerifyOtp() {
   const [error, setError] = useState<string | null>(null);
   const [resendHint, setResendHint] = useState<string | null>(null);
   const invalidateSession = useInvalidateSession();
+  const queryClient = useQueryClient();
 
   const handleVerify = async () => {
     setError(null);
@@ -98,7 +101,16 @@ export default function VerifyOtp() {
       if (sessionRes.data?.user) {
         await provisionBackendUserAfterAuth();
         clearSignedOutMark();
-        router.replace("/");
+        queryClient.removeQueries({ queryKey: ME_QUERY_KEY });
+        const me = await queryClient.fetchQuery({
+          queryKey: ME_QUERY_KEY,
+          queryFn: fetchMeUser,
+        });
+        if (!me?.id) {
+          router.replace("/sign-in");
+          return;
+        }
+        router.replace("/(app)/team");
       } else {
         router.replace("/sign-in");
       }

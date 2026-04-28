@@ -10,8 +10,6 @@ import {
   ActivityIndicator,
   Image,
   ScrollView,
-  Modal,
-  Pressable,
 } from "react-native";
 import { authClient, clearAccessToken, getAccessToken, getAuthHeaders, setAccessTokenFromAuthData } from "@/lib/auth/auth-client";
 import { formatAuthFlowError, isEmailNotVerifiedError } from "@/lib/auth/auth-errors";
@@ -20,10 +18,11 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { StatusBar } from "expo-status-bar";
 import { router, useLocalSearchParams } from "expo-router";
-import { runSignInDiagnostics } from "@/lib/sign-in-diagnostics";
+import { useQueryClient } from "@tanstack/react-query";
 import { fetch } from "expo/fetch";
 import { readJsonSafe } from "@/lib/api/api";
 import { provisionBackendUserAfterAuth } from "@/lib/auth/sync-backend-user";
+import { fetchMeUser, ME_QUERY_KEY } from "@/lib/auth/me-query";
 
 const SIGN_IN_BUILD_MARKER = process.env.EXPO_PUBLIC_SIGNIN_BUILD_MARKER ?? "signin-marker-2026-04-27-01";
 
@@ -34,30 +33,14 @@ export default function SignIn() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [diagOpen, setDiagOpen] = useState(false);
-  const [diagLoading, setDiagLoading] = useState(false);
-  const [diagReport, setDiagReport] = useState<string>("");
   const invalidateSession = useInvalidateSession();
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     if (reason === "session-required") {
       setError("Please sign in again to continue.");
     }
   }, [reason]);
-
-  const handleRunDiagnostics = async () => {
-    setDiagOpen(true);
-    setDiagLoading(true);
-    setDiagReport("");
-    try {
-      const report = await runSignInDiagnostics();
-      setDiagReport(report);
-    } catch (e) {
-      setDiagReport(`Diagnostics failed:\n${e instanceof Error ? e.message : String(e)}`);
-    } finally {
-      setDiagLoading(false);
-    }
-  };
 
   const handleSignIn = async () => {
     setError(null);
@@ -127,7 +110,16 @@ export default function SignIn() {
           setError(`${msg} Please verify your email or try signing in again.`);
           return;
         }
-        router.replace("/");
+        queryClient.removeQueries({ queryKey: ME_QUERY_KEY });
+        const me = await queryClient.fetchQuery({
+          queryKey: ME_QUERY_KEY,
+          queryFn: fetchMeUser,
+        });
+        if (!me?.id) {
+          setError("Could not load your profile. Try signing in again.");
+          return;
+        }
+        router.replace("/(app)/team");
       }
     } catch (err) {
       setError(formatAuthFlowError(err));
@@ -235,20 +227,6 @@ export default function SignIn() {
                 )}
               </TouchableOpacity>
 
-              <Pressable
-                className="mt-4 py-3 px-4 rounded-xl border border-slate-200 dark:border-slate-600 items-center active:opacity-70"
-                onPress={handleRunDiagnostics}
-                disabled={diagLoading}
-                testID="connection-diagnostics-button"
-              >
-                <Text className="text-slate-600 dark:text-slate-300 text-sm font-medium text-center">
-                  Diagnose connection &amp; notifications
-                </Text>
-                <Text className="text-slate-400 dark:text-slate-500 text-xs mt-1 text-center">
-                  Checks server reachability and push setup (no password stored)
-                </Text>
-              </Pressable>
-
               <View className="flex-row justify-center items-center mt-6">
                 <Text className="text-slate-500 text-sm">Don't have an account? </Text>
                 <TouchableOpacity onPress={() => router.push("/sign-up")} testID="sign-up-link">
@@ -278,65 +256,6 @@ export default function SignIn() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-
-      <Modal
-        visible={diagOpen}
-        animationType="fade"
-        transparent
-        onRequestClose={() => setDiagOpen(false)}
-        testID="connection-diagnostics-modal"
-      >
-        <Pressable
-          className="flex-1 bg-black/55 justify-end"
-          onPress={() => setDiagOpen(false)}
-          testID="connection-diagnostics-backdrop"
-        >
-          <Pressable
-            className="bg-white dark:bg-slate-900 rounded-t-3xl max-h-[85%] border-t border-x border-slate-100 dark:border-slate-800"
-            onPress={(ev) => ev.stopPropagation()}
-          >
-            <View className="px-5 pt-5 pb-3 border-b border-slate-100 dark:border-slate-800">
-              <Text className="text-lg font-semibold text-slate-900 dark:text-white">
-                Connection &amp; notifications
-              </Text>
-              <Text className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                Includes which database the API is using, reachability, and push setup. Share with support if
-                sign-in or alerts fail.
-              </Text>
-            </View>
-            <ScrollView
-              className="px-5 py-4"
-              style={{ maxHeight: 420 }}
-              keyboardShouldPersistTaps="handled"
-              testID="connection-diagnostics-scroll"
-            >
-              {diagLoading ? (
-                <View className="py-12 items-center" testID="connection-diagnostics-loading">
-                  <ActivityIndicator size="large" color="#6366F1" />
-                  <Text className="text-slate-500 dark:text-slate-400 text-sm mt-4">Running checks…</Text>
-                </View>
-              ) : (
-                <Text
-                  className="text-xs leading-5 text-slate-800 dark:text-slate-200 font-mono"
-                  selectable
-                  testID="connection-diagnostics-report"
-                >
-                  {diagReport || "—"}
-                </Text>
-              )}
-            </ScrollView>
-            <View className="px-5 pb-6 pt-2">
-              <Pressable
-                className="bg-indigo-600 rounded-xl py-3.5 items-center active:opacity-90"
-                onPress={() => setDiagOpen(false)}
-                testID="connection-diagnostics-close"
-              >
-                <Text className="text-white font-semibold">Close</Text>
-              </Pressable>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
     </View>
   );
 }
