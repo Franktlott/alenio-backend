@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { prisma } from "../prisma";
 import { auth } from "../auth";
 import { authGuard } from "../middleware/auth-guard";
+import { env } from "../env";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -10,6 +11,126 @@ type Variables = {
 
 const subscriptionRouter = new Hono<{ Variables: Variables }>();
 subscriptionRouter.use("*", authGuard);
+
+type RevenueCatEntitlementStatus = {
+  isActive: boolean;
+  currentPeriodEnd: Date | null;
+  configured: boolean;
+};
+
+async function getRevenueCatEntitlementStatus(appUserId: string): Promise<RevenueCatEntitlementStatus> {
+  if (!env.REVENUECAT_SECRET_KEY) {
+    return { isActive: false, currentPeriodEnd: null, configured: false };
+  }
+
+  const url = `https://api.revenuecat.com/v1/subscribers/${encodeURIComponent(appUserId)}`;
+  const response = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${env.REVENUECAT_SECRET_KEY}`,
+      Accept: "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`RevenueCat lookup failed (${response.status})`);
+  }
+
+  const json = await response.json().catch(() => null) as
+    | {
+        subscriber?: {
+          entitlements?: Record<string, { expires_date?: string | null }>;
+        };
+      }
+    | null;
+
+  const entitlementId = env.REVENUECAT_TEAM_ENTITLEMENT_ID || "Team";
+  const entitlement = json?.subscriber?.entitlements?.[entitlementId];
+  if (!entitlement) {
+    return { isActive: false, currentPeriodEnd: null, configured: true };
+  }
+
+  const expiresAt = entitlement.expires_date ? new Date(entitlement.expires_date) : null;
+  const isActive = !expiresAt || expiresAt.getTime() > Date.now();
+  return {
+    isActive,
+    currentPeriodEnd: expiresAt,
+    configured: true,
+  };
+}
+
+export async function syncOwnedTeamSubscriptionsFromRevenueCatUser(appUserId: string) {
+  const status = await getRevenueCatEntitlementStatus(appUserId);
+  if (!status.configured) return { updatedTeams: 0, configured: false };
+
+  const ownedTeams = await prisma.teamMember.findMany({
+    where: { userId: appUserId, role: "owner" },
+    select: { teamId: true },
+  });
+
+  if (ownedTeams.length === 0) return { updatedTeams: 0, configured: true };
+
+  const nextPlan = status.isActive ? "team" : "free";
+  const nextStatus = status.isActive ? "active" : "canceled";
+
+  await Promise.all(
+    ownedTeams.map(({ teamId }) =>
+      prisma.teamSubscription.upsert({
+        where: { teamId },
+        create: {
+          teamId,
+          plan: nextPlan,
+          status: nextStatus,
+          currentPeriodEnd: status.currentPeriodEnd,
+        },
+        update: {
+          plan: nextPlan,
+          status: nextStatus,
+          currentPeriodEnd: status.currentPeriodEnd,
+        },
+      })
+    )
+  );
+
+  return { updatedTeams: ownedTeams.length, configured: true };
+}
+
+// GET /api/teams/:teamId/subscription/health
+// Owner-only diagnostic endpoint to verify RevenueCat connectivity and entitlement state.
+subscriptionRouter.get("/health", async (c) => {
+  const user = c.get("user")!;
+  const teamId = c.req.param("teamId") as string;
+
+  const membership = await prisma.teamMember.findUnique({
+    where: { userId_teamId: { userId: user.id, teamId } },
+  });
+  if (!membership) {
+    return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
+  }
+  if (membership.role !== "owner") {
+    return c.json({ error: { message: "Only the team owner can access subscription health", code: "FORBIDDEN" } }, 403);
+  }
+
+  const current = await getTeamSubscription(teamId);
+  const rc = await getRevenueCatEntitlementStatus(user.id).catch((err) => {
+    console.error("[subscription/health] RevenueCat lookup failed:", err);
+    return null;
+  });
+
+  return c.json({
+    data: {
+      configured: !!env.REVENUECAT_SECRET_KEY,
+      entitlementId: env.REVENUECAT_TEAM_ENTITLEMENT_ID || "Team",
+      revenueCatReachable: rc !== null && rc.configured === true,
+      entitlementActive: rc?.isActive ?? false,
+      entitlementCurrentPeriodEnd: rc?.currentPeriodEnd ?? null,
+      teamSubscription: {
+        plan: current.plan,
+        status: current.status,
+        currentPeriodEnd: current.currentPeriodEnd,
+      },
+    },
+  });
+});
 
 // Helper: fetch or create a free subscription for a team
 export async function getTeamSubscription(teamId: string) {
@@ -72,8 +193,26 @@ subscriptionRouter.post("/upgrade", async (c) => {
     return c.json({ error: { message: "Invalid plan. Must be 'team'", code: "VALIDATION_ERROR" } }, 400);
   }
 
-  const currentPeriodEnd = new Date();
-  currentPeriodEnd.setDate(currentPeriodEnd.getDate() + 30);
+  const entitlement = await getRevenueCatEntitlementStatus(user.id).catch((err) => {
+    console.error("[subscription/upgrade] RevenueCat verify failed:", err);
+    return null;
+  });
+  if (!entitlement?.configured) {
+    return c.json({
+      error: {
+        message: "Subscriptions are not configured on server yet.",
+        code: "SUBSCRIPTION_NOT_CONFIGURED",
+      },
+    }, 503);
+  }
+  if (!entitlement.isActive) {
+    return c.json({
+      error: {
+        message: "No active Team subscription found for this account.",
+        code: "SUBSCRIPTION_INACTIVE",
+      },
+    }, 402);
+  }
 
   const subscription = await prisma.teamSubscription.upsert({
     where: { teamId },
@@ -81,12 +220,12 @@ subscriptionRouter.post("/upgrade", async (c) => {
       teamId,
       plan,
       status: "active",
-      currentPeriodEnd,
+      currentPeriodEnd: entitlement.currentPeriodEnd,
     },
     update: {
       plan,
       status: "active",
-      currentPeriodEnd,
+      currentPeriodEnd: entitlement.currentPeriodEnd,
     },
   });
 

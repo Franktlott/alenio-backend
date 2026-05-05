@@ -7,12 +7,12 @@ import {
   Image,
   Platform,
   Pressable,
-  KeyboardAvoidingView,
   Dimensions,
   ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Send, X, Video } from "lucide-react-native";
+import { SafeKeyboardAvoidingView } from "@/lib/safe-keyboard-controller";
 
 interface ImageSendPreviewProps {
   visible: boolean;
@@ -166,9 +166,7 @@ export function ImageSendPreview({
         </View>
 
         {/* Bottom area with keyboard avoidance */}
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-        >
+        <SafeKeyboardAvoidingView>
           <View
             style={{
               flexDirection: "row",
@@ -219,7 +217,7 @@ export function ImageSendPreview({
               )}
             </Pressable>
           </View>
-        </KeyboardAvoidingView>
+        </SafeKeyboardAvoidingView>
       </View>
     </Modal>
   );

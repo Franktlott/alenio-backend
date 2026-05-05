@@ -110,7 +110,7 @@ export default function VerifyOtp() {
           router.replace("/sign-in");
           return;
         }
-        router.replace("/(app)/team");
+        router.replace("/(app)/chat");
       } else {
         router.replace("/sign-in");
       }
@@ -166,7 +166,7 @@ export default function VerifyOtp() {
         </SafeAreaView>
       </LinearGradient>
 
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} className="flex-1">
+      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} className="flex-1">
         <ScrollView
           className="flex-1"
           contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 32, paddingBottom: 24 }}

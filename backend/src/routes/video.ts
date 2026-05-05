@@ -15,6 +15,23 @@ type Variables = {
 
 const videoRouter = new Hono<{ Variables: Variables }>();
 
+function parseMeetingAssigneeIds(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (Array.isArray(parsed)) return [];
+    if (parsed && typeof parsed === "object") {
+      const obj = parsed as { assigneeIds?: unknown };
+      return Array.isArray(obj.assigneeIds)
+        ? obj.assigneeIds.filter((v): v is string => typeof v === "string")
+        : [];
+    }
+  } catch {
+    // Ignore malformed data
+  }
+  return [];
+}
+
 function sanitizeRoomName(id: string): string {
   return `room-${id}`.replace(/[^a-zA-Z0-9-]/g, "-").slice(0, 40);
 }
@@ -189,6 +206,9 @@ videoRouter.get("/upcoming", authGuard, async (c) => {
       teamName: membership?.team.name ?? "",
       userRole: membership?.role ?? "member",
     };
+  }).filter((item) => {
+    const assigneeIds = parseMeetingAssigneeIds(item.event.reminderMinutes);
+    return assigneeIds.length === 0 || assigneeIds.includes(user.id);
   });
 
   return c.json({ data: result });

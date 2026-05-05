@@ -1,7 +1,14 @@
 import React, { forwardRef } from "react";
-import { Platform, ScrollView, TurboModuleRegistry } from "react-native";
+import {
+  KeyboardAvoidingView as RNKeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  TurboModuleRegistry,
+  View,
+} from "react-native";
 import type { ScrollViewProps } from "react-native";
 import type {
+  KeyboardAvoidingViewProps as LibKeyboardAvoidingViewProps,
   KeyboardAwareScrollViewProps,
   KeyboardAwareScrollViewRef,
 } from "react-native-keyboard-controller";
@@ -28,6 +35,41 @@ export function SafeKeyboardProvider({ children }: { children: React.ReactNode }
   const { KeyboardProvider } = require("react-native-keyboard-controller") as typeof import("react-native-keyboard-controller");
   return <KeyboardProvider>{children}</KeyboardProvider>;
 }
+
+export type SafeKeyboardAvoidingViewProps = LibKeyboardAvoidingViewProps;
+
+/**
+ * Uses react-native-keyboard-controller on dev builds (KeyboardProvider present).
+ * RN's KeyboardAvoidingView does nothing on Android when behavior is undefined; the
+ * library's view applies padding from native keyboard frames on both platforms.
+ */
+function rnKeyboardAvoidingBehavior(
+  behavior: SafeKeyboardAvoidingViewProps["behavior"],
+): "padding" | "height" | "position" | undefined {
+  if (Platform.OS !== "ios") return undefined;
+  if (behavior === "height" || behavior === "position" || behavior === "padding") return behavior;
+  return "padding";
+}
+
+export const SafeKeyboardAvoidingView = forwardRef(function SafeKeyboardAvoidingView(
+  { behavior = "padding", enabled, ...rest }: SafeKeyboardAvoidingViewProps,
+  ref: React.ForwardedRef<View>,
+) {
+  if (!LINKED) {
+    return (
+      <RNKeyboardAvoidingView
+        ref={ref as never}
+        behavior={rnKeyboardAvoidingBehavior(behavior)}
+        enabled={enabled}
+        {...rest}
+      />
+    );
+  }
+  const { KeyboardAvoidingView: LibKAV } =
+    require("react-native-keyboard-controller") as typeof import("react-native-keyboard-controller");
+  const libProps = { behavior, enabled, ...rest } as LibKeyboardAvoidingViewProps;
+  return <LibKAV ref={ref as never} {...libProps} />;
+});
 
 const LIB_ONLY_KEYS = [
   "bottomOffset",

@@ -35,7 +35,6 @@ import {
   CalendarDays,
   QrCode,
   AlertTriangle,
-  CheckCircle2,
 } from "lucide-react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -47,7 +46,7 @@ import { useTeamStore } from "@/lib/state/team-store";
 import { useSession } from "@/lib/auth/use-session";
 import QRCode from "react-native-qrcode-svg";
 import { router } from "expo-router";
-import type { Team, TeamMember } from "@/lib/types";
+import type { Team, TeamMember, Task } from "@/lib/types";
 import { NoTeamPlaceholder } from "@/components/NoTeamPlaceholder";
 import { useDemoMode, showDemoAlert } from "@/lib/useDemo";
 import { useSubscriptionStore } from "@/lib/state/subscription-store";
@@ -374,15 +373,19 @@ export default function TeamScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
 
-  // Aggregate across all 6 months
-  const totalDone6m = monthlyStats?.reduce((s, m) => s + m.done, 0) ?? 0;
-
   const { data: memberStats } = useQuery({
     queryKey: ["member-stats", activeTeamId],
     queryFn: () =>
       api.get<Record<string, { activeTasks: number; overdueTasks: number; completedTasks: number; streak: number; personalBestStreak: number }>>(
         `/api/teams/${activeTeamId}/tasks/member-stats`
       ),
+    enabled: !!activeTeamId,
+  });
+
+  const { data: teamTasksData } = useQuery({
+    queryKey: ["team-overview-tasks", activeTeamId],
+    queryFn: () =>
+      api.get<{ tasks: Task[]; nextCursor: string | null }>(`/api/teams/${activeTeamId}/tasks?limit=500`),
     enabled: !!activeTeamId,
   });
 
@@ -407,16 +410,19 @@ export default function TeamScreen() {
     }
   };
 
-  // Derived stats from real memberStats
-  const totalCompleted = memberStats
-    ? Object.values(memberStats).reduce((sum, s) => sum + s.activeTasks, 0)
-    : 0;
-  const totalOverdue = memberStats
-    ? Object.values(memberStats).reduce((sum, s) => sum + s.overdueTasks, 0)
-    : 0;
+  // Derived overview stats from actual team tasks
+  const teamTasks = teamTasksData?.tasks ?? [];
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const isTaskOverdue = (t: Task) => t.status !== "done" && !!t.dueDate && new Date(t.dueDate) < todayStart;
 
-  const weekCompletionPct = (totalCompleted + totalOverdue) > 0
-    ? Math.round((totalCompleted / (totalCompleted + totalOverdue)) * 100)
+  const totalCompleted = teamTasks.filter((t) => t.status === "done").length;
+  const totalOverdue = teamTasks.filter((t) => isTaskOverdue(t)).length;
+  const totalInProgress = teamTasks.filter((t) => t.status === "in_progress" && !isTaskOverdue(t)).length;
+  const totalOpen = teamTasks.filter((t) => t.status === "todo" && !isTaskOverdue(t)).length;
+
+  const weekCompletionPct = (totalCompleted + totalOpen + totalInProgress + totalOverdue) > 0
+    ? Math.round((totalCompleted / (totalCompleted + totalOpen + totalInProgress + totalOverdue)) * 100)
     : 0;
 
   // Alphabetically sorted member list
@@ -742,55 +748,64 @@ export default function TeamScreen() {
               elevation: 3,
             }}
           >
-            {/* Header row */}
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-              <Text style={{ fontSize: 10, fontWeight: "800", color: "#94A3B8", textTransform: "uppercase", letterSpacing: 1.2 }}>
-                Team at a Glance
-              </Text>
-              {avgCompletionPct !== null ? (
-                <View style={{ backgroundColor: "#EEF2FF", borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 }}>
-                  <Text style={{ fontSize: 11, fontWeight: "700", color: "#4361EE" }}>
-                    {avgCompletionPct}% AVG
-                  </Text>
+            <Text style={{ fontSize: 22, fontWeight: "800", color: "#0F172A", marginBottom: 12 }}>
+              Team Overview
+            </Text>
+
+            <View style={{ flexDirection: "row", alignItems: "center" }}>
+              {(() => {
+                const ringSize = 116;
+                const strokeWidth = 10;
+                const radius = (ringSize - strokeWidth) / 2;
+                const circumference = 2 * Math.PI * radius;
+                const hasAnyOverviewTasks = (totalOpen + totalInProgress + totalOverdue + totalCompleted) > 0;
+                const rawPct = hasAnyOverviewTasks ? (avgCompletionPct ?? weekCompletionPct) : 100;
+                const pct = Math.max(0, Math.min(100, rawPct));
+                const progress = circumference * (pct / 100);
+                return (
+                  <View style={{ width: ringSize, height: ringSize, marginRight: 16 }}>
+                    <Svg width={ringSize} height={ringSize}>
+                      <Circle
+                        cx={ringSize / 2}
+                        cy={ringSize / 2}
+                        r={radius}
+                        stroke="#E5E7EB"
+                        strokeWidth={strokeWidth}
+                        fill="none"
+                      />
+                      <Circle
+                        cx={ringSize / 2}
+                        cy={ringSize / 2}
+                        r={radius}
+                        stroke="#4F46E5"
+                        strokeWidth={strokeWidth}
+                        fill="none"
+                        strokeLinecap="round"
+                        strokeDasharray={`${progress} ${circumference - progress}`}
+                        transform={`rotate(-90 ${ringSize / 2} ${ringSize / 2})`}
+                      />
+                    </Svg>
+                    <View style={{ position: "absolute", inset: 0, alignItems: "center", justifyContent: "center" }}>
+                      <Text style={{ fontSize: 26, fontWeight: "900", color: "#0F172A" }}>{pct}%</Text>
+                      <Text style={{ fontSize: 11, color: "#64748B", marginTop: -2 }}>6-month</Text>
+                    </View>
+                  </View>
+                );
+              })()}
+
+              <View style={{ flex: 1, marginLeft: 2, paddingRight: 6, flexDirection: "row", justifyContent: "flex-start", gap: 8 }}>
+                <View style={{ alignItems: "center", width: 62 }}>
+                  <Text style={{ fontSize: 30, fontWeight: "900", color: "#10B981" }}>{totalOpen}</Text>
+                  <Text numberOfLines={1} style={{ fontSize: 11, color: "#64748B", marginTop: -2 }}>Open</Text>
                 </View>
-              ) : null}
-            </View>
-
-            {/* Chart */}
-            <View style={{ alignItems: "center", overflow: "visible" }}>
-              <PerformanceChart data={monthlyStats ?? []} />
-            </View>
-
-            {/* Footer */}
-            <View
-              style={{
-                marginTop: 10,
-                paddingTop: 10,
-                borderTopWidth: 1,
-                borderTopColor: "#F1F5F9",
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 8,
-              }}
-            >
-              <Text style={{ fontSize: 10, lineHeight: 14, color: "#64748B", flex: 1 }}>
-                6-month completion rate{" "}
-                <Text style={{ fontSize: 10, fontWeight: "800", color: "#0F172A" }}>
-                  {avgCompletionPct !== null ? `${avgCompletionPct}%` : "—"}
-                </Text>
-              </Text>
-              <View style={{ width: 64, height: 3, borderRadius: 2, backgroundColor: "#EEF2FF", overflow: "hidden" }}>
-                <View
-                  style={{
-                    height: 3,
-                    borderRadius: 2,
-                    backgroundColor: "#4361EE",
-                    width: `${avgCompletionPct ?? 0}%`,
-                  }}
-                />
-              </View>
-              <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: "#EEF2FF", alignItems: "center", justifyContent: "center" }}>
-                <CheckCircle2 size={12} color="#4361EE" />
+                <View style={{ alignItems: "center", width: 70 }}>
+                  <Text style={{ fontSize: 30, fontWeight: "900", color: "#F59E0B" }}>{totalInProgress}</Text>
+                  <Text numberOfLines={1} style={{ fontSize: 11, color: "#64748B", marginTop: -2 }}>In Progress</Text>
+                </View>
+                <View style={{ alignItems: "center", width: 62 }}>
+                  <Text style={{ fontSize: 30, fontWeight: "900", color: "#EF4444" }}>{totalOverdue}</Text>
+                  <Text numberOfLines={1} style={{ fontSize: 11, color: "#64748B", marginTop: -2 }}>Overdue</Text>
+                </View>
               </View>
             </View>
           </View>

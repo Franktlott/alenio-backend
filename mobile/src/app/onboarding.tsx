@@ -85,7 +85,7 @@ export default function OnboardingScreen() {
     onSuccess: (team) => {
       setActiveTeamId(team.id);
       queryClient.invalidateQueries({ queryKey: ["teams"] });
-      router.replace("/(app)/team");
+      router.replace("/(app)/chat");
     },
     onError: (err: unknown) => {
       const rawMsg = err instanceof Error ? err.message : "";
@@ -123,7 +123,7 @@ export default function OnboardingScreen() {
         const team = result as Team;
         setActiveTeamId(team.id);
         queryClient.invalidateQueries({ queryKey: ["teams"] });
-        router.replace("/(app)/team");
+        router.replace("/(app)/chat");
       }
     },
     onError: (err: unknown) => {
@@ -167,7 +167,7 @@ export default function OnboardingScreen() {
         if (approved) {
           setActiveTeamId(approved.team.id);
           queryClient.invalidateQueries({ queryKey: ["teams"] });
-          router.replace("/(app)/team");
+          router.replace("/(app)/chat");
         }
       } catch {
         // silently ignore polling errors
@@ -187,7 +187,7 @@ export default function OnboardingScreen() {
       if (approved) {
         setActiveTeamId(approved.team.id);
         queryClient.invalidateQueries({ queryKey: ["teams"] });
-        router.replace("/(app)/team");
+        router.replace("/(app)/chat");
       }
     } catch {
       // ignore
@@ -250,7 +250,7 @@ export default function OnboardingScreen() {
       </LinearGradient>
 
       <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={{ flex: 1 }}
       >
         <ScrollView

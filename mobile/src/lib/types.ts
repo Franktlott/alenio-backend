@@ -163,6 +163,7 @@ export interface CalendarEvent {
   createdBy?: { id: string; name: string; image?: string | null };
   isHidden?: boolean;
   isVideoMeeting?: boolean;
+  assigneeIds?: string[];
 }
 
 

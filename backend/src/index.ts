@@ -25,6 +25,7 @@ import { videoRouter } from "./routes/video";
 import { usersRouter } from "./routes/users";
 import { ogPreviewRouter } from "./routes/og-preview";
 import { feedbackRouter } from "./routes/feedback";
+import { revenueCatRouter } from "./routes/revenuecat";
 import { sendPushNotificationsStrict } from "./lib/push";
 import { getDatabasePublicSummary } from "./lib/database-public-summary";
 import { syncAppUserFromNeonAuth } from "./lib/ensure-app-user";
@@ -51,15 +52,24 @@ const app = new Hono<{ Variables: Variables }>();
 const BACKEND_BUILD_MARKER = env.BACKEND_BUILD_MARKER;
 
 // CORS middleware - validates origin against allowlist
-const allowed = [
+const allowedPatterns = [
   /^http:\/\/localhost(:\d+)?$/,
   /^http:\/\/127\.0\.0\.1(:\d+)?$/,
 ];
+const extraOrigins = (env.CORS_ALLOWED_ORIGINS ?? "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+function isOriginAllowed(origin: string): boolean {
+  if (extraOrigins.includes(origin)) return true;
+  return allowedPatterns.some((re) => re.test(origin));
+}
 
 app.use(
   "*",
   cors({
-    origin: (origin) => (origin && allowed.some((re) => re.test(origin)) ? origin : null),
+    origin: (origin) => (origin && isOriginAllowed(origin) ? origin : null),
     credentials: true,
   })
 );
@@ -567,30 +577,36 @@ app.route("/api/demo", demoRouter);
 app.route("/api/og-preview", ogPreviewRouter);
 app.route("/api/feedback", feedbackRouter);
 app.route("/api/video", videoRouter);
+app.route("/api/revenuecat", revenueCatRouter);
 app.route("/admin", adminRouter);
 app.route("/api/admin-mobile", adminMobileRouter);
 app.route("/web", webRouter);
 
 // ── Auto-cleanup job ────────────────────────────────────────────
-// Deletes calendar events, tasks, and task photos older than 45 days
+// Deletes old calendar events and completed tasks past retention windows.
 async function runCleanup() {
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - 45);
+  const eventsCutoff = new Date();
+  eventsCutoff.setDate(eventsCutoff.getDate() - 45);
+  const completedTasksCutoff = new Date();
+  completedTasksCutoff.setMonth(completedTasksCutoff.getMonth() - 7);
 
   try {
-    // Delete calendar events whose start date is older than 45 days
+    // Delete calendar events whose start date is older than 45 days.
     const deletedEvents = await prisma.calendarEvent.deleteMany({
-      where: { startDate: { lt: cutoff } },
+      where: { startDate: { lt: eventsCutoff } },
     });
 
-    // Delete tasks whose due date is older than 45 days
-    // (cascades to subtasks, assignments, attachmentUrl reference)
+    // Delete only completed tasks older than 7 months.
+    // This keeps active/in-progress tasks intact and preserves short-term history.
     const deletedTasks = await prisma.task.deleteMany({
-      where: { dueDate: { lt: cutoff } },
+      where: {
+        status: "done",
+        completedAt: { not: null, lt: completedTasksCutoff },
+      },
     });
 
     if (deletedEvents.count > 0 || deletedTasks.count > 0) {
-      console.log(`[cleanup] Removed ${deletedEvents.count} events, ${deletedTasks.count} tasks older than 45 days`);
+      console.log(`[cleanup] Removed ${deletedEvents.count} events >45d and ${deletedTasks.count} completed tasks >7mo`);
     }
   } catch (err) {
     console.error("[cleanup] Error during cleanup:", err);

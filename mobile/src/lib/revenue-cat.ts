@@ -3,6 +3,8 @@ import { Platform } from "react-native";
 
 const IOS_KEY = process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY ?? "";
 const ANDROID_KEY = process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_KEY ?? "";
+/** Must match RevenueCat entitlement identifier (case-sensitive). */
+const TEAM_ENTITLEMENT_ID = "Team";
 
 export function isRevenueCatEnabled(): boolean {
   const key = Platform.OS === "ios" ? IOS_KEY : ANDROID_KEY;
@@ -26,7 +28,7 @@ export async function purchaseTeam(): Promise<{ success: boolean; error?: string
     const pkg = offerings.current?.availablePackages?.[0];
     if (!pkg) return { success: false, error: "No offerings available. Check RevenueCat dashboard." };
     const { customerInfo } = await Purchases.purchasePackage(pkg);
-    const isActive = typeof customerInfo.entitlements.active["team"] !== "undefined";
+    const isActive = typeof customerInfo.entitlements.active[TEAM_ENTITLEMENT_ID] !== "undefined";
     return { success: isActive };
   } catch (e: any) {
     if (e?.userCancelled) return { success: false, error: "cancelled" };
@@ -37,7 +39,7 @@ export async function purchaseTeam(): Promise<{ success: boolean; error?: string
 export async function restorePurchases(): Promise<{ success: boolean; isTeam: boolean }> {
   try {
     const customerInfo = await Purchases.restorePurchases();
-    const isTeam = typeof customerInfo.entitlements.active["team"] !== "undefined";
+    const isTeam = typeof customerInfo.entitlements.active[TEAM_ENTITLEMENT_ID] !== "undefined";
     return { success: true, isTeam };
   } catch (e) {
     return { success: false, isTeam: false };

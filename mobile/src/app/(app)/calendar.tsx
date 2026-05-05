@@ -216,6 +216,7 @@ export default function CalendarScreen() {
   const onRefresh = async () => {
     setRefreshing(true);
     await queryClient.invalidateQueries({ queryKey: ["calendar-events", activeTeamId] });
+    await queryClient.invalidateQueries({ queryKey: ["upcoming-video-meetings"] });
     await queryClient.invalidateQueries({ queryKey: ["tasks", activeTeamId] });
     await queryClient.invalidateQueries({ queryKey: ["teams"] });
     setRefreshing(false);

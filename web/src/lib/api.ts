@@ -1,0 +1,449 @@
+import { clearAccessToken, getAccessToken, refreshSessionTokens } from "./auth-client";
+
+const baseUrl = import.meta.env.VITE_BACKEND_URL?.trim().replace(/\/+$/, "") ?? "";
+
+async function readJson<T>(res: Response): Promise<T | null> {
+  if (res.status === 204 || res.status === 205) return null;
+  try {
+    return (await res.json()) as T;
+  } catch {
+    return null;
+  }
+}
+
+async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
+  const headers: HeadersInit = { ...(init?.headers as Record<string, string> | undefined) };
+  const h = new Headers(headers);
+  let token = getAccessToken();
+  if (token) h.set("Authorization", `Bearer ${token}`);
+  if (init?.body && !h.has("Content-Type")) {
+    h.set("Content-Type", "application/json");
+  }
+
+  let res = await fetch(`${baseUrl}${path}`, { ...init, headers: h });
+
+  if (res.status === 401) {
+    const recovered = await refreshSessionTokens();
+    if (recovered) {
+      token = getAccessToken();
+      const h2 = new Headers(init?.headers as HeadersInit);
+      if (token) h2.set("Authorization", `Bearer ${token}`);
+      if (init?.body && !h2.has("Content-Type")) {
+        h2.set("Content-Type", "application/json");
+      }
+      res = await fetch(`${baseUrl}${path}`, { ...init, headers: h2 });
+    } else {
+      clearAccessToken();
+    }
+  }
+
+  if (!res.ok) {
+    const body = await readJson<{ error?: string | { message?: string }; message?: string }>(res);
+    const msg =
+      typeof body?.error === "string"
+        ? body.error
+        : typeof body?.error === "object" && body?.error?.message
+          ? body.error.message
+          : typeof body?.message === "string"
+            ? body.message
+            : res.status === 404
+              ? "Not found — this may not exist or you may not have access."
+              : `Request failed (${res.status})`;
+    throw new Error(msg);
+  }
+  const parsed = await readJson<T>(res);
+  return (parsed ?? {}) as T;
+}
+
+export async function apiGetJson<T>(path: string): Promise<T> {
+  return apiRequest<T>(path, { method: "GET" });
+}
+
+export async function apiPostJson<T>(path: string, body: unknown): Promise<T> {
+  return apiRequest<T>(path, { method: "POST", body: JSON.stringify(body) });
+}
+
+export async function apiPatchJson<T>(path: string, body: unknown): Promise<T> {
+  return apiRequest<T>(path, { method: "PATCH", body: JSON.stringify(body) });
+}
+
+export type WebMeUser = {
+  id: string;
+  name: string | null;
+  email: string | null;
+  image: string | null;
+  createdAt: string;
+};
+
+export type WebTeamRow = {
+  id: string;
+  name: string;
+  createdAt: string;
+  role: string;
+  _count: { members: number; tasks: number };
+};
+
+export type TeamChatMessage = {
+  id: string;
+  content: string | null;
+  mediaUrl: string | null;
+  mediaType: string | null;
+  createdAt: string;
+  senderId: string;
+  teamId: string;
+  sender: { id: string; name: string | null; email: string | null; image: string | null };
+};
+
+export type TeamTopic = {
+  id: string;
+  name: string;
+  description: string | null;
+  color: string | null;
+  teamId: string;
+  _count?: { messages: number };
+};
+
+export type DmConversation = {
+  id: string;
+  isGroup: boolean;
+  name: string | null;
+  participants: Array<{ id: string; name: string | null; email: string | null; image: string | null }>;
+  recipient: { id: string; name: string | null; email: string | null; image: string | null } | null;
+  lastMessage: {
+    id: string;
+    content: string | null;
+    createdAt: string;
+    sender?: { id: string; name: string | null };
+  } | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type DirectChatMessage = {
+  id: string;
+  content: string | null;
+  mediaUrl: string | null;
+  mediaType: string | null;
+  createdAt: string;
+  senderId: string;
+  conversationId: string;
+  sender: { id: string; name: string | null; email: string | null; image: string | null };
+};
+
+export function fetchWebMe() {
+  return apiGetJson<{ data: WebMeUser | null }>("/web/api/me").then((r) => r.data);
+}
+
+export function fetchWebTeams() {
+  return apiGetJson<{ data: WebTeamRow[] }>("/web/api/teams").then((r) => r.data);
+}
+
+export function fetchTeamMessages(teamId: string, topicId: string) {
+  const q = new URLSearchParams({ topicId, limit: "100" });
+  return apiGetJson<{ data: TeamChatMessage[] }>(
+    `/api/teams/${encodeURIComponent(teamId)}/messages?${q.toString()}`,
+  ).then((r) => r.data);
+}
+
+export function postTeamMessage(teamId: string, content: string, topicId: string) {
+  return apiPostJson<{ data: TeamChatMessage }>(`/api/teams/${encodeURIComponent(teamId)}/messages`, {
+    content,
+    topicId: topicId === "general" ? null : topicId,
+  }).then((r) => r.data);
+}
+
+export function fetchTeamTopics(teamId: string) {
+  return apiGetJson<{ data: TeamTopic[] }>(`/api/teams/${encodeURIComponent(teamId)}/topics`).then((r) => r.data);
+}
+
+export function fetchDmConversations() {
+  return apiGetJson<{ data: DmConversation[] }>("/api/dms").then((r) => r.data);
+}
+
+export function fetchDmMessages(conversationId: string) {
+  return apiGetJson<{ data: DirectChatMessage[] }>(`/api/dms/${encodeURIComponent(conversationId)}/messages`).then((r) => r.data);
+}
+
+export function postDmMessage(conversationId: string, content: string) {
+  return apiPostJson<{ data: DirectChatMessage }>(`/api/dms/${encodeURIComponent(conversationId)}/messages`, {
+    content,
+  }).then((r) => r.data);
+}
+
+export type ApiTask = {
+  id: string;
+  title: string;
+  description: string | null;
+  dueDate: string | null;
+  priority: string;
+  status: string;
+  completedAt: string | null;
+  teamId?: string;
+  creatorId?: string;
+  attachmentUrl?: string | null;
+  incognito?: boolean;
+  isJoint?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+  creator?: { id: string; name: string | null; email?: string | null; image?: string | null };
+  subtasks?: ApiSubtask[];
+  assignments: Array<{
+    user: { id: string; name: string | null; email?: string | null; image: string | null };
+  }>;
+};
+
+export type ApiSubtask = {
+  id: string;
+  title: string;
+  completed: boolean;
+  order: number;
+};
+
+export type ApiTaskDetail = ApiTask & {
+  teamId: string;
+  creatorId: string;
+  attachmentUrl: string | null;
+  incognito: boolean;
+  isJoint: boolean;
+  createdAt: string;
+  updatedAt: string;
+  team: { id: string; name: string };
+  creator: { id: string; name: string | null; email: string | null; image: string | null };
+  subtasks: ApiSubtask[];
+};
+
+export function fetchWebTaskDetail(taskId: string, teamId?: string | null) {
+  const tid = encodeURIComponent(taskId);
+  const ws = teamId?.trim();
+  if (!ws) {
+    return apiGetJson<{ data: ApiTaskDetail }>(`/web/api/tasks/${tid}`).then((r) => r.data);
+  }
+  return apiGetJson<{ data: ApiTaskDetail }>(`/web/api/teams/${encodeURIComponent(ws)}/tasks/${tid}`)
+    .then((r) => r.data)
+    .catch(() => apiGetJson<{ data: ApiTaskDetail }>(`/web/api/tasks/${tid}`).then((r) => r.data));
+}
+
+export type ApiCalendarEvent = {
+  id: string;
+  title: string;
+  description?: string | null;
+  startDate: string;
+  endDate: string | null;
+  allDay: boolean | null;
+  color?: string | null;
+  isHidden?: boolean | null;
+  isVideoMeeting?: boolean | null;
+  createdById?: string;
+};
+
+export type ActivityMetadata = {
+  taskTitle?: string;
+  taskTitles?: string[];
+  taskCount?: number;
+  eventTitle?: string;
+  eventTitles?: string[];
+  eventCount?: number;
+  startDate?: string;
+  allDay?: boolean;
+  userName?: string;
+  count?: number;
+  incognito?: boolean;
+  assigneeName?: string;
+  isVideoMeeting?: boolean;
+  targetUserId?: string;
+  targetName?: string;
+  targetUserImage?: string | null;
+  celebrationType?: string;
+  message?: string | null;
+  assignees?: { id: string; name: string; image: string | null }[];
+} | null;
+
+export type ActivityReactionBucket = {
+  count: number;
+  userIds: string[];
+  users: { id: string; name: string | null }[];
+};
+
+export type ApiActivityItem = {
+  id: string;
+  type: string;
+  createdAt: string;
+  metadata: ActivityMetadata;
+  user: { id: string; name: string | null; image: string | null } | null;
+  reactions: Record<string, ActivityReactionBucket>;
+};
+
+export type UpcomingVideoMeeting = {
+  event: ApiCalendarEvent & { teamId: string };
+  teamName: string;
+  userRole: string;
+};
+
+/** Web dashboard routes (`/web/...`) — no mobile subscription gate on tasks. */
+export function fetchWebTeamTasks(teamId: string) {
+  return apiGetJson<{ data: ApiTask[] }>(`/web/api/teams/${encodeURIComponent(teamId)}/tasks`).then((r) => r.data);
+}
+
+// Core app route fallback (often deployed earlier than /web routes)
+export function fetchCoreTeamTasks(teamId: string) {
+  return apiGetJson<{ data: ApiTask[] | { tasks?: ApiTask[] } }>(`/api/teams/${encodeURIComponent(teamId)}/tasks`).then(
+    (r) => {
+      const data = r.data;
+      if (Array.isArray(data)) return data;
+      if (data && Array.isArray(data.tasks)) return data.tasks;
+      return [];
+    },
+  );
+}
+
+export function updateCoreTeamTask(
+  teamId: string,
+  taskId: string,
+  patch: Partial<{
+    title: string;
+    description: string | null;
+    priority: string;
+    dueDate: string | null;
+    status: string;
+    attachmentUrl: string | null;
+  }>,
+) {
+  return apiPatchJson<{ data: ApiTask }>(`/api/teams/${encodeURIComponent(teamId)}/tasks/${encodeURIComponent(taskId)}`, patch).then(
+    (r) => r.data,
+  );
+}
+
+export function fetchWebTeamEvents(teamId: string) {
+  return apiGetJson<{ data: ApiCalendarEvent[] }>(
+    `/web/api/teams/${encodeURIComponent(teamId)}/events`,
+  ).then((r) => r.data);
+}
+
+export function createWebTeamEvent(
+  teamId: string,
+  input: {
+    title: string;
+    description?: string | null;
+    startDate: string;
+    endDate?: string | null;
+    allDay?: boolean;
+    color?: string;
+  },
+) {
+  return apiPostJson<{ data: ApiCalendarEvent }>(`/web/api/teams/${encodeURIComponent(teamId)}/events`, {
+    title: input.title,
+    description: input.description ?? null,
+    startDate: input.startDate,
+    endDate: input.endDate ?? null,
+    allDay: input.allDay ?? true,
+    color: input.color ?? "#4361EE",
+  }).then((r) => r.data);
+}
+
+export function deleteWebTeamEvent(teamId: string, eventId: string) {
+  return apiRequest<{ data: { ok: true } }>(
+    `/web/api/teams/${encodeURIComponent(teamId)}/events/${encodeURIComponent(eventId)}`,
+    { method: "DELETE" },
+  ).then((r) => r.data);
+}
+
+export function updateWebTeamEvent(
+  teamId: string,
+  eventId: string,
+  input: {
+    title?: string;
+    description?: string | null;
+    startDate?: string;
+    endDate?: string | null;
+    allDay?: boolean;
+    color?: string;
+  },
+) {
+  return apiPatchJson<{ data: ApiCalendarEvent }>(`/web/api/teams/${encodeURIComponent(teamId)}/events/${encodeURIComponent(eventId)}`, {
+    ...(input.title !== undefined ? { title: input.title } : {}),
+    ...(input.description !== undefined ? { description: input.description } : {}),
+    ...(input.startDate !== undefined ? { startDate: input.startDate } : {}),
+    ...(input.endDate !== undefined ? { endDate: input.endDate } : {}),
+    ...(input.allDay !== undefined ? { allDay: input.allDay } : {}),
+    ...(input.color !== undefined ? { color: input.color } : {}),
+  }).then((r) => r.data);
+}
+
+export function fetchTeamActivity(teamId: string) {
+  return apiGetJson<{ data: ApiActivityItem[] }>(
+    `/api/teams/${encodeURIComponent(teamId)}/activity`,
+  ).then((r) => r.data);
+}
+
+export function postActivityReaction(teamId: string, activityId: string, emoji: string) {
+  return apiPostJson<{ data: { toggled: boolean } }>(
+    `/api/teams/${encodeURIComponent(teamId)}/activity/${encodeURIComponent(activityId)}/react`,
+    { emoji },
+  ).then((r) => r.data);
+}
+
+export function postActivityCelebrate(
+  teamId: string,
+  payload: { targetUserId: string; celebrationType: string; message?: string },
+) {
+  return apiPostJson<{ data: { id: string } }>(`/api/teams/${encodeURIComponent(teamId)}/activity/celebrate`, payload).then((r) => r.data);
+}
+
+export function fetchUpcomingVideoMeetings() {
+  return apiGetJson<{ data: UpcomingVideoMeeting[] }>("/api/video/upcoming").then((r) => r.data);
+}
+
+export function createVideoRoom(roomId: string, userName?: string | null) {
+  return apiPostJson<{ data: { url: string; token: string | null } }>("/api/video/room", {
+    roomId,
+    userName: userName ?? undefined,
+  }).then((r) => r.data);
+}
+
+export type WebTeamMemberRow = {
+  userId: string;
+  role: string;
+  user: { id: string; name: string | null; email: string | null; image: string | null };
+};
+
+export type WebTeamDetail = {
+  id: string;
+  name: string;
+  createdAt: string;
+  inviteCode?: string | null;
+  _count?: { members: number; tasks: number };
+  members: WebTeamMemberRow[];
+  myRole: string;
+};
+
+export function fetchWebTeam(teamId: string) {
+  return apiGetJson<{ data: WebTeamDetail }>(`/web/api/teams/${encodeURIComponent(teamId)}`).then((r) => r.data);
+}
+
+export type CreateWebTaskInput = {
+  teamId: string;
+  title: string;
+  description?: string | null;
+  priority?: string;
+  status?: string;
+  dueDate?: string | null;
+  assigneeIds: string[];
+  isJoint?: boolean;
+  incognito?: boolean;
+  subtasks?: string[];
+};
+
+export function createWebTask(input: CreateWebTaskInput) {
+  return apiPostJson<{ data: { tasks: ApiTask[] } }>("/web/api/tasks", {
+    teamId: input.teamId,
+    title: input.title,
+    description: input.description || undefined,
+    priority: input.priority ?? "medium",
+    status: input.status ?? "todo",
+    dueDate: input.dueDate || undefined,
+    assigneeIds: input.assigneeIds,
+    isJoint: input.isJoint === true,
+    incognito: input.incognito === true,
+    subtasks: input.subtasks?.filter((t) => t.trim()).length ? input.subtasks.filter((t) => t.trim()) : undefined,
+  }).then((r) => r.data.tasks);
+}

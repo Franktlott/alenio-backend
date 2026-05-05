@@ -70,24 +70,62 @@ async function getMembership(userId: string, teamId: string) {
   });
 }
 
+type CompletionMeta = {
+  completedOnTime?: boolean;
+  dueDate?: string | null;
+  completedAt?: string | null;
+  assignees?: Array<{ id?: string }>;
+};
+
+function getCompletionMetaForUser(
+  activity: { userId: string | null; metadata: string | null },
+  userId: string
+): { completedOnTime: boolean } | null {
+  let meta: CompletionMeta = {};
+  if (activity.metadata) {
+    try {
+      meta = JSON.parse(activity.metadata) as CompletionMeta;
+    } catch {
+      meta = {};
+    }
+  }
+
+  const assigneeIds = (meta.assignees ?? []).map((a) => a.id).filter((id): id is string => typeof id === "string");
+  const isRelevant = activity.userId === userId || assigneeIds.includes(userId);
+  if (!isRelevant) return null;
+
+  let completedOnTime = true;
+  if (typeof meta.completedOnTime === "boolean") {
+    completedOnTime = meta.completedOnTime;
+  } else if (meta.completedAt && meta.dueDate) {
+    completedOnTime = new Date(meta.completedAt) <= new Date(meta.dueDate);
+  }
+
+  return { completedOnTime };
+}
+
+async function getUserCompletionOutcomes(teamId: string, userId: string): Promise<boolean[]> {
+  const completionActivities = await prisma.teamActivity.findMany({
+    where: { teamId, type: "task_completed" },
+    select: { userId: true, metadata: true, createdAt: true },
+    orderBy: { createdAt: "desc" },
+  });
+
+  const outcomes: boolean[] = [];
+  for (const activity of completionActivities) {
+    const parsed = getCompletionMetaForUser(activity, userId);
+    if (!parsed) continue;
+    outcomes.push(parsed.completedOnTime);
+  }
+  return outcomes;
+}
+
 // Recalculate and store streak without awarding milestones (used on recall)
 async function recalculateStreak(userId: string, teamId: string) {
-  const streakRows = await prisma.task.findMany({
-    where: {
-      teamId,
-      status: "done",
-      completedAt: { not: null },
-      dueDate: { not: null },
-      assignments: { some: { userId } },
-    },
-    select: { completedAt: true, dueDate: true },
-    orderBy: { completedAt: "desc" },
-  });
+  const outcomes = await getUserCompletionOutcomes(teamId, userId);
   let streak = 0;
-  for (const row of streakRows) {
-    const ca = row.completedAt!;
-    const dd = row.dueDate!;
-    if (new Date(ca) <= new Date(dd)) streak++;
+  for (const completedOnTime of outcomes) {
+    if (completedOnTime) streak++;
     else break;
   }
   await prisma.teamMember.updateMany({
@@ -108,22 +146,10 @@ async function calculateAndAwardStreak(
   let personalBestCount: number | null = null;
 
   // Consecutive on-time completions since last overdue (most recent first)
-  const streakRows = await prisma.task.findMany({
-    where: {
-      teamId,
-      status: "done",
-      completedAt: { not: null },
-      dueDate: { not: null },
-      assignments: { some: { userId } },
-    },
-    select: { completedAt: true, dueDate: true },
-    orderBy: { completedAt: "desc" },
-  });
+  const outcomes = await getUserCompletionOutcomes(teamId, userId);
   let streak = 0;
-  for (const row of streakRows) {
-    const ca = row.completedAt!;
-    const dd = row.dueDate!;
-    if (new Date(ca) <= new Date(dd)) {
+  for (const completedOnTime of outcomes) {
+    if (completedOnTime) {
       streak++;
     } else {
       break;
@@ -160,18 +186,7 @@ async function calculateAndAwardStreak(
   } else if (fullUser && streak >= fullUser.personalBestStreak && fullUser.personalBestStreak > 0) {
     if (!fullUser.personalBestCelebrated) {
       // First time crossing the personal best in this comeback — check for late task history
-      const completedWithDue = await prisma.task.findMany({
-        where: {
-          assignments: { some: { userId } },
-          status: "done",
-          completedAt: { not: null },
-          dueDate: { not: null },
-        },
-        select: { completedAt: true, dueDate: true },
-      });
-      const lateCount = completedWithDue.filter(
-        (t) => new Date(t.completedAt!) > new Date(t.dueDate!)
-      ).length;
+      const lateCount = outcomes.filter((completedOnTime) => !completedOnTime).length;
       if (lateCount > 0) {
         // Celebrate once and mark as celebrated — won't fire again until next streak break
         await prisma.user.update({ where: { id: userId }, data: { personalBestStreak: streak, personalBestCelebrated: true } });
@@ -262,7 +277,7 @@ tasksRouter.post("/", async (c) => {
   }
 
   const body = await c.req.json();
-  const { title, description, priority, dueDate, assigneeIds, recurrence, attachmentUrl, incognito, isJoint, subtasks } = body;
+  const { title, description, priority, dueDate, status, assigneeIds, recurrence, attachmentUrl, incognito, isJoint, subtasks } = body;
 
   if (!title?.trim()) {
     return c.json({ error: { message: "Title is required", code: "VALIDATION_ERROR" } }, 400);
@@ -276,6 +291,7 @@ tasksRouter.post("/", async (c) => {
   } as const;
 
   const dueDateObj = dueDate ? new Date(dueDate) : null;
+  const normalizedStatus = status === "done" || status === "in_progress" || status === "todo" ? status : "todo";
 
   const subtaskList: { title: string; order: number }[] = Array.isArray(subtasks)
     ? subtasks.map((s: { title: string }, i: number) => ({ title: s.title.trim(), order: i }))
@@ -285,6 +301,8 @@ tasksRouter.post("/", async (c) => {
     title: title.trim(),
     description: description?.trim(),
     priority: priority || "medium",
+    status: normalizedStatus,
+    ...(normalizedStatus === "done" ? { completedAt: new Date() } : {}),
     dueDate: dueDateObj,
     incognito: incognito === true,
     teamId,
@@ -519,24 +537,46 @@ tasksRouter.get("/monthly-completion", async (c) => {
   const sixMonthsAgo = new Date(earliest.year, earliest.month, 1);
   const endOfCurrentMonth = new Date(currentYear, currentMonth + 1, 0, 23, 59, 59, 999);
 
-  // Single query: all tasks with a dueDate in that window
-  const tasks = await prisma.task.findMany({
+  // Use immutable completion events so deleting tasks does not erase history.
+  const completionActivities = await prisma.teamActivity.findMany({
     where: {
       teamId,
-      dueDate: { gte: sixMonthsAgo, lte: endOfCurrentMonth },
+      type: "task_completed",
+      createdAt: { gte: sixMonthsAgo, lte: endOfCurrentMonth },
     },
-    select: { status: true, dueDate: true },
+    select: { createdAt: true, metadata: true },
   });
 
-  // Group tasks by year-month key
+  // Group completion events by completion month key.
+  // total = all completions, done = on-time completions.
   const grouped: Record<string, { total: number; done: number }> = {};
-  for (const task of tasks) {
-    if (!task.dueDate) continue;
-    const d = new Date(task.dueDate);
+  for (const activity of completionActivities) {
+    const d = new Date(activity.createdAt);
     const key = `${d.getFullYear()}-${d.getMonth()}`;
     if (!grouped[key]) grouped[key] = { total: 0, done: 0 };
     grouped[key]!.total++;
-    if (task.status === "done") grouped[key]!.done++;
+
+    let completedOnTime: boolean | null = null;
+    if (activity.metadata) {
+      try {
+        const meta = JSON.parse(activity.metadata) as {
+          completedOnTime?: boolean;
+          dueDate?: string | null;
+          completedAt?: string | null;
+        };
+
+        if (typeof meta.completedOnTime === "boolean") {
+          completedOnTime = meta.completedOnTime;
+        } else if (meta.completedAt && meta.dueDate) {
+          completedOnTime = new Date(meta.completedAt) <= new Date(meta.dueDate);
+        }
+      } catch {
+        completedOnTime = null;
+      }
+    }
+
+    // Legacy completion events without timing metadata default to on-time.
+    if (completedOnTime !== false) grouped[key]!.done++;
   }
 
   const result = months.map(({ year, month, label }) => {
@@ -675,6 +715,9 @@ tasksRouter.patch("/:taskId", async (c) => {
       type: "task_completed",
       metadata: {
         taskTitle: task.incognito ? null : task.title,
+        dueDate: task.dueDate ? task.dueDate.toISOString() : null,
+        completedAt: updated.completedAt ? updated.completedAt.toISOString() : new Date().toISOString(),
+        completedOnTime: task.dueDate ? new Date(updated.completedAt ?? new Date()) <= new Date(task.dueDate) : true,
         assignees: updated.assignments.map((a) => ({
           id: a.userId,
           name: a.user.name,

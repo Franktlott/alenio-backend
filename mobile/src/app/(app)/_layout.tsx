@@ -2,7 +2,7 @@ import { Tabs } from "expo-router";
 import { CheckSquare, Users, User, MessageCircle, Activity } from "lucide-react-native";
 import { View, Text, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
 import { useTeamStore } from "@/lib/state/team-store";
@@ -10,7 +10,7 @@ import { useUnreadStore } from "@/lib/state/unread-store";
 import { useSubscriptionStore } from "@/lib/state/subscription-store";
 import { useTaskStore } from "@/lib/state/task-store";
 import { useEffect, useMemo } from "react";
-import type { Conversation, Team } from "@/lib/types";
+import type { CalendarEvent, Conversation, Team, Task } from "@/lib/types";
 import MeetingBanner from "@/components/MeetingBanner";
 
 const DEMO_EMAIL = "demo@alenio.app";
@@ -29,6 +29,7 @@ const ALL_TABS = [
 
 function FloatingTabBar({ state, descriptors, navigation }: any) {
   const insets = useSafeAreaInsets();
+  const queryClient = useQueryClient();
   const { data: session } = useSession();
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
   const lastReadIds = useUnreadStore((s) => s.lastReadIds);
@@ -95,6 +96,42 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
     return true;
   });
 
+  const prefetchRouteData = (routeName: string) => {
+    if (!session?.user) return;
+    if (routeName === "chat") {
+      void queryClient.prefetchQuery({
+        queryKey: ["conversations"],
+        queryFn: () => api.get<Conversation[]>("/api/dms"),
+      });
+      return;
+    }
+    if (!activeTeamId) return;
+    if (routeName === "execute") {
+      void queryClient.prefetchQuery({
+        queryKey: ["tasks", activeTeamId, "mine"],
+        queryFn: () => api.get<{ tasks: Task[]; nextCursor: string | null }>(`/api/teams/${activeTeamId}/tasks?myTasks=true`),
+      });
+      void queryClient.prefetchQuery({
+        queryKey: ["calendar-events", activeTeamId],
+        queryFn: () => api.get<CalendarEvent[]>(`/api/teams/${activeTeamId}/events`),
+      });
+      return;
+    }
+    if (routeName === "activity") {
+      void queryClient.prefetchQuery({
+        queryKey: ["activity", activeTeamId],
+        queryFn: () => api.get<unknown[]>(`/api/teams/${activeTeamId}/activity?limit=100`),
+      });
+      return;
+    }
+    if (routeName === "team") {
+      void queryClient.prefetchQuery({
+        queryKey: ["team", activeTeamId],
+        queryFn: () => api.get<Team>(`/api/teams/${activeTeamId}`),
+      });
+    }
+  };
+
   return (
     <View style={{
       position: "absolute",
@@ -131,6 +168,7 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
             key={route.key}
             onPress={() => {
               if (isFocused) return;
+              prefetchRouteData(route.name);
               navigation.navigate(route.name);
             }}
             style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 3 }}

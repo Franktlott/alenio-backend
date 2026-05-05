@@ -40,7 +40,31 @@ export default function SignIn() {
     }
   }, [reason]);
 
+  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  const ensureSessionAndToken = async () => {
+    // Neon session materialization can lag briefly after sign-in on mobile.
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      await invalidateSession();
+      const sessionRes = await authClient.getSession({
+        fetchOptions: {
+          headers: { "X-Force-Fetch": "1" },
+        },
+      } as never);
+      const tokenFromSession =
+        setAccessTokenFromAuthData(sessionRes ?? null) ??
+        setAccessTokenFromAuthData(sessionRes.data ?? null);
+      const tokenFromClient = await getAccessToken();
+      if (sessionRes.data?.user && (tokenFromSession || tokenFromClient)) {
+        return true;
+      }
+      await sleep(250);
+    }
+    return false;
+  };
+
   const handleSignIn = async () => {
+    if (loading) return;
     setError(null);
     if (!email.trim()) {
       setError("Please enter your email address");
@@ -79,34 +103,31 @@ export default function SignIn() {
           setAccessTokenFromAuthData(result ?? null) ??
           setAccessTokenFromAuthData(result.data ?? null);
         clearSignedOutMark();
-        await invalidateSession();
-        const sessionRes = await authClient.getSession({
-          fetchOptions: {
-            headers: { "X-Force-Fetch": "1" },
-          },
-        } as never);
-        const tokenFromSession =
-          setAccessTokenFromAuthData(sessionRes ?? null) ??
-          setAccessTokenFromAuthData(sessionRes.data ?? null);
-        const tokenFromClient = await getAccessToken();
-        if (!sessionRes.data?.user || (!tokenFromResult && !tokenFromSession && !tokenFromClient)) {
+        const ready = tokenFromResult ? await ensureSessionAndToken() : await ensureSessionAndToken();
+        if (!ready) {
           setError("Sign-in did not establish a session. Please try again.");
           return;
         }
         await provisionBackendUserAfterAuth();
         const authHeaders = await getAuthHeaders();
-        const backendSessionRes = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/api/me/debug`, {
-          credentials: "include",
-          headers: authHeaders,
-        });
-        const backendJson = await readJsonSafe<{
-          data?: { authenticated?: boolean };
-          error?: { message?: string };
-        }>(backendSessionRes);
-        if (!backendSessionRes.ok || backendJson?.data?.authenticated !== true) {
-          const msg = backendJson?.error?.message ?? "Backend session is not established yet.";
-          setError(`${msg} Please verify your email or try signing in again.`);
-          return;
+        let backendAuthed = false;
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+          const backendSessionRes = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/api/me/debug`, {
+            credentials: "include",
+            headers: authHeaders,
+          });
+          const backendJson = await readJsonSafe<{
+            data?: { authenticated?: boolean };
+          }>(backendSessionRes);
+          if (backendSessionRes.ok && backendJson?.data?.authenticated === true) {
+            backendAuthed = true;
+            break;
+          }
+          await sleep(250);
+        }
+        if (!backendAuthed) {
+          // Do not strand the user on sign-in for transient backend auth propagation delays.
+          await sleep(200);
         }
         queryClient.removeQueries({ queryKey: ME_QUERY_KEY });
         const me = await queryClient.fetchQuery({
@@ -117,7 +138,7 @@ export default function SignIn() {
           setError("Could not load your profile. Try signing in again.");
           return;
         }
-        router.replace("/(app)/team");
+        router.replace("/(app)/chat");
       }
     } catch (err) {
       setError(formatAuthFlowError(err));
@@ -142,7 +163,7 @@ export default function SignIn() {
         </SafeAreaView>
       </LinearGradient>
 
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} className="flex-1">
+      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} className="flex-1">
         <ScrollView
           className="flex-1"
           contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 32, paddingBottom: 16 }}

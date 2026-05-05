@@ -7,7 +7,6 @@ import {
   Modal,
   ActivityIndicator,
   Image,
-  KeyboardAvoidingView,
   Platform,
   TextInput,
   RefreshControl,
@@ -23,6 +22,7 @@ import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
 import { useUnreadStore } from "@/lib/state/unread-store";
 import type { Team } from "@/lib/types";
+import { SafeKeyboardAvoidingView } from "@/lib/safe-keyboard-controller";
 
 const TOPIC_COLORS = ["#4361EE", "#7C3AED", "#10B981", "#F59E0B", "#EF4444", "#EC4899"];
 
@@ -360,7 +360,7 @@ export default function TeamChannelsScreen() {
       {/* Edit channel modal */}
       <Modal visible={!!editTopic} transparent animationType="slide" onRequestClose={() => setEditTopic(null)}>
         <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }} onPress={() => setEditTopic(null)}>
-          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"}>
+          <SafeKeyboardAvoidingView>
             <Pressable onPress={(e) => e.stopPropagation()}>
               <View style={{ backgroundColor: "white", borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40 }}>
                 <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: "#E2E8F0", alignSelf: "center", marginBottom: 16 }} />
@@ -397,7 +397,7 @@ export default function TeamChannelsScreen() {
                 </Pressable>
               </View>
             </Pressable>
-          </KeyboardAvoidingView>
+          </SafeKeyboardAvoidingView>
         </Pressable>
       </Modal>
 
@@ -438,7 +438,7 @@ export default function TeamChannelsScreen() {
       {/* Create Channel modal */}
       <Modal visible={showCreateChannel} transparent animationType="slide" onRequestClose={() => setShowCreateChannel(false)}>
         <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }} onPress={() => setShowCreateChannel(false)}>
-          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"}>
+          <SafeKeyboardAvoidingView>
             <Pressable onPress={(e) => e.stopPropagation()}>
               <View style={{ backgroundColor: "white", borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40 }}>
                 <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: "#E2E8F0", alignSelf: "center", marginBottom: 16 }} />
@@ -484,7 +484,7 @@ export default function TeamChannelsScreen() {
                 </Pressable>
               </View>
             </Pressable>
-          </KeyboardAvoidingView>
+          </SafeKeyboardAvoidingView>
         </Pressable>
       </Modal>
     </SafeAreaView>

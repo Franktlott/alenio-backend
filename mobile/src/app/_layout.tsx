@@ -39,7 +39,19 @@ focusManager.setEventListener((handleFocus) => {
   return () => subscription.remove();
 });
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      // Keep data warm briefly so tab/page switches feel instant.
+      staleTime: 30 * 1000,
+      gcTime: 30 * 60 * 1000,
+      // Avoid automatic refetch every time a screen remounts.
+      refetchOnMount: false,
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: true,
+    },
+  },
+});
 
 function CustomSplash({ isReady, onDone }: { isReady: boolean; onDone: () => void }) {
   const logoOpacity = useSharedValue(0);

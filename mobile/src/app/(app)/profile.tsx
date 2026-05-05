@@ -12,7 +12,6 @@ import {
   ScrollView,
   Pressable,
   Modal,
-  KeyboardAvoidingView,
   Switch,
   Share,
   RefreshControl,
@@ -38,6 +37,7 @@ import * as ImagePicker from "expo-image-picker";
 import { useTeamStore } from "@/lib/state/team-store";
 import { toast } from "burnt";
 import type { Team } from "@/lib/types";
+import { SafeKeyboardAvoidingView } from "@/lib/safe-keyboard-controller";
 
 const DEMO_EMAIL = "demo@alenio.app";
 
@@ -579,11 +579,11 @@ export default function ProfileScreen() {
           <TouchableOpacity
             onPress={handlePhotoPress}
             disabled={uploadMutation.isPending || isDemo}
-            style={{ marginTop: -48, marginBottom: 16 }}
+            style={{ marginTop: -64, marginBottom: 16 }}
             testID="avatar-upload-button"
           >
             <View
-              className="w-24 h-24 rounded-full overflow-hidden bg-indigo-100"
+              className="w-32 h-32 rounded-full overflow-hidden bg-indigo-100"
               style={{ borderWidth: 3, borderColor: "#F8FAFC", position: "relative" }}
             >
               <View
@@ -604,7 +604,7 @@ export default function ProfileScreen() {
                 <Image
                   key={avatarUri}
                   source={{ uri: avatarUri }}
-                  style={{ position: "absolute", top: 0, left: 0, width: 96, height: 96 }}
+                  style={{ position: "absolute", top: 0, left: 0, width: 128, height: 128 }}
                   resizeMode="cover"
                   onError={() => setAvatarFailedUri(avatarUri)}
                   testID="profile-avatar-image"
@@ -628,8 +628,8 @@ export default function ProfileScreen() {
               ) : null}
             </View>
             {!isDemo ? (
-              <View className="absolute bottom-0 right-0 w-7 h-7 rounded-full bg-indigo-600 items-center justify-center border-2 border-white">
-                <Camera size={13} color="white" />
+              <View className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-indigo-600 items-center justify-center border-2 border-white">
+                <Camera size={15} color="white" />
               </View>
             ) : null}
           </TouchableOpacity>
@@ -957,7 +957,7 @@ export default function ProfileScreen() {
       {/* Team edit / delete modal */}
       <Modal visible={!!editingTeam} transparent animationType="slide" onRequestClose={closeEditModal}>
         <Pressable className="flex-1 bg-black/40 justify-end" onPress={closeEditModal}>
-          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"}>
+          <SafeKeyboardAvoidingView>
             <Pressable onPress={(e) => e.stopPropagation()}>
               <View className="bg-white dark:bg-slate-800 rounded-t-3xl px-4 pt-4 pb-10">
 
@@ -1119,7 +1119,7 @@ export default function ProfileScreen() {
                 )}
               </View>
             </Pressable>
-          </KeyboardAvoidingView>
+          </SafeKeyboardAvoidingView>
         </Pressable>
       </Modal>
 
@@ -1192,7 +1192,7 @@ export default function ProfileScreen() {
       {/* Delete Account Modal */}
       <Modal visible={deleteStep > 0} transparent animationType="slide" onRequestClose={closeDeleteModal}>
         <Pressable className="flex-1 bg-black/40 justify-end" onPress={closeDeleteModal}>
-          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"}>
+          <SafeKeyboardAvoidingView>
             <Pressable onPress={(e) => e.stopPropagation()}>
               <View className="bg-white dark:bg-slate-800 rounded-t-3xl px-5 pt-6 pb-10">
                 {/* Step 1: Impact */}
@@ -1306,7 +1306,7 @@ export default function ProfileScreen() {
                 )}
               </View>
             </Pressable>
-          </KeyboardAvoidingView>
+          </SafeKeyboardAvoidingView>
         </Pressable>
       </Modal>
     </SafeAreaView>

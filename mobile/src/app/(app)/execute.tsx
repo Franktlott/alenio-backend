@@ -12,7 +12,6 @@ import {
   Modal,
   TextInput,
   Platform,
-  KeyboardAvoidingView,
   Switch,
   Alert,
   Dimensions,
@@ -21,7 +20,7 @@ import {
 const SCREEN_HEIGHT = Dimensions.get("window").height;
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams, Redirect, useFocusEffect } from "expo-router";
-import { Plus, User, Users, ArrowUpDown, ChevronLeft, ChevronRight, X, CalendarDays, CheckSquare, Calendar, Check, UserRound, Video, VideoOff, Clock, Lock, Globe, ClipboardList } from "lucide-react-native";
+import { Plus, User, Users, ArrowUpDown, ChevronLeft, ChevronRight, ChevronDown, X, CalendarDays, CheckSquare, Calendar, Check, UserRound, Video, VideoOff, Clock, Lock, Globe, ClipboardList } from "lucide-react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -33,6 +32,7 @@ import { useTaskStore } from "@/lib/state/task-store";
 import type { Task, Team, TeamMember, CalendarEvent } from "@/lib/types";
 import { NoTeamPlaceholder } from "@/components/NoTeamPlaceholder";
 import { useDemoMode, showDemoAlert } from "@/lib/useDemo";
+import { SafeKeyboardAvoidingView } from "@/lib/safe-keyboard-controller";
 
 type FilterTab = "all" | "assigned" | "completed";
 type SortMode = "due" | "priority" | "completed";
@@ -430,6 +430,40 @@ function TaskRow({ task, onToggle, onPress, onLongPress }: { task: Task; onToggl
     return { label, color };
   };
 
+  const getStatusPill = (): { label: string; textColor: string; backgroundColor: string } => {
+    if (isDone) {
+      return {
+        label: "Completed",
+        textColor: "#0F172A",
+        backgroundColor: "#D1FAE5",
+      };
+    }
+
+    if (overdue) {
+      return {
+        label: "Overdue",
+        textColor: "#B91C1C",
+        backgroundColor: "#FEE2E2",
+      };
+    }
+
+    if (task.status === "in_progress") {
+      return {
+        label: "In progress",
+        textColor: "#0F172A",
+        backgroundColor: "#FFEDD5",
+      };
+    }
+
+    return {
+      label: "Open",
+      textColor: "#0F172A",
+      backgroundColor: "#DCFCE7",
+    };
+  };
+
+  const statusPill = getStatusPill();
+
   return (
     <Pressable
       onPress={onPress}
@@ -448,123 +482,115 @@ function TaskRow({ task, onToggle, onPress, onLongPress }: { task: Task; onToggl
         elevation: 2,
       }}
     >
-      <View style={{ paddingHorizontal: 12, paddingVertical: 9 }}>
+      <View style={{ paddingHorizontal: 12, paddingVertical: 9, flexDirection: "row", alignItems: "center" }}>
+        <View style={{ flex: 1 }}>
+          {/* Row 1: Icon circle + Title + 3-dot menu */}
+          <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
+            {/* Icon circle — tapping toggles done state */}
+            <Pressable
+              onPress={onToggle}
+              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 16,
+                backgroundColor: isDone ? "#D1FAE5" : iconCircleBg,
+                alignItems: "center",
+                justifyContent: "center",
+                marginRight: 10,
+                marginTop: 1,
+                flexShrink: 0,
+              }}
+            >
+              {isDone ? (
+                <Text style={{ fontSize: 14, color: "#10B981", fontWeight: "700" }}>✓</Text>
+              ) : (
+                <Text style={{ fontSize: 13, fontWeight: "700", color: priority.accentColor }}>
+                  {priority.label[0]}
+                </Text>
+              )}
+            </Pressable>
 
-        {/* Row 1: Icon circle + Title + 3-dot menu */}
-        <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
-          {/* Icon circle — tapping toggles done state */}
-          <Pressable
-            onPress={onToggle}
-            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-            style={{
-              width: 32,
-              height: 32,
-              borderRadius: 16,
-              backgroundColor: isDone ? "#D1FAE5" : iconCircleBg,
-              alignItems: "center",
-              justifyContent: "center",
-              marginRight: 10,
-              marginTop: 1,
-              flexShrink: 0,
-            }}
-          >
-            {isDone ? (
-              <Text style={{ fontSize: 14, color: "#10B981", fontWeight: "700" }}>✓</Text>
-            ) : (
-              <Text style={{ fontSize: 13, fontWeight: "700", color: priority.accentColor }}>
-                {priority.label[0]}
-              </Text>
-            )}
-          </Pressable>
-
-          {/* Title + assignee */}
-          <View style={{ flex: 1, marginRight: 6 }}>
-            <View style={{ flexDirection: "row", alignItems: "center" }}>
-              {task.incognito ? <Text style={{ fontSize: 12, marginRight: 3 }}>🕵️</Text> : null}
-              {task.isJoint ? <Text style={{ fontSize: 12, marginRight: 3 }}>🤝</Text> : null}
-              <Text
-                numberOfLines={2}
-                style={{
-                  fontSize: 14,
-                  fontWeight: "600",
-                  color: isDone ? "#94A3B8" : "#0F172A",
-                  textDecorationLine: isDone ? "line-through" : "none",
-                  lineHeight: 19,
-                  flex: 1,
-                }}
-              >
-                {task.title}
-              </Text>
+            {/* Title + assignee */}
+            <View style={{ flex: 1, marginRight: 6 }}>
+              <View style={{ flexDirection: "row", alignItems: "center" }}>
+                {task.incognito ? <Text style={{ fontSize: 12, marginRight: 3 }}>🕵️</Text> : null}
+                {task.isJoint ? <Text style={{ fontSize: 12, marginRight: 3 }}>🤝</Text> : null}
+                <Text
+                  numberOfLines={2}
+                  style={{
+                    fontSize: 14,
+                    fontWeight: "600",
+                    color: isDone ? "#94A3B8" : "#0F172A",
+                    textDecorationLine: isDone ? "line-through" : "none",
+                    lineHeight: 19,
+                    flex: 1,
+                  }}
+                >
+                  {task.title}
+                </Text>
+              </View>
+              {firstAssigneeName ? (
+                <Text numberOfLines={1} style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>
+                  {"Assigned to: "}
+                  {firstAssigneeName}
+                </Text>
+              ) : null}
             </View>
-            {firstAssigneeName ? (
-              <Text numberOfLines={1} style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>
-                {"Assigned to: "}
-                {firstAssigneeName}
-              </Text>
-            ) : null}
+
           </View>
 
-          {/* 3-dot menu */}
-          <Pressable
-            onPress={(e) => { e.stopPropagation(); onLongPress?.(); }}
-            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-            style={{ paddingLeft: 4, paddingTop: 2 }}
-          >
-            <Text style={{ fontSize: 18, color: "#94A3B8", lineHeight: 20 }}>{"⋮"}</Text>
-          </Pressable>
-        </View>
-
-        {/* Row 2: Priority pill | star placeholder | status/done badge | clock + due time | recurrence */}
-        <View style={{ flexDirection: "row", alignItems: "center", marginTop: 7, gap: 6 }}>
-          {/* Priority pill */}
-          <View style={{
-            flexDirection: "row",
-            alignItems: "center",
-            paddingHorizontal: 7,
-            paddingVertical: 2,
-            borderRadius: 20,
-            backgroundColor: priority.bg,
-          }}>
-            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: priority.accentColor, marginRight: 4 }} />
-            <Text style={{ fontSize: 11, fontWeight: "600", color: priority.text }}>{priority.label}</Text>
-          </View>
-
-          {/* Done status badge */}
-          {isDone ? (
+          {/* Row 2: Priority pill | clock + due time | recurrence */}
+          <View style={{ flexDirection: "row", alignItems: "center", marginTop: 7, gap: 6 }}>
+            {/* Priority pill */}
             <View style={{
               flexDirection: "row",
               alignItems: "center",
               paddingHorizontal: 7,
               paddingVertical: 2,
               borderRadius: 20,
-              backgroundColor: "#D1FAE5",
+              backgroundColor: priority.bg,
             }}>
-              <Text style={{ fontSize: 11, fontWeight: "600", color: "#059669" }}>
-                {getDoneLabel().label}
-              </Text>
+              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: priority.accentColor, marginRight: 4 }} />
+              <Text style={{ fontSize: 11, fontWeight: "600", color: priority.text }}>{priority.label}</Text>
             </View>
-          ) : null}
 
-          {/* Due date */}
-          {dueDate && !isDone ? (
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
-              <Clock size={11} color={dueTimeColor} />
-              <Text style={{ fontSize: 11, fontWeight: "500", color: dueTimeColor }}>
-                {overdue
-                  ? `Overdue · ${fmtDate(dueDate)}`
-                  : today
-                  ? `Today · ${fmtTime(dueDate)}`
-                  : fmtDate(dueDate)}
-              </Text>
-            </View>
-          ) : null}
+            {/* Due date */}
+            {dueDate && !isDone ? (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
+                <Clock size={11} color={dueTimeColor} />
+                <Text style={{ fontSize: 11, fontWeight: "500", color: dueTimeColor }}>
+                  {overdue
+                    ? `Overdue · ${fmtDate(dueDate)}`
+                    : today
+                    ? `Today · ${fmtTime(dueDate)}`
+                    : fmtDate(dueDate)}
+                </Text>
+              </View>
+            ) : null}
 
-          {/* Recurrence indicator */}
-          {task.recurrenceRule && !isDone ? (
-            <Text style={{ fontSize: 11, color: "#818CF8" }}>{"↺"}</Text>
-          ) : null}
+            {/* Recurrence indicator */}
+            {task.recurrenceRule && !isDone ? (
+              <Text style={{ fontSize: 11, color: "#818CF8" }}>{"↺"}</Text>
+            ) : null}
+          </View>
         </View>
 
+        {/* Right-aligned status pill */}
+        <View style={{ marginLeft: 10, alignSelf: "center" }}>
+          <View style={{
+            flexDirection: "row",
+            alignItems: "center",
+            paddingHorizontal: 9,
+            paddingVertical: 4,
+            borderRadius: 20,
+            backgroundColor: statusPill.backgroundColor,
+          }}>
+            <Text style={{ fontSize: 11, fontWeight: "600", color: statusPill.textColor }}>
+              {statusPill.label}
+            </Text>
+          </View>
+        </View>
       </View>
     </Pressable>
   );
@@ -593,13 +619,15 @@ export default function TasksScreen() {
   const [showEventModal, setShowEventModal] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
+  const [eventModalType, setEventModalType] = useState<"event" | "meeting">("event");
   const [eventTitle, setEventTitle] = useState("");
   const [eventDescription, setEventDescription] = useState("");
   const [eventStart, setEventStart] = useState<Date>(new Date());
   const [eventEnd, setEventEnd] = useState<Date>(new Date());
   const [eventColor, setEventColor] = useState("#4361EE");
   const [eventIsHidden, setEventIsHidden] = useState(true);
-  const [eventIsVideoMeeting, setEventIsVideoMeeting] = useState(false);
+  const [meetingAssigneeIds, setMeetingAssigneeIds] = useState<string[]>([]);
+  const [showMeetingAssigneeDropdown, setShowMeetingAssigneeDropdown] = useState(false);
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
   const [showStartTimePicker, setShowStartTimePicker] = useState(false);
@@ -640,6 +668,7 @@ export default function TasksScreen() {
     await queryClient.invalidateQueries({ queryKey: ["tasks", activeTeamId, "mine"] });
     await queryClient.invalidateQueries({ queryKey: ["tasks", activeTeamId, "team"] });
     await queryClient.invalidateQueries({ queryKey: ["calendar-events", activeTeamId] });
+    await queryClient.invalidateQueries({ queryKey: ["upcoming-video-meetings"] });
     setRefreshing(false);
   };
 
@@ -768,8 +797,11 @@ export default function TasksScreen() {
       api.post(`/api/teams/${activeTeamId}/events`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["calendar-events", activeTeamId] });
+      queryClient.invalidateQueries({ queryKey: ["upcoming-video-meetings"] });
       setShowEventModal(false);
-      setEventTitle(""); setEventDescription(""); setEventColor("#4361EE"); setEventIsHidden(true); setEventIsVideoMeeting(false);
+      setEventTitle(""); setEventDescription(""); setEventColor("#4361EE"); setEventIsHidden(true);
+      setMeetingAssigneeIds([]);
+      setShowMeetingAssigneeDropdown(false);
     },
   });
 
@@ -778,9 +810,12 @@ export default function TasksScreen() {
       api.patch(`/api/teams/${activeTeamId}/events/${id}`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["calendar-events", activeTeamId] });
+      queryClient.invalidateQueries({ queryKey: ["upcoming-video-meetings"] });
       setShowEventModal(false);
       setEditingEvent(null);
-      setEventTitle(""); setEventDescription(""); setEventColor("#4361EE"); setEventIsHidden(true); setEventIsVideoMeeting(false);
+      setEventTitle(""); setEventDescription(""); setEventColor("#4361EE"); setEventIsHidden(true);
+      setMeetingAssigneeIds([]);
+      setShowMeetingAssigneeDropdown(false);
     },
   });
 
@@ -789,42 +824,76 @@ export default function TasksScreen() {
       api.delete(`/api/teams/${activeTeamId}/events/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["calendar-events", activeTeamId] });
+      queryClient.invalidateQueries({ queryKey: ["upcoming-video-meetings"] });
       setShowEventModal(false);
       setEditingEvent(null);
       setConfirmDeleteEvent(false);
-      setEventTitle(""); setEventDescription(""); setEventColor("#4361EE"); setEventIsHidden(true); setEventIsVideoMeeting(false);
+      setEventTitle(""); setEventDescription(""); setEventColor("#4361EE"); setEventIsHidden(true);
+      setMeetingAssigneeIds([]);
+      setShowMeetingAssigneeDropdown(false);
     },
   });
 
   const openEventModal = () => {
     setEditingEvent(null);
+    setEventModalType("event");
     const d = selectedDay
       ? (() => { const [y, m, day] = selectedDay.split("-").map(Number); return new Date(y, m - 1, day); })()
       : new Date();
     setEventTitle(""); setEventDescription("");
     setEventStart(d); setEventEnd(d);
-    setEventColor("#4361EE"); setEventIsHidden(true); setEventIsVideoMeeting(false); setFormError(null); setConfirmDeleteEvent(false);
+    setEventColor("#4361EE"); setEventIsHidden(true); setFormError(null); setConfirmDeleteEvent(false);
+    setMeetingAssigneeIds([]);
+    setShowMeetingAssigneeDropdown(false);
+    setShowStartPicker(false); setShowEndPicker(false); setShowStartTimePicker(false); setShowEndTimePicker(false);
+    setShowEventModal(true);
+  };
+
+  const openMeetingModal = () => {
+    setEditingEvent(null);
+    setEventModalType("meeting");
+    const now = new Date();
+    const d = selectedDay
+      ? (() => {
+          const [y, m, day] = selectedDay.split("-").map(Number);
+          return new Date(y, m - 1, day, now.getHours(), now.getMinutes(), 0, 0);
+        })()
+      : now;
+    const end = new Date(d);
+    end.setHours(end.getHours() + 1);
+    setEventTitle(""); setEventDescription("");
+    setEventStart(d); setEventEnd(end);
+    setEventColor("#4361EE"); setEventIsHidden(true); setFormError(null); setConfirmDeleteEvent(false);
+    setMeetingAssigneeIds([]);
+    setShowMeetingAssigneeDropdown(false);
+    setShowStartPicker(false); setShowEndPicker(false); setShowStartTimePicker(false); setShowEndTimePicker(false);
     setShowEventModal(true);
   };
 
   const openEditEventModal = (ev: CalendarEvent) => {
     setEditingEvent(ev);
+    setEventModalType(ev.isVideoMeeting ? "meeting" : "event");
     setEventTitle(ev.title);
     setEventDescription(ev.description ?? "");
     setEventStart(new Date(ev.startDate));
     setEventEnd(ev.endDate ? new Date(ev.endDate) : new Date(ev.startDate));
     setEventColor(ev.color);
     setEventIsHidden(ev.isHidden ?? false);
-    setEventIsVideoMeeting(ev.isVideoMeeting ?? false);
+    setMeetingAssigneeIds(ev.assigneeIds ?? []);
     setFormError(null);
     setConfirmDeleteEvent(false);
+    setShowMeetingAssigneeDropdown(false);
+    setShowStartPicker(false); setShowEndPicker(false); setShowStartTimePicker(false); setShowEndTimePicker(false);
     setShowEventModal(true);
   };
 
   const handleSaveEvent = () => {
     if (!eventTitle.trim()) { setFormError("Please enter a title"); return; }
     const end = eventEnd < eventStart ? eventStart : eventEnd;
-    if (eventIsVideoMeeting) {
+    // Keep the calendar focused on the saved event's day so past-dated meetings remain visible immediately.
+    setSelectedDay(toLocalIso(eventStart));
+    const isMeeting = eventModalType === "meeting";
+    if (isMeeting) {
       const currentEventId = editingEvent?.id;
       const hasOverlap = calendarEvents
         .filter((e) => e.isVideoMeeting && e.id !== currentEventId)
@@ -847,9 +916,10 @@ export default function TasksScreen() {
           startDate: eventStart.toISOString(),
           endDate: end.toISOString(),
           color: eventColor,
-          allDay: !eventIsVideoMeeting,
+          allDay: !isMeeting,
           isHidden: eventIsHidden,
-          isVideoMeeting: eventIsVideoMeeting,
+          isVideoMeeting: isMeeting,
+          assigneeIds: isMeeting && eventIsHidden ? meetingAssigneeIds : undefined,
         },
       });
     } else {
@@ -859,9 +929,10 @@ export default function TasksScreen() {
         startDate: eventStart.toISOString(),
         endDate: end.toISOString(),
         color: eventColor,
-        allDay: !eventIsVideoMeeting,
+        allDay: !isMeeting,
         isHidden: eventIsHidden,
-        isVideoMeeting: eventIsVideoMeeting,
+        isVideoMeeting: isMeeting,
+        assigneeIds: isMeeting && eventIsHidden ? meetingAssigneeIds : undefined,
       });
     }
   };
@@ -1561,8 +1632,22 @@ export default function TasksScreen() {
                   <CalendarDays size={22} color="white" />
                 </View>
                 <View>
-                  <Text style={{ fontSize: 15, fontWeight: "700", color: "#0F172A" }}>Add Event</Text>
+                  <Text style={{ fontSize: 15, fontWeight: "700", color: "#0F172A" }}>Calendar Event</Text>
                   <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 2 }}>Add to the team calendar</Text>
+                </View>
+              </Pressable>
+            ) : null}
+            {isOwnerOrLeader ? (
+              <Pressable
+                onPress={() => { setShowAddModal(false); openMeetingModal(); }}
+                style={{ flexDirection: "row", alignItems: "center", gap: 14, backgroundColor: "#EEF2FF", borderRadius: 16, padding: 16 }}
+              >
+                <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: "#4361EE", alignItems: "center", justifyContent: "center" }}>
+                  <Video size={22} color="white" />
+                </View>
+                <View>
+                  <Text style={{ fontSize: 15, fontWeight: "700", color: "#0F172A" }}>Virtual Meeting</Text>
+                  <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 2 }}>Create a meeting with video call link</Text>
                 </View>
               </Pressable>
             ) : null}
@@ -1575,7 +1660,7 @@ export default function TasksScreen() {
                 <CheckSquare size={22} color="white" />
               </View>
               <View>
-                <Text style={{ fontSize: 15, fontWeight: "700", color: "#0F172A" }}>Add Task</Text>
+                <Text style={{ fontSize: 15, fontWeight: "700", color: "#0F172A" }}>Task</Text>
                 <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 2 }}>Create a new task for the team</Text>
               </View>
             </Pressable>
@@ -1587,14 +1672,18 @@ export default function TasksScreen() {
 
       {/* New / Edit Event Modal */}
       <Modal visible={showEventModal} transparent animationType="slide" onRequestClose={() => { setShowEventModal(false); setEditingEvent(null); setConfirmDeleteEvent(false); }}>
-        <KeyboardAvoidingView style={{ flex: 1, justifyContent: "flex-end" }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+        <SafeKeyboardAvoidingView style={{ flex: 1, justifyContent: "flex-end" }}>
           <Pressable style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.5)" }} onPress={() => { setShowEventModal(false); setEditingEvent(null); setConfirmDeleteEvent(false); }} />
           <Pressable style={{ backgroundColor: "white", borderTopLeftRadius: 24, borderTopRightRadius: 24 }} onPress={(e) => e.stopPropagation()}>
             <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: "#E2E8F0", alignSelf: "center", marginTop: 8, marginBottom: 16 }} />
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 20, paddingHorizontal: 20 }}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                 <Image source={require("@/assets/alenio-icon.png")} style={{ width: 28, height: 28, borderRadius: 7 }} />
-                <Text style={{ fontSize: 17, fontWeight: "700", color: "#0F172A" }}>{editingEvent ? "Edit Event" : "New Event"}</Text>
+                <Text style={{ fontSize: 17, fontWeight: "700", color: "#0F172A" }}>
+                  {editingEvent
+                    ? eventModalType === "meeting" ? "Edit Virtual Meeting" : "Edit Event"
+                    : eventModalType === "meeting" ? "New Virtual Meeting" : "New Event"}
+                </Text>
               </View>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                 {editingEvent ? (
@@ -1667,7 +1756,9 @@ export default function TasksScreen() {
 
               <View style={{ flexDirection: "row", gap: 10, marginBottom: 20 }}>
                 <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748B", marginBottom: 6 }}>Start Date</Text>
+                  <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748B", marginBottom: 6 }}>
+                    {eventModalType === "meeting" ? "Date" : "Start Date"}
+                  </Text>
                   <Pressable onPress={() => { setShowEndPicker(false); setShowStartPicker(true); }} style={{ borderWidth: 1.5, borderColor: "#4361EE", borderRadius: 12, paddingHorizontal: 10, paddingVertical: 10, flexDirection: "row", alignItems: "center", backgroundColor: "#4361EE0D" }}>
                     <Calendar size={13} color="#4361EE" />
                     <Text style={{ fontSize: 12, fontWeight: "500", color: "#4361EE", marginLeft: 6 }}>
@@ -1675,15 +1766,17 @@ export default function TasksScreen() {
                     </Text>
                   </Pressable>
                 </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748B", marginBottom: 6 }}>End Date</Text>
-                  <Pressable onPress={() => { setShowStartPicker(false); setShowEndPicker(true); }} style={{ borderWidth: 1.5, borderColor: "#7C3AED", borderRadius: 12, paddingHorizontal: 10, paddingVertical: 10, flexDirection: "row", alignItems: "center", backgroundColor: "#7C3AED0D" }}>
-                    <Calendar size={13} color="#7C3AED" />
-                    <Text style={{ fontSize: 12, fontWeight: "500", color: "#7C3AED", marginLeft: 6 }}>
-                      {eventEnd.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-                    </Text>
-                  </Pressable>
-                </View>
+                {eventModalType === "event" ? (
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748B", marginBottom: 6 }}>End Date</Text>
+                    <Pressable onPress={() => { setShowStartPicker(false); setShowEndPicker(true); }} style={{ borderWidth: 1.5, borderColor: "#7C3AED", borderRadius: 12, paddingHorizontal: 10, paddingVertical: 10, flexDirection: "row", alignItems: "center", backgroundColor: "#7C3AED0D" }}>
+                      <Calendar size={13} color="#7C3AED" />
+                      <Text style={{ fontSize: 12, fontWeight: "500", color: "#7C3AED", marginLeft: 6 }}>
+                        {eventEnd.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                      </Text>
+                    </Pressable>
+                  </View>
+                ) : null}
               </View>
 
               {showStartPicker ? (
@@ -1693,48 +1786,47 @@ export default function TasksScreen() {
                     <Text style={{ fontSize: 14, fontWeight: "600", color: "#0F172A" }}>Start Date</Text>
                     <Pressable onPress={() => setShowStartPicker(false)}><Text style={{ color: "#4361EE", fontWeight: "600", fontSize: 15 }}>Done</Text></Pressable>
                   </View>
-                  <DateTimePicker value={eventStart} mode="date" display="spinner" style={{ height: 180 }} onChange={(_e, d) => { if (d) { setEventStart(d); if (d > eventEnd) setEventEnd(d); } }} />
+                  <DateTimePicker
+                    value={eventStart}
+                    mode="date"
+                    display="spinner"
+                    style={{ height: 180 }}
+                    onChange={(e, d) => {
+                      if (Platform.OS === "android") setShowStartPicker(false);
+                      if (e.type === "dismissed") return;
+                      if (d) {
+                        setEventStart(d);
+                        if (d > eventEnd) setEventEnd(d);
+                      }
+                    }}
+                  />
                 </View>
               ) : null}
 
-              {showEndPicker ? (
+              {showEndPicker && eventModalType === "event" ? (
                 <View style={{ backgroundColor: "#F8FAFC", borderRadius: 16, marginBottom: 14, overflow: "hidden" }}>
                   <View style={{ flexDirection: "row", justifyContent: "space-between", paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4 }}>
                     <Pressable onPress={() => setShowEndPicker(false)}><Text style={{ color: "#64748B", fontSize: 15 }}>Cancel</Text></Pressable>
                     <Text style={{ fontSize: 14, fontWeight: "600", color: "#0F172A" }}>End Date</Text>
                     <Pressable onPress={() => setShowEndPicker(false)}><Text style={{ color: "#7C3AED", fontWeight: "600", fontSize: 15 }}>Done</Text></Pressable>
                   </View>
-                  <DateTimePicker value={eventEnd} mode="date" display="spinner" minimumDate={eventStart} style={{ height: 180 }} onChange={(_e, d) => { if (d) setEventEnd(d); }} />
+                  <DateTimePicker
+                    value={eventEnd}
+                    mode="date"
+                    display="spinner"
+                    minimumDate={eventStart}
+                    style={{ height: 180 }}
+                    onChange={(e, d) => {
+                      if (Platform.OS === "android") setShowEndPicker(false);
+                      if (e.type === "dismissed") return;
+                      if (d) setEventEnd(d);
+                    }}
+                  />
                 </View>
               ) : null}
 
-              {/* Video Meeting toggle */}
-              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: "#F8FAFC", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, marginBottom: eventIsVideoMeeting ? 10 : 14, borderWidth: 1.5, borderColor: eventIsVideoMeeting ? "#4361EE" : "#E2E8F0" }}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                  <Video size={18} color={eventIsVideoMeeting ? "#4361EE" : "#CBD5E1"} />
-                  <View>
-                    <Text style={{ fontSize: 14, fontWeight: "600", color: "#0F172A" }}>Video Meeting</Text>
-                    <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 1 }}>Includes a video call link</Text>
-                  </View>
-                </View>
-                <Switch
-                  value={eventIsVideoMeeting}
-                  onValueChange={(val) => {
-                    setEventIsVideoMeeting(val);
-                    if (val) {
-                      const newEnd = new Date(eventStart);
-                      newEnd.setHours(newEnd.getHours() + 1);
-                      setEventEnd(newEnd);
-                    }
-                  }}
-                  trackColor={{ false: "#E2E8F0", true: "#4361EE" }}
-                  thumbColor="white"
-                  testID="video-meeting-toggle"
-                />
-              </View>
-
-              {/* Time pickers — only shown for video meetings */}
-              {eventIsVideoMeeting ? (
+              {/* Time pickers — only shown for virtual meetings */}
+              {eventModalType === "meeting" ? (
                 <View style={{ marginBottom: 14 }}>
                   <View style={{ flexDirection: "row", gap: 10 }}>
                     <View style={{ flex: 1 }}>
@@ -1762,7 +1854,23 @@ export default function TasksScreen() {
                         <Text style={{ fontSize: 13, fontWeight: "600", color: "#64748B" }}>Start Time</Text>
                         <Pressable onPress={() => setShowStartTimePicker(false)}><Text style={{ fontSize: 13, fontWeight: "700", color: "#4361EE" }}>Done</Text></Pressable>
                       </View>
-                      <DateTimePicker value={eventStart} mode="time" display="spinner" onChange={(_e, d) => { if (d) setEventStart(prev => { const n = new Date(prev); n.setHours(d.getHours(), d.getMinutes()); return n; }); }} style={{ height: 216 }} />
+                      <DateTimePicker
+                        value={eventStart}
+                        mode="time"
+                        display="spinner"
+                        onChange={(e, d) => {
+                          if (Platform.OS === "android") setShowStartTimePicker(false);
+                          if (e.type === "dismissed") return;
+                          if (d) {
+                            setEventStart((prev) => {
+                              const n = new Date(prev);
+                              n.setHours(d.getHours(), d.getMinutes());
+                              return n;
+                            });
+                          }
+                        }}
+                        style={{ height: 216 }}
+                      />
                     </View>
                   ) : null}
                   {showEndTimePicker ? (
@@ -1771,8 +1879,93 @@ export default function TasksScreen() {
                         <Text style={{ fontSize: 13, fontWeight: "600", color: "#64748B" }}>End Time</Text>
                         <Pressable onPress={() => setShowEndTimePicker(false)}><Text style={{ fontSize: 13, fontWeight: "700", color: "#7C3AED" }}>Done</Text></Pressable>
                       </View>
-                      <DateTimePicker value={eventEnd} mode="time" display="spinner" onChange={(_e, d) => { if (d) setEventEnd(prev => { const n = new Date(prev); n.setHours(d.getHours(), d.getMinutes()); return n; }); }} style={{ height: 216 }} />
+                      <DateTimePicker
+                        value={eventEnd}
+                        mode="time"
+                        display="spinner"
+                        onChange={(e, d) => {
+                          if (Platform.OS === "android") setShowEndTimePicker(false);
+                          if (e.type === "dismissed") return;
+                          if (d) {
+                            setEventEnd((prev) => {
+                              const n = new Date(prev);
+                              n.setHours(d.getHours(), d.getMinutes());
+                              return n;
+                            });
+                          }
+                        }}
+                        style={{ height: 216 }}
+                      />
                     </View>
+                  ) : null}
+
+                  {eventIsHidden ? (
+                    <>
+                      <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748B", marginTop: 12, marginBottom: 8 }}>
+                        Assign Members (optional)
+                      </Text>
+                      <Text style={{ fontSize: 11, color: "#94A3B8", marginBottom: 8 }}>
+                        If none selected, this private meeting is visible to everyone invited by the creator.
+                      </Text>
+                      <Pressable
+                        onPress={() => setShowMeetingAssigneeDropdown((prev) => !prev)}
+                        style={{
+                          borderWidth: 1.5,
+                          borderColor: "#E2E8F0",
+                          borderRadius: 12,
+                          paddingHorizontal: 12,
+                          paddingVertical: 11,
+                          flexDirection: "row",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          backgroundColor: "#FFFFFF",
+                        }}
+                      >
+                        <Text style={{ fontSize: 13, color: "#334155", fontWeight: "500", flex: 1 }} numberOfLines={1}>
+                          {meetingAssigneeIds.length === 0
+                            ? "Select attendees"
+                            : `${meetingAssigneeIds.length} attendee${meetingAssigneeIds.length === 1 ? "" : "s"} selected`}
+                        </Text>
+                        <ChevronDown
+                          size={16}
+                          color="#64748B"
+                          style={{ transform: [{ rotate: showMeetingAssigneeDropdown ? "180deg" : "0deg" }] }}
+                        />
+                      </Pressable>
+                      {showMeetingAssigneeDropdown ? (
+                        <View style={{ marginTop: 8, borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 12, backgroundColor: "#FFFFFF" }}>
+                          {(teamData?.members ?? []).map((member, idx) => {
+                            const selected = meetingAssigneeIds.includes(member.userId);
+                            return (
+                              <Pressable
+                                key={member.userId}
+                                onPress={() =>
+                                  setMeetingAssigneeIds((prev) =>
+                                    prev.includes(member.userId)
+                                      ? prev.filter((id) => id !== member.userId)
+                                      : [...prev, member.userId]
+                                  )
+                                }
+                                style={{
+                                  paddingHorizontal: 12,
+                                  paddingVertical: 11,
+                                  flexDirection: "row",
+                                  alignItems: "center",
+                                  justifyContent: "space-between",
+                                  borderBottomWidth: idx === (teamData?.members ?? []).length - 1 ? 0 : 1,
+                                  borderBottomColor: "#F1F5F9",
+                                }}
+                              >
+                                <Text style={{ fontSize: 13, color: "#334155", fontWeight: selected ? "700" : "500" }}>
+                                  {member.user.name}
+                                </Text>
+                                {selected ? <Check size={16} color="#4361EE" /> : <View style={{ width: 16, height: 16 }} />}
+                              </Pressable>
+                            );
+                          })}
+                        </View>
+                      ) : null}
+                    </>
                   ) : null}
                 </View>
               ) : null}
@@ -1785,13 +1978,28 @@ export default function TasksScreen() {
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
                   <Users size={18} color={!eventIsHidden ? "#4361EE" : "#CBD5E1"} />
                   <View>
-                    <Text style={{ fontSize: 14, fontWeight: "600", color: "#0F172A" }}>Public</Text>
-                    <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 1 }}>{!eventIsHidden ? "Visible to the whole team" : "Only visible to you"}</Text>
+                    <Text style={{ fontSize: 14, fontWeight: "600", color: "#0F172A" }}>
+                      {eventModalType === "meeting" ? (!eventIsHidden ? "Public" : "Private") : "Public"}
+                    </Text>
+                    <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 1 }}>
+                      {eventModalType === "meeting"
+                        ? (!eventIsHidden
+                            ? "Public meeting. Toggle off for private."
+                            : "Private meeting. Toggle on for public.")
+                        : (!eventIsHidden ? "Visible to the whole team" : "Only visible to you")}
+                    </Text>
                   </View>
                 </View>
                 <Switch
                   value={!eventIsHidden}
-                  onValueChange={(v) => setEventIsHidden(!v)}
+                  onValueChange={(v) => {
+                    const nextHidden = !v;
+                    setEventIsHidden(nextHidden);
+                    if (!nextHidden) {
+                      setMeetingAssigneeIds([]);
+                      setShowMeetingAssigneeDropdown(false);
+                    }
+                  }}
                   trackColor={{ false: "#E2E8F0", true: "#4361EE" }}
                   thumbColor="white"
                   testID="hidden-toggle"
@@ -1825,7 +2033,7 @@ export default function TasksScreen() {
               </TouchableOpacity>
             </ScrollView>
           </Pressable>
-        </KeyboardAvoidingView>
+        </SafeKeyboardAvoidingView>
       </Modal>
 
       {/* Milestone Celebration Modal */}

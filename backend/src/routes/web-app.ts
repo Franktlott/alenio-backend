@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { prisma } from "../prisma";
 import { getSessionFromHeaders } from "../auth";
+import { sendPushToUsers } from "../lib/push";
 
 const webRouter = new Hono();
 
@@ -113,6 +114,28 @@ webRouter.delete("/api/teams/:id/members/:userId", async (c) => {
   return c.json({ data: { ok: true } });
 });
 
+// ── API: task by id (any member of task's team) — before `/api/tasks` list
+webRouter.get("/api/tasks/:id", async (c) => {
+  const session = await getWebSession(c);
+  if (!session) return c.json({ error: "Unauthorized" }, 401);
+  const { id } = c.req.param();
+  const task = await prisma.task.findUnique({
+    where: { id },
+    include: {
+      team: { select: { id: true, name: true } },
+      creator: { select: { id: true, name: true, email: true, image: true } },
+      assignments: { include: { user: { select: { id: true, name: true, email: true, image: true } } } },
+      subtasks: { orderBy: { order: "asc" }, select: { id: true, title: true, completed: true, order: true } },
+    },
+  });
+  if (!task) return c.json({ error: { message: "Task not found", code: "NOT_FOUND" } }, 404);
+  const membership = await prisma.teamMember.findFirst({
+    where: { teamId: task.teamId, userId: session.user.id },
+  });
+  if (!membership) return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
+  return c.json({ data: task });
+});
+
 // ── API: my tasks ─────────────────────────────────────────────────────────────
 webRouter.get("/api/tasks", async (c) => {
   const session = await getWebSession(c);
@@ -133,6 +156,26 @@ webRouter.get("/api/tasks", async (c) => {
   return c.json({ data: assignments.map((a) => a.task) });
 });
 
+// ── API: single team task (detail) — register before `/tasks` list so path matches reliably
+webRouter.get("/api/teams/:id/tasks/:taskId", async (c) => {
+  const session = await getWebSession(c);
+  if (!session) return c.json({ error: "Unauthorized" }, 401);
+  const { id: teamId, taskId } = c.req.param();
+  const membership = await prisma.teamMember.findFirst({ where: { teamId, userId: session.user.id } });
+  if (!membership) return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
+  const task = await prisma.task.findFirst({
+    where: { id: taskId, teamId },
+    include: {
+      team: { select: { id: true, name: true } },
+      creator: { select: { id: true, name: true, email: true, image: true } },
+      assignments: { include: { user: { select: { id: true, name: true, email: true, image: true } } } },
+      subtasks: { orderBy: { order: "asc" }, select: { id: true, title: true, completed: true, order: true } },
+    },
+  });
+  if (!task) return c.json({ error: { message: "Task not found", code: "NOT_FOUND" } }, 404);
+  return c.json({ data: task });
+});
+
 // ── API: team tasks ───────────────────────────────────────────────────────────
 webRouter.get("/api/teams/:id/tasks", async (c) => {
   const session = await getWebSession(c);
@@ -145,6 +188,7 @@ webRouter.get("/api/teams/:id/tasks", async (c) => {
     include: {
       assignments: { include: { user: { select: { id: true, name: true, image: true } } } },
       creator: { select: { id: true, name: true } },
+      subtasks: { orderBy: { order: "asc" }, select: { id: true, title: true, completed: true, order: true } },
     },
     orderBy: { createdAt: "desc" },
     take: 100,
@@ -174,34 +218,140 @@ webRouter.get("/api/team-tasks", async (c) => {
   return c.json({ data: tasks });
 });
 
-// ── API: create task ──────────────────────────────────────────────────────────
+// ── API: create task (parity with mobile: assignees, joint vs split, subtasks) ─
 webRouter.post("/api/tasks", async (c) => {
   const session = await getWebSession(c);
   if (!session) return c.json({ error: "Unauthorized" }, 401);
   const body = await c.req.json().catch(() => ({}));
-  const { title, description, priority, dueDate, teamId, status } = body;
-  if (!title || !title.trim()) return c.json({ error: { message: "Title is required" } }, 400);
-  if (!teamId) return c.json({ error: { message: "Team is required" } }, 400);
-  // Verify user is in the team
+  const {
+    title,
+    description,
+    priority,
+    dueDate,
+    teamId,
+    status,
+    assigneeIds,
+    isJoint,
+    incognito,
+    subtasks: subtasksRaw,
+  } = body as Record<string, unknown>;
+
+  if (!title || typeof title !== "string" || !title.trim()) {
+    return c.json({ error: { message: "Title is required" } }, 400);
+  }
+  if (!teamId || typeof teamId !== "string") {
+    return c.json({ error: { message: "Team is required" } }, 400);
+  }
+
   const membership = await prisma.teamMember.findFirst({ where: { teamId, userId: session.user.id } });
   if (!membership) return c.json({ error: { message: "Not a member of this team" } }, 403);
-  const task = await prisma.task.create({
-    data: {
-      title: title.trim(),
-      description: description || null,
-      priority: priority || "medium",
-      dueDate: dueDate ? new Date(dueDate) : null,
-      status: status || "todo",
-      teamId,
-      creatorId: session.user.id,
-    },
-    include: {
-      team: { select: { id: true, name: true } },
-      creator: { select: { id: true, name: true } },
-    },
-  });
-  await prisma.taskAssignment.create({ data: { taskId: task.id, userId: session.user.id } });
-  return c.json({ data: task });
+
+  let ids: string[] = Array.isArray(assigneeIds)
+    ? assigneeIds.filter((id): id is string => typeof id === "string" && id.trim().length > 0).map((id) => id.trim())
+    : [];
+  ids = [...new Set(ids)];
+  if (ids.length === 0) ids = [session.user.id];
+
+  for (const uid of ids) {
+    const m = await prisma.teamMember.findFirst({ where: { teamId, userId: uid } });
+    if (!m) return c.json({ error: { message: "One or more assignees are not on this team" } }, 400);
+  }
+
+  const normalizedStatus =
+    status === "done" || status === "in_progress" || status === "todo" ? status : "todo";
+  const dueDateObj = dueDate && (typeof dueDate === "string" || typeof dueDate === "number") ? new Date(dueDate as string | number) : null;
+  const pri = typeof priority === "string" && priority.trim() ? priority.trim() : "medium";
+
+  const subtaskList: { title: string; order: number }[] = Array.isArray(subtasksRaw)
+    ? subtasksRaw
+        .map((s: unknown, i: number) => {
+          const t =
+            typeof s === "string"
+              ? s.trim()
+              : s && typeof s === "object" && "title" in s && typeof (s as { title: unknown }).title === "string"
+                ? (s as { title: string }).title.trim()
+                : "";
+          return { title: t, order: i };
+        })
+        .filter((s) => s.title.length > 0)
+    : [];
+
+  const taskInclude = {
+    assignments: { include: { user: { select: { id: true, name: true, email: true, image: true } } } },
+    creator: { select: { id: true, name: true } },
+  } as const;
+
+  const baseTaskData = {
+    title: title.trim(),
+    description: typeof description === "string" && description.trim() ? description.trim() : null,
+    priority: pri,
+    status: normalizedStatus,
+    ...(normalizedStatus === "done" ? { completedAt: new Date() } : {}),
+    dueDate: dueDateObj,
+    incognito: incognito === true,
+    teamId,
+    creatorId: session.user.id,
+  };
+
+  let tasks: Awaited<ReturnType<typeof prisma.task.create>>[];
+
+  const joint = isJoint === true && ids.length > 1;
+
+  if (joint) {
+    const task = await prisma.task.create({
+      data: {
+        ...baseTaskData,
+        isJoint: true,
+        assignments: { create: ids.map((userId: string) => ({ userId })) },
+        ...(subtaskList.length > 0 ? { subtasks: { create: subtaskList } } : {}),
+      },
+      include: taskInclude,
+    });
+    tasks = [task];
+  } else if (ids.length <= 1) {
+    const task = await prisma.task.create({
+      data: {
+        ...baseTaskData,
+        isJoint: false,
+        ...(ids.length === 1 ? { assignments: { create: [{ userId: ids[0]! }] } } : {}),
+        ...(subtaskList.length > 0 ? { subtasks: { create: subtaskList } } : {}),
+      },
+      include: taskInclude,
+    });
+    tasks = [task];
+  } else {
+    tasks = await Promise.all(
+      ids.map((assigneeId) =>
+        prisma.task.create({
+          data: {
+            ...baseTaskData,
+            isJoint: false,
+            assignments: { create: [{ userId: assigneeId }] },
+            ...(subtaskList.length > 0 ? { subtasks: { create: subtaskList } } : {}),
+          },
+          include: taskInclude,
+        }),
+      ),
+    );
+  }
+
+  const assigneesToNotify = ids.filter((id) => id !== session.user.id);
+  if (assigneesToNotify.length > 0 && tasks[0]) {
+    try {
+      await sendPushToUsers(
+        assigneesToNotify,
+        "New task assigned",
+        tasks[0].title ?? "You have a new task",
+        { taskId: tasks[0].id, teamId },
+        "notifTaskAssigned",
+        teamId,
+      );
+    } catch {
+      /* non-fatal */
+    }
+  }
+
+  return c.json({ data: { tasks } });
 });
 
 // ── API: update task ──────────────────────────────────────────────────────────

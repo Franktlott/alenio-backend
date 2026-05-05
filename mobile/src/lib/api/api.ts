@@ -1,9 +1,11 @@
 import { fetch } from "expo/fetch";
-import { authClient, clearAccessToken, getAuthHeaders, refreshSessionTokens } from "../auth/auth-client";
+import { clearAccessToken, getAuthHeaders, refreshSessionTokens } from "../auth/auth-client";
 
 const baseUrl = process.env.EXPO_PUBLIC_BACKEND_URL!;
 
 type ApiErrorBody = { error?: { message?: string } };
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export const readJsonSafe = async <T>(response: Response): Promise<T | null> => {
   if (response.status === 204 || response.status === 205) return null;
@@ -42,9 +44,14 @@ const request = async <T>(
 
   let response = await doFetch(authHeaders);
 
-  // Same pattern as consumer apps: rotate JWT via Neon Auth before treating 401 as logged out.
+  // Consumer-app style: retry auth recovery before considering session invalid.
   if (response.status === 401 && !skipSignOut) {
-    const recovered = await refreshSessionTokens();
+    let recovered = await refreshSessionTokens();
+    // Brief second attempt helps after waking from background/network handoff.
+    if (!recovered) {
+      await sleep(250);
+      recovered = await refreshSessionTokens();
+    }
     if (recovered) {
       authHeaders = await getAuthHeaders();
       response = await doFetch(authHeaders);
@@ -54,8 +61,9 @@ const request = async <T>(
   if (!response.ok) {
     const err = await readJsonSafe<ApiErrorBody>(response);
     if (response.status === 401 && !skipSignOut) {
+      // Soft-fail: clear cached token, but do not force global sign-out on one 401.
+      // Next request can rehydrate via Neon session refresh if still valid.
       clearAccessToken();
-      authClient.signOut().catch(() => {});
     }
     throw new Error(err?.error?.message ?? `Request failed: ${response.status}`);
   }
@@ -80,7 +88,11 @@ export const api = {
 
     let response = await doDelete(authHeaders);
     if (response.status === 401) {
-      const recovered = await refreshSessionTokens();
+      let recovered = await refreshSessionTokens();
+      if (!recovered) {
+        await sleep(250);
+        recovered = await refreshSessionTokens();
+      }
       if (recovered) {
         authHeaders = await getAuthHeaders();
         response = await doDelete(authHeaders);
@@ -90,8 +102,8 @@ export const api = {
     if (!response.ok) {
       const err = await readJsonSafe<ApiErrorBody>(response);
       if (response.status === 401) {
+        // Soft-fail like request(): avoid immediate forced sign-out.
         clearAccessToken();
-        authClient.signOut().catch(() => {});
       }
       throw new Error(err?.error?.message ?? `Request failed: ${response.status}`);
     }

@@ -14,6 +14,8 @@ const envSchema = z.object({
   NEON_AUTH_URL: z.string().url(),
   // Backend URL
   BACKEND_URL: z.string().default("http://localhost:3000"),
+  /** Comma-separated browser origins allowed for CORS (e.g. Firebase Hosting https://your-app.web.app). Localhost is always allowed. */
+  CORS_ALLOWED_ORIGINS: z.string().optional(),
   // Build marker for quick deploy verification
   BACKEND_BUILD_MARKER: z.string().optional().default("backend-marker-2026-04-27-01"),
   // Admin Dashboard
@@ -25,6 +27,10 @@ const envSchema = z.object({
   APP_SCHEME: z.string().optional().default("alenio"),
   // Daily.co video
   DAILY_API_KEY: z.string().optional(),
+  // RevenueCat subscriptions
+  REVENUECAT_SECRET_KEY: z.string().optional(),
+  REVENUECAT_TEAM_ENTITLEMENT_ID: z.string().optional().default("Team"),
+  REVENUECAT_WEBHOOK_AUTH_TOKEN: z.string().optional(),
   // Twilio SMS
   TWILIO_ACCOUNT_SID: z.string().optional(),
   TWILIO_AUTH_TOKEN: z.string().optional(),

@@ -5,7 +5,6 @@ import {
   FlatList,
   TextInput,
   TouchableOpacity,
-  KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
   Modal,
@@ -29,6 +28,7 @@ import { MentionPicker } from "@/components/MentionPicker";
 import type { Message, Team, MessageReaction } from "@/lib/types";
 import { useDemoMode, showDemoAlert } from "@/lib/useDemo";
 import { useMention } from "@/lib/useMention";
+import { SafeKeyboardAvoidingView } from "@/lib/safe-keyboard-controller";
 
 const REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🔥'];
 
@@ -647,7 +647,7 @@ export default function TeamChatScreen() {
         animationType="fade"
         onRequestClose={() => { setEditTarget(null); setEditInput(""); }}
       >
-        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
+        <SafeKeyboardAvoidingView style={{ flex: 1 }}>
           <TouchableOpacity
             className="flex-1 bg-black/40 items-center justify-center px-8"
             activeOpacity={1}
@@ -702,7 +702,7 @@ export default function TeamChatScreen() {
               </View>
             </TouchableOpacity>
           </TouchableOpacity>
-        </KeyboardAvoidingView>
+        </SafeKeyboardAvoidingView>
       </Modal>
 
       {/* Delete poll confirmation modal */}
@@ -781,7 +781,7 @@ export default function TeamChatScreen() {
 
       {/* Poll creation modal */}
       <Modal visible={showPollModal} transparent animationType="slide" onRequestClose={() => setShowPollModal(false)}>
-        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
+        <SafeKeyboardAvoidingView style={{ flex: 1 }}>
           <TouchableOpacity
             style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)" }}
             activeOpacity={1}
@@ -965,10 +965,13 @@ export default function TeamChatScreen() {
               </TouchableOpacity>
             </ScrollView>
           </TouchableOpacity>
-        </KeyboardAvoidingView>
+        </SafeKeyboardAvoidingView>
       </Modal>
 
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} className="flex-1" keyboardVerticalOffset={0}>
+      <SafeKeyboardAvoidingView
+        className="flex-1"
+        keyboardVerticalOffset={Platform.OS === "ios" ? insets.top + 64 : 0}
+      >
         {isLoading ? (
           <View testID="team-chat-loading" className="flex-1 items-center justify-center">
             <ActivityIndicator color="#4361EE" />
@@ -982,6 +985,7 @@ export default function TeamChatScreen() {
         ) : (
           <FlatList
             ref={flatListRef}
+            style={{ flex: 1 }}
             testID="team-chat-message-list"
             data={items}
             keyExtractor={(item) => ("type" in item ? item.id : item.id)}
@@ -1077,7 +1081,14 @@ export default function TeamChatScreen() {
         ) : null}
 
         {/* Input bar */}
-        <View testID="team-chat-input-bar" className="flex-row items-end px-3 bg-white dark:bg-slate-800 border-t border-slate-100 dark:border-slate-700" style={{ paddingTop: 8, paddingBottom: insets.bottom + 8 }}>
+        <View
+          testID="team-chat-input-bar"
+          className="flex-row items-end px-3 bg-white dark:bg-slate-800 border-t border-slate-100 dark:border-slate-700"
+          style={{
+            paddingTop: 8,
+            paddingBottom: insets.bottom + 8,
+          }}
+        >
           {!isDemo ? (
             <TouchableOpacity
               onPress={() => setShowMediaPicker(true)}
@@ -1119,7 +1130,7 @@ export default function TeamChatScreen() {
             </TouchableOpacity>
           ) : null}
         </View>
-      </KeyboardAvoidingView>
+      </SafeKeyboardAvoidingView>
       <ImageSendPreview
         visible={!!mediaPreview}
         mediaUri={mediaPreview?.uri ?? null}

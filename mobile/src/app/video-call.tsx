@@ -15,7 +15,7 @@ import { readJsonSafe } from "@/lib/api/api";
 
 const alenioLogo = require("@/assets/alenio-logo-white.png");
 
-type Phase = "loading" | "prejoin" | "incall" | "error";
+type Phase = "prejoin" | "connecting" | "incall" | "error";
 
 export default function VideoCallScreen() {
   const { roomId, roomName } = useLocalSearchParams<{ roomId: string; roomName: string }>();
@@ -27,10 +27,11 @@ export default function VideoCallScreen() {
   const [micPermission, requestMicPermission] = useMicrophonePermissions();
   const [permissionDenied, setPermissionDenied] = useState(false);
 
-  const [phase, setPhase] = useState<Phase>("loading");
+  const [phase, setPhase] = useState<Phase>("prejoin");
   const [callUrl, setCallUrl] = useState<string | null>(null);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [roomReady, setRoomReady] = useState(false);
   const userName = session?.user?.name ?? "Guest";
   const userImage = session?.user?.image;
 
@@ -84,8 +85,8 @@ export default function VideoCallScreen() {
         }
         const { url, token } = json.data;
         setShareUrl(url);
-        setCallUrl(token ? `${url}?t=${token}` : url);
-        setPhase("prejoin");
+        setCallUrl(token ? `${url}?t=${token}&prejoin=false` : `${url}?prejoin=false`);
+        setRoomReady(true);
       } catch {
         setError("Could not connect. Please try again.");
         setPhase("error");
@@ -94,13 +95,20 @@ export default function VideoCallScreen() {
     fetchRoom();
   }, [roomId, userName]);
 
+  useEffect(() => {
+    if (phase !== "connecting") return;
+    const timer = setTimeout(() => setPhase("incall"), 2800);
+    return () => clearTimeout(timer);
+  }, [phase]);
+
   async function requestPermissionsAndJoin() {
+    if (!roomReady || !callUrl) return;
     const cam = cameraPermission?.granted ? cameraPermission : await requestCameraPermission();
     if (!cam?.granted) { setPermissionDenied(true); return; }
     await new Promise(r => setTimeout(r, 300));
     const mic = micPermission?.granted ? micPermission : await requestMicPermission();
     if (!mic?.granted) { setPermissionDenied(true); return; }
-    setPhase("incall");
+    setPhase("connecting");
   }
 
   async function sendEmailInvite() {
@@ -149,18 +157,6 @@ export default function VideoCallScreen() {
     );
   }
 
-  // ── LOADING ──
-  if (phase === "loading") {
-    return (
-      <View style={s.screen}>
-        <StatusBar barStyle="light-content" />
-        <Image source={alenioLogo} style={s.loadingLogo} resizeMode="contain" />
-        <ActivityIndicator color="#4361EE" size="large" />
-        <Text style={s.loadingText}>Connecting...</Text>
-      </View>
-    );
-  }
-
   // ── ERROR ──
   if (phase === "error") {
     return (
@@ -171,6 +167,19 @@ export default function VideoCallScreen() {
         <TouchableOpacity onPress={goBack} style={s.joinBtn}>
           <Text style={s.joinBtnText}>Go Back</Text>
         </TouchableOpacity>
+      </View>
+    );
+  }
+
+  // ── CONNECTING (provider handoff splash) ──
+  if (phase === "connecting") {
+    return (
+      <View style={s.screen}>
+        <StatusBar barStyle="light-content" />
+        <Image source={alenioLogo} style={s.loadingLogo} resizeMode="contain" />
+        <Text style={s.connectingTitle}>Let&apos;s connect</Text>
+        <ActivityIndicator color="#4361EE" size="large" />
+        <Text style={s.loadingText}>Setting up your video room...</Text>
       </View>
     );
   }
@@ -206,9 +215,14 @@ export default function VideoCallScreen() {
           {/* Actions */}
           <View style={s.joinRow}>
             <Animated.View style={joinBtnAnimStyle}>
-              <TouchableOpacity testID="join-call-button" style={s.joinBtn} onPress={requestPermissionsAndJoin}>
+              <TouchableOpacity
+                testID="join-call-button"
+                style={[s.joinBtn, !roomReady && { opacity: 0.7 }]}
+                onPress={requestPermissionsAndJoin}
+                disabled={!roomReady}
+              >
                 <Video size={20} color="#fff" style={{ marginRight: 8 }} />
-                <Text style={s.joinBtnText}>Join call</Text>
+                <Text style={s.joinBtnText}>{roomReady ? "Join call" : "Preparing call..."}</Text>
               </TouchableOpacity>
             </Animated.View>
 
@@ -369,7 +383,8 @@ const s = StyleSheet.create({
     flex: 1, backgroundColor: "#0A0F1E",
     alignItems: "center", justifyContent: "center",
   },
-  loadingLogo: { width: 120, height: 36, marginBottom: 32 },
+  loadingLogo: { width: 180, height: 54, marginBottom: 28 },
+  connectingTitle: { color: "#fff", fontSize: 24, fontWeight: "700", marginBottom: 18 },
   loadingText: { color: "rgba(255,255,255,0.5)", marginTop: 14, fontSize: 14 },
   errorText: { color: "#fff", fontSize: 16, textAlign: "center", paddingHorizontal: 32, marginBottom: 24 },
 

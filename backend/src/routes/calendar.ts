@@ -19,6 +19,30 @@ calendarRouter.use("*", authGuard);
 // In-memory map of scheduled reminder timeouts per event
 const pendingReminders = new Map<string, ReturnType<typeof setTimeout>[]>();
 
+function parseMeetingSettings(raw: string | null | undefined): { reminderMinutes: number[]; assigneeIds: string[] } {
+  if (!raw) return { reminderMinutes: [], assigneeIds: [] };
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (Array.isArray(parsed)) {
+      return {
+        reminderMinutes: parsed.filter((v): v is number => typeof v === "number"),
+        assigneeIds: [],
+      };
+    }
+    if (parsed && typeof parsed === "object") {
+      const obj = parsed as { reminderMinutes?: unknown; assigneeIds?: unknown; minutes?: unknown };
+      const minsSource = Array.isArray(obj.reminderMinutes) ? obj.reminderMinutes : Array.isArray(obj.minutes) ? obj.minutes : [];
+      return {
+        reminderMinutes: minsSource.filter((v): v is number => typeof v === "number"),
+        assigneeIds: Array.isArray(obj.assigneeIds) ? obj.assigneeIds.filter((v): v is string => typeof v === "string") : [],
+      };
+    }
+  } catch {
+    // Ignore malformed legacy data
+  }
+  return { reminderMinutes: [], assigneeIds: [] };
+}
+
 function formatReminderLabel(mins: number): string {
   if (mins === 0) return "is starting now";
   if (mins < 60) return `starts in ${mins} minute${mins !== 1 ? "s" : ""}`;
@@ -31,7 +55,8 @@ async function scheduleEventReminders(
   eventTitle: string,
   teamId: string,
   startDate: Date,
-  reminderMinutes: number[]
+  reminderMinutes: number[],
+  assigneeIds: string[] = []
 ) {
   // Cancel any existing reminders for this event
   const existing = pendingReminders.get(eventId);
@@ -56,9 +81,13 @@ async function scheduleEventReminders(
           where: { teamId },
           select: { userId: true },
         });
-        const userIds = members.map((m) => m.userId);
+        const allUserIds = members.map((m) => m.userId);
+        const targetUserIds = assigneeIds.length > 0
+          ? allUserIds.filter((id) => assigneeIds.includes(id))
+          : allUserIds;
+        if (targetUserIds.length === 0) return;
         await sendPushToUsers(
-          userIds,
+          targetUserIds,
           "Meeting Reminder",
           `${eventTitle} ${formatReminderLabel(mins)}`,
           { eventId, type: "meeting_reminder" },
@@ -90,9 +119,10 @@ export async function initMeetingReminders() {
     });
 
     for (const event of upcoming) {
-      const mins: number[] = JSON.parse(event.reminderMinutes || "[]");
+      const settings = parseMeetingSettings(event.reminderMinutes);
+      const mins = settings.reminderMinutes;
       if (mins.length > 0) {
-        await scheduleEventReminders(event.id, event.title, event.teamId, event.startDate, mins);
+        await scheduleEventReminders(event.id, event.title, event.teamId, event.startDate, mins, settings.assigneeIds);
       }
     }
   } catch {
@@ -112,20 +142,29 @@ calendarRouter.get("/:teamId/events", async (c) => {
     return c.json({ error: { message: "Team not found or not a member", code: "NOT_FOUND" } }, 404);
   }
 
-  // Show all non-hidden events, plus hidden events created by the current user
-  const events = await prisma.calendarEvent.findMany({
-    where: {
-      teamId,
-      OR: [
-        { isHidden: false },
-        { isHidden: true, createdById: user.id },
-      ],
-    },
+  // Show all non-hidden events, plus hidden events created by or assigned to the current user.
+  const allEvents = await prisma.calendarEvent.findMany({
+    where: { teamId },
     orderBy: { startDate: "asc" },
     include: {
       createdBy: { select: { id: true, name: true, image: true } },
     },
   });
+  const events = allEvents
+    .filter((event) => {
+      if (!event.isHidden) return true;
+      if (event.createdById === user.id) return true;
+      if (!event.isVideoMeeting) return false;
+      const settings = parseMeetingSettings(event.reminderMinutes);
+      return settings.assigneeIds.includes(user.id);
+    })
+    .map((event) => {
+      const settings = parseMeetingSettings(event.reminderMinutes);
+      return {
+        ...event,
+        assigneeIds: settings.assigneeIds,
+      };
+    });
 
   return c.json({ data: events });
 });
@@ -140,6 +179,7 @@ const createEventSchema = z.object({
   isHidden: z.boolean().optional(),
   isVideoMeeting: z.boolean().optional().default(false),
   reminderMinutes: z.array(z.number()).optional().default([]),
+  assigneeIds: z.array(z.string()).optional().default([]),
 });
 calendarRouter.post(
   "/:teamId/events",
@@ -169,6 +209,14 @@ calendarRouter.post(
     }
 
     const reminderMins = body.reminderMinutes ?? [];
+    const teamMembers = await prisma.teamMember.findMany({
+      where: { teamId },
+      select: { userId: true },
+    });
+    const teamMemberIds = new Set(teamMembers.map((m) => m.userId));
+    const assigneeIds = Array.from(
+      new Set([...(body.assigneeIds ?? []).filter((id) => teamMemberIds.has(id)), user.id])
+    );
 
     const event = await prisma.calendarEvent.create({
       data: {
@@ -180,7 +228,7 @@ calendarRouter.post(
         color: body.color ?? "#4361EE",
         isHidden: forcePrivate ? true : (body.isHidden ?? false),
         isVideoMeeting: body.isVideoMeeting ?? false,
-        reminderMinutes: JSON.stringify(reminderMins),
+        reminderMinutes: JSON.stringify({ reminderMinutes: reminderMins, assigneeIds }),
         teamId,
         createdById: user.id,
       },
@@ -190,7 +238,7 @@ calendarRouter.post(
     });
 
     if (body.isVideoMeeting && reminderMins.length > 0) {
-      await scheduleEventReminders(event.id, event.title, teamId, event.startDate, reminderMins);
+      await scheduleEventReminders(event.id, event.title, teamId, event.startDate, reminderMins, assigneeIds);
     }
 
     await logActivity({
@@ -200,7 +248,7 @@ calendarRouter.post(
       metadata: { eventTitles: [event.title], eventCount: 1, isVideoMeeting: event.isVideoMeeting, startDate: event.startDate.toISOString(), allDay: event.allDay },
     });
 
-    return c.json({ data: event }, 201);
+    return c.json({ data: { ...event, assigneeIds } }, 201);
   }
 );
 
@@ -214,6 +262,7 @@ const updateEventSchema = z.object({
   isHidden: z.boolean().optional(),
   isVideoMeeting: z.boolean().optional(),
   reminderMinutes: z.array(z.number()).optional(),
+  assigneeIds: z.array(z.string()).optional(),
 });
 
 // PATCH /api/teams/:teamId/events/:eventId — owner only
@@ -239,6 +288,17 @@ calendarRouter.patch(
       return c.json({ error: { message: "Event not found", code: "NOT_FOUND" } }, 404);
     }
 
+    const existingSettings = parseMeetingSettings(existing.reminderMinutes);
+    const teamMembers = await prisma.teamMember.findMany({
+      where: { teamId },
+      select: { userId: true },
+    });
+    const teamMemberIds = new Set(teamMembers.map((m) => m.userId));
+    const nextAssigneeIds = body.assigneeIds !== undefined
+      ? Array.from(new Set([...body.assigneeIds.filter((id) => teamMemberIds.has(id)), existing.createdById]))
+      : existingSettings.assigneeIds;
+    const nextReminderMinutes = body.reminderMinutes ?? existingSettings.reminderMinutes;
+
     const updated = await prisma.calendarEvent.update({
       where: { id: eventId },
       data: {
@@ -250,7 +310,10 @@ calendarRouter.patch(
         ...(body.color !== undefined ? { color: body.color } : {}),
         ...(body.isHidden !== undefined ? { isHidden: body.isHidden } : {}),
         ...(body.isVideoMeeting !== undefined ? { isVideoMeeting: body.isVideoMeeting } : {}),
-        ...(body.reminderMinutes !== undefined ? { reminderMinutes: JSON.stringify(body.reminderMinutes) } : {}),
+        reminderMinutes: JSON.stringify({
+          reminderMinutes: nextReminderMinutes,
+          assigneeIds: nextAssigneeIds,
+        }),
       },
       include: {
         createdBy: { select: { id: true, name: true, image: true } },
@@ -260,11 +323,17 @@ calendarRouter.patch(
     // Re-schedule reminders if relevant fields changed
     const isVideo = body.isVideoMeeting !== undefined ? body.isVideoMeeting : existing.isVideoMeeting;
     if (isVideo && (body.reminderMinutes !== undefined || body.startDate !== undefined)) {
-      const reminders: number[] = body.reminderMinutes ?? JSON.parse(existing.reminderMinutes || "[]");
-      await scheduleEventReminders(updated.id, updated.title, teamId, updated.startDate, reminders);
+      await scheduleEventReminders(
+        updated.id,
+        updated.title,
+        teamId,
+        updated.startDate,
+        nextReminderMinutes,
+        nextAssigneeIds
+      );
     }
 
-    return c.json({ data: updated });
+    return c.json({ data: { ...updated, assigneeIds: nextAssigneeIds } });
   }
 );
 

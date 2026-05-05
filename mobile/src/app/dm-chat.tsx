@@ -5,7 +5,6 @@ import {
   FlatList,
   TextInput,
   TouchableOpacity,
-  KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
   Modal,
@@ -35,6 +34,7 @@ import * as Haptics from "expo-haptics";
 import { toast } from "burnt";
 import { useDemoMode, showDemoAlert } from "@/lib/useDemo";
 import { useMention } from "@/lib/useMention";
+import { SafeKeyboardAvoidingView } from "@/lib/safe-keyboard-controller";
 
 const REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🔥'];
 
@@ -602,7 +602,10 @@ export default function DMChatScreen() {
         </TouchableOpacity>
       </Modal>
 
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} className="flex-1" keyboardVerticalOffset={0}>
+      <SafeKeyboardAvoidingView
+        className="flex-1"
+        keyboardVerticalOffset={Platform.OS === "ios" ? insets.top + 64 : 0}
+      >
         {isLoading ? (
           <View testID="dm-chat-loading" className="flex-1 items-center justify-center">
             <ActivityIndicator color="#4361EE" />
@@ -622,6 +625,7 @@ export default function DMChatScreen() {
         ) : (
           <FlatList
             ref={flatListRef}
+            style={{ flex: 1 }}
             testID="dm-chat-message-list"
             data={items}
             keyExtractor={(item) => ("type" in item ? item.id : item.id)}
@@ -705,7 +709,14 @@ export default function DMChatScreen() {
         ) : null}
 
         {/* Input bar */}
-        <View testID="dm-chat-input-bar" className="flex-row items-end px-3 bg-white dark:bg-slate-800 border-t border-slate-100 dark:border-slate-700" style={{ paddingTop: 8, paddingBottom: insets.bottom + 8 }}>
+        <View
+          testID="dm-chat-input-bar"
+          className="flex-row items-end px-3 bg-white dark:bg-slate-800 border-t border-slate-100 dark:border-slate-700"
+          style={{
+            paddingTop: 8,
+            paddingBottom: insets.bottom + 8,
+          }}
+        >
           {!isDemo ? (
             <TouchableOpacity
               onPress={() => setShowMediaPicker(true)}
@@ -747,7 +758,7 @@ export default function DMChatScreen() {
             </TouchableOpacity>
           ) : null}
         </View>
-      </KeyboardAvoidingView>
+      </SafeKeyboardAvoidingView>
       <ImageSendPreview
         visible={!!mediaPreview}
         mediaUri={mediaPreview?.uri ?? null}

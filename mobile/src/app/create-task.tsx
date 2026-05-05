@@ -22,7 +22,7 @@ import * as ImagePicker from "expo-image-picker";
 import { api } from "@/lib/api/api";
 import { uploadFile } from "@/lib/upload";
 import { useSession } from "@/lib/auth/use-session";
-import type { Task, TaskPriority, RecurrenceType, Team, TeamMember, TaskTemplate } from "@/lib/types";
+import type { Task, TaskPriority, RecurrenceType, Team, TeamMember, TaskTemplate, TaskStatus } from "@/lib/types";
 
 const PRIORITIES: { label: string; value: TaskPriority; color: string }[] = [
   { label: "Low", value: "low", color: "#94A3B8" },
@@ -37,6 +37,12 @@ const RECURRENCE_TYPES: { label: string; value: RecurrenceType }[] = [
   { label: "Monthly", value: "monthly" },
 ];
 
+const TASK_STATUS_OPTIONS: { key: "open" | "in_progress" | "completed"; label: string; value: TaskStatus; color: string }[] = [
+  { key: "open", label: "Open", value: "todo", color: "#64748B" },
+  { key: "in_progress", label: "In progress", value: "in_progress", color: "#F97316" },
+  { key: "completed", label: "Completed", value: "done", color: "#10B981" },
+];
+
 export default function CreateTaskScreen() {
   const { teamId, prefillTitle, initialDueDate } = useLocalSearchParams<{ teamId: string; prefillTitle?: string; initialDueDate?: string }>();
   const queryClient = useQueryClient();
@@ -44,6 +50,7 @@ export default function CreateTaskScreen() {
 
   const [title, setTitle] = useState(typeof prefillTitle === "string" ? prefillTitle : "");
   const [description, setDescription] = useState("");
+  const [taskStatusOption, setTaskStatusOption] = useState<"open" | "in_progress" | "completed">("open");
   const [priority, setPriority] = useState<TaskPriority>("medium");
   const [selectedAssignees, setSelectedAssignees] = useState<string[]>([]);
   const [isRecurring, setIsRecurring] = useState(false);
@@ -205,11 +212,15 @@ export default function CreateTaskScreen() {
 
   const confirmCreate = () => {
     setShowSplitConfirm(false);
+    const selectedStatus = TASK_STATUS_OPTIONS.find((s) => s.key === taskStatusOption);
+    const statusValue: TaskStatus = selectedStatus?.value ?? "todo";
+
     createMutation.mutate({
       title: title.trim(),
       description: description.trim() || undefined,
+      status: statusValue,
       priority,
-      dueDate: dueDate!.toISOString(),
+      dueDate: dueDate ? dueDate.toISOString() : undefined,
       assigneeIds: selectedAssignees,
       incognito: isIncognito,
       isJoint: isJoint || undefined,
@@ -468,6 +479,40 @@ export default function CreateTaskScreen() {
                     }}
                   >
                     {p.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          {/* Status */}
+          <View className="py-4 border-b border-slate-100 dark:border-slate-800">
+            <Text className="text-sm font-semibold text-slate-500 mb-3">
+              Status
+            </Text>
+            <View className="flex-row flex-wrap" style={{ gap: 8 }}>
+              {TASK_STATUS_OPTIONS.map((s) => (
+                <TouchableOpacity
+                  key={s.key}
+                  onPress={() => setTaskStatusOption(s.key)}
+                  className="px-3 py-1.5 rounded-full border"
+                  style={
+                    taskStatusOption === s.key
+                      ? {
+                          backgroundColor: s.color + "20",
+                          borderColor: s.color,
+                        }
+                      : { borderColor: "#E2E8F0", backgroundColor: "transparent" }
+                  }
+                  testID={`status-${s.key}`}
+                >
+                  <Text
+                    className="text-xs font-semibold"
+                    style={{
+                      color: taskStatusOption === s.key ? s.color : "#94A3B8",
+                    }}
+                  >
+                    {s.label}
                   </Text>
                 </TouchableOpacity>
               ))}

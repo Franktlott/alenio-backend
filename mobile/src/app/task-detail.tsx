@@ -22,9 +22,11 @@ import { toast } from "burnt";
 import type { Task, TaskStatus, Team, Subtask, SubtaskCompletion } from "@/lib/types";
 import { useDemoMode } from "@/lib/useDemo";
 
-const STATUS_OPTIONS: { label: string; value: TaskStatus; color: string }[] = [
-  { label: "To Do", value: "todo", color: "#64748B" },
-  { label: "Done", value: "done", color: "#10B981" },
+const STATUS_OPTIONS: { key: "open" | "in_progress" | "completed" | "overdue"; label: string; value: TaskStatus; color: string }[] = [
+  { key: "open", label: "Open", value: "todo", color: "#64748B" },
+  { key: "in_progress", label: "In progress", value: "in_progress", color: "#F97316" },
+  { key: "completed", label: "Completed", value: "done", color: "#10B981" },
+  { key: "overdue", label: "Overdue", value: "todo", color: "#EF4444" },
 ];
 
 const PRIORITY_COLORS: Record<string, string> = {
@@ -378,12 +380,27 @@ export default function TaskDetailScreen() {
           <Text className="text-sm font-semibold text-slate-500 mb-2">Status</Text>
           <View className="flex-row flex-wrap" style={{ gap: 8 }}>
             {STATUS_OPTIONS.map((s) => {
-              const isActive = task.status === s.value;
+              const isOverdueNow = !!task.dueDate && new Date(task.dueDate) < new Date() && task.status !== "done";
+              const openRevertBlocked = s.key === "open" && task.status === "in_progress";
+              const isActive =
+                s.key === "overdue"
+                  ? isOverdueNow
+                  : s.key === "open"
+                    ? task.status === "todo" && !isOverdueNow
+                    : s.key === "in_progress"
+                      ? task.status === "in_progress" && !isOverdueNow
+                      : task.status === "done";
               return (
                 <TouchableOpacity
-                  key={s.value}
+                  key={s.key}
                   onPress={() => {
-                    if (s.value === "done" && !isCompleted) {
+                    if (s.key === "overdue") {
+                      return;
+                    }
+                    if (openRevertBlocked) {
+                      return;
+                    }
+                    if (s.key === "completed" && !isCompleted) {
                       const incomplete = (task.subtasks ?? []).filter((st) =>
                         task.isJoint
                           ? !(st.completions ?? []).some((c: SubtaskCompletion) => c.userId === currentUserId)
@@ -394,14 +411,22 @@ export default function TaskDetailScreen() {
                       } else {
                         setShowDoneConfirm(true);
                       }
-                    } else if (s.value !== "done" && isEditable) {
+                    } else if (s.key !== "completed" && canEdit) {
                       updateMutation.mutate({ status: s.value });
                     }
                   }}
-                  disabled={s.value === "done" ? (isCompleted || updateMutation.isPending || isDemo) : (!isEditable || updateMutation.isPending || isDemo)}
+                  disabled={
+                    s.key === "overdue"
+                      ? true
+                      : openRevertBlocked
+                        ? true
+                      : s.key === "completed"
+                        ? (isCompleted || updateMutation.isPending || isDemo)
+                        : (!canEdit || updateMutation.isPending || isDemo)
+                  }
                   className="px-3 py-1.5 rounded-full border"
                   style={isActive ? { backgroundColor: s.color + "20", borderColor: s.color } : { borderColor: "#E2E8F0" }}
-                  testID={`status-${s.value}`}
+                  testID={`status-${s.key}`}
                 >
                   <Text className="text-xs font-semibold" style={{ color: isActive ? s.color : "#94A3B8" }}>
                     {s.label}

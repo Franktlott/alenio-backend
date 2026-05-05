@@ -1,5 +1,4 @@
-import { View, Text, FlatList, ActivityIndicator, Pressable, ScrollView, Modal, TouchableOpacity, Image, TextInput, KeyboardAvoidingView, Platform, StyleSheet } from "react-native";
-import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withSequence, withTiming } from "react-native-reanimated";
+import { View, Text, FlatList, ActivityIndicator, Pressable, ScrollView, Modal, TouchableOpacity, Image, TextInput, Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -14,6 +13,7 @@ import { NoTeamPlaceholder } from "@/components/NoTeamPlaceholder";
 import { router } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useDemoMode } from "@/lib/useDemo";
+import { SafeKeyboardAvoidingView } from "@/lib/safe-keyboard-controller";
 
 type CalendarEvent = {
   id: string;
@@ -35,88 +35,6 @@ function formatEventTime(startDate: string, endDate: string | null | undefined, 
 
 
 const REACTION_HINT_KEY = "reaction_hint_shown";
-
-type UpcomingMeeting = {
-  event: { id: string; title: string; startDate: string; endDate?: string | null; teamId: string };
-  teamName: string;
-  userRole: string;
-};
-
-function LiveDot() {
-  const scale = useSharedValue(1);
-  const opacity = useSharedValue(1);
-  useEffect(() => {
-    scale.value = withRepeat(withSequence(withTiming(1.8, { duration: 700 }), withTiming(1, { duration: 700 })), -1, false);
-    opacity.value = withRepeat(withSequence(withTiming(0, { duration: 700 }), withTiming(1, { duration: 700 })), -1, false);
-  }, []);
-  const ringStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }], opacity: opacity.value }));
-  return (
-    <View style={liveDotStyles.wrap}>
-      <Animated.View style={[liveDotStyles.ring, ringStyle]} />
-      <View style={liveDotStyles.core} />
-    </View>
-  );
-}
-const liveDotStyles = StyleSheet.create({
-  wrap: { width: 10, height: 10, alignItems: "center", justifyContent: "center" },
-  ring: { position: "absolute", width: 10, height: 10, borderRadius: 5, backgroundColor: "rgba(74,222,128,0.4)" },
-  core: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#4ADE80" },
-});
-
-function ActivityMeetingRow({ meeting, now }: { meeting: UpcomingMeeting; now: number }) {
-  const { event, teamName } = meeting;
-  const startMs = new Date(event.startDate).getTime();
-  const endMs = event.endDate ? new Date(event.endDate).getTime() : startMs + 60 * 60 * 1000;
-  const msUntilStart = startMs - now;
-  const hasStarted = msUntilStart <= 0;
-  const isUrgent = !hasStarted && msUntilStart <= 5 * 60 * 1000;
-  const timeLeft = endMs - now;
-  const minutes = Math.floor(timeLeft / 60000);
-  const timeLeftLabel = minutes > 0 ? `${minutes}m left` : "Ending soon";
-
-  return (
-    <Pressable
-      onPress={() => router.push({ pathname: "/video-call", params: { roomId: event.id, roomName: event.title } } as any)}
-      style={meetingRowStyles.wrapper}
-      testID="activity-meeting-row"
-    >
-      <LinearGradient colors={["#0F172A", "#1E1B4B"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={meetingRowStyles.card}>
-        <View style={meetingRowStyles.accentBar} />
-        <Image source={require("@/assets/alenio-icon.png")} style={meetingRowStyles.icon} />
-        <View style={meetingRowStyles.content}>
-          <View style={meetingRowStyles.topRow}>
-            <LiveDot />
-            <Text style={meetingRowStyles.label}>{hasStarted ? "In progress" : "Starting soon"}</Text>
-          </View>
-          <Text style={meetingRowStyles.title} numberOfLines={1}>{event.title}</Text>
-          <Text style={meetingRowStyles.meta}>{teamName}{hasStarted ? ` · ${timeLeftLabel}` : ""}</Text>
-        </View>
-        <Pressable
-          onPress={() => router.push({ pathname: "/video-call", params: { roomId: event.id, roomName: event.title } } as any)}
-          style={[meetingRowStyles.joinBtn, isUrgent && meetingRowStyles.joinBtnUrgent]}
-          testID="activity-meeting-join-button"
-        >
-          <Video size={13} color="#fff" style={{ marginRight: 5 }} />
-          <Text style={meetingRowStyles.joinText}>Join</Text>
-        </Pressable>
-      </LinearGradient>
-    </Pressable>
-  );
-}
-const meetingRowStyles = StyleSheet.create({
-  wrapper: { marginHorizontal: 16, marginTop: 10, marginBottom: 4, borderRadius: 18, overflow: "hidden", shadowColor: "#4361EE", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 8 },
-  card: { flexDirection: "row", alignItems: "center", paddingVertical: 13, paddingRight: 14, borderRadius: 18, borderWidth: 1, borderColor: "rgba(255,255,255,0.08)" },
-  accentBar: { width: 3, alignSelf: "stretch", backgroundColor: "#4361EE", borderRadius: 2, marginRight: 10 },
-  icon: { width: 34, height: 34, borderRadius: 9, marginRight: 10 },
-  content: { flex: 1, gap: 2 },
-  topRow: { flexDirection: "row", alignItems: "center", gap: 6 },
-  label: { fontSize: 10, fontWeight: "600", color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: 0.6 },
-  title: { fontSize: 14, fontWeight: "700", color: "#FFFFFF", letterSpacing: -0.2 },
-  meta: { fontSize: 11, color: "rgba(255,255,255,0.45)", fontWeight: "500" },
-  joinBtn: { backgroundColor: "#4361EE", flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 8, borderRadius: 22, shadowColor: "#4361EE", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.6, shadowRadius: 8, elevation: 6 },
-  joinBtnUrgent: { backgroundColor: "#10B981", shadowColor: "#10B981" },
-  joinText: { color: "white", fontSize: 13, fontWeight: "700" },
-});
 
 type ActivityEvent = {
   id: string;
@@ -992,27 +910,6 @@ export default function ActivityScreen() {
   const [celebrateType, setCelebrateType] = useState<string>(CELEBRATION_TYPES[0]!.key);
   const [celebrateMessage, setCelebrateMessage] = useState("");
   const hintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [tickNow, setTickNow] = useState<number>(Date.now());
-
-  useEffect(() => {
-    const t = setInterval(() => setTickNow(Date.now()), 10000);
-    return () => clearInterval(t);
-  }, []);
-
-  const { data: meetings = [] } = useQuery<UpcomingMeeting[]>({
-    queryKey: ["upcoming-video-meetings"],
-    queryFn: () => api.get<UpcomingMeeting[]>("/api/video/upcoming"),
-    enabled: !!session?.user,
-    refetchInterval: 30000,
-    staleTime: 20000,
-  });
-
-  const activeMeeting = meetings.find(m => {
-    const startMs = new Date(m.event.startDate).getTime();
-    const endMs = m.event.endDate ? new Date(m.event.endDate).getTime() : startMs + 60 * 60 * 1000;
-    return startMs <= tickNow && tickNow < endMs;
-  }) ?? null;
-
   useEffect(() => {
     AsyncStorage.getItem(REACTION_HINT_KEY).then((val) => {
       if (val !== "1") setShowReactionHint(true);
@@ -1044,7 +941,7 @@ export default function ActivityScreen() {
     refetchInterval: 15000,
   });
 
-  const { data: teamMembers = [] } = useQuery({
+  const { data: teamMembers = [], isLoading: teamMembersLoading } = useQuery({
     queryKey: ["team-members-feed", activeTeamId],
     queryFn: async () => {
       const team = await api.get<{ members: { userId: string; user: { id: string; name: string; image: string | null } }[] }>(`/api/teams/${activeTeamId}`);
@@ -1107,7 +1004,7 @@ export default function ActivityScreen() {
 
       {/* Celebrate modal */}
       <Modal visible={showCelebrateModal} transparent animationType="slide" onRequestClose={() => setShowCelebrateModal(false)}>
-        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
+        <SafeKeyboardAvoidingView style={{ flex: 1 }}>
           <TouchableOpacity style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)" }} activeOpacity={1} onPress={() => setShowCelebrateModal(false)} />
           <View style={{ backgroundColor: "white", borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: "80%" }}>
             {/* Modal header */}
@@ -1126,9 +1023,19 @@ export default function ActivityScreen() {
             {celebrateStep === 1 ? (
               /* Step 1 — pick team member */
               <ScrollView contentContainerStyle={{ paddingVertical: 8 }} showsVerticalScrollIndicator={false}>
-                {teamMembers.length === 0 ? (
+                {teamMembersLoading ? (
                   <View style={{ alignItems: "center", paddingVertical: 40 }}>
                     <ActivityIndicator color="#4361EE" />
+                  </View>
+                ) : teamMembers.length === 0 ? (
+                  <View style={{ alignItems: "center", paddingHorizontal: 24, paddingVertical: 44 }}>
+                    <Text style={{ fontSize: 36, marginBottom: 10 }}>🎉</Text>
+                    <Text style={{ fontSize: 16, fontWeight: "700", color: "#334155", textAlign: "center" }}>
+                      No teammates to celebrate yet
+                    </Text>
+                    <Text style={{ fontSize: 13, color: "#64748B", textAlign: "center", marginTop: 8, lineHeight: 20 }}>
+                      Add more team members first, then come back to post a celebration.
+                    </Text>
                   </View>
                 ) : teamMembers.map((m) => (
                   <TouchableOpacity
@@ -1209,7 +1116,7 @@ export default function ActivityScreen() {
               </ScrollView>
             )}
           </View>
-        </KeyboardAvoidingView>
+        </SafeKeyboardAvoidingView>
       </Modal>
 
       {isLoading ? (
@@ -1230,7 +1137,6 @@ export default function ActivityScreen() {
         <FlatList
           data={activities}
           keyExtractor={(item) => item.id}
-          ListHeaderComponent={activeMeeting ? <ActivityMeetingRow meeting={activeMeeting} now={tickNow} /> : null}
           renderItem={({ item, index }) => (
             <>
               <ActivityItem item={item} activeTeamId={activeTeamId} currentUserId={currentUserId} isDemo={isDemo} showPicker={openPickerId === item.id} onOpenPicker={() => setOpenPickerId(item.id)} onClosePicker={() => setOpenPickerId(null)} />

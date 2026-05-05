@@ -16,7 +16,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.vibecode.alenio-9iqp9v",
-      "buildNumber": "38",
+      "buildNumber": "39",
       "entitlements": {
         "aps-environment": "production"
       },
@@ -33,7 +33,8 @@
     },
     "android": {
       "googleServicesFile": "./google-services.json",
-      "edgeToEdgeEnabled": true,
+      "softwareKeyboardLayoutMode": "resize",
+      "edgeToEdgeEnabled": false,
       "package": "com.vibecode.alenio9iqp9v",
       "permissions": [
         "android.permission.CAMERA",
