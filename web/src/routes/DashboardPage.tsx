@@ -103,24 +103,6 @@ function assigneeInitials(name: string | null, email: string | null | undefined)
   return "?";
 }
 
-function donutGradient(high: number, med: number, low: number, other: number, total: number): string {
-  if (total <= 0) return "#e2e8f0 0deg 360deg";
-  const pct = (n: number) => (n / total) * 360;
-  let angle = 0;
-  const parts: string[] = [];
-  const add = (n: number, color: string) => {
-    if (n <= 0) return;
-    const a = pct(n);
-    parts.push(`${color} ${angle}deg ${angle + a}deg`);
-    angle += a;
-  };
-  add(high, "#ef4444");
-  add(med, "#f59e0b");
-  add(low, "#22c55e");
-  add(other, "#38bdf8");
-  return parts.join(", ");
-}
-
 type TaskTab = "active" | "completed" | "team";
 const PRIORITIES = [
   { label: "Low", value: "low" },
@@ -392,32 +374,6 @@ export function DashboardPage() {
   const activeTasks = useMemo(() => tasks.filter((t) => t.status !== "done"), [tasks]);
   const completedTasks = useMemo(() => tasks.filter((t) => t.status === "done"), [tasks]);
 
-  const todayStart = startOfDay(now);
-  const weekStart = new Date(todayStart);
-  weekStart.setDate(weekStart.getDate() - weekStart.getDay());
-
-  const dueToday = useMemo(
-    () => activeTasks.filter((t) => t.dueDate && isSameDay(new Date(t.dueDate), todayStart)),
-    [activeTasks, todayStart],
-  );
-  const overdue = useMemo(
-    () =>
-      activeTasks.filter((t) => {
-        if (!t.dueDate) return false;
-        return new Date(t.dueDate) < todayStart;
-      }),
-    [activeTasks, todayStart],
-  );
-  const completedThisWeek = useMemo(
-    () =>
-      completedTasks.filter((t) => {
-        if (!t.completedAt) return false;
-        const c = new Date(t.completedAt);
-        return c >= weekStart;
-      }),
-    [completedTasks, weekStart],
-  );
-
   const tabTasks = useMemo(() => {
     if (taskTab === "completed") return completedTasks;
     if (taskTab === "team") return activeTasks;
@@ -438,28 +394,6 @@ export function DashboardPage() {
     }
     return list.slice(0, 8);
   }, [tabTasks, sortBy]);
-
-  const donutBuckets = useMemo(() => {
-    let high = 0;
-    let med = 0;
-    let low = 0;
-    let other = 0;
-    for (const t of activeTasks) {
-      if (t.priority === "high") high++;
-      else if (t.priority === "medium") med++;
-      else if (t.priority === "low") low++;
-      else other++;
-    }
-    const total = high + med + low + other;
-    return { high, med, low, other, total };
-  }, [activeTasks]);
-
-  const upcomingEvents = useMemo(() => {
-    return [...visibleEvents]
-      .filter((e) => new Date(e.startDate) >= todayStart)
-      .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime())
-      .slice(0, 5);
-  }, [visibleEvents, todayStart]);
 
   const calTitle = calendarView.toLocaleString(undefined, { month: "long", year: "numeric" });
   const weekdayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -986,116 +920,6 @@ export function DashboardPage() {
             <Link to="/chat" className="enterprise-card-link">
               View all in chat & team context <span aria-hidden>→</span>
             </Link>
-          </section>
-        </div>
-
-        <div id="analytics" className="enterprise-dashboard-bottom">
-          <section className="enterprise-card enterprise-card-metrics">
-            <h2 className="enterprise-card-title enterprise-card-title-spaced">Overview</h2>
-            <div className="enterprise-metric-grid">
-              <div className="enterprise-metric-tile">
-                <div className="enterprise-metric-icon enterprise-metric-icon-blue" aria-hidden>
-                  ◎
-                </div>
-                <div className="enterprise-metric-label">Active tasks</div>
-                <div className="enterprise-metric-value">{activeTasks.length}</div>
-                <div className="enterprise-metric-trend">Live</div>
-              </div>
-              <div className="enterprise-metric-tile">
-                <div className="enterprise-metric-icon enterprise-metric-icon-green" aria-hidden>
-                  ✓
-                </div>
-                <div className="enterprise-metric-label">Completed this week</div>
-                <div className="enterprise-metric-value">{completedThisWeek.length}</div>
-                <div className="enterprise-metric-trend enterprise-metric-trend-up">Week to date</div>
-              </div>
-              <div className="enterprise-metric-tile">
-                <div className="enterprise-metric-icon enterprise-metric-icon-red" aria-hidden>
-                  !
-                </div>
-                <div className="enterprise-metric-label">Overdue</div>
-                <div className="enterprise-metric-value">{overdue.length}</div>
-                <div className="enterprise-metric-trend enterprise-metric-trend-warn">Needs attention</div>
-              </div>
-              <div className="enterprise-metric-tile">
-                <div className="enterprise-metric-icon enterprise-metric-icon-violet" aria-hidden>
-                  ◇
-                </div>
-                <div className="enterprise-metric-label">Team members</div>
-                <div className="enterprise-metric-value">{selectedTeam?._count.members ?? "—"}</div>
-                <div className="enterprise-metric-trend">Workspace</div>
-              </div>
-            </div>
-          </section>
-
-          <section className="enterprise-card enterprise-card-donut" aria-labelledby="pri-heading">
-            <h2 id="pri-heading" className="enterprise-card-title enterprise-card-title-spaced">
-              Tasks by priority
-            </h2>
-            <div className="enterprise-donut-row">
-              <div
-                className="enterprise-donut-chart"
-                style={{
-                  background: `conic-gradient(${donutGradient(donutBuckets.high, donutBuckets.med, donutBuckets.low, donutBuckets.other, donutBuckets.total)})`,
-                }}
-              >
-                <div className="enterprise-donut-hole">
-                  <strong>{donutBuckets.total}</strong>
-                  <span>Total</span>
-                </div>
-              </div>
-              <ul className="enterprise-donut-legend">
-                <li>
-                  <span className="enterprise-legend-dot enterprise-legend-high" /> High <em>{donutBuckets.high}</em>
-                </li>
-                <li>
-                  <span className="enterprise-legend-dot enterprise-legend-med" /> Medium <em>{donutBuckets.med}</em>
-                </li>
-                <li>
-                  <span className="enterprise-legend-dot enterprise-legend-low" /> Low <em>{donutBuckets.low}</em>
-                </li>
-                <li>
-                  <span className="enterprise-legend-dot enterprise-legend-other" /> Other <em>{donutBuckets.other}</em>
-                </li>
-              </ul>
-            </div>
-          </section>
-
-          <section className="enterprise-card enterprise-card-upcoming" aria-labelledby="up-heading">
-            <h2 id="up-heading" className="enterprise-card-title enterprise-card-title-spaced">
-              Upcoming
-            </h2>
-            {upcomingEvents.length === 0 ? (
-              <p className="enterprise-muted enterprise-upcoming-empty">No upcoming events for this team.</p>
-            ) : (
-              <ul className="enterprise-upcoming-list">
-                {upcomingEvents.map((ev) => {
-                  const start = new Date(ev.startDate);
-                  const end = ev.endDate ? new Date(ev.endDate) : null;
-                  const allDay = ev.allDay !== false;
-                  const timeLabel =
-                    !allDay && end
-                      ? `${start.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })} – ${end.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}`
-                      : allDay
-                        ? "All day"
-                        : start.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
-                  const mo = start.toLocaleString(undefined, { month: "short" }).toUpperCase();
-                  const dy = String(start.getDate());
-                  return (
-                    <li key={ev.id} className="enterprise-upcoming-item">
-                      <div className="enterprise-upcoming-datebox" aria-hidden>
-                        <span className="enterprise-upcoming-mo">{mo}</span>
-                        <span className="enterprise-upcoming-dy">{dy}</span>
-                      </div>
-                      <div className="enterprise-upcoming-body">
-                        <div className="enterprise-upcoming-title">{ev.title}</div>
-                        <div className="enterprise-upcoming-meta">{timeLabel}</div>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
           </section>
         </div>
 

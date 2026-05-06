@@ -3,34 +3,34 @@ import { Link } from "react-router-dom";
 const highlights = [
   {
     title: "Real-time Team Communication",
-    text: "Instant messaging, announcements, and shift updates keep everyone in the loop.",
+    text: "Channels, DMs, polls, and video calls from chat.",
   },
   {
     title: "Tasks That Get Done",
-    text: "Assign tasks, set due times, and track progress in real time from chat to completion.",
+    text: "Owners, due dates, subtasks, files, and templates.",
   },
   {
-    title: "Performance You Can See",
-    text: "Dashboards and reports give leaders visibility into what matters most.",
+    title: "Visibility That Drives Action",
+    text: "Tasks, calendar, and video meetings in one place.",
   },
 ];
 
 const industries = [
   {
     title: "Restaurants & Fast Food",
-    points: ["Shift communication that works in the rush", "Task execution that drives consistency", "Manage visibility across every shift"],
+    points: ["Chat, polls, and video for shifts", "Tasks with subtasks and photos", "Calendar for trainings and visits"],
   },
   {
     title: "Retail Stores",
-    points: ["Daily task management and checklists", "Keep teams accountable and aligned", "Improve execution and customer experience"],
+    points: ["DMs, channels, and polls", "Tasks and files for standards", "Calendar + tasks on the web"],
   },
   {
-    title: "Convenience & Multi-Unit",
-    points: ["Multi-location communication made simple", "Real-time updates and alerts", "Standardized execution everywhere"],
+    title: "Convenience & C-Stores",
+    points: ["Polls, chat, and video", "Checklist tasks with proof", "See work across stores"],
   },
   {
-    title: "Field & Operations Teams",
-    points: ["Keep distributed teams connected", "Share updates and files instantly", "Get work done, no matter where you are"],
+    title: "Multifamily & Apartment Communities",
+    points: ["Channels and DMs for staff", "Work orders as tasks with photos", "Calendar for tours and vendors"],
   },
 ];
 
@@ -40,8 +40,7 @@ export function WebsiteHomePage() {
       <section className="site-v2-hero">
         <header className="site-v2-header">
           <Link to="/" className="site-v2-brand" aria-label="Alenio home">
-            <img src="/alenio-logo-white.png" alt="" className="site-v2-logo" />
-            <span>Alenio</span>
+            <img src="/alenio-logo-white.png" alt="Alenio" className="site-v2-logo-full" width={168} height={40} />
           </Link>
           <nav className="site-v2-nav" aria-label="Primary">
             <a href="#features">Product</a>
@@ -67,10 +66,7 @@ export function WebsiteHomePage() {
               <br />
               that <span>move fast.</span>
             </h1>
-            <p>
-              Alenio helps retail, restaurant, and field teams communicate, execute, and stay accountable all from one
-              place.
-            </p>
+            <p>One app for chat, tasks, calendar, and video.</p>
             <div className="site-v2-hero-cta">
               <Link to="/login" className="site-v2-btn site-v2-btn-primary">
                 Start free today
@@ -80,9 +76,9 @@ export function WebsiteHomePage() {
               </a>
             </div>
             <ul className="site-v2-mini-list">
-              <li>Real-time team chat</li>
-              <li>Task to-do and ownership</li>
-              <li>Track results in real time</li>
+              <li>Chat, DMs, polls, video</li>
+              <li>Tasks, subtasks, files</li>
+              <li>Calendar and meetings</li>
             </ul>
           </div>
           <div className="site-v2-hero-visual" aria-hidden>
@@ -108,7 +104,7 @@ export function WebsiteHomePage() {
       <section id="industries" className="site-v2-section">
         <div className="site-v2-center-head">
           <h2>Built for your industry</h2>
-          <p>Designed for fast-paced, on-the-go teams.</p>
+          <p>Busy teams. Short updates.</p>
         </div>
         <div className="site-v2-industry-grid">
           {industries.map((industry) => (
@@ -132,11 +128,11 @@ export function WebsiteHomePage() {
             <br />
             Drive the right action.
           </h2>
-          <p>Alenio gives leaders real-time visibility so they can support their teams and make smarter decisions.</p>
+          <p>Same tools for the floor and the office.</p>
           <ul>
-            <li>Real-time dashboards</li>
-            <li>Actionable insights</li>
-            <li>Keep everyone accountable</li>
+            <li>Web: tasks and calendar together</li>
+            <li>Polls, channels, quick video</li>
+            <li>Owners, due dates, subtasks</li>
           </ul>
         </div>
       </section>
@@ -164,7 +160,7 @@ export function WebsiteHomePage() {
       </section>
 
       <footer id="contact" className="site-v2-footer">
-        <p>Alenio</p>
+        <img src="/alenio-logo.png" alt="Alenio" className="site-v2-footer-logo" width={140} height={34} />
         <a href="mailto:hello@alenio.ai">hello@alenio.ai</a>
       </footer>
     </div>

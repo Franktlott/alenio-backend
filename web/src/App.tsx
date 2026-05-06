@@ -1,12 +1,16 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthGate } from "./components/AuthGate";
+import { SessionIdleGuard } from "./components/SessionIdleGuard";
 import { ActivityPage } from "./routes/ActivityPage";
 import { ChatPage } from "./routes/ChatPage";
 import { CreateTaskPage } from "./routes/CreateTaskPage";
 import { DashboardPage } from "./routes/DashboardPage";
 import { TaskDetailPage } from "./routes/TaskDetailPage";
+import { ForgotPasswordPage } from "./routes/ForgotPasswordPage";
 import { LoginPage } from "./routes/LoginPage";
+import { ResetPasswordPage } from "./routes/ResetPasswordPage";
 import { VerifyPage } from "./routes/VerifyPage";
+import { VerifyResetCodePage } from "./routes/VerifyResetCodePage";
 import { WebsiteHomePage } from "./routes/WebsiteHomePage";
 
 function missingWebEnvMessage(): string | null {
@@ -55,7 +59,10 @@ function SetupEnvScreen({ message }: { message: string }) {
             Set <code style={{ color: "var(--accent)", background: "var(--surface-muted)", padding: "2px 6px", borderRadius: 4 }}>VITE_NEON_AUTH_URL</code> (same as mobile{" "}
             <code style={{ color: "var(--text)", background: "var(--surface-muted)", padding: "2px 6px", borderRadius: 4 }}>EXPO_PUBLIC_NEON_AUTH_URL</code>) and{" "}
             <code style={{ color: "var(--accent)", background: "var(--surface-muted)", padding: "2px 6px", borderRadius: 4 }}>VITE_BACKEND_URL</code> (same as{" "}
-            <code style={{ color: "var(--text)", background: "var(--surface-muted)", padding: "2px 6px", borderRadius: 4 }}>EXPO_PUBLIC_BACKEND_URL</code>).
+            <code style={{ color: "var(--text)", background: "var(--surface-muted)", padding: "2px 6px", borderRadius: 4 }}>EXPO_PUBLIC_BACKEND_URL</code>). For iPad on Wi‑Fi, copy{" "}
+            <code style={{ color: "var(--text)", background: "var(--surface-muted)", padding: "2px 6px", borderRadius: 4 }}>web/.env.example</code> — use{" "}
+            <code style={{ color: "var(--text)", background: "var(--surface-muted)", padding: "2px 6px", borderRadius: 4 }}>VITE_DEV_API_PROXY=1</code> and{" "}
+            <code style={{ color: "var(--text)", background: "var(--surface-muted)", padding: "2px 6px", borderRadius: 4 }}>VITE_DEV_SERVER_ORIGIN</code>.
           </li>
           <li>
             Stop the dev server and start again: <code style={{ color: "var(--text)", background: "var(--surface-muted)", padding: "2px 6px", borderRadius: 4 }}>bun run dev</code> — Vite only
@@ -78,8 +85,12 @@ export default function App() {
 
   return (
     <BrowserRouter>
+      <SessionIdleGuard />
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password/verify" element={<VerifyResetCodePage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/verify" element={<VerifyPage />} />
         <Route path="/" element={<WebsiteHomePage />} />
         <Route

@@ -1,6 +1,36 @@
 import { clearAccessToken, getAccessToken, refreshSessionTokens } from "./auth-client";
+import { getWebApiBase } from "./api-base";
 
-const baseUrl = import.meta.env.VITE_BACKEND_URL?.trim().replace(/\/+$/, "") ?? "";
+function apiBaseUrl(): string {
+  return getWebApiBase();
+}
+
+function assertProductionApiConfigured(): void {
+  if (import.meta.env.PROD && !apiBaseUrl().trim()) {
+    throw new Error(
+      "VITE_BACKEND_URL was not set when this app was built. Rebuild with your API base URL (e.g. Railway).",
+    );
+  }
+}
+
+function mapNetworkError(err: unknown): Error {
+  if (err instanceof Error) {
+    const m = err.message;
+    if (
+      err.name === "TypeError" ||
+      m === "Load failed" ||
+      m === "Failed to fetch" ||
+      m.startsWith("NetworkError") ||
+      m.includes("Network request failed")
+    ) {
+      return new Error(
+        "Could not reach the API. Check your connection. If this is the hosted site, the API server must allow your domain (CORS) — deploy the latest backend or set CORS_ALLOWED_ORIGINS on Railway.",
+      );
+    }
+    return err;
+  }
+  return new Error("Could not reach the API.");
+}
 
 async function readJson<T>(res: Response): Promise<T | null> {
   if (res.status === 204 || res.status === 205) return null;
@@ -12,6 +42,8 @@ async function readJson<T>(res: Response): Promise<T | null> {
 }
 
 async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
+  assertProductionApiConfigured();
+  const baseUrl = apiBaseUrl();
   const headers: HeadersInit = { ...(init?.headers as Record<string, string> | undefined) };
   const h = new Headers(headers);
   let token = getAccessToken();
@@ -20,7 +52,12 @@ async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
     h.set("Content-Type", "application/json");
   }
 
-  let res = await fetch(`${baseUrl}${path}`, { ...init, headers: h });
+  let res: Response;
+  try {
+    res = await fetch(`${baseUrl}${path}`, { ...init, headers: h });
+  } catch (e) {
+    throw mapNetworkError(e);
+  }
 
   if (res.status === 401) {
     const recovered = await refreshSessionTokens();
@@ -31,7 +68,11 @@ async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
       if (init?.body && !h2.has("Content-Type")) {
         h2.set("Content-Type", "application/json");
       }
-      res = await fetch(`${baseUrl}${path}`, { ...init, headers: h2 });
+      try {
+        res = await fetch(`${baseUrl}${path}`, { ...init, headers: h2 });
+      } catch (e) {
+        throw mapNetworkError(e);
+      }
     } else {
       clearAccessToken();
     }
@@ -145,10 +186,16 @@ export function fetchTeamMessages(teamId: string, topicId: string) {
   ).then((r) => r.data);
 }
 
-export function postTeamMessage(teamId: string, content: string, topicId: string) {
+export function postTeamMessage(
+  teamId: string,
+  content: string,
+  topicId: string,
+  media?: { mediaUrl: string; mediaType: string },
+) {
   return apiPostJson<{ data: TeamChatMessage }>(`/api/teams/${encodeURIComponent(teamId)}/messages`, {
-    content,
+    content: content.trim() || null,
     topicId: topicId === "general" ? null : topicId,
+    ...(media ? { mediaUrl: media.mediaUrl, mediaType: media.mediaType } : {}),
   }).then((r) => r.data);
 }
 
@@ -164,10 +211,76 @@ export function fetchDmMessages(conversationId: string) {
   return apiGetJson<{ data: DirectChatMessage[] }>(`/api/dms/${encodeURIComponent(conversationId)}/messages`).then((r) => r.data);
 }
 
-export function postDmMessage(conversationId: string, content: string) {
+export function postDmMessage(
+  conversationId: string,
+  content: string,
+  media?: { mediaUrl: string; mediaType: string },
+) {
   return apiPostJson<{ data: DirectChatMessage }>(`/api/dms/${encodeURIComponent(conversationId)}/messages`, {
-    content,
+    content: content.trim() || null,
+    ...(media ? { mediaUrl: media.mediaUrl, mediaType: media.mediaType } : {}),
   }).then((r) => r.data);
+}
+
+export type ChatUploadResult = {
+  id: string;
+  url: string;
+  originalFilename: string;
+  contentType: string;
+  sizeBytes: number;
+};
+
+/** Same as mobile `POST /api/upload` — Firebase Storage when configured. */
+export async function uploadChatMedia(file: File): Promise<ChatUploadResult> {
+  assertProductionApiConfigured();
+  const baseUrl = apiBaseUrl();
+  async function doUpload(token: string | null) {
+    const formData = new FormData();
+    formData.append("file", file);
+    const h = new Headers();
+    if (token) h.set("Authorization", `Bearer ${token}`);
+    try {
+      return await fetch(`${baseUrl}/api/upload`, { method: "POST", body: formData, headers: h });
+    } catch (e) {
+      throw mapNetworkError(e);
+    }
+  }
+
+  let token = getAccessToken();
+  let res = await doUpload(token);
+
+  if (res.status === 401) {
+    const recovered = await refreshSessionTokens();
+    if (recovered) {
+      token = getAccessToken();
+      res = await doUpload(token);
+    } else {
+      clearAccessToken();
+    }
+  }
+
+  const parsed = (await res.json().catch(() => ({}))) as {
+    data?: ChatUploadResult;
+    error?: string | { message?: string };
+    message?: string;
+  };
+
+  if (!res.ok) {
+    const msg =
+      typeof parsed?.error === "string"
+        ? parsed.error
+        : typeof parsed?.error === "object" && parsed?.error?.message
+          ? parsed.error.message
+          : typeof parsed?.message === "string"
+            ? parsed.message
+            : res.status === 503
+              ? "File storage is not configured on the server."
+              : `Upload failed (${res.status})`;
+    throw new Error(msg);
+  }
+
+  if (!parsed.data) throw new Error("Upload response missing data.");
+  return parsed.data;
 }
 
 export type ApiTask = {
@@ -398,6 +511,57 @@ export function createVideoRoom(roomId: string, userName?: string | null) {
     roomId,
     userName: userName ?? undefined,
   }).then((r) => r.data);
+}
+
+export type ApiPollOption = {
+  id: string;
+  text: string;
+  votes: { userId: string }[];
+};
+
+export type ApiPoll = {
+  id: string;
+  teamId: string;
+  topicId: string | null;
+  question: string;
+  endsAt: string;
+  createdById: string;
+  allowLeaderDelete: boolean;
+  createdBy: { id: string; name: string | null; image: string | null };
+  options: ApiPollOption[];
+  votes: { userId: string; optionId: string }[];
+};
+
+/** topicKey `"general"` lists polls for the main team channel (no topic). */
+export function fetchTeamPolls(teamId: string, topicKey: string) {
+  const qs = topicKey === "general" ? "" : `?topicId=${encodeURIComponent(topicKey)}`;
+  return apiGetJson<{ data: ApiPoll[] }>(`/api/teams/${encodeURIComponent(teamId)}/polls${qs}`).then((r) => r.data);
+}
+
+export function createTeamPoll(
+  teamId: string,
+  input: {
+    question: string;
+    options: string[];
+    durationHours: number;
+    allowLeaderDelete?: boolean;
+    topicId?: string | null;
+  },
+) {
+  return apiPostJson<{ data: ApiPoll }>(`/api/teams/${encodeURIComponent(teamId)}/polls`, {
+    question: input.question,
+    options: input.options,
+    durationHours: input.durationHours,
+    allowLeaderDelete: input.allowLeaderDelete ?? true,
+    topicId: input.topicId ?? null,
+  }).then((r) => r.data);
+}
+
+export function voteTeamPoll(teamId: string, pollId: string, optionId: string) {
+  return apiPostJson<{ data: ApiPoll }>(
+    `/api/teams/${encodeURIComponent(teamId)}/polls/${encodeURIComponent(pollId)}/vote`,
+    { optionId },
+  ).then((r) => r.data);
 }
 
 export type WebTeamMemberRow = {

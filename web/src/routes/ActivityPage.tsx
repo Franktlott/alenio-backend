@@ -866,12 +866,12 @@ export function ActivityPage() {
       <div className="enterprise-dashboard-inner enterprise-activity-page" data-testid="activity-screen">
         <header className="enterprise-activity-header">
           <div className="enterprise-activity-header-inner">
+            <img src="/alenio-mark.png" alt="" className="enterprise-activity-header-logo" width={64} height={64} />
             <div className="enterprise-activity-header-titles">
               <h1 className="enterprise-activity-h1">Activity</h1>
               <p className="enterprise-activity-sub">Team wins, celebrations, and updates from the last 7 days.</p>
             </div>
             <div className="enterprise-activity-header-actions">
-              <img src="/alenio-logo-white.png" alt="Alenio" className="enterprise-activity-header-logo" />
               <button type="button" className="enterprise-activity-celebrate-btn" onClick={() => setCelebrateOpen(true)} data-testid="celebrate-button">
                 <span aria-hidden>🎉</span> Celebrate
               </button>

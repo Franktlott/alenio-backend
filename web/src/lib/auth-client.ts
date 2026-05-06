@@ -1,5 +1,6 @@
 import { createAuthClient } from "@neondatabase/auth";
 import { BetterAuthVanillaAdapter } from "@neondatabase/auth/vanilla/adapters";
+import { getWebApiBase } from "./api-base";
 import { extractTokenFromAuthPayload, getStoredToken, setStoredToken } from "./token";
 
 function readNeonAuthUrl(): string {
@@ -46,6 +47,30 @@ export function getAuthClient(): ReturnType<typeof createAuthClient> {
   return getAuthClientInstance();
 }
 
+/** Password-reset + OTP; `@neondatabase/auth` typings omit these on the client union. */
+export type AuthPasswordFlowClient = {
+  forgetPassword: {
+    emailOtp: (input: { email: string }) => Promise<{ error?: { message?: string } | null }>;
+  };
+  emailOtp: {
+    checkVerificationOtp: (input: {
+      email: string;
+      otp: string;
+      type: "forget-password";
+    }) => Promise<{ error?: { message?: string } | null }>;
+    resetPassword: (input: {
+      email: string;
+      otp: string;
+      password: string;
+    }) => Promise<{ error?: { message?: string } | null }>;
+  };
+  resetPassword: (input: { newPassword: string; token: string }) => Promise<{ error?: { message?: string } | null }>;
+};
+
+export function getAuthPasswordFlowClient(): AuthPasswordFlowClient {
+  return getAuthClient() as unknown as AuthPasswordFlowClient;
+}
+
 export function setAccessTokenFromAuthData(data: unknown): string | null {
   const token = extractTokenFromAuthPayload(data);
   if (token) setStoredToken(token);
@@ -90,8 +115,7 @@ export async function refreshSessionTokens(): Promise<boolean> {
 }
 
 export async function syncBackendUser(): Promise<void> {
-  const base = import.meta.env.VITE_BACKEND_URL?.trim().replace(/\/+$/, "");
-  if (!base) return;
+  const base = getWebApiBase();
   const token = getStoredToken();
   if (!token) return;
   try {

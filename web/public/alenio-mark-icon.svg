@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" role="img" aria-hidden="true">
+  <defs>
+    <linearGradient id="alenioMark" x1="10" y1="54" x2="54" y2="10" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#22d3ee" />
+      <stop offset="0.45" stop-color="#818cf8" />
+      <stop offset="1" stop-color="#d946ef" />
+    </linearGradient>
+  </defs>
+  <path
+    fill="url(#alenioMark)"
+    d="M32 6 52 58h-8.2L35.8 38.2h-7.6L20.2 58H12L32 6zm0 14.2-6.2 18h12.4L32 20.2z"
+  />
+</svg>

@@ -158,6 +158,11 @@ export function LoginPage() {
             {loading ? "Signing in…" : "Sign in"}
           </button>
           </form>
+          <p className="auth-v2-footnote" style={{ marginTop: "0.75rem" }}>
+            <Link to="/forgot-password" className="auth-v2-inline-link" data-testid="login-forgot-password">
+              Forgot password?
+            </Link>
+          </p>
           <p className="auth-v2-footnote">
             Need product overview?{" "}
             <Link to="/" className="auth-v2-inline-link">

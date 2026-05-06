@@ -55,6 +55,12 @@ const BACKEND_BUILD_MARKER = env.BACKEND_BUILD_MARKER;
 const allowedPatterns = [
   /^http:\/\/localhost(:\d+)?$/,
   /^http:\/\/127\.0\.0\.1(:\d+)?$/,
+  // Same Wi‑Fi: iPad / phone testing against a machine IP (Expo, Safari, etc.)
+  /^http:\/\/192\.168\.\d{1,3}\.\d{1,3}(:\d+)?$/,
+  /^http:\/\/10\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d+)?$/,
+  // Firebase Hosting default hosts (enterprise web on *.web.app / *.firebaseapp.com)
+  /^https:\/\/[a-z0-9][a-z0-9-]*[a-z0-9]\.web\.app$/i,
+  /^https:\/\/[a-z0-9][a-z0-9-]*[a-z0-9]\.firebaseapp\.com$/i,
 ];
 const extraOrigins = (env.CORS_ALLOWED_ORIGINS ?? "")
   .split(",")
@@ -145,6 +151,34 @@ app.get("/health", (c) => {
     /** Compare with EXPO_PUBLIC_NEON_AUTH_URL from the app — hostnames must be the same Neon Auth project. */
     neonAuthHostname: authProjectHint,
   });
+});
+
+/** Browsers opening the API port directly see a hint (API has no HTML app at `/`). */
+app.get("/", (c) => {
+  const host = c.req.header("host") ?? `localhost:${env.PORT ?? "3000"}`;
+  const hostname = host.replace(/:\d+$/, "");
+  const webHintPort = "5173";
+  const webUrl = `http://${hostname}:${webHintPort}`;
+  return c.html(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Alenio API</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 520px; margin: 48px auto; padding: 0 20px; color: #0f172a; line-height: 1.5; }
+    code { background: #f1f5f9; padding: 2px 6px; border-radius: 4px; }
+    a { color: #4f46e5; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <h1>Alenio API</h1>
+  <p>This address is the <strong>backend</strong> (JSON API). A blank or empty page here is normal—there is no web UI on this port.</p>
+  <p>Open the <strong>web app</strong> (Vite dev server, usually port <code>${webHintPort}</code>):</p>
+  <p><a href="${webUrl}">${webUrl}</a></p>
+  <p style="color:#64748b;font-size:14px">Health: <a href="/health">/health</a></p>
+</body>
+</html>`);
 });
 
 /** Explicit Neon Auth → Prisma user sync (middleware already runs sync; this is for the mobile app right after sign-up / verify). */
@@ -624,5 +658,6 @@ const port = Number(process.env.PORT) || 3000;
 
 export default {
   port,
+  hostname: "0.0.0.0",
   fetch: app.fetch,
 };

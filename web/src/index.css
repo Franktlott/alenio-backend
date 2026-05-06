@@ -611,6 +611,72 @@ input {
   align-items: flex-end;
 }
 
+.chat-composer-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.chat-composer-pending {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.chat-composer-pending-preview {
+  max-height: 200px;
+  overflow: hidden;
+  background: #f1f5f9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.chat-composer-pending-media {
+  max-width: 100%;
+  max-height: 200px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  display: block;
+}
+
+.chat-composer-pending-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.45rem 0.6rem;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.chat-composer-pending-label {
+  font-size: 0.75rem;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.chat-composer-pending-remove {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: #dc2626;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  padding: 0.2rem 0.4rem;
+  border-radius: 6px;
+}
+
+.chat-composer-pending-remove:hover {
+  background: #fef2f2;
+}
+
 .chat-composer textarea {
   flex: 1;
   min-height: 44px;
@@ -1090,6 +1156,188 @@ input {
 
 .chat-main-toolbar-compact {
   grid-template-columns: auto 1fr;
+}
+
+.chat-main-toolbar-with-actions {
+  grid-template-columns: auto 1fr auto;
+  align-items: start;
+}
+
+.chat-toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  align-items: center;
+  justify-self: end;
+}
+
+.chat-toolbar-action-btn {
+  font-size: 0.8125rem !important;
+  padding: 0.4rem 0.75rem !important;
+  white-space: nowrap;
+}
+
+.chat-action-banner {
+  margin: 0 !important;
+  border-radius: 0;
+  border-left: none;
+  border-right: none;
+}
+
+.chat-polls-strip {
+  flex-shrink: 0;
+  max-height: min(38vh, 320px);
+  overflow-y: auto;
+  padding: 0.65rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  background: #f8fafc;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.chat-poll-card {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 400px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.65rem 0.75rem;
+}
+
+.chat-poll-card-head {
+  margin-bottom: 0.5rem;
+}
+
+.chat-poll-question {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.35;
+}
+
+.chat-poll-meta {
+  display: block;
+  font-size: 0.6875rem;
+  color: var(--muted);
+  margin-top: 0.2rem;
+}
+
+.chat-poll-options {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.chat-poll-option {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+  margin-bottom: 0.35rem;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+  overflow: hidden;
+}
+
+.chat-poll-option:last-child {
+  margin-bottom: 0;
+}
+
+.chat-poll-option-bar {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  background: #e0e7ff;
+  opacity: 0.55;
+  pointer-events: none;
+  border-radius: 7px 0 0 7px;
+}
+
+.chat-poll-option-label {
+  position: relative;
+  z-index: 1;
+  font-size: 0.8125rem;
+  color: var(--text);
+  flex: 1;
+  min-width: 0;
+}
+
+.chat-poll-option-count {
+  position: relative;
+  z-index: 1;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.chat-poll-option-mine {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.35);
+}
+
+.chat-poll-option-ended {
+  cursor: default;
+  opacity: 0.88;
+}
+
+.chat-poll-option:disabled {
+  cursor: not-allowed;
+  opacity: 0.75;
+}
+
+.chat-poll-modal .enterprise-task-modal-head {
+  padding-right: 2rem;
+}
+
+.chat-poll-modal-body {
+  padding: 0 1rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.chat-poll-option-input {
+  margin-bottom: 0.25rem;
+}
+
+.chat-poll-modal-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+@media (max-width: 720px) {
+  .chat-main-toolbar-with-actions {
+    grid-template-columns: 1fr;
+    gap: 0.65rem;
+  }
+
+  .chat-toolbar-actions {
+    justify-self: stretch;
+    justify-content: flex-start;
+  }
+
+  .chat-back-link {
+    justify-self: start;
+  }
+
+  .chat-main-titles {
+    grid-row: auto;
+  }
 }
 
 .enterprise-dashboard-inner {
@@ -2150,6 +2398,78 @@ input {
   font-size: 0.875rem;
 }
 
+.session-idle-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 6, 23, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+  z-index: 300;
+}
+
+.session-idle-dialog {
+  width: min(400px, 100%);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.5rem 1.35rem;
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.18);
+}
+
+.session-idle-title {
+  margin: 0 0 0.65rem;
+  font-size: 1.2rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+
+.session-idle-desc {
+  margin: 0 0 1.25rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.session-idle-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  justify-content: flex-end;
+}
+
+.session-idle-btn {
+  font-family: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  padding: 0.55rem 1rem;
+  border-radius: 10px;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.session-idle-btn-primary {
+  background: linear-gradient(90deg, var(--gradient-start), var(--gradient-end));
+  color: #fff;
+  border: none;
+}
+
+.session-idle-btn-primary:hover {
+  filter: brightness(0.95);
+}
+
+.session-idle-btn-secondary {
+  background: var(--surface);
+  color: var(--label);
+  border-color: var(--border);
+}
+
+.session-idle-btn-secondary:hover {
+  background: var(--surface-muted);
+}
+
 .enterprise-task-modal-backdrop {
   position: fixed;
   inset: 0;
@@ -2430,9 +2750,9 @@ input {
 
 .enterprise-activity-header-inner {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 1rem;
+  gap: 1rem 1.25rem;
   padding: 1.1rem 1.25rem;
   flex-wrap: wrap;
 }
@@ -2459,10 +2779,12 @@ input {
 }
 
 .enterprise-activity-header-logo {
-  height: 28px;
-  width: auto;
+  width: min(4rem, 18vw);
+  height: auto;
+  max-height: 4rem;
   object-fit: contain;
-  opacity: 0.95;
+  flex-shrink: 0;
+  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.15));
 }
 
 .enterprise-activity-celebrate-btn {
@@ -4115,15 +4437,24 @@ input {
 }
 
 .site-v2-hero {
-  background:
-    linear-gradient(90deg, rgba(2, 6, 23, 0.92), rgba(2, 6, 23, 0.7)),
-    radial-gradient(circle at top right, rgba(79, 70, 229, 0.35), transparent 45%),
-    #020617;
+  position: relative;
+  isolation: isolate;
+  background-color: #020617;
+  /* Photo sits under vignettes; first layer is painted on top (CSS order). */
+  background-image:
+    radial-gradient(ellipse 125% 90% at 62% 34%, rgba(99, 102, 241, 0.18), transparent 52%),
+    radial-gradient(ellipse 115% 95% at 50% 45%, rgba(2, 6, 23, 0) 0%, rgba(2, 6, 23, 0) 42%, rgba(2, 6, 23, 0.38) 68%, rgba(2, 6, 23, 0.82) 88%, #020617 100%),
+    linear-gradient(90deg, rgba(2, 6, 23, 0.78) 0%, rgba(2, 6, 23, 0.28) 26%, transparent 52%, transparent 62%, rgba(2, 6, 23, 0.22) 88%, rgba(2, 6, 23, 0.68) 100%),
+    linear-gradient(180deg, rgba(2, 6, 23, 0.52) 0%, transparent 20%, transparent 72%, rgba(2, 6, 23, 0.78) 100%),
+    url("/site-v2-hero-bg.png");
+  /* Full-width photo (like cover’s horizontal span); height scales with aspect — less “zoomed” than cover on wide heroes. */
+  background-size: 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% auto;
+  background-position: center, center, center, center, center 32%;
+  background-repeat: no-repeat;
   color: #fff;
   padding: 0 1.25rem 1.5rem;
 }
 
-.site-v2-header,
 .site-v2-hero-main,
 .site-v2-section,
 .site-v2-bottom,
@@ -4137,21 +4468,35 @@ input {
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
+  width: 100%;
+  max-width: none;
+  margin: 0;
   padding: 1rem 0;
 }
 
 .site-v2-brand {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0;
   text-decoration: none;
   color: #fff;
   font-weight: 700;
+  flex-shrink: 0;
+  background: transparent;
+  border-radius: 0;
+  line-height: 0;
 }
 
-.site-v2-logo {
-  width: 28px;
-  height: 28px;
+/* Full horizontal lockup (marketing header) */
+.site-v2-logo-full {
+  display: block;
+  width: auto;
+  height: auto;
+  max-height: 2.5rem;
+  max-width: min(11rem, 46vw);
+  object-fit: contain;
+  object-position: left center;
+  background: transparent;
 }
 
 .site-v2-nav {
@@ -4466,9 +4811,15 @@ input {
   justify-content: space-between;
 }
 
-.site-v2-footer p {
-  margin: 0;
-  font-weight: 700;
+.site-v2-footer-logo {
+  width: auto;
+  height: auto;
+  max-height: 1.85rem;
+  max-width: min(9.5rem, 55vw);
+  object-fit: contain;
+  object-position: left center;
+  flex-shrink: 0;
+  background: transparent;
 }
 
 .site-v2-footer a {
