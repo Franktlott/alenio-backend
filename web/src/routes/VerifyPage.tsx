@@ -1,14 +1,23 @@
 import { type FormEvent, useMemo, useState } from "react";
 import { Link, Navigate, useSearchParams } from "react-router-dom";
-import { getAuthClient, setAccessTokenFromAuthData, syncBackendUser } from "../lib/auth-client";
+import {
+  ensureWebSessionAndToken,
+  getAuthClient,
+  setAccessTokenFromAuthData,
+  syncBackendUser,
+} from "../lib/auth-client";
 import { formatAuthFlowError } from "../lib/auth-errors";
+import { createWebTeam } from "../lib/api";
 
 const OTP_MIN = 6;
 const OTP_MAX = 10;
+const WORKSPACE_STORAGE_KEY = "alenio_web_signup_workspace";
 
 export function VerifyPage() {
   const [params] = useSearchParams();
   const email = useMemo(() => (params.get("email") ?? "").trim().toLowerCase(), [params]);
+  const nextStep = useMemo(() => (params.get("next") ?? "").trim().toLowerCase(), [params]);
+  const workspaceFromUrl = useMemo(() => (params.get("workspace") ?? "").trim(), [params]);
   const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
@@ -47,12 +56,33 @@ export function VerifyPage() {
       }
       setAccessTokenFromAuthData(result ?? null);
       setAccessTokenFromAuthData(result.data ?? null);
-      const sessionRes = await getAuthClient().getSession({
-        fetchOptions: { headers: { "X-Force-Fetch": "1" } },
-      } as never);
-      setAccessTokenFromAuthData(sessionRes ?? null);
-      setAccessTokenFromAuthData(sessionRes.data ?? null);
+      const sessionReady = await ensureWebSessionAndToken();
+      if (!sessionReady) {
+        setError("Verified, but session did not start. Try signing in, then open Plan from the sidebar.");
+        return;
+      }
       await syncBackendUser();
+      if (nextStep === "billing") {
+        const ws =
+          sessionStorage.getItem(WORKSPACE_STORAGE_KEY)?.trim() ||
+          workspaceFromUrl ||
+          "";
+        if (!ws) {
+          setError(
+            "No workspace name found. Go back to sign-up and try again, or create a workspace from Team after you sign in.",
+          );
+          return;
+        }
+        try {
+          await createWebTeam(ws);
+        } catch (ce) {
+          setError(ce instanceof Error ? ce.message : "Could not create your workspace. Try again or create a team from Team.");
+          return;
+        }
+        sessionStorage.removeItem(WORKSPACE_STORAGE_KEY);
+        window.location.href = "/billing?subscribe=1";
+        return;
+      }
       window.location.href = "/dashboard";
     } catch (err) {
       setError(formatAuthFlowError(err));

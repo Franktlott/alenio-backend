@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { clearAccessToken, getAuthClient } from "../lib/auth-client";
 import type { WebMeUser, WebTeamRow } from "../lib/api";
 
-export type EnterpriseNavId = "activity" | "chat" | "execute" | "team" | "settings";
+export type EnterpriseNavId = "activity" | "chat" | "execute" | "team" | "plan" | "settings";
 
 type Props = {
   activeNav: EnterpriseNavId;
@@ -50,6 +50,15 @@ function IconTeam() {
     </svg>
   );
 }
+function IconPlan() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <rect x="2" y="5" width="20" height="14" rx="2" />
+      <path d="M2 10h20" />
+    </svg>
+  );
+}
+
 function IconSettings() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
@@ -129,7 +138,8 @@ export function EnterpriseLayout({
           <NavItem to="/activity" navId="activity" activeNav={activeNav} icon={<IconActivity />} label="Activity" />
           <NavItem to="/chat" navId="chat" activeNav={activeNav} icon={<IconChat />} label="Chat" />
           <NavItem to="/dashboard" navId="execute" activeNav={activeNav} icon={<IconExecute />} label="Execute" />
-          <NavItem to="/dashboard#team" navId="team" activeNav={activeNav} icon={<IconTeam />} label="Team" />
+          <NavItem to="/team" navId="team" activeNav={activeNav} icon={<IconTeam />} label="Team" />
+          <NavItem to="/billing" navId="plan" activeNav={activeNav} icon={<IconPlan />} label="Plan" />
           <NavItem to="/dashboard#settings" navId="settings" activeNav={activeNav} icon={<IconSettings />} label="Settings" />
         </nav>
         <div className="enterprise-sidebar-footer">

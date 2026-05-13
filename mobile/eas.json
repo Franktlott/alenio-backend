@@ -32,7 +32,8 @@
         "FROM_EMAIL": "noreply@alenio.app"
       },
       "ios": {
-        "distribution": "store"
+        "distribution": "store",
+        "image": "macos-sequoia-15.5-xcode-26.0"
       },
       "android": {
         "distribution": "store"

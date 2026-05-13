@@ -1,20 +1,29 @@
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import { Link, Navigate, useSearchParams } from "react-router-dom";
 import {
   clearAccessToken,
+  ensureWebSessionAndToken,
   getAccessToken,
   getAuthClient,
   setAccessTokenFromAuthData,
   syncBackendUser,
 } from "../lib/auth-client";
 import { formatAuthFlowError, isEmailNotVerifiedError } from "../lib/auth-errors";
-import { looksLikeJwt } from "../lib/token";
+import { isJwtExpiredSkew, looksLikeJwt } from "../lib/token";
 
 export function LoginPage() {
   const [params] = useSearchParams();
   const reason = params.get("reason");
   const existing = getAccessToken();
-  if (existing && looksLikeJwt(existing)) {
+
+  useEffect(() => {
+    const t = getAccessToken();
+    if (t && looksLikeJwt(t) && isJwtExpiredSkew(t)) {
+      clearAccessToken();
+    }
+  }, []);
+
+  if (existing && looksLikeJwt(existing) && !isJwtExpiredSkew(existing)) {
     return <Navigate to="/dashboard" replace />;
   }
 
@@ -24,20 +33,6 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(
     reason === "session" ? "Your session expired. Sign in again." : null,
   );
-
-  const ensureSessionAndToken = async (): Promise<boolean> => {
-    for (let attempt = 0; attempt < 4; attempt += 1) {
-      const sessionRes = await getAuthClient().getSession({
-        fetchOptions: { headers: { "X-Force-Fetch": "1" } },
-      } as never);
-      const ok =
-        setAccessTokenFromAuthData(sessionRes ?? null) ??
-        setAccessTokenFromAuthData(sessionRes.data ?? null);
-      if (sessionRes.data?.user && ok) return true;
-      await new Promise((r) => setTimeout(r, 250));
-    }
-    return false;
-  };
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -77,7 +72,7 @@ export function LoginPage() {
       }
       setAccessTokenFromAuthData(result ?? null);
       setAccessTokenFromAuthData(result.data ?? null);
-      const ready = await ensureSessionAndToken();
+      const ready = await ensureWebSessionAndToken();
       if (!ready) {
         setError("Sign-in did not return a session. Try again.");
         return;
@@ -159,6 +154,10 @@ export function LoginPage() {
           </button>
           </form>
           <p className="auth-v2-footnote" style={{ marginTop: "0.75rem" }}>
+            <Link to="/sign-up" className="auth-v2-inline-link" data-testid="login-sign-up-link">
+              Create account (web + Stripe)
+            </Link>
+            {" · "}
             <Link to="/forgot-password" className="auth-v2-inline-link" data-testid="login-forgot-password">
               Forgot password?
             </Link>

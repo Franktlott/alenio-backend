@@ -1,4 +1,13 @@
-import { type ClipboardEvent, type KeyboardEvent, useCallback, useEffect, useRef, useState } from "react";
+import {
+  type ClipboardEvent,
+  type KeyboardEvent,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { DashboardTopBar } from "../components/DashboardTopBar";
 import { EnterpriseLayout } from "../components/EnterpriseLayout";
@@ -60,6 +69,16 @@ function formatChatTime(iso: string): string {
   } catch {
     return "";
   }
+}
+
+function conversationRecencyMs(c: DmConversation): number {
+  const last = c.lastMessage?.createdAt;
+  if (last) {
+    const t = new Date(last).getTime();
+    if (!Number.isNaN(t)) return t;
+  }
+  const u = new Date(c.updatedAt).getTime();
+  return Number.isNaN(u) ? 0 : u;
 }
 
 export function ChatPage() {
@@ -218,11 +237,50 @@ export function ChatPage() {
     return () => window.clearInterval(id);
   }, [selectedTeamId, selectedConversationId, refreshChat, isDmMode]);
 
+  const threadKey = useMemo(
+    () =>
+      `${isDmMode ? "dm" : "ch"}:${isDmMode ? selectedConversationId ?? "" : `${selectedTeamId}:${selectedTopicId}`}`,
+    [isDmMode, selectedConversationId, selectedTeamId, selectedTopicId],
+  );
+
+  const scrollSnapBoostRef = useRef(0);
+  useLayoutEffect(() => {
+    scrollSnapBoostRef.current = 2;
+  }, [threadKey]);
+
+  useLayoutEffect(() => {
+    const el = messagesContainerRef.current;
+    if (!el) return;
+
+    const snap = () => {
+      el.scrollTop = el.scrollHeight;
+      messagesEndRef.current?.scrollIntoView({ block: "end", behavior: "auto" });
+    };
+
+    if (scrollSnapBoostRef.current > 0) {
+      snap();
+      requestAnimationFrame(() => requestAnimationFrame(snap));
+      scrollSnapBoostRef.current -= 1;
+      return;
+    }
+
+    // Keep chat anchored to newest messages after refreshes.
+    requestAnimationFrame(snap);
+  }, [messages, threadKey]);
+
   useEffect(() => {
     const el = messagesContainerRef.current;
     if (!el) return;
-    el.scrollTop = el.scrollHeight;
-  }, [messages.length]);
+    const timers = [0, 120, 320, 700].map((delay) =>
+      window.setTimeout(() => {
+        el.scrollTop = el.scrollHeight;
+        messagesEndRef.current?.scrollIntoView({ block: "end", behavior: "auto" });
+      }, delay),
+    );
+    return () => {
+      timers.forEach((id) => window.clearTimeout(id));
+    };
+  }, [threadKey, messages.length]);
 
   const onTeamChange = (id: string) => {
     setParams({ teamId: id, topicId: "general" });
@@ -330,8 +388,14 @@ export function ChatPage() {
     onTeamChange(id);
   };
 
-  const directConversations = conversations.filter((c) => !c.isGroup);
-  const groupConversations = conversations.filter((c) => c.isGroup);
+  const directConversations = useMemo(
+    () => conversations.filter((c) => !c.isGroup).sort((a, b) => conversationRecencyMs(b) - conversationRecencyMs(a)),
+    [conversations],
+  );
+  const groupConversations = useMemo(
+    () => conversations.filter((c) => c.isGroup).sort((a, b) => conversationRecencyMs(b) - conversationRecencyMs(a)),
+    [conversations],
+  );
   const activeConversation = selectedConversationId ? conversations.find((c) => c.id === selectedConversationId) : null;
   const conversationLabel = activeConversation
     ? activeConversation.isGroup
@@ -437,7 +501,7 @@ export function ChatPage() {
 
         {teams && teams.length === 0 ? (
           <p className="chat-app-error" style={{ color: "var(--muted)" }} data-testid="chat-no-teams">
-            Join or create a team in the mobile app, then pick it here.
+            Join or create a workspace on the <Link to="/team">Team</Link> page, then pick it here.
           </p>
         ) : null}
 

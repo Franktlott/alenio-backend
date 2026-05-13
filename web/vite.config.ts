@@ -22,6 +22,10 @@ export default defineConfig(({ mode }) => {
           target: proxyTarget,
           changeOrigin: true,
         },
+        "/web": {
+          target: proxyTarget,
+          changeOrigin: true,
+        },
       },
     },
     build: {

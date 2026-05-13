@@ -19,6 +19,7 @@ import { topicsRouter } from "./routes/topics";
 import { adminRouter } from "./routes/admin";
 import { adminMobileRouter } from "./routes/admin-mobile";
 import { webRouter } from "./routes/web-app";
+import { handleStripeWebhook } from "./routes/stripe-webhook";
 import { pollsRouter } from "./routes/polls";
 import { demoRouter } from "./routes/demo";
 import { videoRouter } from "./routes/video";
@@ -61,6 +62,8 @@ const allowedPatterns = [
   // Firebase Hosting default hosts (enterprise web on *.web.app / *.firebaseapp.com)
   /^https:\/\/[a-z0-9][a-z0-9-]*[a-z0-9]\.web\.app$/i,
   /^https:\/\/[a-z0-9][a-z0-9-]*[a-z0-9]\.firebaseapp\.com$/i,
+  // Production enterprise web (add more custom domains via CORS_ALLOWED_ORIGINS)
+  /^https:\/\/(www\.)?alenio\.app$/i,
 ];
 const extraOrigins = (env.CORS_ALLOWED_ORIGINS ?? "")
   .split(",")
@@ -82,6 +85,9 @@ app.use(
 
 // Logging
 app.use("*", logger());
+
+// Stripe webhooks need the raw body for signature verification (must run before JSON parsers on this path only — no global body parser).
+app.post("/api/webhooks/stripe", handleStripeWebhook);
 
 // Auth session middleware - populates user/session for all routes
 app.use("*", async (c, next) => {

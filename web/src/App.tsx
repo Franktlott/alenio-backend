@@ -2,12 +2,15 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthGate } from "./components/AuthGate";
 import { SessionIdleGuard } from "./components/SessionIdleGuard";
 import { ActivityPage } from "./routes/ActivityPage";
+import { BillingPage } from "./routes/BillingPage";
 import { ChatPage } from "./routes/ChatPage";
 import { CreateTaskPage } from "./routes/CreateTaskPage";
 import { DashboardPage } from "./routes/DashboardPage";
 import { TaskDetailPage } from "./routes/TaskDetailPage";
+import { TeamPage } from "./routes/TeamPage";
 import { ForgotPasswordPage } from "./routes/ForgotPasswordPage";
 import { LoginPage } from "./routes/LoginPage";
+import { SignUpPage } from "./routes/SignUpPage";
 import { ResetPasswordPage } from "./routes/ResetPasswordPage";
 import { VerifyPage } from "./routes/VerifyPage";
 import { VerifyResetCodePage } from "./routes/VerifyResetCodePage";
@@ -88,6 +91,7 @@ export default function App() {
       <SessionIdleGuard />
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/sign-up" element={<SignUpPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password/verify" element={<VerifyResetCodePage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
@@ -114,6 +118,22 @@ export default function App() {
           element={
             <AuthGate>
               <ChatPage />
+            </AuthGate>
+          }
+        />
+        <Route
+          path="/billing"
+          element={
+            <AuthGate>
+              <BillingPage />
+            </AuthGate>
+          }
+        />
+        <Route
+          path="/team"
+          element={
+            <AuthGate>
+              <TeamPage />
             </AuthGate>
           }
         />

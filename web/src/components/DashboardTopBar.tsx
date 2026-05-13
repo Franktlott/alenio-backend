@@ -1,5 +1,6 @@
 import { useCallback, type KeyboardEvent } from "react";
 import type { WebMeUser } from "../lib/api";
+import { JoinRequestBell } from "./JoinRequestBell";
 
 function initials(user: WebMeUser | null): string {
   if (!user) return "?";
@@ -13,6 +14,7 @@ function initials(user: WebMeUser | null): string {
 
 type Props = {
   user: WebMeUser | null;
+  /** Optional extra count shown on the bell badge (join requests are included automatically). */
   notificationCount?: number;
 };
 
@@ -44,13 +46,7 @@ export function DashboardTopBar({ user, notificationCount = 0 }: Props) {
         <kbd className="enterprise-topbar-kbd">⌘ K</kbd>
       </div>
       <div className="enterprise-topbar-actions">
-        <button type="button" className="enterprise-topbar-bell" aria-label="Notifications" data-testid="topbar-notifications">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-            <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-          </svg>
-          {notificationCount > 0 ? <span className="enterprise-topbar-badge">{notificationCount > 9 ? "9+" : notificationCount}</span> : null}
-        </button>
+        <JoinRequestBell extraNotificationCount={notificationCount} />
         <div className="enterprise-topbar-profile" data-testid="topbar-profile">
           {user?.image ? (
             <img src={user.image} alt="" className="enterprise-topbar-avatar enterprise-topbar-avatar-img" />

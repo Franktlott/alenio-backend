@@ -124,6 +124,19 @@ export type WebTeamRow = {
   _count: { members: number; tasks: number };
 };
 
+export type WebTeamSubscription = {
+  id: string;
+  teamId: string;
+  plan: string;
+  status: string;
+  stripeCustomerId: string | null;
+  stripeSubscriptionId: string | null;
+  currentPeriodEnd: string | null;
+  createdAt: string;
+  updatedAt: string;
+  billingProvider?: "stripe" | "mobile_store" | "none";
+};
+
 export type TeamChatMessage = {
   id: string;
   content: string | null;
@@ -177,6 +190,62 @@ export function fetchWebMe() {
 
 export function fetchWebTeams() {
   return apiGetJson<{ data: WebTeamRow[] }>("/web/api/teams").then((r) => r.data);
+}
+
+export type WebTeamJoinRequest = {
+  id: string;
+  teamId: string;
+  userId: string;
+  status: string;
+  createdAt: string;
+  user: { id: string; name: string | null; email: string | null; image: string | null };
+};
+
+export function fetchTeamJoinRequests(teamId: string) {
+  return apiGetJson<{ data: WebTeamJoinRequest[] }>(
+    `/api/teams/${encodeURIComponent(teamId)}/join-requests`,
+  ).then((r) => r.data);
+}
+
+export function approveTeamJoinRequest(teamId: string, requestId: string) {
+  return apiPostJson<{ data: { success: boolean } }>(
+    `/api/teams/${encodeURIComponent(teamId)}/join-requests/${encodeURIComponent(requestId)}/approve`,
+    {},
+  );
+}
+
+export function rejectTeamJoinRequest(teamId: string, requestId: string) {
+  return apiPostJson<{ data: { success: boolean } }>(
+    `/api/teams/${encodeURIComponent(teamId)}/join-requests/${encodeURIComponent(requestId)}/reject`,
+    {},
+  );
+}
+
+export async function fetchWebTeamSubscription(teamId: string): Promise<WebTeamSubscription> {
+  const q = encodeURIComponent(teamId);
+  try {
+    return await apiGetJson<{ data: WebTeamSubscription }>(`/web/api/teams/${q}/subscription`).then((r) => r.data);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "";
+    if (msg.includes("Not found")) {
+      return apiGetJson<{ data: WebTeamSubscription }>(`/api/teams/${q}/subscription`).then((r) => r.data);
+    }
+    throw e;
+  }
+}
+
+export function postWebBillingCheckout(teamId: string) {
+  return apiPostJson<{ data: { url: string } }>("/web/api/billing/checkout-session", { teamId }).then((r) => r.data);
+}
+
+export function postWebBillingPortal(teamId: string) {
+  return apiPostJson<{ data: { url: string } }>("/web/api/billing/portal-session", { teamId }).then((r) => r.data);
+}
+
+export function fetchWebCheckoutConfig() {
+  return apiGetJson<{ data: { configured: boolean; missingKeys: string[] } }>("/web/api/billing/checkout-config").then(
+    (r) => r.data,
+  );
 }
 
 export function fetchTeamMessages(teamId: string, topicId: string) {
@@ -565,6 +634,7 @@ export function voteTeamPoll(teamId: string, pollId: string, optionId: string) {
 }
 
 export type WebTeamMemberRow = {
+  id: string;
   userId: string;
   role: string;
   user: { id: string; name: string | null; email: string | null; image: string | null };
@@ -573,12 +643,146 @@ export type WebTeamMemberRow = {
 export type WebTeamDetail = {
   id: string;
   name: string;
+  image?: string | null;
   createdAt: string;
   inviteCode?: string | null;
   _count?: { members: number; tasks: number };
   members: WebTeamMemberRow[];
   myRole: string;
 };
+
+export type MyJoinRequestRow = {
+  id: string;
+  teamId: string;
+  userId: string;
+  status: string;
+  createdAt: string;
+  team: { id: string; name: string; image: string | null };
+};
+
+export function fetchMyJoinRequests() {
+  return apiGetJson<{ data: MyJoinRequestRow[] }>("/api/join-requests/mine").then((r) => r.data);
+}
+
+export function cancelMyJoinRequest(requestId: string) {
+  return apiRequest<unknown>(`/api/join-requests/${encodeURIComponent(requestId)}`, { method: "DELETE" });
+}
+
+export function postJoinTeamByCode(inviteCode: string) {
+  return apiPostJson<{ data: { status: string; teamName: string; requestId: string } }>("/api/teams/join", {
+    inviteCode: inviteCode.trim(),
+  }).then((r) => r.data);
+}
+
+export function createWebTeam(name: string) {
+  return apiPostJson<{ data: WebTeamRow }>("/web/api/teams", { name: name.trim() }).then((r) => r.data);
+}
+
+export function patchApiTeam(teamId: string, body: { name?: string; image?: string | null }) {
+  return apiPatchJson<{ data: { id: string; name: string; image?: string | null } }>(
+    `/api/teams/${encodeURIComponent(teamId)}`,
+    body,
+  ).then((r) => r.data);
+}
+
+export type TeamMemberStatsMap = Record<
+  string,
+  { activeTasks: number; overdueTasks: number; completedTasks: number; streak: number; personalBestStreak: number }
+>;
+
+export function fetchTeamMemberStats(teamId: string) {
+  return apiGetJson<{ data: TeamMemberStatsMap }>(
+    `/api/teams/${encodeURIComponent(teamId)}/tasks/member-stats`,
+  ).then((r) => r.data);
+}
+
+export type MonthlyCompletionRow = {
+  label: string;
+  year: number;
+  month: number;
+  completionPct: number | null;
+  done: number;
+  total: number;
+};
+
+export function fetchTeamMonthlyCompletion(teamId: string) {
+  return apiGetJson<{ data: MonthlyCompletionRow[] }>(
+    `/api/teams/${encodeURIComponent(teamId)}/tasks/monthly-completion`,
+  ).then((r) => r.data);
+}
+
+export function removeTeamMemberApi(teamId: string, userId: string) {
+  return apiRequest<unknown>(
+    `/api/teams/${encodeURIComponent(teamId)}/members/${encodeURIComponent(userId)}`,
+    { method: "DELETE" },
+  );
+}
+
+export function setTeamMemberRole(teamId: string, userId: string, role: "member" | "team_leader") {
+  return apiPatchJson<{ data: unknown }>(
+    `/api/teams/${encodeURIComponent(teamId)}/members/${encodeURIComponent(userId)}/role`,
+    { role },
+  );
+}
+
+export function transferTeamOwnership(teamId: string, userId: string) {
+  return apiPostJson<{ data: { success: boolean } }>(
+    `/api/teams/${encodeURIComponent(teamId)}/transfer-ownership`,
+    { userId },
+  );
+}
+
+export function leaveTeam(teamId: string) {
+  return apiRequest<unknown>(`/api/teams/${encodeURIComponent(teamId)}/leave`, { method: "DELETE" });
+}
+
+/** Team photo: same upload endpoint as chat; requires purpose=team and teamId. */
+export async function uploadTeamPhoto(file: File, teamId: string): Promise<ChatUploadResult> {
+  assertProductionApiConfigured();
+  const baseUrl = apiBaseUrl();
+  async function doUpload(token: string | null) {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("purpose", "team");
+    formData.append("teamId", teamId);
+    const h = new Headers();
+    if (token) h.set("Authorization", `Bearer ${token}`);
+    try {
+      return await fetch(`${baseUrl}/api/upload`, { method: "POST", body: formData, headers: h });
+    } catch (e) {
+      throw mapNetworkError(e);
+    }
+  }
+  let token = getAccessToken();
+  let res = await doUpload(token);
+  if (res.status === 401) {
+    const recovered = await refreshSessionTokens();
+    if (recovered) {
+      token = getAccessToken();
+      res = await doUpload(token);
+    } else {
+      clearAccessToken();
+    }
+  }
+  const parsed = (await res.json().catch(() => ({}))) as {
+    data?: ChatUploadResult;
+    error?: string | { message?: string };
+    message?: string;
+  };
+  if (!res.ok) {
+    const msg =
+      typeof parsed?.error === "string"
+        ? parsed.error
+        : typeof parsed?.error === "object" && parsed?.error?.message
+          ? parsed.error.message
+          : typeof parsed?.message === "string"
+            ? parsed.message
+            : `Upload failed (${res.status})`;
+    throw new Error(msg);
+  }
+  if (!parsed.data) throw new Error("Upload response missing data.");
+  return parsed.data;
+}
 
 export function fetchWebTeam(teamId: string) {
   return apiGetJson<{ data: WebTeamDetail }>(`/web/api/teams/${encodeURIComponent(teamId)}`).then((r) => r.data);

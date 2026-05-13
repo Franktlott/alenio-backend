@@ -44,6 +44,61 @@ function readBearerToken(headers: Headers): string | null {
   return token?.length ? token : null;
 }
 
+type NeonLikeUser = { id?: string; email?: string | null; name?: string | null; image?: string | null };
+
+function pickUserAndExpiryFromNeonGetSession(result: unknown): {
+  user: AppUser;
+  expiresAt: Date | null;
+} | null {
+  const r = result as {
+    data?: {
+      user?: NeonLikeUser;
+      session?: {
+        user?: NeonLikeUser;
+        expiresAt?: Date | string | number | null;
+        /** Supabase-shaped session from Neon’s adapter */
+        expires_at?: number;
+      } | null;
+    } | null;
+    error?: unknown;
+  } | null;
+  if (r?.error) return null;
+  const data = r?.data;
+  if (!data) return null;
+
+  // Better Auth vanilla: `data.user`. Neon adapter mapping: `data.session.user`.
+  const top = data.user;
+  const nested = data.session?.user;
+  const src = (top?.id ? top : null) ?? (nested?.id ? nested : null);
+  const id = src?.id?.trim();
+  if (!id) return null;
+
+  const sess = data.session;
+  let expiresAt: Date | null = null;
+  if (sess && typeof sess === "object") {
+    if (sess.expiresAt != null) {
+      expiresAt =
+        typeof sess.expiresAt === "string" || typeof sess.expiresAt === "number"
+          ? new Date(sess.expiresAt)
+          : sess.expiresAt instanceof Date
+            ? sess.expiresAt
+            : null;
+    } else if (typeof sess.expires_at === "number") {
+      expiresAt = new Date(sess.expires_at * 1000);
+    }
+  }
+
+  return {
+    user: {
+      id,
+      email: src?.email ?? null,
+      name: src?.name ?? null,
+      image: src?.image ?? null,
+    },
+    expiresAt,
+  };
+}
+
 async function getSessionFromNeon(token: string): Promise<{ user: AppUser; expiresAt: Date | null } | null> {
   try {
     const result = await neonAuthClient.getSession({
@@ -53,27 +108,14 @@ async function getSessionFromNeon(token: string): Promise<{ user: AppUser; expir
         },
       },
     } as never);
-    const data = result.data as
-      | {
-          user?: { id?: string; email?: string | null; name?: string | null; image?: string | null };
-          session?: { expiresAt?: Date | string | null };
-        }
-      | null
-      | undefined;
-    const userId = data?.user?.id;
-    if (!userId) {
-      console.warn("[auth] getSessionFromNeon: response had no user id (token present but not recognized on this Neon Auth project?)");
+    const picked = pickUserAndExpiryFromNeonGetSession(result);
+    if (!picked) {
+      console.warn(
+        "[auth] getSessionFromNeon: no user id in response (expected data.user.id or data.session.user.id). Check NEON_AUTH_URL matches the app’s Neon Auth base URL.",
+      );
       return null;
     }
-    return {
-      user: {
-        id: userId,
-        email: data?.user?.email ?? null,
-        name: data?.user?.name ?? null,
-        image: data?.user?.image ?? null,
-      },
-      expiresAt: data?.session?.expiresAt ? new Date(data.session.expiresAt) : null,
-    };
+    return picked;
   } catch (err) {
     console.warn("[auth] getSessionFromNeon failed; check NEON_AUTH_URL matches the app’s EXPO_PUBLIC_NEON_AUTH_URL", err);
     return null;

@@ -53,8 +53,8 @@ export function WebsiteHomePage() {
             <Link to="/login" className="site-v2-login">
               Log in
             </Link>
-            <Link to="/login" className="site-v2-head-cta">
-              Start free today
+            <Link to="/sign-up" className="site-v2-head-cta">
+              Start with Team (Stripe)
             </Link>
           </div>
         </header>
@@ -68,8 +68,8 @@ export function WebsiteHomePage() {
             </h1>
             <p>One app for chat, tasks, calendar, and video.</p>
             <div className="site-v2-hero-cta">
-              <Link to="/login" className="site-v2-btn site-v2-btn-primary">
-                Start free today
+              <Link to="/sign-up" className="site-v2-btn site-v2-btn-primary">
+                Start with Team (Stripe)
               </Link>
               <a href="#contact" className="site-v2-btn site-v2-btn-outline">
                 Book a demo

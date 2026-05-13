@@ -26,6 +26,6 @@ export default function Index() {
     );
   }
 
-  if (session?.user && me?.id) return <Redirect href="/(app)/team" />;
+  if (session?.user && me?.id) return <Redirect href="/(app)/chat" />;
   return <Redirect href="/sign-in" />;
 }

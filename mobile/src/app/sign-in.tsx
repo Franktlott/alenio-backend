@@ -13,7 +13,12 @@ import {
 } from "react-native";
 import { authClient, clearAccessToken, getAccessToken, getAuthHeaders, setAccessTokenFromAuthData } from "@/lib/auth/auth-client";
 import { formatAuthFlowError, isEmailNotVerifiedError } from "@/lib/auth/auth-errors";
-import { clearSignedOutMark, markSessionSignedOut, useInvalidateSession } from "@/lib/auth/use-session";
+import {
+  clearSignedOutMark,
+  markSessionSignedOut,
+  SESSION_QUERY_KEY,
+  useInvalidateSession,
+} from "@/lib/auth/use-session";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { StatusBar } from "expo-status-bar";
@@ -46,9 +51,13 @@ export default function SignIn() {
     // Neon session materialization can lag briefly after sign-in on mobile.
     for (let attempt = 0; attempt < 4; attempt += 1) {
       await invalidateSession();
+      const bearer = (await getAccessToken())?.trim() ?? null;
       const sessionRes = await authClient.getSession({
         fetchOptions: {
-          headers: { "X-Force-Fetch": "1" },
+          headers: {
+            "X-Force-Fetch": "1",
+            ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}),
+          },
         },
       } as never);
       const tokenFromSession =
@@ -108,6 +117,7 @@ export default function SignIn() {
           setError("Sign-in did not establish a session. Please try again.");
           return;
         }
+        await queryClient.refetchQueries({ queryKey: SESSION_QUERY_KEY });
         await provisionBackendUserAfterAuth();
         const authHeaders = await getAuthHeaders();
         let backendAuthed = false;
@@ -138,6 +148,7 @@ export default function SignIn() {
           setError("Could not load your profile. Try signing in again.");
           return;
         }
+        await queryClient.refetchQueries({ queryKey: SESSION_QUERY_KEY });
         router.replace("/(app)/chat");
       }
     } catch (err) {

@@ -4,7 +4,7 @@ import { Platform } from "react-native";
 const IOS_KEY = process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY ?? "";
 const ANDROID_KEY = process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_KEY ?? "";
 /** Must match RevenueCat entitlement identifier (case-sensitive). */
-const TEAM_ENTITLEMENT_ID = "Team";
+export const TEAM_ENTITLEMENT_ID = "Team";
 
 export function isRevenueCatEnabled(): boolean {
   const key = Platform.OS === "ios" ? IOS_KEY : ANDROID_KEY;

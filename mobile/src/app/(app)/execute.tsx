@@ -411,9 +411,6 @@ function TaskRow({ task, onToggle, onPress, onLongPress }: { task: Task; onToggl
 
   const { overdue, today } = getDueStatus();
 
-  // Icon circle background: priority accent at 15% opacity
-  const iconCircleBg = priority.accentColor + "26"; // 26 hex = ~15% opacity
-
   // First assignee name
   const firstAssigneeName = task.assignments?.[0]?.user?.name ?? null;
 
@@ -484,31 +481,28 @@ function TaskRow({ task, onToggle, onPress, onLongPress }: { task: Task; onToggl
     >
       <View style={{ paddingHorizontal: 12, paddingVertical: 9, flexDirection: "row", alignItems: "center" }}>
         <View style={{ flex: 1 }}>
-          {/* Row 1: Icon circle + Title + 3-dot menu */}
+          {/* Row 1: completion control + title */}
           <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
-            {/* Icon circle — tapping toggles done state */}
             <Pressable
               onPress={onToggle}
               hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
               style={{
-                width: 32,
-                height: 32,
-                borderRadius: 16,
-                backgroundColor: isDone ? "#D1FAE5" : iconCircleBg,
+                width: 24,
+                height: 24,
+                borderRadius: 6,
+                borderWidth: 2,
+                borderColor: isDone ? "#10B981" : "#CBD5E1",
+                backgroundColor: isDone ? "#D1FAE5" : "transparent",
                 alignItems: "center",
                 justifyContent: "center",
                 marginRight: 10,
-                marginTop: 1,
+                marginTop: 2,
                 flexShrink: 0,
               }}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: isDone }}
             >
-              {isDone ? (
-                <Text style={{ fontSize: 14, color: "#10B981", fontWeight: "700" }}>✓</Text>
-              ) : (
-                <Text style={{ fontSize: 13, fontWeight: "700", color: priority.accentColor }}>
-                  {priority.label[0]}
-                </Text>
-              )}
+              {isDone ? <Text style={{ fontSize: 12, color: "#10B981", fontWeight: "700" }}>✓</Text> : null}
             </Pressable>
 
             {/* Title + assignee */}

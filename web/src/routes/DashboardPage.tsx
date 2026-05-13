@@ -201,7 +201,10 @@ export function DashboardPage() {
   }, []);
 
   useEffect(() => {
-    if (!teams?.length) return;
+    if (!teams?.length) {
+      setSelectedTeamId("");
+      return;
+    }
     setSelectedTeamId((prev) => {
       if (prev && teams.some((t) => t.id === prev)) return prev;
       return teams[0]!.id;
@@ -923,55 +926,12 @@ export function DashboardPage() {
           </section>
         </div>
 
-        <div id="team" className="enterprise-dashboard-team">
-          <section className="enterprise-card">
-            <h2 className="enterprise-card-title enterprise-card-title-spaced">Team workspaces</h2>
-            {teams && teams.length === 0 ? (
-              <p className="enterprise-muted" data-testid="dashboard-no-teams">
-                You are not in any teams yet. Use the mobile app to create or join a team.
-              </p>
-            ) : (
-              <div className="enterprise-table-wrap">
-                <table className="enterprise-table">
-                  <thead>
-                    <tr>
-                      <th>Team</th>
-                      <th>Role</th>
-                      <th>Members</th>
-                      <th>Tasks</th>
-                      <th>Chat</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(teams ?? []).map((t) => (
-                      <tr key={t.id}>
-                        <td style={{ fontWeight: 600 }}>{t.name}</td>
-                        <td style={{ textTransform: "capitalize" }}>{t.role.replace(/_/g, " ")}</td>
-                        <td>{t._count.members}</td>
-                        <td>{t._count.tasks}</td>
-                        <td>
-                          <Link
-                            to={`/chat?teamId=${encodeURIComponent(t.id)}`}
-                            className="enterprise-inline-link"
-                            data-testid={`chat-link-${t.id}`}
-                          >
-                            Open
-                          </Link>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </section>
-        </div>
-
         <div id="settings" className="enterprise-dashboard-settings">
           <section className="enterprise-card">
             <h2 className="enterprise-card-title enterprise-card-title-spaced">Settings</h2>
             <p className="enterprise-muted">
-              Manage subscription and advanced options in the <strong>Alenio</strong> mobile app. Use <strong>Sign out</strong> in the
+              Open <Link to="/team">Team</Link> for members and invites. Manage your <strong>Team</strong> plan and Stripe billing from{" "}
+              <Link to="/billing">Plan</Link> in the sidebar. Other options remain in the mobile app. Use <strong>Sign out</strong> in the
               sidebar to leave this session.
             </p>
           </section>

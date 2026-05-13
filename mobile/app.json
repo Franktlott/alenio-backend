@@ -16,7 +16,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.vibecode.alenio-9iqp9v",
-      "buildNumber": "39",
+      "buildNumber": "42",
       "entitlements": {
         "aps-environment": "production"
       },

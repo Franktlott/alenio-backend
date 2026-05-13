@@ -1,7 +1,13 @@
 import { createAuthClient } from "@neondatabase/auth";
 import { BetterAuthVanillaAdapter } from "@neondatabase/auth/vanilla/adapters";
 import { getWebApiBase } from "./api-base";
-import { extractTokenFromAuthPayload, getStoredToken, setStoredToken } from "./token";
+import {
+  extractTokenFromAuthPayload,
+  getStoredToken,
+  isJwtExpiredSkew,
+  looksLikeJwt,
+  setStoredToken,
+} from "./token";
 
 function readNeonAuthUrl(): string {
   return import.meta.env.VITE_NEON_AUTH_URL?.trim() ?? "";
@@ -18,6 +24,11 @@ function neonAuthOrigin(): string {
 }
 
 let authClientInstance: ReturnType<typeof createAuthClient> | null = null;
+
+/** Drop cached Neon client so sign-out / re-login does not reuse stale in-memory session. */
+export function resetAuthClient(): void {
+  authClientInstance = null;
+}
 
 function getAuthClientInstance(): ReturnType<typeof createAuthClient> {
   const url = readNeonAuthUrl();
@@ -83,6 +94,53 @@ export function getAccessToken(): string | null {
 
 export function clearAccessToken(): void {
   setStoredToken(null);
+  resetAuthClient();
+}
+
+function authPayloadHasUser(payload: unknown): boolean {
+  if (payload == null || typeof payload !== "object") return false;
+  const o = payload as Record<string, unknown>;
+  const isObj = (v: unknown): v is Record<string, unknown> => v != null && typeof v === "object";
+  if (isObj(o.user)) return true;
+  if (isObj(o.session)) {
+    const s = o.session;
+    if (isObj(s.user)) return true;
+  }
+  if (isObj(o.data)) return authPayloadHasUser(o.data);
+  return false;
+}
+
+function storedAccessJwtReady(): boolean {
+  const token = getStoredToken()?.trim() ?? null;
+  return !!(token && looksLikeJwt(token) && !isJwtExpiredSkew(token));
+}
+
+/**
+ * Refreshes session from Neon Auth and persists any rotated access token.
+ * Succeeds when a non-expired JWT is stored — `getSession` sometimes omits `data.user` while the bearer is valid.
+ */
+export async function ensureWebSessionAndToken(maxAttempts = 8): Promise<boolean> {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const bearer = getStoredToken()?.trim() ?? null;
+    const sessionRes = await getAuthClient().getSession({
+      fetchOptions: {
+        headers: {
+          "X-Force-Fetch": "1",
+          ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}),
+        },
+      },
+    } as never);
+    setAccessTokenFromAuthData(sessionRes ?? null);
+    setAccessTokenFromAuthData((sessionRes as { data?: unknown })?.data ?? null);
+
+    const data = (sessionRes as { data?: unknown })?.data ?? sessionRes;
+    const userPresent = authPayloadHasUser(data);
+    if (storedAccessJwtReady() && userPresent) return true;
+    if (storedAccessJwtReady() && attempt >= 1) return true;
+
+    await new Promise((r) => setTimeout(r, 120 + attempt * 80));
+  }
+  return storedAccessJwtReady();
 }
 
 let refreshInFlight: Promise<boolean> | null = null;

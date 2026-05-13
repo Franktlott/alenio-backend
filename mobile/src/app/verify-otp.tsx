@@ -15,11 +15,11 @@ import { LinearGradient } from "expo-linear-gradient";
 import { StatusBar } from "expo-status-bar";
 import { router, useLocalSearchParams } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { authClient, setAccessTokenFromAuthData } from "@/lib/auth/auth-client";
+import { authClient, getAccessToken, setAccessTokenFromAuthData } from "@/lib/auth/auth-client";
 import { provisionBackendUserAfterAuth } from "@/lib/auth/sync-backend-user";
 import { formatAuthFlowError } from "@/lib/auth/auth-errors";
 import { clearPendingSignUp, getPendingSignUp } from "@/lib/auth/pending-signup";
-import { clearSignedOutMark, useInvalidateSession } from "@/lib/auth/use-session";
+import { clearSignedOutMark, SESSION_QUERY_KEY, useInvalidateSession } from "@/lib/auth/use-session";
 import { fetchMeUser, ME_QUERY_KEY } from "@/lib/auth/me-query";
 
 /** Better Auth defaults to 6; some projects use longer OTPs. */
@@ -74,7 +74,16 @@ export default function VerifyOtp() {
       }
 
       await invalidateSession();
-      let sessionRes = await authClient.getSession();
+      const sessionHeaders = async () => {
+        const bearer = (await getAccessToken())?.trim() ?? null;
+        return {
+          "X-Force-Fetch": "1",
+          ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}),
+        };
+      };
+      let sessionRes = await authClient.getSession({
+        fetchOptions: { headers: await sessionHeaders() },
+      } as never);
 
       if (!sessionRes.data?.user) {
         const pending = getPendingSignUp();
@@ -88,7 +97,9 @@ export default function VerifyOtp() {
               setAccessTokenFromAuthData(si ?? null);
               setAccessTokenFromAuthData(si.data ?? null);
               await invalidateSession();
-              sessionRes = await authClient.getSession();
+              sessionRes = await authClient.getSession({
+                fetchOptions: { headers: await sessionHeaders() },
+              } as never);
             }
           } catch {
             /* user can sign in manually */
@@ -110,6 +121,7 @@ export default function VerifyOtp() {
           router.replace("/sign-in");
           return;
         }
+        await queryClient.refetchQueries({ queryKey: SESSION_QUERY_KEY });
         router.replace("/(app)/chat");
       } else {
         router.replace("/sign-in");

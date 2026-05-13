@@ -2,6 +2,9 @@ import { Hono } from "hono";
 import { prisma } from "../prisma";
 import { getSessionFromHeaders } from "../auth";
 import { sendPushToUsers } from "../lib/push";
+import { logActivity } from "../lib/activity";
+import { mountWebStripeBilling } from "./web-stripe-billing";
+import { webPrismaUserIdFromContext } from "../lib/web-prisma-user";
 
 const webRouter = new Hono();
 
@@ -12,10 +15,11 @@ async function getWebSession(c: any) {
 
 // ── API: me ──────────────────────────────────────────────────────────────────
 webRouter.get("/api/me", async (c) => {
-  const session = await getWebSession(c);
-  if (!session) return c.json({ error: "Unauthorized" }, 401);
+  if (!(await getWebSession(c))) return c.json({ error: "Unauthorized" }, 401);
+  const userId = webPrismaUserIdFromContext(c);
+  if (!userId) return c.json({ error: "Unauthorized" }, 401);
   const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
+    where: { id: userId },
     select: { id: true, name: true, email: true, image: true, createdAt: true },
   });
   return c.json({ data: user });
@@ -23,10 +27,11 @@ webRouter.get("/api/me", async (c) => {
 
 // ── API: teams list ───────────────────────────────────────────────────────────
 webRouter.get("/api/teams", async (c) => {
-  const session = await getWebSession(c);
-  if (!session) return c.json({ error: "Unauthorized" }, 401);
+  if (!(await getWebSession(c))) return c.json({ error: "Unauthorized" }, 401);
+  const userId = webPrismaUserIdFromContext(c);
+  if (!userId) return c.json({ error: "Unauthorized" }, 401);
   const memberships = await prisma.teamMember.findMany({
-    where: { userId: session.user.id },
+    where: { userId: userId },
     include: {
       team: {
         select: {
@@ -41,8 +46,9 @@ webRouter.get("/api/teams", async (c) => {
 
 // ── API: create team ──────────────────────────────────────────────────────────
 webRouter.post("/api/teams", async (c) => {
-  const session = await getWebSession(c);
-  if (!session) return c.json({ error: "Unauthorized" }, 401);
+  if (!(await getWebSession(c))) return c.json({ error: "Unauthorized" }, 401);
+  const userId = webPrismaUserIdFromContext(c);
+  if (!userId) return c.json({ error: "Unauthorized" }, 401);
   const body = await c.req.json().catch(() => ({}));
   const { name } = body;
   if (!name || !name.trim()) return c.json({ error: { message: "Name is required" } }, 400);
@@ -52,7 +58,7 @@ webRouter.post("/api/teams", async (c) => {
       name: name.trim(),
       inviteCode,
       members: {
-        create: { userId: session.user.id, role: "owner" },
+        create: { userId: userId, role: "owner" },
       },
     },
     select: { id: true, name: true, createdAt: true, _count: { select: { members: true, tasks: true } } },
@@ -60,17 +66,22 @@ webRouter.post("/api/teams", async (c) => {
   return c.json({ data: { ...team, role: "owner" } });
 });
 
+// Stripe billing + team subscription (register early so paths like /api/teams/:id/subscription
+// are not shadowed by longer-lived route tables in some deployments).
+mountWebStripeBilling(webRouter);
+
 // ── API: get team detail ──────────────────────────────────────────────────────
 webRouter.get("/api/teams/:id", async (c) => {
-  const session = await getWebSession(c);
-  if (!session) return c.json({ error: "Unauthorized" }, 401);
+  if (!(await getWebSession(c))) return c.json({ error: "Unauthorized" }, 401);
+  const userId = webPrismaUserIdFromContext(c);
+  if (!userId) return c.json({ error: "Unauthorized" }, 401);
   const { id } = c.req.param();
-  const membership = await prisma.teamMember.findFirst({ where: { teamId: id, userId: session.user.id } });
+  const membership = await prisma.teamMember.findFirst({ where: { teamId: id, userId: userId } });
   if (!membership) return c.json({ error: "Not found" }, 404);
   const team = await prisma.team.findUnique({
     where: { id },
     select: {
-      id: true, name: true, createdAt: true, inviteCode: true,
+      id: true, name: true, image: true, createdAt: true, inviteCode: true,
       _count: { select: { members: true, tasks: true } },
     },
   });
@@ -83,41 +94,71 @@ webRouter.get("/api/teams/:id", async (c) => {
 
 // ── API: edit team name ───────────────────────────────────────────────────────
 webRouter.patch("/api/teams/:id", async (c) => {
-  const session = await getWebSession(c);
-  if (!session) return c.json({ error: "Unauthorized" }, 401);
+  if (!(await getWebSession(c))) return c.json({ error: "Unauthorized" }, 401);
+  const userId = webPrismaUserIdFromContext(c);
+  if (!userId) return c.json({ error: "Unauthorized" }, 401);
   const { id } = c.req.param();
-  const membership = await prisma.teamMember.findFirst({ where: { teamId: id, userId: session.user.id } });
-  if (!membership || !["owner", "admin"].includes(membership.role)) {
+  const membership = await prisma.teamMember.findFirst({ where: { teamId: id, userId: userId } });
+  if (!membership || !["owner", "team_leader", "admin"].includes(membership.role)) {
     return c.json({ error: { message: "Forbidden" } }, 403);
   }
-  const body = await c.req.json().catch(() => ({}));
-  const { name } = body;
-  if (!name || !name.trim()) return c.json({ error: { message: "Name is required" } }, 400);
+  const body = await c.req.json().catch(() => ({})) as { name?: string; image?: string | null };
+  const nameTrim = typeof body.name === "string" ? body.name.trim() : "";
+  const hasImage = "image" in body;
+  if (!nameTrim && !hasImage) {
+    return c.json({ error: { message: "Name or image is required" } }, 400);
+  }
   const team = await prisma.team.update({
     where: { id },
-    data: { name: name.trim() },
-    select: { id: true, name: true },
+    data: {
+      ...(nameTrim ? { name: nameTrim } : {}),
+      ...(hasImage ? { image: body.image ?? null } : {}),
+    },
+    select: { id: true, name: true, image: true, inviteCode: true },
   });
   return c.json({ data: team });
 });
 
 // ── API: remove team member ───────────────────────────────────────────────────
 webRouter.delete("/api/teams/:id/members/:userId", async (c) => {
-  const session = await getWebSession(c);
-  if (!session) return c.json({ error: "Unauthorized" }, 401);
-  const { id, userId } = c.req.param();
-  const myMembership = await prisma.teamMember.findFirst({ where: { teamId: id, userId: session.user.id } });
-  if (!myMembership || !["owner", "admin"].includes(myMembership.role)) {
+  if (!(await getWebSession(c))) return c.json({ error: "Unauthorized" }, 401);
+  const userId = webPrismaUserIdFromContext(c);
+  if (!userId) return c.json({ error: "Unauthorized" }, 401);
+  const { id, userId: memberId } = c.req.param();
+  const myMembership = await prisma.teamMember.findFirst({ where: { teamId: id, userId: userId } });
+  if (!myMembership || !["owner", "team_leader", "admin"].includes(myMembership.role)) {
     return c.json({ error: { message: "Forbidden" } }, 403);
   }
-  await prisma.teamMember.deleteMany({ where: { teamId: id, userId } });
+  if (memberId === userId) {
+    return c.json({ error: { message: "You cannot remove yourself" } }, 400);
+  }
+  const targetMembership = await prisma.teamMember.findUnique({
+    where: { userId_teamId: { userId: memberId, teamId: id } },
+    include: { user: { select: { name: true } } },
+  });
+  if (!targetMembership) {
+    return c.json({ error: { message: "Member not found" } }, 404);
+  }
+  if (["owner", "team_leader"].includes(targetMembership.role)) {
+    return c.json({ error: { message: "Cannot remove an owner or team leader" } }, 403);
+  }
+  await prisma.teamMember.delete({
+    where: { userId_teamId: { userId: memberId, teamId: id } },
+  });
+  await logActivity({
+    teamId: id,
+    userId: memberId,
+    type: "member_removed",
+    metadata: { userName: targetMembership.user.name ?? "" },
+  });
   return c.json({ data: { ok: true } });
 });
 
 // ── API: task by id (any member of task's team) — before `/api/tasks` list
 webRouter.get("/api/tasks/:id", async (c) => {
-  const session = await getWebSession(c);
-  if (!session) return c.json({ error: "Unauthorized" }, 401);
+  if (!(await getWebSession(c))) return c.json({ error: "Unauthorized" }, 401);
+  const userId = webPrismaUserIdFromContext(c);
+  if (!userId) return c.json({ error: "Unauthorized" }, 401);
   const { id } = c.req.param();
   const task = await prisma.task.findUnique({
     where: { id },
@@ -130,7 +171,7 @@ webRouter.get("/api/tasks/:id", async (c) => {
   });
   if (!task) return c.json({ error: { message: "Task not found", code: "NOT_FOUND" } }, 404);
   const membership = await prisma.teamMember.findFirst({
-    where: { teamId: task.teamId, userId: session.user.id },
+    where: { teamId: task.teamId, userId: userId },
   });
   if (!membership) return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
   return c.json({ data: task });
@@ -138,10 +179,11 @@ webRouter.get("/api/tasks/:id", async (c) => {
 
 // ── API: my tasks ─────────────────────────────────────────────────────────────
 webRouter.get("/api/tasks", async (c) => {
-  const session = await getWebSession(c);
-  if (!session) return c.json({ error: "Unauthorized" }, 401);
+  if (!(await getWebSession(c))) return c.json({ error: "Unauthorized" }, 401);
+  const userId = webPrismaUserIdFromContext(c);
+  if (!userId) return c.json({ error: "Unauthorized" }, 401);
   const assignments = await prisma.taskAssignment.findMany({
-    where: { userId: session.user.id },
+    where: { userId: userId },
     include: {
       task: {
         include: {
@@ -158,10 +200,11 @@ webRouter.get("/api/tasks", async (c) => {
 
 // ── API: single team task (detail) — register before `/tasks` list so path matches reliably
 webRouter.get("/api/teams/:id/tasks/:taskId", async (c) => {
-  const session = await getWebSession(c);
-  if (!session) return c.json({ error: "Unauthorized" }, 401);
+  if (!(await getWebSession(c))) return c.json({ error: "Unauthorized" }, 401);
+  const userId = webPrismaUserIdFromContext(c);
+  if (!userId) return c.json({ error: "Unauthorized" }, 401);
   const { id: teamId, taskId } = c.req.param();
-  const membership = await prisma.teamMember.findFirst({ where: { teamId, userId: session.user.id } });
+  const membership = await prisma.teamMember.findFirst({ where: { teamId, userId: userId } });
   if (!membership) return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
   const task = await prisma.task.findFirst({
     where: { id: taskId, teamId },
@@ -178,10 +221,11 @@ webRouter.get("/api/teams/:id/tasks/:taskId", async (c) => {
 
 // ── API: team tasks ───────────────────────────────────────────────────────────
 webRouter.get("/api/teams/:id/tasks", async (c) => {
-  const session = await getWebSession(c);
-  if (!session) return c.json({ error: "Unauthorized" }, 401);
+  if (!(await getWebSession(c))) return c.json({ error: "Unauthorized" }, 401);
+  const userId = webPrismaUserIdFromContext(c);
+  if (!userId) return c.json({ error: "Unauthorized" }, 401);
   const { id } = c.req.param();
-  const membership = await prisma.teamMember.findFirst({ where: { teamId: id, userId: session.user.id } });
+  const membership = await prisma.teamMember.findFirst({ where: { teamId: id, userId: userId } });
   if (!membership) return c.json({ error: "Not found" }, 404);
   const tasks = await prisma.task.findMany({
     where: { teamId: id },
@@ -198,10 +242,11 @@ webRouter.get("/api/teams/:id/tasks", async (c) => {
 
 // ── API: all team tasks (grouped) ─────────────────────────────────────────────
 webRouter.get("/api/team-tasks", async (c) => {
-  const session = await getWebSession(c);
-  if (!session) return c.json({ error: "Unauthorized" }, 401);
+  if (!(await getWebSession(c))) return c.json({ error: "Unauthorized" }, 401);
+  const userId = webPrismaUserIdFromContext(c);
+  if (!userId) return c.json({ error: "Unauthorized" }, 401);
   const memberships = await prisma.teamMember.findMany({
-    where: { userId: session.user.id },
+    where: { userId: userId },
     select: { teamId: true, role: true, team: { select: { id: true, name: true } } },
   });
   const teamIds = memberships.map((m) => m.teamId);
@@ -220,8 +265,9 @@ webRouter.get("/api/team-tasks", async (c) => {
 
 // ── API: create task (parity with mobile: assignees, joint vs split, subtasks) ─
 webRouter.post("/api/tasks", async (c) => {
-  const session = await getWebSession(c);
-  if (!session) return c.json({ error: "Unauthorized" }, 401);
+  if (!(await getWebSession(c))) return c.json({ error: "Unauthorized" }, 401);
+  const userId = webPrismaUserIdFromContext(c);
+  if (!userId) return c.json({ error: "Unauthorized" }, 401);
   const body = await c.req.json().catch(() => ({}));
   const {
     title,
@@ -243,14 +289,14 @@ webRouter.post("/api/tasks", async (c) => {
     return c.json({ error: { message: "Team is required" } }, 400);
   }
 
-  const membership = await prisma.teamMember.findFirst({ where: { teamId, userId: session.user.id } });
+  const membership = await prisma.teamMember.findFirst({ where: { teamId, userId: userId } });
   if (!membership) return c.json({ error: { message: "Not a member of this team" } }, 403);
 
   let ids: string[] = Array.isArray(assigneeIds)
     ? assigneeIds.filter((id): id is string => typeof id === "string" && id.trim().length > 0).map((id) => id.trim())
     : [];
   ids = [...new Set(ids)];
-  if (ids.length === 0) ids = [session.user.id];
+  if (ids.length === 0) ids = [userId];
 
   for (const uid of ids) {
     const m = await prisma.teamMember.findFirst({ where: { teamId, userId: uid } });
@@ -290,7 +336,7 @@ webRouter.post("/api/tasks", async (c) => {
     dueDate: dueDateObj,
     incognito: incognito === true,
     teamId,
-    creatorId: session.user.id,
+    creatorId: userId,
   };
 
   let tasks: Awaited<ReturnType<typeof prisma.task.create>>[];
@@ -335,7 +381,7 @@ webRouter.post("/api/tasks", async (c) => {
     );
   }
 
-  const assigneesToNotify = ids.filter((id) => id !== session.user.id);
+  const assigneesToNotify = ids.filter((id) => id !== userId);
   if (assigneesToNotify.length > 0 && tasks[0]) {
     try {
       await sendPushToUsers(
@@ -356,13 +402,14 @@ webRouter.post("/api/tasks", async (c) => {
 
 // ── API: update task ──────────────────────────────────────────────────────────
 webRouter.patch("/api/tasks/:id", async (c) => {
-  const session = await getWebSession(c);
-  if (!session) return c.json({ error: "Unauthorized" }, 401);
+  if (!(await getWebSession(c))) return c.json({ error: "Unauthorized" }, 401);
+  const userId = webPrismaUserIdFromContext(c);
+  if (!userId) return c.json({ error: "Unauthorized" }, 401);
   const { id } = c.req.param();
   // Must be assigned or creator
   const [assignment, taskCheck] = await Promise.all([
-    prisma.taskAssignment.findFirst({ where: { taskId: id, userId: session.user.id } }),
-    prisma.task.findFirst({ where: { id, creatorId: session.user.id } }),
+    prisma.taskAssignment.findFirst({ where: { taskId: id, userId: userId } }),
+    prisma.task.findFirst({ where: { id, creatorId: userId } }),
   ]);
   if (!assignment && !taskCheck) return c.json({ error: "Not found" }, 404);
   const body = await c.req.json().catch(() => ({}));
@@ -387,11 +434,12 @@ webRouter.patch("/api/tasks/:id", async (c) => {
 
 // ── API: quick status update ──────────────────────────────────────────────────
 webRouter.patch("/api/tasks/:id/status", async (c) => {
-  const session = await getWebSession(c);
-  if (!session) return c.json({ error: "Unauthorized" }, 401);
+  if (!(await getWebSession(c))) return c.json({ error: "Unauthorized" }, 401);
+  const userId = webPrismaUserIdFromContext(c);
+  if (!userId) return c.json({ error: "Unauthorized" }, 401);
   const { id } = c.req.param();
   const assignment = await prisma.taskAssignment.findFirst({
-    where: { taskId: id, userId: session.user.id },
+    where: { taskId: id, userId: userId },
   });
   if (!assignment) return c.json({ error: "Not found" }, 404);
   const { status } = await c.req.json();
@@ -405,15 +453,16 @@ webRouter.patch("/api/tasks/:id/status", async (c) => {
 
 // ── API: delete task ──────────────────────────────────────────────────────────
 webRouter.delete("/api/tasks/:id", async (c) => {
-  const session = await getWebSession(c);
-  if (!session) return c.json({ error: "Unauthorized" }, 401);
+  if (!(await getWebSession(c))) return c.json({ error: "Unauthorized" }, 401);
+  const userId = webPrismaUserIdFromContext(c);
+  if (!userId) return c.json({ error: "Unauthorized" }, 401);
   const { id } = c.req.param();
   const task = await prisma.task.findUnique({ where: { id } });
   if (!task) return c.json({ error: "Not found" }, 404);
   // Must be creator or team admin/owner
-  if (task.creatorId !== session.user.id) {
+  if (task.creatorId !== userId) {
     const membership = task.teamId
-      ? await prisma.teamMember.findFirst({ where: { teamId: task.teamId, userId: session.user.id } })
+      ? await prisma.teamMember.findFirst({ where: { teamId: task.teamId, userId: userId } })
       : null;
     if (!membership || !["owner", "admin"].includes(membership.role)) {
       return c.json({ error: { message: "Forbidden" } }, 403);
@@ -426,10 +475,11 @@ webRouter.delete("/api/tasks/:id", async (c) => {
 
 // ── API: calendar events (all teams) ─────────────────────────────────────────
 webRouter.get("/api/calendar/events", async (c) => {
-  const session = await getWebSession(c);
-  if (!session) return c.json({ error: "Unauthorized" }, 401);
+  if (!(await getWebSession(c))) return c.json({ error: "Unauthorized" }, 401);
+  const userId = webPrismaUserIdFromContext(c);
+  if (!userId) return c.json({ error: "Unauthorized" }, 401);
   const memberships = await prisma.teamMember.findMany({
-    where: { userId: session.user.id },
+    where: { userId: userId },
     select: { teamId: true },
   });
   const teamIds = memberships.map((m) => m.teamId);
@@ -447,10 +497,11 @@ webRouter.get("/api/calendar/events", async (c) => {
 
 // ── API: team events ──────────────────────────────────────────────────────────
 webRouter.get("/api/teams/:id/events", async (c) => {
-  const session = await getWebSession(c);
-  if (!session) return c.json({ error: "Unauthorized" }, 401);
+  if (!(await getWebSession(c))) return c.json({ error: "Unauthorized" }, 401);
+  const userId = webPrismaUserIdFromContext(c);
+  if (!userId) return c.json({ error: "Unauthorized" }, 401);
   const { id } = c.req.param();
-  const membership = await prisma.teamMember.findFirst({ where: { teamId: id, userId: session.user.id } });
+  const membership = await prisma.teamMember.findFirst({ where: { teamId: id, userId: userId } });
   if (!membership) return c.json({ error: "Not found" }, 404);
   const events = await prisma.calendarEvent.findMany({
     where: { teamId: id },
@@ -465,10 +516,11 @@ webRouter.get("/api/teams/:id/events", async (c) => {
 
 // ── API: create team event ────────────────────────────────────────────────────
 webRouter.post("/api/teams/:id/events", async (c) => {
-  const session = await getWebSession(c);
-  if (!session) return c.json({ error: "Unauthorized" }, 401);
+  if (!(await getWebSession(c))) return c.json({ error: "Unauthorized" }, 401);
+  const userId = webPrismaUserIdFromContext(c);
+  if (!userId) return c.json({ error: "Unauthorized" }, 401);
   const { id } = c.req.param();
-  const membership = await prisma.teamMember.findFirst({ where: { teamId: id, userId: session.user.id } });
+  const membership = await prisma.teamMember.findFirst({ where: { teamId: id, userId: userId } });
   if (!membership) return c.json({ error: { message: "Not a member of this team" } }, 403);
   const body = await c.req.json().catch(() => ({}));
   const { title, description, startDate, endDate, allDay, color } = body;
@@ -483,7 +535,7 @@ webRouter.post("/api/teams/:id/events", async (c) => {
       allDay: allDay !== undefined ? allDay : true,
       color: color || "#4361EE",
       teamId: id,
-      createdById: session.user.id,
+      createdById: userId,
     },
     include: {
       team: { select: { id: true, name: true } },
@@ -495,15 +547,16 @@ webRouter.post("/api/teams/:id/events", async (c) => {
 
 // ── API: update team event ────────────────────────────────────────────────────
 webRouter.patch("/api/teams/:id/events/:eid", async (c) => {
-  const session = await getWebSession(c);
-  if (!session) return c.json({ error: "Unauthorized" }, 401);
+  if (!(await getWebSession(c))) return c.json({ error: "Unauthorized" }, 401);
+  const userId = webPrismaUserIdFromContext(c);
+  if (!userId) return c.json({ error: "Unauthorized" }, 401);
   const { id, eid } = c.req.param();
-  const membership = await prisma.teamMember.findFirst({ where: { teamId: id, userId: session.user.id } });
+  const membership = await prisma.teamMember.findFirst({ where: { teamId: id, userId: userId } });
   if (!membership) return c.json({ error: { message: "Not a member of this team" } }, 403);
   const existing = await prisma.calendarEvent.findFirst({ where: { id: eid, teamId: id } });
   if (!existing) return c.json({ error: "Not found" }, 404);
   // Creator or owner/admin can update
-  if (existing.createdById !== session.user.id && !["owner", "admin"].includes(membership.role)) {
+  if (existing.createdById !== userId && !["owner", "admin"].includes(membership.role)) {
     return c.json({ error: { message: "Forbidden" } }, 403);
   }
   const body = await c.req.json().catch(() => ({}));
@@ -528,15 +581,16 @@ webRouter.patch("/api/teams/:id/events/:eid", async (c) => {
 
 // ── API: delete team event ────────────────────────────────────────────────────
 webRouter.delete("/api/teams/:id/events/:eid", async (c) => {
-  const session = await getWebSession(c);
-  if (!session) return c.json({ error: "Unauthorized" }, 401);
+  if (!(await getWebSession(c))) return c.json({ error: "Unauthorized" }, 401);
+  const userId = webPrismaUserIdFromContext(c);
+  if (!userId) return c.json({ error: "Unauthorized" }, 401);
   const { id, eid } = c.req.param();
-  const membership = await prisma.teamMember.findFirst({ where: { teamId: id, userId: session.user.id } });
+  const membership = await prisma.teamMember.findFirst({ where: { teamId: id, userId: userId } });
   if (!membership) return c.json({ error: { message: "Not a member of this team" } }, 403);
   const existing = await prisma.calendarEvent.findFirst({ where: { id: eid, teamId: id } });
   if (!existing) return c.json({ error: "Not found" }, 404);
   // Creator or owner/admin can delete
-  if (existing.createdById !== session.user.id && !["owner", "admin"].includes(membership.role)) {
+  if (existing.createdById !== userId && !["owner", "admin"].includes(membership.role)) {
     return c.json({ error: { message: "Forbidden" } }, 403);
   }
   await prisma.calendarEvent.delete({ where: { id: eid } });

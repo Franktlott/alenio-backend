@@ -31,6 +31,16 @@ const envSchema = z.object({
   REVENUECAT_SECRET_KEY: z.string().optional(),
   REVENUECAT_TEAM_ENTITLEMENT_ID: z.string().optional().default("Team"),
   REVENUECAT_WEBHOOK_AUTH_TOKEN: z.string().optional(),
+  /** Stripe (optional; required for web team checkout + Customer Portal) */
+  STRIPE_SECRET_KEY: z.string().optional(),
+  STRIPE_WEBHOOK_SECRET: z.string().optional(),
+  /** Recurring price ID for the Team plan (Stripe Dashboard → Products) */
+  STRIPE_TEAM_PRICE_ID: z.string().optional(),
+  /**
+   * Public origin of the enterprise web app (no trailing slash), e.g. https://your-app.web.app
+   * Used for Checkout / Portal return URLs. Local dev: http://127.0.0.1:5173
+   */
+  WEB_PUBLIC_URL: z.string().optional(),
   // Twilio SMS
   TWILIO_ACCOUNT_SID: z.string().optional(),
   TWILIO_AUTH_TOKEN: z.string().optional(),

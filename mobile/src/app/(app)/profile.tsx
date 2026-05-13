@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -16,13 +16,14 @@ import {
   Share,
   RefreshControl,
   Alert,
+  Linking,
 } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import * as Notifications from "expo-notifications";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";
-import { ArrowLeft, Camera, LogOut, Pencil, X, Plus, Trash2, Bell, Check, LogOut as LeaveIcon, Crown, Copy, ChevronRight, BarChart2, Volume2, Settings, MessageSquare } from "lucide-react-native";
+import { ArrowLeft, Camera, LogOut, Pencil, X, Plus, Trash2, Bell, Check, LogOut as LeaveIcon, Crown, Copy, ChevronRight, BarChart2, Volume2, Settings, MessageSquare, CreditCard } from "lucide-react-native";
 import { authClient, clearAccessToken, getAuthHeaders } from "@/lib/auth/auth-client";
 import { SESSION_QUERY_KEY, markSessionSignedOut, useInvalidateSession, useSession } from "@/lib/auth/use-session";
 import { clearNotifDebugLog, getNotifDebugLog, getNotifStatus, registerForPushNotificationsAsync } from "@/lib/notifications";
@@ -36,6 +37,12 @@ import { pickImage, takePhoto } from "@/lib/file-picker";
 import * as ImagePicker from "expo-image-picker";
 import { useTeamStore } from "@/lib/state/team-store";
 import { toast } from "burnt";
+import {
+  getTeamBillingContext,
+  openStoreSubscriptionManagement,
+  shouldUseEmbeddedBillingWebView,
+} from "@/lib/subscription-billing";
+import { BillingPortalWebViewModal } from "@/components/BillingPortalWebViewModal";
 import type { Team } from "@/lib/types";
 import { SafeKeyboardAvoidingView } from "@/lib/safe-keyboard-controller";
 
@@ -94,6 +101,8 @@ export default function ProfileScreen() {
   /** URI whose load genuinely failed (not cancelled). RN may fire onError when a prior load is aborted on uri change. */
   const [avatarFailedUri, setAvatarFailedUri] = useState<string | null>(null);
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
+  const [billingPortalUrl, setBillingPortalUrl] = useState<string | null>(null);
+  const [billingActionLoading, setBillingActionLoading] = useState(false);
 
   // Delete account state
   const [deleteStep, setDeleteStep] = useState<0 | 1 | 2 | 3>(0);
@@ -129,6 +138,14 @@ export default function ProfileScreen() {
     queryFn: () =>
       api.get<{ id: string; name: string; email: string; image: string | null; isAdmin?: boolean }>("/api/me"),
     enabled: !!user,
+  });
+
+  const isOwnerOfAnyTeam = teams.some((t) => (t as Team & { role?: string }).role === "owner");
+
+  const { data: ownerTeamSubscription } = useQuery({
+    queryKey: ["subscription", activeTeamId],
+    queryFn: () => api.get<{ plan: string; status: string }>(`/api/teams/${activeTeamId}/subscription`),
+    enabled: !!activeTeamId && isOwnerOfAnyTeam,
   });
 
   // Join requests for the team being edited (owner only)
@@ -172,6 +189,42 @@ export default function ProfileScreen() {
       queryClient.invalidateQueries({ queryKey: ["join-requests", editingTeam?.id] });
     },
   });
+
+  const handleManageSubscriptionBilling = useCallback(async () => {
+    setBillingActionLoading(true);
+    try {
+      const ctx = await getTeamBillingContext();
+      if (!ctx?.hasTeamEntitlement) {
+        toast({ title: "Upgrade to Team to manage billing", preset: "error" });
+        router.push("/subscription");
+        return;
+      }
+      const url = ctx.managementURL;
+      if (!url) {
+        toast({
+          title: "Billing link not ready",
+          preset: "error",
+        });
+        return;
+      }
+      if (shouldUseEmbeddedBillingWebView(ctx.billingSource, url)) {
+        setBillingPortalUrl(url);
+        return;
+      }
+      if (ctx.billingSource === "app_store" || ctx.billingSource === "play_store") {
+        const r = await openStoreSubscriptionManagement(url);
+        if (!r.ok) toast({ title: r.error ?? "Could not open subscription settings", preset: "error" });
+        return;
+      }
+      const can = await Linking.canOpenURL(url);
+      if (can) await Linking.openURL(url);
+      else toast({ title: "Cannot open billing on this device", preset: "error" });
+    } catch {
+      toast({ title: "Could not load billing info", preset: "error" });
+    } finally {
+      setBillingActionLoading(false);
+    }
+  }, []);
 
   // ── Profile mutations ──────────────────────────────────────────
   const uploadMutation = useMutation({
@@ -746,8 +799,8 @@ export default function ProfileScreen() {
           </GlassCard>
         </View>
 
-        {/* Subscription — only visible to Team Leaders */}
-        {teams.some((t) => (t as Team & { role?: string }).role === "owner") ? (
+        {/* Subscription & billing — team owners */}
+        {isOwnerOfAnyTeam ? (
         <View className="mx-4 mt-5">
           <View className="flex-row items-center mb-3" style={{ gap: 6 }}>
             <Crown size={13} color="#94A3B8" />
@@ -764,9 +817,33 @@ export default function ProfileScreen() {
               </View>
               <View className="flex-1">
                 <Text className="font-semibold text-slate-900 dark:text-white">Subscription</Text>
-                <Text className="text-xs text-slate-400 mt-0.5">Manage your plan</Text>
+                <Text className="text-xs text-slate-400 mt-0.5">
+                  {ownerTeamSubscription?.plan === "team" ? "Team plan active" : "Manage your plan"}
+                </Text>
               </View>
               <Text className="text-slate-300 text-base">›</Text>
+            </TouchableOpacity>
+            <View style={{ height: 1, backgroundColor: "rgba(241,245,249,0.8)", marginHorizontal: 16 }} />
+            <TouchableOpacity
+              className="flex-row items-center px-4 py-4"
+              onPress={() => void handleManageSubscriptionBilling()}
+              disabled={billingActionLoading}
+              testID="manage-billing-row"
+            >
+              <View className="w-8 h-8 rounded-xl bg-amber-50 items-center justify-center mr-3">
+                <CreditCard size={16} color="#D97706" />
+              </View>
+              <View className="flex-1">
+                <Text className="font-semibold text-slate-900 dark:text-white">Payment & renewals</Text>
+                <Text className="text-xs text-slate-400 mt-0.5">
+                  Web subscriptions open in a secure browser; App Store &amp; Play use native settings.
+                </Text>
+              </View>
+              {billingActionLoading ? (
+                <ActivityIndicator size="small" color="#4361EE" />
+              ) : (
+                <Text className="text-slate-300 text-base">›</Text>
+              )}
             </TouchableOpacity>
           </GlassCard>
         </View>
@@ -1122,6 +1199,12 @@ export default function ProfileScreen() {
           </SafeKeyboardAvoidingView>
         </Pressable>
       </Modal>
+
+      <BillingPortalWebViewModal
+        visible={!!billingPortalUrl}
+        url={billingPortalUrl}
+        onClose={() => setBillingPortalUrl(null)}
+      />
 
       {/* Leave team confirmation modal */}
       <Modal visible={showSignOutConfirm} transparent animationType="fade" onRequestClose={() => setShowSignOutConfirm(false)}>

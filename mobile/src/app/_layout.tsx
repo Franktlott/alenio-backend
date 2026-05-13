@@ -25,7 +25,8 @@ import Animated, {
 } from 'react-native-reanimated';
 
 export const unstable_settings = {
-  initialRouteName: 'sign-in',
+  /** Run `index` first so session + `/api/me` gate to Chat or Sign-in stays consistent. */
+  initialRouteName: 'index',
 };
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.

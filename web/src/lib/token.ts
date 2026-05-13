@@ -4,6 +4,29 @@ export function looksLikeJwt(v: string): boolean {
   return v.split(".").length === 3;
 }
 
+/** True if JWT `exp` is in the past (or missing / malformed). Used to avoid treating dead sessions as signed-in. */
+export function isJwtExpiredSkew(token: string, skewMs = 30_000): boolean {
+  if (!looksLikeJwt(token)) return true;
+  try {
+    const parts = token.split(".");
+    let base64 = parts[1]!.replace(/-/g, "+").replace(/_/g, "/");
+    const pad = base64.length % 4;
+    if (pad) base64 += "=".repeat(4 - pad);
+    const json =
+      typeof atob !== "undefined"
+        ? atob(base64)
+        : typeof Buffer !== "undefined"
+          ? Buffer.from(base64, "base64").toString("utf8")
+          : null;
+    if (!json) return true;
+    const payload = JSON.parse(json) as { exp?: number };
+    if (typeof payload.exp !== "number") return false;
+    return Date.now() >= payload.exp * 1000 - skewMs;
+  } catch {
+    return true;
+  }
+}
+
 function pickTokenFromUnknown(data: unknown): string | null {
   if (!data || typeof data !== "object") return null;
   const rec = data as Record<string, unknown>;

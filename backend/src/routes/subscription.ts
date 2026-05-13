@@ -69,11 +69,19 @@ export async function syncOwnedTeamSubscriptionsFromRevenueCatUser(appUserId: st
 
   if (ownedTeams.length === 0) return { updatedTeams: 0, configured: true };
 
+  const teamIds = ownedTeams.map((m) => m.teamId);
+  const stripeManaged = await prisma.teamSubscription.findMany({
+    where: { teamId: { in: teamIds }, stripeSubscriptionId: { not: null } },
+    select: { teamId: true },
+  });
+  const skipStripeTeams = new Set(stripeManaged.map((s) => s.teamId));
+
   const nextPlan = status.isActive ? "team" : "free";
   const nextStatus = status.isActive ? "active" : "canceled";
 
+  const toSync = ownedTeams.filter(({ teamId }) => !skipStripeTeams.has(teamId));
   await Promise.all(
-    ownedTeams.map(({ teamId }) =>
+    toSync.map(({ teamId }) =>
       prisma.teamSubscription.upsert({
         where: { teamId },
         create: {
@@ -91,7 +99,7 @@ export async function syncOwnedTeamSubscriptionsFromRevenueCatUser(appUserId: st
     )
   );
 
-  return { updatedTeams: ownedTeams.length, configured: true };
+  return { updatedTeams: toSync.length, configured: true };
 }
 
 // GET /api/teams/:teamId/subscription/health
@@ -133,6 +141,22 @@ subscriptionRouter.get("/health", async (c) => {
 });
 
 // Helper: fetch or create a free subscription for a team
+export function billingProviderFromSubscription(sub: {
+  stripeSubscriptionId: string | null;
+  plan: string;
+  status: string;
+}): "stripe" | "mobile_store" | "none" {
+  if (sub.stripeSubscriptionId?.trim()) return "stripe";
+  if (
+    (sub.plan === "team" || sub.plan === "pro") &&
+    sub.status === "active" &&
+    !sub.stripeSubscriptionId?.trim()
+  ) {
+    return "mobile_store";
+  }
+  return "none";
+}
+
 export async function getTeamSubscription(teamId: string) {
   const sub = await prisma.teamSubscription.upsert({
     where: { teamId },
@@ -162,7 +186,8 @@ subscriptionRouter.get("/", async (c) => {
   }
 
   const subscription = await getTeamSubscription(teamId);
-  return c.json({ data: subscription });
+  const billingProvider = billingProviderFromSubscription(subscription);
+  return c.json({ data: { ...subscription, billingProvider } });
 });
 
 // Pricing info
