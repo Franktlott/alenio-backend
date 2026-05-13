@@ -4,9 +4,11 @@ import { getSessionFromHeaders } from "../auth";
 import { getTeamSubscription, billingProviderFromSubscription } from "./subscription";
 import {
   billingReturnBaseUrl,
+  ensureStripeCustomerIdForTeam,
   getStripeClient,
   isStripeCheckoutConfigured,
   isStripePortalConfigured,
+  reconcileTeamStripeSubscription,
 } from "../lib/stripe-billing";
 import { env } from "../env";
 import { webPrismaUserIdFromContext } from "../lib/web-prisma-user";
@@ -15,15 +17,33 @@ async function getWebSession(c: { req: { raw: Request } }) {
   return getSessionFromHeaders(c.req.raw.headers);
 }
 
-export function mountWebStripeBilling(webRouter: Hono): void {
-  webRouter.get("/api/teams/:id/subscription", async (c) => {
-    if (!(await getWebSession(c))) return c.json({ error: "Unauthorized" }, 401);
-    const userId = webPrismaUserIdFromContext(c);
-    if (!userId) return c.json({ error: "Unauthorized" }, 401);
-    const teamId = c.req.param("id");
-    const membership = await prisma.teamMember.findUnique({
+/**
+ * TeamMember.userId may equal the Neon JWT `sub` from older flows, while `webPrismaUserIdFromContext`
+ * returns the Prisma `User.id` after email-based sync — try both so billing routes resolve membership.
+ */
+async function membershipForWebBilling(
+  c: { get: (key: "user") => unknown; req: { raw: Request } },
+  teamId: string,
+  session: NonNullable<Awaited<ReturnType<typeof getSessionFromHeaders>>>,
+) {
+  const syncedId = webPrismaUserIdFromContext(c);
+  const jwtId = session.user.id?.trim() || "";
+  const ids = [...new Set([syncedId, jwtId].filter((x): x is string => !!x && x.length > 0))];
+  for (const userId of ids) {
+    const m = await prisma.teamMember.findUnique({
       where: { userId_teamId: { userId, teamId } },
     });
+    if (m) return m;
+  }
+  return null;
+}
+
+export function mountWebStripeBilling(webRouter: Hono): void {
+  webRouter.get("/api/teams/:id/subscription", async (c) => {
+    const session = await getWebSession(c);
+    if (!session) return c.json({ error: "Unauthorized" }, 401);
+    const teamId = c.req.param("id");
+    const membership = await membershipForWebBilling(c, teamId, session);
     if (!membership) return c.json({ error: "Not found" }, 404);
     const subscription = await getTeamSubscription(teamId);
     const billingProvider = billingProviderFromSubscription(subscription);
@@ -42,9 +62,8 @@ export function mountWebStripeBilling(webRouter: Hono): void {
   });
 
   webRouter.post("/api/billing/checkout-session", async (c) => {
-    if (!(await getWebSession(c))) return c.json({ error: "Unauthorized" }, 401);
-    const userId = webPrismaUserIdFromContext(c);
-    if (!userId) return c.json({ error: "Unauthorized" }, 401);
+    const session = await getWebSession(c);
+    if (!session) return c.json({ error: "Unauthorized" }, 401);
     if (!isStripeCheckoutConfigured()) {
       return c.json(
         {
@@ -67,17 +86,20 @@ export function mountWebStripeBilling(webRouter: Hono): void {
       return c.json({ error: { message: "teamId is required", code: "VALIDATION_ERROR" } }, 400);
     }
 
-    const membership = await prisma.teamMember.findUnique({
-      where: { userId_teamId: { userId, teamId } },
-    });
-    if (!membership) return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
+    const membership = await membershipForWebBilling(c, teamId, session);
+    if (!membership) {
+      return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
+    }
     if (membership.role !== "owner") {
       return c.json({ error: { message: "Only the team owner can subscribe", code: "FORBIDDEN" } }, 403);
     }
 
     const subRow = await getTeamSubscription(teamId);
 
-    if (subRow.stripeSubscriptionId && ["active", "trialing", "past_due"].includes(subRow.status)) {
+    if (
+      subRow.stripeSubscriptionId &&
+      ["active", "trialing", "past_due", "incomplete", "paused"].includes(subRow.status)
+    ) {
       return c.json(
         {
           error: {
@@ -106,13 +128,15 @@ export function mountWebStripeBilling(webRouter: Hono): void {
       );
     }
 
+    const stripeUserMeta = webPrismaUserIdFromContext(c) ?? membership.userId;
     const user = await prisma.user.findUnique({
-      where: { id: userId },
+      where: { id: membership.userId },
       select: { email: true },
     });
 
     const checkout = await stripe.checkout.sessions.create({
       mode: "subscription",
+      allow_promotion_codes: true,
       line_items: [{ price: priceId, quantity: 1 }],
       success_url: `${base}/billing?billing=success&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${base}/billing?billing=cancel`,
@@ -120,12 +144,12 @@ export function mountWebStripeBilling(webRouter: Hono): void {
       customer_email: user?.email?.trim() || undefined,
       metadata: {
         team_id: teamId,
-        user_id: userId,
+        user_id: stripeUserMeta,
       },
       subscription_data: {
         metadata: {
           team_id: teamId,
-          user_id: userId,
+          user_id: stripeUserMeta,
         },
       },
     });
@@ -138,9 +162,8 @@ export function mountWebStripeBilling(webRouter: Hono): void {
   });
 
   webRouter.post("/api/billing/portal-session", async (c) => {
-    if (!(await getWebSession(c))) return c.json({ error: "Unauthorized" }, 401);
-    const userId = webPrismaUserIdFromContext(c);
-    if (!userId) return c.json({ error: "Unauthorized" }, 401);
+    const session = await getWebSession(c);
+    if (!session) return c.json({ error: "Unauthorized" }, 401);
     if (!isStripePortalConfigured()) {
       return c.json(
         {
@@ -161,16 +184,18 @@ export function mountWebStripeBilling(webRouter: Hono): void {
       return c.json({ error: { message: "teamId is required", code: "VALIDATION_ERROR" } }, 400);
     }
 
-    const membership = await prisma.teamMember.findUnique({
-      where: { userId_teamId: { userId, teamId } },
-    });
-    if (!membership) return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
+    const membership = await membershipForWebBilling(c, teamId, session);
+    if (!membership) {
+      return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
+    }
     if (membership.role !== "owner") {
       return c.json({ error: { message: "Only the team owner can open the billing portal", code: "FORBIDDEN" } }, 403);
     }
 
     const subRow = await getTeamSubscription(teamId);
-    if (!subRow.stripeCustomerId?.trim()) {
+    const customerId =
+      subRow.stripeCustomerId?.trim() || (await ensureStripeCustomerIdForTeam(teamId))?.trim() || null;
+    if (!customerId) {
       return c.json(
         { error: { message: "No Stripe customer for this team yet. Subscribe on the web first.", code: "NO_CUSTOMER" } },
         400,
@@ -178,7 +203,7 @@ export function mountWebStripeBilling(webRouter: Hono): void {
     }
 
     const portal = await stripe.billingPortal.sessions.create({
-      customer: subRow.stripeCustomerId.trim(),
+      customer: customerId,
       return_url: `${base}/billing`,
     });
 
@@ -187,5 +212,30 @@ export function mountWebStripeBilling(webRouter: Hono): void {
     }
 
     return c.json({ data: { url: portal.url } });
+  });
+
+  /** Owner: pull subscription state from Stripe into Postgres (missed webhooks, legacy checkouts). */
+  webRouter.post("/api/billing/reconcile-subscription", async (c) => {
+    const session = await getWebSession(c);
+    if (!session) return c.json({ error: "Unauthorized" }, 401);
+    if (!getStripeClient()) {
+      return c.json({ error: { message: "Stripe not configured", code: "NOT_CONFIGURED" } }, 503);
+    }
+    const body = await c.req.json().catch(() => ({})) as { teamId?: string };
+    const teamId = typeof body.teamId === "string" ? body.teamId.trim() : "";
+    if (!teamId) {
+      return c.json({ error: { message: "teamId is required", code: "VALIDATION_ERROR" } }, 400);
+    }
+    const membership = await membershipForWebBilling(c, teamId, session);
+    if (!membership) {
+      return c.json({ error: { message: "Not a team member of this workspace", code: "FORBIDDEN" } }, 403);
+    }
+    if (membership.role !== "owner") {
+      return c.json({ error: { message: "Only the team owner can sync billing from Stripe", code: "FORBIDDEN" } }, 403);
+    }
+    const reconcile = await reconcileTeamStripeSubscription(teamId);
+    const fresh = await getTeamSubscription(teamId);
+    const billingProvider = billingProviderFromSubscription(fresh);
+    return c.json({ data: { subscription: { ...fresh, billingProvider }, reconcile } });
   });
 }

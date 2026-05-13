@@ -55,7 +55,9 @@ export function DashboardTopBar({ user, notificationCount = 0 }: Props) {
           )}
           <div className="enterprise-topbar-profile-text">
             <span className="enterprise-topbar-profile-name">{user?.name ?? user?.email ?? "Account"}</span>
-            <span className="enterprise-topbar-profile-role">Team member</span>
+            {user?.email && user.email.trim() !== (user.name ?? "").trim() ? (
+              <span className="enterprise-topbar-profile-role">{user.email}</span>
+            ) : null}
           </div>
         </div>
       </div>

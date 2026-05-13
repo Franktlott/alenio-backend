@@ -242,6 +242,17 @@ export function postWebBillingPortal(teamId: string) {
   return apiPostJson<{ data: { url: string } }>("/web/api/billing/portal-session", { teamId }).then((r) => r.data);
 }
 
+export type WebBillingReconcileResult = {
+  subscription: WebTeamSubscription & { billingProvider: "stripe" | "mobile_store" | "none" };
+  reconcile: { applied: boolean; message: string };
+};
+
+export function postWebBillingReconcile(teamId: string) {
+  return apiPostJson<{ data: WebBillingReconcileResult }>("/web/api/billing/reconcile-subscription", { teamId }).then(
+    (r) => r.data,
+  );
+}
+
 export function fetchWebCheckoutConfig() {
   return apiGetJson<{ data: { configured: boolean; missingKeys: string[] } }>("/web/api/billing/checkout-config").then(
     (r) => r.data,

@@ -9,6 +9,7 @@ import {
   fetchWebTeams,
   postWebBillingCheckout,
   postWebBillingPortal,
+  postWebBillingReconcile,
   type WebMeUser,
   type WebTeamRow,
   type WebTeamSubscription,
@@ -100,6 +101,7 @@ export function BillingPage() {
   const [loadErr, setLoadErr] = useState<string | null>(null);
   const [actionErr, setActionErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [syncBusy, setSyncBusy] = useState(false);
   const [checkoutCfg, setCheckoutCfg] = useState<{ configured: boolean; missingKeys: string[] } | null>(null);
   const autoCheckoutStarted = useRef(false);
 
@@ -167,6 +169,52 @@ export function BillingPage() {
     };
   }, [selectedTeamId, teams, subRetryKey]);
 
+  /** After Stripe redirect, webhooks can lag; refetch subscription until it reflects checkout. */
+  useEffect(() => {
+    if (billingFlash !== "success" || !selectedTeamId) return;
+    setSubRetryKey((k) => k + 1);
+    let n = 0;
+    const max = 44;
+    const id = window.setInterval(() => {
+      n += 1;
+      setSubRetryKey((k) => k + 1);
+      if (n >= max) window.clearInterval(id);
+    }, 2000);
+    return () => window.clearInterval(id);
+  }, [billingFlash, selectedTeamId]);
+
+  /** Return from Stripe portal / another tab: refetch so plan matches webhooks without a full reload. */
+  useEffect(() => {
+    if (!selectedTeamId) return;
+    const bumpIfVisible = () => {
+      if (document.visibilityState === "visible") setSubRetryKey((k) => k + 1);
+    };
+    window.addEventListener("focus", bumpIfVisible);
+    document.addEventListener("visibilitychange", bumpIfVisible);
+    return () => {
+      window.removeEventListener("focus", bumpIfVisible);
+      document.removeEventListener("visibilitychange", bumpIfVisible);
+    };
+  }, [selectedTeamId]);
+
+  /**
+   * While Plan shows a billable workspace, poll the API so Stripe/RevenueCat-driven DB changes
+   * (downgrade, cancel, past_due) show up without asking the user to refresh or press Sync.
+   */
+  useEffect(() => {
+    if (!selectedTeamId || !sub) return;
+    const billable =
+      !!sub.stripeSubscriptionId?.trim() ||
+      ((sub.plan === "team" || sub.plan === "pro") &&
+        ["active", "trialing", "past_due", "incomplete", "paused"].includes(sub.status));
+    if (!billable) return;
+    const id = window.setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      setSubRetryKey((k) => k + 1);
+    }, 35_000);
+    return () => window.clearInterval(id);
+  }, [selectedTeamId, sub]);
+
   const myRole = teams?.find((t) => t.id === selectedTeamId)?.role ?? "member";
   const isOwner = myRole === "owner";
 
@@ -201,12 +249,17 @@ export function BillingPage() {
   }, [setParams]);
 
   const stripeActive =
-    !!sub?.stripeSubscriptionId && ["active", "trialing", "past_due"].includes(sub.status);
+    !!sub?.stripeSubscriptionId &&
+    ["active", "trialing", "past_due", "incomplete", "paused"].includes(sub.status);
   const mobileManaged =
     !!sub &&
     (sub.plan === "team" || sub.plan === "pro") &&
     sub.status === "active" &&
     !sub.stripeSubscriptionId;
+
+  /** Portal works with customer id or subscription id (server resolves customer from Stripe). */
+  const canOpenStripePortal =
+    !!sub?.stripeCustomerId?.trim() || !!sub?.stripeSubscriptionId?.trim();
 
   const onSubscribe = useCallback(async () => {
     if (!selectedTeamId || !isOwner) return;
@@ -231,6 +284,23 @@ export function BillingPage() {
     } catch (e) {
       setActionErr(e instanceof Error ? e.message : "Could not open billing portal.");
       setBusy(false);
+    }
+  }, [selectedTeamId, isOwner]);
+
+  const onReconcileStripe = useCallback(async () => {
+    if (!selectedTeamId || !isOwner) return;
+    setSyncBusy(true);
+    setActionErr(null);
+    try {
+      const { reconcile } = await postWebBillingReconcile(selectedTeamId);
+      setSubRetryKey((k) => k + 1);
+      if (!reconcile.applied) {
+        setActionErr(reconcile.message);
+      }
+    } catch (e) {
+      setActionErr(e instanceof Error ? e.message : "Could not sync from Stripe.");
+    } finally {
+      setSyncBusy(false);
     }
   }, [selectedTeamId, isOwner]);
 
@@ -282,7 +352,7 @@ export function BillingPage() {
   const isActiveTeamPlan =
     !!sub &&
     (sub.plan === "team" || sub.plan === "pro") &&
-    ["active", "trialing", "past_due"].includes(sub.status);
+    ["active", "trialing", "past_due", "incomplete", "paused"].includes(sub.status);
   const currentPlanTier: "free" | "team" = isActiveTeamPlan ? "team" : "free";
   const workspaceName = teams?.find((t) => t.id === selectedTeamId)?.name ?? "Workspace";
   const showSubscribeCta = isOwner && !!sub && !stripeActive && !mobileManaged && currentPlanTier === "free";
@@ -685,13 +755,34 @@ export function BillingPage() {
               <>
                 <button
                   type="button"
-                  className={stripeActive || sub?.stripeCustomerId ? "auth-submit" : "auth-link-button"}
-                  style={{ flex: "1 1 220px", maxWidth: 360 }}
-                  disabled={busy || !sub?.stripeCustomerId || !!subErr || subLoading}
+                  className={stripeActive || canOpenStripePortal ? "auth-submit" : "auth-link-button"}
+                  style={{
+                    flex: "1 1 220px",
+                    maxWidth: 360,
+                    minWidth: 0,
+                    width: "auto",
+                  }}
+                  disabled={busy || !canOpenStripePortal || !!subErr || subLoading}
                   onClick={onPortal}
                 >
                   Manage billing
                 </button>
+                {checkoutCfg?.configured ? (
+                  <button
+                    type="button"
+                    className="auth-link-button"
+                    style={{
+                      flex: "1 1 200px",
+                      maxWidth: 320,
+                      minWidth: 0,
+                      width: "auto",
+                    }}
+                    disabled={busy || syncBusy || !!subErr || subLoading}
+                    onClick={onReconcileStripe}
+                  >
+                    {syncBusy ? "Syncing…" : "Sync plan from Stripe"}
+                  </button>
+                ) : null}
               </>
             ) : (
               <p className="enterprise-muted" style={{ margin: 0 }}>
@@ -699,6 +790,51 @@ export function BillingPage() {
               </p>
             )}
           </div>
+          {isOwner && stripeActive ? (
+            <p
+              className="enterprise-muted"
+              style={{
+                margin: "18px 0 0",
+                fontSize: 11,
+                lineHeight: 1.45,
+                textAlign: "center",
+                color: "#94a3b8",
+              }}
+            >
+              <button
+                type="button"
+                disabled={busy || !canOpenStripePortal || !!subErr || subLoading}
+                onClick={onPortal}
+                title="Opens Stripe, where you can cancel the team subscription and return to the Free plan (often at the end of the current period)."
+                style={{
+                  padding: 0,
+                  border: "none",
+                  background: "none",
+                  font: "inherit",
+                  color: "inherit",
+                  cursor: busy ? "not-allowed" : "pointer",
+                  textDecoration: "underline",
+                  textUnderlineOffset: 2,
+                }}
+              >
+                Downgrade to Free
+              </button>
+            </p>
+          ) : null}
+          {isOwner && mobileManaged ? (
+            <p
+              className="enterprise-muted"
+              style={{
+                margin: "18px 0 0",
+                fontSize: 11,
+                lineHeight: 1.45,
+                textAlign: "center",
+                color: "#94a3b8",
+              }}
+            >
+              To move to Free, cancel the team subscription in your phone’s store subscription settings.
+            </p>
+          ) : null}
         </section>
 
         {/* Enterprise */}

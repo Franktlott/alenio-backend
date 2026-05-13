@@ -5,6 +5,7 @@ import { sendPushToUsers } from "../lib/push";
 import { logActivity } from "../lib/activity";
 import { mountWebStripeBilling } from "./web-stripe-billing";
 import { webPrismaUserIdFromContext } from "../lib/web-prisma-user";
+import { isPrismaUniqueOnName, isTeamDisplayNameTaken, normalizeTeamName } from "../lib/team-name";
 
 const webRouter = new Hono();
 
@@ -52,17 +53,38 @@ webRouter.post("/api/teams", async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const { name } = body;
   if (!name || !name.trim()) return c.json({ error: { message: "Name is required" } }, 400);
-  const inviteCode = Math.random().toString(36).slice(2, 10).toUpperCase();
-  const team = await prisma.team.create({
-    data: {
-      name: name.trim(),
-      inviteCode,
-      members: {
-        create: { userId: userId, role: "owner" },
+  const nameNorm = normalizeTeamName(name);
+  if (await isTeamDisplayNameTaken(nameNorm)) {
+    return c.json(
+      { error: { message: "A workspace with this name already exists. Pick a different name.", code: "TEAM_NAME_TAKEN" } },
+      409,
+    );
+  }
+  let inviteCode = Math.random().toString(36).slice(2, 10).toUpperCase();
+  while (await prisma.team.findUnique({ where: { inviteCode } })) {
+    inviteCode = Math.random().toString(36).slice(2, 10).toUpperCase();
+  }
+  let team;
+  try {
+    team = await prisma.team.create({
+      data: {
+        name: nameNorm,
+        inviteCode,
+        members: {
+          create: { userId: userId, role: "owner" },
+        },
       },
-    },
-    select: { id: true, name: true, createdAt: true, _count: { select: { members: true, tasks: true } } },
-  });
+      select: { id: true, name: true, createdAt: true, _count: { select: { members: true, tasks: true } } },
+    });
+  } catch (err) {
+    if (isPrismaUniqueOnName(err)) {
+      return c.json(
+        { error: { message: "A workspace with this name already exists. Pick a different name.", code: "TEAM_NAME_TAKEN" } },
+        409,
+      );
+    }
+    throw err;
+  }
   return c.json({ data: { ...team, role: "owner" } });
 });
 
@@ -108,14 +130,31 @@ webRouter.patch("/api/teams/:id", async (c) => {
   if (!nameTrim && !hasImage) {
     return c.json({ error: { message: "Name or image is required" } }, 400);
   }
-  const team = await prisma.team.update({
-    where: { id },
-    data: {
-      ...(nameTrim ? { name: nameTrim } : {}),
-      ...(hasImage ? { image: body.image ?? null } : {}),
-    },
-    select: { id: true, name: true, image: true, inviteCode: true },
-  });
+  if (nameTrim && (await isTeamDisplayNameTaken(nameTrim, id))) {
+    return c.json(
+      { error: { message: "Another workspace already uses this name. Pick a different name.", code: "TEAM_NAME_TAKEN" } },
+      409,
+    );
+  }
+  let team;
+  try {
+    team = await prisma.team.update({
+      where: { id },
+      data: {
+        ...(nameTrim ? { name: nameTrim } : {}),
+        ...(hasImage ? { image: body.image ?? null } : {}),
+      },
+      select: { id: true, name: true, image: true, inviteCode: true },
+    });
+  } catch (err) {
+    if (isPrismaUniqueOnName(err)) {
+      return c.json(
+        { error: { message: "Another workspace already uses this name. Pick a different name.", code: "TEAM_NAME_TAKEN" } },
+        409,
+      );
+    }
+    throw err;
+  }
   return c.json({ data: team });
 });
 

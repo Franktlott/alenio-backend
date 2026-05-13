@@ -87,7 +87,8 @@ model Verification {
 
 model Team {
   id          String       @id @default(cuid())
-  name        String
+  /** Trimmed in API; unique so two workspaces cannot share the same name (case-insensitive check in routes). */
+  name        String       @unique
   image       String?
   inviteCode  String       @unique
   createdAt   DateTime     @default(now())

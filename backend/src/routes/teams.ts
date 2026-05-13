@@ -4,6 +4,7 @@ import { auth } from "../auth";
 import { authGuard } from "../middleware/auth-guard";
 import { sendPushToUsers } from "../lib/push";
 import { logActivity } from "../lib/activity";
+import { isPrismaUniqueOnName, isTeamDisplayNameTaken, normalizeTeamName } from "../lib/team-name";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -44,6 +45,13 @@ teamsRouter.post("/", async (c) => {
   if (!name?.trim()) {
     return c.json({ error: { message: "Team name is required", code: "VALIDATION_ERROR" } }, 400);
   }
+  const nameNorm = normalizeTeamName(name);
+  if (await isTeamDisplayNameTaken(nameNorm)) {
+    return c.json(
+      { error: { message: "A workspace with this name already exists. Pick a different name.", code: "TEAM_NAME_TAKEN" } },
+      409,
+    );
+  }
 
   // Check if user already owns a team
   const existingOwned = await prisma.teamMember.findFirst({
@@ -59,16 +67,27 @@ teamsRouter.post("/", async (c) => {
     inviteCode = generateInviteCode();
   }
 
-  const team = await prisma.team.create({
-    data: {
-      name: name.trim(),
-      inviteCode,
-      members: {
-        create: { userId: user.id, role: "owner" },
+  let team;
+  try {
+    team = await prisma.team.create({
+      data: {
+        name: nameNorm,
+        inviteCode,
+        members: {
+          create: { userId: user.id, role: "owner" },
+        },
       },
-    },
-    include: { _count: { select: { members: true, tasks: true } } },
-  });
+      include: { _count: { select: { members: true, tasks: true } } },
+    });
+  } catch (err) {
+    if (isPrismaUniqueOnName(err)) {
+      return c.json(
+        { error: { message: "A workspace with this name already exists. Pick a different name.", code: "TEAM_NAME_TAKEN" } },
+        409,
+      );
+    }
+    throw err;
+  }
 
   return c.json({ data: { ...team, role: "owner" } }, 201);
 });
@@ -158,13 +177,32 @@ teamsRouter.patch("/:teamId", async (c) => {
     return c.json({ error: { message: "Only the team owner can edit team info", code: "FORBIDDEN" } }, 403);
   }
 
-  const team = await prisma.team.update({
-    where: { id: teamId },
-    data: {
-      ...(body.name?.trim() ? { name: body.name.trim() } : {}),
-      ...(body.image !== undefined ? { image: body.image } : {}),
-    },
-  });
+  const nameTrim = typeof body.name === "string" ? body.name.trim() : "";
+  if (nameTrim && (await isTeamDisplayNameTaken(nameTrim, teamId))) {
+    return c.json(
+      { error: { message: "Another workspace already uses this name. Pick a different name.", code: "TEAM_NAME_TAKEN" } },
+      409,
+    );
+  }
+
+  let team;
+  try {
+    team = await prisma.team.update({
+      where: { id: teamId },
+      data: {
+        ...(nameTrim ? { name: nameTrim } : {}),
+        ...(body.image !== undefined ? { image: body.image } : {}),
+      },
+    });
+  } catch (err) {
+    if (isPrismaUniqueOnName(err)) {
+      return c.json(
+        { error: { message: "Another workspace already uses this name. Pick a different name.", code: "TEAM_NAME_TAKEN" } },
+        409,
+      );
+    }
+    throw err;
+  }
 
   return c.json({ data: team });
 });

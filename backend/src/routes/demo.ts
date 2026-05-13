@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { prisma } from "../prisma";
 import { createEmailPasswordUser } from "../auth";
+import { isPrismaUniqueOnName, normalizeTeamName } from "../lib/team-name";
 
 const demoRouter = new Hono();
 
@@ -22,7 +23,10 @@ demoRouter.post("/login", async (c) => {
 
     // 2. Ensure demo team exists (idempotent)
     const existingTeam = await prisma.team.findFirst({
-      where: { name: DEMO_TEAM_NAME, members: { some: { userId: demoUser.id, role: "owner" } } },
+      where: {
+        name: { equals: DEMO_TEAM_NAME, mode: "insensitive" },
+        members: { some: { userId: demoUser.id, role: "owner" } },
+      },
     });
 
     if (!existingTeam) {
@@ -82,22 +86,32 @@ async function seedDemoData(ownerId: string) {
   }
 
   // ── Team ─────────────────────────────────────────────────────────────────
-  const team = await prisma.team.create({
-    data: {
-      name: DEMO_TEAM_NAME,
-      inviteCode: `DEMO${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
-      members: {
-        create: [
-          { userId: ownerId, role: "owner" },
-          { userId: sarah, role: "team_leader" },
-          { userId: marcus, role: "member" },
-          { userId: jordan, role: "member" },
-          { userId: elena, role: "member" },
-          { userId: tyler, role: "member" },
-        ],
+  let team;
+  try {
+    team = await prisma.team.create({
+      data: {
+        name: normalizeTeamName(DEMO_TEAM_NAME),
+        inviteCode: `DEMO${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
+        members: {
+          create: [
+            { userId: ownerId, role: "owner" },
+            { userId: sarah, role: "team_leader" },
+            { userId: marcus, role: "member" },
+            { userId: jordan, role: "member" },
+            { userId: elena, role: "member" },
+            { userId: tyler, role: "member" },
+          ],
+        },
       },
-    },
-  });
+    });
+  } catch (e) {
+    if (isPrismaUniqueOnName(e)) {
+      throw new Error(
+        `Cannot seed demo team: the name "${DEMO_TEAM_NAME}" is already used by another workspace. Rename or remove it, or change DEMO_TEAM_NAME in demo.ts.`,
+      );
+    }
+    throw e;
+  }
 
   // ── Topics/Channels ───────────────────────────────────────────────────────
   const generalTopic = await prisma.topic.create({

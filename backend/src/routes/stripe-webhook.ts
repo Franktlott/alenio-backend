@@ -35,13 +35,18 @@ export async function handleStripeWebhook(c: Context): Promise<Response> {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
         if (session.mode !== "subscription") break;
-        const teamId = session.metadata?.team_id?.trim();
+        const teamId =
+          session.metadata?.team_id?.trim() ||
+          (typeof session.client_reference_id === "string" ? session.client_reference_id.trim() : "") ||
+          "";
         const subRef = session.subscription;
         const subId = typeof subRef === "string" ? subRef : subRef?.id;
         if (!teamId || !subId) {
           console.error("[stripe/webhook] checkout.session.completed missing team_id or subscription", {
             teamId,
             subId,
+            hasMetadata: !!session.metadata?.team_id,
+            clientReferenceId: session.client_reference_id ?? null,
           });
           break;
         }
