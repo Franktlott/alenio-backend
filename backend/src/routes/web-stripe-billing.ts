@@ -8,6 +8,7 @@ import {
   getStripeClient,
   isStripeCheckoutConfigured,
   isStripePortalConfigured,
+  reconcileStripeForSubscriptionRead,
   reconcileTeamStripeSubscription,
 } from "../lib/stripe-billing";
 import { env } from "../env";
@@ -45,6 +46,7 @@ export function mountWebStripeBilling(webRouter: Hono): void {
     const teamId = c.req.param("id");
     const membership = await membershipForWebBilling(c, teamId, session);
     if (!membership) return c.json({ error: "Not found" }, 404);
+    await reconcileStripeForSubscriptionRead(teamId);
     const subscription = await getTeamSubscription(teamId);
     const billingProvider = billingProviderFromSubscription(subscription);
     return c.json({ data: { ...subscription, billingProvider } });

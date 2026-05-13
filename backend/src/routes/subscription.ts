@@ -185,6 +185,9 @@ subscriptionRouter.get("/", async (c) => {
     return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
   }
 
+  const { reconcileStripeForSubscriptionRead } = await import("../lib/stripe-billing");
+  await reconcileStripeForSubscriptionRead(teamId);
+
   const subscription = await getTeamSubscription(teamId);
   const billingProvider = billingProviderFromSubscription(subscription);
   return c.json({ data: { ...subscription, billingProvider } });

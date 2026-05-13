@@ -243,6 +243,26 @@ export async function reconcileTeamStripeSubscription(teamId: string): Promise<{
         ? "Stripe has one or more subscriptions on your email, but this account owns multiple workspaces. In Stripe → Subscription → Metadata, set team_id to this workspace’s id, then sync again."
         : candidates.length === 0
           ? "No active Stripe subscriptions found for the team owner’s email in this Stripe account. Confirm you are in the correct Stripe mode (test vs live) and the subscription uses the same email."
-          : "Could not safely match a subscription to this workspace. In Stripe Dashboard, open the subscription → Metadata → add team_id with this workspace’s id, then click Sync again.",
+          : "Could not safely match a subscription to this workspace. In Stripe Dashboard, open the subscription → Metadata → add team_id with this workspace’s id, then reload Plan.",
   };
+}
+
+const subscriptionReadReconcileCooldownMs = 60_000;
+const lastSubscriptionReadReconcileAt = new Map<string, number>();
+
+/**
+ * Best-effort pull from Stripe when the app reads subscription (Plan page, mobile layout).
+ * Throttled per team to avoid hammering Stripe when the UI polls. Webhooks remain primary.
+ */
+export async function reconcileStripeForSubscriptionRead(teamId: string): Promise<void> {
+  if (!getStripeClient()) return;
+  const now = Date.now();
+  const prev = lastSubscriptionReadReconcileAt.get(teamId) ?? 0;
+  if (now - prev < subscriptionReadReconcileCooldownMs) return;
+  lastSubscriptionReadReconcileAt.set(teamId, now);
+  try {
+    await reconcileTeamStripeSubscription(teamId);
+  } catch (e) {
+    console.warn("[stripe/reconcile-read] failed", teamId, e);
+  }
 }
