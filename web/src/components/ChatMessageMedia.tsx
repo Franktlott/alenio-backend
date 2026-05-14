@@ -42,7 +42,7 @@ export function ChatMessageMedia({ url, mediaType }: Props) {
     return (
       <img
         src={url}
-        alt=""
+        alt="Shared image"
         className="chat-media"
         onError={() => setImgFailed(true)}
         loading="lazy"

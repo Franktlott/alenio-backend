@@ -95,7 +95,7 @@ export default function SignUp() {
       <SafeAreaView edges={["top"]}>
         <View className="items-center py-10 px-6">
           <Image source={require("@/assets/alenio-logo-white.png")} style={{ width: 200, height: 72 }} resizeMode="contain" />
-          <Text className="text-white/80 text-base mt-2">Connect. Execute. Celebrate.</Text>
+          <Text className="text-white/80 text-base mt-2">Connect. Workspace. Celebrate.</Text>
         </View>
       </SafeAreaView>
     </LinearGradient>

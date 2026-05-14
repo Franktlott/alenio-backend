@@ -29,6 +29,7 @@ import {
   type WebMeUser,
   type WebTeamRow,
 } from "../lib/api";
+import addChoiceLogo from "../../icon.png";
 
 function priorityRank(p: string): number {
   if (p === "high") return 3;
@@ -154,6 +155,8 @@ export function DashboardPage() {
   const [evActionError, setEvActionError] = useState<string | null>(null);
   const [evEditId, setEvEditId] = useState<string | null>(null);
   const [evMenuId, setEvMenuId] = useState<string | null>(null);
+  const [eventAddChoiceOpen, setEventAddChoiceOpen] = useState(false);
+  const [newEventIsVideoMeeting, setNewEventIsVideoMeeting] = useState(false);
   const [upcomingMeetings, setUpcomingMeetings] = useState<UpcomingVideoMeeting[]>([]);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [videoTitle, setVideoTitle] = useState("");
@@ -396,16 +399,60 @@ export function DashboardPage() {
     const pad = (n: number) => String(n).padStart(2, "0");
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
   };
+
+  const refreshUpcomingMeetings = async () => {
+    try {
+      const data = await fetchUpcomingVideoMeetings();
+      setUpcomingMeetings(data ?? []);
+    } catch {
+      setUpcomingMeetings([]);
+    }
+  };
+
+  const beginNewCalendarEvent = () => {
+    setEvEditId(null);
+    setEvError(null);
+    setEvTitle("");
+    setEvDescription("");
+    setEvColor("#4361EE");
+    setNewEventIsVideoMeeting(false);
+    setEvAllDay(true);
+    setEvStart(new Date().toISOString().slice(0, 10));
+    setEvEnd("");
+    setEventAddChoiceOpen(false);
+    setEventOpen(true);
+  };
+
+  const beginNewVirtualMeeting = () => {
+    setEvEditId(null);
+    setEvError(null);
+    setEvTitle("");
+    setEvDescription("");
+    setEvColor("#4361EE");
+    setNewEventIsVideoMeeting(true);
+    setEvAllDay(false);
+    const start = new Date();
+    start.setMinutes(0, 0, 0);
+    start.setHours(start.getHours() + 1);
+    const end = new Date(start.getTime() + 60 * 60 * 1000);
+    setEvStart(toDatetimeLocalInput(start.toISOString()));
+    setEvEnd(toDatetimeLocalInput(end.toISOString()));
+    setEventAddChoiceOpen(false);
+    setEventOpen(true);
+  };
+
   const activeUpcomingMeeting = useMemo(() => {
     if (!selectedTeamId) return null;
     const nowMs = Date.now();
+    /** Match `GET /api/video/upcoming` window (starts within ~60 min, or in progress). */
+    const upcomingLeadMs = 60 * 60 * 1000;
     return (
       upcomingMeetings
         .filter((m) => m.event.teamId === selectedTeamId)
         .find((m) => {
           const start = new Date(m.event.startDate).getTime();
           const end = m.event.endDate ? new Date(m.event.endDate).getTime() : start + 60 * 60 * 1000;
-          return nowMs <= end && start - nowMs <= 15 * 60 * 1000;
+          return nowMs <= end && start - nowMs <= upcomingLeadMs;
         }) ?? null
     );
   }, [upcomingMeetings, selectedTeamId]);
@@ -470,7 +517,15 @@ export function DashboardPage() {
                 Calendar
               </h2>
               <div className="enterprise-cal-head-actions">
-                <button type="button" className="enterprise-task-modal-btn enterprise-task-modal-btn-secondary" onClick={() => setEventOpen(true)}>
+                <button
+                  type="button"
+                  className="enterprise-task-modal-btn enterprise-task-modal-btn-secondary"
+                  onClick={() => {
+                    if (!selectedTeamId) return;
+                    if (isOwnerOrLeader) setEventAddChoiceOpen(true);
+                    else beginNewCalendarEvent();
+                  }}
+                >
                   + Add event
                 </button>
                 <div className="enterprise-cal-nav">
@@ -695,6 +750,7 @@ export function DashboardPage() {
                                           setEvTitle(event.title ?? "");
                                           setEvDescription(event.description ?? "");
                                           setEvColor(event.color?.trim() || "#4361EE");
+                                          setNewEventIsVideoMeeting(!!event.isVideoMeeting);
                                           setEvStart(allDay ? toDateInput(event.startDate) : toDatetimeLocalInput(event.startDate));
                                           setEvEnd(
                                             event.endDate
@@ -871,7 +927,7 @@ export function DashboardPage() {
                             <div className="enterprise-assignees">
                               {assignees.slice(0, 3).map((u) =>
                                 u.image ? (
-                                  <img key={u.id} src={u.image} alt="" className="enterprise-assignee-img" />
+                                  <img key={u.id} src={u.image} alt={u.name ?? u.email ?? "Assignee"} className="enterprise-assignee-img" />
                                 ) : (
                                   <span key={u.id} className="enterprise-assignee-initials" title={u.name ?? u.email ?? ""}>
                                     {assigneeInitials(u.name, u.email)}
@@ -1271,6 +1327,63 @@ export function DashboardPage() {
           </div>
         </div>
       ) : null}
+      {eventAddChoiceOpen ? (
+        <div
+          className="enterprise-event-choice-backdrop"
+          role="presentation"
+          onClick={() => setEventAddChoiceOpen(false)}
+        >
+          <div
+            className="enterprise-event-choice-sheet"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="dashboard-event-choice-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              className="enterprise-task-modal-close"
+              onClick={() => setEventAddChoiceOpen(false)}
+              aria-label="Close"
+            >
+              ×
+            </button>
+            <div className="enterprise-event-choice-handle" aria-hidden />
+            <div className="enterprise-event-choice-head">
+              <img src={addChoiceLogo} alt="Alenio" className="enterprise-event-choice-logo" width={32} height={32} />
+              <h3 id="dashboard-event-choice-title" className="enterprise-event-choice-title">
+                What would you like to add?
+              </h3>
+            </div>
+            <button type="button" className="enterprise-event-choice-row enterprise-event-choice-row-calendar" onClick={beginNewCalendarEvent}>
+              <span className="enterprise-event-choice-icon-wrap enterprise-event-choice-icon-calendar" aria-hidden>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                  <line x1="16" y1="2" x2="16" y2="6" />
+                  <line x1="8" y1="2" x2="8" y2="6" />
+                  <line x1="3" y1="10" x2="21" y2="10" />
+                </svg>
+              </span>
+              <span className="enterprise-event-choice-row-text">
+                <span className="enterprise-event-choice-row-title">Add calendar event</span>
+                <span className="enterprise-event-choice-row-sub">Add to the team calendar</span>
+              </span>
+            </button>
+            <button type="button" className="enterprise-event-choice-row enterprise-event-choice-row-meeting" onClick={beginNewVirtualMeeting}>
+              <span className="enterprise-event-choice-icon-wrap enterprise-event-choice-icon-meeting" aria-hidden>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polygon points="23 7 16 12 23 17 23 7" fill="currentColor" stroke="none" />
+                  <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+                </svg>
+              </span>
+              <span className="enterprise-event-choice-row-text">
+                <span className="enterprise-event-choice-row-title">Add virtual meeting</span>
+                <span className="enterprise-event-choice-row-sub">Create a meeting with a video call link</span>
+              </span>
+            </button>
+          </div>
+        </div>
+      ) : null}
       {eventOpen ? (
         <div
           className="enterprise-task-modal-backdrop"
@@ -1278,6 +1391,7 @@ export function DashboardPage() {
           onClick={() => {
             setEventOpen(false);
             setEvEditId(null);
+            setNewEventIsVideoMeeting(false);
           }}
         >
           <div className="enterprise-task-modal enterprise-task-create-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
@@ -1287,14 +1401,29 @@ export function DashboardPage() {
               onClick={() => {
                 setEventOpen(false);
                 setEvEditId(null);
+                setNewEventIsVideoMeeting(false);
               }}
               aria-label="Close"
             >
               ×
             </button>
             <header className="enterprise-task-modal-head">
-              <h3 className="enterprise-task-modal-title">{evEditId ? "Edit calendar event" : "Add calendar event"}</h3>
-              <p className="enterprise-muted">{evEditId ? "Update this team event from web." : "Create a team event from web."}</p>
+              <h3 className="enterprise-task-modal-title">
+                {evEditId
+                  ? newEventIsVideoMeeting
+                    ? "Edit virtual meeting"
+                    : "Edit calendar event"
+                  : newEventIsVideoMeeting
+                    ? "Add virtual meeting"
+                    : "Add calendar event"}
+              </h3>
+              <p className="enterprise-muted">
+                {evEditId
+                  ? "Update this team event from the web dashboard."
+                  : newEventIsVideoMeeting
+                    ? "Schedule a timed meeting your team can join from the dashboard."
+                    : "Create an all-day or multi-day entry on the team calendar."}
+              </p>
             </header>
             <form
               className="create-task-form"
@@ -1303,14 +1432,17 @@ export function DashboardPage() {
                 setEvError(null);
                 if (!selectedTeamId) return setEvError("Pick a workspace first.");
                 if (!evTitle.trim()) return setEvError("Please enter an event title.");
+                const fd = new FormData(e.currentTarget);
+                const isVideoMeeting = fd.get("eventIsVideoMeeting") === "1";
                 setEvSaving(true);
                 try {
-                  const startIso = evAllDay
+                  const useAllDay = isVideoMeeting ? false : evAllDay;
+                  const startIso = useAllDay
                     ? new Date(`${evStart}T00:00:00`).toISOString()
                     : new Date(evStart).toISOString();
                   const endIso =
                     evEnd && evEnd.trim()
-                      ? evAllDay
+                      ? useAllDay
                         ? new Date(`${evEnd}T23:59:59`).toISOString()
                         : new Date(evEnd).toISOString()
                       : null;
@@ -1320,8 +1452,9 @@ export function DashboardPage() {
                       description: evDescription.trim() || null,
                       startDate: startIso,
                       endDate: endIso,
-                      allDay: evAllDay,
+                      allDay: useAllDay,
                       color: evColor,
+                      isVideoMeeting,
                     });
                   } else {
                     await createWebTeamEvent(selectedTeamId, {
@@ -1329,13 +1462,17 @@ export function DashboardPage() {
                       description: evDescription.trim() || null,
                       startDate: startIso,
                       endDate: endIso,
-                      allDay: evAllDay,
+                      allDay: useAllDay,
                       color: evColor,
+                      isVideoMeeting,
+                      isHidden: false,
                     });
                   }
                   await refreshTeamData(selectedTeamId);
+                  await refreshUpcomingMeetings();
                   setEventOpen(false);
                   setEvEditId(null);
+                  setNewEventIsVideoMeeting(false);
                   setEvTitle("");
                   setEvDescription("");
                   setEvAllDay(true);
@@ -1349,28 +1486,36 @@ export function DashboardPage() {
                 }
               }}
             >
+              <input type="hidden" name="eventIsVideoMeeting" value={newEventIsVideoMeeting ? "1" : "0"} />
               {evError ? <p className="auth-error">{evError}</p> : null}
               <label className="auth-label">Title</label>
               <input className="auth-input" value={evTitle} onChange={(e) => setEvTitle(e.target.value)} />
               <label className="auth-label">Description</label>
               <textarea className="auth-input create-task-textarea" value={evDescription} onChange={(e) => setEvDescription(e.target.value)} rows={3} />
-              <label className="create-task-checkbox-row">
-                <input type="checkbox" checked={evAllDay} onChange={(e) => setEvAllDay(e.target.checked)} />
-                <span>All day</span>
-              </label>
+              {!newEventIsVideoMeeting ? (
+                <label className="create-task-checkbox-row">
+                  <input type="checkbox" checked={evAllDay} onChange={(e) => setEvAllDay(e.target.checked)} />
+                  <span>All day</span>
+                </label>
+              ) : null}
               <div className="create-task-row">
                 <div className="create-task-field">
-                  <label className="auth-label">{evAllDay ? "Start date" : "Starts"}</label>
+                  <label className="auth-label">{newEventIsVideoMeeting || !evAllDay ? "Starts" : "Start date"}</label>
                   <input
-                    type={evAllDay ? "date" : "datetime-local"}
+                    type={newEventIsVideoMeeting || !evAllDay ? "datetime-local" : "date"}
                     className="auth-input"
                     value={evStart}
                     onChange={(e) => setEvStart(e.target.value)}
                   />
                 </div>
                 <div className="create-task-field">
-                  <label className="auth-label">{evAllDay ? "End date (optional)" : "Ends (optional)"}</label>
-                  <input type={evAllDay ? "date" : "datetime-local"} className="auth-input" value={evEnd} onChange={(e) => setEvEnd(e.target.value)} />
+                  <label className="auth-label">{newEventIsVideoMeeting || !evAllDay ? "Ends (optional)" : "End date (optional)"}</label>
+                  <input
+                    type={newEventIsVideoMeeting || !evAllDay ? "datetime-local" : "date"}
+                    className="auth-input"
+                    value={evEnd}
+                    onChange={(e) => setEvEnd(e.target.value)}
+                  />
                 </div>
                 <div className="create-task-field">
                   <label className="auth-label">Color</label>
@@ -1378,11 +1523,29 @@ export function DashboardPage() {
                 </div>
               </div>
               <div className="enterprise-task-modal-footer">
-                <button type="button" className="enterprise-task-modal-btn enterprise-task-modal-btn-secondary" onClick={() => setEventOpen(false)}>
+                <button
+                  type="button"
+                  className="enterprise-task-modal-btn enterprise-task-modal-btn-secondary"
+                  onClick={() => {
+                    setEventOpen(false);
+                    setEvEditId(null);
+                    setNewEventIsVideoMeeting(false);
+                  }}
+                >
                   Cancel
                 </button>
                 <button type="submit" className="enterprise-task-modal-btn enterprise-task-modal-btn-primary" disabled={evSaving}>
-                  {evSaving ? (evEditId ? "Saving…" : "Creating…") : evEditId ? "Save event" : "Create event"}
+                  {evSaving
+                    ? evEditId
+                      ? "Saving…"
+                      : "Creating…"
+                    : evEditId
+                      ? newEventIsVideoMeeting
+                        ? "Save meeting"
+                        : "Save event"
+                      : newEventIsVideoMeeting
+                        ? "Create meeting"
+                        : "Create event"}
                 </button>
               </div>
             </form>

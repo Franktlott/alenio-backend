@@ -530,6 +530,10 @@ export function createWebTeamEvent(
     endDate?: string | null;
     allDay?: boolean;
     color?: string;
+    isVideoMeeting?: boolean;
+    isHidden?: boolean;
+    assigneeIds?: string[];
+    reminderMinutes?: number[];
   },
 ) {
   return apiPostJson<{ data: ApiCalendarEvent }>(`/web/api/teams/${encodeURIComponent(teamId)}/events`, {
@@ -539,6 +543,10 @@ export function createWebTeamEvent(
     endDate: input.endDate ?? null,
     allDay: input.allDay ?? true,
     color: input.color ?? "#4361EE",
+    isVideoMeeting: input.isVideoMeeting ?? false,
+    isHidden: input.isHidden ?? false,
+    assigneeIds: input.assigneeIds,
+    reminderMinutes: input.reminderMinutes,
   }).then((r) => r.data);
 }
 
@@ -559,6 +567,10 @@ export function updateWebTeamEvent(
     endDate?: string | null;
     allDay?: boolean;
     color?: string;
+    isVideoMeeting?: boolean;
+    isHidden?: boolean;
+    assigneeIds?: string[];
+    reminderMinutes?: number[];
   },
 ) {
   return apiPatchJson<{ data: ApiCalendarEvent }>(`/web/api/teams/${encodeURIComponent(teamId)}/events/${encodeURIComponent(eventId)}`, {
@@ -568,6 +580,10 @@ export function updateWebTeamEvent(
     ...(input.endDate !== undefined ? { endDate: input.endDate } : {}),
     ...(input.allDay !== undefined ? { allDay: input.allDay } : {}),
     ...(input.color !== undefined ? { color: input.color } : {}),
+    ...(input.isVideoMeeting !== undefined ? { isVideoMeeting: input.isVideoMeeting } : {}),
+    ...(input.isHidden !== undefined ? { isHidden: input.isHidden } : {}),
+    ...(input.assigneeIds !== undefined ? { assigneeIds: input.assigneeIds } : {}),
+    ...(input.reminderMinutes !== undefined ? { reminderMinutes: input.reminderMinutes } : {}),
   }).then((r) => r.data);
 }
 

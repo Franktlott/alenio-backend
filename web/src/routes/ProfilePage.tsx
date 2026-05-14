@@ -196,7 +196,7 @@ export function ProfilePage() {
                 {photoBusy ? (
                   <span className="enterprise-muted">…</span>
                 ) : me?.image ? (
-                  <img src={me.image} alt="" className="enterprise-profile-avatar-img" />
+                  <img src={me.image} alt={`${me.name ?? me.email ?? "Your"} profile photo`} className="enterprise-profile-avatar-img" />
                 ) : (
                   <span className="enterprise-profile-avatar-initials">{userInitials(me ?? null)}</span>
                 )}

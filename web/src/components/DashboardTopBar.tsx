@@ -49,7 +49,7 @@ export function DashboardTopBar({ user, notificationCount = 0 }: Props) {
         <JoinRequestBell extraNotificationCount={notificationCount} />
         <div className="enterprise-topbar-profile" data-testid="topbar-profile">
           {user?.image ? (
-            <img src={user.image} alt="" className="enterprise-topbar-avatar enterprise-topbar-avatar-img" />
+            <img src={user.image} alt={user?.name ?? user?.email ?? "Account"} className="enterprise-topbar-avatar enterprise-topbar-avatar-img" />
           ) : (
             <div className="enterprise-topbar-avatar">{initials(user)}</div>
           )}

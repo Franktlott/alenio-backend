@@ -1333,10 +1333,6 @@ input {
   line-height: 1.45;
 }
 
-.enterprise-team-members-head-actions {
-  flex-shrink: 0;
-}
-
 .enterprise-team-member-card-list {
   list-style: none;
   margin: 0.5rem 0 0;
@@ -1850,53 +1846,6 @@ input {
   justify-content: flex-end;
 }
 
-.enterprise-team-overview {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 1.25rem;
-}
-
-.enterprise-team-ring-wrap {
-  position: relative;
-  width: 120px;
-  height: 120px;
-  flex-shrink: 0;
-}
-
-.enterprise-team-ring-label {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-}
-
-.enterprise-team-ring-pct {
-  font-size: 1.35rem;
-  font-weight: 900;
-  color: var(--label);
-}
-
-.enterprise-team-stat-cols {
-  display: flex;
-  gap: 1rem;
-  flex-wrap: wrap;
-}
-
-.enterprise-team-stat-cols > div {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  min-width: 72px;
-}
-
-.enterprise-team-stat-n {
-  font-size: 1.75rem;
-  font-weight: 900;
-}
-
 .enterprise-stat-open {
   color: #10b981;
 }
@@ -1907,38 +1856,6 @@ input {
 
 .enterprise-stat-overdue {
   color: #ef4444;
-}
-
-.enterprise-team-mini-chart {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 6px;
-  height: 112px;
-  margin-top: 1rem;
-  padding: 0 4px;
-}
-
-.enterprise-team-bar-col {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-end;
-  height: 100%;
-}
-
-.enterprise-team-bar {
-  width: 100%;
-  max-width: 32px;
-  background: linear-gradient(180deg, #6366f1, #4361ee);
-  border-radius: 6px 6px 0 0;
-}
-
-.enterprise-team-bar-label {
-  font-size: 0.65rem;
-  color: var(--muted);
-  margin-top: 6px;
 }
 
 .enterprise-team-attention {
@@ -4082,6 +3999,144 @@ input {
   background: var(--surface-muted);
 }
 
+/* Add event: choice sheet (parity with mobile “What would you like to add?”) */
+.enterprise-event-choice-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0;
+  z-index: 101;
+}
+
+.enterprise-event-choice-sheet {
+  width: 100%;
+  max-width: 520px;
+  margin: 0 auto;
+  background: #fff;
+  border-radius: 24px 24px 0 0;
+  padding: 1rem 1.25rem 1.5rem;
+  position: relative;
+  box-shadow: 0 -8px 32px rgba(15, 23, 42, 0.12);
+}
+
+.enterprise-event-choice-handle {
+  width: 40px;
+  height: 4px;
+  border-radius: 2px;
+  background: #e2e8f0;
+  margin: 0 auto 0.75rem;
+}
+
+.enterprise-event-choice-head {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin-bottom: 0.75rem;
+}
+
+.enterprise-event-choice-logo {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.enterprise-event-choice-title {
+  margin: 0;
+  font-size: 1.0625rem;
+  font-weight: 700;
+  color: #0f172a;
+  letter-spacing: -0.02em;
+}
+
+.enterprise-event-choice-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.875rem;
+  width: 100%;
+  text-align: left;
+  border: none;
+  cursor: pointer;
+  border-radius: 16px;
+  padding: 1rem;
+  margin-bottom: 0.75rem;
+  font: inherit;
+  transition: filter 0.15s ease;
+}
+
+.enterprise-event-choice-row:last-of-type {
+  margin-bottom: 0;
+}
+
+.enterprise-event-choice-row:hover {
+  filter: brightness(0.98);
+}
+
+.enterprise-event-choice-row-calendar {
+  background: #f5f3ff;
+}
+
+.enterprise-event-choice-row-meeting {
+  background: #eef2ff;
+}
+
+.enterprise-event-choice-icon-wrap {
+  width: 44px;
+  height: 44px;
+  border-radius: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: #fff;
+}
+
+.enterprise-event-choice-icon-calendar {
+  background: #7c3aed;
+}
+
+.enterprise-event-choice-icon-meeting {
+  background: #4361ee;
+}
+
+.enterprise-event-choice-row-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+.enterprise-event-choice-row-title {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.enterprise-event-choice-row-sub {
+  font-size: 0.75rem;
+  color: #94a3b8;
+}
+
+@media (min-width: 640px) {
+  .enterprise-event-choice-backdrop {
+    align-items: center;
+    padding: 1.25rem;
+  }
+
+  .enterprise-event-choice-sheet {
+    border-radius: 20px;
+    max-height: min(90vh, 480px);
+  }
+
+  .enterprise-event-choice-handle {
+    display: none;
+  }
+}
+
 .enterprise-task-modal-backdrop {
   position: fixed;
   inset: 0;
@@ -4777,6 +4832,8 @@ input {
 /* Milestone celebration card */
 .enterprise-activity-milestone-card {
   margin: 0.5rem 0;
+  max-width: 26rem;
+  width: 100%;
   touch-action: manipulation;
 }
 
@@ -4910,6 +4967,8 @@ input {
   border-radius: 18px;
   overflow: hidden;
   margin: 0.5rem 0;
+  max-width: 26rem;
+  width: 100%;
   box-shadow: 0 12px 36px rgba(249, 115, 22, 0.35);
   touch-action: manipulation;
 }
@@ -5051,6 +5110,8 @@ input {
   border-radius: 16px;
   overflow: hidden;
   margin: 0.5rem 0;
+  max-width: 26rem;
+  width: 100%;
   box-shadow: 0 10px 28px rgba(15, 23, 42, 0.18);
   touch-action: manipulation;
 }

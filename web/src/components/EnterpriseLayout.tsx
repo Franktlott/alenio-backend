@@ -26,7 +26,7 @@ type Props = {
   workspaceOverlayLoading?: boolean;
   /** When false, the Plan (billing) sidebar item is hidden (non-owners in a workspace). */
   showPlanNav: boolean;
-  /** When false, Activity and Execute are hidden (workspace on Free plan). */
+  /** When false, Activity and Workspace are hidden (workspace on Free plan). */
   showActivityExecuteNav: boolean;
 };
 
@@ -46,7 +46,7 @@ function IconChat() {
     </svg>
   );
 }
-function IconExecute() {
+function IconWorkspace() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
       <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
@@ -211,8 +211,8 @@ export function EnterpriseLayout({
   return (
     <div className={`enterprise-app ${mainClassName}`.trim()} data-testid="enterprise-layout">
       <aside className="enterprise-sidebar" aria-label="Main navigation">
-        <Link to="/dashboard" className="enterprise-sidebar-brand" aria-label="Alenio home">
-          <img src="/alenio-logo-white.png" alt="" className="enterprise-sidebar-logo" />
+        <Link to="/dashboard" className="enterprise-sidebar-brand">
+          <img src="/alenio-logo-white.png" alt="Alenio home" className="enterprise-sidebar-logo" />
         </Link>
         <nav className="enterprise-nav" aria-label="Product">
           {showActivityExecuteNav ? (
@@ -220,7 +220,7 @@ export function EnterpriseLayout({
           ) : null}
           <NavItem to="/chat" navId="chat" activeNav={activeNav} icon={<IconChat />} label="Chat" />
           {showActivityExecuteNav ? (
-            <NavItem to="/dashboard" navId="execute" activeNav={activeNav} icon={<IconExecute />} label="Execute" />
+            <NavItem to="/dashboard" navId="execute" activeNav={activeNav} icon={<IconWorkspace />} label="Workspace" />
           ) : null}
           <NavItem to="/team" navId="team" activeNav={activeNav} icon={<IconTeam />} label="Team" />
           {showPlanNav ? (
@@ -251,7 +251,7 @@ export function EnterpriseLayout({
           </select>
           <div className="enterprise-sidebar-user">
             {user?.image ? (
-              <img src={user.image} alt="" className="enterprise-user-avatar enterprise-user-avatar-img" />
+              <img src={user.image} alt={user?.name ?? user?.email ?? "Account"} className="enterprise-user-avatar enterprise-user-avatar-img" />
             ) : (
               <div className="enterprise-user-avatar">{userInitials(user)}</div>
             )}

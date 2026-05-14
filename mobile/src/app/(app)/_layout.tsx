@@ -22,7 +22,7 @@ export const unstable_settings = {
 const ALL_TABS = [
   { name: "activity", label: "Activity", Icon: Activity, paidOnly: true },
   { name: "chat", label: "Chat", Icon: MessageCircle, paidOnly: false },
-  { name: "execute", label: "Execute", Icon: CheckSquare, paidOnly: true },
+  { name: "execute", label: "Workspace", Icon: CheckSquare, paidOnly: true },
   { name: "team", label: "Team", Icon: Users, paidOnly: false },
   { name: "profile", label: "Profile", Icon: User, paidOnly: false },
 ] as const;
@@ -300,7 +300,7 @@ export default function AppLayout() {
       >
         <Tabs.Screen name="activity" options={{}} />
         <Tabs.Screen name="chat" options={{}} />
-        <Tabs.Screen name="execute" options={{ title: "Execute" }} />
+        <Tabs.Screen name="execute" options={{ title: "Workspace" }} />
         <Tabs.Screen name="team" options={{ title: "Team" }} />
         <Tabs.Screen name="calendar" options={{ href: null }} />
         <Tabs.Screen name="profile" options={{ title: "Profile" }} />

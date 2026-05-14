@@ -289,7 +289,7 @@ export function TaskDetailPage() {
                 {task.assignments.map((a) => (
                   <li key={a.user.id} className="task-detail-assignee">
                     {a.user.image ? (
-                      <img src={a.user.image} alt="" className="task-detail-assignee-avatar" width={36} height={36} />
+                      <img src={a.user.image} alt={a.user.name ?? a.user.email ?? "Assignee"} className="task-detail-assignee-avatar" width={36} height={36} />
                     ) : (
                       <div className="task-detail-assignee-placeholder" aria-hidden>
                         {(a.user.name ?? a.user.email ?? "?").slice(0, 1).toUpperCase()}

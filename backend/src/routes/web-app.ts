@@ -16,6 +16,41 @@ async function getWebSession(c: any) {
   return await getSessionFromHeaders(c.req.raw.headers);
 }
 
+/** Parse `CalendarEvent.reminderMinutes` JSON (matches mobile /api calendar). */
+function parseWebMeetingSettings(raw: string | null | undefined): { reminderMinutes: number[]; assigneeIds: string[] } {
+  if (!raw) return { reminderMinutes: [], assigneeIds: [] };
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (Array.isArray(parsed)) {
+      return { reminderMinutes: parsed.filter((v): v is number => typeof v === "number"), assigneeIds: [] };
+    }
+    if (parsed && typeof parsed === "object") {
+      const obj = parsed as { reminderMinutes?: unknown; assigneeIds?: unknown; minutes?: unknown };
+      const minsSource = Array.isArray(obj.reminderMinutes)
+        ? obj.reminderMinutes
+        : Array.isArray(obj.minutes)
+          ? obj.minutes
+          : [];
+      return {
+        reminderMinutes: minsSource.filter((v): v is number => typeof v === "number"),
+        assigneeIds: Array.isArray(obj.assigneeIds) ? obj.assigneeIds.filter((v): v is string => typeof v === "string") : [],
+      };
+    }
+  } catch {
+    /* legacy */
+  }
+  return { reminderMinutes: [], assigneeIds: [] };
+}
+
+function readBodyVideoMeetingFlag(body: Record<string, unknown>): boolean {
+  for (const key of ["isVideoMeeting", "videoMeeting"] as const) {
+    const v = body[key];
+    if (v === true || v === 1) return true;
+    if (typeof v === "string" && (v === "1" || v.toLowerCase() === "true")) return true;
+  }
+  return false;
+}
+
 // ── API: me ──────────────────────────────────────────────────────────────────
 webRouter.get("/api/me", async (c) => {
   if (!(await getWebSession(c))) return c.json({ error: "Unauthorized" }, 401);
@@ -582,8 +617,23 @@ webRouter.post("/api/teams/:id/events", async (c) => {
   const { id } = c.req.param();
   const membership = await prisma.teamMember.findFirst({ where: { teamId: id, userId: userId } });
   if (!membership) return c.json({ error: { message: "Not a member of this team" } }, 403);
-  const body = await c.req.json().catch(() => ({}));
-  const { title, description, startDate, endDate, allDay, color } = body;
+  const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
+  const { title, description, startDate, endDate, allDay, color } = body as {
+    title?: string;
+    description?: string | null;
+    startDate?: string;
+    endDate?: string | null;
+    allDay?: boolean;
+    color?: string;
+  };
+  const isVideoMeeting = readBodyVideoMeetingFlag(body);
+  const isHidden = body.isHidden === true;
+  const reminderMins = Array.isArray(body.reminderMinutes) ? body.reminderMinutes.filter((n: unknown) => typeof n === "number") : [];
+  const teamMembers = await prisma.teamMember.findMany({ where: { teamId: id }, select: { userId: true } });
+  const teamMemberIds = new Set(teamMembers.map((m) => m.userId));
+  const rawAssigneeIds = Array.isArray(body.assigneeIds) ? body.assigneeIds.filter((x: unknown) => typeof x === "string") : [];
+  const assigneeIds = Array.from(new Set([...rawAssigneeIds.filter((uid: string) => teamMemberIds.has(uid)), userId]));
+  const reminderMinutesStr = JSON.stringify({ reminderMinutes: reminderMins, assigneeIds });
   if (!title || !title.trim()) return c.json({ error: { message: "Title is required" } }, 400);
   if (!startDate) return c.json({ error: { message: "Start date is required" } }, 400);
   const event = await prisma.calendarEvent.create({
@@ -594,6 +644,9 @@ webRouter.post("/api/teams/:id/events", async (c) => {
       endDate: endDate ? new Date(endDate) : null,
       allDay: allDay !== undefined ? allDay : true,
       color: color || "#4361EE",
+      isHidden,
+      isVideoMeeting,
+      reminderMinutes: reminderMinutesStr,
       teamId: id,
       createdById: userId,
     },
@@ -621,13 +674,36 @@ webRouter.patch("/api/teams/:id/events/:eid", async (c) => {
   }
   const body = await c.req.json().catch(() => ({}));
   const { title, description, startDate, endDate, allDay, color } = body;
-  const updateData: any = {};
+  const existingSettings = parseWebMeetingSettings(existing.reminderMinutes);
+  const teamMembers = await prisma.teamMember.findMany({ where: { teamId: id }, select: { userId: true } });
+  const teamMemberIds = new Set(teamMembers.map((m) => m.userId));
+  const bodyAssigneeIds = Array.isArray(body.assigneeIds) ? body.assigneeIds.filter((x: unknown) => typeof x === "string") : undefined;
+  const bodyReminderMins = Array.isArray(body.reminderMinutes)
+    ? body.reminderMinutes.filter((n: unknown) => typeof n === "number")
+    : undefined;
+  const nextAssigneeIds =
+    bodyAssigneeIds !== undefined
+      ? Array.from(new Set([...bodyAssigneeIds.filter((uid: string) => teamMemberIds.has(uid)), existing.createdById]))
+      : existingSettings.assigneeIds.length > 0
+        ? existingSettings.assigneeIds
+        : [existing.createdById];
+  const nextReminderMins = bodyReminderMins ?? existingSettings.reminderMinutes;
+  const reminderMinutesStr = JSON.stringify({ reminderMinutes: nextReminderMins, assigneeIds: nextAssigneeIds });
+
+  const updateData: any = {
+    reminderMinutes: reminderMinutesStr,
+  };
   if (title !== undefined) updateData.title = title.trim();
   if (description !== undefined) updateData.description = description || null;
   if (startDate !== undefined) updateData.startDate = new Date(startDate);
   if (endDate !== undefined) updateData.endDate = endDate ? new Date(endDate) : null;
   if (allDay !== undefined) updateData.allDay = allDay;
   if (color !== undefined) updateData.color = color;
+  if (body.isHidden !== undefined) updateData.isHidden = body.isHidden;
+  const bodyRec = body as Record<string, unknown>;
+  if (bodyRec.isVideoMeeting !== undefined || bodyRec.videoMeeting !== undefined) {
+    updateData.isVideoMeeting = readBodyVideoMeetingFlag(bodyRec);
+  }
   const event = await prisma.calendarEvent.update({
     where: { id: eid },
     data: updateData,

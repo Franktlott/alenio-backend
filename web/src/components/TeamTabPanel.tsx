@@ -6,7 +6,6 @@ import {
   approveTeamJoinRequest,
   fetchTeamJoinRequests,
   fetchTeamMemberStats,
-  fetchTeamMonthlyCompletion,
   fetchWebTeam,
   fetchWebTeamSubscription,
   fetchWebTeamTasks,
@@ -18,7 +17,6 @@ import {
   transferTeamOwnership,
   uploadTeamPhoto,
   type ApiTask,
-  type MonthlyCompletionRow,
   type TeamMemberStatsMap,
   type WebMeUser,
   type WebTeamDetail,
@@ -26,6 +24,12 @@ import {
   type WebTeamMemberRow,
   type WebTeamRow,
 } from "../lib/api";
+
+function isTaskOverdue(t: ApiTask, todayStart: Date): boolean {
+  if (t.status === "done") return false;
+  if (!t.dueDate) return false;
+  return new Date(t.dueDate) < todayStart;
+}
 
 function roleLabel(role: string): string {
   if (role === "owner") return "Owner";
@@ -91,12 +95,6 @@ function memberSort(a: WebTeamMemberRow, b: WebTeamMemberRow): number {
   return (a.user.name ?? "").localeCompare(b.user.name ?? "");
 }
 
-function isTaskOverdue(t: ApiTask, todayStart: Date): boolean {
-  if (t.status === "done") return false;
-  if (!t.dueDate) return false;
-  return new Date(t.dueDate) < todayStart;
-}
-
 type Props = {
   teams: WebTeamRow[] | null;
   selectedTeamId: string;
@@ -109,7 +107,6 @@ type Props = {
 export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWorkspaceSwitchLoading }: Props) {
   const [teamDetail, setTeamDetail] = useState<WebTeamDetail | null>(null);
   const [memberStats, setMemberStats] = useState<TeamMemberStatsMap | null>(null);
-  const [monthly, setMonthly] = useState<MonthlyCompletionRow[] | null>(null);
   const [overviewTasks, setOverviewTasks] = useState<ApiTask[]>([]);
   const [isPaid, setIsPaid] = useState(false);
   const [incoming, setIncoming] = useState<WebTeamJoinRequest[]>([]);
@@ -137,7 +134,6 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
     if (!selectedTeamId) {
       setTeamDetail(null);
       setMemberStats(null);
-      setMonthly(null);
       setOverviewTasks([]);
       setIncoming([]);
       return;
@@ -149,15 +145,13 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
       setTeamDetail(detail);
       setNameEdit(detail.name);
       const manageJoin = canManageJoinRequests(detail.myRole);
-      const [stats, months, tasks, sub, joinList] = await Promise.all([
+      const [stats, tasks, sub, joinList] = await Promise.all([
         fetchTeamMemberStats(selectedTeamId).catch(() => null),
-        fetchTeamMonthlyCompletion(selectedTeamId).catch(() => null),
         fetchWebTeamTasks(selectedTeamId).catch(() => []),
         fetchWebTeamSubscription(selectedTeamId).catch(() => null),
         manageJoin ? fetchTeamJoinRequests(selectedTeamId).catch(() => []) : Promise.resolve([]),
       ]);
       setMemberStats(stats);
-      setMonthly(months);
       setOverviewTasks(Array.isArray(tasks) ? tasks : []);
       const plan = sub?.plan ?? "free";
       setIsPaid(plan === "team" || plan === "pro");
@@ -211,29 +205,10 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
     return d;
   }, []);
 
-  const overview = useMemo(() => {
-    const totalCompleted = overviewTasks.filter((t) => t.status === "done").length;
-    const totalOverdue = overviewTasks.filter((t) => isTaskOverdue(t, todayStart)).length;
-    const totalInProgress = overviewTasks.filter(
-      (t) => t.status === "in_progress" && !isTaskOverdue(t, todayStart),
-    ).length;
-    const totalOpen = overviewTasks.filter((t) => t.status === "todo" && !isTaskOverdue(t, todayStart)).length;
-    const denom = totalCompleted + totalOpen + totalInProgress + totalOverdue;
-    const weekCompletionPct = denom > 0 ? Math.round((totalCompleted / denom) * 100) : 0;
-    const nonNullPcts = (monthly ?? []).map((m) => m.completionPct).filter((p): p is number => p !== null);
-    const avgCompletionPct =
-      nonNullPcts.length > 0 ? Math.round(nonNullPcts.reduce((a, b) => a + b, 0) / nonNullPcts.length) : null;
-    const ringPct = denom > 0 ? Math.max(0, Math.min(100, avgCompletionPct ?? weekCompletionPct)) : 0;
-    return {
-      totalCompleted,
-      totalOverdue,
-      totalInProgress,
-      totalOpen,
-      weekCompletionPct,
-      avgCompletionPct,
-      ringPct,
-    };
-  }, [overviewTasks, todayStart, monthly]);
+  const overdueTaskCount = useMemo(
+    () => overviewTasks.filter((t) => isTaskOverdue(t, todayStart)).length,
+    [overviewTasks, todayStart],
+  );
 
   const sortedMembers = useMemo(() => [...(teamDetail?.members ?? [])].sort(memberSort), [teamDetail?.members]);
 
@@ -475,7 +450,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
           </div>
         </div>
         <div className="enterprise-profile-account-row">
-          <div className="enterprise-profile-avatar-col">
+            <div className="enterprise-profile-avatar-col">
             {manageMembers && isEditingWorkspace ? (
               <button
                 type="button"
@@ -487,7 +462,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                 {photoBusy ? (
                   <span className="enterprise-muted">…</span>
                 ) : teamDetail.image ? (
-                  <img src={teamDetail.image} alt="" className="enterprise-profile-avatar-img" />
+                  <img src={teamDetail.image} alt={`${teamDetail.name ?? "Workspace"} photo`} className="enterprise-profile-avatar-img" />
                 ) : (
                   <span className="enterprise-profile-avatar-initials">{teamDetail.name?.[0]?.toUpperCase() ?? "T"}</span>
                 )}
@@ -497,7 +472,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                 {photoBusy ? (
                   <span className="enterprise-muted">…</span>
                 ) : teamDetail.image ? (
-                  <img src={teamDetail.image} alt="" className="enterprise-profile-avatar-img" />
+                  <img src={teamDetail.image} alt={`${teamDetail.name ?? "Workspace"} photo`} className="enterprise-profile-avatar-img" />
                 ) : (
                   <span className="enterprise-profile-avatar-initials">{teamDetail.name?.[0]?.toUpperCase() ?? "T"}</span>
                 )}
@@ -605,18 +580,6 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
               People in this workspace.
             </p>
           </div>
-          <div className="enterprise-team-ws-head-actions enterprise-team-members-head-actions">
-            <button
-              type="button"
-              className="enterprise-profile-edit-btn enterprise-profile-edit-btn-with-icon"
-              onClick={() => void shareInvite()}
-            >
-              <IconUserPlus size={14} /> Add member
-            </button>
-            <button type="button" className="enterprise-profile-edit-btn" onClick={() => void copyInvite()}>
-              Copy code
-            </button>
-          </div>
         </div>
         {manageMembers ? (
           <p className="enterprise-muted enterprise-team-owner-hint">
@@ -645,7 +608,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                   >
                     <span className="enterprise-team-member-av">
                       {m.user.image ? (
-                        <img src={m.user.image} alt="" />
+                        <img src={m.user.image} alt={m.user.name ?? m.user.email ?? "Member"} />
                       ) : (
                         (m.user.name?.[0] ?? "?").toUpperCase()
                       )}
@@ -685,74 +648,12 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
         </ul>
       </section>
 
-      {isPaid ? (
-        <section className="enterprise-card enterprise-team-section">
-          <h3 className="enterprise-card-title">Team overview</h3>
-          <div className="enterprise-team-overview">
-            <div className="enterprise-team-ring-wrap" aria-hidden>
-              <svg width="120" height="120" viewBox="0 0 120 120">
-                <circle cx="60" cy="60" r="52" fill="none" stroke="#e5e7eb" strokeWidth="10" />
-                <circle
-                  cx="60"
-                  cy="60"
-                  r="52"
-                  fill="none"
-                  stroke="#4f46e5"
-                  strokeWidth="10"
-                  strokeLinecap="round"
-                  strokeDasharray={`${(overview.ringPct / 100) * 326.73} 326.73`}
-                  transform="rotate(-90 60 60)"
-                />
-              </svg>
-              <div className="enterprise-team-ring-label">
-                <span className="enterprise-team-ring-pct">{overview.ringPct}%</span>
-                <span className="enterprise-muted" style={{ fontSize: 11 }}>
-                  6-mo avg
-                </span>
-              </div>
-            </div>
-            <div className="enterprise-team-stat-cols">
-              <div>
-                <span className="enterprise-team-stat-n enterprise-stat-open">{overview.totalOpen}</span>
-                <span className="enterprise-muted">Open</span>
-              </div>
-              <div>
-                <span className="enterprise-team-stat-n enterprise-stat-progress">{overview.totalInProgress}</span>
-                <span className="enterprise-muted">In progress</span>
-              </div>
-              <div>
-                <span className="enterprise-team-stat-n enterprise-stat-overdue">{overview.totalOverdue}</span>
-                <span className="enterprise-muted">Overdue</span>
-              </div>
-            </div>
-          </div>
-          {monthly && monthly.some((m) => m.completionPct !== null) ? (
-            <div className="enterprise-team-mini-chart">
-              {monthly.map((m) => {
-                const pct = m.completionPct;
-                const barH = pct == null ? 6 : Math.max(10, Math.round((pct / 100) * 88));
-                return (
-                  <div key={`${m.year}-${m.month}`} className="enterprise-team-bar-col">
-                    <div
-                      className="enterprise-team-bar"
-                      style={{ height: barH }}
-                      title={pct !== null ? `${pct}%` : "—"}
-                    />
-                    <span className="enterprise-team-bar-label">{m.label}</span>
-                  </div>
-                );
-              })}
-            </div>
-          ) : null}
-        </section>
-      ) : null}
-
-      {overview.totalOverdue > 0 ? (
+      {overdueTaskCount > 0 ? (
         <div className="enterprise-team-attention">
           <strong>Needs attention</strong>
           <span>
-            {overview.totalOverdue} overdue task{overview.totalOverdue !== 1 ? "s" : ""} — review on{" "}
-            <Link to="/dashboard">Execute</Link>.
+            {overdueTaskCount} overdue task{overdueTaskCount !== 1 ? "s" : ""} — review on{" "}
+            <Link to="/dashboard">Workspace</Link>.
           </span>
         </div>
       ) : null}

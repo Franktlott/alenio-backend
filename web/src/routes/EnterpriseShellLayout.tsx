@@ -152,7 +152,7 @@ export function EnterpriseShellLayout() {
     !effectiveTeamId ||
     teams.find((t) => t.id === effectiveTeamId)?.hasTeamFeatures === true;
 
-  /** Plan / billing is owner-only; Activity / Execute require Team plan. Runs in layout effect so URL settles before paint (avoids replaceState thrash with Chat sync). */
+  /** Plan / billing is owner-only; Activity / Workspace require Team plan. Runs in layout effect so URL settles before paint (avoids replaceState thrash with Chat sync). */
   useLayoutEffect(() => {
     if (teams === null) return;
     const path = location.pathname;

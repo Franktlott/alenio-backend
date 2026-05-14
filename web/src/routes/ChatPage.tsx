@@ -722,7 +722,7 @@ export function ChatPage() {
                                 playsInline
                               />
                             ) : (
-                              <img src={pendingAttachment.previewUrl} alt="" className="chat-composer-pending-media" />
+                              <img src={pendingAttachment.previewUrl} alt="Pending attachment preview" className="chat-composer-pending-media" />
                             )}
                           </div>
                           <div className="chat-composer-pending-actions">
