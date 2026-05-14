@@ -122,6 +122,8 @@ export type WebTeamRow = {
   createdAt: string;
   role: string;
   _count: { members: number; tasks: number };
+  /** Team plan (tasks, activity, execute) — from GET /web/api/teams; absent on older clients means unknown. */
+  hasTeamFeatures?: boolean;
 };
 
 export type WebTeamSubscription = {
@@ -186,6 +188,13 @@ export type DirectChatMessage = {
 
 export function fetchWebMe() {
   return apiGetJson<{ data: WebMeUser | null }>("/web/api/me").then((r) => r.data);
+}
+
+export function patchApiProfile(body: { name?: string; image?: string | null }) {
+  return apiPatchJson<{ data: { id: string; name: string | null; email: string | null; image: string | null } }>(
+    "/api/profile",
+    body,
+  ).then((r) => r.data);
 }
 
 export function fetchWebTeams() {
@@ -679,8 +688,13 @@ export function cancelMyJoinRequest(requestId: string) {
   return apiRequest<unknown>(`/api/join-requests/${encodeURIComponent(requestId)}`, { method: "DELETE" });
 }
 
+/** Join-by-code: either a pending approval request or immediate membership (team row). */
+export type JoinByCodeResult =
+  | { status: "pending"; teamName: string; requestId: string }
+  | (WebTeamRow & { role?: string });
+
 export function postJoinTeamByCode(inviteCode: string) {
-  return apiPostJson<{ data: { status: string; teamName: string; requestId: string } }>("/api/teams/join", {
+  return apiPostJson<{ data: JoinByCodeResult }>("/api/teams/join", {
     inviteCode: inviteCode.trim(),
   }).then((r) => r.data);
 }
@@ -756,6 +770,53 @@ export async function uploadTeamPhoto(file: File, teamId: string): Promise<ChatU
     formData.append("file", file);
     formData.append("purpose", "team");
     formData.append("teamId", teamId);
+    const h = new Headers();
+    if (token) h.set("Authorization", `Bearer ${token}`);
+    try {
+      return await fetch(`${baseUrl}/api/upload`, { method: "POST", body: formData, headers: h });
+    } catch (e) {
+      throw mapNetworkError(e);
+    }
+  }
+  let token = getAccessToken();
+  let res = await doUpload(token);
+  if (res.status === 401) {
+    const recovered = await refreshSessionTokens();
+    if (recovered) {
+      token = getAccessToken();
+      res = await doUpload(token);
+    } else {
+      clearAccessToken();
+    }
+  }
+  const parsed = (await res.json().catch(() => ({}))) as {
+    data?: ChatUploadResult;
+    error?: string | { message?: string };
+    message?: string;
+  };
+  if (!res.ok) {
+    const msg =
+      typeof parsed?.error === "string"
+        ? parsed.error
+        : typeof parsed?.error === "object" && parsed?.error?.message
+          ? parsed.error.message
+          : typeof parsed?.message === "string"
+            ? parsed.message
+            : `Upload failed (${res.status})`;
+    throw new Error(msg);
+  }
+  if (!parsed.data) throw new Error("Upload response missing data.");
+  return parsed.data;
+}
+
+/** Profile avatar: same upload endpoint as chat; use purpose=profile (no teamId). */
+export async function uploadProfilePhoto(file: File): Promise<ChatUploadResult> {
+  assertProductionApiConfigured();
+  const baseUrl = apiBaseUrl();
+  async function doUpload(token: string | null) {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("purpose", "profile");
     const h = new Headers();
     if (token) h.set("Authorization", `Bearer ${token}`);
     try {

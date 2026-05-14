@@ -1,15 +1,10 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { DashboardTopBar } from "../components/DashboardTopBar";
-import { EnterpriseLayout } from "../components/EnterpriseLayout";
+import { useEnterpriseShell } from "../contexts/EnterpriseShellContext";
 import {
   createWebTask,
-  fetchWebMe,
   fetchWebTeam,
-  fetchWebTeams,
-  type WebMeUser,
   type WebTeamDetail,
-  type WebTeamRow,
 } from "../lib/api";
 
 const PRIORITIES = [
@@ -37,11 +32,8 @@ export function CreateTaskPage() {
   const [params] = useSearchParams();
   const teamIdFromUrl = params.get("teamId")?.trim() ?? "";
 
-  const [me, setMe] = useState<WebMeUser | null | undefined>(undefined);
-  const [teams, setTeams] = useState<WebTeamRow[] | null>(null);
-  const [selectedTeamId, setSelectedTeamId] = useState("");
+  const { me, teams, selectedTeamId, setSelectedTeamId, setWorkspaceMainLoading } = useEnterpriseShell();
   const [teamDetail, setTeamDetail] = useState<WebTeamDetail | null>(null);
-  const [loadErr, setLoadErr] = useState<string | null>(null);
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -56,46 +48,32 @@ export function CreateTaskPage() {
 
   const [saving, setSaving] = useState(false);
   const [formErr, setFormErr] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const [u, t] = await Promise.all([fetchWebMe(), fetchWebTeams()]);
-        if (cancelled) return;
-        setMe(u);
-        setTeams(t ?? []);
-        setLoadErr(null);
-      } catch (e) {
-        if (cancelled) return;
-        setLoadErr(e instanceof Error ? e.message : "Could not load.");
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const [teamDetailLoading, setTeamDetailLoading] = useState(false);
 
   useEffect(() => {
     if (!teams?.length) return;
-    setSelectedTeamId((prev) => {
-      if (teamIdFromUrl && teams.some((x) => x.id === teamIdFromUrl)) return teamIdFromUrl;
-      if (prev && teams.some((x) => x.id === prev)) return prev;
-      return teams[0]!.id;
-    });
-  }, [teams, teamIdFromUrl]);
+    if (teamIdFromUrl && teams.some((x) => x.id === teamIdFromUrl) && teamIdFromUrl !== selectedTeamId) {
+      setSelectedTeamId(teamIdFromUrl);
+    }
+  }, [teams, teamIdFromUrl, selectedTeamId, setSelectedTeamId]);
+
+  useEffect(() => {
+    setWorkspaceMainLoading(teamDetailLoading);
+    return () => setWorkspaceMainLoading(false);
+  }, [teamDetailLoading, setWorkspaceMainLoading]);
 
   useEffect(() => {
     if (!selectedTeamId) return;
     let cancelled = false;
-    (async () => {
+    setTeamDetailLoading(true);
+    void (async () => {
       try {
         const d = await fetchWebTeam(selectedTeamId);
-        if (cancelled) return;
-        setTeamDetail(d);
+        if (!cancelled) setTeamDetail(d);
       } catch {
-        if (cancelled) return;
-        setTeamDetail(null);
+        if (!cancelled) setTeamDetail(null);
+      } finally {
+        if (!cancelled) setTeamDetailLoading(false);
       }
     })();
     return () => {
@@ -173,36 +151,16 @@ export function CreateTaskPage() {
     }
   };
 
-  if (loadErr) {
+  if (me === undefined) {
     return (
-      <div className="enterprise-app enterprise-app-simple">
-        <main className="enterprise-dashboard-inner">
-          <p className="auth-error">{loadErr}</p>
-        </main>
-      </div>
-    );
-  }
-
-  if (me === undefined && !loadErr) {
-    return (
-      <div className="enterprise-app enterprise-app-simple">
-        <main className="enterprise-dashboard-inner">
-          <p className="enterprise-muted">Loading…</p>
-        </main>
+      <div className="enterprise-dashboard-inner">
+        <p className="enterprise-muted">Loading…</p>
       </div>
     );
   }
 
   return (
-    <EnterpriseLayout
-      activeNav="execute"
-      teams={teams ?? []}
-      selectedTeamId={selectedTeamId}
-      onTeamChange={setSelectedTeamId}
-      user={me ?? null}
-      onSignOutNavigate={(path) => navigate(path)}
-      topBar={<DashboardTopBar user={me ?? null} />}
-    >
+    <>
       <div className="enterprise-dashboard-inner create-task-page" data-testid="create-task-screen">
         <div className="create-task-head">
           <Link to="/dashboard" className="create-task-back">
@@ -356,6 +314,6 @@ export function CreateTaskPage() {
           </div>
         </form>
       </div>
-    </EnterpriseLayout>
+    </>
   );
 }

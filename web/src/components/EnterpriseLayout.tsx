@@ -1,9 +1,12 @@
 import type { ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import { AlenioWorkspaceLoading } from "./AlenioWorkspaceLoading";
 import { clearAccessToken, getAuthClient } from "../lib/auth-client";
+import { setPersistedEnterpriseTeamId, markFooterEnterpriseWorkspaceSelect } from "../lib/enterprise-selected-team";
 import type { WebMeUser, WebTeamRow } from "../lib/api";
 
-export type EnterpriseNavId = "activity" | "chat" | "execute" | "team" | "plan" | "settings";
+export type EnterpriseNavId = "activity" | "chat" | "execute" | "team" | "plan" | "profile";
 
 type Props = {
   activeNav: EnterpriseNavId;
@@ -16,7 +19,18 @@ type Props = {
   children: ReactNode;
   mainClassName?: string;
   contentClassName?: string;
+  /**
+   * True while this page is still loading data for the newly selected workspace.
+   * Only affects the overlay after the user changes workspace from the footer select (not when using nav links).
+   */
+  workspaceOverlayLoading?: boolean;
+  /** When false, the Plan (billing) sidebar item is hidden (non-owners in a workspace). */
+  showPlanNav: boolean;
+  /** When false, Activity and Execute are hidden (workspace on Free plan). */
+  showActivityExecuteNav: boolean;
 };
+
+const WORKSPACE_OVERLAY_MIN_MS = 4000;
 
 function IconActivity() {
   return (
@@ -59,11 +73,11 @@ function IconPlan() {
   );
 }
 
-function IconSettings() {
+function IconProfile() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-      <circle cx="12" cy="12" r="3" />
-      <path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+      <circle cx="12" cy="7" r="4" />
     </svg>
   );
 }
@@ -115,7 +129,72 @@ export function EnterpriseLayout({
   children,
   mainClassName = "",
   contentClassName = "",
+  workspaceOverlayLoading = false,
+  showPlanNav,
+  showActivityExecuteNav,
 }: Props) {
+  const [showWorkspaceOverlay, setShowWorkspaceOverlay] = useState(false);
+  /** User changed workspace from the sidebar select; until cleared, `workspaceOverlayLoading` controls how long the overlay may stay up. */
+  const [sidebarWorkspaceSwitch, setSidebarWorkspaceSwitch] = useState(false);
+  const overlayStartedAtRef = useRef<number | null>(null);
+  const hideOverlayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearPendingHideTimer = useCallback(() => {
+    if (hideOverlayTimerRef.current) {
+      clearTimeout(hideOverlayTimerRef.current);
+      hideOverlayTimerRef.current = null;
+    }
+  }, []);
+
+  const endSidebarWorkspaceSwitchSession = useCallback(() => {
+    clearPendingHideTimer();
+    overlayStartedAtRef.current = null;
+    setShowWorkspaceOverlay(false);
+    setSidebarWorkspaceSwitch(false);
+  }, [clearPendingHideTimer]);
+
+  const handleWorkspaceSelectChange = (teamId: string) => {
+    setPersistedEnterpriseTeamId(teamId);
+    markFooterEnterpriseWorkspaceSelect();
+    clearPendingHideTimer();
+    overlayStartedAtRef.current = Date.now();
+    setShowWorkspaceOverlay(true);
+    setSidebarWorkspaceSwitch(true);
+    onTeamChange(teamId);
+  };
+
+  useEffect(() => {
+    if (!sidebarWorkspaceSwitch) return;
+
+    if (workspaceOverlayLoading) {
+      clearPendingHideTimer();
+      return;
+    }
+
+    const started = overlayStartedAtRef.current;
+    if (started == null) {
+      endSidebarWorkspaceSwitchSession();
+      return;
+    }
+
+    const elapsed = Date.now() - started;
+    const remaining = WORKSPACE_OVERLAY_MIN_MS - elapsed;
+
+    if (remaining <= 0) {
+      endSidebarWorkspaceSwitchSession();
+      return;
+    }
+
+    const id = window.setTimeout(() => {
+      endSidebarWorkspaceSwitchSession();
+    }, remaining);
+    hideOverlayTimerRef.current = id;
+
+    return () => {
+      clearTimeout(id);
+    };
+  }, [workspaceOverlayLoading, sidebarWorkspaceSwitch, clearPendingHideTimer, endSidebarWorkspaceSwitchSession]);
+
   const signOut = async () => {
     try {
       await getAuthClient().signOut();
@@ -123,6 +202,7 @@ export function EnterpriseLayout({
       /* ignore */
     }
     clearAccessToken();
+    setPersistedEnterpriseTeamId("");
     onSignOutNavigate("/login?reason=session");
   };
 
@@ -135,12 +215,18 @@ export function EnterpriseLayout({
           <img src="/alenio-logo-white.png" alt="" className="enterprise-sidebar-logo" />
         </Link>
         <nav className="enterprise-nav" aria-label="Product">
-          <NavItem to="/activity" navId="activity" activeNav={activeNav} icon={<IconActivity />} label="Activity" />
+          {showActivityExecuteNav ? (
+            <NavItem to="/activity" navId="activity" activeNav={activeNav} icon={<IconActivity />} label="Activity" />
+          ) : null}
           <NavItem to="/chat" navId="chat" activeNav={activeNav} icon={<IconChat />} label="Chat" />
-          <NavItem to="/dashboard" navId="execute" activeNav={activeNav} icon={<IconExecute />} label="Execute" />
+          {showActivityExecuteNav ? (
+            <NavItem to="/dashboard" navId="execute" activeNav={activeNav} icon={<IconExecute />} label="Execute" />
+          ) : null}
           <NavItem to="/team" navId="team" activeNav={activeNav} icon={<IconTeam />} label="Team" />
-          <NavItem to="/billing" navId="plan" activeNav={activeNav} icon={<IconPlan />} label="Plan" />
-          <NavItem to="/dashboard#settings" navId="settings" activeNav={activeNav} icon={<IconSettings />} label="Settings" />
+          {showPlanNav ? (
+            <NavItem to="/billing" navId="plan" activeNav={activeNav} icon={<IconPlan />} label="Plan" />
+          ) : null}
+          <NavItem to="/profile" navId="profile" activeNav={activeNav} icon={<IconProfile />} label="Profile" />
         </nav>
         <div className="enterprise-sidebar-footer">
           <label className="enterprise-workspace-label" htmlFor="enterprise-workspace">
@@ -149,8 +235,8 @@ export function EnterpriseLayout({
           <select
             id="enterprise-workspace"
             className="enterprise-workspace-select"
-            value={selectedTeamId}
-            onChange={(e) => onTeamChange(e.target.value)}
+            value={teams.some((t) => t.id === selectedTeamId) ? selectedTeamId : ""}
+            onChange={(e) => handleWorkspaceSelectChange(e.target.value)}
             data-testid="enterprise-workspace-select"
           >
             {teams.length === 0 ? (
@@ -180,8 +266,22 @@ export function EnterpriseLayout({
         </div>
       </aside>
       <div className="enterprise-main-column">
-        {topBar}
-        <div className={`enterprise-content ${contentClassName}`.trim()}>{children}</div>
+        <div
+          className={`enterprise-main-column-body${showWorkspaceOverlay ? " enterprise-main-column-body-loading" : ""}`.trim()}
+        >
+          {topBar}
+          <div className={`enterprise-content ${contentClassName}`.trim()}>{children}</div>
+          {showWorkspaceOverlay ? (
+            <div
+              className="enterprise-workspace-loading-overlay"
+              role="status"
+              aria-live="polite"
+              aria-label="Switching Workspace"
+            >
+              <AlenioWorkspaceLoading />
+            </div>
+          ) : null}
+        </div>
       </div>
     </div>
   );

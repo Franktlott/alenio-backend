@@ -4,6 +4,8 @@ import { getSessionFromHeaders } from "../auth";
 import { sendPushToUsers } from "../lib/push";
 import { logActivity } from "../lib/activity";
 import { mountWebStripeBilling } from "./web-stripe-billing";
+import { reconcileStripeForSubscriptionRead } from "../lib/stripe-billing";
+import { getTeamSubscription, teamSubscriptionRowHasTeamFeatures } from "./subscription";
 import { webPrismaUserIdFromContext } from "../lib/web-prisma-user";
 import { isPrismaUniqueOnName, isTeamDisplayNameTaken, normalizeTeamName } from "../lib/team-name";
 
@@ -42,7 +44,26 @@ webRouter.get("/api/teams", async (c) => {
       },
     },
   });
-  return c.json({ data: memberships.map((m) => ({ ...m.team, role: m.role })) });
+  const teamIds = memberships.map((m) => m.team.id);
+  /** Same best-effort Stripe sync as Plan / subscription read — list used to use stale DB only. */
+  await Promise.all(teamIds.map((id) => reconcileStripeForSubscriptionRead(id)));
+  /** Ensure every team has a subscription row so `findMany` is complete (new teams / legacy DB). */
+  await Promise.all(teamIds.map((id) => getTeamSubscription(id)));
+  const subscriptions = await prisma.teamSubscription.findMany({
+    where: { teamId: { in: teamIds } },
+    select: { teamId: true, plan: true, status: true },
+  });
+  const subByTeamId = new Map(subscriptions.map((s) => [s.teamId, s]));
+  return c.json({
+    data: memberships.map((m) => {
+      const team = m.team;
+      return {
+        ...team,
+        role: m.role,
+        hasTeamFeatures: teamSubscriptionRowHasTeamFeatures(subByTeamId.get(team.id) ?? null),
+      };
+    }),
+  });
 });
 
 // ── API: create team ──────────────────────────────────────────────────────────
@@ -85,7 +106,7 @@ webRouter.post("/api/teams", async (c) => {
     }
     throw err;
   }
-  return c.json({ data: { ...team, role: "owner" } });
+  return c.json({ data: { ...team, role: "owner", hasTeamFeatures: false } });
 });
 
 // Stripe billing + team subscription (register early so paths like /api/teams/:id/subscription

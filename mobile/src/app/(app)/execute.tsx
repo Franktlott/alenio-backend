@@ -33,6 +33,7 @@ import type { Task, Team, TeamMember, CalendarEvent } from "@/lib/types";
 import { NoTeamPlaceholder } from "@/components/NoTeamPlaceholder";
 import { useDemoMode, showDemoAlert } from "@/lib/useDemo";
 import { SafeKeyboardAvoidingView } from "@/lib/safe-keyboard-controller";
+import { getUSHolidays, type USFederalHoliday } from "@/lib/us-federal-holidays";
 
 type FilterTab = "all" | "assigned" | "completed";
 type SortMode = "due" | "priority" | "completed";
@@ -74,42 +75,6 @@ function computeWeekBars(week: (Date | null)[], events: CalendarEvent[]): WeekBa
   return tracks;
 }
 
-// Returns the date of the Nth weekday in a given month/year
-// weekday: 0=Sun, 1=Mon ... 6=Sat; nth: 1-based (use -1 for last)
-function nthWeekday(year: number, month: number, weekday: number, nth: number): Date {
-  if (nth > 0) {
-    const d = new Date(year, month, 1);
-    let count = 0;
-    while (true) {
-      if (d.getDay() === weekday) { count++; if (count === nth) return new Date(d); }
-      d.setDate(d.getDate() + 1);
-    }
-  } else {
-    // last occurrence
-    const d = new Date(year, month + 1, 0);
-    while (d.getDay() !== weekday) d.setDate(d.getDate() - 1);
-    return new Date(d);
-  }
-}
-
-interface Holiday { name: string; date: Date }
-
-function getUSHolidays(year: number): Holiday[] {
-  return [
-    { name: "New Year's Day", date: new Date(year, 0, 1) },
-    { name: "MLK Day", date: nthWeekday(year, 0, 1, 3) },
-    { name: "Presidents' Day", date: nthWeekday(year, 1, 1, 3) },
-    { name: "Memorial Day", date: nthWeekday(year, 4, 1, -1) },
-    { name: "Juneteenth", date: new Date(year, 5, 19) },
-    { name: "Independence Day", date: new Date(year, 6, 4) },
-    { name: "Labor Day", date: nthWeekday(year, 8, 1, 1) },
-    { name: "Columbus Day", date: nthWeekday(year, 9, 1, 2) },
-    { name: "Veterans Day", date: new Date(year, 10, 11) },
-    { name: "Thanksgiving", date: nthWeekday(year, 10, 4, 4) },
-    { name: "Christmas Day", date: new Date(year, 11, 25) },
-  ];
-}
-
 function startOfDay(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
 }
@@ -133,7 +98,7 @@ function MiniCalendar({
 }: {
   tasks: Task[];
   events: CalendarEvent[];
-  holidays: Holiday[];
+  holidays: USFederalHoliday[];
   selectedDay: string | null;
   onSelectDay: (iso: string | null) => void;
 }) {

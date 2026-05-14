@@ -20,6 +20,22 @@ function generateInviteCode(): string {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
 }
 
+async function teamHasOwner(teamId: string): Promise<boolean> {
+  const row = await prisma.teamMember.findFirst({ where: { teamId, role: "owner" } });
+  return row !== null;
+}
+
+/** Owner, team leader, or admin; or any member if the workspace has no owner (recovery after bad data / legacy leave). */
+async function canManageJoinRequests(teamId: string, userId: string): Promise<boolean> {
+  const membership = await prisma.teamMember.findUnique({
+    where: { userId_teamId: { userId, teamId } },
+  });
+  if (!membership) return false;
+  if (["owner", "team_leader", "admin"].includes(membership.role)) return true;
+  if (!(await teamHasOwner(teamId))) return true;
+  return false;
+}
+
 // GET /api/teams - list teams for current user
 teamsRouter.get("/", async (c) => {
   const user = c.get("user")!;
@@ -110,6 +126,59 @@ teamsRouter.post("/join", async (c) => {
     return c.json({ error: { message: "Already a member", code: "CONFLICT" } }, 409);
   }
 
+  const memberCount = await prisma.teamMember.count({ where: { teamId: team.id } });
+  if (memberCount === 0) {
+    const alreadyOwnElsewhere = await prisma.teamMember.findFirst({
+      where: { userId: user.id, role: "owner" },
+    });
+    if (alreadyOwnElsewhere) {
+      return c.json(
+        {
+          error: {
+            message:
+              "This workspace has no members left. You already own another workspace—transfer ownership there first, or use a different account to reclaim this invite.",
+            code: "TEAM_LIMIT_REACHED",
+          },
+        },
+        400,
+      );
+    }
+
+    const reclaimed = await prisma.$transaction(async (tx) => {
+      const n = await tx.teamMember.count({ where: { teamId: team.id } });
+      if (n !== 0) {
+        throw new Error("CONCURRENT_JOIN");
+      }
+      await tx.teamMember.create({
+        data: { userId: user.id, teamId: team.id, role: "owner" },
+      });
+      await tx.joinRequest.deleteMany({ where: { teamId: team.id } });
+      return tx.team.findUnique({
+        where: { id: team.id },
+        include: { _count: { select: { members: true, tasks: true } } },
+      });
+    }).catch((e: unknown) => {
+      if (e instanceof Error && e.message === "CONCURRENT_JOIN") return null;
+      throw e;
+    });
+
+    if (!reclaimed) {
+      return c.json(
+        { error: { message: "Someone else just joined this workspace. Try again.", code: "CONFLICT" } },
+        409,
+      );
+    }
+
+    await logActivity({
+      teamId: team.id,
+      userId: user.id,
+      type: "member_joined",
+      metadata: { userName: user.name },
+    });
+
+    return c.json({ data: { ...reclaimed, role: "owner" as const } });
+  }
+
   const existingRequest = await prisma.joinRequest.findUnique({
     where: { teamId_userId: { teamId: team.id, userId: user.id } },
   });
@@ -132,7 +201,7 @@ teamsRouter.post("/join", async (c) => {
 
   // Notify team owners
   const owners = await prisma.teamMember.findMany({
-    where: { teamId: team.id, role: { in: ["owner", "team_leader"] } },
+    where: { teamId: team.id, role: { in: ["owner", "team_leader", "admin"] } },
     select: { userId: true },
   });
   const ownerIds = owners.map((o) => o.userId);
@@ -207,10 +276,28 @@ teamsRouter.patch("/:teamId", async (c) => {
   return c.json({ data: team });
 });
 
-// DELETE /api/teams/:teamId/leave - leave team
+// DELETE /api/teams/:teamId/leave - leave team (workspace owner cannot leave)
 teamsRouter.delete("/:teamId/leave", async (c) => {
   const user = c.get("user")!;
   const { teamId } = c.req.param();
+
+  const membership = await prisma.teamMember.findUnique({
+    where: { userId_teamId: { userId: user.id, teamId } },
+  });
+  if (!membership) {
+    return c.json({ error: { message: "Not a member of this workspace", code: "NOT_FOUND" } }, 404);
+  }
+  if (membership.role === "owner") {
+    return c.json(
+      {
+        error: {
+          message: "Workspace owners cannot leave. Transfer ownership to another member first, or delete the workspace.",
+          code: "FORBIDDEN",
+        },
+      },
+      403,
+    );
+  }
 
   await prisma.teamMember.deleteMany({
     where: { userId: user.id, teamId },
@@ -243,16 +330,13 @@ teamsRouter.delete("/:teamId", async (c) => {
   return c.body(null, 204);
 });
 
-// GET /api/teams/:teamId/join-requests - list pending join requests (owner only)
+// GET /api/teams/:teamId/join-requests - list pending join requests
 teamsRouter.get("/:teamId/join-requests", async (c) => {
   const user = c.get("user")!;
   const { teamId } = c.req.param();
 
-  const membership = await prisma.teamMember.findUnique({
-    where: { userId_teamId: { userId: user.id, teamId } },
-  });
-  if (!membership || !["owner","team_leader"].includes(membership.role)) {
-    return c.json({ error: { message: "Only team owners can view join requests", code: "FORBIDDEN" } }, 403);
+  if (!(await canManageJoinRequests(teamId, user.id))) {
+    return c.json({ error: { message: "You cannot view join requests for this workspace", code: "FORBIDDEN" } }, 403);
   }
 
   const requests = await prisma.joinRequest.findMany({
@@ -266,16 +350,13 @@ teamsRouter.get("/:teamId/join-requests", async (c) => {
   return c.json({ data: requests });
 });
 
-// POST /api/teams/:teamId/join-requests/:requestId/approve - approve a join request (owner only)
+// POST /api/teams/:teamId/join-requests/:requestId/approve - approve a join request
 teamsRouter.post("/:teamId/join-requests/:requestId/approve", async (c) => {
   const user = c.get("user")!;
   const { teamId, requestId } = c.req.param();
 
-  const membership = await prisma.teamMember.findUnique({
-    where: { userId_teamId: { userId: user.id, teamId } },
-  });
-  if (!membership || !["owner","team_leader"].includes(membership.role)) {
-    return c.json({ error: { message: "Only team owners can approve join requests", code: "FORBIDDEN" } }, 403);
+  if (!(await canManageJoinRequests(teamId, user.id))) {
+    return c.json({ error: { message: "You cannot approve join requests for this workspace", code: "FORBIDDEN" } }, 403);
   }
 
   const joinRequest = await prisma.joinRequest.findUnique({
@@ -286,16 +367,53 @@ teamsRouter.post("/:teamId/join-requests/:requestId/approve", async (c) => {
     return c.json({ error: { message: "Join request not found", code: "NOT_FOUND" } }, 404);
   }
 
-  // Create team member and update request status in a transaction
-  await prisma.$transaction([
-    prisma.teamMember.create({
-      data: { userId: joinRequest.userId, teamId, role: "member" },
-    }),
-    prisma.joinRequest.update({
+  const hasOwnerNow = await teamHasOwner(teamId);
+  const hasTeamLeaderNow = Boolean(
+    await prisma.teamMember.findFirst({ where: { teamId, role: "team_leader" } }),
+  );
+  if (!hasOwnerNow && !hasTeamLeaderNow) {
+    const joinerOwnsElsewhere = await prisma.teamMember.findFirst({
+      where: { userId: joinRequest.userId, role: "owner" },
+    });
+    if (joinerOwnsElsewhere) {
+      return c.json(
+        {
+          error: {
+            message:
+              "This workspace has no owner. The person requesting to join already owns another workspace, so they cannot become the owner here. They can transfer their other workspace first or join with a different account.",
+            code: "BAD_REQUEST",
+          },
+        },
+        400,
+      );
+    }
+  }
+
+  await prisma.$transaction(async (tx) => {
+    const hasOwner = await tx.teamMember.findFirst({ where: { teamId, role: "owner" } });
+    let newMemberRole = "member";
+    if (!hasOwner) {
+      const tl = await tx.teamMember.findFirst({
+        where: { teamId, role: "team_leader" },
+        orderBy: { joinedAt: "asc" },
+      });
+      if (tl) {
+        await tx.teamMember.update({
+          where: { userId_teamId: { userId: tl.userId, teamId } },
+          data: { role: "owner" },
+        });
+      } else {
+        newMemberRole = "owner";
+      }
+    }
+    await tx.teamMember.create({
+      data: { userId: joinRequest.userId, teamId, role: newMemberRole },
+    });
+    await tx.joinRequest.update({
       where: { id: requestId },
       data: { status: "approved" },
-    }),
-  ]);
+    });
+  });
 
   // Notify the requesting user
   await sendPushToUsers(
@@ -322,16 +440,13 @@ teamsRouter.post("/:teamId/join-requests/:requestId/approve", async (c) => {
   return c.json({ data: { success: true } });
 });
 
-// POST /api/teams/:teamId/join-requests/:requestId/reject - reject a join request (owner only)
+// POST /api/teams/:teamId/join-requests/:requestId/reject - reject a join request
 teamsRouter.post("/:teamId/join-requests/:requestId/reject", async (c) => {
   const user = c.get("user")!;
   const { teamId, requestId } = c.req.param();
 
-  const membership = await prisma.teamMember.findUnique({
-    where: { userId_teamId: { userId: user.id, teamId } },
-  });
-  if (!membership || !["owner","team_leader"].includes(membership.role)) {
-    return c.json({ error: { message: "Only team owners can reject join requests", code: "FORBIDDEN" } }, 403);
+  if (!(await canManageJoinRequests(teamId, user.id))) {
+    return c.json({ error: { message: "You cannot reject join requests for this workspace", code: "FORBIDDEN" } }, 403);
   }
 
   const joinRequest = await prisma.joinRequest.findUnique({

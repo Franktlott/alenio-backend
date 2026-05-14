@@ -197,7 +197,7 @@ export default function SubscriptionScreen() {
           teamId: activeTeamId,
         });
         const can = await Linking.canOpenURL(url);
-        if (!can) throw new Error("Cannot open Stripe checkout on this device.");
+        if (!can) throw new Error("Cannot open checkout on this device.");
         await Linking.openURL(url);
         return { via: "stripe_checkout" };
       } catch (e) {
@@ -308,24 +308,7 @@ export default function SubscriptionScreen() {
         <View style={{ alignItems: "center", paddingHorizontal: 20, marginTop: 22 }}>
           {isLoading ? (
             <ActivityIndicator color="#4361EE" testID="subscription-loading" style={{ marginBottom: 14 }} />
-          ) : (
-            <View
-              style={{
-                paddingHorizontal: 14,
-                paddingVertical: 7,
-                borderRadius: 999,
-                backgroundColor: "#F8FAFC",
-                borderWidth: 1,
-                borderColor: "#E2E8F0",
-                marginBottom: 14,
-              }}
-              testID="plan-badge"
-            >
-              <Text style={{ fontSize: 10, fontWeight: "800", letterSpacing: 1.4, color: "#64748B" }}>
-                CURRENT PLAN
-              </Text>
-            </View>
-          )}
+          ) : null}
           <Text
             style={{
               textAlign: "center",
@@ -356,7 +339,7 @@ export default function SubscriptionScreen() {
           ) : null}
           {!isLoading && stripeBilled ? (
             <Text style={{ textAlign: "center", fontSize: 13, color: "#94A3B8", marginBottom: 2 }}>
-              Billed through Stripe — use Manage payment below.
+              Billed on the web — use Manage payment below.
             </Text>
           ) : null}
         </View>
@@ -617,7 +600,7 @@ export default function SubscriptionScreen() {
                         lineHeight: 14,
                       }}
                     >
-                      Cancel anytime · Secure billing via Stripe
+                      Cancel anytime · Secure checkout
                     </Text>
                   ) : (
                     <Text style={{ textAlign: "center", fontSize: 10, color: "#94A3B8", marginTop: 8 }}>
@@ -632,7 +615,7 @@ export default function SubscriptionScreen() {
           </View>
         </View>
 
-        {/* Payment & renewals (Stripe web vs App Store / Play) */}
+        {/* Payment & renewals (web vs App Store / Play) */}
         {currentPlan === "team" && !isLoading && ((stripeBilled && isOwner) || (!stripeBilled && isRevenueCatEnabled())) ? (
           <View style={{ marginHorizontal: 16, marginTop: 20 }}>
             <TouchableOpacity
@@ -665,13 +648,13 @@ export default function SubscriptionScreen() {
                 paddingHorizontal: 8,
               }}
             >
-              Subscriptions started on the web open in a secure in-app browser (Stripe). In-app purchases use Apple
-              or Google subscription settings.
+              Subscriptions started on the web open in a secure in-app browser. In-app purchases use Apple or Google
+              subscription settings.
             </Text>
           </View>
         ) : null}
 
-        {/* Cancel plan section (in-app cancel is for store-synced plans; Stripe is cancelled in the billing portal) */}
+        {/* Cancel plan section (in-app cancel is for store-synced plans; web-billed plans use the billing portal) */}
         {currentPlan !== "free" && !isLoading && !stripeBilled ? (
           <View style={{ marginHorizontal: 16, marginTop: 8 }}>
             <TouchableOpacity
@@ -746,7 +729,7 @@ export default function SubscriptionScreen() {
           </View>
         </TouchableOpacity>
 
-        {/* Restore Purchases — App Store / Play only (hide when this workspace is Stripe-billed) */}
+        {/* Restore Purchases — App Store / Play only (hide when this workspace is billed on the web) */}
         {isRevenueCatEnabled() && !stripeBilled ? (
           <TouchableOpacity
             onPress={async () => {

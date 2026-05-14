@@ -135,7 +135,7 @@ export async function reconcileTeamStripeSubscription(teamId: string): Promise<{
 }> {
   const stripe = getStripeClient();
   if (!stripe) {
-    return { applied: false, message: "Stripe is not configured on this server." };
+    return { applied: false, message: "Web billing is not configured on this server." };
   }
 
   const row = await getTeamSubscription(teamId);
@@ -152,7 +152,7 @@ export async function reconcileTeamStripeSubscription(teamId: string): Promise<{
     try {
       const sub = await stripe.subscriptions.retrieve(row.stripeSubscriptionId.trim(), { expand: ["items.data"] });
       await apply(sub);
-      return { applied: true, message: "Subscription refreshed from Stripe." };
+      return { applied: true, message: "Subscription refreshed from billing." };
     } catch (e) {
       console.warn("[stripe/reconcile] retrieve by stored subscription id failed", e);
     }
@@ -166,12 +166,12 @@ export async function reconcileTeamStripeSubscription(teamId: string): Promise<{
       subs.data.find((s) => ["active", "trialing", "past_due", "incomplete", "paused"].includes(s.status));
     if (match) {
       await apply(match);
-      return { applied: true, message: "Subscription found for this team’s Stripe customer and saved." };
+      return { applied: true, message: "Subscription found for this team’s billing customer and saved." };
     }
     return {
       applied: false,
       message:
-        "This workspace has a Stripe customer id but no matching subscription. Open Stripe → Subscriptions and confirm status, or add metadata team_id on the subscription to this team’s id.",
+        "This workspace has a billing customer id but no matching subscription. In your billing dashboard, confirm subscription status, or add metadata team_id on the subscription to this team’s id.",
     };
   }
 
@@ -182,7 +182,7 @@ export async function reconcileTeamStripeSubscription(teamId: string): Promise<{
   const email = owner?.user?.email?.trim();
   const ownerUserId = owner?.userId ?? null;
   if (!email || !ownerUserId) {
-    return { applied: false, message: "No team owner email found to look up Stripe customers." };
+    return { applied: false, message: "No team owner email found to look up billing customers." };
   }
 
   const customers = await stripe.customers.list({ email, limit: 15 });
@@ -195,7 +195,7 @@ export async function reconcileTeamStripeSubscription(teamId: string): Promise<{
     }
   }
 
-  /** Stripe customer email can differ from the team owner email in Neon; metadata team_id is authoritative. */
+  /** Billing customer email can differ from the team owner email in Neon; metadata team_id is authoritative. */
   try {
     const escaped = teamId.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
     const search = await stripe.subscriptions.search({
@@ -208,7 +208,7 @@ export async function reconcileTeamStripeSubscription(teamId: string): Promise<{
       return {
         applied: true,
         message:
-          "Subscription matched in Stripe by metadata team_id (owner email did not have to match the Stripe customer email).",
+          "Subscription matched by metadata team_id (owner email did not have to match the billing customer email).",
       };
     }
   } catch (e) {
@@ -232,7 +232,7 @@ export async function reconcileTeamStripeSubscription(teamId: string): Promise<{
     return {
       applied: true,
       message:
-        "Linked your only active Stripe subscription on this billing email to this workspace (no team_id metadata was required).",
+        "Linked your only active subscription on this billing email to this workspace (no team_id metadata was required).",
     };
   }
 
@@ -240,10 +240,10 @@ export async function reconcileTeamStripeSubscription(teamId: string): Promise<{
     applied: false,
     message:
       ownedTeams.length > 1 && candidates.length > 0
-        ? "Stripe has one or more subscriptions on your email, but this account owns multiple workspaces. In Stripe → Subscription → Metadata, set team_id to this workspace’s id, then sync again."
+        ? "There are one or more subscriptions on your email, but this account owns multiple workspaces. In your billing provider, open the subscription → Metadata, set team_id to this workspace’s id, then sync again."
         : candidates.length === 0
-          ? "No active Stripe subscriptions found for the team owner’s email in this Stripe account. Confirm you are in the correct Stripe mode (test vs live) and the subscription uses the same email."
-          : "Could not safely match a subscription to this workspace. In Stripe Dashboard, open the subscription → Metadata → add team_id with this workspace’s id, then reload Plan.",
+          ? "No active subscriptions found for the team owner’s email in this billing account. Confirm test vs live mode and that the subscription uses the same email."
+          : "Could not safely match a subscription to this workspace. In your billing dashboard, open the subscription → Metadata → add team_id with this workspace’s id, then reload Plan.",
   };
 }
 

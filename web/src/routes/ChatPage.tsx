@@ -8,11 +8,12 @@ import {
   useRef,
   useState,
 } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { DashboardTopBar } from "../components/DashboardTopBar";
-import { EnterpriseLayout } from "../components/EnterpriseLayout";
+import { Link, useSearchParams } from "react-router-dom";
+import { useEnterpriseShell } from "../contexts/EnterpriseShellContext";
+import { NoTeamsEmptyState } from "../components/NoTeamsEmptyState";
 import { ChatMessageMedia } from "../components/ChatMessageMedia";
 import { linkifyText } from "../lib/linkify";
+import { isRecentFooterEnterpriseWorkspaceSelect } from "../lib/enterprise-selected-team";
 import {
   createTeamPoll,
   createVideoRoom,
@@ -21,8 +22,6 @@ import {
   fetchTeamMessages,
   fetchTeamPolls,
   fetchTeamTopics,
-  fetchWebMe,
-  fetchWebTeams,
   postDmMessage,
   postTeamMessage,
   uploadChatMedia,
@@ -32,8 +31,6 @@ import {
   type DirectChatMessage,
   type TeamChatMessage,
   type TeamTopic,
-  type WebMeUser,
-  type WebTeamRow,
 } from "../lib/api";
 
 const MESSAGE_REFRESH_MS = 4000;
@@ -82,14 +79,12 @@ function conversationRecencyMs(c: DmConversation): number {
 }
 
 export function ChatPage() {
-  const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const teamIdFromUrl = params.get("teamId")?.trim() ?? "";
   const topicIdFromUrl = params.get("topicId")?.trim() ?? "";
   const conversationIdFromUrl = params.get("conversationId")?.trim() ?? "";
 
-  const [me, setMe] = useState<WebMeUser | null>(null);
-  const [teams, setTeams] = useState<WebTeamRow[] | null>(null);
+  const { me, teams, selectedTeamId, setSelectedTeamId, refreshMeAndTeams } = useEnterpriseShell();
   const [topics, setTopics] = useState<TeamTopic[]>([]);
   const [conversations, setConversations] = useState<DmConversation[]>([]);
   const [messages, setMessages] = useState<Array<TeamChatMessage | DirectChatMessage>>([]);
@@ -118,8 +113,6 @@ export function ChatPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
 
-  const selectedTeamId =
-    teamIdFromUrl && teams?.some((t) => t.id === teamIdFromUrl) ? teamIdFromUrl : teams?.[0]?.id ?? "";
   const selectedTopicId = topicIdFromUrl || "general";
   const selectedConversationId = conversationIdFromUrl;
   const isDmMode = Boolean(selectedConversationId);
@@ -128,12 +121,10 @@ export function ChatPage() {
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    void (async () => {
       try {
-        const [u, t, dms] = await Promise.all([fetchWebMe(), fetchWebTeams(), fetchDmConversations()]);
+        const dms = await fetchDmConversations();
         if (cancelled) return;
-        setMe(u);
-        setTeams(t ?? []);
         setConversations(dms ?? []);
       } catch (e) {
         if (cancelled) return;
@@ -146,10 +137,22 @@ export function ChatPage() {
   }, []);
 
   useEffect(() => {
-    if (!teams?.length || !selectedTeamId) return;
-    if (!isDmMode && (teamIdFromUrl !== selectedTeamId || !topicIdFromUrl)) {
-      setParams({ teamId: selectedTeamId, topicId: selectedTopicId }, { replace: true });
+    if (!teams?.length) return;
+    if (
+      teamIdFromUrl &&
+      teams.some((t) => t.id === teamIdFromUrl) &&
+      teamIdFromUrl !== selectedTeamId &&
+      !isRecentFooterEnterpriseWorkspaceSelect()
+    ) {
+      setSelectedTeamId(teamIdFromUrl);
     }
+  }, [teams, teamIdFromUrl, selectedTeamId, setSelectedTeamId]);
+
+  useEffect(() => {
+    if (!teams?.length || !selectedTeamId) return;
+    if (isDmMode) return;
+    if (teamIdFromUrl === selectedTeamId && topicIdFromUrl === selectedTopicId) return;
+    setParams({ teamId: selectedTeamId, topicId: selectedTopicId }, { replace: true });
   }, [teams, selectedTeamId, teamIdFromUrl, topicIdFromUrl, selectedTopicId, isDmMode, setParams]);
 
   useEffect(() => {
@@ -221,9 +224,10 @@ export function ChatPage() {
     if (isDmMode) setPolls([]);
     if (isDmMode) {
       if (!selectedConversationId) return;
-    } else if (!selectedTeamId) {
+      void refreshChat();
       return;
     }
+    if (!selectedTeamId) return;
     void refreshChat();
   }, [selectedTeamId, selectedTopicId, isDmMode, selectedConversationId, refreshChat]);
 
@@ -283,6 +287,7 @@ export function ChatPage() {
   }, [threadKey, messages.length]);
 
   const onTeamChange = (id: string) => {
+    setSelectedTeamId(id);
     setParams({ teamId: id, topicId: "general" });
     setMessages([]);
     setTopics([]);
@@ -384,10 +389,6 @@ export function ChatPage() {
     setSendErr(null);
   };
 
-  const onWorkspaceChange = (id: string) => {
-    onTeamChange(id);
-  };
-
   const directConversations = useMemo(
     () => conversations.filter((c) => !c.isGroup).sort((a, b) => conversationRecencyMs(b) - conversationRecencyMs(a)),
     [conversations],
@@ -485,24 +486,15 @@ export function ChatPage() {
   }
 
   return (
-    <EnterpriseLayout
-      activeNav="chat"
-      teams={teams ?? []}
-      selectedTeamId={selectedTeamId}
-      onTeamChange={onWorkspaceChange}
-      user={me}
-      onSignOutNavigate={(path) => navigate(path)}
-      contentClassName="enterprise-content-flush"
-      mainClassName="enterprise-app-chat"
-      topBar={<DashboardTopBar user={me} />}
-    >
-      <div className="chat-app-body chat-app-body-enterprise" data-testid="chat-screen">
+    <>
+      <div
+        className={`chat-app-body chat-app-body-enterprise${teams && teams.length === 0 ? " chat-app-body-no-teams" : ""}`}
+        data-testid="chat-screen"
+      >
         {loadErr && !teams?.length ? <p className="auth-error chat-app-error">{loadErr}</p> : null}
 
         {teams && teams.length === 0 ? (
-          <p className="chat-app-error" style={{ color: "var(--muted)" }} data-testid="chat-no-teams">
-            Join or create a workspace on the <Link to="/team">Team</Link> page, then pick it here.
-          </p>
+          <NoTeamsEmptyState onRefreshWorkspaces={refreshMeAndTeams} />
         ) : null}
 
         {teams && teams.length > 0 ? (
@@ -781,7 +773,7 @@ export function ChatPage() {
                   {sendErr}
                 </p>
               ) : null}
-              {loadErr && teams.length > 0 ? (
+              {loadErr && teams && teams.length > 0 ? (
                 <p className="auth-error" style={{ marginTop: 8 }} data-testid="chat-load-error">
                   {loadErr}
                 </p>
@@ -909,6 +901,6 @@ export function ChatPage() {
           </div>
         </div>
       ) : null}
-    </EnterpriseLayout>
+    </>
   );
 }

@@ -2,7 +2,7 @@ import { Tabs } from "expo-router";
 import { CheckSquare, Users, User, MessageCircle, Activity } from "lucide-react-native";
 import { View, Text, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, useQueries } from "@tanstack/react-query";
 import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
 import { useTeamStore } from "@/lib/state/team-store";
@@ -87,6 +87,42 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
     refetchInterval: 30000,
   });
 
+  const { data: teamsList = [] } = useQuery({
+    queryKey: ["teams"],
+    queryFn: () => api.get<Team[]>("/api/teams"),
+    enabled: !!session?.user,
+    staleTime: 1000 * 60 * 2,
+  });
+
+  const manageableTeamIds = useMemo(
+    () => teamsList.filter((t) => t.role === "owner" || t.role === "team_leader").map((t) => t.id),
+    [teamsList],
+  );
+
+  type JoinReqRow = { status: string };
+
+  const joinRequestQueries = useQueries({
+    queries: manageableTeamIds.map((teamId) => ({
+      queryKey: ["team-join-requests", teamId] as const,
+      queryFn: () => api.get<JoinReqRow[]>(`/api/teams/${teamId}/join-requests`),
+      enabled: !!session?.user && manageableTeamIds.length > 0,
+      staleTime: 15_000,
+      refetchInterval: 25_000,
+    })),
+  });
+
+  const pendingJoinRequestCount = useMemo(() => {
+    let n = 0;
+    for (const q of joinRequestQueries) {
+      const rows = q.data;
+      if (!Array.isArray(rows)) continue;
+      for (const r of rows) {
+        if (r.status === "pending") n += 1;
+      }
+    }
+    return n;
+  }, [joinRequestQueries]);
+
   const visibleRoutes = state.routes.filter((r: any) => {
     if (r.name === "calendar") return false;
     const tab = ALL_TABS.find((t) => t.name === r.name);
@@ -157,11 +193,17 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
         const { Icon, label, name } = tab;
         const isChat = name === "chat";
         const isTasks = name === "execute";
+        const isTeamTab = name === "team";
         const acknowledgedCount = acknowledgedCounts[activeTeamId ?? ""] ?? 0;
         const newTaskCount = Math.max(0, taskCount - acknowledgedCount);
-        const badge = isChat && (unreadCount + teamUnreadCount) > 0 ? (unreadCount + teamUnreadCount)
-          : isTasks && newTaskCount > 0 ? newTaskCount
-          : null;
+        const badge =
+          isChat && unreadCount + teamUnreadCount > 0
+            ? unreadCount + teamUnreadCount
+            : isTasks && newTaskCount > 0
+              ? newTaskCount
+              : isTeamTab && pendingJoinRequestCount > 0
+                ? pendingJoinRequestCount
+                : null;
 
         return (
           <Pressable

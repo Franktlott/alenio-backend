@@ -1,11 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import QRCode from "qrcode";
+import { NoTeamsEmptyState } from "./NoTeamsEmptyState";
 import {
   approveTeamJoinRequest,
-  cancelMyJoinRequest,
-  createWebTeam,
-  fetchMyJoinRequests,
   fetchTeamJoinRequests,
   fetchTeamMemberStats,
   fetchTeamMonthlyCompletion,
@@ -14,7 +12,6 @@ import {
   fetchWebTeamTasks,
   leaveTeam,
   patchApiTeam,
-  postJoinTeamByCode,
   rejectTeamJoinRequest,
   removeTeamMemberApi,
   setTeamMemberRole,
@@ -22,7 +19,6 @@ import {
   uploadTeamPhoto,
   type ApiTask,
   type MonthlyCompletionRow,
-  type MyJoinRequestRow,
   type TeamMemberStatsMap,
   type WebMeUser,
   type WebTeamDetail,
@@ -36,6 +32,43 @@ function roleLabel(role: string): string {
   if (role === "team_leader") return "Team Leader";
   if (role === "admin") return "Admin";
   return "Member";
+}
+
+function roleBadgeClass(role: string): string {
+  if (role === "owner") return "enterprise-team-role-badge enterprise-team-role-badge-owner";
+  if (role === "team_leader") return "enterprise-team-role-badge enterprise-team-role-badge-leader";
+  if (role === "admin") return "enterprise-team-role-badge enterprise-team-role-badge-admin";
+  return "enterprise-team-role-badge";
+}
+
+function IconUserPlus({ size = 22 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+      <circle cx="8.5" cy="7" r="4" />
+      <line x1="20" y1="8" x2="20" y2="14" />
+      <line x1="23" y1="11" x2="17" y2="11" />
+    </svg>
+  );
+}
+
+function IconPencil() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+    </svg>
+  );
+}
+
+function IconLogOut() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+      <polyline points="16 17 21 12 16 7" />
+      <line x1="21" y1="12" x2="9" y2="12" />
+    </svg>
+  );
 }
 
 function canManageJoinRequests(role: string): boolean {
@@ -69,28 +102,24 @@ type Props = {
   selectedTeamId: string;
   me: WebMeUser | null | undefined;
   onTeamsRefresh: () => Promise<void>;
+  /** True while fetching a new workspace after the sidebar selection changed. */
+  onWorkspaceSwitchLoading?: (busy: boolean) => void;
 };
 
-export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh }: Props) {
+export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWorkspaceSwitchLoading }: Props) {
   const [teamDetail, setTeamDetail] = useState<WebTeamDetail | null>(null);
   const [memberStats, setMemberStats] = useState<TeamMemberStatsMap | null>(null);
   const [monthly, setMonthly] = useState<MonthlyCompletionRow[] | null>(null);
   const [overviewTasks, setOverviewTasks] = useState<ApiTask[]>([]);
   const [isPaid, setIsPaid] = useState(false);
   const [incoming, setIncoming] = useState<WebTeamJoinRequest[]>([]);
-  const [myPending, setMyPending] = useState<MyJoinRequestRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [tabErr, setTabErr] = useState<string | null>(null);
-
-  const [joinCode, setJoinCode] = useState("");
-  const [joinBusy, setJoinBusy] = useState(false);
-  const [createName, setCreateName] = useState("");
-  const [createBusy, setCreateBusy] = useState(false);
-  const [cancelBusy, setCancelBusy] = useState(false);
 
   const [nameEdit, setNameEdit] = useState("");
   const [nameSaving, setNameSaving] = useState(false);
   const [photoBusy, setPhotoBusy] = useState(false);
+  const [isEditingWorkspace, setIsEditingWorkspace] = useState(false);
 
   const [qrOpen, setQrOpen] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
@@ -103,22 +132,6 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh }: Prop
 
   const hasTeams = (teams?.length ?? 0) > 0;
   const myId = me?.id ?? "";
-
-  const loadMyPending = useCallback(async () => {
-    try {
-      const rows = await fetchMyJoinRequests();
-      setMyPending(rows.filter((r) => r.status === "pending"));
-    } catch {
-      setMyPending([]);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (hasTeams) return;
-    void loadMyPending();
-    const t = window.setInterval(() => void loadMyPending(), 20_000);
-    return () => clearInterval(t);
-  }, [hasTeams, loadMyPending]);
 
   const loadTeamContext = useCallback(async () => {
     if (!selectedTeamId) {
@@ -160,6 +173,21 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh }: Prop
   useEffect(() => {
     void loadTeamContext();
   }, [loadTeamContext]);
+
+  useEffect(() => {
+    if (!onWorkspaceSwitchLoading) return;
+    const busy = Boolean(
+      selectedTeamId && loading && (!teamDetail || teamDetail.id !== selectedTeamId),
+    );
+    onWorkspaceSwitchLoading(busy);
+    return () => {
+      onWorkspaceSwitchLoading(false);
+    };
+  }, [selectedTeamId, loading, teamDetail, onWorkspaceSwitchLoading]);
+
+  useEffect(() => {
+    setIsEditingWorkspace(false);
+  }, [selectedTeamId]);
 
   useEffect(() => {
     if (!qrOpen || !teamDetail?.inviteCode) {
@@ -215,6 +243,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh }: Prop
     setTabErr(null);
     try {
       await patchApiTeam(selectedTeamId, { name: nameEdit.trim() });
+      setIsEditingWorkspace(false);
       await loadTeamContext();
       await onTeamsRefresh();
     } catch (e) {
@@ -344,108 +373,9 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh }: Prop
   const manageMembers = canRemoveMembers(myRole);
 
   if (!hasTeams) {
-    const pending = myPending[0];
     return (
       <div className="enterprise-team-tab">
-        <section className="enterprise-card" data-testid="dashboard-no-teams">
-          <h2 className="enterprise-card-title enterprise-card-title-spaced">Team</h2>
-          {pending ? (
-            <div className="enterprise-team-pending-box">
-              <p className="enterprise-muted" style={{ marginTop: 0 }}>
-                Your request to join <strong>{pending.team.name}</strong> is pending approval from a team leader.
-              </p>
-              <button
-                type="button"
-                className="enterprise-team-btn-destructive"
-                disabled={cancelBusy}
-                onClick={async () => {
-                  setCancelBusy(true);
-                  try {
-                    await cancelMyJoinRequest(pending.id);
-                    await loadMyPending();
-                  } catch (e) {
-                    setTabErr(e instanceof Error ? e.message : "Could not cancel.");
-                  } finally {
-                    setCancelBusy(false);
-                  }
-                }}
-              >
-                {cancelBusy ? "Canceling…" : "Cancel request"}
-              </button>
-            </div>
-          ) : (
-            <>
-              <p className="enterprise-muted">Join a team with an invite code, or create a new team.</p>
-              <div className="enterprise-team-join-row">
-                <input
-                  className="auth-input enterprise-team-input"
-                  placeholder="Invite code"
-                  value={joinCode}
-                  onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-                  autoCapitalize="characters"
-                />
-                <button
-                  type="button"
-                  className="auth-submit"
-                  disabled={joinBusy || !joinCode.trim()}
-                  onClick={async () => {
-                    setJoinBusy(true);
-                    setTabErr(null);
-                    try {
-                      await postJoinTeamByCode(joinCode.trim());
-                      setJoinCode("");
-                      await loadMyPending();
-                    } catch (e) {
-                      setTabErr(e instanceof Error ? e.message : "Could not join.");
-                    } finally {
-                      setJoinBusy(false);
-                    }
-                  }}
-                >
-                  {joinBusy ? "Sending…" : "Request to join"}
-                </button>
-              </div>
-              <div className="enterprise-team-create-block">
-                <label className="enterprise-muted" style={{ fontSize: 13 }}>
-                  Create a team
-                </label>
-                <div className="enterprise-team-join-row">
-                  <input
-                    className="auth-input enterprise-team-input"
-                    placeholder="Team name"
-                    value={createName}
-                    onChange={(e) => setCreateName(e.target.value)}
-                  />
-                  <button
-                    type="button"
-                    className="auth-submit"
-                    disabled={createBusy || !createName.trim()}
-                    onClick={async () => {
-                      setCreateBusy(true);
-                      setTabErr(null);
-                      try {
-                        await createWebTeam(createName.trim());
-                        setCreateName("");
-                        await onTeamsRefresh();
-                      } catch (e) {
-                        setTabErr(e instanceof Error ? e.message : "Could not create team.");
-                      } finally {
-                        setCreateBusy(false);
-                      }
-                    }}
-                  >
-                    {createBusy ? "Creating…" : "Create"}
-                  </button>
-                </div>
-              </div>
-            </>
-          )}
-          {tabErr ? (
-            <p className="enterprise-form-error" role="alert">
-              {tabErr}
-            </p>
-          ) : null}
-        </section>
+        <NoTeamsEmptyState onRefreshWorkspaces={onTeamsRefresh} />
       </div>
     );
   }
@@ -458,12 +388,8 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh }: Prop
     );
   }
 
-  if (loading && !teamDetail) {
-    return (
-      <div className="enterprise-team-tab">
-        <p className="enterprise-muted">Loading team…</p>
-      </div>
-    );
+  if (loading && (!teamDetail || teamDetail.id !== selectedTeamId)) {
+    return <div className="enterprise-team-tab enterprise-team-tab-loading-host" aria-busy="true" />;
   }
 
   if (!teamDetail) {
@@ -482,54 +408,147 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh }: Prop
         </p>
       ) : null}
 
-      <div className="enterprise-team-hero">
-        <div className="enterprise-team-hero-inner">
-          <button
-            type="button"
-            className="enterprise-team-avatar-btn"
-            disabled={!manageMembers || photoBusy}
-            onClick={() => manageMembers && onPickTeamPhoto()}
-            title={manageMembers ? "Change team photo" : undefined}
-          >
-            {photoBusy ? (
-              <span className="enterprise-muted">…</span>
-            ) : teamDetail.image ? (
-              <img src={teamDetail.image} alt="" className="enterprise-team-avatar-img" />
+      <section className="enterprise-card enterprise-profile-account enterprise-team-ws-profile-card">
+        <div className="enterprise-profile-account-head">
+          <h2 className="enterprise-card-title enterprise-card-title-spaced enterprise-profile-account-title">Workspace</h2>
+          <div className="enterprise-team-ws-head-actions">
+            {myRole !== "owner" ? (
+              <button
+                type="button"
+                className="enterprise-team-leave-inline"
+                disabled={leaveBusy}
+                onClick={() => void onLeaveTeam()}
+              >
+                <IconLogOut /> {leaveBusy ? "Leaving…" : "Leave"}
+              </button>
+            ) : null}
+            {!isEditingWorkspace ? (
+              <>
+                <button
+                  type="button"
+                  className="enterprise-profile-edit-btn enterprise-profile-edit-btn-with-icon"
+                  onClick={() => void shareInvite()}
+                >
+                  <IconUserPlus size={14} /> Add member
+                </button>
+                <button type="button" className="enterprise-profile-edit-btn" onClick={() => void copyInvite()}>
+                  Copy code
+                </button>
+                {manageMembers ? (
+                  <button
+                    type="button"
+                    className="enterprise-profile-edit-btn enterprise-profile-edit-btn-with-icon"
+                    onClick={() => {
+                      setTabErr(null);
+                      setIsEditingWorkspace(true);
+                      setNameEdit(teamDetail.name);
+                    }}
+                  >
+                    <IconPencil /> Edit
+                  </button>
+                ) : null}
+              </>
             ) : (
-              <span className="enterprise-team-avatar-letter">{teamDetail.name?.[0]?.toUpperCase() ?? "T"}</span>
-            )}
-          </button>
-          <div className="enterprise-team-hero-text">
-            {manageMembers ? (
-              <div className="enterprise-team-name-edit">
-                <input
-                  className="auth-input enterprise-team-name-input"
-                  value={nameEdit}
-                  onChange={(e) => setNameEdit(e.target.value)}
-                />
-                <button type="button" className="enterprise-inline-link" disabled={nameSaving} onClick={() => void onSaveTeamName()}>
-                  {nameSaving ? "Saving…" : "Save name"}
+              <div className="enterprise-profile-account-actions">
+                <button
+                  type="button"
+                  className="enterprise-profile-cancel-btn"
+                  disabled={nameSaving}
+                  onClick={() => {
+                    setIsEditingWorkspace(false);
+                    setNameEdit(teamDetail.name);
+                    setTabErr(null);
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="auth-submit"
+                  disabled={nameSaving || !nameEdit.trim()}
+                  onClick={() => void onSaveTeamName()}
+                >
+                  {nameSaving ? "Saving…" : "Save workspace"}
                 </button>
               </div>
-            ) : (
-              <h3 className="enterprise-team-title">{teamDetail.name}</h3>
             )}
-            <div className="enterprise-team-code-row">
-              <span className="enterprise-team-code">{teamDetail.inviteCode}</span>
-              <button type="button" className="enterprise-inline-link" onClick={() => void copyInvite()}>
+          </div>
+        </div>
+        <div className="enterprise-profile-account-row">
+          <div className="enterprise-profile-avatar-col">
+            {manageMembers && isEditingWorkspace ? (
+              <button
+                type="button"
+                className="enterprise-profile-avatar-btn"
+                disabled={photoBusy}
+                onClick={() => void onPickTeamPhoto()}
+                title="Change workspace photo"
+              >
+                {photoBusy ? (
+                  <span className="enterprise-muted">…</span>
+                ) : teamDetail.image ? (
+                  <img src={teamDetail.image} alt="" className="enterprise-profile-avatar-img" />
+                ) : (
+                  <span className="enterprise-profile-avatar-initials">{teamDetail.name?.[0]?.toUpperCase() ?? "T"}</span>
+                )}
+              </button>
+            ) : (
+              <div className="enterprise-profile-avatar-preview">
+                {photoBusy ? (
+                  <span className="enterprise-muted">…</span>
+                ) : teamDetail.image ? (
+                  <img src={teamDetail.image} alt="" className="enterprise-profile-avatar-img" />
+                ) : (
+                  <span className="enterprise-profile-avatar-initials">{teamDetail.name?.[0]?.toUpperCase() ?? "T"}</span>
+                )}
+              </div>
+            )}
+            {manageMembers && isEditingWorkspace ? (
+              <button type="button" className="enterprise-team-pill-btn" disabled={photoBusy} onClick={() => void onPickTeamPhoto()}>
+                {photoBusy ? "Updating…" : "Update photo"}
+              </button>
+            ) : null}
+          </div>
+          <div className="enterprise-profile-account-fields">
+            {isEditingWorkspace && manageMembers ? (
+              <>
+                <label className="enterprise-muted enterprise-profile-label" htmlFor="team-ws-name">
+                  Workspace name
+                </label>
+                <input
+                  id="team-ws-name"
+                  className="auth-input enterprise-profile-name-input"
+                  value={nameEdit}
+                  onChange={(e) => setNameEdit(e.target.value)}
+                  autoComplete="organization"
+                />
+                <p className="enterprise-profile-edit-hint">Invite code stays the same for everyone.</p>
+              </>
+            ) : (
+              <>
+                <span className="enterprise-muted enterprise-profile-label">Workspace name</span>
+                <p className="enterprise-profile-name-display">{teamDetail.name}</p>
+              </>
+            )}
+            <span className="enterprise-team-account-pill-badge">
+              {roleLabel(myRole)} · Team access enabled
+            </span>
+            <div className="enterprise-team-code-row-ws enterprise-team-ws-invite-tools">
+              <span className="enterprise-team-code-mono">{teamDetail.inviteCode}</span>
+              <button type="button" className="enterprise-team-pill-btn" onClick={() => void copyInvite()}>
                 Copy
               </button>
-              <button type="button" className="enterprise-inline-link" onClick={() => void shareInvite()}>
+              <button type="button" className="enterprise-team-pill-btn" onClick={() => void shareInvite()}>
                 Share
               </button>
-              <button type="button" className="enterprise-inline-link" onClick={() => setQrOpen(true)}>
+              <button type="button" className="enterprise-team-pill-btn" onClick={() => setQrOpen(true)}>
                 QR code
               </button>
             </div>
-            <p className="enterprise-team-hint">Share this code to invite team members</p>
+            <p className="enterprise-team-hint-ws">Share this code to invite team members</p>
           </div>
         </div>
-      </div>
+      </section>
 
       {manageJoin && incoming.length > 0 ? (
         <section className="enterprise-card enterprise-team-section">
@@ -577,6 +596,94 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh }: Prop
           </ul>
         </section>
       ) : null}
+
+      <section className="enterprise-card enterprise-profile-teams">
+        <div className="enterprise-team-members-head">
+          <div>
+            <h2 className="enterprise-card-title enterprise-card-title-spaced">Team members</h2>
+            <p className="enterprise-muted enterprise-profile-teams-hint enterprise-team-members-sub">
+              People in this workspace.
+            </p>
+          </div>
+          <div className="enterprise-team-ws-head-actions enterprise-team-members-head-actions">
+            <button
+              type="button"
+              className="enterprise-profile-edit-btn enterprise-profile-edit-btn-with-icon"
+              onClick={() => void shareInvite()}
+            >
+              <IconUserPlus size={14} /> Add member
+            </button>
+            <button type="button" className="enterprise-profile-edit-btn" onClick={() => void copyInvite()}>
+              Copy code
+            </button>
+          </div>
+        </div>
+        {manageMembers ? (
+          <p className="enterprise-muted enterprise-team-owner-hint">
+            {myRole === "owner"
+              ? "Tap a member to change role, transfer ownership, or remove."
+              : "Tap a member to remove them from the team."}
+          </p>
+        ) : null}
+        <ul className="enterprise-team-member-card-list">
+          {sortedMembers.map((m) => {
+            const stats = memberStats?.[m.userId];
+            const streak = stats?.streak ?? 0;
+            const overdue = stats?.overdueTasks ?? 0;
+            const isSelf = m.userId === myId;
+            const rowOpen = canOpenMemberRow(myRole, m);
+            return (
+              <li key={m.id} className="enterprise-team-member-card-item">
+                <div
+                  className={`enterprise-team-member-wrap enterprise-team-member-card-inner ${isSelf ? "enterprise-team-member-self" : ""}`}
+                >
+                  <button
+                    type="button"
+                    className="enterprise-team-member-main"
+                    onClick={() => rowOpen && openMemberModal(m)}
+                    disabled={!rowOpen}
+                  >
+                    <span className="enterprise-team-member-av">
+                      {m.user.image ? (
+                        <img src={m.user.image} alt="" />
+                      ) : (
+                        (m.user.name?.[0] ?? "?").toUpperCase()
+                      )}
+                    </span>
+                    <span className="enterprise-team-member-center">
+                      <span className="enterprise-team-member-name-line">
+                        <span className="enterprise-team-member-name">
+                          {m.user.name ?? m.user.email ?? "Member"}
+                          {isSelf ? " (you)" : ""}
+                        </span>
+                        <span className={roleBadgeClass(m.role)}>{roleLabel(m.role)}</span>
+                      </span>
+                      {m.user.email ? (
+                        <span className="enterprise-muted enterprise-team-member-email-line">{m.user.email}</span>
+                      ) : null}
+                      {isPaid && (streak > 0 || overdue > 0) ? (
+                        <span className="enterprise-team-member-submetrics">
+                          {isPaid && streak > 0 ? <span title="Streak">🔥 {streak}</span> : null}
+                          {overdue > 0 ? <span className="enterprise-stat-overdue">⚠ {overdue}</span> : null}
+                        </span>
+                      ) : null}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className="enterprise-team-member-kebab"
+                    aria-label="Member actions"
+                    disabled={!rowOpen}
+                    onClick={() => rowOpen && openMemberModal(m)}
+                  >
+                    ⋮
+                  </button>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      </section>
 
       {isPaid ? (
         <section className="enterprise-card enterprise-team-section">
@@ -648,75 +755,6 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh }: Prop
             <Link to="/dashboard">Execute</Link>.
           </span>
         </div>
-      ) : null}
-
-      <section className="enterprise-card enterprise-team-section">
-        <div className="enterprise-team-section-head">
-          <h3 className="enterprise-card-title" style={{ marginBottom: 0 }}>
-            Team members
-          </h3>
-          <Link to={`/chat?teamId=${encodeURIComponent(selectedTeamId)}`} className="enterprise-inline-link">
-            Open team chat
-          </Link>
-        </div>
-        {manageMembers ? (
-          <p className="enterprise-muted enterprise-team-owner-hint">
-            {myRole === "owner"
-              ? "Tap a member to change role, transfer ownership, or remove."
-              : "Tap a member to remove them from the team."}
-          </p>
-        ) : null}
-        <ul className="enterprise-team-member-list">
-          {sortedMembers.map((m) => {
-            const stats = memberStats?.[m.userId];
-            const streak = stats?.streak ?? 0;
-            const overdue = stats?.overdueTasks ?? 0;
-            const isSelf = m.userId === myId;
-            const rowOpen = canOpenMemberRow(myRole, m);
-            return (
-              <li key={m.id}>
-                <button
-                  type="button"
-                  className={`enterprise-team-member-row ${isSelf ? "enterprise-team-member-self" : ""}`}
-                  onClick={() => rowOpen && openMemberModal(m)}
-                  disabled={!rowOpen}
-                >
-                  <span className="enterprise-team-member-av">
-                    {m.user.image ? (
-                      <img src={m.user.image} alt="" />
-                    ) : (
-                      (m.user.name?.[0] ?? "?").toUpperCase()
-                    )}
-                  </span>
-                  <span className="enterprise-team-member-info">
-                    <span className="enterprise-team-member-name">
-                      {m.user.name ?? m.user.email ?? "Member"}
-                      {isSelf ? " (you)" : ""}
-                    </span>
-                    <span className="enterprise-muted">{roleLabel(m.role)}</span>
-                  </span>
-                  <span className="enterprise-team-member-metrics">
-                    {isPaid ? <span title="Streak">🔥 {streak}</span> : null}
-                    {overdue > 0 ? <span className="enterprise-stat-overdue">⚠ {overdue}</span> : null}
-                  </span>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      </section>
-
-      {myRole !== "owner" ? (
-        <section className="enterprise-card enterprise-team-section">
-          <button
-            type="button"
-            className="enterprise-team-btn-outline"
-            disabled={leaveBusy}
-            onClick={() => void onLeaveTeam()}
-          >
-            {leaveBusy ? "Leaving…" : "Leave team"}
-          </button>
-        </section>
       ) : null}
 
       {qrOpen ? (

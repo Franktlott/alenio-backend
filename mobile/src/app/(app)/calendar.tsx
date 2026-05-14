@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -20,6 +20,7 @@ import { useSession } from "@/lib/auth/use-session";
 import type { Task, Team } from "@/lib/types";
 import { useDemoMode } from "@/lib/useDemo";
 import { useSubscriptionStore } from "@/lib/state/subscription-store";
+import { getUSHolidays, type USFederalHoliday } from "@/lib/us-federal-holidays";
 
 type CalendarEvent = {
   id: string;
@@ -203,6 +204,22 @@ export default function CalendarScreen() {
   const days = getDaysInMonth(currentMonth);
   const today = new Date();
 
+  const holidayYears = useMemo(() => {
+    const ys = new Set<number>();
+    for (const d of days) ys.add(d.getFullYear());
+    return ys;
+  }, [days]);
+
+  const holidays = useMemo(
+    () => [...holidayYears].sort((a, b) => a - b).flatMap((y) => getUSHolidays(y)),
+    [holidayYears],
+  );
+
+  const selectedHolidays: USFederalHoliday[] = useMemo(() => {
+    if (!selectedDate) return [];
+    return holidays.filter((h) => isSameDay(h.date, selectedDate));
+  }, [holidays, selectedDate]);
+
   // Group into weeks
   const weeks: Date[][] = [];
   for (let i = 0; i < days.length; i += 7) weeks.push(days.slice(i, i + 7));
@@ -292,6 +309,7 @@ export default function CalendarScreen() {
                     const isToday = isSameDay(day, today);
                     const isSelected = selectedDate ? isSameDay(day, selectedDate) : false;
                     const hasTask = inMonth ? getTasksForDay(day).length > 0 : false;
+                    const isHoliday = holidays.some((h) => isSameDay(h.date, day));
 
                     return (
                       <Pressable
@@ -323,9 +341,15 @@ export default function CalendarScreen() {
                             {day.getDate()}
                           </Text>
                         </View>
-                        {/* Task dot */}
-                        {hasTask && !isToday ? (
-                          <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: "#10B981", marginTop: 2 }} />
+                        {(hasTask && !isToday) || isHoliday ? (
+                          <View style={{ flexDirection: "row", gap: 2, alignItems: "center", marginTop: 2 }}>
+                            {hasTask && !isToday ? (
+                              <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: "#10B981" }} />
+                            ) : null}
+                            {isHoliday ? (
+                              <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: "#EF4444" }} />
+                            ) : null}
+                          </View>
                         ) : null}
                       </Pressable>
                     );
@@ -419,6 +443,10 @@ export default function CalendarScreen() {
             <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#10B981" }} />
             <Text style={{ fontSize: 11, color: "#64748B" }}>Your tasks</Text>
           </View>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#EF4444" }} />
+            <Text style={{ fontSize: 11, color: "#64748B" }}>Federal holidays</Text>
+          </View>
           {isOwnerOrLeader ? (
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
               <UserRound size={10} color="#94A3B8" />
@@ -450,13 +478,27 @@ export default function CalendarScreen() {
               <View style={{ alignItems: "center", paddingVertical: 24 }} testID="loading-indicator">
                 <ActivityIndicator color="#4361EE" />
               </View>
-            ) : selectedEvents.length === 0 && selectedTasks.length === 0 ? (
+            ) : selectedEvents.length === 0 && selectedTasks.length === 0 && selectedHolidays.length === 0 ? (
               <View style={{ backgroundColor: "white", borderRadius: 14, padding: 24, alignItems: "center", shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 4, shadowOffset: { width: 0, height: 1 }, elevation: 1 }} testID="empty-day-state">
                 <Calendar size={28} color="#CBD5E1" />
                 <Text style={{ color: "#94A3B8", marginTop: 8, fontSize: 14 }}>Nothing scheduled</Text>
               </View>
             ) : (
               <View style={{ gap: 8 }}>
+                {selectedHolidays.map((h) => (
+                  <View
+                    key={h.name}
+                    style={{ backgroundColor: "#FEF2F2", borderRadius: 14, padding: 14, borderLeftWidth: 4, borderLeftColor: "#EF4444", flexDirection: "row", alignItems: "center", gap: 10, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 4, shadowOffset: { width: 0, height: 1 }, elevation: 1 }}
+                    testID={`holiday-${h.name}`}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 14, fontWeight: "700", color: "#0F172A" }} numberOfLines={1}>
+                        {h.name}
+                      </Text>
+                      <Text style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>Federal holiday</Text>
+                    </View>
+                  </View>
+                ))}
                 {selectedEvents.map((event) => (
                   <Pressable
                     key={event.id}

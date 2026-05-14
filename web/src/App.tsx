@@ -6,8 +6,10 @@ import { BillingPage } from "./routes/BillingPage";
 import { ChatPage } from "./routes/ChatPage";
 import { CreateTaskPage } from "./routes/CreateTaskPage";
 import { DashboardPage } from "./routes/DashboardPage";
+import { EnterpriseShellLayout } from "./routes/EnterpriseShellLayout";
 import { TaskDetailPage } from "./routes/TaskDetailPage";
 import { TeamPage } from "./routes/TeamPage";
+import { ProfilePage } from "./routes/ProfilePage";
 import { ForgotPasswordPage } from "./routes/ForgotPasswordPage";
 import { LoginPage } from "./routes/LoginPage";
 import { SignUpPage } from "./routes/SignUpPage";
@@ -98,53 +100,20 @@ export default function App() {
         <Route path="/verify" element={<VerifyPage />} />
         <Route path="/" element={<WebsiteHomePage />} />
         <Route
-          path="/dashboard"
           element={
             <AuthGate>
-              <DashboardPage />
+              <EnterpriseShellLayout />
             </AuthGate>
           }
-        />
-        <Route
-          path="/activity"
-          element={
-            <AuthGate>
-              <ActivityPage />
-            </AuthGate>
-          }
-        />
-        <Route
-          path="/chat"
-          element={
-            <AuthGate>
-              <ChatPage />
-            </AuthGate>
-          }
-        />
-        <Route
-          path="/billing"
-          element={
-            <AuthGate>
-              <BillingPage />
-            </AuthGate>
-          }
-        />
-        <Route
-          path="/team"
-          element={
-            <AuthGate>
-              <TeamPage />
-            </AuthGate>
-          }
-        />
-        <Route
-          path="/tasks/new"
-          element={
-            <AuthGate>
-              <CreateTaskPage />
-            </AuthGate>
-          }
-        />
+        >
+          <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/activity" element={<ActivityPage />} />
+          <Route path="/chat" element={<ChatPage />} />
+          <Route path="/billing" element={<BillingPage />} />
+          <Route path="/team" element={<TeamPage />} />
+          <Route path="/profile" element={<ProfilePage />} />
+          <Route path="/tasks/new" element={<CreateTaskPage />} />
+        </Route>
         <Route
           path="/tasks/:taskId"
           element={

@@ -177,6 +177,7 @@ function RootLayoutNav() {
       } else if (data?.type === "join_request" || data?.type === "join_approved" || data?.type === "join_rejected") {
         queryClient.invalidateQueries({ queryKey: ["teams"] });
         queryClient.invalidateQueries({ queryKey: ["join-requests"] });
+        queryClient.invalidateQueries({ queryKey: ["team-join-requests"] });
       } else if (data?.teamId) {
         // team message, poll, etc.
         queryClient.invalidateQueries({ queryKey: ["messages"] });

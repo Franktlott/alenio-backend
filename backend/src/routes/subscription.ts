@@ -173,6 +173,14 @@ export async function getTeamSubscription(teamId: string) {
   return sub;
 }
 
+/** Team-gated product areas (tasks, activity, etc.) — aligned with web billing “team tier”. */
+export function teamSubscriptionRowHasTeamFeatures(sub: { plan: string; status: string } | null | undefined): boolean {
+  const plan = (sub?.plan ?? "free").trim().toLowerCase();
+  const status = (sub?.status ?? "active").trim().toLowerCase();
+  if (!["team", "pro"].includes(plan)) return false;
+  return ["active", "trialing", "past_due", "incomplete", "paused"].includes(status);
+}
+
 // GET /api/teams/:teamId/subscription
 subscriptionRouter.get("/", async (c) => {
   const user = c.get("user")!;

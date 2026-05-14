@@ -161,6 +161,14 @@ export function TaskDetailPage() {
     if (task && id !== task.team.id) navigate("/dashboard");
   };
 
+  /** Task routes are team-gated; leave if this workspace is on Free once teams are known. */
+  useEffect(() => {
+    if (teams === null || !workspaceId || !task) return;
+    const has = teams.find((t) => t.id === workspaceId)?.hasTeamFeatures === true;
+    if (has) return;
+    navigate("/chat", { replace: true });
+  }, [teams, workspaceId, task, navigate]);
+
   if (me === undefined) {
     return (
       <div className="enterprise-app enterprise-app-simple">
@@ -196,6 +204,13 @@ export function TaskDetailPage() {
     );
   }
 
+  const showPlanNav =
+    teams !== null && !!workspaceId && teams.find((t) => t.id === workspaceId)?.role === "owner";
+  const showActivityExecuteNav =
+    teams === null ||
+    !workspaceId ||
+    teams.find((t) => t.id === workspaceId)?.hasTeamFeatures === true;
+
   return (
     <EnterpriseLayout
       activeNav="execute"
@@ -205,6 +220,8 @@ export function TaskDetailPage() {
       user={me ?? null}
       onSignOutNavigate={(path) => navigate(path)}
       topBar={<DashboardTopBar user={me ?? null} />}
+      showPlanNav={showPlanNav}
+      showActivityExecuteNav={showActivityExecuteNav}
     >
       <div className="enterprise-dashboard-inner task-detail-page" data-testid="task-detail-screen">
         <div className="task-detail-head">

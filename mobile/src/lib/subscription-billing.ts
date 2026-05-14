@@ -10,7 +10,7 @@ export type TeamBillingContext = {
   billingSource: BillingSource | null;
   /** Raw RevenueCat store string e.g. STRIPE, APP_STORE */
   storeRaw: string | null;
-  /** RevenueCat-provided URL: Stripe Customer Portal, App Store subscriptions, Play subscriptions, etc. */
+  /** RevenueCat-provided URL: web billing portal, App Store subscriptions, Play subscriptions, etc. */
   managementURL: string | null;
 };
 
@@ -63,7 +63,7 @@ export async function getTeamBillingContext(): Promise<TeamBillingContext | null
 export function billingSourceLabel(source: BillingSource | null): string {
   switch (source) {
     case "stripe":
-      return "Web (Stripe)";
+      return "Web";
     case "app_store":
       return "App Store";
     case "play_store":
@@ -76,7 +76,7 @@ export function billingSourceLabel(source: BillingSource | null): string {
 }
 
 /**
- * Hosts allowed inside an embedded WebView for payment portals (Stripe).
+ * Hosts allowed inside an embedded WebView for payment portals (approved billing domains).
  */
 export function isStripePortalEmbedUrl(url: string): boolean {
   try {
@@ -92,7 +92,7 @@ export function isStripePortalEmbedUrl(url: string): boolean {
   }
 }
 
-/** Use in-app WebView for Stripe (and similar HTTPS portals); native store sheets for IAP. */
+/** Use in-app WebView for HTTPS billing portals; native store sheets for IAP. */
 export function shouldUseEmbeddedBillingWebView(source: BillingSource | null, url: string | null): boolean {
   if (!url) return false;
   if (source === "stripe") return isStripePortalEmbedUrl(url);

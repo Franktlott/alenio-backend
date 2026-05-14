@@ -1,19 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { DashboardTopBar } from "../components/DashboardTopBar";
-import { EnterpriseLayout } from "../components/EnterpriseLayout";
+import { useEnterpriseShell } from "../contexts/EnterpriseShellContext";
 import {
   fetchTeamActivity,
-  fetchWebMe,
   fetchWebTeam,
-  fetchWebTeams,
   postActivityCelebrate,
   postActivityReaction,
   type ActivityReactionBucket,
   type ApiActivityItem,
-  type WebMeUser,
-  type WebTeamRow,
 } from "../lib/api";
+
+/** App icon at repo `web/icon.png` (bundled by Vite). */
+import activityHeaderLogo from "../../icon.png";
 
 const REACTION_HINT_KEY = "alenio_activity_reaction_hint";
 const EMOJI_OPTIONS = ["😊", "❤️", "😂", "😮", "🔥", "🎉"];
@@ -651,12 +648,8 @@ function ActivityFeedItem({
 }
 
 export function ActivityPage() {
-  const navigate = useNavigate();
-  const [me, setMe] = useState<WebMeUser | null | undefined>(undefined);
-  const [teams, setTeams] = useState<WebTeamRow[] | null>(null);
-  const [selectedTeamId, setSelectedTeamId] = useState("");
+  const { me, teams, selectedTeamId, setSelectedTeamId, setWorkspaceMainLoading } = useEnterpriseShell();
   const [items, setItems] = useState<ApiActivityItem[]>([]);
-  const [err, setErr] = useState<string | null>(null);
   const [listErr, setListErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [openPickerId, setOpenPickerId] = useState<string | null>(null);
@@ -691,31 +684,9 @@ export function ActivityPage() {
   }, [selectedTeamId]);
 
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const [u, t] = await Promise.all([fetchWebMe(), fetchWebTeams()]);
-        if (cancelled) return;
-        setMe(u);
-        setTeams(t ?? []);
-        setErr(null);
-      } catch (e) {
-        if (cancelled) return;
-        setErr(e instanceof Error ? e.message : "Could not load.");
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!teams?.length) return;
-    setSelectedTeamId((prev) => {
-      if (prev && teams.some((t) => t.id === prev)) return prev;
-      return teams[0]!.id;
-    });
-  }, [teams]);
+    setWorkspaceMainLoading(loading);
+    return () => setWorkspaceMainLoading(false);
+  }, [loading, setWorkspaceMainLoading]);
 
   useEffect(() => {
     void loadActivity();
@@ -833,40 +804,20 @@ export function ActivityPage() {
     [],
   );
 
-  if (err) {
+  if (me === undefined) {
     return (
-      <div className="enterprise-app enterprise-app-simple">
-        <main className="enterprise-dashboard-inner">
-          <p className="auth-error">{err}</p>
-        </main>
-      </div>
-    );
-  }
-
-  if (me === undefined && !err) {
-    return (
-      <div className="enterprise-app enterprise-app-simple">
-        <main className="enterprise-dashboard-inner">
-          <p className="enterprise-muted">Loading…</p>
-        </main>
+      <div className="enterprise-dashboard-inner">
+        <p className="enterprise-muted">Loading…</p>
       </div>
     );
   }
 
   return (
-    <EnterpriseLayout
-      activeNav="activity"
-      teams={teams ?? []}
-      selectedTeamId={selectedTeamId}
-      onTeamChange={setSelectedTeamId}
-      user={me ?? null}
-      onSignOutNavigate={(path) => navigate(path)}
-      topBar={<DashboardTopBar user={me ?? null} />}
-    >
+    <>
       <div className="enterprise-dashboard-inner enterprise-activity-page" data-testid="activity-screen">
         <header className="enterprise-activity-header">
           <div className="enterprise-activity-header-inner">
-            <img src="/alenio-mark.png" alt="" className="enterprise-activity-header-logo" width={64} height={64} />
+            <img src={activityHeaderLogo} alt="Alenio" className="enterprise-activity-header-logo" />
             <div className="enterprise-activity-header-titles">
               <h1 className="enterprise-activity-h1">Activity</h1>
               <p className="enterprise-activity-sub">Team wins, celebrations, and updates from the last 7 days.</p>
@@ -1029,6 +980,6 @@ export function ActivityPage() {
           </div>
         </div>
       ) : null}
-    </EnterpriseLayout>
+    </>
   );
 }

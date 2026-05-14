@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
-import { DashboardTopBar } from "../components/DashboardTopBar";
-import { EnterpriseLayout } from "../components/EnterpriseLayout";
+import { useLocation, useNavigate } from "react-router-dom";
+import { useEnterpriseShell } from "../contexts/EnterpriseShellContext";
 import {
   computeWeekBars,
   getDaysInMonth,
@@ -9,16 +8,15 @@ import {
   isSameDay,
   startOfDay,
 } from "../lib/calendar-mobile-parity";
+import { getUSHolidays } from "../lib/us-federal-holidays";
 import {
   createWebTask,
   createWebTeamEvent,
   createVideoRoom,
   deleteWebTeamEvent,
   fetchCoreTeamTasks,
-  fetchWebMe,
   fetchWebTeam,
   fetchWebTeamEvents,
-  fetchWebTeams,
   fetchWebTeamTasks,
   fetchUpcomingVideoMeetings,
   updateWebTeamEvent,
@@ -119,12 +117,9 @@ const STATUSES = [
 export function DashboardPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const [me, setMe] = useState<WebMeUser | null | undefined>(undefined);
-  const [teams, setTeams] = useState<WebTeamRow[] | null>(null);
-  const [selectedTeamId, setSelectedTeamId] = useState("");
+  const { me, teams, selectedTeamId, setSelectedTeamId, setWorkspaceMainLoading } = useEnterpriseShell();
   const [tasks, setTasks] = useState<ApiTask[]>([]);
   const [events, setEvents] = useState<ApiCalendarEvent[]>([]);
-  const [loadErr, setLoadErr] = useState<string | null>(null);
   const [tasksErr, setTasksErr] = useState<string | null>(null);
   const [teamDataLoading, setTeamDataLoading] = useState(false);
   const [calendarView, setCalendarView] = useState(() => new Date());
@@ -182,34 +177,9 @@ export function DashboardPage() {
   }, [location.hash]);
 
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const [u, t] = await Promise.all([fetchWebMe(), fetchWebTeams()]);
-        if (cancelled) return;
-        setMe(u);
-        setTeams(t ?? []);
-        setLoadErr(null);
-      } catch (e) {
-        if (cancelled) return;
-        setLoadErr(e instanceof Error ? e.message : "Could not load data.");
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!teams?.length) {
-      setSelectedTeamId("");
-      return;
-    }
-    setSelectedTeamId((prev) => {
-      if (prev && teams.some((t) => t.id === prev)) return prev;
-      return teams[0]!.id;
-    });
-  }, [teams]);
+    setWorkspaceMainLoading(!!selectedTeamId && teamDataLoading);
+    return () => setWorkspaceMainLoading(false);
+  }, [selectedTeamId, teamDataLoading, setWorkspaceMainLoading]);
 
   useEffect(() => {
     if (!selectedTeamId) return;
@@ -371,6 +341,22 @@ export function DashboardPage() {
     return w;
   }, [calDays]);
 
+  const holidayYears = useMemo(() => {
+    const ys = new Set<number>();
+    for (const d of calDays) ys.add(d.getFullYear());
+    return ys;
+  }, [calDays]);
+
+  const holidays = useMemo(
+    () => [...holidayYears].sort((a, b) => a - b).flatMap((y) => getUSHolidays(y)),
+    [holidayYears],
+  );
+
+  const selectedHolidays = useMemo(() => {
+    if (!selectedDate) return [];
+    return holidays.filter((h) => isSameDay(h.date, selectedDate));
+  }, [holidays, selectedDate]);
+
   const selectedEvents = selectedDate ? getEventsForDay(selectedDate) : [];
   const selectedTasks = selectedDate ? getTasksForDay(selectedDate) : [];
 
@@ -438,40 +424,18 @@ export function DashboardPage() {
     }
   };
 
-  if (loadErr) {
+  if (me === undefined) {
     return (
-      <div className="enterprise-app enterprise-app-simple">
-        <main className="enterprise-dashboard-inner">
-          <p className="auth-error" data-testid="dashboard-error">
-            {loadErr}
-          </p>
-        </main>
-      </div>
-    );
-  }
-
-  if (me === undefined && !loadErr) {
-    return (
-      <div className="enterprise-app enterprise-app-simple">
-        <main className="enterprise-dashboard-inner">
-          <p className="enterprise-muted" data-testid="dashboard-loading">
-            Loading…
-          </p>
-        </main>
+      <div className="enterprise-dashboard-inner">
+        <p className="enterprise-muted" data-testid="dashboard-loading">
+          Loading…
+        </p>
       </div>
     );
   }
 
   return (
-    <EnterpriseLayout
-      activeNav="execute"
-      teams={teams ?? []}
-      selectedTeamId={selectedTeamId}
-      onTeamChange={setSelectedTeamId}
-      user={me ?? null}
-      onSignOutNavigate={(path) => navigate(path)}
-      topBar={<DashboardTopBar user={me ?? null} />}
-    >
+    <>
       <div className="enterprise-dashboard-inner" data-testid="dashboard-screen">
         {tasksErr ? (
           <p className="enterprise-banner-warn" role="status">
@@ -549,6 +513,7 @@ export function DashboardPage() {
                           const isToday = isSameDay(day, now);
                           const isSelected = selectedDate ? isSameDay(day, selectedDate) : false;
                           const hasTask = inMonth && getTasksForDay(day).length > 0;
+                          const isHoliday = holidays.some((h) => isSameDay(h.date, day));
                           return (
                             <button
                               key={dayIndex}
@@ -562,8 +527,11 @@ export function DashboardPage() {
                               >
                                 <span className="enterprise-cal-daynum">{day.getDate()}</span>
                               </span>
-                              {hasTask && !isToday ? (
-                                <span className="enterprise-cal-task-dot" title="Your tasks due this day" />
+                              {(hasTask && !isToday) || isHoliday ? (
+                                <span className="enterprise-cal-day-dots" aria-hidden>
+                                  {hasTask && !isToday ? <span className="enterprise-cal-task-dot" title="Your tasks due this day" /> : null}
+                                  {isHoliday ? <span className="enterprise-cal-holiday-dot" title="US federal holiday" /> : null}
+                                </span>
                               ) : null}
                             </button>
                           );
@@ -637,6 +605,10 @@ export function DashboardPage() {
                   <span className="enterprise-cal-legend-dot" />
                   <span>Your tasks</span>
                 </div>
+                <div className="enterprise-cal-legend-item">
+                  <span className="enterprise-cal-legend-holiday" />
+                  <span>Federal holidays</span>
+                </div>
                 {isOwnerOrLeader ? (
                   <div className="enterprise-cal-legend-item">
                     <span className="enterprise-cal-legend-incog" aria-hidden>
@@ -656,12 +628,21 @@ export function DashboardPage() {
                   </div>
                   {teamDataLoading ? (
                     <div className="enterprise-cal-day-loading">Loading…</div>
-                  ) : selectedEvents.length === 0 && selectedTasks.length === 0 ? (
+                  ) : selectedEvents.length === 0 && selectedTasks.length === 0 && selectedHolidays.length === 0 ? (
                     <div className="enterprise-cal-day-empty">
                       <p>Nothing scheduled</p>
                     </div>
                   ) : (
                     <div className="enterprise-cal-day-list">
+                      {selectedHolidays.map((h) => (
+                        <div key={h.name} className="enterprise-cal-day-holiday" data-testid={`holiday-${h.name}`}>
+                          <div className="enterprise-cal-day-holiday-accent" aria-hidden />
+                          <div>
+                            <div className="enterprise-cal-day-holiday-name">{h.name}</div>
+                            <div className="enterprise-cal-day-holiday-sub">Federal holiday</div>
+                          </div>
+                        </div>
+                      ))}
                       {selectedEvents.map((event) => (
                         <div
                           key={event.id}
@@ -920,20 +901,6 @@ export function DashboardPage() {
                 </tbody>
               </table>
             </div>
-            <Link to="/chat" className="enterprise-card-link">
-              View all in chat & team context <span aria-hidden>→</span>
-            </Link>
-          </section>
-        </div>
-
-        <div id="settings" className="enterprise-dashboard-settings">
-          <section className="enterprise-card">
-            <h2 className="enterprise-card-title enterprise-card-title-spaced">Settings</h2>
-            <p className="enterprise-muted">
-              Open <Link to="/team">Team</Link> for members and invites. Manage your <strong>Team</strong> plan and Stripe billing from{" "}
-              <Link to="/billing">Plan</Link> in the sidebar. Other options remain in the mobile app. Use <strong>Sign out</strong> in the
-              sidebar to leave this session.
-            </p>
           </section>
         </div>
       </div>
@@ -1438,7 +1405,7 @@ export function DashboardPage() {
           </div>
         </div>
       ) : null}
-    </EnterpriseLayout>
+    </>
   );
 }
 

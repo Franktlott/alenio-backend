@@ -137,11 +137,11 @@ export function SignUpPage() {
           <h1 className="auth-v2-hero-title">
             Create your workspace.
             <br />
-            <span>Billing runs on Stripe — same plan, web or mobile.</span>
+            <span>Same plan on web and mobile.</span>
           </h1>
           <p className="auth-v2-hero-copy">
-            After you verify your email, you&apos;ll start Stripe checkout for the Team plan. The mobile app will recognize
-            this subscription and open Stripe for changes — not the App Store.
+            After you verify your email, you&apos;ll complete checkout for the Team plan on the web. Manage or change
+            the plan from there — subscriptions started in the mobile app use the App Store instead.
           </p>
         </div>
       </section>

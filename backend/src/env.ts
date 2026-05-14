@@ -31,10 +31,10 @@ const envSchema = z.object({
   REVENUECAT_SECRET_KEY: z.string().optional(),
   REVENUECAT_TEAM_ENTITLEMENT_ID: z.string().optional().default("Team"),
   REVENUECAT_WEBHOOK_AUTH_TOKEN: z.string().optional(),
-  /** Stripe (optional; required for web team checkout + Customer Portal) */
+  /** Optional: web Team checkout and customer portal (secret key and price id below) */
   STRIPE_SECRET_KEY: z.string().optional(),
   STRIPE_WEBHOOK_SECRET: z.string().optional(),
-  /** Recurring price ID for the Team plan (Stripe Dashboard → Products) */
+  /** Recurring price ID for the Team plan (from your payment provider dashboard) */
   STRIPE_TEAM_PRICE_ID: z.string().optional(),
   /**
    * Public origin of the enterprise web app (no trailing slash), e.g. https://your-app.web.app

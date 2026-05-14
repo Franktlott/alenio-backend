@@ -71,7 +71,7 @@ export function mountWebStripeBilling(webRouter: Hono): void {
         {
           error: {
             message:
-              "Stripe checkout is not configured (need STRIPE_SECRET_KEY, STRIPE_TEAM_PRICE_ID, WEB_PUBLIC_URL)",
+              "Web checkout is not configured (need STRIPE_SECRET_KEY, STRIPE_TEAM_PRICE_ID, WEB_PUBLIC_URL)",
             code: "NOT_CONFIGURED",
           },
         },
@@ -105,7 +105,7 @@ export function mountWebStripeBilling(webRouter: Hono): void {
       return c.json(
         {
           error: {
-            message: "This team already has an active Stripe subscription. Use Manage billing.",
+            message: "This team already has an active web subscription. Use Manage billing.",
             code: "ALREADY_SUBSCRIBED",
           },
         },
@@ -122,7 +122,7 @@ export function mountWebStripeBilling(webRouter: Hono): void {
         {
           error: {
             message:
-              "This team’s subscription is managed in the mobile app (App Store). Web checkout is only for teams billed through Stripe.",
+              "This team’s subscription is managed in the mobile app (App Store). Web checkout is only for teams billed on the web.",
             code: "MOBILE_MANAGED",
           },
         },
@@ -170,7 +170,7 @@ export function mountWebStripeBilling(webRouter: Hono): void {
       return c.json(
         {
           error: {
-            message: "Stripe portal is not configured (need STRIPE_SECRET_KEY and WEB_PUBLIC_URL)",
+            message: "Billing portal is not configured (need STRIPE_SECRET_KEY and WEB_PUBLIC_URL)",
             code: "NOT_CONFIGURED",
           },
         },
@@ -199,7 +199,7 @@ export function mountWebStripeBilling(webRouter: Hono): void {
       subRow.stripeCustomerId?.trim() || (await ensureStripeCustomerIdForTeam(teamId))?.trim() || null;
     if (!customerId) {
       return c.json(
-        { error: { message: "No Stripe customer for this team yet. Subscribe on the web first.", code: "NO_CUSTOMER" } },
+        { error: { message: "No billing customer for this team yet. Subscribe on the web first.", code: "NO_CUSTOMER" } },
         400,
       );
     }
@@ -216,12 +216,12 @@ export function mountWebStripeBilling(webRouter: Hono): void {
     return c.json({ data: { url: portal.url } });
   });
 
-  /** Owner: pull subscription state from Stripe into Postgres (missed webhooks, legacy checkouts). */
+  /** Owner: pull subscription state from billing into Postgres (missed webhooks, legacy checkouts). */
   webRouter.post("/api/billing/reconcile-subscription", async (c) => {
     const session = await getWebSession(c);
     if (!session) return c.json({ error: "Unauthorized" }, 401);
     if (!getStripeClient()) {
-      return c.json({ error: { message: "Stripe not configured", code: "NOT_CONFIGURED" } }, 503);
+      return c.json({ error: { message: "Billing is not configured", code: "NOT_CONFIGURED" } }, 503);
     }
     const body = await c.req.json().catch(() => ({})) as { teamId?: string };
     const teamId = typeof body.teamId === "string" ? body.teamId.trim() : "";
@@ -233,7 +233,7 @@ export function mountWebStripeBilling(webRouter: Hono): void {
       return c.json({ error: { message: "Not a team member of this workspace", code: "FORBIDDEN" } }, 403);
     }
     if (membership.role !== "owner") {
-      return c.json({ error: { message: "Only the team owner can sync billing from Stripe", code: "FORBIDDEN" } }, 403);
+      return c.json({ error: { message: "Only the team owner can sync billing", code: "FORBIDDEN" } }, 403);
     }
     const reconcile = await reconcileTeamStripeSubscription(teamId);
     const fresh = await getTeamSubscription(teamId);

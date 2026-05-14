@@ -20,7 +20,7 @@ type Props = {
 };
 
 /**
- * Secure billing portal: HTTPS Stripe (and stripe.*) only; no arbitrary URLs.
+ * Secure billing portal: approved HTTPS billing hosts only; no arbitrary URLs.
  */
 export function BillingPortalWebViewModal({ visible, url, onClose }: Props) {
   const scheme = useColorScheme();
