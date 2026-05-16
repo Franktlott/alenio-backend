@@ -24,7 +24,7 @@ export function LoginPage() {
   }, []);
 
   if (existing && looksLikeJwt(existing) && !isJwtExpiredSkew(existing)) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to="/chat" replace />;
   }
 
   const [email, setEmail] = useState("");
@@ -78,7 +78,7 @@ export function LoginPage() {
         return;
       }
       await syncBackendUser();
-      window.location.href = "/dashboard";
+      window.location.href = "/chat";
     } catch (err) {
       setError(formatAuthFlowError(err));
     } finally {

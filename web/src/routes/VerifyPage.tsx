@@ -16,7 +16,6 @@ const WORKSPACE_STORAGE_KEY = "alenio_web_signup_workspace";
 export function VerifyPage() {
   const [params] = useSearchParams();
   const email = useMemo(() => (params.get("email") ?? "").trim().toLowerCase(), [params]);
-  const nextStep = useMemo(() => (params.get("next") ?? "").trim().toLowerCase(), [params]);
   const workspaceFromUrl = useMemo(() => (params.get("workspace") ?? "").trim(), [params]);
   const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(false);
@@ -58,32 +57,28 @@ export function VerifyPage() {
       setAccessTokenFromAuthData(result.data ?? null);
       const sessionReady = await ensureWebSessionAndToken();
       if (!sessionReady) {
-        setError("Verified, but session did not start. Try signing in, then open Plan from the sidebar.");
+        setError("Verified, but session did not start. Try signing in, then open Chat from the sidebar.");
         return;
       }
       await syncBackendUser();
-      if (nextStep === "billing") {
-        const ws =
-          sessionStorage.getItem(WORKSPACE_STORAGE_KEY)?.trim() ||
-          workspaceFromUrl ||
-          "";
-        if (!ws) {
-          setError(
-            "No workspace name found. Go back to sign-up and try again, or create a workspace from Team after you sign in.",
-          );
-          return;
-        }
+      const ws =
+        sessionStorage.getItem(WORKSPACE_STORAGE_KEY)?.trim() ||
+        workspaceFromUrl ||
+        "";
+      if (ws) {
         try {
           await createWebTeam(ws);
         } catch (ce) {
-          setError(ce instanceof Error ? ce.message : "Could not create your workspace. Try again or create a team from Team.");
+          setError(
+            ce instanceof Error
+              ? ce.message
+              : "Could not create your workspace. Try again or create a team from Team.",
+          );
           return;
         }
         sessionStorage.removeItem(WORKSPACE_STORAGE_KEY);
-        window.location.href = "/billing?subscribe=1";
-        return;
       }
-      window.location.href = "/dashboard";
+      window.location.href = "/chat";
     } catch (err) {
       setError(formatAuthFlowError(err));
     } finally {

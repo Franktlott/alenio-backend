@@ -25,7 +25,7 @@ export function SignUpPage() {
   }, []);
 
   if (existing && looksLikeJwt(existing) && !isJwtExpiredSkew(existing)) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to="/chat" replace />;
   }
 
   const [name, setName] = useState("");
@@ -81,7 +81,7 @@ export function SignUpPage() {
           }
           sessionStorage.setItem(WORKSPACE_STORAGE_KEY, ws);
           clearAccessToken();
-          window.location.href = `/verify?email=${encodeURIComponent(emailNorm)}&next=billing&workspace=${encodeURIComponent(ws)}`;
+          window.location.href = `/verify?email=${encodeURIComponent(emailNorm)}&workspace=${encodeURIComponent(ws)}`;
           return;
         }
         setError(result.error.message ?? "Could not create account.");
@@ -103,7 +103,7 @@ export function SignUpPage() {
         }
         sessionStorage.setItem(WORKSPACE_STORAGE_KEY, ws);
         clearAccessToken();
-        window.location.href = `/verify?email=${encodeURIComponent(emailNorm)}&next=billing&workspace=${encodeURIComponent(ws)}`;
+        window.location.href = `/verify?email=${encodeURIComponent(emailNorm)}&workspace=${encodeURIComponent(ws)}`;
         return;
       }
 
@@ -120,7 +120,7 @@ export function SignUpPage() {
         return;
       }
       sessionStorage.removeItem(WORKSPACE_STORAGE_KEY);
-      window.location.href = "/billing?subscribe=1";
+      window.location.href = "/chat";
     } catch (err) {
       setError(formatAuthFlowError(err));
     } finally {
@@ -141,8 +141,8 @@ export function SignUpPage() {
             <span>Same plan on web and mobile.</span>
           </h1>
           <p className="auth-v2-hero-copy">
-            After you verify your email, you&apos;ll complete checkout for the Team plan on the web. Manage or change
-            the plan from there — subscriptions started in the mobile app use the App Store instead.
+            Start in Chat right away. Upgrade to the Team plan anytime from Plan in the sidebar — subscriptions started
+            in the mobile app use the App Store instead.
           </p>
         </div>
       </section>
@@ -216,7 +216,7 @@ export function SignUpPage() {
               </p>
             ) : null}
             <button type="submit" className="auth-btn-primary" disabled={loading} data-testid="sign-up-submit">
-              {loading ? "Creating…" : "Continue to email verification & billing"}
+              {loading ? "Creating…" : "Create account"}
             </button>
           </form>
           <p className="auth-v2-footnote" style={{ marginTop: "0.75rem" }}>

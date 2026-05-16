@@ -130,7 +130,7 @@ export default function App() {
             </AuthGate>
           }
         />
-        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        <Route path="*" element={<Navigate to="/chat" replace />} />
       </Routes>
     </BrowserRouter>
   );
