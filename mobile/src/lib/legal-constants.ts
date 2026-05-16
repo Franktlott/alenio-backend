@@ -1,6 +1,10 @@
-/** Single source of truth for in-app legal screens (keep in sync with product and support). */
-export const LEGAL_LAST_UPDATED = "April 27, 2026";
+/** Single source of truth for in-app legal screens (keep in sync with product, web, and support). */
+export const LEGAL_LAST_UPDATED = "May 9, 2026";
 export const LEGAL_APP_NAME = "Alenio";
-export const LEGAL_COMPANY_NAME = "Lott Technologies Group, LLC";
-/** Must match support/operational contact (e.g. backend feedback route). */
-export const LEGAL_CONTACT_EMAIL = "info@lotttechnologies.com";
+export const LEGAL_COMPANY_NAME = "Alenio Insights, LLC";
+/** Parent company (disclosed in legal documents and UI). */
+export const LEGAL_PARENT_COMPANY_NAME = "Lott Technologies Group, LLC";
+/** Public website (enterprise app and marketing). */
+export const LEGAL_WEBSITE_LABEL = "alenio.app";
+/** Must match support/operational contact where applicable. */
+export const LEGAL_CONTACT_EMAIL = "info@alenio.app";

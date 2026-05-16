@@ -10,23 +10,12 @@ import {
   type WebTeamRow,
   type WebTeamSubscription,
 } from "../lib/api";
+import { FREE_INCLUDED, FREE_LOCKED, TEAM_FEATURES } from "../lib/plan-catalog";
 
 function planLabel(plan: string): string {
   if (plan === "team" || plan === "pro") return "Team";
   return "Free";
 }
-
-const FREE_INCLUDED = ["Activity feed", "Team chat", "Team members"] as const;
-const FREE_LOCKED = ["Tasks & action items", "Metrics & dashboards", "Team calendar", "Performance insights"] as const;
-const TEAM_FEATURES = [
-  "Tasks & action items",
-  "Team calendar",
-  "Metrics & dashboards",
-  "Workflow execution",
-  "Performance insights",
-  "Celebrations & shoutouts",
-  "Priority support",
-] as const;
 
 function IconCheck({ className }: { className?: string }) {
   return (
@@ -83,16 +72,21 @@ export function BillingPage() {
   const [busy, setBusy] = useState(false);
   const [checkoutCfg, setCheckoutCfg] = useState<{ configured: boolean; missingKeys: string[] } | null>(null);
   const autoCheckoutStarted = useRef(false);
+  /** Team id for which `sub` was last loaded successfully (enables silent background refresh). */
+  const loadedSubTeamIdRef = useRef<string | null>(null);
 
   const billingFlash = params.get("billing");
+  /** True only on first load / workspace switch / retry after error — not on 35s poll or focus refresh. */
+  const showPlanLoading = subLoading && !sub;
 
   useEffect(() => {
-    setWorkspaceMainLoading(subLoading);
+    setWorkspaceMainLoading(showPlanLoading);
     return () => setWorkspaceMainLoading(false);
-  }, [subLoading, setWorkspaceMainLoading]);
+  }, [showPlanLoading, setWorkspaceMainLoading]);
 
   useEffect(() => {
     if (!selectedTeamId) {
+      loadedSubTeamIdRef.current = null;
       setSub(null);
       setSubErr(null);
       setSubLoading(false);
@@ -101,6 +95,7 @@ export function BillingPage() {
     if (teams !== null) {
       const row = teams.find((t) => t.id === selectedTeamId);
       if (!row || row.role !== "owner") {
+        loadedSubTeamIdRef.current = null;
         setSub(null);
         setSubErr(null);
         setSubLoading(false);
@@ -108,26 +103,34 @@ export function BillingPage() {
       }
     }
     if (teams && !teams.some((t) => t.id === selectedTeamId)) {
+      loadedSubTeamIdRef.current = null;
       setSub(null);
       setSubErr("That workspace is not in your team list. Pick another workspace above.");
       setSubLoading(false);
       return;
     }
+    const silentRefresh = loadedSubTeamIdRef.current === selectedTeamId;
     let cancelled = false;
-    setSubLoading(true);
-    setSubErr(null);
+    if (!silentRefresh) {
+      setSubLoading(true);
+      setSubErr(null);
+      setSub(null);
+    }
     (async () => {
       try {
         const s = await fetchWebTeamSubscription(selectedTeamId);
         if (cancelled) return;
         setSub(s);
         setSubErr(null);
+        loadedSubTeamIdRef.current = selectedTeamId;
       } catch (e) {
         if (cancelled) return;
+        if (silentRefresh) return;
+        loadedSubTeamIdRef.current = null;
         setSub(null);
         setSubErr(e instanceof Error ? e.message : "Could not load subscription.");
       } finally {
-        if (!cancelled) setSubLoading(false);
+        if (!cancelled && !silentRefresh) setSubLoading(false);
       }
     })();
     return () => {
@@ -256,7 +259,7 @@ export function BillingPage() {
   useEffect(() => {
     const subscribe = params.get("subscribe");
     if (subscribe !== "1") return;
-    if (!teams?.length || !selectedTeamId || !isOwner || subLoading || subErr || sub === null) return;
+    if (!teams?.length || !selectedTeamId || !isOwner || showPlanLoading || subErr || sub === null) return;
     if (checkoutCfg === null) return;
     if (!checkoutCfg.configured) {
       setParams(
@@ -342,7 +345,7 @@ export function BillingPage() {
 
         {/* Hero */}
         <header style={{ textAlign: "center", marginBottom: 8 }}>
-          {subLoading ? (
+          {showPlanLoading ? (
             <p className="enterprise-muted" style={{ marginBottom: 12 }}>
               Loading plan…
             </p>
@@ -354,7 +357,7 @@ export function BillingPage() {
             Simple pricing. No hidden fees. Cancel anytime. Subscriptions are per workspace — only the{" "}
             <strong>owner</strong> can start checkout or open the billing portal.
           </p>
-          {!subLoading && sub && subscriptionLine(sub, stripeActive) ? (
+          {!showPlanLoading && sub && subscriptionLine(sub, stripeActive) ? (
             <p className="enterprise-muted" style={{ fontSize: 14, marginTop: 4 }}>
               {subscriptionLine(sub, stripeActive)}
             </p>
@@ -389,8 +392,8 @@ export function BillingPage() {
             className="enterprise-card"
             style={{
               margin: 0,
-              borderWidth: currentPlanTier === "free" && sub && !subLoading ? 2 : 1,
-              borderColor: currentPlanTier === "free" && sub && !subLoading ? "#64748b" : undefined,
+              borderWidth: currentPlanTier === "free" && sub && !showPlanLoading ? 2 : 1,
+              borderColor: currentPlanTier === "free" && sub && !showPlanLoading ? "#64748b" : undefined,
             }}
             aria-labelledby="billing-free-heading"
           >
@@ -403,7 +406,7 @@ export function BillingPage() {
                   Perfect for teams getting started
                 </p>
               </div>
-              {currentPlanTier === "free" && sub && !subLoading ? (
+              {currentPlanTier === "free" && sub && !showPlanLoading ? (
                 <span
                   style={{
                     fontSize: 10,
@@ -492,7 +495,7 @@ export function BillingPage() {
             }}
             aria-labelledby="billing-team-heading"
           >
-            {currentPlanTier !== "team" || subLoading || !sub ? (
+            {currentPlanTier !== "team" || showPlanLoading || !sub ? (
               <div
                 style={{
                   display: "inline-flex",
@@ -585,11 +588,11 @@ export function BillingPage() {
                   only by running locally.
                 </div>
               ) : null}
-              {!subLoading && sub && currentPlanTier === "team" ? (
+              {!showPlanLoading && sub && currentPlanTier === "team" ? (
                 <button type="button" className="auth-submit auth-submit--team-current" disabled>
                   Current plan
                 </button>
-              ) : !subLoading && sub ? (
+              ) : !showPlanLoading && sub ? (
                 <>
                   {showSubscribeCta ? (
                     <button
@@ -617,7 +620,7 @@ export function BillingPage() {
                 </>
               ) : (
                 <p className="enterprise-muted" style={{ margin: 0 }}>
-                  {subLoading ? "Loading…" : "—"}
+                  {showPlanLoading ? "Loading…" : "—"}
                 </p>
               )}
             </div>
@@ -629,7 +632,7 @@ export function BillingPage() {
           <h2 className="enterprise-card-title" style={{ fontSize: 16 }}>
             Billing actions
           </h2>
-          {subLoading ? (
+          {showPlanLoading ? (
             <p className="enterprise-muted">Loading subscription…</p>
           ) : sub && !subErr ? (
             <>
@@ -667,17 +670,38 @@ export function BillingPage() {
                 </p>
               ) : null}
               {mobileManaged ? (
-                <p className="enterprise-muted" style={{ marginTop: 0, marginBottom: 16 }}>
-                  This workspace is on a team plan from the mobile app (App Store). Web checkout is only for teams that subscribe on the web.
-                </p>
+                <div
+                  className="enterprise-card"
+                  style={{
+                    marginTop: 0,
+                    marginBottom: 16,
+                    padding: "16px 18px",
+                    background: "var(--surface-muted)",
+                    borderStyle: "solid",
+                    borderWidth: 1,
+                    borderColor: "var(--border)",
+                  }}
+                >
+                  <p style={{ margin: "0 0 8px", fontSize: 13, fontWeight: 600, color: "var(--text)" }}>
+                    Subscription: Mobile app (app store billing)
+                  </p>
+                  <p className="enterprise-muted" style={{ margin: 0, fontSize: 13, lineHeight: 1.6 }}>
+                    This workspace is on Team through an in-app subscription (Apple App Store or Google Play). Billing,
+                    payment methods, and plan changes for that purchase are handled by the platform—not through this web
+                    administrator. To modify or cancel, sign in on the account that bought the subscription and open that
+                    store&apos;s subscription settings (for example, <strong>Settings → Subscriptions</strong> on iOS, or
+                    Google Play → Payments &amp; subscriptions on Android). To return this workspace to Free, cancel the Team
+                    plan there; entitlement updates follow each platform&apos;s billing cycle.
+                  </p>
+                </div>
               ) : null}
             </>
           ) : !subErr ? (
             <p className="enterprise-muted">No subscription details loaded yet.</p>
           ) : null}
 
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 12, justifyContent: "center" }}>
-            {isOwner ? (
+          {isOwner && !mobileManaged ? (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 12, justifyContent: "center" }}>
               <button
                 type="button"
                 className={stripeActive || canOpenStripePortal ? "auth-submit" : "auth-link-button"}
@@ -686,30 +710,18 @@ export function BillingPage() {
                   maxWidth: 360,
                   width: "100%",
                 }}
-                disabled={busy || !canOpenStripePortal || !!subErr || subLoading}
+                disabled={busy || !canOpenStripePortal || !!subErr || showPlanLoading}
                 onClick={onPortal}
               >
                 Manage billing
               </button>
-            ) : (
+            </div>
+          ) : !isOwner ? (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 12, justifyContent: "center" }}>
               <p className="enterprise-muted" style={{ margin: 0 }}>
                 Ask a team owner to manage the subscription for this workspace.
               </p>
-            )}
-          </div>
-          {isOwner && mobileManaged ? (
-            <p
-              className="enterprise-muted"
-              style={{
-                margin: "18px 0 0",
-                fontSize: 11,
-                lineHeight: 1.45,
-                textAlign: "center",
-                color: "#94a3b8",
-              }}
-            >
-              To move to Free, cancel the team subscription in your phone’s store subscription settings.
-            </p>
+            </div>
           ) : null}
         </section>
       </div>

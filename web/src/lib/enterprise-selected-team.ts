@@ -32,6 +32,12 @@ export function isRecentFooterEnterpriseWorkspaceSelect(ms = 800) {
   return Date.now() - lastFooterWorkspaceSelectAt < ms;
 }
 
+/** Stable signature of workspace id membership — ignores new array references from refetches. */
+export function teamsWorkspaceSelectionKey(teams: TeamLike[]): string {
+  if (!teams.length) return "";
+  return [...teams.map((t) => t.id)].sort().join("|");
+}
+
 /** After a valid `prev`, use persisted id, then first team. */
 export function pickEnterpriseTeamId(teams: TeamLike[], prev: string): string {
   if (!teams.length) return "";

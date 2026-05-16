@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -21,6 +21,7 @@ import type { Task, Team } from "@/lib/types";
 import { useDemoMode } from "@/lib/useDemo";
 import { useSubscriptionStore } from "@/lib/state/subscription-store";
 import { getUSHolidays, type USFederalHoliday } from "@/lib/us-federal-holidays";
+import { eventShowsScheduledTime, formatEventTimeRange } from "@/lib/format-event-time";
 
 type CalendarEvent = {
   id: string;
@@ -59,6 +60,16 @@ function isSameDay(a: Date, b: Date): boolean {
     a.getMonth() === b.getMonth() &&
     a.getDate() === b.getDate()
   );
+}
+
+/** Same join window as MeetingBanner: leaders in the 15m pre-start window; members at 5m or after start (until end). */
+function canShowVideoJoinOnEvent(event: CalendarEvent, now: number, isOwnerOrLeader: boolean): boolean {
+  if (!event.isVideoMeeting) return false;
+  const startMs = new Date(event.startDate).getTime();
+  const endMs = event.endDate ? new Date(event.endDate).getTime() : startMs + 60 * 60 * 1000;
+  const msUntilStart = startMs - now;
+  if (now >= endMs || msUntilStart > 15 * 60 * 1000) return false;
+  return isOwnerOrLeader || msUntilStart <= 5 * 60 * 1000;
 }
 
 function startOfDay(d: Date): Date {
@@ -227,6 +238,18 @@ export default function CalendarScreen() {
   const selectedEvents = selectedDate ? getEventsForDay(selectedDate) : [];
   const selectedTasks = selectedDate ? getTasksForDay(selectedDate) : [];
   const isLoading = eventsLoading || tasksLoading;
+
+  const selectedHasVideoMeeting = useMemo(
+    () => selectedEvents.some((e) => e.isVideoMeeting),
+    [selectedEvents],
+  );
+  const [meetingNow, setMeetingNow] = useState(Date.now());
+
+  useEffect(() => {
+    if (!selectedHasVideoMeeting) return;
+    const id = setInterval(() => setMeetingNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [selectedHasVideoMeeting]);
 
   const [refreshing, setRefreshing] = useState(false);
 
@@ -499,50 +522,126 @@ export default function CalendarScreen() {
                     </View>
                   </View>
                 ))}
-                {selectedEvents.map((event) => (
-                  <Pressable
-                    key={event.id}
-                    onPress={() => {
-                      if (isOwnerOrLeader) {
-                        router.push({ pathname: "/create-event", params: { teamId: activeTeamId!, eventId: event.id, eventTitle: event.title, eventDescription: event.description ?? "", eventColor: event.color, startDate: event.startDate, eventEndDate: event.endDate ?? event.startDate, eventIsHidden: String(event.isHidden ?? false), eventIsVideoMeeting: String(event.isVideoMeeting ?? false) } });
-                      }
-                    }}
-                    style={{ backgroundColor: "white", borderRadius: 14, padding: 14, borderLeftWidth: 4, borderLeftColor: event.color, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 4, shadowOffset: { width: 0, height: 1 }, elevation: 1 }}
-                    testID={`event-item-${event.id}`}
-                  >
-                    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                      <View style={{ flexDirection: "row", alignItems: "center", flex: 1, gap: 6 }}>
-                        <Text style={{ fontSize: 14, fontWeight: "700", color: "#0F172A", flex: 1 }} numberOfLines={1}>{event.title}</Text>
-                        {event.isVideoMeeting ? <Video size={13} color="#4361EE" /> : null}
-                      </View>
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                        {!event.isHidden ? (
-                          <View style={{ flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: "#DCFCE7", paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10 }}>
-                            <Globe size={9} color="#16A34A" />
-                            <Text style={{ fontSize: 10, fontWeight: "700", color: "#16A34A" }}>Public</Text>
+                {selectedEvents.map((event) => {
+                  const showJoin = canShowVideoJoinOnEvent(event, meetingNow, isOwnerOrLeader);
+                  const cardStyle = {
+                    backgroundColor: "white" as const,
+                    borderRadius: 14,
+                    padding: 14,
+                    borderLeftWidth: 4,
+                    borderLeftColor: event.color,
+                    shadowColor: "#000",
+                    shadowOpacity: 0.04,
+                    shadowRadius: 4,
+                    shadowOffset: { width: 0, height: 1 },
+                    elevation: 1,
+                  };
+                  const openEventEdit = () =>
+                    router.push({
+                      pathname: "/create-event",
+                      params: {
+                        teamId: activeTeamId!,
+                        eventId: event.id,
+                        eventTitle: event.title,
+                        eventDescription: event.description ?? "",
+                        eventColor: event.color,
+                        startDate: event.startDate,
+                        eventEndDate: event.endDate ?? event.startDate,
+                        eventIsHidden: String(event.isHidden ?? false),
+                        eventIsVideoMeeting: String(event.isVideoMeeting ?? false),
+                      },
+                    });
+                  const titleBlock = (
+                    <View style={{ flexDirection: "row", alignItems: "center", flex: 1, gap: 6, minWidth: 0 }}>
+                      <Text style={{ fontSize: 14, fontWeight: "700", color: "#0F172A", flex: 1 }} numberOfLines={1}>
+                        {event.title}
+                      </Text>
+                      {event.isVideoMeeting ? <Video size={13} color="#4361EE" /> : null}
+                    </View>
+                  );
+                  return (
+                    <View key={event.id} style={cardStyle} testID={`event-item-${event.id}`}>
+                      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                        {isOwnerOrLeader ? (
+                          <Pressable
+                            onPress={openEventEdit}
+                            style={{ flex: 1, minWidth: 0 }}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Edit event ${event.title}`}
+                          >
+                            {titleBlock}
+                          </Pressable>
+                        ) : (
+                          <View style={{ flex: 1, minWidth: 0 }}>{titleBlock}</View>
+                        )}
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                          {showJoin ? (
+                            <Pressable
+                              onPress={() =>
+                                router.push({
+                                  pathname: "/video-call",
+                                  params: { roomId: event.id, roomName: event.title },
+                                })
+                              }
+                              accessibilityRole="button"
+                              accessibilityLabel={`Join video meeting, ${event.title}`}
+                              hitSlop={6}
+                              testID={`event-join-${event.id}`}
+                              focusable
+                              style={{
+                                flexDirection: "row",
+                                alignItems: "center",
+                                gap: 4,
+                                backgroundColor: "#EFF6FF",
+                                borderWidth: 1,
+                                borderColor: "#BFDBFE",
+                                paddingHorizontal: 10,
+                                paddingVertical: 6,
+                                borderRadius: 999,
+                              }}
+                            >
+                              <Video size={12} color="#4361EE" />
+                              <Text style={{ fontSize: 11, fontWeight: "700", color: "#4361EE" }}>Join</Text>
+                            </Pressable>
+                          ) : null}
+                          {!event.isHidden ? (
+                            <View style={{ flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: "#DCFCE7", paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10 }}>
+                              <Globe size={9} color="#16A34A" />
+                              <Text style={{ fontSize: 10, fontWeight: "700", color: "#16A34A" }}>Public</Text>
+                            </View>
+                          ) : null}
+                          <View style={{ backgroundColor: event.color + "20", paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 }}>
+                            <Text style={{ fontSize: 10, fontWeight: "600", color: event.color }}>
+                              {event.endDate && !isSameDay(new Date(event.startDate), new Date(event.endDate))
+                                ? `${new Date(event.startDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${new Date(event.endDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
+                                : "Event"}
+                            </Text>
                           </View>
-                        ) : null}
-                        <View style={{ backgroundColor: event.color + "20", paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 }}>
-                          <Text style={{ fontSize: 10, fontWeight: "600", color: event.color }}>
-                            {event.endDate && !isSameDay(new Date(event.startDate), new Date(event.endDate))
-                              ? `${new Date(event.startDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${new Date(event.endDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
-                              : "Event"}
-                          </Text>
                         </View>
                       </View>
+                      {eventShowsScheduledTime(event) ? (
+                        <Text
+                          style={{
+                            fontSize: 12,
+                            color: event.isVideoMeeting ? "#4361EE" : "#64748B",
+                            fontWeight: event.isVideoMeeting ? "600" : "400",
+                            marginTop: 4,
+                          }}
+                        >
+                          {formatEventTimeRange(event.startDate, event.endDate)}
+                        </Text>
+                      ) : null}
+                      {event.description ? (
+                        <Text style={{ fontSize: 12, color: "#64748B", marginTop: 4 }} numberOfLines={2}>
+                          {event.description}
+                        </Text>
+                      ) : null}
+                      {isOwnerOrLeader ? (
+                        <Text style={{ fontSize: 11, color: "#CBD5E1", marginTop: 6 }}>Tap title row to edit</Text>
+                      ) : null}
                     </View>
-                    {!event.allDay ? (
-                      <Text style={{ fontSize: 12, color: "#64748B", marginTop: 4 }}>
-                        {new Date(event.startDate).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}
-                        {event.endDate ? ` – ${new Date(event.endDate).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}` : null}
-                      </Text>
-                    ) : null}
-                    {event.description ? (
-                      <Text style={{ fontSize: 12, color: "#64748B", marginTop: 4 }} numberOfLines={2}>{event.description}</Text>
-                    ) : null}
-                    {isOwnerOrLeader ? <Text style={{ fontSize: 11, color: "#CBD5E1", marginTop: 6 }}>Tap to edit</Text> : null}
-                  </Pressable>
-                ))}
+                  );
+                })}
 
                 {selectedTasks.map((task) => (
                   <View key={task.id} style={{ backgroundColor: "white", borderRadius: 14, padding: 14, borderLeftWidth: 4, borderLeftColor: "#10B981", shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 4, shadowOffset: { width: 0, height: 1 }, elevation: 1 }} testID={`task-item-${task.id}`}>

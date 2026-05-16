@@ -219,7 +219,13 @@ export function TaskDetailPage() {
       onTeamChange={handleWorkspaceChange}
       user={me ?? null}
       onSignOutNavigate={(path) => navigate(path)}
-      topBar={<DashboardTopBar user={me ?? null} />}
+      topBar={
+        <DashboardTopBar
+          user={me ?? null}
+          pageTitle="Task"
+          workspaceName={teams?.find((t) => t.id === workspaceId)?.name ?? null}
+        />
+      }
       showPlanNav={showPlanNav}
       showActivityExecuteNav={showActivityExecuteNav}
     >

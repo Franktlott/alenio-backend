@@ -4,7 +4,8 @@ import { DashboardTopBar } from "../components/DashboardTopBar";
 import { EnterpriseLayout, type EnterpriseNavId } from "../components/EnterpriseLayout";
 import { EnterpriseShellContext, type EnterpriseShellContextValue } from "../contexts/EnterpriseShellContext";
 import { fetchWebMe, fetchWebTeams, type WebMeUser, type WebTeamRow } from "../lib/api";
-import { pickEnterpriseTeamId } from "../lib/enterprise-selected-team";
+import { pickEnterpriseTeamId, teamsWorkspaceSelectionKey } from "../lib/enterprise-selected-team";
+import { enterpriseNavTitle } from "../lib/enterprise-nav";
 
 export type EnterpriseRouteHandle = {
   enterpriseContentClassName?: string;
@@ -71,11 +72,16 @@ export function EnterpriseShellLayout() {
     };
   }, []);
 
+  const teamsWorkspaceKeyRef = useRef("");
   useEffect(() => {
     if (!teams?.length) {
+      teamsWorkspaceKeyRef.current = "";
       setSelectedTeamId("");
       return;
     }
+    const nextKey = teamsWorkspaceSelectionKey(teams);
+    if (nextKey === teamsWorkspaceKeyRef.current) return;
+    teamsWorkspaceKeyRef.current = nextKey;
     setSelectedTeamId((prev) => pickEnterpriseTeamId(teams, prev));
   }, [teams]);
 
@@ -145,12 +151,17 @@ export function EnterpriseShellLayout() {
     return picked && teams.some((t) => t.id === picked) ? picked : "";
   }, [teams, selectedTeamId]);
 
+  const topBarPageTitle = enterpriseNavTitle(activeNav);
+  const topBarWorkspaceName =
+    teams !== null && effectiveTeamId ? (teams.find((t) => t.id === effectiveTeamId)?.name ?? null) : null;
+
   const workspaceOwner =
     teams !== null && !!effectiveTeamId && teams.find((t) => t.id === effectiveTeamId)?.role === "owner";
+  /** Treat missing `hasTeamFeatures` as allowed so refetches / first paint never redirect to Chat. */
   const showActivityExecuteNav =
     teams === null ||
     !effectiveTeamId ||
-    teams.find((t) => t.id === effectiveTeamId)?.hasTeamFeatures === true;
+    teams.find((t) => t.id === effectiveTeamId)?.hasTeamFeatures !== false;
 
   /** Plan / billing is owner-only; Activity / Workspace require Team plan. Runs in layout effect so URL settles before paint (avoids replaceState thrash with Chat sync). */
   useLayoutEffect(() => {
@@ -212,7 +223,9 @@ export function EnterpriseShellLayout() {
         onTeamChange={setSelectedTeamId}
         user={me ?? null}
         onSignOutNavigate={(path) => navigate(path)}
-        topBar={<DashboardTopBar user={me ?? null} />}
+        topBar={
+          <DashboardTopBar user={me ?? null} pageTitle={topBarPageTitle} workspaceName={topBarWorkspaceName} />
+        }
         mainClassName={mainClassName}
         contentClassName={contentClassName}
         workspaceOverlayLoading={workspaceMainLoading}

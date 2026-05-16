@@ -34,6 +34,7 @@ import { NoTeamPlaceholder } from "@/components/NoTeamPlaceholder";
 import { useDemoMode, showDemoAlert } from "@/lib/useDemo";
 import { SafeKeyboardAvoidingView } from "@/lib/safe-keyboard-controller";
 import { getUSHolidays, type USFederalHoliday } from "@/lib/us-federal-holidays";
+import { formatEventTimeRange } from "@/lib/format-event-time";
 
 type FilterTab = "all" | "assigned" | "completed";
 type SortMode = "due" | "priority" | "completed";
@@ -1127,8 +1128,19 @@ export default function TasksScreen() {
                         </View>
                       </View>
                       <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                        <CalendarDays size={10} color="#64748B" />
-                        <Text style={{ fontSize: 11, color: "#64748B" }}>{dateText}</Text>
+                        {ev.isVideoMeeting ? (
+                          <>
+                            <Clock size={10} color="#4361EE" />
+                            <Text style={{ fontSize: 11, color: "#4361EE", fontWeight: "600" }}>
+                              {formatEventTimeRange(ev.startDate, ev.endDate)}
+                            </Text>
+                          </>
+                        ) : (
+                          <>
+                            <CalendarDays size={10} color="#64748B" />
+                            <Text style={{ fontSize: 11, color: "#64748B" }}>{dateText}</Text>
+                          </>
+                        )}
                       </View>
                     </View>
                   </Pressable>

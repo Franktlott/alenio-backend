@@ -155,11 +155,20 @@ export function LoginPage() {
           </form>
           <p className="auth-v2-footnote" style={{ marginTop: "0.75rem" }}>
             <Link to="/sign-up" className="auth-v2-inline-link" data-testid="login-sign-up-link">
-              Create account (web)
+              Create account
             </Link>
             {" · "}
             <Link to="/forgot-password" className="auth-v2-inline-link" data-testid="login-forgot-password">
               Forgot password?
+            </Link>
+          </p>
+          <p className="auth-v2-footnote">
+            <Link to="/privacy" className="auth-v2-inline-link">
+              Privacy Policy
+            </Link>
+            {" · "}
+            <Link to="/terms" className="auth-v2-inline-link">
+              Terms of Service
             </Link>
           </p>
           <p className="auth-v2-footnote">

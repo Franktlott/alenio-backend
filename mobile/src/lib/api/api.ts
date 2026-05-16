@@ -77,13 +77,17 @@ export const api = {
     request<{ data: T }>(url, { method: "POST", body: JSON.stringify(body), ...opts }).then((r) => r.data),
   put: <T>(url: string, body: unknown) =>
     request<{ data: T }>(url, { method: "PUT", body: JSON.stringify(body) }).then((r) => r.data),
-  delete: async <T>(url: string) => {
+  delete: async <T>(url: string, body?: unknown) => {
     let authHeaders = await getAuthHeaders();
     const doDelete = (headers: Record<string, string>) =>
       fetch(`${baseUrl}${url}`, {
         method: "DELETE",
         credentials: "include",
-        headers,
+        headers: {
+          ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
+          ...headers,
+        },
+        ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
       });
 
     let response = await doDelete(authHeaders);

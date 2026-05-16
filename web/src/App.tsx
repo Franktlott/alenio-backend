@@ -1,5 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthGate } from "./components/AuthGate";
+import { DocumentTitle } from "./components/DocumentTitle";
 import { SessionIdleGuard } from "./components/SessionIdleGuard";
 import { ActivityPage } from "./routes/ActivityPage";
 import { BillingPage } from "./routes/BillingPage";
@@ -16,7 +17,10 @@ import { SignUpPage } from "./routes/SignUpPage";
 import { ResetPasswordPage } from "./routes/ResetPasswordPage";
 import { VerifyPage } from "./routes/VerifyPage";
 import { VerifyResetCodePage } from "./routes/VerifyResetCodePage";
+import { PrivacyPolicyPage } from "./routes/PrivacyPolicyPage";
+import { TermsOfServicePage } from "./routes/TermsOfServicePage";
 import { WebsiteHomePage } from "./routes/WebsiteHomePage";
+import { PricingPage } from "./routes/PricingPage";
 
 function missingWebEnvMessage(): string | null {
   if (!import.meta.env.VITE_NEON_AUTH_URL?.trim()) {
@@ -90,6 +94,7 @@ export default function App() {
 
   return (
     <BrowserRouter>
+      <DocumentTitle />
       <SessionIdleGuard />
       <Routes>
         <Route path="/login" element={<LoginPage />} />
@@ -98,7 +103,10 @@ export default function App() {
         <Route path="/reset-password/verify" element={<VerifyResetCodePage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/verify" element={<VerifyPage />} />
+        <Route path="/privacy" element={<PrivacyPolicyPage />} />
+        <Route path="/terms" element={<TermsOfServicePage />} />
         <Route path="/" element={<WebsiteHomePage />} />
+        <Route path="/pricing" element={<PricingPage />} />
         <Route
           element={
             <AuthGate>

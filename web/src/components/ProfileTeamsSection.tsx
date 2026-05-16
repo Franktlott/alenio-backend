@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
 import {
   cancelMyJoinRequest,
+  deleteTeam,
   fetchMyJoinRequests,
   leaveTeam,
   type MyJoinRequestRow,
@@ -12,7 +12,12 @@ import { WorkspaceCreateJoinModals } from "./WorkspaceCreateJoinModals";
 type Props = {
   teams: WebTeamRow[];
   onRefresh: () => Promise<void>;
+  onWorkspaceDeleted?: (deletedId: string) => Promise<void>;
 };
+
+function isWorkspaceOwner(role: string): boolean {
+  return role === "owner";
+}
 
 function roleLabel(role: string): string {
   if (role === "owner") return "Owner";
@@ -64,14 +69,35 @@ function IconLogOut() {
   );
 }
 
-export function ProfileTeamsSection({ teams, onRefresh }: Props) {
+export function ProfileTeamsSection({ teams, onRefresh, onWorkspaceDeleted }: Props) {
   const [pending, setPending] = useState<MyJoinRequestRow[]>([]);
   const [cancelId, setCancelId] = useState<string | null>(null);
   const [leaveId, setLeaveId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<WebTeamRow | null>(null);
+  const [deletePhrase, setDeletePhrase] = useState("");
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [workspaceMenuId, setWorkspaceMenuId] = useState<string | null>(null);
   const [sectionErr, setSectionErr] = useState<string | null>(null);
   const [joinOpen, setJoinOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [joinInfo, setJoinInfo] = useState<string | null>(null);
+
+  const closeDeleteModal = () => {
+    setDeleteTarget(null);
+    setDeletePhrase("");
+    setDeletePassword("");
+  };
+
+  const deleteConfirmationReady =
+    deletePhrase.trim() === "DELETE" || deletePassword.trim().length > 0;
+
+  useEffect(() => {
+    if (!workspaceMenuId) return;
+    const close = () => setWorkspaceMenuId(null);
+    document.addEventListener("click", close);
+    return () => document.removeEventListener("click", close);
+  }, [workspaceMenuId]);
 
   const loadPending = useCallback(async () => {
     try {
@@ -108,9 +134,6 @@ export function ProfileTeamsSection({ teams, onRefresh }: Props) {
           </button>
         </div>
       </div>
-      <p className="enterprise-muted enterprise-profile-teams-team-link">
-        Manage members and invites on the <Link to="/team">Team</Link> page.
-      </p>
       {joinInfo ? (
         <p className="enterprise-no-teams-info" role="status" style={{ marginBottom: 12 }}>
           {joinInfo}
@@ -186,7 +209,42 @@ export function ProfileTeamsSection({ teams, onRefresh }: Props) {
                 </div>
                 <div className="enterprise-profile-workspace-card-actions">
                   <span className="enterprise-team-account-pill-badge">{roleLabel(t.role)}</span>
-                  {t.role === "owner" ? null : (
+                  {isWorkspaceOwner(t.role) ? (
+                    <div className="enterprise-profile-workspace-menu-wrap">
+                      <button
+                        type="button"
+                        className="enterprise-profile-workspace-more"
+                        aria-label={`Actions for ${t.name}`}
+                        aria-expanded={workspaceMenuId === t.id}
+                        data-testid={`workspace-menu-${t.id}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setWorkspaceMenuId((prev) => (prev === t.id ? null : t.id));
+                        }}
+                      >
+                        ⋯
+                      </button>
+                      {workspaceMenuId === t.id ? (
+                        <div className="enterprise-profile-workspace-menu" role="menu">
+                          <button
+                            type="button"
+                            role="menuitem"
+                            className="enterprise-profile-workspace-menu-danger"
+                            data-testid={`delete-workspace-${t.id}`}
+                            onClick={() => {
+                              setWorkspaceMenuId(null);
+                              setSectionErr(null);
+                              setDeletePhrase("");
+                              setDeletePassword("");
+                              setDeleteTarget(t);
+                            }}
+                          >
+                            Delete workspace
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : (
                     <button
                       type="button"
                       className="enterprise-team-leave-inline"
@@ -215,6 +273,91 @@ export function ProfileTeamsSection({ teams, onRefresh }: Props) {
           })}
         </ul>
       )}
+
+      {deleteTarget ? (
+        <div
+          className="enterprise-profile-delete-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-workspace-title"
+          data-testid="delete-workspace-modal"
+        >
+          <button type="button" className="enterprise-profile-delete-backdrop" aria-label="Close" onClick={closeDeleteModal} />
+          <div className="enterprise-profile-delete-dialog">
+            <h3 id="delete-workspace-title" className="enterprise-profile-delete-title">
+              Delete workspace?
+            </h3>
+            <p className="enterprise-muted enterprise-profile-delete-copy">
+              This permanently deletes <strong>{deleteTarget.name}</strong> and all its tasks, messages, calendar events,
+              and files. Members keep their personal accounts.
+            </p>
+            <p className="enterprise-profile-delete-or">Confirm with either option below:</p>
+            <label className="enterprise-muted enterprise-profile-delete-label" htmlFor="delete-workspace-phrase">
+              Type <strong>DELETE</strong>
+            </label>
+            <input
+              id="delete-workspace-phrase"
+              className="auth-input"
+              value={deletePhrase}
+              onChange={(e) => setDeletePhrase(e.target.value)}
+              placeholder="DELETE"
+              autoComplete="off"
+              autoCapitalize="characters"
+              data-testid="delete-workspace-phrase-input"
+            />
+            <p className="enterprise-profile-delete-or-divider" aria-hidden>
+              or
+            </p>
+            <label className="enterprise-muted enterprise-profile-delete-label" htmlFor="delete-workspace-password">
+              Your account password
+            </label>
+            <input
+              id="delete-workspace-password"
+              type="password"
+              className="auth-input"
+              value={deletePassword}
+              onChange={(e) => setDeletePassword(e.target.value)}
+              placeholder="Password"
+              autoComplete="current-password"
+              data-testid="delete-workspace-password-input"
+            />
+            <div className="enterprise-profile-delete-actions">
+              <button
+                type="button"
+                className="enterprise-team-btn-destructive enterprise-profile-delete-submit"
+                disabled={deleteBusy || !deleteConfirmationReady}
+                data-testid="confirm-delete-workspace"
+                onClick={async () => {
+                  if (!deleteConfirmationReady) return;
+                  setSectionErr(null);
+                  setDeleteBusy(true);
+                  try {
+                    const confirmation =
+                      deletePhrase.trim() === "DELETE"
+                        ? { confirmPhrase: "DELETE" as const }
+                        : { password: deletePassword };
+                    await deleteTeam(deleteTarget.id, confirmation);
+                    const deletedId = deleteTarget.id;
+                    closeDeleteModal();
+                    await onRefresh();
+                    await loadPending();
+                    if (onWorkspaceDeleted) await onWorkspaceDeleted(deletedId);
+                  } catch (e) {
+                    setSectionErr(e instanceof Error ? e.message : "Could not delete workspace.");
+                  } finally {
+                    setDeleteBusy(false);
+                  }
+                }}
+              >
+                {deleteBusy ? "Deleting…" : "Delete forever"}
+              </button>
+              <button type="button" className="auth-link-button" onClick={closeDeleteModal} disabled={deleteBusy}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

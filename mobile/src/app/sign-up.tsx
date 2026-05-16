@@ -20,6 +20,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { StatusBar } from "expo-status-bar";
 import { router } from "expo-router";
+import { LEGAL_APP_NAME, LEGAL_COMPANY_NAME, LEGAL_PARENT_COMPANY_NAME } from "@/lib/legal-constants";
 
 export default function SignUp() {
   const [name, setName] = useState("");
@@ -219,6 +220,9 @@ export default function SignUp() {
               <Text className="text-xs text-indigo-500 font-medium">Privacy Policy</Text>
             </TouchableOpacity>
           </View>
+          <Text className="text-[10px] text-slate-400 text-center mt-2 px-4">
+            {LEGAL_APP_NAME} is operated by {LEGAL_COMPANY_NAME}. Parent company: {LEGAL_PARENT_COMPANY_NAME}.
+          </Text>
 
           <View style={{ alignItems: "center", marginTop: 32, paddingBottom: 8 }}>
             <Image source={require("@/assets/lotttech-logo.png")} style={{ width: 185, height: 57 }} resizeMode="contain" />

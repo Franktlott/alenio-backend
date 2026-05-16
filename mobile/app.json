@@ -16,7 +16,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.vibecode.alenio-9iqp9v",
-      "buildNumber": "43",
+      "buildNumber": "44",
       "entitlements": {
         "aps-environment": "production"
       },
@@ -35,6 +35,7 @@
       "googleServicesFile": "./google-services.json",
       "softwareKeyboardLayoutMode": "resize",
       "edgeToEdgeEnabled": false,
+      "usesCleartextTraffic": true,
       "package": "com.vibecode.alenio9iqp9v",
       "permissions": [
         "android.permission.CAMERA",
@@ -42,6 +43,7 @@
       ]
     },
     "plugins": [
+      "expo-dev-client",
       "expo-router",
       "expo-camera",
       [

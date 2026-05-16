@@ -11,6 +11,7 @@ import {
 import { formatAuthFlowError, isEmailNotVerifiedError } from "../lib/auth-errors";
 import { isJwtExpiredSkew, looksLikeJwt } from "../lib/token";
 import { createWebTeam } from "../lib/api";
+import { LEGAL_COMPANY_NAME, LEGAL_PARENT_COMPANY_NAME } from "../lib/legal-constants";
 
 const WORKSPACE_STORAGE_KEY = "alenio_web_signup_workspace";
 
@@ -218,6 +219,17 @@ export function SignUpPage() {
               {loading ? "Creating…" : "Continue to email verification & billing"}
             </button>
           </form>
+          <p className="auth-v2-footnote" style={{ marginTop: "0.75rem" }}>
+            By continuing, you agree to {LEGAL_COMPANY_NAME}&apos;s (parent company: {LEGAL_PARENT_COMPANY_NAME}){" "}
+            <Link to="/terms" className="auth-v2-inline-link">
+              Terms of Service
+            </Link>
+            {" and "}
+            <Link to="/privacy" className="auth-v2-inline-link">
+              Privacy Policy
+            </Link>
+            .
+          </p>
           <p className="auth-v2-footnote" style={{ marginTop: "0.75rem" }}>
             Already have an account?{" "}
             <Link to="/login" className="auth-v2-inline-link" data-testid="sign-up-login-link">

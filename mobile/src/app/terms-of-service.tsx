@@ -11,8 +11,10 @@ import { ArrowLeft } from "lucide-react-native";
 import {
   LEGAL_APP_NAME as APP_NAME,
   LEGAL_COMPANY_NAME as COMPANY_NAME,
+  LEGAL_PARENT_COMPANY_NAME as PARENT_COMPANY_NAME,
   LEGAL_CONTACT_EMAIL as CONTACT_EMAIL,
   LEGAL_LAST_UPDATED as LAST_UPDATED,
+  LEGAL_WEBSITE_LABEL as WEBSITE_LABEL,
 } from "@/lib/legal-constants";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -58,20 +60,20 @@ export default function TermsOfService() {
         <Text className="text-xs text-slate-400 mb-6">Last updated: {LAST_UPDATED}</Text>
 
         <Body>
-          Please read these Terms of Service ("Terms") carefully before using the {APP_NAME} mobile application operated by {COMPANY_NAME} ("we", "us", or "our"). By accessing or using {APP_NAME}, you agree to be bound by these Terms.
+          Please read these Terms of Service ("Terms") carefully before using the {APP_NAME} mobile application or the {APP_NAME} website at {WEBSITE_LABEL}, operated by {COMPANY_NAME} ("we", "us", or "our"). {COMPANY_NAME} is a subsidiary of {PARENT_COMPANY_NAME}. By accessing or using {APP_NAME}, you agree to be bound by these Terms.
         </Body>
 
         <View className="h-4" />
 
         <Section title="1. Acceptance of Terms">
           <Body>
-            By creating an account or using {APP_NAME}, you confirm that you are at least 13 years of age, have read and understood these Terms, and agree to comply with them. If you do not agree, you may not use the App.
+            By creating an account or using {APP_NAME}, you confirm that you are at least 13 years of age, have read and understood these Terms, and agree to comply with them. If you do not agree, you may not use the App or the Website.
           </Body>
         </Section>
 
         <Section title="2. Description of Service">
           <Body>
-            {APP_NAME} is a team communication and task management platform that enables teams to collaborate through messaging, task assignments, shared calendars, video meetings, and real-time communication tools. Features may evolve over time and we reserve the right to modify, suspend, or discontinue any part of the service.
+            {APP_NAME} is a team communication and task management platform that enables teams to collaborate through messaging, task assignments, shared calendars, video meetings, and real-time communication tools, including through our mobile applications and website. Features may evolve over time and we reserve the right to modify, suspend, or discontinue any part of the service.
           </Body>
         </Section>
 
@@ -96,7 +98,7 @@ export default function TermsOfService() {
             <Bullet>Attempt to gain unauthorized access to any part of the service or other users' accounts.</Bullet>
             <Bullet>Use the service for spam, unsolicited advertising, or chain messages.</Bullet>
             <Bullet>Violate any applicable local, state, national, or international law or regulation.</Bullet>
-            <Bullet>Scrape, crawl, or use automated means to access the App without our permission.</Bullet>
+            <Bullet>Scrape, crawl, or use automated means to access the App or the Website without our permission.</Bullet>
           </View>
         </Section>
 
@@ -108,30 +110,32 @@ export default function TermsOfService() {
 
         <Section title="6. Subscriptions and Payments">
           <Body>
-            {APP_NAME} may offer premium subscription plans. Subscriptions are billed through the Apple App Store or Google Play Store according to their respective billing terms. By purchasing a subscription:
+            {APP_NAME} may offer premium subscription plans. Depending on how you subscribe:
           </Body>
           <View className="mt-2">
-            <Bullet>Payment will be charged to your App Store or Play Store account at confirmation of purchase.</Bullet>
-            <Bullet>Subscriptions automatically renew unless cancelled at least 24 hours before the end of the current period.</Bullet>
-            <Bullet>Manage or cancel subscriptions through your device's account settings.</Bullet>
-            <Bullet>No refunds are provided for partial subscription periods, except as required by applicable law.</Bullet>
+            <Bullet>
+              <Text className="font-semibold">Mobile (App Store or Google Play):</Text> Subscriptions are billed through the applicable store according to its billing terms. Payment is charged to your store account at confirmation of purchase. Subscriptions automatically renew unless cancelled at least 24 hours before the end of the current period. Manage or cancel through your device&apos;s store account settings. Refunds follow the store&apos;s rules, except as required by applicable law.
+            </Bullet>
+            <Bullet>
+              <Text className="font-semibold">Web ({WEBSITE_LABEL}):</Text> If you start or manage a team plan on our website, payment and billing are processed by Stripe. You authorize us and Stripe to charge your payment method according to the plan you select. Manage billing, payment methods, and cancellation through your account on {WEBSITE_LABEL} as we make available. Stripe&apos;s terms and privacy policy apply to their processing.
+            </Bullet>
           </View>
           <View className="mt-2">
             <Body>
-              Apple and Google are not parties to these Terms. Subscription billing and refunds for App Store purchases are governed by Apple's Terms of Sale; for Play Store purchases, by Google's Terms of Service.
+              Apple and Google are not parties to these Terms for in-app purchases. Subscription billing and refunds for App Store purchases are governed by Apple&apos;s Terms of Sale; for Play Store purchases, by Google&apos;s terms.
             </Body>
           </View>
         </Section>
 
         <Section title="7. Intellectual Property">
           <Body>
-            All intellectual property rights in {APP_NAME}, including but not limited to the software, design, logos, trademarks, and content created by {COMPANY_NAME}, are owned by or licensed to {COMPANY_NAME}. You may not copy, modify, distribute, sell, or lease any part of the App or its content without our prior written consent.
+            All intellectual property rights in {APP_NAME}, including but not limited to the software, design, logos, trademarks, and content created by {COMPANY_NAME}, are owned by or licensed to {COMPANY_NAME}. You may not copy, modify, distribute, sell, or lease any part of the App, the Website, or their content without our prior written consent.
           </Body>
         </Section>
 
         <Section title="8. Privacy">
           <Body>
-            Your use of {APP_NAME} is also governed by our Privacy Policy, which is incorporated into these Terms by reference. By using the App, you consent to our data practices as described in the Privacy Policy.
+            Your use of {APP_NAME} is also governed by our Privacy Policy, which is incorporated into these Terms by reference. By using the App or the Website, you consent to our data practices as described in the Privacy Policy.
           </Body>
         </Section>
 
@@ -156,31 +160,31 @@ export default function TermsOfService() {
 
         <Section title="11. Disclaimers">
           <Body>
-            {APP_NAME} is provided "as is" and "as available" without warranties of any kind, either express or implied, including warranties of merchantability, fitness for a particular purpose, or non-infringement. We do not warrant that the App will be uninterrupted, error-free, or free of viruses or other harmful components.
+            {APP_NAME} is provided "as is" and "as available" without warranties of any kind, either express or implied, including warranties of merchantability, fitness for a particular purpose, or non-infringement. We do not warrant that the service will be uninterrupted, error-free, or free of viruses or other harmful components.
           </Body>
         </Section>
 
         <Section title="12. Limitation of Liability">
           <Body>
-            To the fullest extent permitted by applicable law, {COMPANY_NAME} and its officers, directors, employees, and agents shall not be liable for any indirect, incidental, special, consequential, or punitive damages arising from your use of or inability to use the App, even if advised of the possibility of such damages. Our total liability to you for any claims arising from these Terms or your use of the App shall not exceed the amount you paid us in the 12 months preceding the claim.
+            To the fullest extent permitted by applicable law, {COMPANY_NAME} and its officers, directors, employees, and agents shall not be liable for any indirect, incidental, special, consequential, or punitive damages arising from your use of or inability to use {APP_NAME}, even if advised of the possibility of such damages. Our total liability to you for any claims arising from these Terms or your use of {APP_NAME} shall not exceed the amount you paid us in the 12 months preceding the claim.
           </Body>
         </Section>
 
         <Section title="13. Indemnification">
           <Body>
-            You agree to indemnify, defend, and hold harmless {COMPANY_NAME} and its affiliates from any claims, damages, losses, and expenses (including reasonable legal fees) arising out of your use of the App, your content, or your violation of these Terms.
+            You agree to indemnify, defend, and hold harmless {COMPANY_NAME} and its affiliates from any claims, damages, losses, and expenses (including reasonable legal fees) arising out of your use of {APP_NAME}, your content, or your violation of these Terms.
           </Body>
         </Section>
 
         <Section title="14. Termination">
           <Body>
-            We reserve the right to suspend or terminate your account at our discretion, without notice, if we believe you have violated these Terms or applicable law. You may delete your account at any time through the App settings. Upon termination, your right to use the App ceases immediately.
+            We reserve the right to suspend or terminate your account at our discretion, without notice, if we believe you have violated these Terms or applicable law. You may delete your account at any time through the App or your account settings on the Website. Upon termination, your right to use {APP_NAME} ceases immediately.
           </Body>
         </Section>
 
         <Section title="15. Changes to Terms">
           <Body>
-            We may update these Terms from time to time. We will notify you of material changes within the App. Your continued use of {APP_NAME} after the effective date of revised Terms constitutes your acceptance of the changes.
+            We may update these Terms from time to time. We will notify you of material changes within the App or on the Website. Your continued use of {APP_NAME} after the effective date of revised Terms constitutes your acceptance of the changes.
           </Body>
         </Section>
 
@@ -196,7 +200,8 @@ export default function TermsOfService() {
           </Body>
           <View className="mt-3 bg-slate-50 rounded-xl p-4">
             <Text className="text-sm font-semibold text-slate-700">{COMPANY_NAME}</Text>
-            <Text className="text-sm text-indigo-600 mt-1">{CONTACT_EMAIL}</Text>
+            <Text className="text-xs text-slate-500 mt-1">Parent company: {PARENT_COMPANY_NAME}</Text>
+            <Text className="text-sm text-indigo-600 mt-2">{CONTACT_EMAIL}</Text>
           </View>
         </Section>
       </ScrollView>

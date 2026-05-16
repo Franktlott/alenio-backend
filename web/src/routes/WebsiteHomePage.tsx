@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { LEGAL_COMPANY_NAME, LEGAL_PARENT_COMPANY_NAME } from "../lib/legal-constants";
 
 const highlights = [
   {
@@ -45,7 +46,7 @@ export function WebsiteHomePage() {
           <nav className="site-v2-nav" aria-label="Primary">
             <a href="#features">Product</a>
             <a href="#industries">Solutions</a>
-            <a href="#pricing">Pricing</a>
+            <Link to="/pricing">Pricing</Link>
             <a href="#resources">Resources</a>
             <a href="#about">About</a>
           </nav>
@@ -160,8 +161,17 @@ export function WebsiteHomePage() {
       </section>
 
       <footer id="contact" className="site-v2-footer">
-        <img src="/alenio-logo.png" alt="Alenio" className="site-v2-footer-logo" width={140} height={34} />
-        <a href="mailto:hello@alenio.ai">hello@alenio.ai</a>
+        <div className="site-v2-footer-top">
+          <img src="/alenio-logo.png" alt="Alenio" className="site-v2-footer-logo" width={140} height={34} />
+          <a href="mailto:info@alenio.app">info@alenio.app</a>
+        </div>
+        <p className="site-v2-footer-legal">
+          <Link to="/privacy">Privacy Policy</Link>
+          {" · "}
+          <Link to="/terms">Terms of Service</Link>
+        </p>
+        <p className="site-v2-footer-company">{LEGAL_COMPANY_NAME}</p>
+        <p className="site-v2-footer-parent">Parent company: {LEGAL_PARENT_COMPANY_NAME}</p>
       </footer>
     </div>
   );

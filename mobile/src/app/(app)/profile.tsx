@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -23,10 +23,10 @@ import * as Notifications from "expo-notifications";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";
-import { ArrowLeft, Camera, LogOut, Pencil, X, Plus, Trash2, Bell, Check, LogOut as LeaveIcon, Crown, Copy, ChevronRight, BarChart2, Volume2, Settings, MessageSquare, CreditCard } from "lucide-react-native";
+import { ArrowLeft, Camera, LogOut, Pencil, X, Plus, Trash2, Bell, Check, LogOut as LeaveIcon, Crown, Copy, ChevronRight, BarChart2, Volume2, MessageSquare } from "lucide-react-native";
 import { authClient, clearAccessToken, getAuthHeaders } from "@/lib/auth/auth-client";
 import { SESSION_QUERY_KEY, markSessionSignedOut, useInvalidateSession, useSession } from "@/lib/auth/use-session";
-import { clearNotifDebugLog, getNotifDebugLog, getNotifStatus, registerForPushNotificationsAsync } from "@/lib/notifications";
+import { clearNotifDebugLog, getNotifDebugLog, getNotifStatus, registerForPushNotificationsAsync, ensureAndroidChannelsForPreview, notificationPreviewDataKey } from "@/lib/notifications";
 import { router } from "expo-router";
 import { useMutation, useQuery, useQueryClient, useQueries } from "@tanstack/react-query";
 import { api } from "@/lib/api/api";
@@ -37,12 +37,6 @@ import { pickImage, takePhoto } from "@/lib/file-picker";
 import * as ImagePicker from "expo-image-picker";
 import { useTeamStore } from "@/lib/state/team-store";
 import { toast } from "burnt";
-import {
-  getTeamBillingContext,
-  openStoreSubscriptionManagement,
-  shouldUseEmbeddedBillingWebView,
-} from "@/lib/subscription-billing";
-import { BillingPortalWebViewModal } from "@/components/BillingPortalWebViewModal";
 import type { Team } from "@/lib/types";
 import { SafeKeyboardAvoidingView } from "@/lib/safe-keyboard-controller";
 
@@ -53,6 +47,15 @@ type JoinRequestItem = {
   status: string;
   createdAt: string;
   user: { id: string; name: string; email: string; image: string | null };
+};
+
+type NotifPrefs = {
+  notifMessages: boolean;
+  notifTaskAssigned: boolean;
+  notifTaskDue: boolean;
+  notifMeetings: boolean;
+  notifTone: string;
+  hasToken: boolean;
 };
 
 // Glass card component using BlurView
@@ -101,8 +104,6 @@ export default function ProfileScreen() {
   /** URI whose load genuinely failed (not cancelled). RN may fire onError when a prior load is aborted on uri change. */
   const [avatarFailedUri, setAvatarFailedUri] = useState<string | null>(null);
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
-  const [billingPortalUrl, setBillingPortalUrl] = useState<string | null>(null);
-  const [billingActionLoading, setBillingActionLoading] = useState(false);
 
   // Delete account state
   const [deleteStep, setDeleteStep] = useState<0 | 1 | 2 | 3>(0);
@@ -123,7 +124,8 @@ export default function ProfileScreen() {
   const [editTeamImage, setEditTeamImage] = useState<string | null>(null);
   const [uploadingTeamImage, setUploadingTeamImage] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
-  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [deleteTeamPhrase, setDeleteTeamPhrase] = useState("");
+  const [deleteTeamPassword, setDeleteTeamPassword] = useState("");
   const [leavingTeam, setLeavingTeam] = useState<Team | null>(null);
 
   const { data: teams = [], isLoading: teamsLoading } = useQuery({
@@ -139,6 +141,80 @@ export default function ProfileScreen() {
       api.get<{ id: string; name: string; email: string; image: string | null; isAdmin?: boolean }>("/api/me"),
     enabled: !!user,
   });
+
+  const { data: notifPrefs } = useQuery({
+    queryKey: ["notification-preferences"],
+    queryFn: () => api.get<NotifPrefs>("/api/notification-preferences"),
+    enabled: !!user,
+  });
+
+  const notifMutation = useMutation({
+    mutationFn: (patch: Partial<NotifPrefs>) => api.patch<NotifPrefs>("/api/notification-preferences", patch),
+    onMutate: async (patch) => {
+      await queryClient.cancelQueries({ queryKey: ["notification-preferences"] });
+      const prev = queryClient.getQueryData<NotifPrefs>(["notification-preferences"]);
+      queryClient.setQueryData<NotifPrefs>(["notification-preferences"], (old) => (old ? { ...old, ...patch } : old));
+      return { prev };
+    },
+    onError: (_err, _patch, ctx) => {
+      if (ctx?.prev) queryClient.setQueryData(["notification-preferences"], ctx.prev);
+    },
+  });
+
+  const toneMutation = useMutation({
+    mutationFn: (tone: string) => api.patch<NotifPrefs>("/api/notification-preferences", { notifTone: tone }),
+    onMutate: async (tone) => {
+      await queryClient.cancelQueries({ queryKey: ["notification-preferences"] });
+      const prev = queryClient.getQueryData<NotifPrefs>(["notification-preferences"]);
+      queryClient.setQueryData<NotifPrefs>(["notification-preferences"], (old) => (old ? { ...old, notifTone: tone } : old));
+      return { prev };
+    },
+    onError: (_err, _tone, ctx) => {
+      if (ctx?.prev) queryClient.setQueryData(["notification-preferences"], ctx.prev);
+    },
+  });
+
+  const playNotifTonePreview = async (tone: string) => {
+    if (tone === "silent") return;
+    await ensureAndroidChannelsForPreview();
+    const soundFile = tone === "default" ? "default" : `${tone}.wav`;
+    const channelId = tone === "default" ? "alenio_main" : `alenio_${tone}`;
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: "Sound Preview",
+        body: `Testing ${tone === "default" ? "Default" : tone.charAt(0).toUpperCase() + tone.slice(1)} sound`,
+        sound: soundFile,
+        data: { [notificationPreviewDataKey]: true },
+      },
+      trigger:
+        Platform.OS === "android"
+          ? { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: 1, channelId }
+          : null,
+    });
+  };
+
+  const [notifRegStatus, setNotifRegStatus] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+
+    const poll = () => {
+      Promise.all([getNotifStatus(), getNotifDebugLog()]).then(([s]) => {
+        if (cancelled) return;
+        setNotifRegStatus(s);
+        if (s?.startsWith("getting token") || s?.startsWith("saving token") || s?.startsWith("attempt")) {
+          timer = setTimeout(poll, 2000);
+        }
+      });
+    };
+
+    poll();
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, []);
 
   const isOwnerOfAnyTeam = teams.some((t) => (t as Team & { role?: string }).role === "owner");
 
@@ -190,42 +266,6 @@ export default function ProfileScreen() {
     },
   });
 
-  const handleManageSubscriptionBilling = useCallback(async () => {
-    setBillingActionLoading(true);
-    try {
-      const ctx = await getTeamBillingContext();
-      if (!ctx?.hasTeamEntitlement) {
-        toast({ title: "Upgrade to Team to manage billing", preset: "error" });
-        router.push("/subscription");
-        return;
-      }
-      const url = ctx.managementURL;
-      if (!url) {
-        toast({
-          title: "Billing link not ready",
-          preset: "error",
-        });
-        return;
-      }
-      if (shouldUseEmbeddedBillingWebView(ctx.billingSource, url)) {
-        setBillingPortalUrl(url);
-        return;
-      }
-      if (ctx.billingSource === "app_store" || ctx.billingSource === "play_store") {
-        const r = await openStoreSubscriptionManagement(url);
-        if (!r.ok) toast({ title: r.error ?? "Could not open subscription settings", preset: "error" });
-        return;
-      }
-      const can = await Linking.canOpenURL(url);
-      if (can) await Linking.openURL(url);
-      else toast({ title: "Cannot open billing on this device", preset: "error" });
-    } catch {
-      toast({ title: "Could not load billing info", preset: "error" });
-    } finally {
-      setBillingActionLoading(false);
-    }
-  }, []);
-
   // ── Profile mutations ──────────────────────────────────────────
   const uploadMutation = useMutation({
     mutationFn: async (source: "library" | "camera") => {
@@ -264,7 +304,8 @@ export default function ProfileScreen() {
   });
 
   const deleteTeamMutation = useMutation({
-    mutationFn: (id: string) => api.delete(`/api/teams/${id}`),
+    mutationFn: ({ id, body }: { id: string; body: { confirmPhrase?: string; password?: string } }) =>
+      api.delete(`/api/teams/${id}`, body),
     onSuccess: async () => {
       const freshTeams = await queryClient.fetchQuery({
         queryKey: ["teams"],
@@ -349,7 +390,8 @@ export default function ProfileScreen() {
     setEditTeamName(team.name);
     setEditTeamImage(team.image ?? null);
     setConfirmingDelete(false);
-    setDeleteConfirmText("");
+    setDeleteTeamPhrase("");
+    setDeleteTeamPassword("");
   };
 
   const closeEditModal = () => {
@@ -357,7 +399,8 @@ export default function ProfileScreen() {
     setEditTeamName("");
     setEditTeamImage(null);
     setConfirmingDelete(false);
-    setDeleteConfirmText("");
+    setDeleteTeamPhrase("");
+    setDeleteTeamPassword("");
   };
 
   const pickTeamPhoto = async () => {
@@ -390,9 +433,16 @@ export default function ProfileScreen() {
     updateTeamMutation.mutate({ id: editingTeam.id, data: { name: editTeamName.trim(), image: editTeamImage } });
   };
 
+  const deleteTeamConfirmationReady =
+    deleteTeamPhrase.trim() === "DELETE" || deleteTeamPassword.trim().length > 0;
+
   const handleDeleteTeam = () => {
-    if (!editingTeam || deleteConfirmText !== editingTeam.name) return;
-    deleteTeamMutation.mutate(editingTeam.id);
+    if (!editingTeam || !deleteTeamConfirmationReady) return;
+    const body =
+      deleteTeamPhrase.trim() === "DELETE"
+        ? { confirmPhrase: "DELETE" as const }
+        : { password: deleteTeamPassword };
+    deleteTeamMutation.mutate({ id: editingTeam.id, body });
   };
 
   const handleSignOut = async () => {
@@ -807,7 +857,7 @@ export default function ProfileScreen() {
             <Text className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Plan</Text>
           </View>
           <GlassCard>
-            <TouchableOpacity
+            <Pressable
               className="flex-row items-center px-4 py-4"
               onPress={() => router.push("/subscription")}
               testID="subscription-row"
@@ -816,35 +866,13 @@ export default function ProfileScreen() {
                 <Crown size={16} color="#4361EE" />
               </View>
               <View className="flex-1">
-                <Text className="font-semibold text-slate-900 dark:text-white">Subscription</Text>
+                <Text className="text-sm font-semibold text-slate-900">Subscription</Text>
                 <Text className="text-xs text-slate-400 mt-0.5">
                   {ownerTeamSubscription?.plan === "team" ? "Team plan active" : "Manage your plan"}
                 </Text>
               </View>
-              <Text className="text-slate-300 text-base">›</Text>
-            </TouchableOpacity>
-            <View style={{ height: 1, backgroundColor: "rgba(241,245,249,0.8)", marginHorizontal: 16 }} />
-            <TouchableOpacity
-              className="flex-row items-center px-4 py-4"
-              onPress={() => void handleManageSubscriptionBilling()}
-              disabled={billingActionLoading}
-              testID="manage-billing-row"
-            >
-              <View className="w-8 h-8 rounded-xl bg-amber-50 items-center justify-center mr-3">
-                <CreditCard size={16} color="#D97706" />
-              </View>
-              <View className="flex-1">
-                <Text className="font-semibold text-slate-900 dark:text-white">Payment & renewals</Text>
-                <Text className="text-xs text-slate-400 mt-0.5">
-                  Web subscriptions open in a secure browser; App Store &amp; Play use native settings.
-                </Text>
-              </View>
-              {billingActionLoading ? (
-                <ActivityIndicator size="small" color="#4361EE" />
-              ) : (
-                <Text className="text-slate-300 text-base">›</Text>
-              )}
-            </TouchableOpacity>
+              <ChevronRight size={16} color="#CBD5E1" />
+            </Pressable>
           </GlassCard>
         </View>
         ) : null}
@@ -914,24 +942,137 @@ export default function ProfileScreen() {
           </GlassCard>
         </View>) : null}
 
-        {/* Settings + Feedback */}
+        {/* Notifications — moved from former Settings screen */}
+        <View className="mx-4 mt-5">
+          <View className="flex-row items-center mb-3" style={{ gap: 6 }}>
+            <Bell size={13} color="#94A3B8" />
+            <Text className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Notifications</Text>
+          </View>
+          <GlassCard>
+            {(
+              [
+                {
+                  key: "notifMessages" as const,
+                  label: "New messages",
+                  description: "Team and direct messages",
+                },
+                {
+                  key: "notifTaskAssigned" as const,
+                  label: "Task assigned",
+                  description: "When a task is assigned to you",
+                },
+                {
+                  key: "notifTaskDue" as const,
+                  label: "Task due reminders",
+                  description: "Reminders for upcoming due dates",
+                },
+                {
+                  key: "notifMeetings" as const,
+                  label: "Meeting reminders",
+                  description: "Alerts before video meetings",
+                },
+              ] as const
+            ).map((item, index, arr) => {
+              const isEnabled = notifPrefs?.[item.key] ?? true;
+              return (
+                <View
+                  key={item.key}
+                  className="flex-row items-center px-4 py-3.5"
+                  style={
+                    index < arr.length - 1
+                      ? { borderBottomWidth: 1, borderBottomColor: "rgba(241,245,249,0.8)" }
+                      : undefined
+                  }
+                >
+                  <View className="flex-1">
+                    <Text className="text-sm font-semibold text-slate-900 dark:text-white">{item.label}</Text>
+                    <Text className="text-xs text-slate-400 mt-0.5">{item.description}</Text>
+                  </View>
+                  <Switch
+                    value={isEnabled}
+                    onValueChange={(val) => notifMutation.mutate({ [item.key]: val })}
+                    trackColor={{ false: "#E2E8F0", true: "#6B8EF6" }}
+                    thumbColor="white"
+                    testID={`settings-notif-toggle-${item.key}`}
+                  />
+                </View>
+              );
+            })}
+          </GlassCard>
+
+          <View className="mt-2 mb-1 px-1" style={{ gap: 4 }}>
+            <View className="flex-row items-center" style={{ gap: 6 }}>
+              <View
+                style={{
+                  width: 7,
+                  height: 7,
+                  borderRadius: 4,
+                  backgroundColor: notifPrefs?.hasToken ? "#22C55E" : "#EF4444",
+                }}
+              />
+            </View>
+            {notifRegStatus && !notifPrefs?.hasToken ? (
+              <Text className="text-xs text-slate-300 ml-3" selectable>
+                {notifRegStatus}
+              </Text>
+            ) : null}
+          </View>
+
+          <View className="mt-3">
+            <Text className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 ml-1">Notification sound</Text>
+            <GlassCard>
+              {(
+                [
+                  { value: "default", label: "Default", emoji: "🔔" },
+                  { value: "bell", label: "Bell", emoji: "🔕" },
+                  { value: "chime", label: "Chime", emoji: "🎵" },
+                  { value: "alert", label: "Alert", emoji: "⚠️" },
+                  { value: "silent", label: "Silent", emoji: "🚫" },
+                ] as const
+              ).map((item, index, arr) => {
+                const currentTone = notifPrefs?.notifTone ?? "default";
+                const isSelected =
+                  currentTone === item.value ||
+                  (item.value === "default" && !["bell", "chime", "alert", "silent"].includes(currentTone));
+                return (
+                  <View
+                    key={item.value}
+                    className="flex-row items-center px-4 py-3.5"
+                    style={
+                      index < arr.length - 1
+                        ? { borderBottomWidth: 1, borderBottomColor: "rgba(241,245,249,0.8)" }
+                        : undefined
+                    }
+                  >
+                    <Pressable
+                      className="flex-row items-center flex-1"
+                      onPress={() => toneMutation.mutate(item.value)}
+                      testID={`settings-tone-option-${item.value}`}
+                    >
+                      <Text className="text-base mr-3">{item.emoji}</Text>
+                      <Text className="text-sm font-semibold text-slate-900 dark:text-white">{item.label}</Text>
+                    </Pressable>
+                    {isSelected ? (
+                      <Check size={16} color="#4361EE" />
+                    ) : item.value !== "silent" ? (
+                      <Pressable
+                        onPress={() => void playNotifTonePreview(item.value)}
+                        testID={`settings-tone-preview-${item.value}`}
+                        className="w-8 h-8 rounded-full bg-slate-100 items-center justify-center"
+                      >
+                        <Volume2 size={14} color="#64748B" />
+                      </Pressable>
+                    ) : null}
+                  </View>
+                );
+              })}
+            </GlassCard>
+          </View>
+        </View>
+
+        {/* Feedback */}
         <View className="mx-4 mt-5">
           <GlassCard>
-            <Pressable
-              className="flex-row items-center px-4 py-4"
-              onPress={() => router.push("/settings")}
-              testID="settings-card"
-            >
-              <View className="w-8 h-8 rounded-xl bg-slate-100 items-center justify-center mr-3">
-                <Settings size={16} color="#4361EE" />
-              </View>
-              <View className="flex-1">
-                <Text className="text-sm font-semibold text-slate-900">Settings</Text>
-                <Text className="text-xs text-slate-400 mt-0.5">Notifications and preferences</Text>
-              </View>
-              <ChevronRight size={16} color="#CBD5E1" />
-            </Pressable>
-            <View style={{ height: 1, backgroundColor: "rgba(241,245,249,0.8)", marginHorizontal: 16 }} />
             <Pressable
               className="flex-row items-center px-4 py-4"
               onPress={() => router.push("/feedback")}
@@ -941,7 +1082,7 @@ export default function ProfileScreen() {
                 <MessageSquare size={16} color="#4361EE" />
               </View>
               <View className="flex-1">
-                <Text className="text-sm font-semibold text-slate-900">Send Feedback</Text>
+                <Text className="text-sm font-semibold text-slate-900">Send feedback</Text>
                 <Text className="text-xs text-slate-400 mt-0.5">Help us improve the app</Text>
               </View>
               <ChevronRight size={16} color="#CBD5E1" />
@@ -1150,7 +1291,14 @@ export default function ProfileScreen() {
                   <>
                     <View className="flex-row items-center justify-between mb-4">
                       <Text className="text-lg font-bold text-slate-900 dark:text-white">Delete Team?</Text>
-                      <TouchableOpacity onPress={() => { setConfirmingDelete(false); setDeleteConfirmText(""); }} testID="back-from-delete">
+                      <TouchableOpacity
+                        onPress={() => {
+                          setConfirmingDelete(false);
+                          setDeleteTeamPhrase("");
+                          setDeleteTeamPassword("");
+                        }}
+                        testID="back-from-delete"
+                      >
                         <X size={20} color="#94A3B8" />
                       </TouchableOpacity>
                     </View>
@@ -1159,24 +1307,44 @@ export default function ProfileScreen() {
                       <Text className="font-semibold text-slate-700 dark:text-slate-200">{editingTeam?.name}</Text>
                       {" "}and all its tasks and messages. Members will keep their accounts.
                     </Text>
+                    <Text className="text-sm text-slate-500 dark:text-slate-400 mb-3">
+                      Confirm with either option below.
+                    </Text>
                     <Text className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
-                      Type <Text className="text-slate-800 dark:text-slate-200">{editingTeam?.name}</Text> to confirm
+                      Type <Text className="text-slate-800 dark:text-slate-200">DELETE</Text>
+                    </Text>
+                    <TextInput
+                      className="bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white rounded-xl px-4 py-3 text-base mb-3 border border-slate-200 dark:border-slate-600"
+                      value={deleteTeamPhrase}
+                      onChangeText={setDeleteTeamPhrase}
+                      placeholder="DELETE"
+                      placeholderTextColor="#94A3B8"
+                      autoCapitalize="characters"
+                      autoCorrect={false}
+                      testID="delete-confirm-phrase-input"
+                    />
+                    <Text className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2 text-center">
+                      or
+                    </Text>
+                    <Text className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
+                      Your account password
                     </Text>
                     <TextInput
                       className="bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white rounded-xl px-4 py-3 text-base mb-4 border border-slate-200 dark:border-slate-600"
-                      value={deleteConfirmText}
-                      onChangeText={setDeleteConfirmText}
-                      placeholder={editingTeam?.name ?? ""}
+                      value={deleteTeamPassword}
+                      onChangeText={setDeleteTeamPassword}
+                      placeholder="Password"
                       placeholderTextColor="#94A3B8"
+                      secureTextEntry
                       autoCapitalize="none"
                       autoCorrect={false}
-                      testID="delete-confirm-input"
+                      testID="delete-confirm-password-input"
                     />
                     <TouchableOpacity
                       onPress={handleDeleteTeam}
-                      disabled={deleteTeamMutation.isPending || deleteConfirmText !== editingTeam?.name}
+                      disabled={deleteTeamMutation.isPending || !deleteTeamConfirmationReady}
                       className="rounded-2xl py-4 items-center mb-3"
-                      style={{ backgroundColor: deleteConfirmText === editingTeam?.name ? "#EF4444" : "#CBD5E1" }}
+                      style={{ backgroundColor: deleteTeamConfirmationReady ? "#EF4444" : "#CBD5E1" }}
                       testID="confirm-delete-team"
                     >
                       {deleteTeamMutation.isPending ? (
@@ -1186,7 +1354,11 @@ export default function ProfileScreen() {
                       )}
                     </TouchableOpacity>
                     <TouchableOpacity
-                      onPress={() => { setConfirmingDelete(false); setDeleteConfirmText(""); }}
+                      onPress={() => {
+                        setConfirmingDelete(false);
+                        setDeleteTeamPhrase("");
+                        setDeleteTeamPassword("");
+                      }}
                       className="rounded-2xl py-4 items-center bg-slate-100 dark:bg-slate-700"
                       testID="cancel-delete-team"
                     >
@@ -1199,12 +1371,6 @@ export default function ProfileScreen() {
           </SafeKeyboardAvoidingView>
         </Pressable>
       </Modal>
-
-      <BillingPortalWebViewModal
-        visible={!!billingPortalUrl}
-        url={billingPortalUrl}
-        onClose={() => setBillingPortalUrl(null)}
-      />
 
       {/* Leave team confirmation modal */}
       <Modal visible={showSignOutConfirm} transparent animationType="fade" onRequestClose={() => setShowSignOutConfirm(false)}>

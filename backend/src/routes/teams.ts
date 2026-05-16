@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { prisma } from "../prisma";
-import { auth } from "../auth";
+import { auth, verifyEmailPassword } from "../auth";
 import { authGuard } from "../middleware/auth-guard";
 import { sendPushToUsers } from "../lib/push";
 import { logActivity } from "../lib/activity";
@@ -313,7 +313,7 @@ teamsRouter.delete("/:teamId/leave", async (c) => {
   return c.body(null, 204);
 });
 
-// DELETE /api/teams/:teamId - delete team (owner only)
+// DELETE /api/teams/:teamId - delete workspace (owner only; confirm with password or "DELETE")
 teamsRouter.delete("/:teamId", async (c) => {
   const user = c.get("user")!;
   const { teamId } = c.req.param();
@@ -321,8 +321,49 @@ teamsRouter.delete("/:teamId", async (c) => {
   const membership = await prisma.teamMember.findUnique({
     where: { userId_teamId: { userId: user.id, teamId } },
   });
-  if (!membership || !["owner","team_leader"].includes(membership.role)) {
-    return c.json({ error: { message: "Only the team owner can delete the team", code: "FORBIDDEN" } }, 403);
+  if (!membership || membership.role !== "owner") {
+    return c.json(
+      { error: { message: "Only the workspace owner can delete this workspace", code: "FORBIDDEN" } },
+      403,
+    );
+  }
+
+  let confirmation: { password?: string; confirmPhrase?: string } = {};
+  try {
+    const raw = await c.req.json();
+    if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+      confirmation = raw as { password?: string; confirmPhrase?: string };
+    }
+  } catch {
+    /* no body */
+  }
+
+  const password = typeof confirmation.password === "string" ? confirmation.password.trim() : "";
+  const phrase = typeof confirmation.confirmPhrase === "string" ? confirmation.confirmPhrase.trim() : "";
+
+  if (password) {
+    const fullUser = await prisma.user.findUnique({ where: { id: user.id } });
+    if (!fullUser?.email) {
+      return c.json({ error: { message: "User not found", code: "NOT_FOUND" } }, 404);
+    }
+    try {
+      const verified = await verifyEmailPassword(fullUser.email, password);
+      if (!verified) throw new Error("Sign-in failed");
+    } catch {
+      return c.json({ error: { message: "Incorrect password", code: "INVALID_PASSWORD" } }, 401);
+    }
+  } else if (phrase === "DELETE") {
+    /* confirmed */
+  } else {
+    return c.json(
+      {
+        error: {
+          message: 'Confirm deletion with your account password or type DELETE in the confirmation field',
+          code: "VALIDATION_ERROR",
+        },
+      },
+      400,
+    );
   }
 
   await prisma.team.delete({ where: { id: teamId } });

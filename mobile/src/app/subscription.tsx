@@ -9,10 +9,12 @@ import {
   Pressable,
   Image,
   Linking,
+  Alert,
+  Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { ArrowLeft, Crown, Check, Lock, Star, Users } from "lucide-react-native";
+import { ArrowLeft, Crown, Check, Lock, Star } from "lucide-react-native";
 import { router } from "expo-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api/api";
@@ -21,11 +23,9 @@ import { toast } from "burnt";
 import { purchaseTeam, restorePurchases, isRevenueCatEnabled } from "@/lib/revenue-cat";
 import {
   getTeamBillingContext,
-  isStripePortalEmbedUrl,
   openStoreSubscriptionManagement,
-  shouldUseEmbeddedBillingWebView,
+  ALENIO_WEB_BILLING_URL,
 } from "@/lib/subscription-billing";
-import { BillingPortalWebViewModal } from "@/components/BillingPortalWebViewModal";
 
 type TeamListRow = { id: string; role: string };
 
@@ -76,14 +76,11 @@ const TEAM_FEATURES = [
   "Priority support",
 ] as const;
 
-const ENTERPRISE_MAIL = "mailto:support@alenio.app?subject=Enterprise%20pricing";
-
 export default function SubscriptionScreen() {
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
   const queryClient = useQueryClient();
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
-  const [billingPortalUrl, setBillingPortalUrl] = useState<string | null>(null);
   const [billingActionLoading, setBillingActionLoading] = useState(false);
 
   const { data: teams = [] } = useQuery({
@@ -101,30 +98,31 @@ export default function SubscriptionScreen() {
   const isOwner = teams.find((t) => t.id === activeTeamId)?.role === "owner";
   const stripeBilled = isStripeBilledFromApi(subscription);
 
+  function promptManagePlanOnAlenioWeb() {
+    Alert.alert(
+      "Manage your plan on the web",
+      "This workspace is billed through Alenio on the web. Sign in at alenio.app to update payment, change your plan, or cancel — billing is not managed inside this app.",
+      [
+        { text: "Not now", style: "cancel" },
+        {
+          text: "Open alenio.app",
+          onPress: () => {
+            void Linking.openURL(ALENIO_WEB_BILLING_URL);
+          },
+        },
+      ],
+    );
+  }
+
   const handleManageSubscriptionBilling = useCallback(async () => {
     setBillingActionLoading(true);
     try {
       if (stripeBilled) {
-        if (!activeTeamId) {
-          toast({ title: "No team selected", preset: "error" });
-          return;
-        }
         if (!isOwner) {
-          toast({ title: "Only the team owner can manage billing", preset: "error" });
+          toast({ title: "Only the workspace owner can manage billing", preset: "error" });
           return;
         }
-        const { url } = await api.post<{ url: string }>("/web/api/billing/portal-session", { teamId: activeTeamId });
-        if (!url) {
-          toast({ title: "Billing link not ready. Try again shortly.", preset: "error" });
-          return;
-        }
-        if (isStripePortalEmbedUrl(url)) {
-          setBillingPortalUrl(url);
-          return;
-        }
-        const can = await Linking.canOpenURL(url);
-        if (can) await Linking.openURL(url);
-        else toast({ title: "Cannot open billing on this device", preset: "error" });
+        promptManagePlanOnAlenioWeb();
         return;
       }
 
@@ -133,107 +131,56 @@ export default function SubscriptionScreen() {
         toast({ title: "No active subscription to manage", preset: "error" });
         return;
       }
-      const url = ctx.managementURL;
-      if (!url) {
-        toast({ title: "Billing link not ready. Try again shortly.", preset: "error" });
-        return;
-      }
-      if (shouldUseEmbeddedBillingWebView(ctx.billingSource, url)) {
-        setBillingPortalUrl(url);
-        return;
-      }
+
       if (ctx.billingSource === "app_store" || ctx.billingSource === "play_store") {
+        const url = ctx.managementURL;
+        if (!url) {
+          toast({ title: "Billing link not ready. Try again shortly.", preset: "error" });
+          return;
+        }
         const r = await openStoreSubscriptionManagement(url);
         if (!r.ok) toast({ title: r.error ?? "Could not open subscription settings", preset: "error" });
         return;
       }
-      const can = await Linking.canOpenURL(url);
-      if (can) await Linking.openURL(url);
-      else toast({ title: "Cannot open billing on this device", preset: "error" });
+
+      if (!isOwner) {
+        toast({ title: "Only the workspace owner can manage web billing", preset: "error" });
+        return;
+      }
+      promptManagePlanOnAlenioWeb();
     } catch {
       toast({ title: "Could not load billing info", preset: "error" });
     } finally {
       setBillingActionLoading(false);
     }
-  }, [activeTeamId, isOwner, stripeBilled]);
+  }, [isOwner, stripeBilled]);
 
   const currentPlan: TierPlan = subscriptionTierPlan(subscription);
 
-  type UpgradeResult = { via: "iap" } | { via: "stripe_checkout" };
-
   const upgradeMutation = useMutation({
-    mutationFn: async (plan: TierPlan): Promise<UpgradeResult | void> => {
+    mutationFn: async (plan: TierPlan): Promise<void> => {
       if (plan !== "team") throw new Error("cancelled");
       if (!activeTeamId) throw new Error("No team selected.");
 
-      const subLatest =
-        queryClient.getQueryData<Subscription>(["subscription", activeTeamId]) ?? subscription;
       const teamsList = queryClient.getQueryData<TeamListRow[]>(["teams"]) ?? teams;
       const owner = teamsList.find((t) => t.id === activeTeamId)?.role === "owner";
-
-      const mobileManaged =
-        !!subLatest &&
-        (subLatest.plan === "team" || subLatest.plan === "pro") &&
-        subLatest.status === "active" &&
-        !subLatest.stripeSubscriptionId?.trim();
-
-      if (mobileManaged) {
-        if (!isRevenueCatEnabled()) {
-          throw new Error("This team’s plan is managed in the app store. Purchases are not available in this build.");
-        }
-        const result = await purchaseTeam();
-        if (!result.success) {
-          if (result.error === "cancelled") throw new Error("cancelled");
-          throw new Error(result.error ?? "Purchase failed");
-        }
-        await api.post(`/api/teams/${activeTeamId}/subscription/upgrade`, { plan });
-        return { via: "iap" };
-      }
-
       if (!owner) throw new Error("Only the team owner can subscribe.");
 
-      try {
-        const { url } = await api.post<{ url: string }>("/web/api/billing/checkout-session", {
-          teamId: activeTeamId,
-        });
-        const can = await Linking.canOpenURL(url);
-        if (!can) throw new Error("Cannot open checkout on this device.");
-        await Linking.openURL(url);
-        return { via: "stripe_checkout" };
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : "";
-        if (msg.includes("MOBILE_MANAGED") || msg.includes("mobile app")) {
-          if (!isRevenueCatEnabled()) throw e instanceof Error ? e : new Error(msg);
-          const result = await purchaseTeam();
-          if (!result.success) {
-            if (result.error === "cancelled") throw new Error("cancelled");
-            throw new Error(result.error ?? "Purchase failed");
-          }
-          await api.post(`/api/teams/${activeTeamId}/subscription/upgrade`, { plan });
-          return { via: "iap" };
-        }
-        if (msg.includes("not configured") || msg.includes("NOT_CONFIGURED")) {
-          if (!isRevenueCatEnabled()) throw e instanceof Error ? e : new Error(msg);
-          const result = await purchaseTeam();
-          if (!result.success) {
-            if (result.error === "cancelled") throw new Error("cancelled");
-            throw new Error(result.error ?? "Purchase failed");
-          }
-          await api.post(`/api/teams/${activeTeamId}/subscription/upgrade`, { plan });
-          return { via: "iap" };
-        }
-        throw e instanceof Error ? e : new Error(msg || "Upgrade failed");
+      if (!isRevenueCatEnabled()) {
+        throw new Error(
+          "In-app purchases are not available in this build. Use the App Store or Google Play build of Alenio, or subscribe at alenio.app.",
+        );
       }
+
+      const result = await purchaseTeam();
+      if (!result.success) {
+        if (result.error === "cancelled") throw new Error("cancelled");
+        throw new Error(result.error ?? "Purchase failed");
+      }
+      await api.post(`/api/teams/${activeTeamId}/subscription/upgrade`, { plan });
     },
-    onSuccess: (result) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["subscription", activeTeamId] });
-      if (result?.via === "stripe_checkout") {
-        toast({
-          title: "Complete checkout in the browser, then return here.",
-          preset: "done",
-        });
-        return;
-      }
       toast({ title: "Upgraded to Team!", preset: "done" });
     },
     onError: (e: Error) => {
@@ -339,7 +286,7 @@ export default function SubscriptionScreen() {
           ) : null}
           {!isLoading && stripeBilled ? (
             <Text style={{ textAlign: "center", fontSize: 13, color: "#94A3B8", marginBottom: 2 }}>
-              Billed on the web — use Manage payment below.
+              Billed on the web — owners manage the plan at alenio.app (tap Manage billing below).
             </Text>
           ) : null}
         </View>
@@ -543,19 +490,42 @@ export default function SubscriptionScreen() {
             ))}
             <View style={{ marginTop: 14 }}>
               {!isLoading && currentPlan === "team" ? (
-                <TouchableOpacity
-                  disabled
-                  style={{
-                    borderRadius: 12,
-                    paddingVertical: 11,
-                    alignItems: "center",
-                    backgroundColor: "#EEF2FF",
-                    borderWidth: 1,
-                    borderColor: "#C7D2FE",
-                  }}
-                >
-                  <Text style={{ fontSize: 12, fontWeight: "700", color: TEAM_ACCENT }}>Current plan</Text>
-                </TouchableOpacity>
+                ((stripeBilled && isOwner) || (!stripeBilled && isRevenueCatEnabled())) ? (
+                  <TouchableOpacity
+                    onPress={() => void handleManageSubscriptionBilling()}
+                    disabled={billingActionLoading}
+                    testID="subscription-manage-billing"
+                    style={{
+                      borderRadius: 12,
+                      paddingVertical: 12,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      borderWidth: 1,
+                      borderColor: "#C7D2FE",
+                      backgroundColor: "white",
+                    }}
+                  >
+                    {billingActionLoading ? (
+                      <ActivityIndicator color={TEAM_ACCENT} />
+                    ) : (
+                      <Text style={{ fontSize: 12, fontWeight: "700", color: TEAM_ACCENT }}>Manage billing</Text>
+                    )}
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity
+                    disabled
+                    style={{
+                      borderRadius: 12,
+                      paddingVertical: 11,
+                      alignItems: "center",
+                      backgroundColor: "#EEF2FF",
+                      borderWidth: 1,
+                      borderColor: "#C7D2FE",
+                    }}
+                  >
+                    <Text style={{ fontSize: 12, fontWeight: "700", color: TEAM_ACCENT }}>Current plan</Text>
+                  </TouchableOpacity>
+                )
               ) : !isLoading && currentPlan === "free" ? (
                 <>
                   <TouchableOpacity
@@ -600,7 +570,7 @@ export default function SubscriptionScreen() {
                         lineHeight: 14,
                       }}
                     >
-                      Cancel anytime · Secure checkout
+                      Cancel anytime · Billed through {Platform.OS === "ios" ? "the App Store" : "Google Play"}
                     </Text>
                   ) : (
                     <Text style={{ textAlign: "center", fontSize: 10, color: "#94A3B8", marginTop: 8 }}>
@@ -614,45 +584,6 @@ export default function SubscriptionScreen() {
             </View>
           </View>
         </View>
-
-        {/* Payment & renewals (web vs App Store / Play) */}
-        {currentPlan === "team" && !isLoading && ((stripeBilled && isOwner) || (!stripeBilled && isRevenueCatEnabled())) ? (
-          <View style={{ marginHorizontal: 16, marginTop: 20 }}>
-            <TouchableOpacity
-              onPress={() => void handleManageSubscriptionBilling()}
-              disabled={billingActionLoading}
-              testID="subscription-manage-billing"
-              style={{
-                borderRadius: 16,
-                paddingVertical: 14,
-                alignItems: "center",
-                borderWidth: 1,
-                borderColor: "#FDE68A",
-                backgroundColor: "#FFFBEB",
-              }}
-            >
-              {billingActionLoading ? (
-                <ActivityIndicator color="#D97706" />
-              ) : (
-                <Text style={{ color: "#B45309", fontWeight: "700", fontSize: 15 }}>
-                  Manage payment & renewals
-                </Text>
-              )}
-            </TouchableOpacity>
-            <Text
-              style={{
-                textAlign: "center",
-                fontSize: 12,
-                color: "#94A3B8",
-                marginTop: 8,
-                paddingHorizontal: 8,
-              }}
-            >
-              Subscriptions started on the web open in a secure in-app browser. In-app purchases use Apple or Google
-              subscription settings.
-            </Text>
-          </View>
-        ) : null}
 
         {/* Cancel plan section (in-app cancel is for store-synced plans; web-billed plans use the billing portal) */}
         {currentPlan !== "free" && !isLoading && !stripeBilled ? (
@@ -685,49 +616,6 @@ export default function SubscriptionScreen() {
             </Text>
           </View>
         ) : null}
-
-        {/* Enterprise */}
-        <TouchableOpacity
-          onPress={() => void Linking.openURL(ENTERPRISE_MAIL)}
-          activeOpacity={0.85}
-          style={{
-            marginHorizontal: 16,
-            marginTop: 20,
-            borderRadius: 16,
-            borderWidth: 1,
-            borderColor: "#E2E8F0",
-            backgroundColor: "white",
-            padding: 16,
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 14,
-          }}
-          testID="subscription-enterprise"
-        >
-          <View
-            style={{
-              width: 44,
-              height: 44,
-              borderRadius: 12,
-              backgroundColor: "#F1F5F9",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <Users size={22} color="#64748B" />
-          </View>
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={{ fontSize: 14, fontWeight: "700", color: "#0F172A", lineHeight: 19 }}>
-              More than 25 members?
-            </Text>
-            <Text style={{ fontSize: 12, color: "#64748B", marginTop: 4, lineHeight: 17 }}>
-              Contact us for custom pricing for larger teams.
-            </Text>
-            <Text style={{ fontSize: 13, fontWeight: "700", color: "#4361EE", marginTop: 8 }}>
-              Contact Sales ›
-            </Text>
-          </View>
-        </TouchableOpacity>
 
         {/* Restore Purchases — App Store / Play only (hide when this workspace is billed on the web) */}
         {isRevenueCatEnabled() && !stripeBilled ? (
@@ -763,12 +651,6 @@ export default function SubscriptionScreen() {
           </TouchableOpacity>
         ) : null}
       </ScrollView>
-
-      <BillingPortalWebViewModal
-        visible={!!billingPortalUrl}
-        url={billingPortalUrl}
-        onClose={() => setBillingPortalUrl(null)}
-      />
 
       {/* Cancel confirmation modal */}
       <Modal

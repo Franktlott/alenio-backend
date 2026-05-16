@@ -11,6 +11,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { formatEventTimeRange } from "@/lib/format-event-time";
 
 const alenioIcon = require("@/assets/alenio-icon.png");
 
@@ -177,7 +178,8 @@ export default function MeetingBanner() {
           </View>
           <Text style={styles.title} numberOfLines={1}>{event.title}</Text>
           <Text style={styles.meta}>
-            {teamName}
+            {formatEventTimeRange(event.startDate, event.endDate)}
+            {` · ${teamName}`}
             {!hasStarted ? ` · ${formatCountdown(msUntilStart)}` : ""}
           </Text>
         </View>

@@ -615,7 +615,7 @@ export function DashboardPage() {
                                     marginLeft: isBarStart ? 2 : 0,
                                     marginRight: isBarEnd ? 2 : 0,
                                   }}
-                                  title={isOwnerOrLeader ? `${bar.title} · Edit in the Alenio app` : bar.title}
+                                  title={bar.title}
                                   aria-label={bar.title}
                                   onClick={() => {
                                     /* parity: mobile opens edit; web has no editor */
@@ -698,111 +698,121 @@ export function DashboardPage() {
                           </div>
                         </div>
                       ))}
-                      {selectedEvents.map((event) => (
-                        <div
-                          key={event.id}
-                          className="enterprise-cal-day-event"
-                          style={{ borderLeftColor: event.color?.trim() || "#4361EE" }}
-                          data-testid={`event-item-${event.id}`}
-                        >
-                          <div className="enterprise-cal-day-event-top">
-                            <span className="enterprise-cal-day-event-name">{event.title}</span>
-                            <span className="enterprise-cal-day-event-badges">
-                              {event.isVideoMeeting ? (
+                      {selectedEvents.map((event) => {
+                        const badgesContent = (
+                          <>
+                            {!event.isHidden ? <span className="enterprise-cal-badge-public">Public</span> : null}
+                            <span
+                              className="enterprise-cal-badge-range"
+                              style={{ color: event.color?.trim() || "#4361EE", background: `${event.color?.trim() || "#4361EE"}20` }}
+                            >
+                              {event.endDate && !isSameDay(new Date(event.startDate), new Date(event.endDate))
+                                ? `${new Date(event.startDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${new Date(event.endDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
+                                : "Event"}
+                            </span>
+                            {(isOwnerOrAdmin || (!!me?.id && event.createdById === me.id)) && selectedTeamId ? (
+                              <div className="enterprise-cal-day-event-actions">
                                 <button
                                   type="button"
-                                  className="enterprise-cal-badge-video enterprise-cal-video-join"
-                                  title="Join video meeting"
-                                  onClick={() => void openVideoCall(event.id, event.title)}
-                                  disabled={videoLoading}
+                                  className="enterprise-cal-day-event-more"
+                                  onClick={() => setEvMenuId((prev) => (prev === event.id ? null : event.id))}
+                                  aria-label="Event actions"
                                 >
-                                  {videoLoading ? "Joining…" : "Join"}
+                                  ⋯
                                 </button>
-                              ) : null}
-                              {!event.isHidden ? <span className="enterprise-cal-badge-public">Public</span> : null}
-                              <span
-                                className="enterprise-cal-badge-range"
-                                style={{ color: event.color?.trim() || "#4361EE", background: `${event.color?.trim() || "#4361EE"}20` }}
-                              >
-                                {event.endDate && !isSameDay(new Date(event.startDate), new Date(event.endDate))
-                                  ? `${new Date(event.startDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${new Date(event.endDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
-                                  : "Event"}
-                              </span>
-                              {(isOwnerOrAdmin || (!!me?.id && event.createdById === me.id)) && selectedTeamId ? (
-                                <div className="enterprise-cal-day-event-actions">
+                                {evMenuId === event.id ? (
+                                  <div className="enterprise-cal-day-event-menu">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setEvMenuId(null);
+                                        setEvEditId(event.id);
+                                        const allDay = event.allDay !== false;
+                                        setEvAllDay(allDay);
+                                        setEvTitle(event.title ?? "");
+                                        setEvDescription(event.description ?? "");
+                                        setEvColor(event.color?.trim() || "#4361EE");
+                                        setNewEventIsVideoMeeting(!!event.isVideoMeeting);
+                                        setEvStart(allDay ? toDateInput(event.startDate) : toDatetimeLocalInput(event.startDate));
+                                        setEvEnd(
+                                          event.endDate
+                                            ? allDay
+                                              ? toDateInput(event.endDate)
+                                              : toDatetimeLocalInput(event.endDate)
+                                            : "",
+                                        );
+                                        setEventOpen(true);
+                                      }}
+                                    >
+                                      Edit
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={evDeleteId === event.id}
+                                      onClick={async () => {
+                                        const ok = window.confirm("Delete this event?");
+                                        if (!ok) return;
+                                        setEvDeleteId(event.id);
+                                        setEvActionError(null);
+                                        setEvMenuId(null);
+                                        try {
+                                          await deleteWebTeamEvent(selectedTeamId, event.id);
+                                          await refreshTeamData(selectedTeamId);
+                                        } catch (err) {
+                                          setEvActionError(err instanceof Error ? err.message : "Could not delete event.");
+                                        } finally {
+                                          setEvDeleteId(null);
+                                        }
+                                      }}
+                                    >
+                                      {evDeleteId === event.id ? "Deleting…" : "Delete"}
+                                    </button>
+                                  </div>
+                                ) : null}
+                              </div>
+                            ) : null}
+                          </>
+                        );
+                        return (
+                          <div
+                            key={event.id}
+                            className="enterprise-cal-day-event"
+                            style={{ borderLeftColor: event.color?.trim() || "#4361EE" }}
+                            data-testid={`event-item-${event.id}`}
+                          >
+                            <div className="enterprise-cal-day-event-top">
+                              <span className="enterprise-cal-day-event-name">{event.title}</span>
+                              {event.isVideoMeeting ? (
+                                <div className="enterprise-cal-day-event-meeting-actions">
                                   <button
                                     type="button"
-                                    className="enterprise-cal-day-event-more"
-                                    onClick={() => setEvMenuId((prev) => (prev === event.id ? null : event.id))}
-                                    aria-label="Event actions"
+                                    className="enterprise-cal-badge-video enterprise-cal-video-join"
+                                    title="Join video meeting"
+                                    aria-label={`Join video meeting: ${event.title}`}
+                                    onClick={() => void openVideoCall(event.id, event.title)}
+                                    disabled={videoLoading}
+                                    data-testid={`event-join-${event.id}`}
                                   >
-                                    ⋯
+                                    {videoLoading ? "Joining…" : "Join"}
                                   </button>
-                                  {evMenuId === event.id ? (
-                                    <div className="enterprise-cal-day-event-menu">
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          setEvMenuId(null);
-                                          setEvEditId(event.id);
-                                          const allDay = event.allDay !== false;
-                                          setEvAllDay(allDay);
-                                          setEvTitle(event.title ?? "");
-                                          setEvDescription(event.description ?? "");
-                                          setEvColor(event.color?.trim() || "#4361EE");
-                                          setNewEventIsVideoMeeting(!!event.isVideoMeeting);
-                                          setEvStart(allDay ? toDateInput(event.startDate) : toDatetimeLocalInput(event.startDate));
-                                          setEvEnd(
-                                            event.endDate
-                                              ? allDay
-                                                ? toDateInput(event.endDate)
-                                                : toDatetimeLocalInput(event.endDate)
-                                              : "",
-                                          );
-                                          setEventOpen(true);
-                                        }}
-                                      >
-                                        Edit
-                                      </button>
-                                      <button
-                                        type="button"
-                                        disabled={evDeleteId === event.id}
-                                        onClick={async () => {
-                                          const ok = window.confirm("Delete this event?");
-                                          if (!ok) return;
-                                          setEvDeleteId(event.id);
-                                          setEvActionError(null);
-                                          setEvMenuId(null);
-                                          try {
-                                            await deleteWebTeamEvent(selectedTeamId, event.id);
-                                            await refreshTeamData(selectedTeamId);
-                                          } catch (err) {
-                                            setEvActionError(err instanceof Error ? err.message : "Could not delete event.");
-                                          } finally {
-                                            setEvDeleteId(null);
-                                          }
-                                        }}
-                                      >
-                                        {evDeleteId === event.id ? "Deleting…" : "Delete"}
-                                      </button>
-                                    </div>
-                                  ) : null}
+                                  <span className="enterprise-cal-day-event-badges">{badgesContent}</span>
                                 </div>
-                              ) : null}
-                            </span>
-                          </div>
-                          {event.allDay !== true ? (
-                            <div className="enterprise-cal-day-event-time">
-                              {new Date(event.startDate).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}
-                              {event.endDate
-                                ? ` – ${new Date(event.endDate).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}`
-                                : null}
+                              ) : (
+                                <span className="enterprise-cal-day-event-badges">{badgesContent}</span>
+                              )}
                             </div>
-                          ) : null}
-                          {event.description ? <p className="enterprise-cal-day-event-desc">{event.description}</p> : null}
-                          {isOwnerOrLeader ? <p className="enterprise-cal-day-event-edit-hint">Edit in the Alenio app</p> : null}
-                        </div>
-                      ))}
+                            {event.allDay !== true ? (
+                              <div className="enterprise-cal-day-event-time">
+                                {new Date(event.startDate).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}
+                                {event.endDate
+                                  ? ` – ${new Date(event.endDate).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}`
+                                  : null}
+                              </div>
+                            ) : null}
+                            {event.description ? <p className="enterprise-cal-day-event-desc">{event.description}</p> : null}
+                          </div>
+                        );
+                      })}
                       {selectedTasks.map((task) => (
                         <div
                           key={task.id}

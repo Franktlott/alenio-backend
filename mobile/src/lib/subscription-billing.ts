@@ -2,6 +2,11 @@ import { Linking } from "react-native";
 import Purchases from "react-native-purchases";
 import { isRevenueCatEnabled, TEAM_ENTITLEMENT_ID } from "./revenue-cat";
 
+/**
+ * Where teams that subscribed on the web manage plans. The native app must not open Stripe checkout or Customer Portal.
+ */
+export const ALENIO_WEB_BILLING_URL = "https://alenio.app/billing";
+
 export type BillingSource = "stripe" | "app_store" | "play_store" | "other";
 
 export type TeamBillingContext = {

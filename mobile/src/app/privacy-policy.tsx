@@ -11,8 +11,10 @@ import { ArrowLeft } from "lucide-react-native";
 import {
   LEGAL_APP_NAME as APP_NAME,
   LEGAL_COMPANY_NAME as COMPANY_NAME,
+  LEGAL_PARENT_COMPANY_NAME as PARENT_COMPANY_NAME,
   LEGAL_CONTACT_EMAIL as CONTACT_EMAIL,
   LEGAL_LAST_UPDATED as LAST_UPDATED,
+  LEGAL_WEBSITE_LABEL as WEBSITE_LABEL,
 } from "@/lib/legal-constants";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -58,7 +60,7 @@ export default function PrivacyPolicy() {
         <Text className="text-xs text-slate-400 mb-6">Last updated: {LAST_UPDATED}</Text>
 
         <Body>
-          {COMPANY_NAME} ("we", "us", or "our") operates the {APP_NAME} mobile application (the "App"). This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our App. Please read it carefully.
+          {COMPANY_NAME} ("we", "us", or "our") operates the {APP_NAME} mobile application (the "App") and the {APP_NAME} website at {WEBSITE_LABEL} (the "Website"). {COMPANY_NAME} is a subsidiary of {PARENT_COMPANY_NAME}. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use the App or the Website. Please read it carefully.
         </Body>
 
         <View className="h-4" />
@@ -87,6 +89,9 @@ export default function PrivacyPolicy() {
             <Bullet>
               <Text className="font-semibold">Usage Data:</Text> Features used, actions taken, and timestamps of interactions.
             </Bullet>
+            <Bullet>
+              <Text className="font-semibold">Website &amp; session data:</Text> When you use the Website, our authentication provider uses cookies and similar technologies as needed for sign-in sessions, security, and preferences in your browser.
+            </Bullet>
           </View>
         </Section>
 
@@ -97,7 +102,7 @@ export default function PrivacyPolicy() {
             <Bullet>Create and manage your account and authenticate your identity.</Bullet>
             <Bullet>Enable team communication, task management, collaboration, and video meetings.</Bullet>
             <Bullet>Send push notifications for messages, tasks, and reminders (you may opt out in Settings).</Bullet>
-            <Bullet>Process subscription payments via our payment provider.</Bullet>
+            <Bullet>Process subscription payments: in-app purchases via the applicable app store; on the web, via Stripe when you subscribe or manage billing at {WEBSITE_LABEL}.</Bullet>
             <Bullet>Respond to your support requests and communicate important updates.</Bullet>
             <Bullet>Monitor and analyse usage to improve the App's performance and features.</Bullet>
             <Bullet>Detect, prevent, and address technical issues and security threats.</Bullet>
@@ -165,12 +170,13 @@ export default function PrivacyPolicy() {
         </Section>
 
         <Section title="8. Third-Party Services">
-          <Body>The App integrates with the following third-party services, each governed by their own privacy policies:</Body>
+          <Body>The App and Website integrate with the following third-party services, each governed by their own privacy policies:</Body>
           <View className="mt-2">
             <Bullet>Neon — Database hosting and authentication (sign-in, sessions, and application data storage).</Bullet>
             <Bullet>Apple Push Notification Service (APNs) — iOS push notifications.</Bullet>
             <Bullet>Google Firebase — Firebase Cloud Messaging (FCM) for Android push notifications; Firebase Storage for user-uploaded files and media where the App stores attachments.</Bullet>
             <Bullet>RevenueCat — Subscription and in-app purchase management.</Bullet>
+            <Bullet>Stripe — Payment processing when you subscribe or manage a team plan on the Website ({WEBSITE_LABEL}); subject to Stripe&apos;s terms and privacy policy.</Bullet>
             <Bullet>Resend — Transactional email (for example when you submit feedback or when we send operational emails).</Bullet>
             <Bullet>Expo — App infrastructure and updates.</Bullet>
             <Bullet>Daily.co — Video call infrastructure. Your display name is passed to Daily.co to identify you during video meetings. Video and audio streams are processed by Daily.co and are not stored by {COMPANY_NAME}. Daily.co's terms and privacy policy apply to their processing.</Bullet>
@@ -185,7 +191,7 @@ export default function PrivacyPolicy() {
 
         <Section title="10. Changes to This Policy">
           <Body>
-            We may update this Privacy Policy from time to time. We will notify you of material changes by posting the new policy in the App and updating the "Last updated" date above. Your continued use of the App after changes constitutes acceptance of the updated policy.
+            We may update this Privacy Policy from time to time. We will notify you of material changes by posting the new policy in the App or on the Website and updating the "Last updated" date above. Your continued use of the App or Website after changes constitutes acceptance of the updated policy.
           </Body>
         </Section>
 
@@ -195,7 +201,8 @@ export default function PrivacyPolicy() {
           </Body>
           <View className="mt-3 bg-slate-50 rounded-xl p-4">
             <Text className="text-sm font-semibold text-slate-700">{COMPANY_NAME}</Text>
-            <Text className="text-sm text-indigo-600 mt-1">{CONTACT_EMAIL}</Text>
+            <Text className="text-xs text-slate-500 mt-1">Parent company: {PARENT_COMPANY_NAME}</Text>
+            <Text className="text-sm text-indigo-600 mt-2">{CONTACT_EMAIL}</Text>
           </View>
         </Section>
       </ScrollView>

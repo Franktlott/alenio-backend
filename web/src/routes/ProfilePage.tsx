@@ -1,12 +1,16 @@
 import { useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
+import { LEGAL_COMPANY_NAME, LEGAL_PARENT_COMPANY_NAME } from "../lib/legal-constants";
 import { useEnterpriseShell } from "../contexts/EnterpriseShellContext";
 import { ProfileTeamsSection } from "../components/ProfileTeamsSection";
 import {
+  fetchWebTeams,
   patchApiProfile,
   uploadProfilePhoto,
   type WebMeUser,
   type WebTeamRow,
 } from "../lib/api";
+import { pickEnterpriseTeamId, setPersistedEnterpriseTeamId } from "../lib/enterprise-selected-team";
 
 function userInitials(user: WebMeUser | null): string {
   if (!user) return "?";
@@ -139,7 +143,9 @@ export function ProfilePage() {
   if (me === undefined) {
     return (
       <div className="enterprise-dashboard-inner enterprise-profile-page">
-        <p className="enterprise-muted">Loading…</p>
+        <div className="enterprise-profile-page-body">
+          <p className="enterprise-muted">Loading…</p>
+        </div>
       </div>
     );
   }
@@ -147,10 +153,11 @@ export function ProfilePage() {
   return (
     <>
       <div className="enterprise-dashboard-inner enterprise-profile-page">
-        <h1 className="enterprise-page-title enterprise-profile-page-title">Profile</h1>
+        <div className="enterprise-profile-page-body">
+          <h1 className="enterprise-page-title enterprise-profile-page-title">Profile</h1>
 
-        <section className="enterprise-card enterprise-profile-account">
-          <div className="enterprise-profile-account-head">
+          <section className="enterprise-card enterprise-profile-account">
+            <div className="enterprise-profile-account-head">
             <h2 className="enterprise-card-title enterprise-card-title-spaced enterprise-profile-account-title">Account</h2>
             {!isEditing ? (
               <button
@@ -244,9 +251,52 @@ export function ProfilePage() {
               {formErr}
             </p>
           ) : null}
-        </section>
+          </section>
 
-        <ProfileTeamsSection teams={teams ?? []} onRefresh={refreshMeAndTeams} />
+          <ProfileTeamsSection
+            teams={teams ?? []}
+            onRefresh={refreshMeAndTeams}
+            onWorkspaceDeleted={async (deletedId) => {
+              const fresh = await fetchWebTeams();
+              setTeams(fresh ?? []);
+              if (selectedTeamId === deletedId) {
+                const next = pickEnterpriseTeamId(fresh ?? [], "");
+                setSelectedTeamId(next);
+                setPersistedEnterpriseTeamId(next);
+              }
+              await refreshMeAndTeams();
+            }}
+          />
+        </div>
+
+        <footer className="enterprise-profile-legal" aria-labelledby="profile-legal-heading">
+          <div className="enterprise-profile-legal-inner">
+            <h2 id="profile-legal-heading" className="enterprise-profile-legal-title">
+              Legal information
+            </h2>
+            <nav className="enterprise-profile-legal-nav" aria-label="Legal documents">
+              <Link to="/privacy" className="enterprise-profile-legal-link">
+                Privacy Policy
+              </Link>
+              <span className="enterprise-profile-legal-sep" aria-hidden>
+                |
+              </span>
+              <Link to="/terms" className="enterprise-profile-legal-link">
+                Terms of Service
+              </Link>
+            </nav>
+            <dl className="enterprise-profile-legal-entity">
+              <div className="enterprise-profile-legal-entity-row">
+                <dt>Operating entity</dt>
+                <dd>{LEGAL_COMPANY_NAME}</dd>
+              </div>
+              <div className="enterprise-profile-legal-entity-row">
+                <dt>Parent company</dt>
+                <dd>{LEGAL_PARENT_COMPANY_NAME}</dd>
+              </div>
+            </dl>
+          </div>
+        </footer>
       </div>
     </>
   );

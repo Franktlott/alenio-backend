@@ -53,7 +53,7 @@
   Never delete or refactor RootLayoutNav from src/app/_layout.tsx.
   
   <stack_router>
-    src/app/_layout.tsx (root layout), src/app/index.tsx (matches '/'), src/app/settings.tsx (matches '/settings')
+    src/app/_layout.tsx (root layout), src/app/index.tsx (matches '/')
     Use <Stack.Screen options={{ title, headerStyle, ... }} /> inside pages to customize headers.
   </stack_router>
   

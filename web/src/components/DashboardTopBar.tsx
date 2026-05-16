@@ -1,4 +1,3 @@
-import { useCallback, type KeyboardEvent } from "react";
 import type { WebMeUser } from "../lib/api";
 import { JoinRequestBell } from "./JoinRequestBell";
 
@@ -14,36 +13,29 @@ function initials(user: WebMeUser | null): string {
 
 type Props = {
   user: WebMeUser | null;
+  pageTitle: string;
+  workspaceName?: string | null;
   /** Optional extra count shown on the bell badge (join requests are included automatically). */
   notificationCount?: number;
 };
 
-export function DashboardTopBar({ user, notificationCount = 0 }: Props) {
-  const onSearchKeyDown = useCallback((e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
-      e.preventDefault();
-      (e.target as HTMLInputElement).focus();
-    }
-  }, []);
+export function DashboardTopBar({ user, pageTitle, workspaceName, notificationCount = 0 }: Props) {
+  const workspace = workspaceName?.trim() || null;
 
   return (
     <header className="enterprise-topbar" data-testid="dashboard-topbar">
-      <div className="enterprise-topbar-search-wrap">
-        <span className="enterprise-topbar-search-icon" aria-hidden>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <circle cx="11" cy="11" r="8" />
-            <path d="m21 21-4.35-4.35" />
-          </svg>
-        </span>
-        <input
-          type="search"
-          className="enterprise-topbar-search"
-          placeholder="Search tasks, teams, metrics…"
-          aria-label="Search"
-          onKeyDown={onSearchKeyDown}
-          data-testid="topbar-search"
-        />
-        <kbd className="enterprise-topbar-kbd">⌘ K</kbd>
+      <div className="enterprise-topbar-context" data-testid="topbar-context">
+        <h1 className="enterprise-topbar-title">{pageTitle}</h1>
+        {workspace ? (
+          <>
+            <span className="enterprise-topbar-sep" aria-hidden>
+              ·
+            </span>
+            <span className="enterprise-topbar-workspace" data-testid="topbar-workspace">
+              {workspace}
+            </span>
+          </>
+        ) : null}
       </div>
       <div className="enterprise-topbar-actions">
         <JoinRequestBell extraNotificationCount={notificationCount} />

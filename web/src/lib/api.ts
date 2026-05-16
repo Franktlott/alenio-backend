@@ -777,6 +777,19 @@ export function leaveTeam(teamId: string) {
   return apiRequest<unknown>(`/api/teams/${encodeURIComponent(teamId)}/leave`, { method: "DELETE" });
 }
 
+export type DeleteTeamConfirmation = {
+  password?: string;
+  confirmPhrase?: string;
+};
+
+/** Permanently delete a workspace (owner only). Confirm with password or confirmPhrase "DELETE". */
+export function deleteTeam(teamId: string, confirmation: DeleteTeamConfirmation) {
+  return apiRequest<unknown>(`/api/teams/${encodeURIComponent(teamId)}`, {
+    method: "DELETE",
+    body: JSON.stringify(confirmation),
+  });
+}
+
 /** Team photo: same upload endpoint as chat; requires purpose=team and teamId. */
 export async function uploadTeamPhoto(file: File, teamId: string): Promise<ChatUploadResult> {
   assertProductionApiConfigured();
