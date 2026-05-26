@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { LEGAL_COMPANY_NAME, LEGAL_PARENT_COMPANY_NAME } from "../lib/legal-constants";
+import { clearAccessToken, getAuthClient } from "../lib/auth-client";
 import { useEnterpriseShell } from "../contexts/EnterpriseShellContext";
+import { DeleteAccountModal } from "../components/DeleteAccountModal";
 import { ProfileTeamsSection } from "../components/ProfileTeamsSection";
 import {
   fetchWebTeams,
@@ -39,6 +41,7 @@ function IconPencil() {
 }
 
 export function ProfilePage() {
+  const navigate = useNavigate();
   const {
     me,
     setMe,
@@ -53,7 +56,19 @@ export function ProfilePage() {
   const [profileSaving, setProfileSaving] = useState(false);
   const [photoBusy, setPhotoBusy] = useState(false);
   const [formErr, setFormErr] = useState<string | null>(null);
+  const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
   const prevWorkspaceRef = useRef("");
+
+  const onAccountDeleted = async () => {
+    try {
+      await getAuthClient().signOut();
+    } catch {
+      /* ignore */
+    }
+    clearAccessToken();
+    setPersistedEnterpriseTeamId("");
+    navigate("/login", { replace: true });
+  };
 
   useEffect(() => {
     if (me) setNameEdit((prev) => (prev === "" || !isEditing ? me.name?.trim() ?? "" : prev));
@@ -284,6 +299,18 @@ export function ProfilePage() {
               <Link to="/terms" className="enterprise-profile-legal-link">
                 Terms of Service
               </Link>
+              <span className="enterprise-profile-legal-sep" aria-hidden>
+                |
+              </span>
+              <button
+                type="button"
+                className="enterprise-profile-legal-link"
+                id="account-deletion"
+                onClick={() => setDeleteAccountOpen(true)}
+                data-testid="account-deletion-link"
+              >
+                Account deletion
+              </button>
             </nav>
             <dl className="enterprise-profile-legal-entity">
               <div className="enterprise-profile-legal-entity-row">
@@ -298,6 +325,12 @@ export function ProfilePage() {
           </div>
         </footer>
       </div>
+
+      <DeleteAccountModal
+        open={deleteAccountOpen}
+        onClose={() => setDeleteAccountOpen(false)}
+        onDeleted={onAccountDeleted}
+      />
     </>
   );
 }

@@ -14,6 +14,7 @@ function pageTitleForPath(pathname: string): string | null {
   if (pathname.startsWith("/verify")) return "Verify email";
   if (pathname.startsWith("/privacy")) return "Privacy Policy";
   if (pathname.startsWith("/terms")) return "Terms of Service";
+  if (pathname.startsWith("/account-deletion")) return "Account Deletion";
   if (pathname.startsWith("/activity")) return enterpriseNavTitle("activity");
   if (pathname.startsWith("/chat")) return enterpriseNavTitle("chat");
   if (pathname.startsWith("/dashboard")) return enterpriseNavTitle("execute");

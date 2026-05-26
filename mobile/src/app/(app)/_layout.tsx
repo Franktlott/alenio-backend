@@ -12,6 +12,7 @@ import { useTaskStore } from "@/lib/state/task-store";
 import { useEffect, useMemo } from "react";
 import type { CalendarEvent, Conversation, Team, Task } from "@/lib/types";
 import MeetingBanner from "@/components/MeetingBanner";
+import { WorkspaceSwitchOverlay } from "@/components/WorkspaceSwitchOverlay";
 
 const DEMO_EMAIL = "demo@alenio.app";
 
@@ -306,6 +307,7 @@ export default function AppLayout() {
         <Tabs.Screen name="profile" options={{ title: "Profile" }} />
       </Tabs>
       <MeetingBanner />
+      <WorkspaceSwitchOverlay />
     </>
   );
 }

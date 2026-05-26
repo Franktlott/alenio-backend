@@ -197,6 +197,14 @@ export function patchApiProfile(body: { name?: string; image?: string | null }) 
   ).then((r) => r.data);
 }
 
+/** Permanently delete the signed-in user and all associated app data (password required). */
+export function deleteApiAccount(password: string) {
+  return apiRequest<{ data: { deleted: boolean } }>("/api/user", {
+    method: "DELETE",
+    body: JSON.stringify({ password }),
+  });
+}
+
 export function fetchWebTeams() {
   return apiGetJson<{ data: WebTeamRow[] }>("/web/api/teams").then((r) => r.data);
 }

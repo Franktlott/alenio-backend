@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { LEGAL_COMPANY_NAME, LEGAL_PARENT_COMPANY_NAME } from "../lib/legal-constants";
+import { MarketingFooter } from "./MarketingFooter";
 
-type NavId = "product" | "solutions" | "pricing" | "resources" | "about";
+type NavId = "how-it-works" | "pricing";
 
 type Props = {
   children: ReactNode;
@@ -27,50 +27,25 @@ export function WebsiteChrome({ children, activeNav, variant = "bar" }: Props) {
         />
       </Link>
       <nav className="site-v2-nav" aria-label="Primary">
-        <a href="/#features" className={navClass("product")}>
-          Product
-        </a>
-        <a href="/#industries" className={navClass("solutions")}>
-          Solutions
+        <a href="/#how-alenio-works" className={navClass("how-it-works")}>
+          How Alenio Works
         </a>
         <Link to="/pricing" className={navClass("pricing")}>
           Pricing
         </Link>
-        <a href="/#resources" className={navClass("resources")}>
-          Resources
-        </a>
-        <a href="/#about" className={navClass("about")}>
-          About
-        </a>
       </nav>
       <div className="site-v2-head-actions">
         <Link to="/login" className={variant === "hero" ? "site-v2-login" : "site-v2-login site-v2-login-dark"}>
           Log in
         </Link>
         <Link to="/sign-up" className="site-v2-head-cta">
-          Start with Team
+          Join Alenio
         </Link>
       </div>
     </header>
   );
 
-  const footer = (
-    <footer id="contact" className="site-v2-footer">
-      <div className="site-v2-footer-top">
-        <img src="/alenio-logo.png" alt="Alenio" className="site-v2-footer-logo" width={140} height={34} />
-        <a href="mailto:info@alenio.app">info@alenio.app</a>
-      </div>
-      <p className="site-v2-footer-legal">
-        <Link to="/privacy">Privacy Policy</Link>
-        {" · "}
-        <Link to="/terms">Terms of Service</Link>
-        {" · "}
-        <Link to="/pricing">Pricing</Link>
-      </p>
-      <p className="site-v2-footer-company">{LEGAL_COMPANY_NAME}</p>
-      <p className="site-v2-footer-parent">Parent company: {LEGAL_PARENT_COMPANY_NAME}</p>
-    </footer>
-  );
+  const footer = <MarketingFooter />;
 
   if (variant === "hero") {
     return (

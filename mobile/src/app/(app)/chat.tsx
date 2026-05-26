@@ -26,7 +26,7 @@ import type { Conversation, Team } from "@/lib/types";
 import { NoTeamPlaceholder } from "@/components/NoTeamPlaceholder";
 import { useDemoMode } from "@/lib/useDemo";
 import { useSubscriptionStore } from "@/lib/state/subscription-store";
-import { restorePurchases, isRevenueCatEnabled } from "@/lib/revenue-cat";
+import { PAYWALL_BODY, PAYWALL_TITLE } from "@/lib/plan-access-copy";
 
 const PINNED_DMS_KEY = "pinned_dms";
 
@@ -76,7 +76,6 @@ export default function ChatScreen() {
   const queryClient = useQueryClient();
   const isDemo = useDemoMode();
   const [showGroupPaywall, setShowGroupPaywall] = useState(false);
-  const [isRestoringChat, setIsRestoringChat] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [pinnedDmIds, setPinnedDmIds] = useState<string[]>([]);
@@ -387,47 +386,22 @@ export default function ChatScreen() {
               <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: "#EEF2FF", alignItems: "center", justifyContent: "center", marginBottom: 14 }}>
                 <Lock size={28} color="#4361EE" />
               </View>
-              <Text style={{ fontSize: 18, fontWeight: "700", color: "#0F172A", textAlign: "center", marginBottom: 8 }}>Group Chats</Text>
+              <Text style={{ fontSize: 18, fontWeight: "700", color: "#0F172A", textAlign: "center", marginBottom: 8 }}>{PAYWALL_TITLE}</Text>
               <Text style={{ fontSize: 14, color: "#64748B", textAlign: "center", marginBottom: 24, lineHeight: 20 }}>
-                Upgrade to Alenio Team to create group conversations with your team
+                {PAYWALL_BODY}
               </Text>
               <TouchableOpacity
                 onPress={() => { setShowGroupPaywall(false); router.push("/subscription"); }}
-                testID="group-paywall-upgrade-button"
+                testID="group-paywall-view-plan"
                 style={{ borderRadius: 14, overflow: "hidden", width: "100%", shadowColor: "#4361EE", shadowOpacity: 0.35, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 5, marginBottom: 10 }}
               >
                 <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ paddingVertical: 14, alignItems: "center", flexDirection: "row", justifyContent: "center", gap: 8 }}>
-                  <Text style={{ color: "white", fontWeight: "700", fontSize: 15 }}>Upgrade to Team Plan</Text>
+                  <Text style={{ color: "white", fontWeight: "700", fontSize: 15 }}>View plan details</Text>
                   <Text style={{ color: "rgba(255,255,255,0.85)", fontSize: 15 }}>→</Text>
                 </LinearGradient>
               </TouchableOpacity>
               <TouchableOpacity onPress={() => setShowGroupPaywall(false)} style={{ paddingVertical: 10, width: "100%", alignItems: "center" }} testID="group-paywall-dismiss">
                 <Text style={{ color: "#94A3B8", fontWeight: "600", fontSize: 14 }}>Not now</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={async () => {
-                  if (!isRevenueCatEnabled()) return;
-                  setIsRestoringChat(true);
-                  try {
-                    const result = await restorePurchases();
-                    setShowGroupPaywall(false);
-                    if (result.success && result.isTeam) {
-                      queryClient.invalidateQueries({ queryKey: ["subscription"] });
-                      toast({ title: "Purchases restored!", preset: "done" });
-                    } else {
-                      toast({ title: "No active purchases found.", preset: "error" });
-                    }
-                  } finally {
-                    setIsRestoringChat(false);
-                  }
-                }}
-                disabled={isRestoringChat}
-                style={{ paddingVertical: 8, width: "100%", alignItems: "center" }} testID="group-paywall-restore">
-                {isRestoringChat ? (
-                  <ActivityIndicator size="small" color="#CBD5E1" />
-                ) : (
-                  <Text style={{ color: "#CBD5E1", fontSize: 12 }}>Restore Purchases</Text>
-                )}
               </TouchableOpacity>
             </View>
           </Pressable>

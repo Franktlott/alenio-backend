@@ -26,12 +26,11 @@ import { videoRouter } from "./routes/video";
 import { usersRouter } from "./routes/users";
 import { ogPreviewRouter } from "./routes/og-preview";
 import { feedbackRouter } from "./routes/feedback";
-import { revenueCatRouter } from "./routes/revenuecat";
 import { sendPushNotificationsStrict } from "./lib/push";
 import { getDatabasePublicSummary } from "./lib/database-public-summary";
 import { syncAppUserFromNeonAuth } from "./lib/ensure-app-user";
+import { deleteAppUserCompletely } from "./lib/delete-app-user";
 import {
-  deleteAllUserStorageObjects,
   deleteStorageObjectByUrlIfOwned,
   isFirebaseStorageConfigured,
   uploadFileToFirebaseStorage,
@@ -582,18 +581,15 @@ app.delete("/api/user", async (c) => {
     return c.json({ error: { message: "Incorrect password", code: "INVALID_PASSWORD" } }, 401);
   }
 
-  // Delete records that don't have onDelete: Cascade, in dependency order
-  const uid = user.id;
-  await prisma.pollVote.deleteMany({ where: { userId: uid } });
-  await prisma.poll.deleteMany({ where: { createdById: uid } });
-  await prisma.directMessage.deleteMany({ where: { senderId: uid } });
-  await prisma.message.deleteMany({ where: { senderId: uid } });
-  await prisma.topic.deleteMany({ where: { createdById: uid } });
-  await prisma.taskTemplate.deleteMany({ where: { createdById: uid } });
-  await prisma.task.deleteMany({ where: { creatorId: uid } });
-  await deleteAllUserStorageObjects(uid);
-  // Delete user (cascades: sessions, accounts, team memberships, reactions, etc.)
-  await prisma.user.delete({ where: { id: uid } });
+  try {
+    await deleteAppUserCompletely(user.id);
+  } catch (err) {
+    console.error("[delete-account] failed for user", user.id, err);
+    return c.json(
+      { error: { message: "Could not delete account. Try again or contact support.", code: "DELETE_FAILED" } },
+      500,
+    );
+  }
 
   return c.json({ data: { deleted: true } });
 });
@@ -617,7 +613,6 @@ app.route("/api/demo", demoRouter);
 app.route("/api/og-preview", ogPreviewRouter);
 app.route("/api/feedback", feedbackRouter);
 app.route("/api/video", videoRouter);
-app.route("/api/revenuecat", revenueCatRouter);
 app.route("/admin", adminRouter);
 app.route("/api/admin-mobile", adminMobileRouter);
 app.route("/web", webRouter);

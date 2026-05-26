@@ -1,61 +1,233 @@
 import { Link } from "react-router-dom";
-import { LEGAL_COMPANY_NAME, LEGAL_PARENT_COMPANY_NAME } from "../lib/legal-constants";
+import { MarketingFooter } from "../components/MarketingFooter";
 
-const highlights = [
+const pillars = [
   {
-    title: "Real-time Team Communication",
-    text: "Channels, DMs, polls, and video calls from chat.",
+    title: "Know what's happening instantly",
+    icon: "chat",
+    points: [
+      "Team channels and direct messages",
+      "Polls for quick shift decisions",
+      "Video calls right from chat",
+    ],
   },
   {
-    title: "Tasks That Get Done",
-    text: "Owners, due dates, subtasks, files, and templates.",
+    title: "Keep tasks from slipping",
+    icon: "tasks",
+    points: [
+      "Assign owners and due dates",
+      "Subtasks, files, and photos",
+      "Templates for recurring work",
+    ],
   },
   {
-    title: "Visibility That Drives Action",
-    text: "Tasks, calendar, and video meetings in one place.",
+    title: "Run every location consistently",
+    icon: "locations",
+    points: [
+      "Calendar for trainings and visits",
+      "Visibility across stores",
+      "Same playbook at every site",
+    ],
   },
 ];
 
 const industries = [
   {
     title: "Restaurants & Fast Food",
-    points: ["Chat, polls, and video for shifts", "Tasks with subtasks and photos", "Calendar for trainings and visits"],
+    tone: "restaurant",
+    image: "/industry-restaurants-fast-food.png",
+    points: [
+      "Shift handoffs in chat",
+      "Opening and closing checklists",
+      "Manager visits on the calendar",
+    ],
   },
   {
     title: "Retail Stores",
-    points: ["DMs, channels, and polls", "Tasks and files for standards", "Calendar + tasks on the web"],
+    tone: "retail",
+    image: "/industry-retail-stores.png",
+    points: [
+      "Floor standards as tasks",
+      "DMs for quick questions",
+      "Multi-store visibility",
+    ],
   },
   {
     title: "Convenience & C-Stores",
-    points: ["Polls, chat, and video", "Checklist tasks with proof", "See work across stores"],
+    tone: "cstore",
+    image: "/industry-convenience-c-stores.png",
+    points: [
+      "Cooler restock tasks with proof",
+      "Polls for shift coverage",
+      "See work across locations",
+    ],
   },
   {
-    title: "Multifamily & Apartment Communities",
-    points: ["Channels and DMs for staff", "Work orders as tasks with photos", "Calendar for tours and vendors"],
+    title: "Multifamily & Communities",
+    tone: "multifamily",
+    image: "/industry-multifamily-communities.png",
+    points: [
+      "Staff channels and DMs",
+      "Work orders with photos",
+      "Vendor and tour scheduling",
+    ],
   },
 ];
+
+const useCases = [
+  {
+    title: "During a rush",
+    desc: "Send quick updates, get help, keep the floor moving.",
+    tone: "rush",
+    image: "/usecase-during-a-rush.png",
+  },
+  {
+    title: "Opening a new location",
+    desc: "Use templates to roll out standards and track readiness before day one.",
+    tone: "open",
+    image: "/usecase-opening-new-location.png",
+  },
+  {
+    title: "For managers",
+    desc: "Less follow-up. More coaching. Stronger teams.",
+    tone: "manager",
+    image: "/usecase-for-managers.png",
+  },
+  {
+    title: "For field leaders",
+    desc: "Stay aligned with visibility into every store and team.",
+    tone: "field",
+    image: "/usecase-field-leaders.png",
+  },
+];
+
+type CompareValue = boolean | string;
+
+const compareRows: {
+  feature: string;
+  teams: CompareValue;
+  slack: CompareValue;
+  groupme: CompareValue;
+  alenio: CompareValue;
+}[] = [
+  {
+    feature: "Real-time team messaging",
+    teams: true,
+    slack: true,
+    groupme: true,
+    alenio: true,
+  },
+  {
+    feature: "Tasks with owners, due dates & proof",
+    teams: "Planner (separate)",
+    slack: "Add-ons",
+    groupme: false,
+    alenio: true,
+  },
+  {
+    feature: "Team calendar in the same app",
+    teams: true,
+    slack: "Integrations",
+    groupme: false,
+    alenio: true,
+  },
+  {
+    feature: "Polls in chat",
+    teams: true,
+    slack: "Apps",
+    groupme: true,
+    alenio: true,
+  },
+  {
+    feature: "Video calls from chat",
+    teams: true,
+    slack: "Huddles",
+    groupme: "Limited",
+    alenio: true,
+  },
+  {
+    feature: "Built for frontline shift work",
+    teams: "Office-first",
+    slack: "Office-first",
+    groupme: "Social groups",
+    alenio: true,
+  },
+  {
+    feature: "Chat, tasks & calendar together",
+    teams: "Multiple apps",
+    slack: "Stack of tools",
+    groupme: "Chat only",
+    alenio: true,
+  },
+];
+
+function CompareCell({ value }: { value: CompareValue }) {
+  if (value === true) {
+    return (
+      <span className="site-v2-check" aria-label="Included">
+        ✓
+      </span>
+    );
+  }
+  if (value === false) {
+    return (
+      <span className="site-v2-compare-miss" aria-label="Not included">
+        —
+      </span>
+    );
+  }
+  return <span className="site-v2-compare-note">{value}</span>;
+}
+
+const activityItems = [
+  { name: "Jessica M.", action: "completed Restock Cooler", time: "12m ago", avatar: "JM" },
+  { name: "Marcus T.", action: "posted in #morning-shift", time: "28m ago", avatar: "MT" },
+  { name: "Manager", action: "assigned Opening checklist", time: "1h ago", avatar: "MG" },
+  { name: "Aisha K.", action: "uploaded photo on task", time: "2h ago", avatar: "AK" },
+];
+
+function PillarIcon({ type }: { type: string }) {
+  if (type === "tasks") {
+    return (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+        <path d="M9 11l3 3L22 4" />
+        <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+      </svg>
+    );
+  }
+  if (type === "locations") {
+    return (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+        <circle cx="12" cy="10" r="3" />
+      </svg>
+    );
+  }
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+    </svg>
+  );
+}
 
 export function WebsiteHomePage() {
   return (
     <div className="site-v2">
       <section className="site-v2-hero">
-        <header className="site-v2-header">
+        <header className="site-v2-header site-v2-header-hero">
           <Link to="/" className="site-v2-brand" aria-label="Alenio home">
             <img src="/alenio-logo-white.png" alt="Alenio" className="site-v2-logo-full" width={168} height={40} />
           </Link>
           <nav className="site-v2-nav" aria-label="Primary">
-            <a href="#features">Product</a>
-            <a href="#industries">Solutions</a>
+            <a href="#how-alenio-works">How Alenio Works</a>
             <Link to="/pricing">Pricing</Link>
-            <a href="#resources">Resources</a>
-            <a href="#about">About</a>
           </nav>
           <div className="site-v2-head-actions">
             <Link to="/login" className="site-v2-login">
               Log in
             </Link>
             <Link to="/sign-up" className="site-v2-head-cta">
-              Start with Team
+              Join Alenio
             </Link>
           </div>
         </header>
@@ -63,56 +235,62 @@ export function WebsiteHomePage() {
         <div className="site-v2-hero-main">
           <div className="site-v2-hero-copy">
             <h1>
-              Built for teams
-              <br />
-              that <span>move fast.</span>
+              Built for teams that <span className="site-v2-hero-headline-accent">move fast.</span>
             </h1>
-            <p>One app for chat, tasks, calendar, and video.</p>
+            <p>
+              Alenio helps retail, restaurant, and field teams communicate, execute, and stay accountable — all from
+              one place.
+            </p>
             <div className="site-v2-hero-cta">
               <Link to="/sign-up" className="site-v2-btn site-v2-btn-primary">
-                Start with Team
+                Join Alenio
               </Link>
-              <a href="#contact" className="site-v2-btn site-v2-btn-outline">
-                Book a demo
-              </a>
             </div>
-            <ul className="site-v2-mini-list">
-              <li>Chat, DMs, polls, video</li>
-              <li>Tasks, subtasks, files</li>
-              <li>Calendar and meetings</li>
-            </ul>
           </div>
+
           <div className="site-v2-hero-visual" aria-hidden>
-            <div className="site-v2-device-phone" />
-            <div className="site-v2-device-dashboard" />
+            <div className="site-v2-phone-mock">
+              <div className="site-v2-phone-screen">
+                <div className="site-v2-phone-header"># morning-shift</div>
+                <div className="site-v2-phone-msg site-v2-phone-msg-them">
+                  <span className="site-v2-phone-avatar">JM</span>
+                  Cooler restock done — photo attached
+                </div>
+                <div className="site-v2-phone-msg site-v2-phone-msg-me">Opening checklist at 85%</div>
+                <div className="site-v2-phone-tasks">
+                  <div className="site-v2-phone-tasks-title">Today&apos;s tasks</div>
+                  <div className="site-v2-phone-task done">✓ Restock cooler</div>
+                  <div className="site-v2-phone-task">○ Floor standards walk</div>
+                </div>
+              </div>
+            </div>
+            <div className="site-v2-dashboard-mock">
+              <div className="site-v2-dash-bar" />
+              <div className="site-v2-dash-grid">
+                <div className="site-v2-dash-card">
+                  <span className="site-v2-dash-label">Shift completion</span>
+                  <span className="site-v2-dash-value">94%</span>
+                </div>
+                <div className="site-v2-dash-card">
+                  <span className="site-v2-dash-label">Tasks today</span>
+                  <span className="site-v2-dash-value">182</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
-      <section id="features" className="site-v2-section">
-        <h2>Everything your team needs to win the day.</h2>
-        <div className="site-v2-feature-grid">
-          {highlights.map((item) => (
-            <article key={item.title} className="site-v2-feature-card">
-              <h3>{item.title}</h3>
-              <p>{item.text}</p>
-              <a href="#resources">Learn more →</a>
-            </article>
-          ))}
-        </div>
-      </section>
-
-      <section id="industries" className="site-v2-section">
-        <div className="site-v2-center-head">
-          <h2>Built for your industry</h2>
-          <p>Busy teams. Short updates.</p>
-        </div>
-        <div className="site-v2-industry-grid">
-          {industries.map((industry) => (
-            <article key={industry.title} className="site-v2-industry-card">
-              <h3>{industry.title}</h3>
+      <section id="features" className="site-v2-section site-v2-pillars">
+        <div className="site-v2-pillar-grid">
+          {pillars.map((p) => (
+            <article key={p.title} className="site-v2-pillar-card">
+              <div className="site-v2-pillar-icon">
+                <PillarIcon type={p.icon} />
+              </div>
+              <h3>{p.title}</h3>
               <ul>
-                {industry.points.map((point) => (
+                {p.points.map((point) => (
                   <li key={point}>{point}</li>
                 ))}
               </ul>
@@ -121,58 +299,180 @@ export function WebsiteHomePage() {
         </div>
       </section>
 
-      <section id="about" className="site-v2-section site-v2-ops">
-        <div className="site-v2-ops-board" aria-hidden />
-        <div className="site-v2-ops-copy">
-          <h2>
-            See the big picture.
-            <br />
-            Drive the right action.
-          </h2>
-          <p>Same tools for the floor and the office.</p>
-          <ul>
-            <li>Web: tasks and calendar together</li>
-            <li>Polls, channels, quick video</li>
-            <li>Owners, due dates, subtasks</li>
-          </ul>
+      <section id="industries" className="site-v2-section">
+        <div className="site-v2-center-head">
+          <h2>Built for your industry</h2>
+        </div>
+        <div className="site-v2-industry-grid site-v2-industry-grid-v2">
+          {industries.map((industry) => (
+            <article
+              key={industry.title}
+              className={`site-v2-industry-card-v2 site-v2-industry-${industry.tone}${industry.image ? " site-v2-industry-has-photo" : ""}`}
+            >
+              {industry.image ? (
+                <img
+                  src={industry.image}
+                  alt=""
+                  className="site-v2-industry-photo site-v2-industry-photo-img"
+                  loading="lazy"
+                  decoding="async"
+                />
+              ) : (
+                <div className="site-v2-industry-photo" aria-hidden />
+              )}
+              <div className="site-v2-industry-body">
+                <h3>{industry.title}</h3>
+                <ul>
+                  {industry.points.map((point) => (
+                    <li key={point}>{point}</li>
+                  ))}
+                </ul>
+                <a href="#contact" className="site-v2-industry-link">
+                  See how it works →
+                </a>
+              </div>
+            </article>
+          ))}
         </div>
       </section>
 
-      <section id="pricing" className="site-v2-bottom">
-        <div className="site-v2-quote">
-          <p>
-            “Alenio has completely changed the way we communicate and execute. Our team is more connected and more
-            accountable.”
-          </p>
-          <span>Mark T. · Area Manager</span>
+      <section id="how-alenio-works" className="site-v2-section site-v2-usecases">
+        <div className="site-v2-center-head">
+          <h2>How Alenio Works</h2>
         </div>
-        <div className="site-v2-cta">
+        <div className="site-v2-usecase-grid">
+          {useCases.map((uc) => (
+            <article
+              key={uc.title}
+              className={`site-v2-usecase-card site-v2-usecase-${uc.tone}${uc.image ? " site-v2-usecase-has-image" : ""}`}
+            >
+              {uc.image ? (
+                <img
+                  src={uc.image}
+                  alt=""
+                  className="site-v2-usecase-art site-v2-usecase-art-img"
+                  loading="lazy"
+                  decoding="async"
+                />
+              ) : (
+                <div className="site-v2-usecase-art" aria-hidden />
+              )}
+              <h3>{uc.title}</h3>
+              <p>{uc.desc}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="site-v2-section site-v2-compare-wrap">
+        <div className="site-v2-center-head">
+          <h2>How Alenio compares</h2>
+          <p>
+            Teams, Slack, and GroupMe are strong at messaging. Alenio adds shift-ready tasks, calendar, and visibility in
+            one app built for the floor.
+          </p>
+        </div>
+        <div className="site-v2-compare-scroll">
+          <table className="site-v2-compare-table">
+            <thead>
+              <tr>
+                <th scope="col" className="site-v2-compare-col-feature">
+                  Capability
+                </th>
+                <th scope="col" className="site-v2-compare-col-competitor">
+                  Microsoft Teams
+                </th>
+                <th scope="col" className="site-v2-compare-col-competitor">
+                  Slack
+                </th>
+                <th scope="col" className="site-v2-compare-col-competitor">
+                  GroupMe
+                </th>
+                <th scope="col" className="site-v2-compare-col-alenio">
+                  Alenio
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {compareRows.map((row) => (
+                <tr key={row.feature}>
+                  <th scope="row">{row.feature}</th>
+                  <td className="site-v2-compare-col-competitor">
+                    <CompareCell value={row.teams} />
+                  </td>
+                  <td className="site-v2-compare-col-competitor">
+                    <CompareCell value={row.slack} />
+                  </td>
+                  <td className="site-v2-compare-col-competitor">
+                    <CompareCell value={row.groupme} />
+                  </td>
+                  <td className="site-v2-compare-col-alenio">
+                    <CompareCell value={row.alenio} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="resources" className="site-v2-section site-v2-insights">
+        <div className="site-v2-insights-grid">
+          <article className="site-v2-activity-card">
+            <h3>Live activity across your team</h3>
+            <ul className="site-v2-activity-list">
+              {activityItems.map((item) => (
+                <li key={`${item.name}-${item.time}`}>
+                  <span className="site-v2-activity-avatar">{item.avatar}</span>
+                  <div className="site-v2-activity-text">
+                    <strong>{item.name}</strong> {item.action}
+                    <span className="site-v2-activity-time">{item.time}</span>
+                  </div>
+                  <span className="site-v2-activity-dot" aria-hidden />
+                </li>
+              ))}
+            </ul>
+          </article>
+          <article className="site-v2-metrics-card">
+            <h3>See what drives results</h3>
+            <div className="site-v2-metric">
+              <div className="site-v2-metric-top">
+                <span className="site-v2-metric-label">Shift completion rate</span>
+                <span className="site-v2-metric-trend site-v2-metric-trend-up">+8%</span>
+              </div>
+              <span className="site-v2-metric-value">94%</span>
+            </div>
+            <div className="site-v2-metric">
+              <div className="site-v2-metric-top">
+                <span className="site-v2-metric-label">Tasks completed today</span>
+                <span className="site-v2-metric-trend site-v2-metric-trend-up">+12%</span>
+              </div>
+              <span className="site-v2-metric-value">182</span>
+            </div>
+            <div className="site-v2-metric">
+              <div className="site-v2-metric-top">
+                <span className="site-v2-metric-label">Overdue tasks</span>
+                <span className="site-v2-metric-trend site-v2-metric-trend-down">−4%</span>
+              </div>
+              <span className="site-v2-metric-value">7</span>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section className="site-v2-final-cta">
+        <div className="site-v2-final-cta-inner">
           <h2>Stop guessing. Start executing.</h2>
           <p>Join thousands of teams that rely on Alenio to run better every day.</p>
-          <div className="site-v2-hero-cta">
-            <Link to="/login" className="site-v2-btn site-v2-btn-primary">
-              Start your free trial
+          <div className="site-v2-hero-cta site-v2-final-cta-actions">
+            <Link to="/sign-up" className="site-v2-btn site-v2-btn-primary site-v2-btn-lg">
+              Join Alenio
             </Link>
-            <a href="#contact" className="site-v2-btn site-v2-btn-outline">
-              Book a demo
-            </a>
           </div>
         </div>
       </section>
 
-      <footer id="contact" className="site-v2-footer">
-        <div className="site-v2-footer-top">
-          <img src="/alenio-logo.png" alt="Alenio" className="site-v2-footer-logo" width={140} height={34} />
-          <a href="mailto:info@alenio.app">info@alenio.app</a>
-        </div>
-        <p className="site-v2-footer-legal">
-          <Link to="/privacy">Privacy Policy</Link>
-          {" · "}
-          <Link to="/terms">Terms of Service</Link>
-        </p>
-        <p className="site-v2-footer-company">{LEGAL_COMPANY_NAME}</p>
-        <p className="site-v2-footer-parent">Parent company: {LEGAL_PARENT_COMPANY_NAME}</p>
-      </footer>
+      <MarketingFooter />
     </div>
   );
 }

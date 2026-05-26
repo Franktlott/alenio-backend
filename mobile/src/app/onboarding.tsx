@@ -13,15 +13,14 @@ import {
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { router } from "expo-router";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { router, useLocalSearchParams } from "expo-router";
 import { ArrowLeft, Clock, ScanLine, X, Users, Link2 } from "lucide-react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { api } from "@/lib/api/api";
 import { useTeamStore } from "@/lib/state/team-store";
 import type { Team } from "@/lib/types";
 import { useSession } from "@/lib/auth/use-session";
-
 type JoinResult =
   | { status: "pending"; teamName: string; requestId: string }
   | (Team & { status?: undefined });
@@ -42,7 +41,9 @@ const cardShadow = {
 
 export default function OnboardingScreen() {
   const { data: session, isLoading: isSessionLoading } = useSession();
-  const [mode, setMode] = useState<"create" | "join">("create");
+  const { intent, mode: modeParam } = useLocalSearchParams<{ intent?: string; mode?: string }>();
+  const isAddFlow = intent === "add";
+  const [mode, setMode] = useState<"create" | "join">(modeParam === "join" ? "join" : "create");
   const [teamName, setTeamName] = useState("");
   const [inviteCode, setInviteCode] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -60,16 +61,6 @@ export default function OnboardingScreen() {
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const scannedRef = useRef(false);
 
-  const { data: existingTeams = [] } = useQuery({
-    queryKey: ["teams"],
-    queryFn: () => api.get<any[]>("/api/teams"),
-  });
-  const alreadyOwnsTeam = existingTeams.some((t: any) => t.role === "owner");
-
-  useEffect(() => {
-    if (alreadyOwnsTeam) setMode("join");
-  }, [alreadyOwnsTeam]);
-
   useEffect(() => {
     if (isSessionLoading) return;
     if (!session?.user) {
@@ -82,10 +73,14 @@ export default function OnboardingScreen() {
 
   const createMutation = useMutation({
     mutationFn: () => api.post<Team>("/api/teams", { name: teamName }),
-    onSuccess: (team) => {
+    onSuccess: async (team) => {
       setActiveTeamId(team.id);
       queryClient.invalidateQueries({ queryKey: ["teams"] });
-      router.replace("/(app)/chat");
+      if (isAddFlow && router.canGoBack()) {
+        router.back();
+      } else {
+        router.replace("/(app)/chat");
+      }
     },
     onError: (err: unknown) => {
       const rawMsg = err instanceof Error ? err.message : "";
@@ -93,15 +88,6 @@ export default function OnboardingScreen() {
         const waitMs = 20_000;
         setCooldownUntilMs(Date.now() + waitMs);
         setError("Too many requests right now. Please wait 20 seconds, then try again.");
-        return;
-      }
-      const isOwnerLimit =
-        /already own a team/i.test(rawMsg) ||
-        /team_limit_reached/i.test(rawMsg) ||
-        /request failed:\s*400/i.test(rawMsg);
-      if (isOwnerLimit) {
-        setMode("join");
-        setError("You already own a team. Use Join team to connect to another workspace.");
         return;
       }
       setError(rawMsg || "Could not create team right now. Please try again.");
@@ -123,7 +109,11 @@ export default function OnboardingScreen() {
         const team = result as Team;
         setActiveTeamId(team.id);
         queryClient.invalidateQueries({ queryKey: ["teams"] });
-        router.replace("/(app)/chat");
+        if (isAddFlow && router.canGoBack()) {
+          router.back();
+        } else {
+          router.replace("/(app)/chat");
+        }
       }
     },
     onError: (err: unknown) => {
@@ -211,11 +201,6 @@ export default function OnboardingScreen() {
         setError("Please enter a team name");
         return;
       }
-      if (alreadyOwnsTeam) {
-        setMode("join");
-        setError("You already own a team. Use Join team to connect to another workspace.");
-        return;
-      }
       createMutation.mutate();
     } else {
       if (!inviteCode.trim()) {
@@ -240,10 +225,10 @@ export default function OnboardingScreen() {
           </TouchableOpacity>
           <View>
             <Text style={{ color: "white", fontSize: 20, fontWeight: "700" }}>
-              {alreadyOwnsTeam ? "Join a team" : "Set up your team"}
+              {isAddFlow ? "Add workspace" : "Set up your team"}
             </Text>
             <Text style={{ color: "rgba(255,255,255,0.7)", fontSize: 14 }}>
-              {alreadyOwnsTeam ? "Enter a code or scan to join your team" : "Create or join a workspace"}
+              {isAddFlow ? "Create a new workspace or join with a code" : "Create or join a workspace"}
             </Text>
           </View>
         </View>
@@ -312,7 +297,7 @@ export default function OnboardingScreen() {
                 <Text style={{ color: "#94A3B8", fontSize: 13 }}>Cancel / Try different code</Text>
               </TouchableOpacity>
             </View>
-          ) : mode === "join" || alreadyOwnsTeam ? (
+          ) : mode === "join" ? (
             // Join mode card
             <View
               style={[
@@ -339,9 +324,7 @@ export default function OnboardingScreen() {
                 Enter a code or scan to join your team
               </Text>
 
-              {/* Mode toggle — only shown when user does not already own a team */}
-              {!alreadyOwnsTeam && (
-                <View style={{ flexDirection: "row", backgroundColor: "#F1F5F9", borderRadius: 12, padding: 4, marginBottom: 20 }}>
+              <View style={{ flexDirection: "row", backgroundColor: "#F1F5F9", borderRadius: 12, padding: 4, marginBottom: 20 }}>
                   <TouchableOpacity
                     onPress={() => { setMode("create"); setError(null); }}
                     style={{ flex: 1, paddingVertical: 8, borderRadius: 10, alignItems: "center", backgroundColor: mode === "create" ? "white" : "transparent" }}
@@ -361,7 +344,6 @@ export default function OnboardingScreen() {
                     </Text>
                   </TouchableOpacity>
                 </View>
-              )}
 
               {/* Invite code label + input */}
               <Text style={{ fontSize: 13, fontWeight: "600", color: "#374151", marginBottom: 6 }}>
@@ -492,7 +474,14 @@ export default function OnboardingScreen() {
               ) : null}
 
               <TouchableOpacity
-                style={{ backgroundColor: "#4361EE", borderRadius: 14, paddingVertical: 15, alignItems: "center", width: "100%", marginTop: 12 }}
+                style={{
+                  backgroundColor: "#4361EE",
+                  borderRadius: 14,
+                  paddingVertical: 15,
+                  alignItems: "center",
+                  width: "100%",
+                  marginTop: 12,
+                }}
                 onPress={handleSubmit}
                 disabled={isLoading}
                 testID="submit-button"

@@ -5,28 +5,24 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Image,
-  ImageBackground,
   ActionSheetIOS,
   Platform,
   TextInput,
   ScrollView,
   Pressable,
   Modal,
-  Switch,
-  Share,
   RefreshControl,
   Alert,
   Linking,
 } from "react-native";
-import * as Clipboard from "expo-clipboard";
 import * as Notifications from "expo-notifications";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { BlurView } from "expo-blur";
-import { ArrowLeft, Camera, LogOut, Pencil, X, Plus, Trash2, Bell, Check, LogOut as LeaveIcon, Crown, Copy, ChevronRight, BarChart2, Volume2, MessageSquare } from "lucide-react-native";
+import { Camera, LogOut, Pencil, X, Trash2, Bell, Check, Crown, MessageSquare } from "lucide-react-native";
+import { notificationPreferencesSummary } from "@/components/NotificationPreferencesPanel";
 import { authClient, clearAccessToken, getAuthHeaders } from "@/lib/auth/auth-client";
 import { SESSION_QUERY_KEY, markSessionSignedOut, useInvalidateSession, useSession } from "@/lib/auth/use-session";
-import { clearNotifDebugLog, getNotifDebugLog, getNotifStatus, registerForPushNotificationsAsync, ensureAndroidChannelsForPreview, notificationPreviewDataKey } from "@/lib/notifications";
+import { clearNotifDebugLog, getNotifDebugLog, getNotifStatus, registerForPushNotificationsAsync } from "@/lib/notifications";
 import { router } from "expo-router";
 import { useMutation, useQuery, useQueryClient, useQueries } from "@tanstack/react-query";
 import { api } from "@/lib/api/api";
@@ -36,9 +32,19 @@ import { uploadFile } from "@/lib/upload";
 import { pickImage, takePhoto } from "@/lib/file-picker";
 import * as ImagePicker from "expo-image-picker";
 import { useTeamStore } from "@/lib/state/team-store";
+import { useSwitchWorkspace } from "@/hooks/use-switch-workspace";
 import { toast } from "burnt";
 import type { Team } from "@/lib/types";
 import { SafeKeyboardAvoidingView } from "@/lib/safe-keyboard-controller";
+import { WORKSPACE_SWITCH_HINT } from "@/components/WorkspaceTeamUI";
+import {
+  ProfileCard,
+  ProfileContent,
+  ProfileDivider,
+  ProfileMenuRow,
+  ProfileSection,
+} from "@/components/profile/ProfileEnterpriseUI";
+import { ProfileWorkspaceList } from "@/components/profile/ProfileWorkspaceList";
 
 const DEMO_EMAIL = "demo@alenio.app";
 
@@ -58,33 +64,6 @@ type NotifPrefs = {
   hasToken: boolean;
 };
 
-// Glass card component using BlurView
-function GlassCard({ children, style }: { children: React.ReactNode; style?: object }) {
-  return (
-    <BlurView
-      intensity={60}
-      tint="light"
-      style={[
-        {
-          borderRadius: 20,
-          overflow: "hidden",
-          borderWidth: 1,
-          borderColor: "rgba(255,255,255,0.6)",
-          shadowColor: "#000",
-          shadowOpacity: 0.06,
-          shadowRadius: 8,
-          shadowOffset: { width: 0, height: 2 },
-        },
-        style,
-      ]}
-    >
-      <View style={{ backgroundColor: "rgba(255,255,255,0.45)" }}>
-        {children}
-      </View>
-    </BlurView>
-  );
-}
-
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const { data: session } = useSession();
@@ -92,12 +71,12 @@ export default function ProfileScreen() {
   const queryClient = useQueryClient();
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
   const setActiveTeamId = useTeamStore((s) => s.setActiveTeamId);
+  const { switchWorkspace } = useSwitchWorkspace();
   const user = session?.user;
   const isDemo = user?.email === DEMO_EMAIL;
 
-  const overlayColor = "rgba(240,242,255,0.85)";
-  const nameColor = "#1E1B4B";
-  const emailColor = "#4361EE";
+  const nameColor = "#0F172A";
+  const emailColor = "#64748B";
 
   // Profile state
   const [localImage, setLocalImage] = useState<string | null>(null);
@@ -106,7 +85,7 @@ export default function ProfileScreen() {
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
 
   // Delete account state
-  const [deleteStep, setDeleteStep] = useState<0 | 1 | 2 | 3>(0);
+  const [deleteStep, setDeleteStep] = useState<0 | 1 | 2>(0);
   const [deletePassword, setDeletePassword] = useState<string>("");
   const [deletePasswordVisible, setDeletePasswordVisible] = useState<boolean>(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -147,74 +126,6 @@ export default function ProfileScreen() {
     queryFn: () => api.get<NotifPrefs>("/api/notification-preferences"),
     enabled: !!user,
   });
-
-  const notifMutation = useMutation({
-    mutationFn: (patch: Partial<NotifPrefs>) => api.patch<NotifPrefs>("/api/notification-preferences", patch),
-    onMutate: async (patch) => {
-      await queryClient.cancelQueries({ queryKey: ["notification-preferences"] });
-      const prev = queryClient.getQueryData<NotifPrefs>(["notification-preferences"]);
-      queryClient.setQueryData<NotifPrefs>(["notification-preferences"], (old) => (old ? { ...old, ...patch } : old));
-      return { prev };
-    },
-    onError: (_err, _patch, ctx) => {
-      if (ctx?.prev) queryClient.setQueryData(["notification-preferences"], ctx.prev);
-    },
-  });
-
-  const toneMutation = useMutation({
-    mutationFn: (tone: string) => api.patch<NotifPrefs>("/api/notification-preferences", { notifTone: tone }),
-    onMutate: async (tone) => {
-      await queryClient.cancelQueries({ queryKey: ["notification-preferences"] });
-      const prev = queryClient.getQueryData<NotifPrefs>(["notification-preferences"]);
-      queryClient.setQueryData<NotifPrefs>(["notification-preferences"], (old) => (old ? { ...old, notifTone: tone } : old));
-      return { prev };
-    },
-    onError: (_err, _tone, ctx) => {
-      if (ctx?.prev) queryClient.setQueryData(["notification-preferences"], ctx.prev);
-    },
-  });
-
-  const playNotifTonePreview = async (tone: string) => {
-    if (tone === "silent") return;
-    await ensureAndroidChannelsForPreview();
-    const soundFile = tone === "default" ? "default" : `${tone}.wav`;
-    const channelId = tone === "default" ? "alenio_main" : `alenio_${tone}`;
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title: "Sound Preview",
-        body: `Testing ${tone === "default" ? "Default" : tone.charAt(0).toUpperCase() + tone.slice(1)} sound`,
-        sound: soundFile,
-        data: { [notificationPreviewDataKey]: true },
-      },
-      trigger:
-        Platform.OS === "android"
-          ? { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: 1, channelId }
-          : null,
-    });
-  };
-
-  const [notifRegStatus, setNotifRegStatus] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    let timer: ReturnType<typeof setTimeout>;
-
-    const poll = () => {
-      Promise.all([getNotifStatus(), getNotifDebugLog()]).then(([s]) => {
-        if (cancelled) return;
-        setNotifRegStatus(s);
-        if (s?.startsWith("getting token") || s?.startsWith("saving token") || s?.startsWith("attempt")) {
-          timer = setTimeout(poll, 2000);
-        }
-      });
-    };
-
-    poll();
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, []);
 
   const isOwnerOfAnyTeam = teams.some((t) => (t as Team & { role?: string }).role === "owner");
 
@@ -643,7 +554,7 @@ export default function ProfileScreen() {
   const natureImageUrl = `https://images.unsplash.com/${naturePhotos[dayIndex]}?w=800&h=320&fit=crop&auto=format&q=80`;
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#F8FAFC" }} edges={[]} testID="profile-screen">
+    <SafeAreaView style={{ flex: 1, backgroundColor: "#F1F5F9" }} edges={[]} testID="profile-screen">
       {/* Header */}
       <LinearGradient
         colors={["#4361EE", "#7C3AED"]}
@@ -671,7 +582,7 @@ export default function ProfileScreen() {
         <View style={{ height: 160, overflow: "hidden" }}>
           <Image source={{ uri: natureImageUrl }} style={{ width: "100%", height: 160, resizeMode: "cover" }} />
           <LinearGradient
-            colors={["transparent", "rgba(248,250,252,0.9)"]}
+            colors={["transparent", "rgba(241,245,249,0.95)"]}
             style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 70 }}
           />
         </View>
@@ -737,150 +648,73 @@ export default function ProfileScreen() {
             ) : null}
           </TouchableOpacity>
 
-          {/* Name */}
-          <Text style={{ fontSize: 20, fontWeight: "700", color: nameColor, marginBottom: 4 }}>{displayName}</Text>
-
-          <Text style={{ fontSize: 14, color: emailColor }}>{displayEmail}</Text>
+          <Text style={{ fontSize: 18, fontWeight: "700", color: nameColor, marginBottom: 2 }}>{displayName}</Text>
+          <Text style={{ fontSize: 13, color: emailColor }}>{displayEmail}</Text>
         </View>
 
-        {/* Teams */}
-        <View className="mx-4 mt-5">
-          <View className="flex-row items-center justify-between mb-3">
-            <Text className="text-xs font-semibold text-slate-400 uppercase tracking-wider">My Teams</Text>
-            {!isDemo ? (
-              <TouchableOpacity
-                className="flex-row items-center"
-                style={{ gap: 4 }}
-                onPress={() => router.push("/onboarding")}
-                testID="create-join-team-button"
-              >
-                <Plus size={14} color="#4361EE" />
-                <Text className="text-xs font-semibold text-indigo-600">Add team</Text>
-              </TouchableOpacity>
-            ) : null}
-          </View>
+        <ProfileContent>
+          {/* Workspaces */}
+          <ProfileSection
+            title="Workspaces"
+            subtitle={
+              teamsLoading
+                ? "Teams you belong to"
+                : teams.length > 1
+                  ? WORKSPACE_SWITCH_HINT
+                  : "Teams you belong to"
+            }
+          >
+            <ProfileWorkspaceList
+              teams={teams as (Team & { role?: string })[]}
+              activeTeamId={activeTeamId}
+              teamsLoading={teamsLoading}
+              isDemo={isDemo}
+              pendingCountMap={pendingCountMap}
+              onSelectTeam={(teamId) => void switchWorkspace(teamId, { navigateTo: "/(app)/team" })}
+              onOpenTeam={() => router.replace("/(app)/team")}
+              onEditTeam={openEditModal}
+              onLeaveTeam={setLeavingTeam}
+              onSwitchWorkspaces={() => router.push("/switch-workspace" as never)}
+              onAddWorkspace={() =>
+                router.push({
+                  pathname: "/onboarding",
+                  params: { intent: "add", mode: "create" },
+                })
+              }
+            />
+          </ProfileSection>
 
-          <GlassCard>
-            {teamsLoading ? (
-              <View className="py-8 items-center">
-                <ActivityIndicator color="#4361EE" />
-              </View>
-            ) : teams.length === 0 ? (
-              <View className="py-8 items-center px-4">
-                <Text className="text-slate-400 text-sm mt-2 text-center">You're not part of any teams yet</Text>
-              </View>
-            ) : (
-              teams.map((team, index) => {
-                const isActive = team.id === activeTeamId;
-                const isOwner = ["owner", "team_leader"].includes((team as Team & { role?: string }).role ?? "");
-                const pendingCount = pendingCountMap[team.id] ?? 0;
-                return (
-                  <Pressable
-                    key={team.id}
-                    onPress={() => { setActiveTeamId(team.id); router.replace("/(app)/team"); }}
-                    className="flex-row items-center px-4 py-3.5"
-                    style={index < teams.length - 1 ? { borderBottomWidth: 1, borderBottomColor: "rgba(241,245,249,0.8)" } : undefined}
-                    testID={`team-row-${team.id}`}
-                  >
-                    <View className="w-10 h-10 rounded-xl overflow-hidden bg-indigo-100 items-center justify-center mr-3">
-                      {team.image ? (
-                        <Image source={{ uri: team.image }} style={{ width: 40, height: 40 }} resizeMode="cover" />
-                      ) : (
-                        <Text className="text-indigo-600 text-base font-bold">{team.name?.[0]?.toUpperCase() ?? "?"}</Text>
-                      )}
-                    </View>
-                    <View className="flex-1">
-                      <Text className="font-semibold text-slate-900 dark:text-white">{team.name}</Text>
-                      <Text className="text-xs text-slate-400">
-                        {(team as Team & { role?: string }).role === "owner" ? "Owner" : (team as Team & { role?: string }).role === "team_leader" ? "Team Leader" : (team as Team & { role?: string }).role ?? "member"}
-                      </Text>
-                      {team.inviteCode && !isActive ? (
-                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 }}>
-                          <Text style={{ fontSize: 11, fontWeight: "700", color: "#4361EE", letterSpacing: 1.5 }}>{team.inviteCode}</Text>
-                          <TouchableOpacity
-                            onPress={async () => { await Clipboard.setStringAsync(team.inviteCode); }}
-                            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                            testID={`copy-code-${team.id}`}
-                          >
-                            <Copy size={12} color="#4361EE" />
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            onPress={() => Share.share({ message: `Join my team "${team.name}" on Alenio! Use invite code: ${team.inviteCode}` })}
-                            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                            testID={`share-code-${team.id}`}
-                          >
-                            <Text style={{ fontSize: 10, color: "#4361EE", fontWeight: "600" }}>Share</Text>
-                          </TouchableOpacity>
-                        </View>
-                      ) : null}
-                    </View>
-                    {isActive ? (
-                      <View className="w-2 h-2 rounded-full bg-indigo-500 mr-3" />
-                    ) : isOwner && !isDemo ? (
-                      <View className="flex-row items-center" style={{ gap: 6 }}>
-                        {pendingCount > 0 ? (
-                          <View className="w-5 h-5 rounded-full bg-red-500 items-center justify-center">
-                            <Text style={{ color: "white", fontSize: 10, fontWeight: "bold" }}>{pendingCount}</Text>
-                          </View>
-                        ) : null}
-                        <TouchableOpacity
-                          onPress={() => openEditModal(team)}
-                          className="w-8 h-8 rounded-full items-center justify-center"
-                          style={{ backgroundColor: "#4361EE12" }}
-                          testID={`edit-team-${team.id}`}
-                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                        >
-                          <Pencil size={14} color="#4361EE" />
-                        </TouchableOpacity>
-                      </View>
-                    ) : !isOwner && !isDemo ? (
-                      <TouchableOpacity
-                        onPress={() => setLeavingTeam(team)}
-                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                        testID={`leave-team-${team.id}`}
-                      >
-                        <LeaveIcon size={16} color="#EF4444" />
-                      </TouchableOpacity>
-                    ) : null}
-                  </Pressable>
-                );
-              })
-            )}
-          </GlassCard>
-        </View>
-
-        {/* Subscription & billing — team owners */}
-        {isOwnerOfAnyTeam ? (
-        <View className="mx-4 mt-5">
-          <View className="flex-row items-center mb-3" style={{ gap: 6 }}>
-            <Crown size={13} color="#94A3B8" />
-            <Text className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Plan</Text>
-          </View>
-          <GlassCard>
-            <Pressable
-              className="flex-row items-center px-4 py-4"
-              onPress={() => router.push("/subscription")}
-              testID="subscription-row"
-            >
-              <View className="w-8 h-8 rounded-xl bg-indigo-100 items-center justify-center mr-3">
-                <Crown size={16} color="#4361EE" />
-              </View>
-              <View className="flex-1">
-                <Text className="text-sm font-semibold text-slate-900">Subscription</Text>
-                <Text className="text-xs text-slate-400 mt-0.5">
-                  {ownerTeamSubscription?.plan === "team" ? "Team plan active" : "Manage your plan"}
-                </Text>
-              </View>
-              <ChevronRight size={16} color="#CBD5E1" />
-            </Pressable>
-          </GlassCard>
-        </View>
-        ) : null}
+          {/* Account */}
+          <ProfileSection title="Account">
+            <ProfileCard>
+              {isOwnerOfAnyTeam ? (
+                <>
+                  <ProfileMenuRow
+                    icon={Crown}
+                    title="Plan & access"
+                    subtitle={
+                      ownerTeamSubscription?.plan === "team" ? "Team plan active" : "View and manage your plan"
+                    }
+                    onPress={() => router.push("/subscription")}
+                    testID="subscription-row"
+                  />
+                  <ProfileDivider inset />
+                </>
+              ) : null}
+              <ProfileMenuRow
+                icon={Bell}
+                title="Notifications"
+                subtitle={notificationPreferencesSummary(notifPrefs)}
+                onPress={() => router.push("/notifications")}
+                testID="notifications-menu-row"
+              />
+            </ProfileCard>
+          </ProfileSection>
 
         {/* Push Notifications Debug — hidden, preserved for future use */}
         {false ? (<View className="mx-4 mt-5">
           <Text className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3 ml-1">Push Notifications Debug</Text>
-          <GlassCard>
+          <ProfileCard>
             <Pressable
               onPress={handleRetryPushRegistration}
               disabled={retryingPush}
@@ -939,206 +773,68 @@ export default function ProfileScreen() {
                 <Text className="text-xs text-slate-500" selectable testID="push-debug-result">{pushDebugResult}</Text>
               </View>
             ) : null}
-          </GlassCard>
+          </ProfileCard>
         </View>) : null}
 
-        {/* Notifications — moved from former Settings screen */}
-        <View className="mx-4 mt-5">
-          <View className="flex-row items-center mb-3" style={{ gap: 6 }}>
-            <Bell size={13} color="#94A3B8" />
-            <Text className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Notifications</Text>
-          </View>
-          <GlassCard>
-            {(
-              [
-                {
-                  key: "notifMessages" as const,
-                  label: "New messages",
-                  description: "Team and direct messages",
-                },
-                {
-                  key: "notifTaskAssigned" as const,
-                  label: "Task assigned",
-                  description: "When a task is assigned to you",
-                },
-                {
-                  key: "notifTaskDue" as const,
-                  label: "Task due reminders",
-                  description: "Reminders for upcoming due dates",
-                },
-                {
-                  key: "notifMeetings" as const,
-                  label: "Meeting reminders",
-                  description: "Alerts before video meetings",
-                },
-              ] as const
-            ).map((item, index, arr) => {
-              const isEnabled = notifPrefs?.[item.key] ?? true;
-              return (
-                <View
-                  key={item.key}
-                  className="flex-row items-center px-4 py-3.5"
-                  style={
-                    index < arr.length - 1
-                      ? { borderBottomWidth: 1, borderBottomColor: "rgba(241,245,249,0.8)" }
-                      : undefined
-                  }
-                >
-                  <View className="flex-1">
-                    <Text className="text-sm font-semibold text-slate-900 dark:text-white">{item.label}</Text>
-                    <Text className="text-xs text-slate-400 mt-0.5">{item.description}</Text>
-                  </View>
-                  <Switch
-                    value={isEnabled}
-                    onValueChange={(val) => notifMutation.mutate({ [item.key]: val })}
-                    trackColor={{ false: "#E2E8F0", true: "#6B8EF6" }}
-                    thumbColor="white"
-                    testID={`settings-notif-toggle-${item.key}`}
-                  />
-                </View>
-              );
-            })}
-          </GlassCard>
-
-          <View className="mt-2 mb-1 px-1" style={{ gap: 4 }}>
-            <View className="flex-row items-center" style={{ gap: 6 }}>
-              <View
-                style={{
-                  width: 7,
-                  height: 7,
-                  borderRadius: 4,
-                  backgroundColor: notifPrefs?.hasToken ? "#22C55E" : "#EF4444",
-                }}
+          {/* Support */}
+          <ProfileSection title="Support">
+            <ProfileCard>
+              <ProfileMenuRow
+                icon={MessageSquare}
+                title="Send feedback"
+                subtitle="Report issues or suggest improvements"
+                onPress={() => router.push("/feedback")}
+                testID="feedback-card"
               />
-            </View>
-            {notifRegStatus && !notifPrefs?.hasToken ? (
-              <Text className="text-xs text-slate-300 ml-3" selectable>
-                {notifRegStatus}
-              </Text>
+            </ProfileCard>
+          </ProfileSection>
+
+          {/* Legal */}
+          <ProfileSection title="Legal & privacy">
+            <ProfileCard>
+              <ProfileMenuRow
+                title="Privacy Policy"
+                onPress={() => router.push("/privacy-policy")}
+                testID="privacy-policy-link"
+              />
+              <ProfileDivider />
+              <ProfileMenuRow
+                title="Terms of Service"
+                onPress={() => router.push("/terms-of-service")}
+                testID="terms-of-service-link"
+              />
+              {!isDemo ? (
+                <>
+                  <ProfileDivider />
+                  <ProfileMenuRow
+                    title="Account deletion"
+                    subtitle="Permanently remove your account and data"
+                    onPress={() => setDeleteStep(1)}
+                    testID="account-deletion-link"
+                  />
+                </>
+              ) : null}
+            </ProfileCard>
+            {!isDemo ? (
+              <Text style={{ fontSize: 11, color: "#94A3B8", textAlign: "center", marginTop: 10 }}>John 3:16</Text>
             ) : null}
-          </View>
+          </ProfileSection>
 
-          <View className="mt-3">
-            <Text className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 ml-1">Notification sound</Text>
-            <GlassCard>
-              {(
-                [
-                  { value: "default", label: "Default", emoji: "🔔" },
-                  { value: "bell", label: "Bell", emoji: "🔕" },
-                  { value: "chime", label: "Chime", emoji: "🎵" },
-                  { value: "alert", label: "Alert", emoji: "⚠️" },
-                  { value: "silent", label: "Silent", emoji: "🚫" },
-                ] as const
-              ).map((item, index, arr) => {
-                const currentTone = notifPrefs?.notifTone ?? "default";
-                const isSelected =
-                  currentTone === item.value ||
-                  (item.value === "default" && !["bell", "chime", "alert", "silent"].includes(currentTone));
-                return (
-                  <View
-                    key={item.value}
-                    className="flex-row items-center px-4 py-3.5"
-                    style={
-                      index < arr.length - 1
-                        ? { borderBottomWidth: 1, borderBottomColor: "rgba(241,245,249,0.8)" }
-                        : undefined
-                    }
-                  >
-                    <Pressable
-                      className="flex-row items-center flex-1"
-                      onPress={() => toneMutation.mutate(item.value)}
-                      testID={`settings-tone-option-${item.value}`}
-                    >
-                      <Text className="text-base mr-3">{item.emoji}</Text>
-                      <Text className="text-sm font-semibold text-slate-900 dark:text-white">{item.label}</Text>
-                    </Pressable>
-                    {isSelected ? (
-                      <Check size={16} color="#4361EE" />
-                    ) : item.value !== "silent" ? (
-                      <Pressable
-                        onPress={() => void playNotifTonePreview(item.value)}
-                        testID={`settings-tone-preview-${item.value}`}
-                        className="w-8 h-8 rounded-full bg-slate-100 items-center justify-center"
-                      >
-                        <Volume2 size={14} color="#64748B" />
-                      </Pressable>
-                    ) : null}
-                  </View>
-                );
-              })}
-            </GlassCard>
-          </View>
-        </View>
-
-        {/* Feedback */}
-        <View className="mx-4 mt-5">
-          <GlassCard>
-            <Pressable
-              className="flex-row items-center px-4 py-4"
-              onPress={() => router.push("/feedback")}
-              testID="feedback-card"
-            >
-              <View className="w-8 h-8 rounded-xl bg-indigo-50 items-center justify-center mr-3">
-                <MessageSquare size={16} color="#4361EE" />
-              </View>
-              <View className="flex-1">
-                <Text className="text-sm font-semibold text-slate-900">Send feedback</Text>
-                <Text className="text-xs text-slate-400 mt-0.5">Help us improve the app</Text>
-              </View>
-              <ChevronRight size={16} color="#CBD5E1" />
-            </Pressable>
-          </GlassCard>
-        </View>
-
-        {/* Legal / About */}
-        <View className="mx-4 mt-5">
-          <GlassCard>
-            <TouchableOpacity
-              className="flex-row items-center px-4 py-4 border-b border-slate-100/60"
-              onPress={() => router.push("/privacy-policy")}
-              testID="privacy-policy-link"
-            >
-              <Text className="flex-1 text-slate-700 font-medium">Privacy Policy</Text>
-              <ChevronRight size={18} color="#94A3B8" />
-            </TouchableOpacity>
-            <TouchableOpacity
-              className="flex-row items-center px-4 py-4"
-              onPress={() => router.push("/terms-of-service")}
-              testID="terms-of-service-link"
-            >
-              <Text className="flex-1 text-slate-700 font-medium">Terms of Service</Text>
-              <ChevronRight size={18} color="#94A3B8" />
-            </TouchableOpacity>
-          </GlassCard>
-        </View>
-
-        {/* Sign out */}
-        <View className="mx-4 mt-5">
-          <GlassCard>
-            <TouchableOpacity
-              className="flex-row items-center px-4 py-4"
-              onPress={() => setShowSignOutConfirm(true)}
-              testID="sign-out-button"
-            >
-              <LogOut size={20} color="#EF4444" />
-              <Text className="flex-1 ml-3 text-red-500 font-medium">Sign out</Text>
-            </TouchableOpacity>
-          </GlassCard>
-        </View>
-
-        {/* Delete Account */}
-        {!isDemo && (
-          <View className="mx-4 mt-3 mb-6">
-            <TouchableOpacity
-              onPress={() => setDeleteStep(1)}
-              className="py-3 items-center"
-              testID="delete-account-button"
-            >
-              <Text className="text-sm text-slate-400">Delete Account</Text>
-            </TouchableOpacity>
-            <Text className="text-xs text-slate-400 text-center">John 3:16</Text>
-          </View>
-        )}
+          {/* Sign out */}
+          <ProfileSection title="Session">
+            <ProfileCard>
+              <ProfileMenuRow
+                icon={LogOut}
+                title="Sign out"
+                subtitle="Sign in again to access your account"
+                onPress={() => setShowSignOutConfirm(true)}
+                testID="sign-out-button"
+                destructive
+                showChevron={false}
+              />
+            </ProfileCard>
+          </ProfileSection>
+        </ProfileContent>
 
         {/* App Info / Environment */}
         {false ? (<View className="mx-4 mt-2 mb-8 items-center">
@@ -1478,16 +1174,21 @@ export default function ProfileScreen() {
                     </TouchableOpacity>
                   </>
                 )}
-                {/* Step 2: Password */}
+                {/* Step 2: Password + confirm deletion */}
                 {deleteStep === 2 && (
                   <>
                     <View className="flex-row items-center justify-between mb-2">
-                      <Text className="text-xl font-bold text-slate-900 dark:text-white">Confirm identity</Text>
+                      <Text className="text-xl font-bold text-slate-900 dark:text-white">Confirm with your password</Text>
                       <TouchableOpacity onPress={closeDeleteModal}>
                         <X size={22} color="#94A3B8" />
                       </TouchableOpacity>
                     </View>
-                    <Text className="text-sm text-slate-500 mb-5">Enter your password to continue</Text>
+                    <View className="bg-red-50 rounded-2xl p-4 mb-4">
+                      <Text className="text-sm text-red-700 text-center leading-5">
+                        This will permanently delete your account and all associated data. There is no way to recover it.
+                      </Text>
+                    </View>
+                    <Text className="text-sm text-slate-500 mb-2">Enter your account password to confirm</Text>
                     <View className="flex-row items-center bg-slate-50 rounded-xl px-4 border border-slate-200 mb-2">
                       <TextInput
                         className="flex-1 py-3 text-base text-slate-900"
@@ -1506,40 +1207,15 @@ export default function ProfileScreen() {
                     {deleteError ? <Text className="text-red-500 text-xs mb-3 ml-1">{deleteError}</Text> : <View className="mb-3" />}
                     <TouchableOpacity
                       onPress={() => {
-                        if (!deletePassword.trim()) return;
-                        setDeleteStep(3);
+                        if (!deletePassword.trim()) {
+                          setDeleteError("Enter your password to confirm deletion.");
+                          return;
+                        }
+                        deleteAccountMutation.mutate();
                       }}
-                      disabled={!deletePassword.trim()}
-                      className="rounded-2xl py-4 items-center mb-3"
-                      style={{ backgroundColor: deletePassword.trim() ? "#4361EE" : "#CBD5E1" }}
-                      testID="delete-continue-step2"
-                    >
-                      <Text className="font-bold text-white text-base">Continue</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={() => setDeleteStep(1)} className="py-3 items-center">
-                      <Text className="text-slate-400 font-medium">Back</Text>
-                    </TouchableOpacity>
-                  </>
-                )}
-                {/* Step 3: Final confirm */}
-                {deleteStep === 3 && (
-                  <>
-                    <View className="flex-row items-center justify-between mb-3">
-                      <Text className="text-xl font-bold text-slate-900 dark:text-white">Final step</Text>
-                      <TouchableOpacity onPress={closeDeleteModal}>
-                        <X size={22} color="#94A3B8" />
-                      </TouchableOpacity>
-                    </View>
-                    <View className="bg-red-50 rounded-2xl p-4 mb-5">
-                      <Text className="text-sm text-red-700 text-center leading-5">
-                        This will permanently delete your account and all associated data. There is no way to recover it.
-                      </Text>
-                    </View>
-                    {deleteError ? <Text className="text-red-500 text-xs mb-3 text-center">{deleteError}</Text> : null}
-                    <TouchableOpacity
-                      onPress={() => deleteAccountMutation.mutate()}
-                      disabled={deleteAccountMutation.isPending}
+                      disabled={deleteAccountMutation.isPending || !deletePassword.trim()}
                       className="rounded-2xl py-4 items-center mb-3 bg-red-500"
+                      style={{ opacity: deletePassword.trim() ? 1 : 0.5 }}
                       testID="confirm-delete-account"
                     >
                       {deleteAccountMutation.isPending ? (
@@ -1548,8 +1224,15 @@ export default function ProfileScreen() {
                         <Text className="font-bold text-white text-base">Delete My Account</Text>
                       )}
                     </TouchableOpacity>
-                    <TouchableOpacity onPress={closeDeleteModal} className="py-3 items-center">
-                      <Text className="text-slate-400 font-medium">Cancel</Text>
+                    <TouchableOpacity
+                      onPress={() => {
+                        setDeletePassword("");
+                        setDeleteError(null);
+                        setDeleteStep(1);
+                      }}
+                      className="py-3 items-center"
+                    >
+                      <Text className="text-slate-400 font-medium">Back</Text>
                     </TouchableOpacity>
                   </>
                 )}

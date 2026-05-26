@@ -5,7 +5,6 @@ import { authGuard } from "../middleware/auth-guard";
 import { sendPushToUsers } from "../lib/push";
 import { logActivity } from "../lib/activity";
 import { isPrismaUniqueOnName, isTeamDisplayNameTaken, normalizeTeamName } from "../lib/team-name";
-
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
   session: typeof auth.$Infer.Session.session | null;
@@ -53,7 +52,7 @@ teamsRouter.get("/", async (c) => {
   return c.json({ data: memberships.map((m) => ({ ...m.team, role: m.role })) });
 });
 
-// POST /api/teams - create team
+// POST /api/teams - create team (users may own multiple workspaces)
 teamsRouter.post("/", async (c) => {
   const user = c.get("user")!;
   const body = await c.req.json();
@@ -67,14 +66,6 @@ teamsRouter.post("/", async (c) => {
       { error: { message: "A workspace with this name already exists. Pick a different name.", code: "TEAM_NAME_TAKEN" } },
       409,
     );
-  }
-
-  // Check if user already owns a team
-  const existingOwned = await prisma.teamMember.findFirst({
-    where: { userId: user.id, role: "owner" },
-  });
-  if (existingOwned) {
-    return c.json({ error: { message: "You already own a team. You can only own one team.", code: "TEAM_LIMIT_REACHED" } }, 400);
   }
 
   let inviteCode = generateInviteCode();
@@ -128,22 +119,6 @@ teamsRouter.post("/join", async (c) => {
 
   const memberCount = await prisma.teamMember.count({ where: { teamId: team.id } });
   if (memberCount === 0) {
-    const alreadyOwnElsewhere = await prisma.teamMember.findFirst({
-      where: { userId: user.id, role: "owner" },
-    });
-    if (alreadyOwnElsewhere) {
-      return c.json(
-        {
-          error: {
-            message:
-              "This workspace has no members left. You already own another workspace—transfer ownership there first, or use a different account to reclaim this invite.",
-            code: "TEAM_LIMIT_REACHED",
-          },
-        },
-        400,
-      );
-    }
-
     const reclaimed = await prisma.$transaction(async (tx) => {
       const n = await tx.teamMember.count({ where: { teamId: team.id } });
       if (n !== 0) {
@@ -412,24 +387,6 @@ teamsRouter.post("/:teamId/join-requests/:requestId/approve", async (c) => {
   const hasTeamLeaderNow = Boolean(
     await prisma.teamMember.findFirst({ where: { teamId, role: "team_leader" } }),
   );
-  if (!hasOwnerNow && !hasTeamLeaderNow) {
-    const joinerOwnsElsewhere = await prisma.teamMember.findFirst({
-      where: { userId: joinRequest.userId, role: "owner" },
-    });
-    if (joinerOwnsElsewhere) {
-      return c.json(
-        {
-          error: {
-            message:
-              "This workspace has no owner. The person requesting to join already owns another workspace, so they cannot become the owner here. They can transfer their other workspace first or join with a different account.",
-            code: "BAD_REQUEST",
-          },
-        },
-        400,
-      );
-    }
-  }
-
   await prisma.$transaction(async (tx) => {
     const hasOwner = await tx.teamMember.findFirst({ where: { teamId, role: "owner" } });
     let newMemberRole = "member";

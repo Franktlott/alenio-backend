@@ -102,7 +102,7 @@ export default function PrivacyPolicy() {
             <Bullet>Create and manage your account and authenticate your identity.</Bullet>
             <Bullet>Enable team communication, task management, collaboration, and video meetings.</Bullet>
             <Bullet>Send push notifications for messages, tasks, and reminders (you may opt out in Settings).</Bullet>
-            <Bullet>Process subscription payments: in-app purchases via the applicable app store; on the web, via Stripe when you subscribe or manage billing at {WEBSITE_LABEL}.</Bullet>
+            <Bullet>Process subscription payments on the web via Stripe when you subscribe or manage billing at {WEBSITE_LABEL}. The mobile app does not process purchases or link to external checkout.</Bullet>
             <Bullet>Respond to your support requests and communicate important updates.</Bullet>
             <Bullet>Monitor and analyse usage to improve the App's performance and features.</Bullet>
             <Bullet>Detect, prevent, and address technical issues and security threats.</Bullet>
@@ -116,7 +116,7 @@ export default function PrivacyPolicy() {
               <Text className="font-semibold">Within Your Team:</Text> Content you share (messages, tasks, reactions) is visible to members of your team as part of the App's core functionality.
             </Bullet>
             <Bullet>
-              <Text className="font-semibold">Service Providers:</Text> We use third-party services including Neon (database and authentication for accounts and app data), RevenueCat (subscription management), Google Firebase (Android push notifications via FCM and cloud storage for uploaded media such as attachments and profile images), Expo and Apple/Google (push infrastructure and app distribution), Daily.co (video meetings), Resend (email delivery for certain product or support messages), and other cloud infrastructure providers. These providers process data under their respective terms and privacy policies and are engaged to protect your information.
+              <Text className="font-semibold">Service Providers:</Text> We use third-party services including Neon (database and authentication for accounts and app data), Stripe (subscription billing on the web at alenio.app), Google Firebase (Android push notifications via FCM and cloud storage for uploaded media such as attachments and profile images), Expo and Apple/Google (push infrastructure and app distribution), Daily.co (video meetings), Resend (email delivery for certain product or support messages), and other cloud infrastructure providers. These providers process data under their respective terms and privacy policies and are engaged to protect your information.
             </Bullet>
             <Bullet>
               <Text className="font-semibold">Legal Requirements:</Text> We may disclose your information if required by law or to protect our rights, users, or the public.
@@ -175,7 +175,7 @@ export default function PrivacyPolicy() {
             <Bullet>Neon — Database hosting and authentication (sign-in, sessions, and application data storage).</Bullet>
             <Bullet>Apple Push Notification Service (APNs) — iOS push notifications.</Bullet>
             <Bullet>Google Firebase — Firebase Cloud Messaging (FCM) for Android push notifications; Firebase Storage for user-uploaded files and media where the App stores attachments.</Bullet>
-            <Bullet>RevenueCat — Subscription and in-app purchase management.</Bullet>
+            <Bullet>Stripe — Web subscription checkout and billing (alenio.app).</Bullet>
             <Bullet>Stripe — Payment processing when you subscribe or manage a team plan on the Website ({WEBSITE_LABEL}); subject to Stripe&apos;s terms and privacy policy.</Bullet>
             <Bullet>Resend — Transactional email (for example when you submit feedback or when we send operational emails).</Bullet>
             <Bullet>Expo — App infrastructure and updates.</Bullet>

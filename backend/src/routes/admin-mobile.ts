@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { deleteAllUserStorageObjects } from "../lib/firebase-storage";
+import { deleteAppUserCompletely } from "../lib/delete-app-user";
 import { prisma } from "../prisma";
 import { auth } from "../auth";
 
@@ -113,16 +113,12 @@ adminMobileRouter.delete("/users/:id", async (c) => {
     return c.json({ error: { message: "Cannot delete other admin accounts", code: "FORBIDDEN" } }, 400);
   }
 
-  // Delete in dependency order (non-cascade relations)
-  await prisma.pollVote.deleteMany({ where: { userId: id } });
-  await prisma.poll.deleteMany({ where: { createdById: id } });
-  await prisma.directMessage.deleteMany({ where: { senderId: id } });
-  await prisma.message.deleteMany({ where: { senderId: id } });
-  await prisma.topic.deleteMany({ where: { createdById: id } });
-  await prisma.taskTemplate.deleteMany({ where: { createdById: id } });
-  await prisma.task.deleteMany({ where: { creatorId: id } });
-  await deleteAllUserStorageObjects(id);
-  await prisma.user.delete({ where: { id } });
+  try {
+    await deleteAppUserCompletely(id);
+  } catch (err) {
+    console.error("[admin-delete-user] failed for user", id, err);
+    return c.json({ error: { message: "Could not delete user", code: "DELETE_FAILED" } }, 500);
+  }
 
   return c.json({ data: { deleted: true } });
 });

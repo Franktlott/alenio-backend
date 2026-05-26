@@ -6,6 +6,25 @@ import { looksLikeJwt } from "../lib/token";
 const IDLE_MS = 5 * 60 * 1000;
 const WARNING_SECONDS = 5 * 60;
 
+/** Marketing and auth routes — no idle sign-out prompt while browsing these. */
+const PUBLIC_PATHS = new Set([
+  "/",
+  "/pricing",
+  "/privacy",
+  "/terms",
+  "/account-deletion",
+  "/login",
+  "/sign-up",
+  "/verify",
+  "/forgot-password",
+  "/reset-password",
+  "/reset-password/verify",
+]);
+
+function isPublicPath(pathname: string): boolean {
+  return PUBLIC_PATHS.has(pathname);
+}
+
 function formatCountdown(totalSec: number): string {
   const m = Math.floor(Math.max(0, totalSec) / 60);
   const s = Math.max(0, totalSec) % 60;
@@ -23,14 +42,8 @@ export function SessionIdleGuard() {
   const [warningOpen, setWarningOpen] = useState(false);
   const [countdownSec, setCountdownSec] = useState(WARNING_SECONDS);
 
-  const onAuthPath =
-    location.pathname === "/login" ||
-    location.pathname === "/verify" ||
-    location.pathname === "/forgot-password" ||
-    location.pathname === "/reset-password/verify" ||
-    location.pathname === "/reset-password";
   const hasSession = looksLikeJwt(getAccessToken() ?? "");
-  const guardActive = !onAuthPath && hasSession;
+  const guardActive = hasSession && !isPublicPath(location.pathname);
 
   const bumpActivity = useCallback(() => {
     if (warningOpenRef.current) return;

@@ -96,9 +96,9 @@ export function PrivacyPolicyPage() {
               <strong>Within your team:</strong> Content you share is visible to members of your team as part of core functionality.
             </li>
             <li>
-              <strong>Service providers:</strong> We use third-party services including Neon (database and authentication), RevenueCat
-              (in-app subscriptions), Google Firebase (FCM for Android push and storage for uploads), Expo and Apple/Google (distribution
-              and push), Daily.co (video meetings), Resend (email), Stripe (payments on the Website), and other infrastructure providers.
+              <strong>Service providers:</strong> We use third-party services including Neon (database and authentication), Stripe
+              (subscription billing on the Website), Google Firebase (FCM for Android push and storage for uploads), Expo and Apple/Google
+              (distribution and push), Daily.co (video meetings), Resend (email), and other infrastructure providers.
               They process data under their respective terms and privacy policies.
             </li>
             <li>
@@ -114,9 +114,13 @@ export function PrivacyPolicyPage() {
 
         <Section title="4. Data Retention">
           <p>
-            We retain your personal information for as long as your account is active or as needed to provide services. You may request
-            deletion of your account and associated data by emailing {LEGAL_CONTACT_EMAIL}. We will process deletion requests within 30
-            days, subject to any legal obligations to retain certain data.
+            We retain your personal information for as long as your account is active or as needed to provide services. You may delete
+            your account in the App or on the Website, or follow the steps on our{" "}
+            <Link to="/account-deletion" className="legal-doc-inline-link">
+              account deletion page
+            </Link>
+            . You may also request deletion by emailing {LEGAL_CONTACT_EMAIL}. We will process deletion requests within 30 days, subject
+            to any legal obligations to retain certain data.
           </p>
         </Section>
 
@@ -141,7 +145,7 @@ export function PrivacyPolicyPage() {
         </Section>
 
         <Section title="8. Third-Party Services">
-          <p>The App and Website integrate with services including Neon, Apple (APNs), Google Firebase, RevenueCat, Resend, Expo, Daily.co, and Stripe (web billing). Each is governed by its own policies.</p>
+          <p>The App and Website integrate with services including Neon, Apple (APNs), Google Firebase, Stripe, Resend, Expo, and Daily.co. Each is governed by its own policies.</p>
         </Section>
 
         <Section title="9. International Data Transfers">

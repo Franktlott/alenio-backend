@@ -8,7 +8,6 @@ import {
   type WebTeamRow,
 } from "../lib/api";
 import { WorkspaceCreateJoinModals } from "./WorkspaceCreateJoinModals";
-
 type Props = {
   teams: WebTeamRow[];
   onRefresh: () => Promise<void>;
@@ -119,7 +118,9 @@ export function ProfileTeamsSection({ teams, onRefresh, onWorkspaceDeleted }: Pr
       <div className="enterprise-profile-workspaces-head">
         <div>
           <h2 className="enterprise-card-title enterprise-card-title-spaced enterprise-profile-workspaces-title">Workspaces</h2>
-          <p className="enterprise-muted enterprise-profile-workspaces-sub">Manage the teams you belong to.</p>
+          <p className="enterprise-muted enterprise-profile-workspaces-sub">
+            Manage the workspaces you belong to. Each workspace has its own plan on the Plan page.
+          </p>
         </div>
         <div className="enterprise-profile-workspaces-actions">
           <button

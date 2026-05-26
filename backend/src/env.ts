@@ -12,6 +12,10 @@ const envSchema = z.object({
   DATABASE_URL: z.string().default("file:./dev.db"),
   // Neon Auth
   NEON_AUTH_URL: z.string().url(),
+  /** Optional: delete auth users via Neon Management API (see Neon Console → API keys, project/branch IDs). */
+  NEON_API_KEY: z.string().optional(),
+  NEON_PROJECT_ID: z.string().optional(),
+  NEON_BRANCH_ID: z.string().optional(),
   // Backend URL
   BACKEND_URL: z.string().default("http://localhost:3000"),
   /** Comma-separated browser origins allowed for CORS (e.g. Firebase Hosting https://your-app.web.app). Localhost is always allowed. */
@@ -27,10 +31,6 @@ const envSchema = z.object({
   APP_SCHEME: z.string().optional().default("alenio"),
   // Daily.co video
   DAILY_API_KEY: z.string().optional(),
-  // RevenueCat subscriptions
-  REVENUECAT_SECRET_KEY: z.string().optional(),
-  REVENUECAT_TEAM_ENTITLEMENT_ID: z.string().optional().default("Team"),
-  REVENUECAT_WEBHOOK_AUTH_TOKEN: z.string().optional(),
   /** Optional: web Team checkout and customer portal (secret key and price id below) */
   STRIPE_SECRET_KEY: z.string().optional(),
   STRIPE_WEBHOOK_SECRET: z.string().optional(),

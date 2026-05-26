@@ -1,88 +1,8 @@
-import { Linking } from "react-native";
-import Purchases from "react-native-purchases";
-import { isRevenueCatEnabled, TEAM_ENTITLEMENT_ID } from "./revenue-cat";
-
 /**
- * Where teams that subscribed on the web manage plans. The native app must not open Stripe checkout or Customer Portal.
+ * Stripe portal URL allowlist (used only if a secure billing WebView is shown).
+ * The store app does not open external checkout or billing links — see plan-access-copy.
  */
-export const ALENIO_WEB_BILLING_URL = "https://alenio.app/billing";
 
-export type BillingSource = "stripe" | "app_store" | "play_store" | "other";
-
-export type TeamBillingContext = {
-  hasTeamEntitlement: boolean;
-  /** Normalized channel for UI routing */
-  billingSource: BillingSource | null;
-  /** Raw RevenueCat store string e.g. STRIPE, APP_STORE */
-  storeRaw: string | null;
-  /** RevenueCat-provided URL: web billing portal, App Store subscriptions, Play subscriptions, etc. */
-  managementURL: string | null;
-};
-
-function mapStoreToBillingSource(store: string | null | undefined): BillingSource | null {
-  if (!store) return null;
-  switch (store) {
-    case "STRIPE":
-    case "PADDLE":
-    case "RC_BILLING":
-      return "stripe";
-    case "APP_STORE":
-    case "MAC_APP_STORE":
-      return "app_store";
-    case "PLAY_STORE":
-      return "play_store";
-    default:
-      return "other";
-  }
-}
-
-/**
- * Reads Team entitlement + management URL from RevenueCat (authoritative for web vs in-app billing).
- */
-export async function getTeamBillingContext(): Promise<TeamBillingContext | null> {
-  if (!isRevenueCatEnabled()) return null;
-  try {
-    const info = await Purchases.getCustomerInfo();
-    const ent = info.entitlements.active[TEAM_ENTITLEMENT_ID];
-    const managementURL = info.managementURL ?? null;
-    if (!ent) {
-      return {
-        hasTeamEntitlement: false,
-        billingSource: null,
-        storeRaw: null,
-        managementURL,
-      };
-    }
-    const storeRaw = ent.store ?? null;
-    return {
-      hasTeamEntitlement: true,
-      billingSource: mapStoreToBillingSource(storeRaw),
-      storeRaw,
-      managementURL,
-    };
-  } catch {
-    return null;
-  }
-}
-
-export function billingSourceLabel(source: BillingSource | null): string {
-  switch (source) {
-    case "stripe":
-      return "Web";
-    case "app_store":
-      return "App Store";
-    case "play_store":
-      return "Google Play";
-    case "other":
-      return "Other";
-    default:
-      return "—";
-  }
-}
-
-/**
- * Hosts allowed inside an embedded WebView for payment portals (approved billing domains).
- */
 export function isStripePortalEmbedUrl(url: string): boolean {
   try {
     const u = new URL(url);
@@ -94,27 +14,5 @@ export function isStripePortalEmbedUrl(url: string): boolean {
     return false;
   } catch {
     return false;
-  }
-}
-
-/** Use in-app WebView for HTTPS billing portals; native store sheets for IAP. */
-export function shouldUseEmbeddedBillingWebView(source: BillingSource | null, url: string | null): boolean {
-  if (!url) return false;
-  if (source === "stripe") return isStripePortalEmbedUrl(url);
-  if (source === "other") return isStripePortalEmbedUrl(url);
-  return false;
-}
-
-/**
- * Open App Store / Play subscription management (native).
- */
-export async function openStoreSubscriptionManagement(url: string): Promise<{ ok: boolean; error?: string }> {
-  try {
-    const can = await Linking.canOpenURL(url);
-    if (!can) return { ok: false, error: "Cannot open subscription management on this device." };
-    await Linking.openURL(url);
-    return { ok: true };
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Something went wrong." };
   }
 }

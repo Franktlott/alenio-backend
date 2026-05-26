@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { createWebTeam, postJoinTeamByCode, type JoinByCodeResult } from "../lib/api";
-
 function isJoinPendingResult(r: JoinByCodeResult): r is { status: "pending"; teamName: string; requestId: string } {
   return "status" in r && r.status === "pending";
 }
@@ -126,7 +125,9 @@ export function WorkspaceCreateJoinModals({
             <h3 id="ws-create-title" className="enterprise-modal-title">
               Create workspace
             </h3>
-            <p className="enterprise-muted enterprise-modal-sub">You will be the workspace owner.</p>
+            <p className="enterprise-muted enterprise-modal-sub">
+              You will be the workspace owner. Subscriptions are billed per workspace on the Plan page.
+            </p>
             <input
               className="auth-input enterprise-modal-input"
               placeholder="Workspace name"

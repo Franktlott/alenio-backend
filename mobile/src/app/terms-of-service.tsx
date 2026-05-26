@@ -110,19 +110,11 @@ export default function TermsOfService() {
 
         <Section title="6. Subscriptions and Payments">
           <Body>
-            {APP_NAME} may offer premium subscription plans. Depending on how you subscribe:
+            {APP_NAME} may offer premium Team subscription plans for each workspace. Team plans are purchased and managed on our website ({WEBSITE_LABEL}) using Stripe. Payment is charged according to the plan you select. Manage billing, payment methods, and cancellation through your account on {WEBSITE_LABEL} as we make available. Stripe&apos;s terms and privacy policy apply to their processing.
           </Body>
           <View className="mt-2">
-            <Bullet>
-              <Text className="font-semibold">Mobile (App Store or Google Play):</Text> Subscriptions are billed through the applicable store according to its billing terms. Payment is charged to your store account at confirmation of purchase. Subscriptions automatically renew unless cancelled at least 24 hours before the end of the current period. Manage or cancel through your device&apos;s store account settings. Refunds follow the store&apos;s rules, except as required by applicable law.
-            </Bullet>
-            <Bullet>
-              <Text className="font-semibold">Web ({WEBSITE_LABEL}):</Text> If you start or manage a team plan on our website, payment and billing are processed by Stripe. You authorize us and Stripe to charge your payment method according to the plan you select. Manage billing, payment methods, and cancellation through your account on {WEBSITE_LABEL} as we make available. Stripe&apos;s terms and privacy policy apply to their processing.
-            </Bullet>
-          </View>
-          <View className="mt-2">
             <Body>
-              Apple and Google are not parties to these Terms for in-app purchases. Subscription billing and refunds for App Store purchases are governed by Apple&apos;s Terms of Sale; for Play Store purchases, by Google&apos;s terms.
+              The mobile app does not process in-app subscription purchases. To upgrade, change plans, or cancel, sign in on {WEBSITE_LABEL} with the workspace owner account.
             </Body>
           </View>
         </Section>

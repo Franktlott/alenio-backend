@@ -17,6 +17,7 @@ import { SignUpPage } from "./routes/SignUpPage";
 import { ResetPasswordPage } from "./routes/ResetPasswordPage";
 import { VerifyPage } from "./routes/VerifyPage";
 import { VerifyResetCodePage } from "./routes/VerifyResetCodePage";
+import { AccountDeletionPage } from "./routes/AccountDeletionPage";
 import { PrivacyPolicyPage } from "./routes/PrivacyPolicyPage";
 import { TermsOfServicePage } from "./routes/TermsOfServicePage";
 import { WebsiteHomePage } from "./routes/WebsiteHomePage";
@@ -105,6 +106,7 @@ export default function App() {
         <Route path="/verify" element={<VerifyPage />} />
         <Route path="/privacy" element={<PrivacyPolicyPage />} />
         <Route path="/terms" element={<TermsOfServicePage />} />
+        <Route path="/account-deletion" element={<AccountDeletionPage />} />
         <Route path="/" element={<WebsiteHomePage />} />
         <Route path="/pricing" element={<PricingPage />} />
         <Route

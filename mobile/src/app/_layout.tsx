@@ -1,5 +1,5 @@
 import { Toaster } from 'burnt/web';
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
+import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router/react-navigation';
 import { Stack, router } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
@@ -13,7 +13,6 @@ import { useEffect, useRef, useState } from 'react';
 import * as Notifications from 'expo-notifications';
 import * as Haptics from 'expo-haptics';
 import { registerForPushNotificationsAsync } from '@/lib/notifications';
-import { initRevenueCat } from '@/lib/revenue-cat';
 import { fetchMeUser, ME_QUERY_KEY } from '@/lib/auth/me-query';
 import { ensureSessionFreshOnForeground } from '@/lib/auth/auth-client';
 import Animated, {
@@ -162,7 +161,6 @@ function RootLayoutNav() {
         registerForPushNotificationsAsync();
       }
     });
-    initRevenueCat(session.user.id);
     notificationListener.current = Notifications.addNotificationReceivedListener((notification) => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       const data = notification.request.content.data as Record<string, string>;
@@ -250,6 +248,13 @@ function RootLayoutNav() {
             />
             <Stack.Screen name="subscription" />
             <Stack.Screen
+              name="switch-workspace"
+              options={{
+                presentation: "fullScreenModal",
+                headerShown: false,
+              }}
+            />
+            <Stack.Screen
               name="feedback"
               options={{
                 presentation: 'formSheet',
@@ -258,6 +263,7 @@ function RootLayoutNav() {
                 headerShown: false,
               }}
             />
+            <Stack.Screen name="notifications" />
           </Stack.Protected>
           <Stack.Protected guard={!hasBackendSession}>
             <Stack.Screen name="sign-in" />
