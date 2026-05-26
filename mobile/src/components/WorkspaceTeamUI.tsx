@@ -3,7 +3,7 @@ import { View, Text, Image, Pressable, type ViewStyle } from "react-native";
 import { ChevronRight } from "lucide-react-native";
 import type { Team } from "@/lib/types";
 
-export const WORKSPACE_SWITCH_HINT = "Tap a team to switch workspaces.";
+export const WORKSPACE_SWITCH_HINT = "Tap a workspace to switch.";
 
 export function formatTeamRole(role?: string): string {
   if (!role) return "Member";

@@ -4,7 +4,9 @@ export type PickedFile = { uri: string; filename: string; mimeType: string };
 
 export async function pickImage(): Promise<PickedFile | null> {
   const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-  if (!perm.granted) return null;
+  if (!perm.granted) {
+    throw new Error("Photo library access is required. Enable it in your device Settings.");
+  }
 
   const result = await ImagePicker.launchImageLibraryAsync({
     mediaTypes: ['images'] as ImagePicker.MediaType[],
@@ -15,16 +17,30 @@ export async function pickImage(): Promise<PickedFile | null> {
 
   if (result.canceled) return null;
   const asset = result.assets[0];
+  return toPickedFile(asset);
+}
+
+function normalizeImageMime(mime?: string | null): string {
+  if (!mime) return "image/jpeg";
+  if (mime === "image/heic" || mime === "image/heif") return "image/jpeg";
+  return mime;
+}
+
+function toPickedFile(asset: ImagePicker.ImagePickerAsset): PickedFile {
+  const mimeType = normalizeImageMime(asset.mimeType);
+  const ext = mimeType.includes("png") ? "png" : "jpg";
   return {
     uri: asset.uri,
-    filename: asset.fileName ?? `photo-${Date.now()}.jpg`,
-    mimeType: asset.mimeType ?? "image/jpeg",
+    filename: asset.fileName ?? `photo-${Date.now()}.${ext}`,
+    mimeType,
   };
 }
 
 export async function takePhoto(): Promise<PickedFile | null> {
   const perm = await ImagePicker.requestCameraPermissionsAsync();
-  if (!perm.granted) return null;
+  if (!perm.granted) {
+    throw new Error("Camera access is required. Enable it in your device Settings.");
+  }
 
   const result = await ImagePicker.launchCameraAsync({
     quality: 0.8,
@@ -33,12 +49,7 @@ export async function takePhoto(): Promise<PickedFile | null> {
   });
 
   if (result.canceled) return null;
-  const asset = result.assets[0];
-  return {
-    uri: asset.uri,
-    filename: asset.fileName ?? `photo-${Date.now()}.jpg`,
-    mimeType: asset.mimeType ?? "image/jpeg",
-  };
+  return toPickedFile(result.assets[0]);
 }
 
 export async function pickMedia(): Promise<PickedFile | null> {

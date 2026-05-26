@@ -31,6 +31,12 @@ demoRouter.post("/login", async (c) => {
 
     if (!existingTeam) {
       await seedDemoData(demoUser.id);
+    } else {
+      await prisma.teamSubscription.upsert({
+        where: { teamId: existingTeam.id },
+        create: { teamId: existingTeam.id, plan: "team", status: "active" },
+        update: { plan: "team", status: "active" },
+      });
     }
 
     return c.json({ data: { email: DEMO_EMAIL, password: DEMO_PASSWORD } });
@@ -112,6 +118,12 @@ async function seedDemoData(ownerId: string) {
     }
     throw e;
   }
+
+  await prisma.teamSubscription.upsert({
+    where: { teamId: team.id },
+    create: { teamId: team.id, plan: "team", status: "active" },
+    update: { plan: "team", status: "active" },
+  });
 
   // ── Topics/Channels ───────────────────────────────────────────────────────
   const generalTopic = await prisma.topic.create({

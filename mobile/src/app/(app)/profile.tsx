@@ -128,6 +128,11 @@ export default function ProfileScreen() {
   });
 
   const isOwnerOfAnyTeam = teams.some((t) => (t as Team & { role?: string }).role === "owner");
+  const activeTeam = teams.find((t) => t.id === activeTeamId) as (Team & { role?: string }) | undefined;
+  const canManageActiveTeam =
+    !!activeTeam && ["owner", "team_leader"].includes(activeTeam.role ?? "") && !isDemo;
+  const canLeaveActiveTeam =
+    !!activeTeam && !canManageActiveTeam && !isDemo;
 
   const { data: ownerTeamSubscription } = useQuery({
     queryKey: ["subscription", activeTeamId],
@@ -289,11 +294,15 @@ export default function ProfileScreen() {
         (index) => {
           if (index === 1) uploadMutation.mutate("library");
           if (index === 2) uploadMutation.mutate("camera");
-        }
+        },
       );
-    } else {
-      uploadMutation.mutate("library");
+      return;
     }
+    Alert.alert("Profile photo", undefined, [
+      { text: "Cancel", style: "cancel" },
+      { text: "Choose from library", onPress: () => uploadMutation.mutate("library") },
+      { text: "Take photo", onPress: () => uploadMutation.mutate("camera") },
+    ]);
   };
 
   const openEditModal = (team: Team) => {
@@ -658,10 +667,10 @@ export default function ProfileScreen() {
             title="Workspaces"
             subtitle={
               teamsLoading
-                ? "Teams you belong to"
+                ? undefined
                 : teams.length > 1
                   ? WORKSPACE_SWITCH_HINT
-                  : "Teams you belong to"
+                  : undefined
             }
           >
             <ProfileWorkspaceList
@@ -670,18 +679,31 @@ export default function ProfileScreen() {
               teamsLoading={teamsLoading}
               isDemo={isDemo}
               pendingCountMap={pendingCountMap}
-              onSelectTeam={(teamId) => void switchWorkspace(teamId, { navigateTo: "/(app)/team" })}
-              onOpenTeam={() => router.replace("/(app)/team")}
-              onEditTeam={openEditModal}
-              onLeaveTeam={setLeavingTeam}
-              onSwitchWorkspaces={() => router.push("/switch-workspace" as never)}
+              onSelectTeam={(teamId) => void switchWorkspace(teamId)}
+              onManageActive={
+                canManageActiveTeam && activeTeam ? () => openEditModal(activeTeam) : undefined
+              }
               onAddWorkspace={() =>
                 router.push({
                   pathname: "/onboarding",
                   params: { intent: "add", mode: "create" },
                 })
               }
+              onViewAll={
+                teams.length > 4 ? () => router.push("/switch-workspace" as never) : undefined
+              }
             />
+            {canLeaveActiveTeam && activeTeam ? (
+              <ProfileCard style={{ marginTop: 8 }}>
+                <ProfileMenuRow
+                  title="Leave workspace"
+                  destructive
+                  showChevron={false}
+                  onPress={() => setLeavingTeam(activeTeam)}
+                  testID="leave-active-workspace"
+                />
+              </ProfileCard>
+            ) : null}
           </ProfileSection>
 
           {/* Account */}

@@ -143,7 +143,7 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
       return;
     }
     if (!activeTeamId) return;
-    if (routeName === "execute") {
+    if (routeName === "execute" && isPaid) {
       void queryClient.prefetchQuery({
         queryKey: ["tasks", activeTeamId, "mine"],
         queryFn: () => api.get<{ tasks: Task[]; nextCursor: string | null }>(`/api/teams/${activeTeamId}/tasks?myTasks=true`),
@@ -154,7 +154,7 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
       });
       return;
     }
-    if (routeName === "activity") {
+    if (routeName === "activity" && isPaid) {
       void queryClient.prefetchQuery({
         queryKey: ["activity", activeTeamId],
         queryFn: () => api.get<unknown[]>(`/api/teams/${activeTeamId}/activity?limit=100`),
@@ -277,11 +277,15 @@ export default function AppLayout() {
   });
 
   useEffect(() => {
+    if (!activeTeamId) {
+      setPlan("free");
+      return;
+    }
     if (subscription) {
       const plan = subscription.plan === "pro" ? "team" : subscription.plan;
-      setPlan(plan as "free" | "team");
+      setPlan(plan === "team" ? "team" : "free");
     }
-  }, [subscription]);
+  }, [subscription, activeTeamId, setPlan]);
 
   useEffect(() => {
     if (teams && teams.length > 0 && !activeTeamId) {

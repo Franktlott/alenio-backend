@@ -664,6 +664,20 @@ export default function TasksScreen() {
     }
   }, [teams, activeTeamId, setActiveTeamId]);
 
+  const { data: subscription } = useQuery({
+    queryKey: ["subscription", activeTeamId],
+    queryFn: () => api.get<{ plan: string; status: string }>(`/api/teams/${activeTeamId}/subscription`),
+    enabled: !!activeTeamId,
+  });
+  const plan = useSubscriptionStore((s) => s.plan);
+  const isPro = plan === "team";
+  React.useEffect(() => {
+    if (subscription) {
+      const normalized = subscription.plan === "pro" ? "team" : subscription.plan;
+      useSubscriptionStore.getState().setPlan(normalized === "team" ? "team" : "free");
+    }
+  }, [subscription]);
+
   // My tasks (assigned to me, or created by me with no assignment) — Active & Completed tabs
   const { data: myTasksData, isLoading } = useQuery({
     queryKey: ["tasks", activeTeamId, "mine"],
@@ -672,7 +686,7 @@ export default function TasksScreen() {
       setNextCursor(result.nextCursor);
       return result;
     },
-    enabled: !!activeTeamId,
+    enabled: !!activeTeamId && isPro,
   });
   const allTasks: Task[] = myTasksData?.tasks ?? [];
 
@@ -683,7 +697,7 @@ export default function TasksScreen() {
       const result = await api.get<{ tasks: Task[]; nextCursor: string | null }>(`/api/teams/${activeTeamId}/tasks?creatorId=me`);
       return result;
     },
-    enabled: !!activeTeamId && filter === "assigned",
+    enabled: !!activeTeamId && isPro && filter === "assigned",
   });
   const teamTasks: Task[] = teamTasksData?.tasks ?? [];
 
@@ -700,19 +714,8 @@ export default function TasksScreen() {
   const { data: calendarEvents = [] } = useQuery({
     queryKey: ["calendar-events", activeTeamId],
     queryFn: () => api.get<CalendarEvent[]>(`/api/teams/${activeTeamId}/events`),
-    enabled: !!activeTeamId,
+    enabled: !!activeTeamId && isPro,
   });
-
-  const { data: subscription } = useQuery({
-    queryKey: ["subscription", activeTeamId],
-    queryFn: () => api.get<{ plan: string; status: string }>(`/api/teams/${activeTeamId}/subscription`),
-    enabled: !!activeTeamId,
-  });
-  const plan = useSubscriptionStore((s) => s.plan);
-  const isPro = plan === "team";
-  React.useEffect(() => {
-    if (subscription) {}
-  }, [subscription]);
 
   const toggleMutation = useMutation({
     mutationFn: (task: Task) =>

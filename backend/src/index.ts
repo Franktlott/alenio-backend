@@ -272,8 +272,137 @@ app.get("/static/:filename", async (c) => {
   return new Response(file);
 });
 
-// File upload endpoint - stores uploads in Firebase Storage
-app.post("/api/upload", async (c) => {
+const MAX_UPLOAD_BYTES = 12 * 1024 * 1024;
+
+function fileFromBase64Json(payload: {
+  data?: unknown;
+  filename?: unknown;
+  contentType?: unknown;
+}): File | null {
+  if (typeof payload.data !== "string" || !payload.data.trim()) return null;
+  let bytes: Buffer;
+  try {
+    bytes = Buffer.from(payload.data, "base64");
+  } catch {
+    return null;
+  }
+  if (bytes.length === 0 || bytes.length > MAX_UPLOAD_BYTES) return null;
+  const name = String(payload.filename ?? "photo.jpg").trim() || "photo.jpg";
+  const type = String(payload.contentType ?? "image/jpeg").trim() || "image/jpeg";
+  return new File([bytes], name, { type });
+}
+
+type UploadParseResult =
+  | { ok: true; file: File; purpose: "profile" | "team" | "generic"; teamId: string }
+  | { ok: false; status: 400 | 413; message: string; code: string };
+
+type UploadContext = {
+  req: {
+    header: (name: string) => string | undefined;
+    json: () => Promise<unknown>;
+    parseBody: () => Promise<Record<string, string | File>>;
+  };
+};
+
+function friendlyMultipartError(detail: string): string {
+  if (/boundary|mime type|form data|multipart/i.test(detail)) {
+    return "Upload format was not recognized. Please update the app and try again.";
+  }
+  return detail ? `Could not read upload. (${detail})` : "Could not read upload.";
+}
+
+async function parseJsonBase64Upload(c: UploadContext): Promise<UploadParseResult> {
+  let json: {
+    purpose?: string;
+    teamId?: string;
+    data?: string;
+    filename?: string;
+    contentType?: string;
+  };
+  try {
+    json = (await c.req.json()) as typeof json;
+  } catch {
+    return {
+      ok: false,
+      status: 400,
+      message: "Invalid photo upload. Try selecting the image again.",
+      code: "VALIDATION_ERROR",
+    };
+  }
+
+  const purposeRaw = String(json.purpose ?? "").trim();
+  const teamIdRaw = String(json.teamId ?? "").trim();
+  const file = fileFromBase64Json(json);
+  if (!file) {
+    const tooLarge =
+      typeof json.data === "string" && Math.floor(json.data.length * 0.75) > MAX_UPLOAD_BYTES;
+    return {
+      ok: false,
+      status: tooLarge ? 413 : 400,
+      message: tooLarge
+        ? "Photo is too large. Choose a smaller image."
+        : "Invalid image data. Try selecting the photo again.",
+      code: tooLarge ? "PAYLOAD_TOO_LARGE" : "VALIDATION_ERROR",
+    };
+  }
+
+  const purpose = purposeRaw === "profile" || purposeRaw === "team" ? purposeRaw : "generic";
+  return { ok: true, file, purpose, teamId: teamIdRaw };
+}
+
+async function parseMultipartUpload(c: UploadContext): Promise<UploadParseResult> {
+  let body: Record<string, string | File>;
+  try {
+    body = await c.req.parseBody();
+  } catch (parseErr) {
+    const detail = parseErr instanceof Error ? parseErr.message : "Invalid multipart body";
+    return {
+      ok: false,
+      status: 400,
+      message: friendlyMultipartError(detail),
+      code: "VALIDATION_ERROR",
+    };
+  }
+
+  const raw = body["file"];
+  if (!(raw instanceof File)) {
+    return { ok: false, status: 400, message: "No file provided", code: "VALIDATION_ERROR" };
+  }
+  if (raw.size === 0) {
+    return {
+      ok: false,
+      status: 400,
+      message: "Uploaded file is empty. Try selecting the photo again.",
+      code: "VALIDATION_ERROR",
+    };
+  }
+
+  const purposeRaw = body["purpose"] != null ? String(body["purpose"]).trim() : "";
+  const teamIdRaw = body["teamId"] != null ? String(body["teamId"]).trim() : "";
+  const purpose = purposeRaw === "profile" || purposeRaw === "team" ? purposeRaw : "generic";
+  return { ok: true, file: raw, purpose, teamId: teamIdRaw };
+}
+
+async function resolveUploadFile(c: UploadContext, mode: "json" | "multipart" | "auto"): Promise<UploadParseResult> {
+  if (mode === "json") return parseJsonBase64Upload(c);
+  if (mode === "multipart") return parseMultipartUpload(c);
+
+  const contentType = (c.req.header("content-type") ?? "").toLowerCase();
+  const uploadFormat = (c.req.header("x-alenio-upload") ?? "").toLowerCase();
+  if (uploadFormat === "base64" || uploadFormat === "json") {
+    return parseJsonBase64Upload(c);
+  }
+  if (contentType.includes("multipart/form-data")) {
+    return parseMultipartUpload(c);
+  }
+  return parseJsonBase64Upload(c);
+}
+
+async function handleFileUpload(c: {
+  get: (key: "user") => AppUser | null;
+  json: (data: unknown, status?: number) => Response;
+  req: UploadContext["req"];
+}, mode: "json" | "multipart" | "auto") {
   const user = c.get("user");
   if (!user) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
   if (!isFirebaseStorageConfigured()) {
@@ -286,26 +415,15 @@ app.post("/api/upload", async (c) => {
   }
 
   try {
-    const formData = await c.req.formData();
-    const rawEntry = formData.get("file");
-    const purposeRaw = formData.get("purpose")?.toString().trim();
-    const teamIdRaw = formData.get("teamId")?.toString().trim();
-
-    if (rawEntry == null || typeof rawEntry === "string") {
-      return c.json({ error: { message: "No file provided", code: "VALIDATION_ERROR" } }, 400);
+    const resolved = await resolveUploadFile(c, mode);
+    if (!resolved.ok) {
+      return c.json({ error: { message: resolved.message, code: resolved.code } }, resolved.status);
     }
-
-    const body = rawEntry as File | Blob;
-    const file =
-      body instanceof File
-        ? body
-        : new File([body], "upload", { type: body.type || "application/octet-stream" });
-
-    const purpose = purposeRaw === "profile" || purposeRaw === "team" ? purposeRaw : "generic";
+    const { file, purpose, teamId: teamIdRaw } = resolved;
     if (purpose === "team" && !teamIdRaw) {
       return c.json(
         { error: { message: "teamId is required for team photo uploads", code: "VALIDATION_ERROR" } },
-        400
+        400,
       );
     }
 
@@ -350,10 +468,19 @@ app.post("/api/upload", async (c) => {
     });
     return c.json({ data: uploaded });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Upload failed";
+    const raw = err instanceof Error ? err.message : "Upload failed";
+    const message = /boundary|mime type|form data|multipart/i.test(raw)
+      ? "Upload format was not recognized. Please update the app and try again."
+      : raw;
     return c.json({ error: { message, code: "UPLOAD_ERROR" } }, 500);
   }
-});
+}
+
+// Mobile app: JSON + base64 (never multipart)
+app.post("/api/upload/json", async (c) => handleFileUpload(c, "json"));
+
+// Web / browser: multipart form-data
+app.post("/api/upload", async (c) => handleFileUpload(c, "auto"));
 
 // Upload smoke test - verifies Firebase upload wiring end-to-end
 app.post("/api/upload/smoke", async (c) => {
@@ -661,4 +788,5 @@ export default {
   port,
   hostname: "0.0.0.0",
   fetch: app.fetch,
+  maxRequestBodySize: 50 * 1024 * 1024,
 };

@@ -1,5 +1,10 @@
 /** Store-safe copy: no external purchase links, prices tied to checkout, or payment provider names. */
 
+export function hasTeamPlan(sub?: { plan?: string | null } | null): boolean {
+  const plan = (sub?.plan ?? "free").trim().toLowerCase();
+  return plan === "team" || plan === "pro";
+}
+
 export const PLAN_SCREEN_TITLE = "Plan & access";
 
 export const PLAN_SCREEN_SUBTITLE =

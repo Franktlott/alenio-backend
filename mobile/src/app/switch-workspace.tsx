@@ -3,18 +3,17 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { X, Building2 } from "lucide-react-native";
+import { X, Check, ChevronRight } from "lucide-react-native";
 import { api } from "@/lib/api/api";
 import type { Team } from "@/lib/types";
 import { useSession } from "@/lib/auth/use-session";
 import { useSwitchWorkspace } from "@/hooks/use-switch-workspace";
 import {
-  CurrentWorkspaceBadge,
   WORKSPACE_SWITCH_HINT,
   WorkspaceTeamAvatar,
-  WorkspaceTeamRow,
   formatTeamRole,
 } from "@/components/WorkspaceTeamUI";
+import { PROFILE_UI } from "@/components/profile/ProfileEnterpriseUI";
 
 export default function SwitchWorkspaceScreen() {
   const { data: session } = useSession();
@@ -36,9 +35,6 @@ export default function SwitchWorkspaceScreen() {
     return copy;
   }, [teams, activeTeamId]);
 
-  const activeTeam = teams.find((t) => t.id === activeTeamId);
-  const otherTeams = sortedTeams.filter((t) => t.id !== activeTeamId);
-
   const onSelect = async (teamId: string) => {
     if (teamId === activeTeamId) {
       router.back();
@@ -51,59 +47,43 @@ export default function SwitchWorkspaceScreen() {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#F1F5F9" }} edges={["top", "bottom"]}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: PROFILE_UI.pageBg }} edges={["top", "bottom"]}>
       <View
         style={{
           flexDirection: "row",
           alignItems: "center",
           justifyContent: "space-between",
-          paddingHorizontal: 20,
-          paddingVertical: 14,
+          paddingHorizontal: 16,
+          paddingVertical: 12,
           borderBottomWidth: 1,
           borderBottomColor: "#E2E8F0",
           backgroundColor: "#FFFFFF",
         }}
       >
-        <View style={{ flex: 1 }}>
-          <Text
-            style={{
-              fontSize: 11,
-              fontWeight: "700",
-              letterSpacing: 1.1,
-              color: "#64748B",
-              textTransform: "uppercase",
-            }}
-          >
-            Workspaces
-          </Text>
-          <Text style={{ fontSize: 17, fontWeight: "700", color: "#0F172A", marginTop: 2 }}>Switch workspace</Text>
-        </View>
+        <Text style={{ fontSize: 17, fontWeight: "600", color: "#0F172A" }}>Workspaces</Text>
         <Pressable
           onPress={() => router.back()}
           hitSlop={12}
           style={{
-            width: 40,
-            height: 40,
-            borderRadius: 10,
-            backgroundColor: "#F8FAFC",
-            borderWidth: 1,
-            borderColor: "#E2E8F0",
+            width: 36,
+            height: 36,
+            borderRadius: 8,
             alignItems: "center",
             justifyContent: "center",
           }}
           testID="close-switch-workspace"
         >
-          <X size={20} color="#64748B" />
+          <X size={22} color="#64748B" />
         </Pressable>
       </View>
 
       <ScrollView
-        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 20, paddingBottom: 32 }}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 32 }}
         keyboardShouldPersistTaps="handled"
       >
-        {teams.length > 0 && !isLoading ? (
+        {!isLoading && teams.length > 0 ? (
           <Text
-            style={{ fontSize: 12, color: "#64748B", lineHeight: 17, marginBottom: 16, paddingHorizontal: 4 }}
+            style={{ fontSize: 12, color: "#64748B", lineHeight: 17, marginBottom: 12 }}
             testID="workspace-switch-hint"
           >
             {WORKSPACE_SWITCH_HINT}
@@ -112,144 +92,62 @@ export default function SwitchWorkspaceScreen() {
 
         {isLoading ? (
           <View style={{ paddingVertical: 48, alignItems: "center" }}>
-            <ActivityIndicator color="#4361EE" />
+            <ActivityIndicator color="#4338CA" />
           </View>
         ) : teams.length === 0 ? (
-          <View
-            style={{
-              backgroundColor: "#FFFFFF",
-              borderRadius: 14,
-              padding: 28,
-              alignItems: "center",
-              borderWidth: 1,
-              borderColor: "#E2E8F0",
-            }}
-          >
-            <Building2 size={28} color="#94A3B8" style={{ marginBottom: 12 }} />
+          <View style={[PROFILE_UI.card, { padding: 28, alignItems: "center" }]}>
             <Text style={{ color: "#64748B", textAlign: "center", fontSize: 13 }}>
               You are not part of any workspaces yet.
             </Text>
           </View>
         ) : (
-          <>
-            {activeTeam ? (
-              <View style={{ marginBottom: 24 }}>
-                <Text
-                  style={{
-                    fontSize: 11,
-                    fontWeight: "700",
-                    letterSpacing: 1.1,
-                    color: "#64748B",
-                    textTransform: "uppercase",
-                    marginBottom: 10,
-                    paddingHorizontal: 4,
-                  }}
-                >
-                  Current workspace
-                </Text>
-                <View
-                  style={{
-                    backgroundColor: "#FFFFFF",
-                    borderRadius: 14,
-                    padding: 16,
-                    borderWidth: 1,
-                    borderColor: "#C7D2FE",
-                    shadowColor: "#4361EE",
-                    shadowOpacity: 0.08,
-                    shadowRadius: 12,
-                    shadowOffset: { width: 0, height: 4 },
-                  }}
-                >
-                  <View style={{ flexDirection: "row", alignItems: "center" }}>
-                    <WorkspaceTeamAvatar team={activeTeam} size={44} active />
-                    <View style={{ flex: 1, marginLeft: 12, minWidth: 0 }}>
-                      <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 6 }}>
-                        <Text style={{ fontSize: 15, fontWeight: "600", color: "#0F172A" }} numberOfLines={1}>
-                          {activeTeam.name}
-                        </Text>
-                        <CurrentWorkspaceBadge compact />
-                      </View>
-                      <Text style={{ fontSize: 11, color: "#64748B", marginTop: 3 }}>
-                        {formatTeamRole((activeTeam as Team & { role?: string }).role)}
-                      </Text>
-                    </View>
-                  </View>
+          <View style={PROFILE_UI.card}>
+            {sortedTeams.map((team, index) => {
+              const isActive = team.id === activeTeamId;
+              const role = (team as Team & { role?: string }).role;
+              return (
+                <View key={team.id}>
+                  {index > 0 ? (
+                    <View style={{ height: 1, backgroundColor: "#F1F5F9", marginLeft: 66 }} />
+                  ) : null}
                   <Pressable
-                    onPress={() => router.back()}
-                    style={{
-                      marginTop: 14,
-                      paddingVertical: 10,
-                      borderRadius: 8,
-                      backgroundColor: "#F8FAFC",
-                      borderWidth: 1,
-                      borderColor: "#E2E8F0",
-                      alignItems: "center",
-                    }}
-                    testID="stay-on-current-workspace"
+                    onPress={() => void onSelect(team.id)}
+                    disabled={isActive}
+                    testID={`switch-workspace-${team.id}`}
+                    style={({ pressed }) => ({
+                      backgroundColor: isActive ? "#F8FAFC" : pressed ? "#F8FAFC" : "transparent",
+                    })}
                   >
-                    <Text style={{ fontSize: 12, fontWeight: "600", color: "#475569" }}>Stay on current workspace</Text>
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        paddingHorizontal: 14,
+                        paddingVertical: 12,
+                        minHeight: 56,
+                      }}
+                    >
+                      <WorkspaceTeamAvatar team={team} size={40} active={isActive} />
+                      <View style={{ flex: 1, marginLeft: 12, minWidth: 0 }}>
+                        <Text style={PROFILE_UI.rowTitle} numberOfLines={1}>
+                          {team.name}
+                        </Text>
+                        <Text style={PROFILE_UI.rowSubtitle} numberOfLines={1}>
+                          {formatTeamRole(role)}
+                          {isActive ? " · Current" : null}
+                        </Text>
+                      </View>
+                      {isActive ? (
+                        <Check size={20} color="#4338CA" strokeWidth={2.5} />
+                      ) : (
+                        <ChevronRight size={18} color="#94A3B8" />
+                      )}
+                    </View>
                   </Pressable>
                 </View>
-              </View>
-            ) : null}
-
-            {otherTeams.length > 0 ? (
-              <View>
-                <Text
-                  style={{
-                    fontSize: 11,
-                    fontWeight: "700",
-                    letterSpacing: 1.1,
-                    color: "#64748B",
-                    textTransform: "uppercase",
-                    marginBottom: 10,
-                    paddingHorizontal: 4,
-                  }}
-                >
-                  {activeTeam ? "Switch to" : "Your workspaces"}
-                </Text>
-                <View style={{ gap: 10 }}>
-                  {otherTeams.map((team) => (
-                    <WorkspaceTeamRow
-                      key={team.id}
-                      team={team as Team & { role?: string }}
-                      isActive={false}
-                      onPress={() => void onSelect(team.id)}
-                      testID={`switch-workspace-${team.id}`}
-                      trailing={
-                        <View
-                          style={{
-                            marginLeft: 8,
-                            paddingHorizontal: 12,
-                            paddingVertical: 6,
-                            borderRadius: 8,
-                            backgroundColor: "#4361EE",
-                          }}
-                        >
-                          <Text style={{ fontSize: 11, fontWeight: "700", color: "#FFFFFF" }}>Switch</Text>
-                        </View>
-                      }
-                      showChevron={false}
-                    />
-                  ))}
-                </View>
-              </View>
-            ) : null}
-
-            {!activeTeam && sortedTeams.length > 0 ? (
-              <View style={{ gap: 10 }}>
-                {sortedTeams.map((team) => (
-                  <WorkspaceTeamRow
-                    key={team.id}
-                    team={team as Team & { role?: string }}
-                    isActive={team.id === activeTeamId}
-                    onPress={() => void onSelect(team.id)}
-                    testID={`switch-workspace-${team.id}`}
-                  />
-                ))}
-              </View>
-            ) : null}
-          </>
+              );
+            })}
+          </View>
         )}
       </ScrollView>
     </SafeAreaView>
