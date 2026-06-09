@@ -739,7 +739,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
           {selectedMember ? (
             <TeamMemberProfilePanel
               key={selectedMember.userId}
-              teamId={selectedTeamId}
+              teamId={teamDetail.id}
               member={selectedMember}
               isSelf={selectedMember.userId === myId}
               managerName={ownerMember?.user.name ?? ownerMember?.user.email ?? null}
@@ -922,7 +922,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
       ) : null}
 
       <OneOnOneTemplatesModal
-        teamId={selectedTeamId}
+        teamId={teamDetail.id}
         open={oneOneTemplatesOpen}
         onClose={() => setOneOneTemplatesOpen(false)}
       />

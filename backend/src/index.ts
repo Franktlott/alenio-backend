@@ -37,6 +37,11 @@ import {
   isFirebaseStorageConfigured,
   uploadFileToFirebaseStorage,
 } from "./lib/firebase-storage";
+import { syncPrismaSchemaOnStartup } from "./lib/sync-prisma-schema";
+import { ensureOneOnOneSchema } from "./lib/ensure-one-on-one-schema";
+
+syncPrismaSchemaOnStartup();
+const oneOnOneSchemaReady = ensureOneOnOneSchema(prisma);
 
 type Variables = {
   user: AppUser | null;
@@ -86,6 +91,12 @@ app.use(
 
 // Logging
 app.use("*", logger());
+
+// Ensure 1:1 tables exist before handling API requests (fixes 500 when db push was skipped).
+app.use("*", async (_c, next) => {
+  await oneOnOneSchemaReady;
+  await next();
+});
 
 // Stripe webhooks need the raw body for signature verification (must run before JSON parsers on this path only — no global body parser).
 app.post("/api/webhooks/stripe", handleStripeWebhook);

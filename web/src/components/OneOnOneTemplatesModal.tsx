@@ -63,7 +63,10 @@ export function OneOnOneTemplatesModal({ teamId, open, onClose }: Props) {
   const [fields, setFields] = useState<OneOnOneTemplateField[]>([]);
 
   const loadTemplates = useCallback(async () => {
-    if (!teamId) return;
+    if (!teamId?.trim()) {
+      setErr("No workspace selected.");
+      return;
+    }
     setLoading(true);
     setErr(null);
     try {
@@ -130,6 +133,10 @@ export function OneOnOneTemplatesModal({ teamId, open, onClose }: Props) {
   };
 
   const onSave = async () => {
+    if (!teamId?.trim()) {
+      setErr("No workspace selected. Close this dialog and pick a workspace first.");
+      return;
+    }
     if (!title.trim()) {
       setErr("Template name is required.");
       return;

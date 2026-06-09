@@ -983,29 +983,69 @@ export type OneOnOneTemplateInput = {
   fields: OneOnOneTemplateField[];
 };
 
+function requireTeamId(teamId: string): string {
+  const id = teamId?.trim();
+  if (!id) throw new Error("No workspace selected.");
+  return id;
+}
+
+function oneOnOneTemplatesPaths(teamId: string) {
+  const id = encodeURIComponent(requireTeamId(teamId));
+  return {
+    api: `/api/teams/${id}/one-on-one-templates`,
+    web: `/web/api/teams/${id}/one-on-one-templates`,
+  };
+}
+
+function oneOnOneMeetingsPaths(teamId: string, memberUserId: string) {
+  const team = encodeURIComponent(requireTeamId(teamId));
+  const member = encodeURIComponent(requireTeamId(memberUserId));
+  return {
+    api: `/api/teams/${team}/members/${member}/one-on-ones`,
+    web: `/web/api/teams/${team}/members/${member}/one-on-ones`,
+  };
+}
+
+async function oneOnOneRequest<T>(paths: { api: string; web: string }, init?: RequestInit): Promise<T> {
+  try {
+    return await apiRequest<T>(paths.api, init);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "";
+    if (msg.includes("Not found")) {
+      return apiRequest<T>(paths.web, init);
+    }
+    throw e;
+  }
+}
+
 export function fetchOneOnOneTemplates(teamId: string) {
-  return apiGetJson<{ data: OneOnOneTemplate[] }>(
-    `/web/api/teams/${encodeURIComponent(teamId)}/one-on-one-templates`,
-  ).then((r) => r.data ?? []);
+  const paths = oneOnOneTemplatesPaths(teamId);
+  return oneOnOneRequest<{ data: OneOnOneTemplate[] }>(paths).then((r) => r.data ?? []);
 }
 
 export function createOneOnOneTemplate(teamId: string, input: OneOnOneTemplateInput) {
-  return apiPostJson<{ data: OneOnOneTemplate }>(
-    `/web/api/teams/${encodeURIComponent(teamId)}/one-on-one-templates`,
-    input,
-  ).then((r) => r.data);
+  const paths = oneOnOneTemplatesPaths(teamId);
+  return oneOnOneRequest<{ data: OneOnOneTemplate }>(paths, {
+    method: "POST",
+    body: JSON.stringify(input),
+  }).then((r) => r.data);
 }
 
 export function updateOneOnOneTemplate(teamId: string, templateId: string, input: OneOnOneTemplateInput) {
-  return apiPatchJson<{ data: OneOnOneTemplate }>(
-    `/web/api/teams/${encodeURIComponent(teamId)}/one-on-one-templates/${encodeURIComponent(templateId)}`,
-    input,
+  const paths = oneOnOneTemplatesPaths(teamId);
+  const suffix = `/${encodeURIComponent(templateId)}`;
+  return oneOnOneRequest<{ data: OneOnOneTemplate }>(
+    { api: `${paths.api}${suffix}`, web: `${paths.web}${suffix}` },
+    { method: "PATCH", body: JSON.stringify(input) },
   ).then((r) => r.data);
 }
 
 export function deleteOneOnOneTemplate(teamId: string, templateId: string) {
-  return apiDeleteJson<{ data: { deleted: boolean } }>(
-    `/web/api/teams/${encodeURIComponent(teamId)}/one-on-one-templates/${encodeURIComponent(templateId)}`,
+  const paths = oneOnOneTemplatesPaths(teamId);
+  const suffix = `/${encodeURIComponent(templateId)}`;
+  return oneOnOneRequest<{ data: { deleted: boolean } }>(
+    { api: `${paths.api}${suffix}`, web: `${paths.web}${suffix}` },
+    { method: "DELETE" },
   );
 }
 
@@ -1023,9 +1063,8 @@ export type OneOnOneMeeting = {
 };
 
 export function fetchOneOnOneMeetings(teamId: string, memberUserId: string) {
-  return apiGetJson<{ data: OneOnOneMeeting[] }>(
-    `/web/api/teams/${encodeURIComponent(teamId)}/members/${encodeURIComponent(memberUserId)}/one-on-ones`,
-  ).then((r) => r.data ?? []);
+  const paths = oneOnOneMeetingsPaths(teamId, memberUserId);
+  return oneOnOneRequest<{ data: OneOnOneMeeting[] }>(paths).then((r) => r.data ?? []);
 }
 
 export function createOneOnOneMeeting(
@@ -1033,8 +1072,9 @@ export function createOneOnOneMeeting(
   memberUserId: string,
   input: { templateId: string; responses: Record<string, string | number> },
 ) {
-  return apiPostJson<{ data: OneOnOneMeeting }>(
-    `/web/api/teams/${encodeURIComponent(teamId)}/members/${encodeURIComponent(memberUserId)}/one-on-ones`,
-    input,
-  ).then((r) => r.data);
+  const paths = oneOnOneMeetingsPaths(teamId, memberUserId);
+  return oneOnOneRequest<{ data: OneOnOneMeeting }>(paths, {
+    method: "POST",
+    body: JSON.stringify(input),
+  }).then((r) => r.data);
 }

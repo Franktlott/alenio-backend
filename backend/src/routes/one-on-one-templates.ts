@@ -4,6 +4,7 @@ import { z } from "zod";
 import { prisma } from "../prisma";
 import { auth } from "../auth";
 import { authGuard } from "../middleware/auth-guard";
+import { prismaRouteError } from "../lib/prisma-errors";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -30,10 +31,20 @@ const fieldSchema = z.object({
   ratingMax: z.number().int().min(2).max(10).optional(),
 });
 
-async function getMembership(userId: string, teamId: string) {
-  return prisma.teamMember.findUnique({
-    where: { userId_teamId: { userId, teamId } },
-  });
+async function getMembership(
+  c: { get: (key: "user" | "session") => unknown },
+  teamId: string,
+) {
+  const user = c.get("user") as { id?: string } | null;
+  const session = c.get("session") as { user?: { id?: string } } | null;
+  const ids = [...new Set([user?.id, session?.user?.id].filter((x): x is string => typeof x === "string" && x.length > 0))];
+  for (const userId of ids) {
+    const membership = await prisma.teamMember.findUnique({
+      where: { userId_teamId: { userId, teamId } },
+    });
+    if (membership) return membership;
+  }
+  return null;
 }
 
 function parseFields(raw: string) {
@@ -78,23 +89,26 @@ const upsertSchema = z.object({
 
 // GET /api/teams/:teamId/one-on-one-templates
 oneOnOneTemplatesRouter.get("/", async (c) => {
-  const user = c.get("user")!;
   const teamId = c.req.param("teamId") as string;
 
-  const membership = await getMembership(user.id, teamId);
+  const membership = await getMembership(c, teamId);
   if (!membership) {
     return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
   }
 
-  const templates = await prisma.oneOnOneTemplate.findMany({
-    where: { teamId },
-    include: {
-      createdBy: { select: { id: true, name: true, email: true, image: true } },
-    },
-    orderBy: { updatedAt: "desc" },
-  });
+  try {
+    const templates = await prisma.oneOnOneTemplate.findMany({
+      where: { teamId },
+      include: {
+        createdBy: { select: { id: true, name: true, email: true, image: true } },
+      },
+      orderBy: { updatedAt: "desc" },
+    });
 
-  return c.json({ data: templates.map(serializeTemplate) });
+    return c.json({ data: templates.map(serializeTemplate) });
+  } catch (err) {
+    return prismaRouteError(c, err, "[one-on-one-templates] GET failed");
+  }
 });
 
 // POST /api/teams/:teamId/one-on-one-templates
@@ -102,7 +116,7 @@ oneOnOneTemplatesRouter.post("/", zValidator("json", upsertSchema), async (c) =>
   const user = c.get("user")!;
   const teamId = c.req.param("teamId") as string;
 
-  const membership = await getMembership(user.id, teamId);
+  const membership = await getMembership(c, teamId);
   if (!membership || membership.role !== "owner") {
     return c.json({ error: { message: "Only the workspace owner can create 1:1 templates", code: "FORBIDDEN" } }, 403);
   }
@@ -110,20 +124,24 @@ oneOnOneTemplatesRouter.post("/", zValidator("json", upsertSchema), async (c) =>
   const body = c.req.valid("json");
   const fields = [...body.fields].sort((a, b) => a.order - b.order);
 
-  const template = await prisma.oneOnOneTemplate.create({
-    data: {
-      teamId,
-      title: body.title.trim(),
-      description: body.description?.trim() || null,
-      fields: JSON.stringify(fields),
-      createdById: user.id,
-    },
-    include: {
-      createdBy: { select: { id: true, name: true, email: true, image: true } },
-    },
-  });
+  try {
+    const template = await prisma.oneOnOneTemplate.create({
+      data: {
+        teamId,
+        title: body.title.trim(),
+        description: body.description?.trim() || null,
+        fields: JSON.stringify(fields),
+        createdById: user.id,
+      },
+      include: {
+        createdBy: { select: { id: true, name: true, email: true, image: true } },
+      },
+    });
 
-  return c.json({ data: serializeTemplate(template) }, 201);
+    return c.json({ data: serializeTemplate(template) }, 201);
+  } catch (err) {
+    return prismaRouteError(c, err, "[one-on-one-templates] POST failed");
+  }
 });
 
 // PATCH /api/teams/:teamId/one-on-one-templates/:templateId
@@ -135,7 +153,7 @@ oneOnOneTemplatesRouter.patch(
     const teamId = c.req.param("teamId") as string;
     const templateId = c.req.param("templateId") as string;
 
-    const membership = await getMembership(user.id, teamId);
+    const membership = await getMembership(c, teamId);
     if (!membership || membership.role !== "owner") {
       return c.json({ error: { message: "Only the workspace owner can edit 1:1 templates", code: "FORBIDDEN" } }, 403);
     }
@@ -168,11 +186,10 @@ oneOnOneTemplatesRouter.patch(
 
 // DELETE /api/teams/:teamId/one-on-one-templates/:templateId
 oneOnOneTemplatesRouter.delete("/:templateId", async (c) => {
-  const user = c.get("user")!;
   const teamId = c.req.param("teamId") as string;
   const templateId = c.req.param("templateId") as string;
 
-  const membership = await getMembership(user.id, teamId);
+  const membership = await getMembership(c, teamId);
   if (!membership || membership.role !== "owner") {
     return c.json({ error: { message: "Only the workspace owner can delete 1:1 templates", code: "FORBIDDEN" } }, 403);
   }

@@ -4,6 +4,7 @@ import { z } from "zod";
 import { prisma } from "../prisma";
 import { auth } from "../auth";
 import { authGuard } from "../middleware/auth-guard";
+import { prismaRouteError } from "../lib/prisma-errors";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -22,10 +23,20 @@ type TemplateField = {
   ratingMax?: number;
 };
 
-async function getMembership(userId: string, teamId: string) {
-  return prisma.teamMember.findUnique({
-    where: { userId_teamId: { userId, teamId } },
-  });
+async function getMembership(
+  c: { get: (key: "user" | "session") => unknown },
+  teamId: string,
+) {
+  const user = c.get("user") as { id?: string } | null;
+  const session = c.get("session") as { user?: { id?: string } } | null;
+  const ids = [...new Set([user?.id, session?.user?.id].filter((x): x is string => typeof x === "string" && x.length > 0))];
+  for (const userId of ids) {
+    const membership = await prisma.teamMember.findUnique({
+      where: { userId_teamId: { userId, teamId } },
+    });
+    if (membership) return membership;
+  }
+  return null;
 }
 
 function parseJsonArray(raw: string): TemplateField[] {
@@ -109,11 +120,10 @@ const createMeetingSchema = z.object({
 
 // GET /api/teams/:teamId/members/:memberUserId/one-on-ones
 oneOnOneMeetingsRouter.get("/:memberUserId/one-on-ones", async (c) => {
-  const user = c.get("user")!;
   const teamId = c.req.param("teamId") as string;
   const memberUserId = c.req.param("memberUserId") as string;
 
-  const membership = await getMembership(user.id, teamId);
+  const membership = await getMembership(c, teamId);
   if (!membership) {
     return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
   }
@@ -125,15 +135,19 @@ oneOnOneMeetingsRouter.get("/:memberUserId/one-on-ones", async (c) => {
     return c.json({ error: { message: "Member not found", code: "NOT_FOUND" } }, 404);
   }
 
-  const meetings = await prisma.oneOnOneMeeting.findMany({
-    where: { teamId, memberUserId },
-    include: {
-      createdBy: { select: { id: true, name: true, email: true, image: true } },
-    },
-    orderBy: { createdAt: "desc" },
-  });
+  try {
+    const meetings = await prisma.oneOnOneMeeting.findMany({
+      where: { teamId, memberUserId },
+      include: {
+        createdBy: { select: { id: true, name: true, email: true, image: true } },
+      },
+      orderBy: { createdAt: "desc" },
+    });
 
-  return c.json({ data: meetings.map(serializeMeeting) });
+    return c.json({ data: meetings.map(serializeMeeting) });
+  } catch (err) {
+    return prismaRouteError(c, err, "[one-on-one-meetings] GET failed");
+  }
 });
 
 // POST /api/teams/:teamId/members/:memberUserId/one-on-ones
@@ -145,7 +159,7 @@ oneOnOneMeetingsRouter.post(
     const teamId = c.req.param("teamId") as string;
     const memberUserId = c.req.param("memberUserId") as string;
 
-    const membership = await getMembership(user.id, teamId);
+    const membership = await getMembership(c, teamId);
     if (!membership) {
       return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
     }
