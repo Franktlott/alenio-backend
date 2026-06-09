@@ -23,6 +23,36 @@ type TemplateField = {
   ratingMax?: number;
 };
 
+const followUpTaskSchema = z.object({
+  title: z.string().trim().min(1).max(500),
+  assigneeUserId: z.string().min(1),
+  description: z.string().trim().max(2000).optional(),
+  dueDate: z.string().optional(),
+});
+
+const createMeetingSchema = z.object({
+  templateId: z.string().min(1),
+  responses: z.record(z.string(), z.union([z.string(), z.number()])),
+  followUpTasks: z.array(followUpTaskSchema).optional(),
+});
+
+const updateMeetingSchema = z.object({
+  responses: z.record(z.string(), z.union([z.string(), z.number()])),
+  followUpTasks: z.array(followUpTaskSchema).optional(),
+});
+
+const meetingInclude = {
+  createdBy: { select: { id: true, name: true, email: true, image: true } },
+  followUpTasks: {
+    orderBy: { createdAt: "asc" as const },
+    include: {
+      assignments: {
+        include: { user: { select: { id: true, name: true, email: true, image: true } } },
+      },
+    },
+  },
+};
+
 async function getMembership(
   c: { get: (key: "user" | "session") => unknown },
   teamId: string,
@@ -63,6 +93,27 @@ function canCreateMeeting(membership: { role: string }, memberUserId: string, us
   return membership.role === "owner" || membership.role === "team_leader";
 }
 
+function serializeFollowUpTask(task: {
+  id: string;
+  title: string;
+  description: string | null;
+  status: string;
+  dueDate: Date | null;
+  assignments: Array<{
+    user: { id: string; name: string | null; email: string; image: string | null };
+  }>;
+}) {
+  const assignee = task.assignments[0]?.user ?? null;
+  return {
+    id: task.id,
+    title: task.title,
+    description: task.description,
+    status: task.status,
+    dueDate: task.dueDate?.toISOString() ?? null,
+    assignee,
+  };
+}
+
 function serializeMeeting(meeting: {
   id: string;
   teamId: string;
@@ -74,6 +125,16 @@ function serializeMeeting(meeting: {
   createdById: string;
   createdAt: Date;
   createdBy?: { id: string; name: string; email: string; image: string | null };
+  followUpTasks?: Array<{
+    id: string;
+    title: string;
+    description: string | null;
+    status: string;
+    dueDate: Date | null;
+    assignments: Array<{
+      user: { id: string; name: string | null; email: string; image: string | null };
+    }>;
+  }>;
 }) {
   return {
     id: meeting.id,
@@ -86,6 +147,7 @@ function serializeMeeting(meeting: {
     createdById: meeting.createdById,
     createdAt: meeting.createdAt.toISOString(),
     createdBy: meeting.createdBy,
+    followUpTasks: (meeting.followUpTasks ?? []).map(serializeFollowUpTask),
   };
 }
 
@@ -124,14 +186,59 @@ function canModifyMeeting(
   return canCreateMeeting(membership, memberUserId, userId);
 }
 
-const createMeetingSchema = z.object({
-  templateId: z.string().min(1),
-  responses: z.record(z.string(), z.union([z.string(), z.number()])),
-});
+async function validateFollowUpAssignees(
+  teamId: string,
+  memberUserId: string,
+  createdById: string,
+  tasks: z.infer<typeof followUpTaskSchema>[],
+) {
+  const allowed = new Set([memberUserId, createdById]);
+  const leaders = await prisma.teamMember.findMany({
+    where: { teamId, role: { in: ["owner", "team_leader"] } },
+    select: { userId: true },
+  });
+  for (const leader of leaders) allowed.add(leader.userId);
 
-const updateMeetingSchema = z.object({
-  responses: z.record(z.string(), z.union([z.string(), z.number()])),
-});
+  for (const task of tasks) {
+    if (!allowed.has(task.assigneeUserId)) {
+      return "Follow-up tasks must be assigned to the associate or a team leader.";
+    }
+    const membership = await prisma.teamMember.findFirst({
+      where: { teamId, userId: task.assigneeUserId },
+    });
+    if (!membership) {
+      return "Follow-up assignee must be a team member.";
+    }
+  }
+  return null;
+}
+
+async function createFollowUpTasks(
+  meetingId: string,
+  teamId: string,
+  creatorId: string,
+  tasks: z.infer<typeof followUpTaskSchema>[],
+) {
+  if (tasks.length === 0) return;
+
+  for (const task of tasks) {
+    const dueDate =
+      task.dueDate && !Number.isNaN(Date.parse(task.dueDate)) ? new Date(task.dueDate) : null;
+    await prisma.task.create({
+      data: {
+        title: task.title.trim(),
+        description: task.description?.trim() || null,
+        priority: "medium",
+        status: "todo",
+        dueDate,
+        teamId,
+        creatorId,
+        oneOnOneMeetingId: meetingId,
+        assignments: { create: [{ userId: task.assigneeUserId }] },
+      },
+    });
+  }
+}
 
 // GET /api/teams/:teamId/members/:memberUserId/one-on-ones
 oneOnOneMeetingsRouter.get("/:memberUserId/one-on-ones", async (c) => {
@@ -153,9 +260,7 @@ oneOnOneMeetingsRouter.get("/:memberUserId/one-on-ones", async (c) => {
   try {
     const meetings = await prisma.oneOnOneMeeting.findMany({
       where: { teamId, memberUserId },
-      include: {
-        createdBy: { select: { id: true, name: true, email: true, image: true } },
-      },
+      include: meetingInclude,
       orderBy: { createdAt: "desc" },
     });
 
@@ -204,6 +309,12 @@ oneOnOneMeetingsRouter.post(
       return c.json({ error: { message: validationError, code: "VALIDATION_ERROR" } }, 400);
     }
 
+    const followUpTasks = body.followUpTasks ?? [];
+    const followUpError = await validateFollowUpAssignees(teamId, memberUserId, user.id, followUpTasks);
+    if (followUpError) {
+      return c.json({ error: { message: followUpError, code: "VALIDATION_ERROR" } }, 400);
+    }
+
     const meeting = await prisma.oneOnOneMeeting.create({
       data: {
         teamId,
@@ -214,12 +325,19 @@ oneOnOneMeetingsRouter.post(
         responses: JSON.stringify(body.responses),
         createdById: user.id,
       },
-      include: {
-        createdBy: { select: { id: true, name: true, email: true, image: true } },
-      },
+      include: meetingInclude,
     });
 
-    return c.json({ data: serializeMeeting(meeting) }, 201);
+    if (followUpTasks.length > 0) {
+      await createFollowUpTasks(meeting.id, teamId, user.id, followUpTasks);
+    }
+
+    const withTasks = await prisma.oneOnOneMeeting.findUnique({
+      where: { id: meeting.id },
+      include: meetingInclude,
+    });
+
+    return c.json({ data: serializeMeeting(withTasks ?? meeting) }, 201);
   },
 );
 
@@ -256,14 +374,34 @@ oneOnOneMeetingsRouter.patch(
       return c.json({ error: { message: validationError, code: "VALIDATION_ERROR" } }, 400);
     }
 
+    const followUpTasks = body.followUpTasks ?? [];
+    const followUpError = await validateFollowUpAssignees(
+      teamId,
+      memberUserId,
+      existing.createdById,
+      followUpTasks,
+    );
+    if (followUpError) {
+      return c.json({ error: { message: followUpError, code: "VALIDATION_ERROR" } }, 400);
+    }
+
     try {
-      const meeting = await prisma.oneOnOneMeeting.update({
+      await prisma.oneOnOneMeeting.update({
         where: { id: meetingId },
         data: { responses: JSON.stringify(body.responses) },
-        include: {
-          createdBy: { select: { id: true, name: true, email: true, image: true } },
-        },
       });
+
+      if (followUpTasks.length > 0) {
+        await createFollowUpTasks(meetingId, teamId, user.id, followUpTasks);
+      }
+
+      const meeting = await prisma.oneOnOneMeeting.findUnique({
+        where: { id: meetingId },
+        include: meetingInclude,
+      });
+      if (!meeting) {
+        return c.json({ error: { message: "1:1 not found", code: "NOT_FOUND" } }, 404);
+      }
       return c.json({ data: serializeMeeting(meeting) });
     } catch (err) {
       return prismaRouteError(c, err, "[one-on-one-meetings] PATCH failed");

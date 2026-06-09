@@ -1051,6 +1051,22 @@ export function deleteOneOnOneTemplate(teamId: string, templateId: string) {
   );
 }
 
+export type OneOnOneFollowUpTask = {
+  id: string;
+  title: string;
+  description: string | null;
+  status: string;
+  dueDate: string | null;
+  assignee: { id: string; name: string | null; email: string; image: string | null } | null;
+};
+
+export type OneOnOneFollowUpTaskInput = {
+  title: string;
+  assigneeUserId: string;
+  description?: string;
+  dueDate?: string;
+};
+
 export type OneOnOneMeeting = {
   id: string;
   teamId: string;
@@ -1062,6 +1078,7 @@ export type OneOnOneMeeting = {
   createdById: string;
   createdAt: string;
   createdBy?: { id: string; name: string; email: string; image: string | null };
+  followUpTasks?: OneOnOneFollowUpTask[];
 };
 
 export function fetchOneOnOneMeetings(teamId: string, memberUserId: string) {
@@ -1072,7 +1089,11 @@ export function fetchOneOnOneMeetings(teamId: string, memberUserId: string) {
 export function createOneOnOneMeeting(
   teamId: string,
   memberUserId: string,
-  input: { templateId: string; responses: Record<string, string | number> },
+  input: {
+    templateId: string;
+    responses: Record<string, string | number>;
+    followUpTasks?: OneOnOneFollowUpTaskInput[];
+  },
 ) {
   const paths = oneOnOneMeetingsPaths(teamId, memberUserId);
   return oneOnOneRequest<{ data: OneOnOneMeeting }>(paths, {
@@ -1096,7 +1117,10 @@ export function updateOneOnOneMeeting(
   teamId: string,
   memberUserId: string,
   meetingId: string,
-  input: { responses: Record<string, string | number> },
+  input: {
+    responses: Record<string, string | number>;
+    followUpTasks?: OneOnOneFollowUpTaskInput[];
+  },
 ) {
   const paths = oneOnOneMeetingPaths(teamId, memberUserId, meetingId);
   return oneOnOneRequest<{ data: OneOnOneMeeting }>(paths, {

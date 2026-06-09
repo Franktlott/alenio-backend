@@ -11,6 +11,7 @@ type Props = {
   member: WebTeamMemberRow;
   isSelf: boolean;
   managerName: string | null;
+  leaderUserId: string | null;
   roleLabel: string;
   roleBadgeClass: string;
   canManage: boolean;
@@ -26,6 +27,7 @@ export function TeamMemberProfilePanel({
   member,
   isSelf,
   managerName,
+  leaderUserId,
   roleLabel,
   roleBadgeClass,
   canManage,
@@ -36,15 +38,7 @@ export function TeamMemberProfilePanel({
   onManage,
 }: Props) {
   const [activeTab, setActiveTab] = useState<ProfileTab>("Overview");
-  const [oneOneCreateTrigger, setOneOneCreateTrigger] = useState(0);
   const displayName = member.user.name ?? member.user.email ?? "Member";
-
-  const scheduleOneOne = () => {
-    setActiveTab("1:1 history");
-    if (canCreateOneOne) {
-      setOneOneCreateTrigger((n) => n + 1);
-    }
-  };
 
   return (
     <div className="enterprise-team-profile" data-testid="team-member-profile">
@@ -82,19 +76,8 @@ export function TeamMemberProfilePanel({
             ) : null}
           </div>
         </div>
-        <div className="enterprise-team-profile-actions">
-          <button type="button" className="enterprise-team-profile-action enterprise-team-profile-action--soon" disabled>
-            + Add goal
-          </button>
-          <button
-            type="button"
-            className="enterprise-team-profile-action enterprise-team-profile-action-outline"
-            disabled={!canCreateOneOne}
-            onClick={scheduleOneOne}
-          >
-            Schedule 1:1
-          </button>
-          {canManage ? (
+        {canManage ? (
+          <div className="enterprise-team-profile-actions">
             <button
               type="button"
               className="enterprise-team-profile-kebab"
@@ -103,8 +86,8 @@ export function TeamMemberProfilePanel({
             >
               ⋮
             </button>
-          ) : null}
-        </div>
+          </div>
+        ) : null}
       </header>
 
       <nav className="enterprise-team-profile-tabs" aria-label="Member profile sections">
@@ -164,9 +147,9 @@ export function TeamMemberProfilePanel({
             memberUserId={member.userId}
             memberName={displayName}
             managerName={managerName}
+            leaderUserId={leaderUserId}
             canCreate={canCreateOneOne}
             canModify={canCreateOneOne}
-            createTrigger={oneOneCreateTrigger}
           />
         )}
       </div>

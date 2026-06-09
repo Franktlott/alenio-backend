@@ -66,6 +66,27 @@ function renderQuestion(
   `;
 }
 
+function renderFollowUpTasksHtml(
+  tasks: NonNullable<OneOnOnePrintOptions["meeting"]["followUpTasks"]>,
+  memberUserId: string,
+  memberName: string,
+  managerName: string | null,
+): string {
+  if (!tasks.length) {
+    return `
+      <div class="footer-line"></div>
+      <div class="footer-line"></div>
+    `;
+  }
+  return tasks
+    .map((task) => {
+      const assignee =
+        task.assignee?.id === memberUserId ? memberName : managerName?.trim() || "Leader";
+      return `<div class="footer-line">${escapeHtml(task.title)} · ${escapeHtml(assignee)}</div>`;
+    })
+    .join("");
+}
+
 function renderSections(fields: OneOnOneTemplateField[], responses: Record<string, string | number>): string {
   const sorted = [...fields].sort((a, b) => a.order - b.order);
   let html = "";
@@ -104,6 +125,12 @@ function buildPrintHtml(options: OneOnOnePrintOptions, logoUrl: string): string 
     introText?.trim() ||
     "This 1:1 template is designed to help managers and team members have meaningful conversations, align on priorities, and support ongoing growth and development.";
   const sectionsHtml = renderSections(meeting.templateFields, meeting.responses);
+  const followUpTasksHtml = renderFollowUpTasksHtml(
+    meeting.followUpTasks ?? [],
+    meeting.memberUserId,
+    memberName,
+    managerName,
+  );
   const dateStr = formatPrintDate(meeting.createdAt);
   const manager = managerName?.trim() || "—";
   const preparedBy = meeting.createdBy?.name ?? meeting.createdBy?.email ?? "—";
@@ -340,9 +367,8 @@ function buildPrintHtml(options: OneOnOnePrintOptions, logoUrl: string): string 
     <div class="footer-grid">
       <div class="footer-col">
         <h4>Action items</h4>
-        <p>Key takeaways and next steps</p>
-        <div class="footer-line"></div>
-        <div class="footer-line"></div>
+        <p>Follow-up tasks from this 1:1</p>
+        ${followUpTasksHtml}
       </div>
       <div class="footer-col">
         <h4>Follow up</h4>

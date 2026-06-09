@@ -743,6 +743,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
               member={selectedMember}
               isSelf={selectedMember.userId === myId}
               managerName={ownerMember?.user.name ?? ownerMember?.user.email ?? null}
+              leaderUserId={ownerMember?.userId ?? null}
               roleLabel={roleLabel(selectedMember.role)}
               roleBadgeClass={roleBadgeClass(selectedMember.role)}
               canManage={canOpenMemberRow(myRole, selectedMember)}

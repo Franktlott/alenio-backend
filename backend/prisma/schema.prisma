@@ -160,10 +160,14 @@ model Task {
   recurrenceRule RecurrenceRule?
   subtasks       Subtask[]
 
+  oneOnOneMeetingId String?
+  oneOnOneMeeting   OneOnOneMeeting? @relation(fields: [oneOnOneMeetingId], references: [id], onDelete: SetNull)
+
   @@index([teamId])
   @@index([teamId, status])
   @@index([teamId, dueDate])
   @@index([teamId, completedAt])
+  @@index([oneOnOneMeetingId])
 }
 
 model Subtask {
@@ -265,6 +269,7 @@ model OneOnOneMeeting {
   createdById    String
   createdBy      User              @relation("OneOnOneMeetingCreator", fields: [createdById], references: [id])
   createdAt      DateTime          @default(now())
+  followUpTasks  Task[]
 
   @@index([teamId, memberUserId])
 }

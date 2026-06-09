@@ -90,6 +90,26 @@ export async function ensureOneOnOneSchema(prisma: PrismaClient): Promise<void> 
     `);
 
     console.log("[startup] 1:1 database tables ensured");
+
+    await prisma.$executeRawUnsafe(`
+      DO $$ BEGIN
+        ALTER TABLE "Task" ADD COLUMN "oneOnOneMeetingId" TEXT;
+      EXCEPTION WHEN duplicate_column THEN NULL;
+      END $$;
+    `);
+
+    await prisma.$executeRawUnsafe(`
+      CREATE INDEX IF NOT EXISTS "Task_oneOnOneMeetingId_idx" ON "Task"("oneOnOneMeetingId");
+    `);
+
+    await prisma.$executeRawUnsafe(`
+      DO $$ BEGIN
+        ALTER TABLE "Task"
+          ADD CONSTRAINT "Task_oneOnOneMeetingId_fkey"
+          FOREIGN KEY ("oneOnOneMeetingId") REFERENCES "OneOnOneMeeting"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+      EXCEPTION WHEN duplicate_object THEN NULL;
+      END $$;
+    `);
   } catch (err) {
     console.error("[startup] ensureOneOnOneSchema failed:", err);
   }
