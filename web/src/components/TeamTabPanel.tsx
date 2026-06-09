@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react
 import { Link } from "react-router-dom";
 import QRCode from "qrcode";
 import { NoTeamsEmptyState } from "./NoTeamsEmptyState";
+import { TeamMemberProfilePanel } from "./TeamMemberProfilePanel";
 import {
   approveTeamJoinRequest,
   fetchTeamJoinRequests,
@@ -43,6 +44,13 @@ function roleBadgeClass(role: string): string {
   if (role === "team_leader") return "enterprise-team-role-badge enterprise-team-role-badge-leader";
   if (role === "admin") return "enterprise-team-role-badge enterprise-team-role-badge-admin";
   return "enterprise-team-role-badge";
+}
+
+function roleAbbrev(role: string): string {
+  if (role === "owner") return "OWN";
+  if (role === "team_leader") return "TL";
+  if (role === "admin") return "ADM";
+  return "MBR";
 }
 
 function IconUserPlus({ size = 22 }: { size?: number }) {
@@ -237,6 +245,10 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
 
   const [leaveBusy, setLeaveBusy] = useState(false);
 
+  const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
+  const [memberSearch, setMemberSearch] = useState("");
+  const [workspaceSettingsOpen, setWorkspaceSettingsOpen] = useState(false);
+
   const hasTeams = (teams?.length ?? 0) > 0;
   const myId = me?.id ?? "";
 
@@ -321,6 +333,33 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
   );
 
   const sortedMembers = useMemo(() => [...(teamDetail?.members ?? [])].sort(memberSort), [teamDetail?.members]);
+
+  useEffect(() => {
+    setSelectedMemberId(sortedMembers[0]?.userId ?? null);
+    setMemberSearch("");
+  }, [selectedTeamId, sortedMembers]);
+
+  const filteredMembers = useMemo(() => {
+    const q = memberSearch.trim().toLowerCase();
+    if (!q) return sortedMembers;
+    return sortedMembers.filter((m) => {
+      const name = (m.user.name ?? "").toLowerCase();
+      const email = (m.user.email ?? "").toLowerCase();
+      return name.includes(q) || email.includes(q);
+    });
+  }, [memberSearch, sortedMembers]);
+
+  const selectedMember = useMemo(
+    () => sortedMembers.find((m) => m.userId === selectedMemberId) ?? null,
+    [sortedMembers, selectedMemberId],
+  );
+
+  const ownerMember = useMemo(() => sortedMembers.find((m) => m.role === "owner") ?? null, [sortedMembers]);
+
+  const openActionCount = useMemo(
+    () => overviewTasks.filter((t) => t.status !== "done" && !isTaskOverdue(t, todayStart)).length,
+    [overviewTasks, todayStart],
+  );
 
   const onSaveTeamName = async () => {
     if (!selectedTeamId || !nameEdit.trim()) return;
