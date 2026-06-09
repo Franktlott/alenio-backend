@@ -1,6 +1,7 @@
 import { createAuthClient } from "@neondatabase/auth";
 import { BetterAuthVanillaAdapter } from "@neondatabase/auth/vanilla/adapters";
 import { getWebApiBase } from "./api-base";
+import { getResolvedNeonAuthUrl } from "./env-config";
 import {
   extractTokenFromAuthPayload,
   getStoredToken,
@@ -10,20 +11,15 @@ import {
 } from "./token";
 
 function readNeonAuthUrl(): string {
-  return import.meta.env.VITE_NEON_AUTH_URL?.trim() ?? "";
-}
-
-function neonAuthOrigin(): string {
-  const raw = readNeonAuthUrl();
-  if (!raw) return "";
-  try {
-    return new URL(raw).origin;
-  } catch {
-    return "";
-  }
+  return getResolvedNeonAuthUrl();
 }
 
 let authClientInstance: ReturnType<typeof createAuthClient> | null = null;
+
+/** Token-based session — omit cookies so cross-origin Neon Auth requests skip cookie CSRF origin checks. */
+function webAuthFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  return fetch(input, { ...init, credentials: "omit" });
+}
 
 /** Drop cached Neon client so sign-out / re-login does not reuse stale in-memory session. */
 export function resetAuthClient(): void {
@@ -34,19 +30,13 @@ function getAuthClientInstance(): ReturnType<typeof createAuthClient> {
   const url = readNeonAuthUrl();
   if (!url) {
     throw new Error(
-      "Missing VITE_NEON_AUTH_URL. Create web/.env from .env.example, set VITE_NEON_AUTH_URL and VITE_BACKEND_URL, then restart the dev server (bun run dev).",
+      "Missing Neon Auth URL. Copy web/.env.example to web/.env, set VITE_DEV_NEON_AUTH_URL / VITE_PROD_NEON_AUTH_URL (and matching backend URLs), then restart the dev server.",
     );
   }
-  const origin = neonAuthOrigin();
   authClientInstance ??= createAuthClient(url, {
     adapter: BetterAuthVanillaAdapter({
       fetchOptions: {
-        headers: origin
-          ? {
-              Origin: origin,
-              Referer: `${origin}/`,
-            }
-          : undefined,
+        customFetchImpl: webAuthFetch,
       },
     }),
   });

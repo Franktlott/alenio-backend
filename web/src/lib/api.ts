@@ -8,7 +8,7 @@ function apiBaseUrl(): string {
 function assertProductionApiConfigured(): void {
   if (import.meta.env.PROD && !apiBaseUrl().trim()) {
     throw new Error(
-      "VITE_BACKEND_URL was not set when this app was built. Rebuild with your API base URL (e.g. Railway).",
+      "VITE_PROD_BACKEND_URL was not set when this app was built. Rebuild with your production API URL (e.g. Railway).",
     );
   }
 }

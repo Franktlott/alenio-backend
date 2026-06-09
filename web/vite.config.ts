@@ -1,11 +1,13 @@
 import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
+import { resolveBackendUrl } from "./src/lib/env-config";
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
   /** Same as the URL you type on iPad (e.g. http://192.168.1.42:5173). Fixes blank page when using a LAN IP. */
   const devOrigin = env.VITE_DEV_SERVER_ORIGIN?.trim();
-  const proxyTarget = env.VITE_DEV_PROXY_TARGET?.trim() || "http://127.0.0.1:3000";
+  const resolvedBackend = resolveBackendUrl(env, mode === "production");
+  const proxyTarget = env.VITE_DEV_PROXY_TARGET?.trim() || resolvedBackend || "http://127.0.0.1:3000";
 
   return {
     plugins: [react()],
@@ -16,7 +18,7 @@ export default defineConfig(({ mode }) => {
       host: true,
       cors: true,
       ...(devOrigin ? { origin: devOrigin } : {}),
-      // iPad only needs this port; /api is forwarded to the backend on your Mac (no 3000 on the tablet).
+      // iPad only needs this port; /api is forwarded to the active backend (dev or prod per VITE_API_TARGET).
       proxy: {
         "/api": {
           target: proxyTarget,

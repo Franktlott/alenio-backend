@@ -8,7 +8,8 @@ Browser admin UI for teams. It uses the same **Neon Auth** accounts as the mobil
 cd web
 bun install
 cp .env.example .env
-# Edit .env — VITE_NEON_AUTH_URL and VITE_BACKEND_URL must match your mobile app’s auth host and API.
+# Edit .env — set VITE_DEV_* (dev Railway + Neon Auth) and VITE_PROD_* (production).
+# Use VITE_API_TARGET=development|production to pick which pair the local dev server uses.
 bun run dev
 ```
 

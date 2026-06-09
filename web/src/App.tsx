@@ -22,15 +22,10 @@ import { PrivacyPolicyPage } from "./routes/PrivacyPolicyPage";
 import { TermsOfServicePage } from "./routes/TermsOfServicePage";
 import { WebsiteHomePage } from "./routes/WebsiteHomePage";
 import { PricingPage } from "./routes/PricingPage";
+import { getActiveApiTarget, getWebEnvConfigError } from "./lib/env-config";
 
 function missingWebEnvMessage(): string | null {
-  if (!import.meta.env.VITE_NEON_AUTH_URL?.trim()) {
-    return "VITE_NEON_AUTH_URL is not set.";
-  }
-  if (!import.meta.env.VITE_BACKEND_URL?.trim()) {
-    return "VITE_BACKEND_URL is not set.";
-  }
-  return null;
+  return getWebEnvConfigError();
 }
 
 function SetupEnvScreen({ message }: { message: string }) {
@@ -59,20 +54,23 @@ function SetupEnvScreen({ message }: { message: string }) {
         }}
       >
         <h1 style={{ margin: "0 0 12px", fontSize: 20, fontWeight: 700 }}>Configure environment</h1>
-        <p style={{ margin: "0 0 16px", color: "var(--muted)", lineHeight: 1.5 }}>{message}</p>
+        <p style={{ margin: "0 0 8px", color: "var(--muted)", lineHeight: 1.5 }}>{message}</p>
+        <p style={{ margin: "0 0 16px", color: "var(--muted)", lineHeight: 1.5, fontSize: 13 }}>
+          Active local target: <strong style={{ color: "var(--text)" }}>{getActiveApiTarget()}</strong> (set{" "}
+          <code style={{ color: "var(--text)", background: "var(--surface-muted)", padding: "2px 6px", borderRadius: 4 }}>VITE_API_TARGET=development</code> or{" "}
+          <code style={{ color: "var(--text)", background: "var(--surface-muted)", padding: "2px 6px", borderRadius: 4 }}>production</code> in <code style={{ color: "var(--text)", background: "var(--surface-muted)", padding: "2px 6px", borderRadius: 4 }}>web/.env</code>).
+        </p>
         <ol style={{ margin: "0 0 16px", paddingLeft: 20, color: "var(--muted)", lineHeight: 1.6 }}>
           <li>
             In the <code style={{ color: "var(--text)", background: "var(--surface-muted)", padding: "2px 6px", borderRadius: 4 }}>web</code> folder, run:{" "}
             <code style={{ color: "var(--text)", background: "var(--surface-muted)", padding: "2px 6px", borderRadius: 4 }}>cp .env.example .env</code>
           </li>
           <li>
-            Set <code style={{ color: "var(--accent)", background: "var(--surface-muted)", padding: "2px 6px", borderRadius: 4 }}>VITE_NEON_AUTH_URL</code> (same as mobile{" "}
-            <code style={{ color: "var(--text)", background: "var(--surface-muted)", padding: "2px 6px", borderRadius: 4 }}>EXPO_PUBLIC_NEON_AUTH_URL</code>) and{" "}
-            <code style={{ color: "var(--accent)", background: "var(--surface-muted)", padding: "2px 6px", borderRadius: 4 }}>VITE_BACKEND_URL</code> (same as{" "}
-            <code style={{ color: "var(--text)", background: "var(--surface-muted)", padding: "2px 6px", borderRadius: 4 }}>EXPO_PUBLIC_BACKEND_URL</code>). For iPad on Wi‑Fi, copy{" "}
-            <code style={{ color: "var(--text)", background: "var(--surface-muted)", padding: "2px 6px", borderRadius: 4 }}>web/.env.example</code> — use{" "}
-            <code style={{ color: "var(--text)", background: "var(--surface-muted)", padding: "2px 6px", borderRadius: 4 }}>VITE_DEV_API_PROXY=1</code> and{" "}
-            <code style={{ color: "var(--text)", background: "var(--surface-muted)", padding: "2px 6px", borderRadius: 4 }}>VITE_DEV_SERVER_ORIGIN</code>.
+            Under <strong>Development</strong>, set <code style={{ color: "var(--accent)", background: "var(--surface-muted)", padding: "2px 6px", borderRadius: 4 }}>VITE_DEV_NEON_AUTH_URL</code> and{" "}
+            <code style={{ color: "var(--accent)", background: "var(--surface-muted)", padding: "2px 6px", borderRadius: 4 }}>VITE_DEV_BACKEND_URL</code>. Under <strong>Production</strong>, set{" "}
+            <code style={{ color: "var(--accent)", background: "var(--surface-muted)", padding: "2px 6px", borderRadius: 4 }}>VITE_PROD_NEON_AUTH_URL</code> and{" "}
+            <code style={{ color: "var(--accent)", background: "var(--surface-muted)", padding: "2px 6px", borderRadius: 4 }}>VITE_PROD_BACKEND_URL</code>. Use{" "}
+            <code style={{ color: "var(--text)", background: "var(--surface-muted)", padding: "2px 6px", borderRadius: 4 }}>VITE_API_TARGET</code> to switch locally.
           </li>
           <li>
             Stop the dev server and start again: <code style={{ color: "var(--text)", background: "var(--surface-muted)", padding: "2px 6px", borderRadius: 4 }}>bun run dev</code> — Vite only
