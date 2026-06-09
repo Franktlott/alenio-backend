@@ -114,114 +114,140 @@ function buildPrintHtml(options: OneOnOnePrintOptions, logoUrl: string): string 
   <meta charset="UTF-8" />
   <title>${escapeHtml(meeting.templateTitle)} — 1:1</title>
   <style>
-    @page { size: letter; margin: 0.55in 0.6in; }
+    @page { size: letter; margin: 0.38in 0.42in; }
     * { box-sizing: border-box; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
       color: #0f172a;
-      font-size: 11pt;
-      line-height: 1.45;
+      font-size: 8.5pt;
+      line-height: 1.32;
       margin: 0;
       padding: 0;
+      -webkit-font-smoothing: antialiased;
     }
-    .doc { max-width: 7.5in; margin: 0 auto; }
+    .doc { max-width: 100%; margin: 0 auto; }
     .top-row {
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
-      border-bottom: 2px solid #0f172a;
-      padding-bottom: 10px;
-      margin-bottom: 14px;
+      gap: 16px;
+      border-bottom: 1.5px solid #0f172a;
+      padding-bottom: 7px;
+      margin-bottom: 9px;
     }
-    .logo-wrap { display: flex; align-items: center; gap: 8px; }
-    .logo-wrap img { width: 28px; height: 28px; }
-    .logo-text { font-size: 22pt; font-weight: 800; color: #1e293b; letter-spacing: -0.02em; }
-    .doc-type { text-align: right; }
+    .brand-logo {
+      height: 28px;
+      width: auto;
+      max-width: 118px;
+      display: block;
+      object-fit: contain;
+    }
+    .doc-type { text-align: right; flex-shrink: 0; }
     .doc-type-kicker {
-      font-size: 8pt;
+      font-size: 6.5pt;
       font-weight: 700;
-      letter-spacing: 0.12em;
+      letter-spacing: 0.14em;
       color: #64748b;
-      margin: 0 0 4px;
+      margin: 0 0 2px;
+      text-transform: uppercase;
     }
-    .doc-type-title { font-size: 16pt; font-weight: 800; margin: 0; color: #0f172a; }
+    .doc-type-title {
+      font-size: 11.5pt;
+      font-weight: 700;
+      margin: 0;
+      color: #0f172a;
+      letter-spacing: -0.01em;
+      line-height: 1.2;
+    }
     .meta-grid {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
-      gap: 12px;
+      gap: 8px 10px;
       border-bottom: 1px solid #cbd5e1;
-      padding-bottom: 12px;
-      margin-bottom: 14px;
+      padding-bottom: 8px;
+      margin-bottom: 8px;
     }
     .meta-item label {
       display: block;
-      font-size: 7pt;
+      font-size: 6pt;
       font-weight: 700;
-      letter-spacing: 0.1em;
+      letter-spacing: 0.11em;
       color: #64748b;
-      margin-bottom: 3px;
+      margin-bottom: 1px;
+      text-transform: uppercase;
     }
-    .meta-item span { font-size: 10pt; font-weight: 600; color: #0f172a; }
+    .meta-item span {
+      font-size: 8.5pt;
+      font-weight: 600;
+      color: #0f172a;
+      line-height: 1.25;
+    }
     .intro {
-      font-size: 9.5pt;
+      font-size: 7.5pt;
       color: #475569;
-      margin: 0 0 18px;
-      line-height: 1.55;
+      margin: 0 0 10px;
+      line-height: 1.4;
     }
-    .section { margin-bottom: 16px; }
+    .section { margin-bottom: 9px; }
     .section-head {
       display: flex;
       align-items: center;
-      gap: 8px;
-      background: #e0f2fe;
-      padding: 7px 12px;
-      border-radius: 4px;
-      margin-bottom: 10px;
+      gap: 6px;
+      background: #e8f4fc;
+      border-left: 3px solid #0284c7;
+      padding: 4px 8px;
+      margin-bottom: 6px;
     }
     .section-dot {
-      width: 10px;
-      height: 10px;
+      width: 6px;
+      height: 6px;
       border-radius: 50%;
       background: #0284c7;
       flex-shrink: 0;
     }
     .section-title {
-      font-size: 9pt;
-      font-weight: 800;
-      letter-spacing: 0.06em;
+      font-size: 7pt;
+      font-weight: 700;
+      letter-spacing: 0.08em;
       color: #0c4a6e;
     }
-    .section-body { padding: 0 4px; }
-    .question { margin-bottom: 14px; }
-    .question-label {
-      font-size: 10pt;
-      font-weight: 700;
-      color: #0f172a;
+    .section-body { padding: 0 2px; }
+    .question {
       margin-bottom: 6px;
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+    .question-label {
+      font-size: 8pt;
+      font-weight: 600;
+      color: #1e293b;
+      margin-bottom: 2px;
+      line-height: 1.25;
     }
     .answer-line {
-      border-bottom: 1px solid #94a3b8;
-      min-height: 22px;
-      padding: 2px 0 4px;
-      font-size: 10pt;
-      color: #1e293b;
+      border-bottom: 1px solid #cbd5e1;
+      min-height: 14px;
+      padding: 1px 0 2px;
+      font-size: 8pt;
+      color: #334155;
       white-space: pre-wrap;
+      line-height: 1.3;
     }
     .rating-row {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 5px;
       flex-wrap: wrap;
     }
     .rating-dot {
-      width: 26px;
-      height: 26px;
+      width: 18px;
+      height: 18px;
       border-radius: 50%;
-      border: 1.5px solid #64748b;
+      border: 1px solid #94a3b8;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      font-size: 9pt;
+      font-size: 7pt;
       font-weight: 700;
       color: #475569;
     }
@@ -231,76 +257,80 @@ function buildPrintHtml(options: OneOnOnePrintOptions, logoUrl: string): string 
       color: #fff;
     }
     .rating-hint {
-      font-size: 8pt;
+      font-size: 6.5pt;
       color: #64748b;
-      margin-left: 4px;
+      margin-left: 2px;
     }
     .footer-grid {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
+      grid-template-columns: 1.2fr 0.8fr 0.8fr;
       gap: 0;
       border-top: 1px solid #cbd5e1;
-      margin-top: 22px;
-      padding-top: 14px;
+      margin-top: 12px;
+      padding-top: 8px;
     }
     .footer-col {
-      padding: 0 14px;
+      padding: 0 10px;
       border-right: 1px solid #e2e8f0;
     }
     .footer-col:first-child { padding-left: 0; }
     .footer-col:last-child { border-right: none; padding-right: 0; }
     .footer-col h4 {
-      margin: 0 0 2px;
-      font-size: 8pt;
-      font-weight: 800;
-      letter-spacing: 0.08em;
+      margin: 0 0 1px;
+      font-size: 6.5pt;
+      font-weight: 700;
+      letter-spacing: 0.09em;
       color: #0f172a;
+      text-transform: uppercase;
     }
     .footer-col p {
-      margin: 0 0 8px;
-      font-size: 8pt;
+      margin: 0 0 4px;
+      font-size: 6.5pt;
       color: #64748b;
+      line-height: 1.25;
     }
     .footer-line {
-      border-bottom: 1px solid #94a3b8;
-      min-height: 18px;
-      margin-bottom: 8px;
+      border-bottom: 1px solid #cbd5e1;
+      min-height: 12px;
+      margin-bottom: 4px;
     }
     .bottom-bar {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      border-top: 1px solid #cbd5e1;
-      margin-top: 16px;
-      padding-top: 10px;
-      font-size: 9pt;
+      border-top: 1px solid #e2e8f0;
+      margin-top: 10px;
+      padding-top: 6px;
+      font-size: 7pt;
       color: #64748b;
     }
-    .bottom-bar .logo-wrap img { width: 18px; height: 18px; }
-    .bottom-bar .logo-text { font-size: 11pt; font-weight: 800; }
+    .bottom-bar .brand-logo {
+      height: 16px;
+      max-width: 72px;
+      opacity: 0.85;
+    }
     @media print {
       body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .section-head { background: #e8f4fc !important; }
+      .rating-dot--filled { background: #0284c7 !important; }
     }
   </style>
 </head>
 <body>
   <div class="doc">
     <div class="top-row">
-      <div class="logo-wrap">
-        <img src="${escapeHtml(logoUrl)}" alt="" />
-        <span class="logo-text">Alenio</span>
-      </div>
+      <img src="${escapeHtml(logoUrl)}" alt="Alenio" class="brand-logo" />
       <div class="doc-type">
-        <p class="doc-type-kicker">1:1 MEETING TEMPLATE</p>
+        <p class="doc-type-kicker">1:1 Meeting</p>
         <h1 class="doc-type-title">${escapeHtml(meeting.templateTitle)}</h1>
       </div>
     </div>
 
     <div class="meta-grid">
-      <div class="meta-item"><label>EMPLOYEE</label><span>${escapeHtml(memberName)}</span></div>
-      <div class="meta-item"><label>MANAGER</label><span>${escapeHtml(manager)}</span></div>
-      <div class="meta-item"><label>DATE</label><span>${escapeHtml(dateStr)}</span></div>
-      <div class="meta-item"><label>MEETING #</label><span>${meetingNumber}</span></div>
+      <div class="meta-item"><label>Employee</label><span>${escapeHtml(memberName)}</span></div>
+      <div class="meta-item"><label>Manager</label><span>${escapeHtml(manager)}</span></div>
+      <div class="meta-item"><label>Date</label><span>${escapeHtml(dateStr)}</span></div>
+      <div class="meta-item"><label>Meeting #</label><span>${meetingNumber}</span></div>
     </div>
 
     <p class="intro">${escapeHtml(intro)}</p>
@@ -309,53 +339,81 @@ function buildPrintHtml(options: OneOnOnePrintOptions, logoUrl: string): string 
 
     <div class="footer-grid">
       <div class="footer-col">
-        <h4>ACTION ITEMS</h4>
+        <h4>Action items</h4>
         <p>Key takeaways and next steps</p>
-        <div class="footer-line"></div>
         <div class="footer-line"></div>
         <div class="footer-line"></div>
       </div>
       <div class="footer-col">
-        <h4>FOLLOW UP</h4>
+        <h4>Follow up</h4>
         <p>Date of next 1:1</p>
         <div class="footer-line"></div>
       </div>
       <div class="footer-col">
-        <h4>PREPARED BY</h4>
+        <h4>Prepared by</h4>
         <p>Manager signature</p>
         <div class="footer-line">${escapeHtml(preparedBy)}</div>
       </div>
     </div>
 
     <div class="bottom-bar">
-      <div class="logo-wrap">
-        <img src="${escapeHtml(logoUrl)}" alt="" />
-        <span class="logo-text">Alenio</span>
-      </div>
+      <img src="${escapeHtml(logoUrl)}" alt="Alenio" class="brand-logo" />
       <span>alenio.com</span>
     </div>
   </div>
-  <script>
-    window.onload = function() {
-      window.print();
-      window.onafterprint = function() { window.close(); };
-    };
-  </script>
 </body>
 </html>`;
 }
 
+function removePrintFrame(frame: HTMLIFrameElement): void {
+  frame.parentNode?.removeChild(frame);
+}
+
+function printHtmlInHiddenFrame(html: string): void {
+  const frame = document.createElement("iframe");
+  frame.setAttribute("aria-hidden", "true");
+  frame.title = "1:1 print preview";
+  frame.style.cssText =
+    "position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;pointer-events:none";
+  document.body.appendChild(frame);
+
+  const frameWin = frame.contentWindow;
+  if (!frameWin) {
+    removePrintFrame(frame);
+    throw new Error("Could not open print view.");
+  }
+
+  const doc = frameWin.document;
+  doc.open();
+  doc.write(html);
+  doc.close();
+
+  const cleanup = () => removePrintFrame(frame);
+  const triggerPrint = () => {
+    try {
+      frameWin.focus();
+      frameWin.print();
+    } catch {
+      cleanup();
+      throw new Error("Could not open print view.");
+    }
+  };
+
+  if ("onafterprint" in frameWin) {
+    frameWin.onafterprint = cleanup;
+  } else {
+    setTimeout(cleanup, 1500);
+  }
+
+  // Brief delay so layout and logo can finish loading before print.
+  setTimeout(triggerPrint, 350);
+}
+
 /** Opens a print dialog; user can choose "Save as PDF". */
 export function printOneOnOneMeeting(options: OneOnOnePrintOptions): void {
-  const logoUrl = `${window.location.origin}/alenio-mark-icon.svg`;
+  const logoUrl = `${window.location.origin}/alenio-logo.png`;
   const html = buildPrintHtml(options, logoUrl);
-  const printWindow = window.open("", "_blank", "noopener,noreferrer,width=900,height=700");
-  if (!printWindow) {
-    throw new Error("Pop-up blocked. Allow pop-ups to print this 1:1.");
-  }
-  printWindow.document.open();
-  printWindow.document.write(html);
-  printWindow.document.close();
+  printHtmlInHiddenFrame(html);
 }
 
 export function meetingNumberFor(meetings: OneOnOneMeeting[], meetingId: string): number {
