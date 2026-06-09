@@ -108,6 +108,10 @@ export async function apiPatchJson<T>(path: string, body: unknown): Promise<T> {
   return apiRequest<T>(path, { method: "PATCH", body: JSON.stringify(body) });
 }
 
+export async function apiDeleteJson<T>(path: string): Promise<T> {
+  return apiRequest<T>(path, { method: "DELETE" });
+}
+
 export type WebMeUser = {
   id: string;
   name: string | null;
@@ -943,4 +947,94 @@ export function createWebTask(input: CreateWebTaskInput) {
     incognito: input.incognito === true,
     subtasks: input.subtasks?.filter((t) => t.trim()).length ? input.subtasks.filter((t) => t.trim()) : undefined,
   }).then((r) => r.data.tasks);
+}
+
+export type OneOnOneTemplateFieldType =
+  | "short_text"
+  | "long_text"
+  | "rating"
+  | "manager_notes"
+  | "associate_notes";
+
+export type OneOnOneTemplateField = {
+  id: string;
+  label: string;
+  type: OneOnOneTemplateFieldType;
+  order: number;
+  required?: boolean;
+  ratingMax?: number;
+};
+
+export type OneOnOneTemplate = {
+  id: string;
+  teamId: string;
+  title: string;
+  description: string | null;
+  fields: OneOnOneTemplateField[];
+  createdById: string;
+  createdAt: string;
+  updatedAt: string;
+  createdBy?: { id: string; name: string; email: string; image: string | null };
+};
+
+export type OneOnOneTemplateInput = {
+  title: string;
+  description?: string | null;
+  fields: OneOnOneTemplateField[];
+};
+
+export function fetchOneOnOneTemplates(teamId: string) {
+  return apiGetJson<{ data: OneOnOneTemplate[] }>(
+    `/web/api/teams/${encodeURIComponent(teamId)}/one-on-one-templates`,
+  ).then((r) => r.data ?? []);
+}
+
+export function createOneOnOneTemplate(teamId: string, input: OneOnOneTemplateInput) {
+  return apiPostJson<{ data: OneOnOneTemplate }>(
+    `/web/api/teams/${encodeURIComponent(teamId)}/one-on-one-templates`,
+    input,
+  ).then((r) => r.data);
+}
+
+export function updateOneOnOneTemplate(teamId: string, templateId: string, input: OneOnOneTemplateInput) {
+  return apiPatchJson<{ data: OneOnOneTemplate }>(
+    `/web/api/teams/${encodeURIComponent(teamId)}/one-on-one-templates/${encodeURIComponent(templateId)}`,
+    input,
+  ).then((r) => r.data);
+}
+
+export function deleteOneOnOneTemplate(teamId: string, templateId: string) {
+  return apiDeleteJson<{ data: { deleted: boolean } }>(
+    `/web/api/teams/${encodeURIComponent(teamId)}/one-on-one-templates/${encodeURIComponent(templateId)}`,
+  );
+}
+
+export type OneOnOneMeeting = {
+  id: string;
+  teamId: string;
+  memberUserId: string;
+  templateId: string | null;
+  templateTitle: string;
+  templateFields: OneOnOneTemplateField[];
+  responses: Record<string, string | number>;
+  createdById: string;
+  createdAt: string;
+  createdBy?: { id: string; name: string; email: string; image: string | null };
+};
+
+export function fetchOneOnOneMeetings(teamId: string, memberUserId: string) {
+  return apiGetJson<{ data: OneOnOneMeeting[] }>(
+    `/web/api/teams/${encodeURIComponent(teamId)}/members/${encodeURIComponent(memberUserId)}/one-on-ones`,
+  ).then((r) => r.data ?? []);
+}
+
+export function createOneOnOneMeeting(
+  teamId: string,
+  memberUserId: string,
+  input: { templateId: string; responses: Record<string, string | number> },
+) {
+  return apiPostJson<{ data: OneOnOneMeeting }>(
+    `/web/api/teams/${encodeURIComponent(teamId)}/members/${encodeURIComponent(memberUserId)}/one-on-ones`,
+    input,
+  ).then((r) => r.data);
 }

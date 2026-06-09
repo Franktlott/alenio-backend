@@ -26,6 +26,8 @@ model User {
   messageReactions MessageReaction[]
   directMessageReactions DirectMessageReaction[]
   templatesCreated TaskTemplate[] @relation("TemplateCreator")
+  oneOnOneTemplatesCreated OneOnOneTemplate[] @relation("OneOnOneTemplateCreator")
+  oneOnOneMeetingsCreated OneOnOneMeeting[] @relation("OneOnOneMeetingCreator")
   phoneNumber   String?
   phoneNumberVerified Boolean @default(false)
   pushToken     String?
@@ -103,6 +105,8 @@ model Team {
   teamActivities TeamActivity[]
   topics      Topic[]
   polls       Poll[]
+  oneOnOneTemplates OneOnOneTemplate[]
+  oneOnOneMeetings OneOnOneMeeting[]
 }
 
 model TeamSubscription {
@@ -227,6 +231,42 @@ model TaskTemplate {
   createdById          String
   createdBy            User     @relation("TemplateCreator", fields: [createdById], references: [id])
   createdAt            DateTime @default(now())
+}
+
+model OneOnOneTemplate {
+  id          String   @id @default(cuid())
+  teamId      String
+  team        Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  /** JSON array of { id, label, type, order, required?, ratingMax? } */
+  fields      String
+  createdById String
+  createdBy   User     @relation("OneOnOneTemplateCreator", fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  meetings    OneOnOneMeeting[]
+
+  @@index([teamId])
+}
+
+model OneOnOneMeeting {
+  id             String            @id @default(cuid())
+  teamId         String
+  team           Team              @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  memberUserId   String
+  templateId     String?
+  template       OneOnOneTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  templateTitle  String
+  /** Snapshot of template fields at creation time */
+  templateFields String
+  /** JSON object: { [fieldId]: string | number } */
+  responses      String
+  createdById    String
+  createdBy      User              @relation("OneOnOneMeetingCreator", fields: [createdById], references: [id])
+  createdAt      DateTime          @default(now())
+
+  @@index([teamId, memberUserId])
 }
 
 model Message {

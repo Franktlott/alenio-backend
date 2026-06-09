@@ -33,7 +33,7 @@ export function TeamPage() {
 
   return (
     <div
-      className={`enterprise-tab-shell enterprise-tab-shell-scroll enterprise-team-page-shell${hasNoTeams ? " chat-app-body-no-teams" : ""}`}
+      className={`enterprise-tab-shell enterprise-team-page-shell${hasNoTeams ? " chat-app-body-no-teams" : ""}`}
       data-testid="team-screen"
     >
       <TeamTabPanel

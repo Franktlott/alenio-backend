@@ -1,14 +1,20 @@
+import { useState } from "react";
 import type { WebTeamMemberRow } from "../lib/api";
+import { OneOnOneHistoryTab } from "./OneOnOneHistoryTab";
 
-const PROFILE_TABS = ["Overview", "Development plan", "1:1 history", "Goals", "Notes", "Training"] as const;
+const PROFILE_TABS = ["Overview", "Development plan", "1:1 history"] as const;
+
+type ProfileTab = (typeof PROFILE_TABS)[number];
 
 type Props = {
+  teamId: string;
   member: WebTeamMemberRow;
   isSelf: boolean;
   managerName: string | null;
   roleLabel: string;
   roleBadgeClass: string;
   canManage: boolean;
+  canCreateOneOne: boolean;
   streak?: number;
   overdueTasks?: number;
   onBack: () => void;
@@ -16,18 +22,29 @@ type Props = {
 };
 
 export function TeamMemberProfilePanel({
+  teamId,
   member,
   isSelf,
   managerName,
   roleLabel,
   roleBadgeClass,
   canManage,
+  canCreateOneOne,
   streak,
   overdueTasks,
   onBack,
   onManage,
 }: Props) {
+  const [activeTab, setActiveTab] = useState<ProfileTab>("Overview");
+  const [oneOneCreateTrigger, setOneOneCreateTrigger] = useState(0);
   const displayName = member.user.name ?? member.user.email ?? "Member";
+
+  const scheduleOneOne = () => {
+    setActiveTab("1:1 history");
+    if (canCreateOneOne) {
+      setOneOneCreateTrigger((n) => n + 1);
+    }
+  };
 
   return (
     <div className="enterprise-team-profile" data-testid="team-member-profile">
@@ -69,7 +86,12 @@ export function TeamMemberProfilePanel({
           <button type="button" className="enterprise-team-profile-action enterprise-team-profile-action--soon" disabled>
             + Add goal
           </button>
-          <button type="button" className="enterprise-team-profile-action enterprise-team-profile-action-outline enterprise-team-profile-action--soon" disabled>
+          <button
+            type="button"
+            className="enterprise-team-profile-action enterprise-team-profile-action-outline"
+            disabled={!canCreateOneOne}
+            onClick={scheduleOneOne}
+          >
             Schedule 1:1
           </button>
           {canManage ? (
@@ -86,12 +108,13 @@ export function TeamMemberProfilePanel({
       </header>
 
       <nav className="enterprise-team-profile-tabs" aria-label="Member profile sections">
-        {PROFILE_TABS.map((tab, index) => (
+        {PROFILE_TABS.map((tab) => (
           <button
             key={tab}
             type="button"
-            className={`enterprise-team-profile-tab${index === 0 ? " enterprise-team-profile-tab--active" : ""} enterprise-team-profile-tab--soon`}
-            disabled
+            className={`enterprise-team-profile-tab${activeTab === tab ? " enterprise-team-profile-tab--active" : ""}`}
+            aria-selected={activeTab === tab}
+            onClick={() => setActiveTab(tab)}
           >
             {tab}
           </button>
@@ -99,55 +122,51 @@ export function TeamMemberProfilePanel({
       </nav>
 
       <div className="enterprise-team-profile-body">
-        <section className="enterprise-team-profile-section">
-          <h3 className="enterprise-team-profile-section-title">At a glance</h3>
-          <dl className="enterprise-team-profile-facts">
-            <div>
-              <dt>Role</dt>
-              <dd>{roleLabel}</dd>
-            </div>
-            {member.user.email ? (
+        {activeTab === "Overview" ? (
+          <section className="enterprise-team-profile-section">
+            <h3 className="enterprise-team-profile-section-title">At a glance</h3>
+            <dl className="enterprise-team-profile-facts">
               <div>
-                <dt>Email</dt>
-                <dd>{member.user.email}</dd>
+                <dt>Role</dt>
+                <dd>{roleLabel}</dd>
               </div>
-            ) : null}
-            {streak != null && streak > 0 ? (
-              <div>
-                <dt>Streak</dt>
-                <dd>🔥 {streak} days</dd>
-              </div>
-            ) : null}
-            {overdueTasks != null && overdueTasks > 0 ? (
-              <div>
-                <dt>Overdue tasks</dt>
-                <dd className="enterprise-stat-overdue">{overdueTasks}</dd>
-              </div>
-            ) : null}
-          </dl>
-        </section>
-
-        <section className="enterprise-team-profile-section enterprise-team-section--coming-soon">
-          <div className="enterprise-team-section-head">
-            <h3 className="enterprise-team-profile-section-title">Development plan</h3>
+              {member.user.email ? (
+                <div>
+                  <dt>Email</dt>
+                  <dd>{member.user.email}</dd>
+                </div>
+              ) : null}
+              {streak != null && streak > 0 ? (
+                <div>
+                  <dt>Streak</dt>
+                  <dd>🔥 {streak} days</dd>
+                </div>
+              ) : null}
+              {overdueTasks != null && overdueTasks > 0 ? (
+                <div>
+                  <dt>Overdue tasks</dt>
+                  <dd className="enterprise-stat-overdue">{overdueTasks}</dd>
+                </div>
+              ) : null}
+            </dl>
+          </section>
+        ) : activeTab === "Development plan" ? (
+          <div className="enterprise-team-profile-tab-coming-soon" aria-label="Development plan content">
             <span className="enterprise-team-coming-soon-badge">Coming soon</span>
+            <p className="enterprise-team-profile-tab-coming-soon-title">Development plan</p>
+            <p className="enterprise-muted enterprise-team-profile-tab-coming-soon-copy">
+              Target roles, strengths, action plans, and manager notes will show up here.
+            </p>
           </div>
-          <div className="enterprise-team-section-placeholder enterprise-team-profile-placeholder-grid">
-            <div className="enterprise-team-profile-placeholder-card">
-              <span className="enterprise-team-profile-placeholder-label">Target role</span>
-              <span className="enterprise-team-profile-placeholder-value">—</span>
-            </div>
-            <div className="enterprise-team-profile-placeholder-card">
-              <span className="enterprise-team-profile-placeholder-label">Action plan</span>
-              <span className="enterprise-team-profile-placeholder-bar" />
-              <span className="enterprise-team-profile-placeholder-bar enterprise-team-profile-placeholder-bar--short" />
-            </div>
-            <div className="enterprise-team-profile-placeholder-card">
-              <span className="enterprise-team-profile-placeholder-label">Manager notes</span>
-              <span className="enterprise-team-profile-placeholder-block" />
-            </div>
-          </div>
-        </section>
+        ) : (
+          <OneOnOneHistoryTab
+            teamId={teamId}
+            memberUserId={member.userId}
+            memberName={displayName}
+            canCreate={canCreateOneOne}
+            createTrigger={oneOneCreateTrigger}
+          />
+        )}
       </div>
     </div>
   );

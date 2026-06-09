@@ -4,6 +4,8 @@ import { getSessionFromHeaders } from "../auth";
 import { sendPushToUsers } from "../lib/push";
 import { logActivity } from "../lib/activity";
 import { mountWebStripeBilling } from "./web-stripe-billing";
+import { oneOnOneTemplatesRouter } from "./one-on-one-templates";
+import { oneOnOneMeetingsRouter } from "./one-on-one-meetings";
 import { reconcileStripeForSubscriptionRead } from "../lib/stripe-billing";
 import { getTeamSubscription, teamSubscriptionRowHasTeamFeatures } from "./subscription";
 import { webPrismaUserIdFromContext } from "../lib/web-prisma-user";
@@ -147,6 +149,10 @@ webRouter.post("/api/teams", async (c) => {
 // Stripe billing + team subscription (register early so paths like /api/teams/:id/subscription
 // are not shadowed by longer-lived route tables in some deployments).
 mountWebStripeBilling(webRouter);
+
+// 1:1 templates + meeting history (register before generic /api/teams/:id routes).
+webRouter.route("/api/teams/:teamId/one-on-one-templates", oneOnOneTemplatesRouter);
+webRouter.route("/api/teams/:teamId/members", oneOnOneMeetingsRouter);
 
 // ── API: get team detail ──────────────────────────────────────────────────────
 webRouter.get("/api/teams/:id", async (c) => {
