@@ -4,7 +4,7 @@ import { z } from "zod";
 import { prisma } from "../prisma";
 import { auth } from "../auth";
 import { authGuard } from "../middleware/auth-guard";
-import { prismaRouteError } from "../lib/prisma-errors";
+import { prismaRouteError, isPrismaSchemaMissingError } from "../lib/prisma-errors";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -43,15 +43,13 @@ const updateMeetingSchema = z.object({
 
 const meetingInclude = {
   createdBy: { select: { id: true, name: true, email: true, image: true } },
-  followUpTasks: {
-    orderBy: { createdAt: "asc" as const },
-    include: {
-      assignments: {
-        include: { user: { select: { id: true, name: true, email: true, image: true } } },
-      },
-    },
-  },
 };
+
+const taskAssignmentInclude = {
+  assignments: {
+    include: { user: { select: { id: true, name: true, email: true, image: true } } },
+  },
+} as const;
 
 async function getMembership(
   c: { get: (key: "user" | "session") => unknown },
@@ -125,16 +123,6 @@ function serializeMeeting(meeting: {
   createdById: string;
   createdAt: Date;
   createdBy?: { id: string; name: string; email: string; image: string | null };
-  followUpTasks?: Array<{
-    id: string;
-    title: string;
-    description: string | null;
-    status: string;
-    dueDate: Date | null;
-    assignments: Array<{
-      user: { id: string; name: string | null; email: string; image: string | null };
-    }>;
-  }>;
 }) {
   return {
     id: meeting.id,
@@ -147,7 +135,54 @@ function serializeMeeting(meeting: {
     createdById: meeting.createdById,
     createdAt: meeting.createdAt.toISOString(),
     createdBy: meeting.createdBy,
-    followUpTasks: (meeting.followUpTasks ?? []).map(serializeFollowUpTask),
+  };
+}
+
+async function loadFollowUpTasks(meetingId: string) {
+  try {
+    const tasks = await prisma.task.findMany({
+      where: { oneOnOneMeetingId: meetingId },
+      include: taskAssignmentInclude,
+      orderBy: { createdAt: "asc" },
+    });
+    return tasks.map(serializeFollowUpTask);
+  } catch (err) {
+    if (!isPrismaSchemaMissingError(err)) throw err;
+    const rows = await prisma.$queryRaw<
+      Array<{ id: string; title: string; description: string | null; status: string; dueDate: Date | null }>
+    >`SELECT id, title, description, status, "dueDate" FROM "Task" WHERE "oneOnOneMeetingId" = ${meetingId} ORDER BY "createdAt" ASC`;
+    const loaded = await Promise.all(
+      rows.map(async (row) => {
+        const assignments = await prisma.taskAssignment.findMany({
+          where: { taskId: row.id },
+          include: { user: { select: { id: true, name: true, email: true, image: true } } },
+        });
+        return serializeFollowUpTask({
+          ...row,
+          assignments: assignments.map((a) => ({ user: a.user })),
+        });
+      }),
+    );
+    return loaded;
+  }
+}
+
+async function serializeMeetingWithTasks(meeting: {
+  id: string;
+  teamId: string;
+  memberUserId: string;
+  templateId: string | null;
+  templateTitle: string;
+  templateFields: string;
+  responses: string;
+  createdById: string;
+  createdAt: Date;
+  createdBy?: { id: string; name: string; email: string; image: string | null };
+}) {
+  const followUpTasks = await loadFollowUpTasks(meeting.id);
+  return {
+    ...serializeMeeting(meeting),
+    followUpTasks,
   };
 }
 
@@ -224,19 +259,38 @@ async function createFollowUpTasks(
   for (const task of tasks) {
     const dueDate =
       task.dueDate && !Number.isNaN(Date.parse(task.dueDate)) ? new Date(task.dueDate) : null;
-    await prisma.task.create({
-      data: {
-        title: task.title.trim(),
-        description: task.description?.trim() || null,
-        priority: "medium",
-        status: "todo",
-        dueDate,
-        teamId,
-        creatorId,
-        oneOnOneMeetingId: meetingId,
-        assignments: { create: [{ userId: task.assigneeUserId }] },
-      },
-    });
+    const baseData = {
+      title: task.title.trim(),
+      description: task.description?.trim() || null,
+      priority: "medium",
+      status: "todo",
+      dueDate,
+      teamId,
+      creatorId,
+      assignments: { create: [{ userId: task.assigneeUserId }] },
+    };
+
+    try {
+      await prisma.task.create({
+        data: {
+          ...baseData,
+          oneOnOneMeetingId: meetingId,
+        },
+      });
+    } catch (err) {
+      console.error("[one-on-one-meetings] linked task create failed, retrying link update:", err);
+      const created = await prisma.task.create({ data: baseData });
+      try {
+        await prisma.$executeRawUnsafe(
+          `UPDATE "Task" SET "oneOnOneMeetingId" = $1 WHERE "id" = $2`,
+          meetingId,
+          created.id,
+        );
+      } catch (linkErr) {
+        console.error("[one-on-one-meetings] task link update failed:", linkErr);
+        throw new Error("Could not link follow-up task to this 1:1.");
+      }
+    }
   }
 }
 
@@ -264,7 +318,8 @@ oneOnOneMeetingsRouter.get("/:memberUserId/one-on-ones", async (c) => {
       orderBy: { createdAt: "desc" },
     });
 
-    return c.json({ data: meetings.map(serializeMeeting) });
+    const data = await Promise.all(meetings.map((meeting) => serializeMeetingWithTasks(meeting)));
+    return c.json({ data });
   } catch (err) {
     return prismaRouteError(c, err, "[one-on-one-meetings] GET failed");
   }
@@ -315,29 +370,59 @@ oneOnOneMeetingsRouter.post(
       return c.json({ error: { message: followUpError, code: "VALIDATION_ERROR" } }, 400);
     }
 
-    const meeting = await prisma.oneOnOneMeeting.create({
-      data: {
-        teamId,
-        memberUserId,
-        templateId: template.id,
-        templateTitle: template.title,
-        templateFields: template.fields,
-        responses: JSON.stringify(body.responses),
-        createdById: user.id,
-      },
-      include: meetingInclude,
-    });
+    try {
+      const meeting = await prisma.$transaction(async (tx) => {
+        const created = await tx.oneOnOneMeeting.create({
+          data: {
+            teamId,
+            memberUserId,
+            templateId: template.id,
+            templateTitle: template.title,
+            templateFields: template.fields,
+            responses: JSON.stringify(body.responses),
+            createdById: user.id,
+          },
+          include: meetingInclude,
+        });
 
-    if (followUpTasks.length > 0) {
-      await createFollowUpTasks(meeting.id, teamId, user.id, followUpTasks);
+        if (followUpTasks.length > 0) {
+          for (const task of followUpTasks) {
+            const dueDate =
+              task.dueDate && !Number.isNaN(Date.parse(task.dueDate))
+                ? new Date(task.dueDate)
+                : null;
+            const baseData = {
+              title: task.title.trim(),
+              description: task.description?.trim() || null,
+              priority: "medium",
+              status: "todo",
+              dueDate,
+              teamId,
+              creatorId: user.id,
+              assignments: { create: [{ userId: task.assigneeUserId }] },
+            };
+            try {
+              await tx.task.create({
+                data: { ...baseData, oneOnOneMeetingId: created.id },
+              });
+            } catch {
+              const taskRow = await tx.task.create({ data: baseData });
+              await tx.$executeRawUnsafe(
+                `UPDATE "Task" SET "oneOnOneMeetingId" = $1 WHERE "id" = $2`,
+                created.id,
+                taskRow.id,
+              );
+            }
+          }
+        }
+
+        return created;
+      });
+
+      return c.json({ data: await serializeMeetingWithTasks(meeting) }, 201);
+    } catch (err) {
+      return prismaRouteError(c, err, "[one-on-one-meetings] POST failed");
     }
-
-    const withTasks = await prisma.oneOnOneMeeting.findUnique({
-      where: { id: meeting.id },
-      include: meetingInclude,
-    });
-
-    return c.json({ data: serializeMeeting(withTasks ?? meeting) }, 201);
   },
 );
 
@@ -402,7 +487,7 @@ oneOnOneMeetingsRouter.patch(
       if (!meeting) {
         return c.json({ error: { message: "1:1 not found", code: "NOT_FOUND" } }, 404);
       }
-      return c.json({ data: serializeMeeting(meeting) });
+      return c.json({ data: await serializeMeetingWithTasks(meeting) });
     } catch (err) {
       return prismaRouteError(c, err, "[one-on-one-meetings] PATCH failed");
     }

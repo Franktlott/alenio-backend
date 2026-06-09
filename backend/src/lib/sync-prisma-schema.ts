@@ -10,7 +10,7 @@ export function syncPrismaSchemaOnStartup(): void {
   const backendRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
   const result = spawnSync(
     "bunx",
-    ["prisma", "db", "push", "--skip-generate", "--accept-data-loss"],
+    ["prisma", "db", "push", "--accept-data-loss"],
     {
       cwd: backendRoot,
       env: process.env,

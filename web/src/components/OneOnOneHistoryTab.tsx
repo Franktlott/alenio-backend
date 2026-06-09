@@ -184,7 +184,7 @@ export function OneOnOneHistoryTab({
       else initial[field.id] = "";
     }
     setResponses(initial);
-    setFollowUpDrafts([]);
+    setFollowUpDrafts([newFollowUpDraft()]);
     setErr(null);
     setView("fill");
   };
@@ -518,7 +518,7 @@ export function OneOnOneHistoryTab({
                 </li>
               ))}
             </ul>
-          ) : existingFollowUps.length === 0 ? (
+          ) : existingFollowUps.length === 0 && followUpDrafts.length === 0 ? (
             <p className="enterprise-muted enterprise-oneone-followup-empty">No follow-up tasks yet.</p>
           ) : null}
         </section>
