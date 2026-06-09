@@ -1080,3 +1080,32 @@ export function createOneOnOneMeeting(
     body: JSON.stringify(input),
   }).then((r) => r.data);
 }
+
+function oneOnOneMeetingPaths(teamId: string, memberUserId: string, meetingId: string) {
+  const team = encodeURIComponent(requireTeamId(teamId));
+  const member = encodeURIComponent(requireTeamId(memberUserId));
+  const meeting = encodeURIComponent(meetingId);
+  const suffix = `/one-on-ones/${meeting}`;
+  return {
+    api: `/api/teams/${team}/members/${member}${suffix}`,
+    web: `/web/api/teams/${team}/members/${member}${suffix}`,
+  };
+}
+
+export function updateOneOnOneMeeting(
+  teamId: string,
+  memberUserId: string,
+  meetingId: string,
+  input: { responses: Record<string, string | number> },
+) {
+  const paths = oneOnOneMeetingPaths(teamId, memberUserId, meetingId);
+  return oneOnOneRequest<{ data: OneOnOneMeeting }>(paths, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  }).then((r) => r.data);
+}
+
+export function deleteOneOnOneMeeting(teamId: string, memberUserId: string, meetingId: string) {
+  const paths = oneOnOneMeetingPaths(teamId, memberUserId, meetingId);
+  return oneOnOneRequest<{ data: { deleted: boolean } }>(paths, { method: "DELETE" });
+}

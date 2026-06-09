@@ -114,8 +114,22 @@ function validateResponses(fields: TemplateField[], responses: Record<string, st
   return null;
 }
 
+function canModifyMeeting(
+  membership: { role: string },
+  memberUserId: string,
+  userId: string,
+  createdById: string,
+) {
+  if (createdById === userId) return true;
+  return canCreateMeeting(membership, memberUserId, userId);
+}
+
 const createMeetingSchema = z.object({
   templateId: z.string().min(1),
+  responses: z.record(z.string(), z.union([z.string(), z.number()])),
+});
+
+const updateMeetingSchema = z.object({
   responses: z.record(z.string(), z.union([z.string(), z.number()])),
 });
 
@@ -208,5 +222,84 @@ oneOnOneMeetingsRouter.post(
     return c.json({ data: serializeMeeting(meeting) }, 201);
   },
 );
+
+// PATCH /api/teams/:teamId/members/:memberUserId/one-on-ones/:meetingId
+oneOnOneMeetingsRouter.patch(
+  "/:memberUserId/one-on-ones/:meetingId",
+  zValidator("json", updateMeetingSchema),
+  async (c) => {
+    const user = c.get("user")!;
+    const teamId = c.req.param("teamId") as string;
+    const memberUserId = c.req.param("memberUserId") as string;
+    const meetingId = c.req.param("meetingId") as string;
+
+    const membership = await getMembership(c, teamId);
+    if (!membership) {
+      return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
+    }
+
+    const existing = await prisma.oneOnOneMeeting.findFirst({
+      where: { id: meetingId, teamId, memberUserId },
+    });
+    if (!existing) {
+      return c.json({ error: { message: "1:1 not found", code: "NOT_FOUND" } }, 404);
+    }
+
+    if (!canModifyMeeting(membership, memberUserId, user.id, existing.createdById)) {
+      return c.json({ error: { message: "You cannot edit this 1:1", code: "FORBIDDEN" } }, 403);
+    }
+
+    const body = c.req.valid("json");
+    const fields = parseJsonArray(existing.templateFields);
+    const validationError = validateResponses(fields, body.responses);
+    if (validationError) {
+      return c.json({ error: { message: validationError, code: "VALIDATION_ERROR" } }, 400);
+    }
+
+    try {
+      const meeting = await prisma.oneOnOneMeeting.update({
+        where: { id: meetingId },
+        data: { responses: JSON.stringify(body.responses) },
+        include: {
+          createdBy: { select: { id: true, name: true, email: true, image: true } },
+        },
+      });
+      return c.json({ data: serializeMeeting(meeting) });
+    } catch (err) {
+      return prismaRouteError(c, err, "[one-on-one-meetings] PATCH failed");
+    }
+  },
+);
+
+// DELETE /api/teams/:teamId/members/:memberUserId/one-on-ones/:meetingId
+oneOnOneMeetingsRouter.delete("/:memberUserId/one-on-ones/:meetingId", async (c) => {
+  const user = c.get("user")!;
+  const teamId = c.req.param("teamId") as string;
+  const memberUserId = c.req.param("memberUserId") as string;
+  const meetingId = c.req.param("meetingId") as string;
+
+  const membership = await getMembership(c, teamId);
+  if (!membership) {
+    return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
+  }
+
+  const existing = await prisma.oneOnOneMeeting.findFirst({
+    where: { id: meetingId, teamId, memberUserId },
+  });
+  if (!existing) {
+    return c.json({ error: { message: "1:1 not found", code: "NOT_FOUND" } }, 404);
+  }
+
+  if (!canModifyMeeting(membership, memberUserId, user.id, existing.createdById)) {
+    return c.json({ error: { message: "You cannot delete this 1:1", code: "FORBIDDEN" } }, 403);
+  }
+
+  try {
+    await prisma.oneOnOneMeeting.delete({ where: { id: meetingId } });
+    return c.json({ data: { deleted: true } });
+  } catch (err) {
+    return prismaRouteError(c, err, "[one-on-one-meetings] DELETE failed");
+  }
+});
 
 export { oneOnOneMeetingsRouter };

@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   createOneOnOneMeeting,
+  deleteOneOnOneMeeting,
   fetchOneOnOneMeetings,
   fetchOneOnOneTemplates,
+  updateOneOnOneMeeting,
   type OneOnOneMeeting,
   type OneOnOneTemplate,
   type OneOnOneTemplateField,
 } from "../lib/api";
+import { meetingNumberFor, printOneOnOneMeeting } from "../lib/one-on-one-print";
 
 const FIELD_TYPE_LABELS: Record<string, string> = {
   section: "Section",
@@ -33,12 +36,27 @@ function formatMeetingDate(iso: string): string {
   }
 }
 
+function meetingToFillTemplate(meeting: OneOnOneMeeting): OneOnOneTemplate {
+  return {
+    id: meeting.templateId ?? meeting.id,
+    teamId: meeting.teamId,
+    title: meeting.templateTitle,
+    description: null,
+    fields: meeting.templateFields,
+    createdById: meeting.createdById,
+    createdAt: meeting.createdAt,
+    updatedAt: meeting.createdAt,
+    createdBy: meeting.createdBy,
+  };
+}
+
 type Props = {
   teamId: string;
   memberUserId: string;
   memberName: string;
+  managerName: string | null;
   canCreate: boolean;
-  /** Increment to open the new-1:1 flow from outside (e.g. Schedule 1:1). */
+  canModify: boolean;
   createTrigger?: number;
 };
 
@@ -48,13 +66,16 @@ export function OneOnOneHistoryTab({
   teamId,
   memberUserId,
   memberName,
+  managerName,
   canCreate,
+  canModify,
   createTrigger = 0,
 }: Props) {
   const [view, setView] = useState<View>("list");
   const [meetings, setMeetings] = useState<OneOnOneMeeting[]>([]);
   const [templates, setTemplates] = useState<OneOnOneTemplate[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<OneOnOneTemplate | null>(null);
+  const [editingMeeting, setEditingMeeting] = useState<OneOnOneMeeting | null>(null);
   const [responses, setResponses] = useState<Record<string, string | number>>({});
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [loadingMeetings, setLoadingMeetings] = useState(false);
@@ -83,6 +104,7 @@ export function OneOnOneHistoryTab({
   useEffect(() => {
     setView("list");
     setSelectedTemplate(null);
+    setEditingMeeting(null);
     setResponses({});
     setExpandedId(null);
     setErr(null);
@@ -95,6 +117,7 @@ export function OneOnOneHistoryTab({
       return;
     }
     setErr(null);
+    setEditingMeeting(null);
     setLoadingTemplates(true);
     setView("pick");
     try {
@@ -118,6 +141,7 @@ export function OneOnOneHistoryTab({
 
   const pickTemplate = (template: OneOnOneTemplate) => {
     setSelectedTemplate(template);
+    setEditingMeeting(null);
     const initial: Record<string, string | number> = {};
     for (const field of template.fields) {
       if (field.type === "section") continue;
@@ -129,8 +153,30 @@ export function OneOnOneHistoryTab({
     setView("fill");
   };
 
+  const startEdit = (meeting: OneOnOneMeeting) => {
+    setEditingMeeting(meeting);
+    setSelectedTemplate(meetingToFillTemplate(meeting));
+    setResponses({ ...meeting.responses });
+    setErr(null);
+    setView("fill");
+  };
+
   const setFieldValue = (fieldId: string, value: string | number) => {
     setResponses((prev) => ({ ...prev, [fieldId]: value }));
+  };
+
+  const normalizeResponses = (fields: OneOnOneTemplateField[]) => {
+    const normalized: Record<string, string | number> = {};
+    for (const field of fields) {
+      if (field.type === "section") continue;
+      const raw = responses[field.id];
+      if (field.type === "rating") {
+        normalized[field.id] = typeof raw === "number" ? raw : Number(raw) || 0;
+      } else {
+        normalized[field.id] = typeof raw === "string" ? raw : String(raw ?? "");
+      }
+    }
+    return normalized;
   };
 
   const onSave = async () => {
@@ -138,28 +184,56 @@ export function OneOnOneHistoryTab({
     setSaving(true);
     setErr(null);
     try {
-      const normalized: Record<string, string | number> = {};
-      for (const field of selectedTemplate.fields) {
-        if (field.type === "section") continue;
-        const raw = responses[field.id];
-        if (field.type === "rating") {
-          normalized[field.id] = typeof raw === "number" ? raw : Number(raw) || 0;
-        } else {
-          normalized[field.id] = typeof raw === "string" ? raw : String(raw ?? "");
-        }
+      const normalized = normalizeResponses(selectedTemplate.fields);
+      if (editingMeeting) {
+        await updateOneOnOneMeeting(teamId, memberUserId, editingMeeting.id, { responses: normalized });
+      } else {
+        await createOneOnOneMeeting(teamId, memberUserId, {
+          templateId: selectedTemplate.id,
+          responses: normalized,
+        });
       }
-      await createOneOnOneMeeting(teamId, memberUserId, {
-        templateId: selectedTemplate.id,
-        responses: normalized,
-      });
       await loadMeetings();
       setView("list");
       setSelectedTemplate(null);
+      setEditingMeeting(null);
       setResponses({});
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Could not save 1:1.");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const onDelete = async (meeting: OneOnOneMeeting) => {
+    if (!window.confirm(`Delete this 1:1 from ${formatMeetingDate(meeting.createdAt)}? This cannot be undone.`)) {
+      return;
+    }
+    setErr(null);
+    try {
+      await deleteOneOnOneMeeting(teamId, memberUserId, meeting.id);
+      if (expandedId === meeting.id) setExpandedId(null);
+      if (editingMeeting?.id === meeting.id) {
+        setEditingMeeting(null);
+        setSelectedTemplate(null);
+        setView("list");
+      }
+      await loadMeetings();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Could not delete 1:1.");
+    }
+  };
+
+  const onPrint = (meeting: OneOnOneMeeting) => {
+    try {
+      printOneOnOneMeeting({
+        meeting,
+        memberName,
+        managerName,
+        meetingNumber: meetingNumberFor(meetings, meeting.id),
+      });
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Could not open print view.");
     }
   };
 
@@ -210,6 +284,18 @@ export function OneOnOneHistoryTab({
     );
   };
 
+  const exitFill = () => {
+    if (editingMeeting) {
+      setView("list");
+      setEditingMeeting(null);
+      setSelectedTemplate(null);
+    } else {
+      setView("pick");
+      setSelectedTemplate(null);
+    }
+    setErr(null);
+  };
+
   if (view === "pick") {
     return (
       <div className="enterprise-oneone-history">
@@ -239,7 +325,8 @@ export function OneOnOneHistoryTab({
                   <strong>{template.title}</strong>
                   {template.description ? <span className="enterprise-muted">{template.description}</span> : null}
                   <span className="enterprise-muted">
-                    {template.fields.length} field{template.fields.length !== 1 ? "s" : ""}
+                    {template.fields.filter((f) => f.type !== "section").length} question
+                    {template.fields.filter((f) => f.type !== "section").length !== 1 ? "s" : ""}
                   </span>
                 </button>
               </li>
@@ -262,20 +349,19 @@ export function OneOnOneHistoryTab({
     const sortedFields = [...selectedTemplate.fields].sort((a, b) => a.order - b.order);
     return (
       <div className="enterprise-oneone-history">
-        <button
-          type="button"
-          className="enterprise-oneone-history-back"
-          onClick={() => {
-            setView("pick");
-            setSelectedTemplate(null);
-            setErr(null);
-          }}
-        >
-          ← Choose another template
+        <button type="button" className="enterprise-oneone-history-back" onClick={exitFill}>
+          ← {editingMeeting ? "Back to history" : "Choose another template"}
         </button>
-        <h3 className="enterprise-oneone-history-heading">{selectedTemplate.title}</h3>
-        {selectedTemplate.description ? (
+        <h3 className="enterprise-oneone-history-heading">
+          {editingMeeting ? "Edit 1:1" : selectedTemplate.title}
+        </h3>
+        {!editingMeeting && selectedTemplate.description ? (
           <p className="enterprise-muted enterprise-oneone-history-sub">{selectedTemplate.description}</p>
+        ) : null}
+        {editingMeeting ? (
+          <p className="enterprise-muted enterprise-oneone-history-sub">
+            {selectedTemplate.title} · {formatMeetingDate(editingMeeting.createdAt)}
+          </p>
         ) : null}
         {err ? <p className="enterprise-form-error" role="alert">{err}</p> : null}
         <ul className="enterprise-oneone-fill-fields">
@@ -302,7 +388,7 @@ export function OneOnOneHistoryTab({
             Cancel
           </button>
           <button type="button" className="auth-submit enterprise-oneone-fill-save" disabled={saving} onClick={() => void onSave()}>
-            {saving ? "Saving…" : "Save 1:1"}
+            {saving ? "Saving…" : editingMeeting ? "Save changes" : "Save 1:1"}
           </button>
         </div>
       </div>
@@ -353,19 +439,46 @@ export function OneOnOneHistoryTab({
                   <span className="enterprise-oneone-history-item-chevron" aria-hidden>{isOpen ? "▾" : "▸"}</span>
                 </button>
                 {isOpen ? (
-                  <dl className="enterprise-oneone-history-responses">
-                    {fields.map((field) => {
-                      if (field.type === "section") return null;
-                      const answer = meeting.responses[field.id];
-                      if (answer === undefined || answer === "" || answer === 0) return null;
-                      return (
-                        <div key={field.id}>
-                          <dt>{field.label}</dt>
-                          <dd>{String(answer)}</dd>
-                        </div>
-                      );
-                    })}
-                  </dl>
+                  <>
+                    <div className="enterprise-oneone-history-item-actions">
+                      <button type="button" className="enterprise-oneone-history-action-btn" onClick={() => onPrint(meeting)}>
+                        Print / PDF
+                      </button>
+                      {canModify ? (
+                        <>
+                          <button type="button" className="enterprise-oneone-history-action-btn" onClick={() => startEdit(meeting)}>
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            className="enterprise-oneone-history-action-btn enterprise-oneone-history-action-btn--danger"
+                            onClick={() => void onDelete(meeting)}
+                          >
+                            Delete
+                          </button>
+                        </>
+                      ) : null}
+                    </div>
+                    <dl className="enterprise-oneone-history-responses">
+                      {fields.map((field) => {
+                        if (field.type === "section") {
+                          return (
+                            <div key={field.id} className="enterprise-oneone-history-section-label">
+                              <dt>{field.label}</dt>
+                            </div>
+                          );
+                        }
+                        const answer = meeting.responses[field.id];
+                        if (answer === undefined || answer === "" || answer === 0) return null;
+                        return (
+                          <div key={field.id}>
+                            <dt>{field.label}</dt>
+                            <dd>{String(answer)}</dd>
+                          </div>
+                        );
+                      })}
+                    </dl>
+                  </>
                 ) : null}
               </li>
             );

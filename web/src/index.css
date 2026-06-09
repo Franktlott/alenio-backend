@@ -4341,6 +4341,49 @@ input {
   font-size: 0.875rem;
 }
 
+.enterprise-oneone-history-item-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  padding: 0 0.75rem 0.65rem;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.enterprise-oneone-history-action-btn {
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  border-radius: 8px;
+  padding: 0.35rem 0.65rem;
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #334155;
+  cursor: pointer;
+}
+
+.enterprise-oneone-history-action-btn:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+.enterprise-oneone-history-action-btn--danger {
+  color: #b91c1c;
+  border-color: #fecaca;
+}
+
+.enterprise-oneone-history-action-btn--danger:hover {
+  background: #fef2f2;
+}
+
+.enterprise-oneone-history-section-label dt {
+  font-size: 0.8125rem;
+  font-weight: 800;
+  color: #0c4a6e;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-top: 0.35rem;
+}
+
 .enterprise-oneone-history-responses {
   margin: 0;
   padding: 0 0.85rem 0.85rem;

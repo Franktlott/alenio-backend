@@ -163,7 +163,9 @@ export function TeamMemberProfilePanel({
             teamId={teamId}
             memberUserId={member.userId}
             memberName={displayName}
+            managerName={managerName}
             canCreate={canCreateOneOne}
+            canModify={canCreateOneOne}
             createTrigger={oneOneCreateTrigger}
           />
         )}
