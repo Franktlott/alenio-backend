@@ -1,4 +1,9 @@
 import type { OneOnOneMeeting, OneOnOneTemplateField } from "./api";
+import {
+  ASSOCIATE_FEEDBACK_FIELD_ID,
+  ASSOCIATE_FEEDBACK_LABEL,
+  formatAssociateResponseDisplay,
+} from "./one-on-one-feedback";
 
 export type OneOnOnePrintOptions = {
   meeting: OneOnOneMeeting;
@@ -31,6 +36,7 @@ function formatPrintDate(iso: string): string {
 function answerText(responses: Record<string, string | number>, field: OneOnOneTemplateField): string {
   const raw = responses[field.id];
   if (raw === undefined || raw === "" || raw === 0) return "";
+  if (field.type === "associate_notes") return formatAssociateResponseDisplay(raw);
   return String(raw);
 }
 
@@ -66,29 +72,71 @@ function renderQuestion(
   `;
 }
 
+function formatFollowUpDueDate(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  try {
+    return new Date(iso).toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  } catch {
+    return null;
+  }
+}
+
 function renderFollowUpTasksHtml(
   tasks: NonNullable<OneOnOnePrintOptions["meeting"]["followUpTasks"]>,
-  memberUserId: string,
-  memberName: string,
-  managerName: string | null,
 ): string {
   if (!tasks.length) {
-    return `
-      <div class="footer-line"></div>
-      <div class="footer-line"></div>
-    `;
+    return `<div class="footer-task footer-task--empty">No follow up tasks</div>`;
   }
   return tasks
     .map((task) => {
-      const assignee =
-        task.assignee?.id === memberUserId ? memberName : managerName?.trim() || "Leader";
-      return `<div class="footer-line">${escapeHtml(task.title)} · ${escapeHtml(assignee)}</div>`;
+      const dueLabel = formatFollowUpDueDate(task.dueDate);
+      const dueText = dueLabel ? `Due ${dueLabel}` : "No due date";
+      return `<div class="footer-task"><span class="footer-task-title">${escapeHtml(task.title)}</span><span class="footer-task-due">${escapeHtml(dueText)}</span></div>`;
     })
     .join("");
 }
 
+function renderAssociateFeedbackHtml(meeting: OneOnOneMeeting): string {
+  const answer = meeting.responses[ASSOCIATE_FEEDBACK_FIELD_ID];
+  if (answer === undefined || answer === "" || answer === 0) {
+    if (!meeting.associateFeedbackPending) return "";
+    return `
+      <div class="section">
+        <div class="section-head">
+          <span class="section-dot"></span>
+          <span class="section-title">${escapeHtml(ASSOCIATE_FEEDBACK_LABEL.toUpperCase())}</span>
+        </div>
+        <div class="section-body">
+          <div class="question">
+            <div class="question-label">${escapeHtml(ASSOCIATE_FEEDBACK_LABEL)}</div>
+            <div class="answer-line enterprise-muted">Awaiting associate feedback</div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+  return `
+    <div class="section">
+      <div class="section-head">
+        <span class="section-dot"></span>
+        <span class="section-title">${escapeHtml(ASSOCIATE_FEEDBACK_LABEL.toUpperCase())}</span>
+      </div>
+      <div class="section-body">
+        <div class="question">
+          <div class="question-label">${escapeHtml(ASSOCIATE_FEEDBACK_LABEL)}</div>
+          <div class="answer-line">${escapeHtml(formatAssociateResponseDisplay(answer))}</div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 function renderSections(fields: OneOnOneTemplateField[], responses: Record<string, string | number>): string {
-  const sorted = [...fields].sort((a, b) => a.order - b.order);
+  const sorted = [...fields].filter((field) => field.type !== "associate_notes").sort((a, b) => a.order - b.order);
   let html = "";
   let questionNum = 0;
   let sectionOpen = false;
@@ -124,13 +172,8 @@ function buildPrintHtml(options: OneOnOnePrintOptions, logoUrl: string): string 
   const intro =
     introText?.trim() ||
     "This 1:1 template is designed to help managers and team members have meaningful conversations, align on priorities, and support ongoing growth and development.";
-  const sectionsHtml = renderSections(meeting.templateFields, meeting.responses);
-  const followUpTasksHtml = renderFollowUpTasksHtml(
-    meeting.followUpTasks ?? [],
-    meeting.memberUserId,
-    memberName,
-    managerName,
-  );
+  const sectionsHtml = renderSections(meeting.templateFields, meeting.responses) + renderAssociateFeedbackHtml(meeting);
+  const followUpTasksHtml = renderFollowUpTasksHtml(meeting.followUpTasks ?? []);
   const dateStr = formatPrintDate(meeting.createdAt);
   const manager = managerName?.trim() || "—";
   const preparedBy = meeting.createdBy?.name ?? meeting.createdBy?.email ?? "—";
@@ -320,6 +363,35 @@ function buildPrintHtml(options: OneOnOnePrintOptions, logoUrl: string): string 
       border-bottom: 1px solid #cbd5e1;
       min-height: 12px;
       margin-bottom: 4px;
+    }
+    .footer-task {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 8px;
+      border-bottom: 1px solid #cbd5e1;
+      padding: 2px 0 3px;
+      margin-bottom: 4px;
+      font-size: 7.5pt;
+      line-height: 1.3;
+    }
+    .footer-task-title {
+      font-weight: 600;
+      color: #1e293b;
+      flex: 1;
+      min-width: 0;
+    }
+    .footer-task-due {
+      font-size: 7pt;
+      color: #64748b;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .footer-task--empty {
+      justify-content: flex-start;
+      font-style: italic;
+      color: #64748b;
+      font-weight: 500;
     }
     .bottom-bar {
       display: flex;

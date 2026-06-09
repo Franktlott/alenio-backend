@@ -11,6 +11,16 @@ import {
   type OneOnOneFollowUpTaskInput,
 } from "../lib/api";
 import { meetingNumberFor, printOneOnOneMeeting } from "../lib/one-on-one-print";
+import {
+  ASSOCIATE_FEEDBACK_FIELD_ID,
+  ASSOCIATE_FEEDBACK_LABEL,
+  formatAssociateResponseDisplay,
+} from "../lib/one-on-one-feedback";
+import {
+  getOneOnOneMeetingStatusFromMeeting,
+  oneOnOneMeetingStatusClass,
+  oneOnOneMeetingStatusLabel,
+} from "../lib/one-on-one-status";
 
 const FIELD_TYPE_LABELS: Record<string, string> = {
   section: "Section",
@@ -67,10 +77,32 @@ type FollowUpDraft = {
   id: string;
   title: string;
   assigneeRole: "associate" | "leader";
+  dueDate: string;
 };
 
 function newFollowUpDraft(): FollowUpDraft {
-  return { id: crypto.randomUUID(), title: "", assigneeRole: "associate" };
+  return { id: crypto.randomUUID(), title: "", assigneeRole: "associate", dueDate: "" };
+}
+
+function dueDateInputToIso(value: string): string | undefined {
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  const parsed = new Date(`${trimmed}T23:59:59`);
+  if (Number.isNaN(parsed.getTime())) return undefined;
+  return parsed.toISOString();
+}
+
+function formatFollowUpDueDate(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  try {
+    return new Date(iso).toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  } catch {
+    return null;
+  }
 }
 
 function assigneeDisplayName(
@@ -82,6 +114,15 @@ function assigneeDisplayName(
 ): string {
   if (!userId || userId === memberUserId) return memberName;
   return leaderName ?? "Leader";
+}
+
+function MeetingStatusBadge({ meeting }: { meeting: OneOnOneMeeting }) {
+  const status = getOneOnOneMeetingStatusFromMeeting(meeting);
+  return (
+    <span className={oneOnOneMeetingStatusClass(status)} title={oneOnOneMeetingStatusLabel(status)}>
+      {oneOnOneMeetingStatusLabel(status)}
+    </span>
+  );
 }
 
 export function OneOnOneHistoryTab({
@@ -99,12 +140,14 @@ export function OneOnOneHistoryTab({
   const [selectedTemplate, setSelectedTemplate] = useState<OneOnOneTemplate | null>(null);
   const [editingMeeting, setEditingMeeting] = useState<OneOnOneMeeting | null>(null);
   const [responses, setResponses] = useState<Record<string, string | number>>({});
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [previewMeeting, setPreviewMeeting] = useState<OneOnOneMeeting | null>(null);
+  const [menuMeetingId, setMenuMeetingId] = useState<string | null>(null);
   const [loadingMeetings, setLoadingMeetings] = useState(false);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [followUpDrafts, setFollowUpDrafts] = useState<FollowUpDraft[]>([]);
+  const [feedbackPromptOpen, setFeedbackPromptOpen] = useState(false);
 
   const resolveLeaderUserId = (meeting?: OneOnOneMeeting | null) =>
     leaderUserId ?? meeting?.createdById ?? null;
@@ -117,10 +160,14 @@ export function OneOnOneHistoryTab({
         title: draft.title.trim(),
       }))
       .filter((item) => item.title.length > 0)
-      .map(({ draft, title }) => ({
-        title,
-        assigneeUserId: draft.assigneeRole === "associate" ? memberUserId : leaderId ?? memberUserId,
-      }));
+      .map(({ draft, title }) => {
+        const dueDate = dueDateInputToIso(draft.dueDate);
+        return {
+          title,
+          assigneeUserId: draft.assigneeRole === "associate" ? memberUserId : leaderId ?? memberUserId,
+          ...(dueDate ? { dueDate } : {}),
+        };
+      });
   };
 
   const loadMeetings = useCallback(async () => {
@@ -147,7 +194,8 @@ export function OneOnOneHistoryTab({
     setEditingMeeting(null);
     setResponses({});
     setFollowUpDrafts([]);
-    setExpandedId(null);
+    setPreviewMeeting(null);
+    setMenuMeetingId(null);
     setErr(null);
     setTemplates([]);
   }, [memberUserId, teamId]);
@@ -189,7 +237,16 @@ export function OneOnOneHistoryTab({
     setView("fill");
   };
 
+  useEffect(() => {
+    if (!menuMeetingId) return;
+    const closeMenu = () => setMenuMeetingId(null);
+    document.addEventListener("click", closeMenu);
+    return () => document.removeEventListener("click", closeMenu);
+  }, [menuMeetingId]);
+
   const startEdit = (meeting: OneOnOneMeeting) => {
+    setPreviewMeeting(null);
+    setMenuMeetingId(null);
     setEditingMeeting(meeting);
     setSelectedTemplate(meetingToFillTemplate(meeting));
     setResponses({ ...meeting.responses });
@@ -205,7 +262,7 @@ export function OneOnOneHistoryTab({
   const normalizeResponses = (fields: OneOnOneTemplateField[]) => {
     const normalized: Record<string, string | number> = {};
     for (const field of fields) {
-      if (field.type === "section") continue;
+      if (field.type === "section" || field.type === "associate_notes") continue;
       const raw = responses[field.id];
       if (field.type === "rating") {
         normalized[field.id] = typeof raw === "number" ? raw : Number(raw) || 0;
@@ -216,20 +273,21 @@ export function OneOnOneHistoryTab({
     return normalized;
   };
 
-  const onSave = async () => {
+  const performSave = async (requestAssociateFeedback: boolean) => {
     if (!selectedTemplate) return;
+    setFeedbackPromptOpen(false);
     setSaving(true);
     setErr(null);
     try {
       const normalized = normalizeResponses(selectedTemplate.fields);
       const followUpTasks = buildFollowUpPayload(editingMeeting);
+      const payload = { responses: normalized, followUpTasks, requestAssociateFeedback };
       if (editingMeeting) {
-        await updateOneOnOneMeeting(teamId, memberUserId, editingMeeting.id, { responses: normalized, followUpTasks });
+        await updateOneOnOneMeeting(teamId, memberUserId, editingMeeting.id, payload);
       } else {
         await createOneOnOneMeeting(teamId, memberUserId, {
           templateId: selectedTemplate.id,
-          responses: normalized,
-          followUpTasks,
+          ...payload,
         });
       }
       await loadMeetings();
@@ -245,6 +303,57 @@ export function OneOnOneHistoryTab({
     }
   };
 
+  const onSaveClick = () => {
+    if (!selectedTemplate || saving) return;
+    setFeedbackPromptOpen(true);
+  };
+
+  const renderFeedbackPromptModal = () => {
+    if (!feedbackPromptOpen) return null;
+    return (
+      <div
+        className="enterprise-modal-backdrop enterprise-oneone-feedback-prompt-backdrop"
+        role="presentation"
+        onClick={() => setFeedbackPromptOpen(false)}
+      >
+        <div
+          className="enterprise-modal-sheet enterprise-oneone-feedback-prompt-modal"
+          role="dialog"
+          aria-labelledby="oneone-feedback-prompt-title"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <h2 id="oneone-feedback-prompt-title" className="enterprise-oneone-feedback-prompt-title">
+            Request feedback?
+          </h2>
+          <p className="enterprise-oneone-feedback-prompt-copy">
+            Request feedback and commitments from <strong>{memberName}</strong>?
+          </p>
+          <p className="enterprise-muted enterprise-oneone-feedback-prompt-sub">
+            If yes, they&apos;ll receive a task to share their notes or select &ldquo;No feedback entered&rdquo;.
+          </p>
+          <div className="enterprise-oneone-feedback-prompt-actions">
+            <button
+              type="button"
+              className="enterprise-profile-cancel-btn"
+              disabled={saving}
+              onClick={() => void performSave(false)}
+            >
+              No
+            </button>
+            <button
+              type="button"
+              className="enterprise-oneone-templates-primary-btn"
+              disabled={saving}
+              onClick={() => void performSave(true)}
+            >
+              {saving ? "Saving…" : "Yes"}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const onDelete = async (meeting: OneOnOneMeeting) => {
     if (!window.confirm(`Delete this 1:1 from ${formatMeetingDate(meeting.createdAt)}? This cannot be undone.`)) {
       return;
@@ -252,7 +361,8 @@ export function OneOnOneHistoryTab({
     setErr(null);
     try {
       await deleteOneOnOneMeeting(teamId, memberUserId, meeting.id);
-      if (expandedId === meeting.id) setExpandedId(null);
+      if (previewMeeting?.id === meeting.id) setPreviewMeeting(null);
+      if (menuMeetingId === meeting.id) setMenuMeetingId(null);
       if (editingMeeting?.id === meeting.id) {
         setEditingMeeting(null);
         setSelectedTemplate(null);
@@ -279,8 +389,7 @@ export function OneOnOneHistoryTab({
 
   const renderFieldInput = (field: OneOnOneTemplateField) => {
     const value = responses[field.id] ?? "";
-    const isLong =
-      field.type === "long_text" || field.type === "manager_notes" || field.type === "associate_notes";
+    const isLong = field.type === "long_text" || field.type === "manager_notes";
 
     if (field.type === "rating") {
       const max = field.ratingMax ?? 5;
@@ -353,18 +462,113 @@ export function OneOnOneHistoryTab({
     <div className="enterprise-oneone-followup-list">
       <h4 className="enterprise-oneone-followup-list-title">Follow-up tasks</h4>
       <ul className="enterprise-oneone-followup-items">
-        {tasks.map((task) => (
-          <li key={task.id} className="enterprise-oneone-followup-item">
-            <span className="enterprise-oneone-followup-item-title">{task.title}</span>
-            <span className="enterprise-oneone-followup-item-meta">
-              Assigned to {assigneeDisplayName(task.assignee?.id, memberUserId, memberName, leaderUserId, managerName)}
-              {task.status !== "todo" ? ` · ${task.status.replace("_", " ")}` : ""}
-            </span>
-          </li>
-        ))}
+        {tasks.map((task) => {
+          const dueLabel = formatFollowUpDueDate(task.dueDate);
+          return (
+            <li key={task.id} className="enterprise-oneone-followup-item">
+              <span className="enterprise-oneone-followup-item-title">{task.title}</span>
+              <span className="enterprise-oneone-followup-item-meta">
+                Assigned to {assigneeDisplayName(task.assignee?.id, memberUserId, memberName, leaderUserId, managerName)}
+                {dueLabel ? ` · Due ${dueLabel}` : ""}
+                {task.status !== "todo" ? ` · ${task.status.replace("_", " ")}` : ""}
+              </span>
+            </li>
+          );
+        })}
       </ul>
     </div>
   );
+
+  const renderMeetingPreviewBody = (meeting: OneOnOneMeeting) => {
+    const fields = [...meeting.templateFields].sort((a, b) => a.order - b.order);
+    return (
+      <>
+        <dl className="enterprise-oneone-preview-responses">
+          {fields.map((field) => {
+            if (field.type === "section") {
+              return (
+                <div key={field.id} className="enterprise-oneone-history-section-label">
+                  <dt>{field.label}</dt>
+                </div>
+              );
+            }
+            if (field.type === "associate_notes") return null;
+            const answer = meeting.responses[field.id];
+            if (answer === undefined || answer === "" || answer === 0) return null;
+            return (
+              <div key={field.id} className="enterprise-oneone-history-response">
+                <dt>{field.label}</dt>
+                <dd>{formatAssociateResponseDisplay(answer)}</dd>
+              </div>
+            );
+          })}
+          {(() => {
+            const answer = meeting.responses[ASSOCIATE_FEEDBACK_FIELD_ID];
+            if (answer !== undefined && answer !== "" && answer !== 0) {
+              return (
+                <div className="enterprise-oneone-history-response">
+                  <dt>{ASSOCIATE_FEEDBACK_LABEL}</dt>
+                  <dd>{formatAssociateResponseDisplay(answer)}</dd>
+                </div>
+              );
+            }
+            if (meeting.associateFeedbackPending) {
+              return (
+                <div className="enterprise-oneone-history-response">
+                  <dt>{ASSOCIATE_FEEDBACK_LABEL}</dt>
+                  <dd className="enterprise-muted">Awaiting associate feedback</dd>
+                </div>
+              );
+            }
+            return null;
+          })()}
+        </dl>
+        {meeting.followUpTasks?.length ? renderFollowUpTaskList(meeting.followUpTasks) : null}
+      </>
+    );
+  };
+
+  const renderMeetingPreviewModal = () => {
+    if (!previewMeeting) return null;
+    const meetingNum = meetingNumberFor(meetings, previewMeeting.id);
+    return (
+      <div
+        className="enterprise-modal-backdrop enterprise-oneone-preview-backdrop"
+        role="presentation"
+        onClick={() => setPreviewMeeting(null)}
+      >
+        <div
+          className="enterprise-modal-sheet enterprise-oneone-preview-modal"
+          role="dialog"
+          aria-label={`${previewMeeting.templateTitle} 1:1`}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <header className="enterprise-oneone-preview-header">
+            <div className="enterprise-oneone-preview-header-text">
+              <p className="enterprise-oneone-templates-kicker">1:1 Meeting</p>
+              <h2 className="enterprise-oneone-preview-title">{previewMeeting.templateTitle}</h2>
+              <p className="enterprise-oneone-preview-meta">
+                {formatMeetingDate(previewMeeting.createdAt)} · Meeting #{meetingNum}
+                {managerName ? ` · Manager: ${managerName}` : ""}
+              </p>
+              <div className="enterprise-oneone-preview-status">
+                <MeetingStatusBadge meeting={previewMeeting} />
+              </div>
+            </div>
+            <button
+              type="button"
+              className="enterprise-oneone-templates-close"
+              aria-label="Close preview"
+              onClick={() => setPreviewMeeting(null)}
+            >
+              ×
+            </button>
+          </header>
+          <div className="enterprise-oneone-preview-body">{renderMeetingPreviewBody(previewMeeting)}</div>
+        </div>
+      </div>
+    );
+  };
 
   if (view === "pick") {
     return (
@@ -453,7 +657,7 @@ export function OneOnOneHistoryTab({
         {err ? <p className="enterprise-form-error" role="alert">{err}</p> : null}
         <ul className="enterprise-oneone-fill-fields">
           {sortedFields.map((field) =>
-            field.type === "section" ? (
+            field.type === "associate_notes" ? null : field.type === "section" ? (
               <li key={field.id} className="enterprise-oneone-fill-section">
                 <h4>{field.label}</h4>
               </li>
@@ -508,6 +712,13 @@ export function OneOnOneHistoryTab({
                     <option value="associate">Associate · {memberName}</option>
                     <option value="leader">Leader · {leaderLabel}</option>
                   </select>
+                  <input
+                    type="date"
+                    className="auth-input enterprise-oneone-followup-date"
+                    value={draft.dueDate}
+                    onChange={(e) => updateFollowUpDraft(draft.id, { dueDate: e.target.value })}
+                    aria-label="Follow-up task due date"
+                  />
                   <button
                     type="button"
                     className="enterprise-oneone-templates-table-action enterprise-oneone-templates-table-action--danger"
@@ -530,11 +741,12 @@ export function OneOnOneHistoryTab({
             type="button"
             className="enterprise-oneone-templates-primary-btn enterprise-oneone-fill-save"
             disabled={saving}
-            onClick={() => void onSave()}
+            onClick={onSaveClick}
           >
             {saving ? "Saving…" : editingMeeting ? "Save changes" : "Save 1:1"}
           </button>
         </div>
+        {renderFeedbackPromptModal()}
       </div>
     );
   }
@@ -579,37 +791,52 @@ export function OneOnOneHistoryTab({
         <div className="enterprise-oneone-history-table-wrap">
           <div className="enterprise-oneone-history-table-head" aria-hidden>
             <span>Meeting</span>
-            <span>Date</span>
-            <span />
+            <span className="enterprise-oneone-history-table-actions-col">Actions</span>
           </div>
           <ul className="enterprise-oneone-history-list">
-            {meetings.map((meeting) => {
-              const isOpen = expandedId === meeting.id;
-              const fields = [...meeting.templateFields].sort((a, b) => a.order - b.order);
-              return (
-                <li
-                  key={meeting.id}
-                  className={`enterprise-oneone-history-item${isOpen ? " enterprise-oneone-history-item--open" : ""}`}
-                >
-                  <div className="enterprise-oneone-history-item-head-row">
+            {meetings.map((meeting) => (
+              <li
+                key={meeting.id}
+                className={`enterprise-oneone-history-item${
+                  menuMeetingId === meeting.id ? " enterprise-oneone-history-item--menu-open" : ""
+                }`}
+              >
+                <div className="enterprise-oneone-history-row">
+                  <button
+                    type="button"
+                    className="enterprise-oneone-history-row-main"
+                    onClick={() => {
+                      setMenuMeetingId(null);
+                      setPreviewMeeting(meeting);
+                    }}
+                  >
+                    <span className="enterprise-oneone-history-item-title">{meeting.templateTitle}</span>
+                    <span className="enterprise-oneone-history-item-date">{formatMeetingDate(meeting.createdAt)}</span>
+                    <MeetingStatusBadge meeting={meeting} />
+                  </button>
+                  <div className="enterprise-oneone-history-row-menu-wrap">
                     <button
                       type="button"
-                      className="enterprise-oneone-history-item-head"
-                      onClick={() => setExpandedId(isOpen ? null : meeting.id)}
-                      aria-expanded={isOpen}
+                      className="enterprise-oneone-history-row-menu-btn"
+                      aria-label={`Actions for ${meeting.templateTitle}`}
+                      aria-expanded={menuMeetingId === meeting.id}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setMenuMeetingId((current) => (current === meeting.id ? null : meeting.id));
+                      }}
                     >
-                      <span className="enterprise-oneone-history-item-title">{meeting.templateTitle}</span>
-                      <span className="enterprise-oneone-history-item-date">{formatMeetingDate(meeting.createdAt)}</span>
-                      <span className="enterprise-oneone-history-item-chevron" aria-hidden>{isOpen ? "▾" : "▸"}</span>
+                      Actions ▾
                     </button>
-                  </div>
-                  {isOpen ? (
-                    <div className="enterprise-oneone-history-item-detail">
-                      <div className="enterprise-oneone-history-item-actions">
+                    {menuMeetingId === meeting.id ? (
+                      <div className="enterprise-oneone-history-row-menu" role="menu">
                         <button
                           type="button"
-                          className="enterprise-oneone-templates-table-action"
-                          onClick={() => onPrint(meeting)}
+                          role="menuitem"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setMenuMeetingId(null);
+                            onPrint(meeting);
+                          }}
                         >
                           Print / PDF
                         </button>
@@ -617,49 +844,38 @@ export function OneOnOneHistoryTab({
                           <>
                             <button
                               type="button"
-                              className="enterprise-oneone-templates-table-action"
-                              onClick={() => startEdit(meeting)}
+                              role="menuitem"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                startEdit(meeting);
+                              }}
                             >
                               Edit
                             </button>
                             <button
                               type="button"
-                              className="enterprise-oneone-templates-table-action enterprise-oneone-templates-table-action--danger"
-                              onClick={() => void onDelete(meeting)}
+                              role="menuitem"
+                              className="enterprise-oneone-history-row-menu-danger"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setMenuMeetingId(null);
+                                void onDelete(meeting);
+                              }}
                             >
                               Delete
                             </button>
                           </>
                         ) : null}
                       </div>
-                      <dl className="enterprise-oneone-history-responses">
-                        {fields.map((field) => {
-                          if (field.type === "section") {
-                            return (
-                              <div key={field.id} className="enterprise-oneone-history-section-label">
-                                <dt>{field.label}</dt>
-                              </div>
-                            );
-                          }
-                          const answer = meeting.responses[field.id];
-                          if (answer === undefined || answer === "" || answer === 0) return null;
-                          return (
-                            <div key={field.id} className="enterprise-oneone-history-response">
-                              <dt>{field.label}</dt>
-                              <dd>{String(answer)}</dd>
-                            </div>
-                          );
-                        })}
-                      </dl>
-                      {meeting.followUpTasks?.length ? renderFollowUpTaskList(meeting.followUpTasks) : null}
-                    </div>
-                  ) : null}
-                </li>
-              );
-            })}
+                    ) : null}
+                  </div>
+                </div>
+              </li>
+            ))}
           </ul>
         </div>
       ) : null}
+      {renderMeetingPreviewModal()}
     </div>
   );
 }

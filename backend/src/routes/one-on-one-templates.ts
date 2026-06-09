@@ -31,6 +31,7 @@ const fieldSchema = z.object({
   required: z.boolean().optional(),
   ratingMax: z.number().int().min(2).max(10).optional(),
   helpText: z.string().max(500).optional().nullable(),
+  associateRequest: z.enum(["task", "message"]).optional().nullable(),
 });
 
 async function getMembership(

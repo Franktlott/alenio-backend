@@ -126,6 +126,7 @@ export type WebTeamRow = {
   image?: string | null;
   createdAt: string;
   role: string;
+  inviteCode?: string | null;
   _count: { members: number; tasks: number };
   /** Team plan (tasks, activity, execute) — from GET /web/api/teams; absent on older clients means unknown. */
   hasTeamFeatures?: boolean;
@@ -957,6 +958,8 @@ export type OneOnOneTemplateFieldType =
   | "manager_notes"
   | "associate_notes";
 
+export type AssociateRequestMode = "task" | "message";
+
 export type OneOnOneTemplateField = {
   id: string;
   label: string;
@@ -965,6 +968,17 @@ export type OneOnOneTemplateField = {
   required?: boolean;
   ratingMax?: number;
   helpText?: string | null;
+  associateRequest?: AssociateRequestMode | null;
+};
+
+export type OneOnOneAssociateFeedbackContext = {
+  fieldId: string;
+  fieldLabel: string;
+  helpText: string | null;
+  meetingTitle: string;
+  currentResponse: string;
+  submitted: boolean;
+  associateRequest: AssociateRequestMode | null;
 };
 
 export type OneOnOneTemplate = {
@@ -1079,6 +1093,7 @@ export type OneOnOneMeeting = {
   createdAt: string;
   createdBy?: { id: string; name: string; email: string; image: string | null };
   followUpTasks?: OneOnOneFollowUpTask[];
+  associateFeedbackPending?: boolean;
 };
 
 export function fetchOneOnOneMeetings(teamId: string, memberUserId: string) {
@@ -1093,6 +1108,7 @@ export function createOneOnOneMeeting(
     templateId: string;
     responses: Record<string, string | number>;
     followUpTasks?: OneOnOneFollowUpTaskInput[];
+    requestAssociateFeedback?: boolean;
   },
 ) {
   const paths = oneOnOneMeetingsPaths(teamId, memberUserId);
@@ -1120,6 +1136,7 @@ export function updateOneOnOneMeeting(
   input: {
     responses: Record<string, string | number>;
     followUpTasks?: OneOnOneFollowUpTaskInput[];
+    requestAssociateFeedback?: boolean;
   },
 ) {
   const paths = oneOnOneMeetingPaths(teamId, memberUserId, meetingId);
@@ -1132,4 +1149,36 @@ export function updateOneOnOneMeeting(
 export function deleteOneOnOneMeeting(teamId: string, memberUserId: string, meetingId: string) {
   const paths = oneOnOneMeetingPaths(teamId, memberUserId, meetingId);
   return oneOnOneRequest<{ data: { deleted: boolean } }>(paths, { method: "DELETE" });
+}
+
+function oneOnOneAssociateFeedbackPaths(teamId: string, memberUserId: string, meetingId: string, fieldId?: string) {
+  const base = oneOnOneMeetingPaths(teamId, memberUserId, meetingId);
+  const suffix = fieldId ? `/associate-feedback/${encodeURIComponent(fieldId)}` : "/associate-feedback";
+  return {
+    api: `${base.api}${suffix}`,
+    web: `${base.web}${suffix}`,
+  };
+}
+
+export function fetchOneOnOneAssociateFeedbackContext(
+  teamId: string,
+  memberUserId: string,
+  meetingId: string,
+  fieldId: string,
+) {
+  const paths = oneOnOneAssociateFeedbackPaths(teamId, memberUserId, meetingId, fieldId);
+  return oneOnOneRequest<{ data: OneOnOneAssociateFeedbackContext }>(paths).then((r) => r.data);
+}
+
+export function submitOneOnOneAssociateFeedback(
+  teamId: string,
+  memberUserId: string,
+  meetingId: string,
+  input: { fieldId: string; response: string },
+) {
+  const paths = oneOnOneAssociateFeedbackPaths(teamId, memberUserId, meetingId);
+  return oneOnOneRequest<{ data: OneOnOneMeeting }>(paths, {
+    method: "POST",
+    body: JSON.stringify(input),
+  }).then((r) => r.data);
 }

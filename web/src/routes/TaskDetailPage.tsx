@@ -2,7 +2,9 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { DashboardTopBar } from "../components/DashboardTopBar";
 import { EnterpriseLayout } from "../components/EnterpriseLayout";
+import { OneOnOneAssociateFeedbackForm } from "../components/OneOnOneAssociateFeedbackForm";
 import {
+  fetchOneOnOneAssociateFeedbackContext,
   fetchWebMe,
   fetchCoreTeamTasks,
   fetchWebTaskDetail,
@@ -11,9 +13,11 @@ import {
   fetchWebTeamTasks,
   type ApiTask,
   type ApiTaskDetail,
+  type OneOnOneAssociateFeedbackContext,
   type WebMeUser,
   type WebTeamRow,
 } from "../lib/api";
+import { parseFeedbackTaskDescription } from "../lib/one-on-one-feedback";
 
 function formatWhen(iso: string | null): string {
   if (!iso) return "—";
@@ -75,6 +79,7 @@ export function TaskDetailPage() {
   const [task, setTask] = useState<ApiTaskDetail | null>(null);
   const [workspaceId, setWorkspaceId] = useState("");
   const [err, setErr] = useState<string | null>(null);
+  const [feedbackContext, setFeedbackContext] = useState<OneOnOneAssociateFeedbackContext | null>(null);
 
   useEffect(() => {
     if (!taskId) {
@@ -155,6 +160,45 @@ export function TaskDetailPage() {
       cancelled = true;
     };
   }, [taskId, teamIdFromQuery]);
+
+  const feedbackMeta = task?.description ? parseFeedbackTaskDescription(task.description) : null;
+  const isFeedbackAssignee =
+    !!me?.id &&
+    !!feedbackMeta &&
+    task?.assignments.some((assignment) => assignment.user.id === me.id) === true;
+
+  useEffect(() => {
+    if (!feedbackMeta || !isFeedbackAssignee || task?.status === "done") {
+      setFeedbackContext(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const context = await fetchOneOnOneAssociateFeedbackContext(
+          feedbackMeta.teamId,
+          feedbackMeta.memberUserId,
+          feedbackMeta.meetingId,
+          feedbackMeta.fieldId,
+        );
+        if (cancelled) return;
+        setFeedbackContext(context.submitted ? null : context);
+      } catch {
+        if (cancelled) return;
+        setFeedbackContext(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    feedbackMeta?.teamId,
+    feedbackMeta?.memberUserId,
+    feedbackMeta?.meetingId,
+    feedbackMeta?.fieldId,
+    isFeedbackAssignee,
+    task?.status,
+  ]);
 
   const handleWorkspaceChange = (id: string) => {
     setWorkspaceId(id);
@@ -264,7 +308,23 @@ export function TaskDetailPage() {
             <dd>{task.creator.name ?? task.creator.email ?? task.creator.id}</dd>
           </dl>
 
-          {task.description ? (
+          {feedbackContext && feedbackMeta ? (
+            <section className="task-detail-section enterprise-oneone-feedback-task-section">
+              <h2 className="task-detail-section-title">1:1 feedback</h2>
+              <OneOnOneAssociateFeedbackForm
+                teamId={feedbackMeta.teamId}
+                memberUserId={feedbackMeta.memberUserId}
+                meetingId={feedbackMeta.meetingId}
+                context={feedbackContext}
+                onSubmitted={() => {
+                  setFeedbackContext(null);
+                  void fetchWebTaskDetail(taskId, workspaceId || undefined).then(setTask).catch(() => undefined);
+                }}
+              />
+            </section>
+          ) : null}
+
+          {task.description && !feedbackMeta ? (
             <section className="task-detail-section">
               <h2 className="task-detail-section-title">Description</h2>
               <p className="task-detail-description">{task.description}</p>

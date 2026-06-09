@@ -5,6 +5,15 @@ import { prisma } from "../prisma";
 import { auth } from "../auth";
 import { authGuard } from "../middleware/auth-guard";
 import { prismaRouteError, isPrismaSchemaMissingError } from "../lib/prisma-errors";
+import { sendPushToUsers } from "../lib/push";
+import {
+  ASSOCIATE_FEEDBACK_FIELD_ID,
+  ASSOCIATE_FEEDBACK_LABEL,
+  encodeFeedbackTaskDescription,
+  isAssociateRequestedField,
+  NO_FEEDBACK_VALUE,
+  type OneOnOneTemplateFieldLike,
+} from "../lib/one-on-one-feedback";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -14,14 +23,15 @@ type Variables = {
 const oneOnOneMeetingsRouter = new Hono<{ Variables: Variables }>();
 oneOnOneMeetingsRouter.use("*", authGuard);
 
-type TemplateField = {
-  id: string;
-  label: string;
-  type: string;
+type TemplateField = OneOnOneTemplateFieldLike & {
   order: number;
-  required?: boolean;
   ratingMax?: number;
 };
+
+const associateFeedbackSchema = z.object({
+  fieldId: z.string().min(1),
+  response: z.string().max(10000),
+});
 
 const followUpTaskSchema = z.object({
   title: z.string().trim().min(1).max(500),
@@ -34,11 +44,13 @@ const createMeetingSchema = z.object({
   templateId: z.string().min(1),
   responses: z.record(z.string(), z.union([z.string(), z.number()])),
   followUpTasks: z.array(followUpTaskSchema).optional(),
+  requestAssociateFeedback: z.boolean().optional(),
 });
 
 const updateMeetingSchema = z.object({
   responses: z.record(z.string(), z.union([z.string(), z.number()])),
   followUpTasks: z.array(followUpTaskSchema).optional(),
+  requestAssociateFeedback: z.boolean().optional(),
 });
 
 const meetingInclude = {
@@ -180,15 +192,21 @@ async function serializeMeetingWithTasks(meeting: {
   createdBy?: { id: string; name: string; email: string; image: string | null };
 }) {
   const followUpTasks = await loadFollowUpTasks(meeting.id);
+  const responses = parseResponses(meeting.responses);
+  const associateFeedbackPending =
+    !associateFeedbackAnswered(responses) &&
+    (await feedbackRequestAlreadySent(meeting.id, ASSOCIATE_FEEDBACK_FIELD_ID));
   return {
     ...serializeMeeting(meeting),
     followUpTasks,
+    associateFeedbackPending,
   };
 }
 
 function validateResponses(fields: TemplateField[], responses: Record<string, string | number>) {
   for (const field of fields) {
-    if (field.type === "section") continue;
+    if (field.type === "section" || field.type === "associate_notes") continue;
+    if (isAssociateRequestedField(field)) continue;
     const value = responses[field.id];
     if (field.required) {
       if (field.type === "rating") {
@@ -246,6 +264,103 @@ async function validateFollowUpAssignees(
     }
   }
   return null;
+}
+
+async function feedbackRequestAlreadySent(meetingId: string, fieldId: string) {
+  const tasks = await prisma.task.findMany({
+    where: { oneOnOneMeetingId: meetingId },
+    select: { description: true },
+  });
+  return tasks.some((task) => task.description?.includes(`"fieldId":"${fieldId}"`));
+}
+
+async function completeFeedbackTasks(meetingId: string, fieldId: string) {
+  const tasks = await prisma.task.findMany({
+    where: { oneOnOneMeetingId: meetingId, status: { not: "done" } },
+    select: { id: true, description: true },
+  });
+  const toComplete = tasks.filter((task) => task.description?.includes(`"fieldId":"${fieldId}"`));
+  if (toComplete.length === 0) return;
+  await prisma.task.updateMany({
+    where: { id: { in: toComplete.map((task) => task.id) } },
+    data: { status: "done", completedAt: new Date() },
+  });
+}
+
+function associateFeedbackAnswered(responses: Record<string, string | number>): boolean {
+  const answer = responses[ASSOCIATE_FEEDBACK_FIELD_ID];
+  if (answer === undefined) return false;
+  if (String(answer) === NO_FEEDBACK_VALUE) return true;
+  return String(answer).trim() !== "";
+}
+
+async function createMeetingAssociateFeedbackRequest(
+  meeting: {
+    id: string;
+    teamId: string;
+    memberUserId: string;
+    templateTitle: string;
+  },
+  requestAssociateFeedback: boolean,
+  responses: Record<string, string | number>,
+  creatorId: string,
+  managerName: string,
+) {
+  if (!requestAssociateFeedback) return;
+  if (associateFeedbackAnswered(responses)) return;
+  if (await feedbackRequestAlreadySent(meeting.id, ASSOCIATE_FEEDBACK_FIELD_ID)) return;
+
+  const meta = {
+    meetingId: meeting.id,
+    fieldId: ASSOCIATE_FEEDBACK_FIELD_ID,
+    teamId: meeting.teamId,
+    memberUserId: meeting.memberUserId,
+    fieldLabel: ASSOCIATE_FEEDBACK_LABEL,
+  };
+
+  const description = encodeFeedbackTaskDescription(meta);
+  const task = await prisma.task.create({
+    data: {
+      title: `1:1 feedback: ${meeting.templateTitle}`,
+      description,
+      priority: "medium",
+      status: "todo",
+      teamId: meeting.teamId,
+      creatorId,
+      oneOnOneMeetingId: meeting.id,
+      assignments: { create: [{ userId: meeting.memberUserId }] },
+    },
+  });
+
+  if (meeting.memberUserId !== creatorId) {
+    await sendPushToUsers(
+      [meeting.memberUserId],
+      "1:1 feedback requested",
+      `${managerName} asked you to share feedback for ${meeting.templateTitle}`,
+      { taskId: task.id, teamId: meeting.teamId, type: "oneone_feedback" },
+      "notifTaskAssigned",
+      meeting.teamId,
+    );
+  }
+}
+
+function resolveFeedbackField(fieldId: string, fields: TemplateField[]) {
+  if (fieldId === ASSOCIATE_FEEDBACK_FIELD_ID) {
+    return {
+      id: ASSOCIATE_FEEDBACK_FIELD_ID,
+      label: ASSOCIATE_FEEDBACK_LABEL,
+      helpText: null,
+      associateRequest: "task" as const,
+    };
+  }
+  const field = fields.find((f) => f.id === fieldId);
+  if (!field || !isAssociateRequestedField(field)) return null;
+  return {
+    id: field.id,
+    label: field.label,
+    helpText: field.helpText ?? null,
+    associateRequest: field.associateRequest ?? null,
+  };
 }
 
 async function createFollowUpTasks(
@@ -419,6 +534,15 @@ oneOnOneMeetingsRouter.post(
         return created;
       });
 
+      const managerName = user.name?.trim() || user.email || "Your manager";
+      await createMeetingAssociateFeedbackRequest(
+        meeting,
+        body.requestAssociateFeedback === true,
+        body.responses,
+        user.id,
+        managerName,
+      );
+
       return c.json({ data: await serializeMeetingWithTasks(meeting) }, 201);
     } catch (err) {
       return prismaRouteError(c, err, "[one-on-one-meetings] POST failed");
@@ -480,6 +604,15 @@ oneOnOneMeetingsRouter.patch(
         await createFollowUpTasks(meetingId, teamId, user.id, followUpTasks);
       }
 
+      const managerName = user.name?.trim() || user.email || "Your manager";
+      await createMeetingAssociateFeedbackRequest(
+        { id: meetingId, teamId, memberUserId, templateTitle: existing.templateTitle },
+        body.requestAssociateFeedback === true,
+        body.responses,
+        user.id,
+        managerName,
+      );
+
       const meeting = await prisma.oneOnOneMeeting.findUnique({
         where: { id: meetingId },
         include: meetingInclude,
@@ -491,6 +624,117 @@ oneOnOneMeetingsRouter.patch(
     } catch (err) {
       return prismaRouteError(c, err, "[one-on-one-meetings] PATCH failed");
     }
+  },
+);
+
+// GET /api/teams/:teamId/members/:memberUserId/one-on-ones/:meetingId/associate-feedback/:fieldId
+oneOnOneMeetingsRouter.get("/:memberUserId/one-on-ones/:meetingId/associate-feedback/:fieldId", async (c) => {
+  const user = c.get("user")!;
+  const teamId = c.req.param("teamId") as string;
+  const memberUserId = c.req.param("memberUserId") as string;
+  const meetingId = c.req.param("meetingId") as string;
+  const fieldId = c.req.param("fieldId") as string;
+
+  const membership = await getMembership(c, teamId);
+  if (!membership) {
+    return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
+  }
+
+  if (user.id !== memberUserId) {
+    return c.json({ error: { message: "Only the associate can submit this feedback", code: "FORBIDDEN" } }, 403);
+  }
+
+  const meeting = await prisma.oneOnOneMeeting.findFirst({
+    where: { id: meetingId, teamId, memberUserId },
+  });
+  if (!meeting) {
+    return c.json({ error: { message: "1:1 not found", code: "NOT_FOUND" } }, 404);
+  }
+
+  const fields = parseJsonArray(meeting.templateFields) as TemplateField[];
+  const field = resolveFeedbackField(fieldId, fields);
+  if (!field) {
+    return c.json({ error: { message: "Feedback field not found", code: "NOT_FOUND" } }, 404);
+  }
+
+  const responses = parseResponses(meeting.responses);
+  const currentResponse = responses[fieldId];
+  const submitted =
+    currentResponse !== undefined &&
+    (String(currentResponse) === NO_FEEDBACK_VALUE || String(currentResponse).trim() !== "");
+
+  return c.json({
+    data: {
+      fieldId: field.id,
+      fieldLabel: field.label,
+      helpText: field.helpText,
+      meetingTitle: meeting.templateTitle,
+      currentResponse: submitted ? String(currentResponse) : "",
+      submitted,
+      associateRequest: field.associateRequest,
+    },
+  });
+});
+
+// POST /api/teams/:teamId/members/:memberUserId/one-on-ones/:meetingId/associate-feedback
+oneOnOneMeetingsRouter.post(
+  "/:memberUserId/one-on-ones/:meetingId/associate-feedback",
+  zValidator("json", associateFeedbackSchema),
+  async (c) => {
+    const user = c.get("user")!;
+    const teamId = c.req.param("teamId") as string;
+    const memberUserId = c.req.param("memberUserId") as string;
+    const meetingId = c.req.param("meetingId") as string;
+    const body = c.req.valid("json");
+
+    const membership = await getMembership(c, teamId);
+    if (!membership) {
+      return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
+    }
+
+    if (user.id !== memberUserId) {
+      return c.json({ error: { message: "Only the associate can submit this feedback", code: "FORBIDDEN" } }, 403);
+    }
+
+    const meeting = await prisma.oneOnOneMeeting.findFirst({
+      where: { id: meetingId, teamId, memberUserId },
+    });
+    if (!meeting) {
+      return c.json({ error: { message: "1:1 not found", code: "NOT_FOUND" } }, 404);
+    }
+
+    const fields = parseJsonArray(meeting.templateFields) as TemplateField[];
+    const field = resolveFeedbackField(body.fieldId, fields);
+    if (!field) {
+      return c.json({ error: { message: "Feedback field not found", code: "NOT_FOUND" } }, 404);
+    }
+
+    const trimmed = body.response.trim();
+    if (trimmed !== NO_FEEDBACK_VALUE && trimmed.length === 0) {
+      return c.json(
+        { error: { message: "Enter feedback or choose no feedback entered.", code: "VALIDATION_ERROR" } },
+        400,
+      );
+    }
+
+    const responses = parseResponses(meeting.responses);
+    responses[body.fieldId] = trimmed === NO_FEEDBACK_VALUE ? NO_FEEDBACK_VALUE : trimmed;
+
+    await prisma.oneOnOneMeeting.update({
+      where: { id: meetingId },
+      data: { responses: JSON.stringify(responses) },
+    });
+    await completeFeedbackTasks(meetingId, body.fieldId);
+
+    const updated = await prisma.oneOnOneMeeting.findUnique({
+      where: { id: meetingId },
+      include: meetingInclude,
+    });
+    if (!updated) {
+      return c.json({ error: { message: "1:1 not found", code: "NOT_FOUND" } }, 404);
+    }
+
+    return c.json({ data: await serializeMeetingWithTasks(updated) });
   },
 );
 

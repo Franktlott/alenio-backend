@@ -77,6 +77,7 @@ export function ProfileTeamsSection({ teams, selectedTeamId, onSelectWorkspace, 
   const [joinOpen, setJoinOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [joinInfo, setJoinInfo] = useState<string | null>(null);
+  const [copiedTeamId, setCopiedTeamId] = useState<string | null>(null);
 
   const closeDeleteModal = () => {
     setDeleteTarget(null);
@@ -127,6 +128,16 @@ export function ProfileTeamsSection({ teams, selectedTeamId, onSelectWorkspace, 
     const t = window.setInterval(() => void loadPending(), 20_000);
     return () => clearInterval(t);
   }, [loadPending]);
+
+  const copyInviteCode = async (teamId: string, code: string) => {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopiedTeamId(teamId);
+      window.setTimeout(() => setCopiedTeamId((current) => (current === teamId ? null : current)), 2000);
+    } catch {
+      setSectionErr("Could not copy invite code.");
+    }
+  };
 
   return (
     <section className="enterprise-card enterprise-profile-teams">
@@ -252,6 +263,19 @@ export function ProfileTeamsSection({ teams, selectedTeamId, onSelectWorkspace, 
                       </p>
                     ) : null}
                     <p className="enterprise-muted enterprise-profile-ws-card-meta">{memberLine}</p>
+                    {t.inviteCode ? (
+                      <div className="enterprise-profile-ws-invite-row">
+                        <span className="enterprise-profile-ws-invite-label">Invite code</span>
+                        <span className="enterprise-team-code-mono enterprise-profile-ws-invite-code">{t.inviteCode}</span>
+                        <button
+                          type="button"
+                          className="enterprise-profile-ws-copy-btn"
+                          onClick={() => void copyInviteCode(t.id, t.inviteCode!)}
+                        >
+                          {copiedTeamId === t.id ? "Copied" : "Copy"}
+                        </button>
+                      </div>
+                    ) : null}
                   </div>
                   <div className="enterprise-profile-ws-card-top-right">
                     {isCurrent ? (

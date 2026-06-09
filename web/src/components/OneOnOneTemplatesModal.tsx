@@ -18,7 +18,6 @@ const QUESTION_TYPE_OPTIONS: {
   { value: "long_text", label: "Long answer", defaultLabel: "Question" },
   { value: "rating", label: "Rating", defaultLabel: "Rating" },
   { value: "manager_notes", label: "Manager notes", defaultLabel: "Manager notes" },
-  { value: "associate_notes", label: "Associate notes", defaultLabel: "Associate notes" },
 ];
 
 type SectionGroup = {
@@ -166,6 +165,16 @@ export function OneOnOneTemplatesModal({ teamId, open, onClose }: Props) {
     setFieldMenuId(null);
     void loadTemplates();
   }, [open, loadTemplates]);
+
+  useEffect(() => {
+    if (!fieldMenuId && !moreOpen) return;
+    const closeMenus = () => {
+      setFieldMenuId(null);
+      setMoreOpen(false);
+    };
+    document.addEventListener("click", closeMenus);
+    return () => document.removeEventListener("click", closeMenus);
+  }, [fieldMenuId, moreOpen]);
 
   const openCreate = () => {
     const blank = emptyEditorState();
@@ -359,53 +368,99 @@ export function OneOnOneTemplatesModal({ teamId, open, onClose }: Props) {
   return (
     <div className="enterprise-modal-backdrop enterprise-oneone-templates-backdrop" role="presentation" onClick={onClose}>
       <div
-        className={`enterprise-modal-sheet enterprise-oneone-templates-modal${view === "editor" ? " enterprise-oneone-templates-modal--editor" : ""}`}
+        className={`enterprise-modal-sheet enterprise-oneone-templates-modal${view === "editor" ? " enterprise-oneone-templates-modal--editor" : " enterprise-oneone-templates-modal--list"}`}
         role="dialog"
         aria-label="1:1 templates"
         onClick={(e) => e.stopPropagation()}
       >
         {view === "list" ? (
           <>
-            <button type="button" className="enterprise-task-modal-close" aria-label="Close" onClick={onClose}>
-              ×
-            </button>
-            <header className="enterprise-oneone-templates-head">
-              <h2 className="enterprise-oneone-templates-title">1:1 templates</h2>
-              <button type="button" className="auth-submit enterprise-oneone-templates-create-btn" onClick={openCreate}>
-                + Create template
-              </button>
-            </header>
-            {err ? <p className="enterprise-form-error" role="alert">{err}</p> : null}
-            <div className="enterprise-oneone-templates-list-wrap">
-              {loading ? <p className="enterprise-muted">Loading…</p> : null}
-              {!loading && templates.length === 0 ? (
-                <p className="enterprise-muted enterprise-oneone-templates-empty">
-                  No 1:1 templates yet. Create one to define questions, ratings, and notes for check-ins.
+            <header className="enterprise-oneone-templates-list-header">
+              <div className="enterprise-oneone-templates-list-header-text">
+                <p className="enterprise-oneone-templates-kicker">Team · Check-ins</p>
+                <h2 className="enterprise-oneone-templates-title">1:1 templates</h2>
+                <p className="enterprise-oneone-templates-subtitle">
+                  Standardize manager check-ins with reusable question sets.
                 </p>
+              </div>
+              <div className="enterprise-oneone-templates-list-header-actions">
+                <button type="button" className="enterprise-oneone-templates-primary-btn" onClick={openCreate}>
+                  Create template
+                </button>
+                <button type="button" className="enterprise-oneone-templates-close" aria-label="Close" onClick={onClose}>
+                  ×
+                </button>
+              </div>
+            </header>
+            {err ? <p className="enterprise-form-error enterprise-oneone-templates-list-error" role="alert">{err}</p> : null}
+            <div className="enterprise-oneone-templates-list-wrap">
+              {loading ? <p className="enterprise-muted enterprise-oneone-templates-list-status">Loading templates…</p> : null}
+              {!loading && templates.length === 0 ? (
+                <div className="enterprise-oneone-templates-empty-panel">
+                  <p className="enterprise-oneone-templates-empty-title">No templates yet</p>
+                  <p className="enterprise-muted enterprise-oneone-templates-empty">
+                    Create a template to define questions, ratings, and notes for 1:1 check-ins.
+                  </p>
+                  <button type="button" className="enterprise-oneone-templates-primary-btn" onClick={openCreate}>
+                    Create template
+                  </button>
+                </div>
               ) : null}
               {!loading && templates.length > 0 ? (
-                <ul className="enterprise-oneone-templates-list">
-                  {templates.map((template) => (
-                    <li key={template.id} className="enterprise-oneone-templates-list-item">
-                      <button type="button" className="enterprise-oneone-templates-list-main" onClick={() => openEdit(template)}>
-                        <strong>{template.title}</strong>
-                        <span className="enterprise-muted">
-                          {template.fields.filter((f) => f.type !== "section").length} question
-                          {template.fields.filter((f) => f.type !== "section").length !== 1 ? "s" : ""}
-                          {template.description ? ` · ${template.description}` : ""}
-                        </span>
-                      </button>
-                      <button
-                        type="button"
-                        className="enterprise-oneone-templates-delete-btn"
-                        aria-label={`Delete ${template.title}`}
-                        onClick={() => void onDeleteTemplate(template)}
-                      >
-                        Delete
-                      </button>
-                    </li>
-                  ))}
-                </ul>
+                <div className="enterprise-oneone-templates-table-wrap">
+                  <table className="enterprise-oneone-templates-table">
+                    <thead>
+                      <tr>
+                        <th scope="col">Template</th>
+                        <th scope="col">Questions</th>
+                        <th scope="col" className="enterprise-oneone-templates-table-actions-col">
+                          <span className="visually-hidden">Actions</span>
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {templates.map((template) => {
+                        const questionCount = template.fields.filter((f) => f.type !== "section").length;
+                        return (
+                          <tr key={template.id} className="enterprise-oneone-templates-table-row">
+                            <td>
+                              <button
+                                type="button"
+                                className="enterprise-oneone-templates-table-link"
+                                onClick={() => openEdit(template)}
+                              >
+                                <span className="enterprise-oneone-templates-table-name">{template.title}</span>
+                                {template.description ? (
+                                  <span className="enterprise-oneone-templates-table-desc">{template.description}</span>
+                                ) : null}
+                              </button>
+                            </td>
+                            <td className="enterprise-oneone-templates-table-meta">
+                              {questionCount} question{questionCount !== 1 ? "s" : ""}
+                            </td>
+                            <td className="enterprise-oneone-templates-table-actions">
+                              <button
+                                type="button"
+                                className="enterprise-oneone-templates-table-action"
+                                onClick={() => openEdit(template)}
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                className="enterprise-oneone-templates-table-action enterprise-oneone-templates-table-action--danger"
+                                aria-label={`Delete ${template.title}`}
+                                onClick={() => void onDeleteTemplate(template)}
+                              >
+                                Delete
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               ) : null}
             </div>
           </>
@@ -445,18 +500,21 @@ export function OneOnOneTemplatesModal({ teamId, open, onClose }: Props) {
                   className={`enterprise-oneone-templates-toolbar-btn${editorView === "preview" ? " enterprise-oneone-templates-toolbar-btn--active" : ""}`}
                   onClick={() => setEditorView((v) => (v === "preview" ? "edit" : "preview"))}
                 >
-                  <span aria-hidden>👁</span> Preview
+                  Preview
                 </button>
                 <div className="enterprise-oneone-templates-more-wrap">
                   <button
                     type="button"
                     className="enterprise-oneone-templates-toolbar-btn"
-                    onClick={() => setMoreOpen((v) => !v)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setMoreOpen((v) => !v);
+                    }}
                   >
                     More ▾
                   </button>
                   {moreOpen ? (
-                    <div className="enterprise-oneone-templates-more-menu">
+                    <div className="enterprise-oneone-templates-more-menu" onClick={(e) => e.stopPropagation()}>
                       {editingId ? (
                         <button
                           type="button"
@@ -477,13 +535,13 @@ export function OneOnOneTemplatesModal({ teamId, open, onClose }: Props) {
                 </div>
                 <button
                   type="button"
-                  className="auth-submit enterprise-oneone-templates-save-btn"
+                  className="enterprise-oneone-templates-primary-btn enterprise-oneone-templates-save-btn"
                   disabled={saving}
                   onClick={() => void onSave()}
                 >
                   {saving ? "Saving…" : "Save template"}
                 </button>
-                <button type="button" className="enterprise-task-modal-close" aria-label="Close" onClick={onClose}>
+                <button type="button" className="enterprise-oneone-templates-close" aria-label="Close" onClick={onClose}>
                   ×
                 </button>
               </div>
@@ -530,10 +588,10 @@ export function OneOnOneTemplatesModal({ teamId, open, onClose }: Props) {
                       </button>
                       <button
                         type="button"
-                        className="auth-submit enterprise-oneone-templates-pane-btn enterprise-oneone-templates-pane-btn--primary"
+                        className="enterprise-oneone-templates-primary-btn enterprise-oneone-templates-pane-btn enterprise-oneone-templates-pane-btn--primary"
                         onClick={() => addQuestion(sectionGroups[sectionGroups.length - 1]?.section.id)}
                       >
-                        + Add question
+                        Add question
                       </button>
                     </div>
                   </div>
@@ -576,7 +634,9 @@ export function OneOnOneTemplatesModal({ teamId, open, onClose }: Props) {
                               {group.fields.map((field, qIndex) => (
                                 <li
                                   key={field.id}
-                                  className={`enterprise-oneone-templates-question-row${selectedFieldId === field.id ? " enterprise-oneone-templates-question-row--selected" : ""}`}
+                                  className={`enterprise-oneone-templates-question-row${
+                                    selectedFieldId === field.id ? " enterprise-oneone-templates-question-row--selected" : ""
+                                  }${fieldMenuId === field.id ? " enterprise-oneone-templates-question-row--menu-open" : ""}`}
                                   draggable
                                   onDragStart={() => setDragFieldId(field.id)}
                                   onDragOver={(e) => e.preventDefault()}
@@ -604,12 +664,15 @@ export function OneOnOneTemplatesModal({ teamId, open, onClose }: Props) {
                                       type="button"
                                       className="enterprise-oneone-templates-question-menu-btn"
                                       aria-label="Question options"
-                                      onClick={() => setFieldMenuId((id) => (id === field.id ? null : field.id))}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setFieldMenuId((id) => (id === field.id ? null : field.id));
+                                      }}
                                     >
                                       ⋮
                                     </button>
                                     {fieldMenuId === field.id ? (
-                                      <div className="enterprise-oneone-templates-question-menu">
+                                      <div className="enterprise-oneone-templates-question-menu" onClick={(e) => e.stopPropagation()}>
                                         <button type="button" onClick={() => duplicateField(field.id)}>Duplicate</button>
                                         <button type="button" onClick={() => moveFieldInFlatList(field.id, -1)}>Move up</button>
                                         <button type="button" onClick={() => moveFieldInFlatList(field.id, 1)}>Move down</button>
@@ -650,7 +713,7 @@ export function OneOnOneTemplatesModal({ teamId, open, onClose }: Props) {
                           className="enterprise-oneone-templates-field-delete"
                           onClick={() => removeField(selectedField.id)}
                         >
-                          🗑 Delete field
+                          Delete field
                         </button>
                       </div>
 
@@ -742,7 +805,7 @@ export function OneOnOneTemplatesModal({ teamId, open, onClose }: Props) {
                         >
                           Cancel
                         </button>
-                        <button type="button" className="auth-submit enterprise-oneone-templates-done-btn" onClick={() => setSelectedFieldId(null)}>
+                        <button type="button" className="enterprise-oneone-templates-primary-btn enterprise-oneone-templates-done-btn" onClick={() => setSelectedFieldId(null)}>
                           Done
                         </button>
                       </div>

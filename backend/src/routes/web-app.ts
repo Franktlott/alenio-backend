@@ -75,7 +75,7 @@ webRouter.get("/api/teams", async (c) => {
     include: {
       team: {
         select: {
-          id: true, name: true, image: true, createdAt: true,
+          id: true, name: true, image: true, createdAt: true, inviteCode: true,
           _count: { select: { members: true, tasks: true } },
         },
       },

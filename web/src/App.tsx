@@ -8,6 +8,7 @@ import { ChatPage } from "./routes/ChatPage";
 import { CreateTaskPage } from "./routes/CreateTaskPage";
 import { DashboardPage } from "./routes/DashboardPage";
 import { EnterpriseShellLayout } from "./routes/EnterpriseShellLayout";
+import { OneOnOneFeedbackPage } from "./routes/OneOnOneFeedbackPage";
 import { TaskDetailPage } from "./routes/TaskDetailPage";
 import { TeamPage } from "./routes/TeamPage";
 import { ProfilePage } from "./routes/ProfilePage";
@@ -127,6 +128,14 @@ export default function App() {
           element={
             <AuthGate>
               <TaskDetailPage />
+            </AuthGate>
+          }
+        />
+        <Route
+          path="/one-on-one-feedback"
+          element={
+            <AuthGate>
+              <OneOnOneFeedbackPage />
             </AuthGate>
           }
         />
