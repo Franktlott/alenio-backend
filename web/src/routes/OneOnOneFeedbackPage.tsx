@@ -94,11 +94,7 @@ export function OneOnOneFeedbackPage() {
       user={me ?? null}
       onSignOutNavigate={(path) => navigate(path)}
       topBar={
-        <DashboardTopBar
-          user={me ?? null}
-          pageTitle="1:1 feedback"
-          workspaceName={teams?.find((t) => t.id === workspaceId)?.name ?? null}
-        />
+        <DashboardTopBar user={me ?? null} pageTitle="1:1 feedback" />
       }
       showPlanNav={showPlanNav}
       showActivityExecuteNav={showActivityExecuteNav}

@@ -155,8 +155,6 @@ export function EnterpriseShellLayout() {
   }, [teams, selectedTeamId]);
 
   const topBarPageTitle = enterpriseNavTitle(activeNav);
-  const topBarWorkspaceName =
-    teams !== null && effectiveTeamId ? (teams.find((t) => t.id === effectiveTeamId)?.name ?? null) : null;
 
   const workspaceOwner =
     teams !== null && !!effectiveTeamId && teams.find((t) => t.id === effectiveTeamId)?.role === "owner";
@@ -227,7 +225,7 @@ export function EnterpriseShellLayout() {
         user={me ?? null}
         onSignOutNavigate={(path) => navigate(path)}
         topBar={
-          <DashboardTopBar user={me ?? null} pageTitle={topBarPageTitle} workspaceName={topBarWorkspaceName} />
+          <DashboardTopBar user={me ?? null} pageTitle={topBarPageTitle} />
         }
         mainClassName={mainClassName}
         contentClassName={contentClassName}

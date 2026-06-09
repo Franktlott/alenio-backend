@@ -10,6 +10,7 @@ import {
 } from "../lib/calendar-mobile-parity";
 import { getUSHolidays } from "../lib/us-federal-holidays";
 import { canShowVideoJoin, isInVideoMeetingBannerWindow, isVideoMeetingLeaderRole } from "../lib/video-meeting-join";
+import { OneOnOneAssociateFeedbackForm } from "../components/OneOnOneAssociateFeedbackForm";
 import {
   createWebTask,
   createWebTeamEvent,
@@ -17,6 +18,7 @@ import {
   deleteWebTask,
   deleteWebTeamEvent,
   fetchCoreTeamTasks,
+  fetchOneOnOneAssociateFeedbackContext,
   fetchWebTeam,
   fetchWebTeamEvents,
   fetchWebTeamTasks,
@@ -26,11 +28,17 @@ import {
   type ApiCalendarEvent,
   type ApiSubtask,
   type ApiTask,
+  type OneOnOneAssociateFeedbackContext,
   type UpcomingVideoMeeting,
   type WebTeamDetail,
   type WebMeUser,
   type WebTeamRow,
 } from "../lib/api";
+import {
+  formatTaskDescriptionForDisplay,
+  isFeedbackTaskDescription,
+  parseFeedbackTaskDescription,
+} from "../lib/one-on-one-feedback";
 import addChoiceLogo from "../../icon.png";
 
 function priorityRank(p: string): number {
@@ -181,8 +189,17 @@ export function DashboardPage() {
   const [taskMenuId, setTaskMenuId] = useState<string | null>(null);
   const [taskDeleteId, setTaskDeleteId] = useState<string | null>(null);
   const [taskActionError, setTaskActionError] = useState<string | null>(null);
+  const [feedbackContext, setFeedbackContext] = useState<OneOnOneAssociateFeedbackContext | null>(null);
 
   const now = new Date();
+  const selectedTaskFeedbackMeta = selectedTaskModal?.description
+    ? parseFeedbackTaskDescription(selectedTaskModal.description)
+    : null;
+  const isSelectedTaskFeedbackAssignee =
+    !!me?.id &&
+    !!selectedTaskFeedbackMeta &&
+    selectedTaskModal?.assignments.some((assignment) => assignment.user.id === me.id) === true;
+  const isSelectedTaskFeedback = isFeedbackTaskDescription(selectedTaskModal?.description);
 
   useEffect(() => {
     const id = location.hash.replace(/^#/, "");
@@ -196,6 +213,13 @@ export function DashboardPage() {
     setWorkspaceMainLoading(!!selectedTeamId && teamDataLoading);
     return () => setWorkspaceMainLoading(false);
   }, [selectedTeamId, teamDataLoading, setWorkspaceMainLoading]);
+
+  useEffect(() => {
+    if (!evMenuId) return;
+    const closeMenu = () => setEvMenuId(null);
+    document.addEventListener("click", closeMenu);
+    return () => document.removeEventListener("click", closeMenu);
+  }, [evMenuId]);
 
   useEffect(() => {
     if (!selectedTeamId) return;
@@ -314,11 +338,45 @@ export function DashboardPage() {
     setSelectedTaskModal(t);
     setTaskEditMode(false);
     setTaskError(null);
+    setFeedbackContext(null);
     setEditTitle(t.title ?? "");
     setEditDescription(t.description ?? "");
     setEditPriority(t.priority ?? "medium");
     setEditDueDate(t.dueDate ? new Date(t.dueDate).toISOString().slice(0, 10) : "");
   };
+
+  useEffect(() => {
+    if (!selectedTaskFeedbackMeta || !isSelectedTaskFeedbackAssignee || selectedTaskModal?.status === "done") {
+      setFeedbackContext(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const context = await fetchOneOnOneAssociateFeedbackContext(
+          selectedTaskFeedbackMeta.teamId,
+          selectedTaskFeedbackMeta.memberUserId,
+          selectedTaskFeedbackMeta.meetingId,
+          selectedTaskFeedbackMeta.fieldId,
+        );
+        if (cancelled) return;
+        setFeedbackContext(context.submitted ? null : context);
+      } catch {
+        if (cancelled) return;
+        setFeedbackContext(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    selectedTaskFeedbackMeta?.teamId,
+    selectedTaskFeedbackMeta?.memberUserId,
+    selectedTaskFeedbackMeta?.meetingId,
+    selectedTaskFeedbackMeta?.fieldId,
+    isSelectedTaskFeedbackAssignee,
+    selectedTaskModal?.status,
+  ]);
 
   const resetCreateForm = () => {
     setCtTitle("");
@@ -531,7 +589,7 @@ export function DashboardPage() {
 
   return (
     <>
-      <div className="enterprise-tab-shell enterprise-tab-shell-scroll" data-testid="dashboard-screen">
+      <div className="enterprise-tab-shell enterprise-dashboard-shell enterprise-dashboard-pro" data-testid="dashboard-screen">
         {tasksErr ? (
           <p className="enterprise-banner-warn" role="status">
             {tasksErr}
@@ -566,7 +624,10 @@ export function DashboardPage() {
         ) : null}
 
         <div className="enterprise-dashboard-top">
-          <section className="enterprise-card enterprise-card-cal" aria-labelledby="cal-heading">
+          <section
+            className={`enterprise-card enterprise-card-cal${evMenuId ? " enterprise-card-cal--menu-open" : ""}`}
+            aria-labelledby="cal-heading"
+          >
             <div className="enterprise-card-head">
               <h2 id="cal-heading" className="enterprise-card-title">
                 Calendar
@@ -604,7 +665,7 @@ export function DashboardPage() {
                 </div>
               </div>
             </div>
-            <div className="enterprise-cal-mobile-wrap">
+            <div className={`enterprise-cal-mobile-wrap${evMenuId ? " enterprise-cal-mobile-wrap--menu-open" : ""}`}>
               <div className="enterprise-cal-weekdays enterprise-cal-weekdays-mobile">
                 {weekdayLabels.map((w) => (
                   <div key={w} className="enterprise-cal-weekday">
@@ -729,21 +790,26 @@ export function DashboardPage() {
                 ) : null}
               </div>
               {selectedDate ? (
-                <div className="enterprise-cal-day-panel">
+                <div className={`enterprise-cal-day-panel${evMenuId ? " enterprise-cal-day-panel--menu-open" : ""}`}>
                   <div className="enterprise-cal-day-panel-head">
                     <h3 className="enterprise-cal-day-panel-title">
                       {selectedDate.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
                     </h3>
-                    <p className="enterprise-cal-day-panel-hint">Add events here, or manage advanced edits in the mobile app.</p>
+                    <p className="enterprise-cal-day-panel-hint">Scheduled items for this date.</p>
                   </div>
                   {teamDataLoading ? (
                     <div className="enterprise-cal-day-loading">Loading…</div>
                   ) : selectedEvents.length === 0 && selectedTasks.length === 0 && selectedHolidays.length === 0 ? (
-                    <div className="enterprise-cal-day-empty">
-                      <p>Nothing scheduled</p>
+                    <div className="enterprise-dashboard-empty enterprise-cal-day-empty">
+                      <svg className="enterprise-dashboard-empty-icon" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
+                        <rect x="3" y="4" width="18" height="18" rx="2" />
+                        <path d="M16 2v4M8 2v4M3 10h18" />
+                      </svg>
+                      <p className="enterprise-dashboard-empty-title">Nothing scheduled</p>
+                      <p className="enterprise-dashboard-empty-sub">Add an event or select a date.</p>
                     </div>
                   ) : (
-                    <div className="enterprise-cal-day-list">
+                    <div className={`enterprise-cal-day-list${evMenuId ? " enterprise-cal-day-list--menu-open" : ""}`}>
                       {selectedHolidays.map((h) => (
                         <div key={h.name} className="enterprise-cal-day-holiday" data-testid={`holiday-${h.name}`}>
                           <div className="enterprise-cal-day-holiday-accent" aria-hidden />
@@ -754,6 +820,8 @@ export function DashboardPage() {
                         </div>
                       ))}
                       {selectedEvents.map((event) => {
+                        const canManageEvent =
+                          (isOwnerOrAdmin || (!!me?.id && event.createdById === me.id)) && !!selectedTeamId;
                         const badgesContent = (
                           <>
                             {!event.isHidden ? <span className="enterprise-cal-badge-public">Public</span> : null}
@@ -765,103 +833,107 @@ export function DashboardPage() {
                                 ? `${new Date(event.startDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${new Date(event.endDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
                                 : "Event"}
                             </span>
-                            {(isOwnerOrAdmin || (!!me?.id && event.createdById === me.id)) && selectedTeamId ? (
-                              <div className="enterprise-cal-day-event-actions">
-                                <button
-                                  type="button"
-                                  className="enterprise-cal-day-event-more"
-                                  onClick={() => setEvMenuId((prev) => (prev === event.id ? null : event.id))}
-                                  aria-label="Event actions"
-                                >
-                                  ⋯
-                                </button>
-                                {evMenuId === event.id ? (
-                                  <div className="enterprise-cal-day-event-menu">
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setEvMenuId(null);
-                                        setEvEditId(event.id);
-                                        const allDay = event.allDay !== false;
-                                        setEvAllDay(allDay);
-                                        setEvTitle(event.title ?? "");
-                                        setEvDescription(event.description ?? "");
-                                        setEvColor(event.color?.trim() || "#4361EE");
-                                        setNewEventIsVideoMeeting(!!event.isVideoMeeting);
-                                        setEvStart(allDay ? toDateInput(event.startDate) : toDatetimeLocalInput(event.startDate));
-                                        setEvEnd(
-                                          event.endDate
-                                            ? allDay
-                                              ? toDateInput(event.endDate)
-                                              : toDatetimeLocalInput(event.endDate)
-                                            : "",
-                                        );
-                                        setEventOpen(true);
-                                      }}
-                                    >
-                                      Edit
-                                    </button>
-                                    <button
-                                      type="button"
-                                      disabled={evDeleteId === event.id}
-                                      onClick={async () => {
-                                        const ok = window.confirm("Delete this event?");
-                                        if (!ok) return;
-                                        setEvDeleteId(event.id);
-                                        setEvActionError(null);
-                                        setEvMenuId(null);
-                                        try {
-                                          await deleteWebTeamEvent(selectedTeamId, event.id);
-                                          await refreshTeamData(selectedTeamId);
-                                        } catch (err) {
-                                          setEvActionError(err instanceof Error ? err.message : "Could not delete event.");
-                                        } finally {
-                                          setEvDeleteId(null);
-                                        }
-                                      }}
-                                    >
-                                      {evDeleteId === event.id ? "Deleting…" : "Delete"}
-                                    </button>
-                                  </div>
-                                ) : null}
-                              </div>
-                            ) : null}
                           </>
                         );
+                        const eventActions = canManageEvent ? (
+                          <div className="enterprise-cal-day-event-actions">
+                            <button
+                              type="button"
+                              className="enterprise-cal-day-event-more"
+                              aria-expanded={evMenuId === event.id}
+                              aria-haspopup="menu"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEvMenuId((prev) => (prev === event.id ? null : event.id));
+                              }}
+                              aria-label="Event actions"
+                            >
+                              ⋯
+                            </button>
+                            {evMenuId === event.id ? (
+                              <div className="enterprise-cal-day-event-menu" role="menu" onClick={(e) => e.stopPropagation()}>
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  onClick={() => {
+                                    setEvMenuId(null);
+                                    setEvEditId(event.id);
+                                    const allDay = event.allDay !== false;
+                                    setEvAllDay(allDay);
+                                    setEvTitle(event.title ?? "");
+                                    setEvDescription(event.description ?? "");
+                                    setEvColor(event.color?.trim() || "#4361EE");
+                                    setNewEventIsVideoMeeting(!!event.isVideoMeeting);
+                                    setEvStart(allDay ? toDateInput(event.startDate) : toDatetimeLocalInput(event.startDate));
+                                    setEvEnd(
+                                      event.endDate
+                                        ? allDay
+                                          ? toDateInput(event.endDate)
+                                          : toDatetimeLocalInput(event.endDate)
+                                        : "",
+                                    );
+                                    setEventOpen(true);
+                                  }}
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  disabled={evDeleteId === event.id}
+                                  onClick={async () => {
+                                    const ok = window.confirm("Delete this event?");
+                                    if (!ok) return;
+                                    setEvDeleteId(event.id);
+                                    setEvActionError(null);
+                                    setEvMenuId(null);
+                                    try {
+                                      await deleteWebTeamEvent(selectedTeamId, event.id);
+                                      await refreshTeamData(selectedTeamId);
+                                    } catch (err) {
+                                      setEvActionError(err instanceof Error ? err.message : "Could not delete event.");
+                                    } finally {
+                                      setEvDeleteId(null);
+                                    }
+                                  }}
+                                >
+                                  {evDeleteId === event.id ? "Deleting…" : "Delete"}
+                                </button>
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : null;
                         return (
                           <div
                             key={event.id}
-                            className="enterprise-cal-day-event"
+                            className={`enterprise-cal-day-event${evMenuId === event.id ? " enterprise-cal-day-event--menu-open" : ""}`}
                             style={{ borderLeftColor: event.color?.trim() || "#4361EE" }}
                             data-testid={`event-item-${event.id}`}
                           >
                             <div className="enterprise-cal-day-event-top">
                               <span className="enterprise-cal-day-event-name">{event.title}</span>
-                              {event.isVideoMeeting ? (
-                                <div className="enterprise-cal-day-event-meeting-actions">
-                                  {canShowVideoJoin(
-                                    event.startDate,
-                                    event.endDate,
-                                    meetingNow,
-                                    isOwnerOrLeader,
-                                  ) ? (
-                                    <button
-                                      type="button"
-                                      className="enterprise-cal-badge-video enterprise-cal-video-join"
-                                      title="Join video meeting"
-                                      aria-label={`Join video meeting: ${event.title}`}
-                                      onClick={() => void openVideoCall(event.id, event.title)}
-                                      disabled={videoLoading}
-                                      data-testid={`event-join-${event.id}`}
-                                    >
-                                      {videoLoading ? "Joining…" : "Join"}
-                                    </button>
-                                  ) : null}
-                                  <span className="enterprise-cal-day-event-badges">{badgesContent}</span>
-                                </div>
-                              ) : (
+                              <div className="enterprise-cal-day-event-meta">
+                                {event.isVideoMeeting && canShowVideoJoin(
+                                  event.startDate,
+                                  event.endDate,
+                                  meetingNow,
+                                  isOwnerOrLeader,
+                                ) ? (
+                                  <button
+                                    type="button"
+                                    className="enterprise-cal-badge-video enterprise-cal-video-join"
+                                    title="Join video meeting"
+                                    aria-label={`Join video meeting: ${event.title}`}
+                                    onClick={() => void openVideoCall(event.id, event.title)}
+                                    disabled={videoLoading}
+                                    data-testid={`event-join-${event.id}`}
+                                  >
+                                    {videoLoading ? "Joining…" : "Join"}
+                                  </button>
+                                ) : null}
                                 <span className="enterprise-cal-day-event-badges">{badgesContent}</span>
-                              )}
+                                {eventActions}
+                              </div>
                             </div>
                             {event.allDay !== true ? (
                               <div className="enterprise-cal-day-event-time">
@@ -896,7 +968,9 @@ export function DashboardPage() {
                             </span>
                             <span className="enterprise-cal-day-task-badge">{task.status === "done" ? "Done" : "Task"}</span>
                           </div>
-                          {task.description ? <p className="enterprise-cal-day-task-desc">{task.description}</p> : null}
+                          {task.description ? (
+                            <p className="enterprise-cal-day-task-desc">{formatTaskDescriptionForDisplay(task.description)}</p>
+                          ) : null}
                         </div>
                       ))}
                     </div>
@@ -912,7 +986,7 @@ export function DashboardPage() {
                 Tasks
               </h2>
               <div className="enterprise-task-head-actions">
-                <button type="button" className="enterprise-task-modal-btn enterprise-task-modal-btn-secondary" onClick={() => setCreateOpen(true)}>
+                <button type="button" className="enterprise-dashboard-add-task" onClick={() => setCreateOpen(true)}>
                   + Add task
                 </button>
                 <div className="enterprise-task-tabs" role="tablist">
@@ -944,17 +1018,19 @@ export function DashboardPage() {
                   <option value="priority">Priority</option>
                 </select>
               </label>
-              <span className="enterprise-task-filters-ico" aria-hidden title="Filters">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <button type="button" className="enterprise-task-filters-btn" aria-label="Filters">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
                   <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
                 </svg>
-              </span>
+                <span>Filters</span>
+              </button>
             </div>
             {taskActionError ? (
               <p className="enterprise-form-error" role="alert" style={{ marginBottom: "0.75rem" }}>
                 {taskActionError}
               </p>
             ) : null}
+            <div className="enterprise-card-tasks-body">
             <div className="enterprise-table-wrap">
               <table className="enterprise-table">
                 <thead>
@@ -971,7 +1047,14 @@ export function DashboardPage() {
                   {tableRows.length === 0 ? (
                     <tr>
                       <td colSpan={6} className="enterprise-table-empty">
-                        No tasks in this view.
+                        <div className="enterprise-dashboard-empty">
+                          <svg className="enterprise-dashboard-empty-icon" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
+                            <path d="M9 11l3 3L22 4" />
+                            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+                          </svg>
+                          <p className="enterprise-dashboard-empty-title">No tasks to show</p>
+                          <p className="enterprise-dashboard-empty-sub">Create a task to get started.</p>
+                        </div>
                       </td>
                     </tr>
                   ) : (
@@ -994,7 +1077,9 @@ export function DashboardPage() {
                         >
                           <td>
                             <div className="enterprise-task-title">{t.title}</div>
-                            {t.description ? <div className="enterprise-task-desc">{t.description}</div> : null}
+                            {t.description ? (
+                              <div className="enterprise-task-desc">{formatTaskDescriptionForDisplay(t.description)}</div>
+                            ) : null}
                           </td>
                           <td>{formatTaskDue(t.dueDate, now)}</td>
                           <td>
@@ -1068,11 +1153,19 @@ export function DashboardPage() {
                 </tbody>
               </table>
             </div>
+            </div>
           </section>
         </div>
       </div>
       {selectedTaskModal ? (
-        <div className="enterprise-task-modal-backdrop" role="presentation" onClick={() => setSelectedTaskModal(null)}>
+        <div
+          className="enterprise-task-modal-backdrop"
+          role="presentation"
+          onClick={() => {
+            setSelectedTaskModal(null);
+            setFeedbackContext(null);
+          }}
+        >
           <div
             className="enterprise-task-modal"
             role="dialog"
@@ -1087,6 +1180,7 @@ export function DashboardPage() {
                 setSelectedTaskModal(null);
                 setTaskEditMode(false);
                 setTaskError(null);
+                setFeedbackContext(null);
               }}
               aria-label="Close"
             >
@@ -1119,14 +1213,40 @@ export function DashboardPage() {
                   </section>
                 ) : null}
 
-                <section className="enterprise-task-modal-section">
-                  <h4>Description</h4>
-                  {taskEditMode ? (
-                    <textarea className="auth-input create-task-textarea" value={editDescription} onChange={(e) => setEditDescription(e.target.value)} rows={3} />
-                  ) : (
-                    <div className="enterprise-task-modal-description-box">{selectedTaskModal.description?.trim() || "Add a description..."}</div>
-                  )}
-                </section>
+                {feedbackContext && selectedTaskFeedbackMeta ? (
+                  <section className="enterprise-task-modal-section enterprise-oneone-feedback-task-section">
+                    <h4>1:1 feedback</h4>
+                    <OneOnOneAssociateFeedbackForm
+                      teamId={selectedTaskFeedbackMeta.teamId}
+                      memberUserId={selectedTaskFeedbackMeta.memberUserId}
+                      meetingId={selectedTaskFeedbackMeta.meetingId}
+                      context={feedbackContext}
+                      onSubmitted={async () => {
+                        setFeedbackContext(null);
+                        if (!selectedTeamId || !selectedTaskModal) return;
+                        await refreshTeamData(selectedTeamId);
+                        const refreshed = mergeTaskLists(
+                          await fetchWebTeamTasks(selectedTeamId),
+                          await fetchCoreTeamTasks(selectedTeamId).catch(() => []),
+                        ).find((item) => item.id === selectedTaskModal.id);
+                        if (refreshed) setSelectedTaskModal(refreshed);
+                      }}
+                    />
+                  </section>
+                ) : null}
+
+                {!feedbackContext ? (
+                  <section className="enterprise-task-modal-section">
+                    <h4>Description</h4>
+                    {taskEditMode && !isSelectedTaskFeedback ? (
+                      <textarea className="auth-input create-task-textarea" value={editDescription} onChange={(e) => setEditDescription(e.target.value)} rows={3} />
+                    ) : (
+                      <div className="enterprise-task-modal-description-box">
+                        {formatTaskDescriptionForDisplay(selectedTaskModal.description) || "Add a description..."}
+                      </div>
+                    )}
+                  </section>
+                ) : null}
 
                 <section className="enterprise-task-modal-section">
                   <h4>Subtasks</h4>
@@ -1207,6 +1327,7 @@ export function DashboardPage() {
             </div>
             {taskError ? <p className="auth-error">{taskError}</p> : null}
             <footer className="enterprise-task-modal-footer">
+              {!isSelectedTaskFeedback ? (
               <button
                 type="button"
                 className="enterprise-task-modal-btn enterprise-task-modal-btn-secondary"
@@ -1239,6 +1360,7 @@ export function DashboardPage() {
               >
                 {taskSaving ? "Saving…" : taskEditMode ? "Save task" : "Edit task"}
               </button>
+              ) : null}
               <button
                 type="button"
                 className="enterprise-task-modal-btn enterprise-task-modal-btn-primary"

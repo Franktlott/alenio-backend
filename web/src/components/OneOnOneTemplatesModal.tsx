@@ -102,7 +102,7 @@ function normalizeLoadedFields(fields: OneOnOneTemplateField[]): OneOnOneTemplat
 }
 
 function emptyEditorState() {
-  const section = newSection("Opening");
+  const section = newSection("");
   return {
     title: "",
     description: "",
@@ -207,7 +207,7 @@ export function OneOnOneTemplatesModal({ teamId, open, onClose }: Props) {
   };
 
   const addSection = () => {
-    const section = newSection("New section");
+    const section = newSection("");
     setFields((prev) => [...prev, section]);
     setCollapsedSections((prev) => {
       const next = new Set(prev);
@@ -313,6 +313,11 @@ export function OneOnOneTemplatesModal({ teamId, open, onClose }: Props) {
     }
     if (questionFields.some((f) => !f.label.trim())) {
       setErr("Every question needs a label.");
+      return;
+    }
+    const sectionFields = fields.filter(isSection);
+    if (sectionFields.some((f) => !f.label.trim())) {
+      setErr("Every section needs a name.");
       return;
     }
 
@@ -556,7 +561,7 @@ export function OneOnOneTemplatesModal({ teamId, open, onClose }: Props) {
                 </p>
                 {sectionGroups.map((group) => (
                   <section key={group.section.id} className="enterprise-oneone-templates-preview-section">
-                    <h3>{group.section.label}</h3>
+                    <h3>{group.section.label.trim() || "Untitled section"}</h3>
                     <ul>
                       {group.fields.map((field) => (
                         <li key={field.id}>
@@ -610,11 +615,14 @@ export function OneOnOneTemplatesModal({ teamId, open, onClose }: Props) {
                             >
                               <span className="enterprise-oneone-templates-section-chevron">{collapsed ? "▸" : "▾"}</span>
                               <input
-                                className="enterprise-oneone-templates-section-title-input"
+                                className={`enterprise-oneone-templates-section-title-input${
+                                  !group.section.label.trim() ? " enterprise-oneone-templates-section-title-input--empty" : ""
+                                }`}
                                 value={group.section.label}
                                 onChange={(e) => updateField(group.section.id, { label: e.target.value })}
                                 onClick={(e) => e.stopPropagation()}
-                                aria-label="Section title"
+                                placeholder="Section name"
+                                aria-label="Section name"
                               />
                               <span className="enterprise-oneone-templates-section-count">
                                 {group.fields.length} question{group.fields.length !== 1 ? "s" : ""}

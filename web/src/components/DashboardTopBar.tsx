@@ -14,29 +14,17 @@ function initials(user: WebMeUser | null): string {
 type Props = {
   user: WebMeUser | null;
   pageTitle: string;
-  workspaceName?: string | null;
   /** Optional extra count shown on the bell badge (join requests are included automatically). */
   notificationCount?: number;
 };
 
-export function DashboardTopBar({ user, pageTitle, workspaceName, notificationCount = 0 }: Props) {
-  const workspace = workspaceName?.trim() || null;
-
+export function DashboardTopBar({ user, pageTitle, notificationCount = 0 }: Props) {
   return (
     <header className="enterprise-topbar" data-testid="dashboard-topbar">
       <div className="enterprise-topbar-context" data-testid="topbar-context">
         <h1 className="enterprise-topbar-title">{pageTitle}</h1>
-        {workspace ? (
-          <>
-            <span className="enterprise-topbar-sep" aria-hidden>
-              ·
-            </span>
-            <span className="enterprise-topbar-workspace" data-testid="topbar-workspace">
-              {workspace}
-            </span>
-          </>
-        ) : null}
       </div>
+
       <div className="enterprise-topbar-actions">
         <JoinRequestBell extraNotificationCount={notificationCount} />
         <div className="enterprise-topbar-profile" data-testid="topbar-profile">
