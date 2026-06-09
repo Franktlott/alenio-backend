@@ -15,6 +15,7 @@ const oneOnOneTemplatesRouter = new Hono<{ Variables: Variables }>();
 oneOnOneTemplatesRouter.use("*", authGuard);
 
 const fieldTypeSchema = z.enum([
+  "section",
   "short_text",
   "long_text",
   "rating",
@@ -29,6 +30,7 @@ const fieldSchema = z.object({
   order: z.number().int().min(0),
   required: z.boolean().optional(),
   ratingMax: z.number().int().min(2).max(10).optional(),
+  helpText: z.string().max(500).optional().nullable(),
 });
 
 async function getMembership(

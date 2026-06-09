@@ -9,6 +9,7 @@ import {
 } from "../lib/api";
 
 const FIELD_TYPE_LABELS: Record<string, string> = {
+  section: "Section",
   short_text: "Short answer",
   long_text: "Long answer",
   rating: "Rating",
@@ -119,6 +120,7 @@ export function OneOnOneHistoryTab({
     setSelectedTemplate(template);
     const initial: Record<string, string | number> = {};
     for (const field of template.fields) {
+      if (field.type === "section") continue;
       if (field.type === "rating") initial[field.id] = 0;
       else initial[field.id] = "";
     }
@@ -138,6 +140,7 @@ export function OneOnOneHistoryTab({
     try {
       const normalized: Record<string, string | number> = {};
       for (const field of selectedTemplate.fields) {
+        if (field.type === "section") continue;
         const raw = responses[field.id];
         if (field.type === "rating") {
           normalized[field.id] = typeof raw === "number" ? raw : Number(raw) || 0;
@@ -276,16 +279,23 @@ export function OneOnOneHistoryTab({
         ) : null}
         {err ? <p className="enterprise-form-error" role="alert">{err}</p> : null}
         <ul className="enterprise-oneone-fill-fields">
-          {sortedFields.map((field) => (
-            <li key={field.id} className="enterprise-oneone-fill-field">
-              <label className="enterprise-oneone-fill-label">
-                {field.label}
-                {field.required ? <span className="enterprise-oneone-fill-required">Required</span> : null}
-                <span className="enterprise-oneone-fill-type">{fieldTypeLabel(field.type)}</span>
-              </label>
-              {renderFieldInput(field)}
-            </li>
-          ))}
+          {sortedFields.map((field) =>
+            field.type === "section" ? (
+              <li key={field.id} className="enterprise-oneone-fill-section">
+                <h4>{field.label}</h4>
+              </li>
+            ) : (
+              <li key={field.id} className="enterprise-oneone-fill-field">
+                <label className="enterprise-oneone-fill-label">
+                  {field.label}
+                  {field.required ? <span className="enterprise-oneone-fill-required">Required</span> : null}
+                  <span className="enterprise-oneone-fill-type">{fieldTypeLabel(field.type)}</span>
+                </label>
+                {field.helpText ? <p className="enterprise-muted enterprise-oneone-fill-help">{field.helpText}</p> : null}
+                {renderFieldInput(field)}
+              </li>
+            ),
+          )}
         </ul>
         <div className="enterprise-oneone-fill-actions">
           <button type="button" className="enterprise-profile-cancel-btn" disabled={saving} onClick={() => setView("list")}>
@@ -345,6 +355,7 @@ export function OneOnOneHistoryTab({
                 {isOpen ? (
                   <dl className="enterprise-oneone-history-responses">
                     {fields.map((field) => {
+                      if (field.type === "section") return null;
                       const answer = meeting.responses[field.id];
                       if (answer === undefined || answer === "" || answer === 0) return null;
                       return (

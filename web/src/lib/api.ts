@@ -950,6 +950,7 @@ export function createWebTask(input: CreateWebTaskInput) {
 }
 
 export type OneOnOneTemplateFieldType =
+  | "section"
   | "short_text"
   | "long_text"
   | "rating"
@@ -963,6 +964,7 @@ export type OneOnOneTemplateField = {
   order: number;
   required?: boolean;
   ratingMax?: number;
+  helpText?: string | null;
 };
 
 export type OneOnOneTemplate = {

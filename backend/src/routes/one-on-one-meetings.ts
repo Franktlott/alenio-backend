@@ -91,6 +91,7 @@ function serializeMeeting(meeting: {
 
 function validateResponses(fields: TemplateField[], responses: Record<string, string | number>) {
   for (const field of fields) {
+    if (field.type === "section") continue;
     const value = responses[field.id];
     if (field.required) {
       if (field.type === "rating") {
