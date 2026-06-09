@@ -1,0 +1,12 @@
+{
+  "name": "alenio",
+  "private": true,
+  "scripts": {
+    "build:web": "npm run build --prefix web",
+    "deploy:hosting": "firebase deploy --only hosting",
+    "deploy": "npm run build:web && npm run deploy:hosting"
+  },
+  "devDependencies": {
+    "firebase-tools": "^14.12.0"
+  }
+}

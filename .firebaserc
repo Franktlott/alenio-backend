@@ -1,5 +1,6 @@
 {
   "projects": {
+    "default": "alenio---prod",
     "alenio-production": "alenio---prod"
   },
   "targets": {},
