@@ -223,11 +223,43 @@ tasksRouter.get("/", async (c) => {
     return c.json({ error: { message: "Task manager requires Alenio Team or Pro", code: "SUBSCRIPTION_REQUIRED" } }, 403);
   }
 
-  const { status, priority, assigneeId, creatorId, myTasks, cursor } = c.req.query();
+  const { status, priority, assigneeId, creatorId, myTasks, cursor, dueYear, dueMonth, completedYear, completedMonth } =
+    c.req.query();
   const rawLimit = Number(c.req.query("limit") ?? 50);
   const limit = Math.min(isNaN(rawLimit) || rawLimit < 1 ? 50 : rawLimit, 200);
 
   const resolvedAssigneeId = assigneeId === "me" ? user.id : assigneeId;
+
+  const monthBounds = (year: number, month: number) => {
+    const monthStart = new Date(year, month, 1);
+    const monthEnd = new Date(year, month + 1, 0, 23, 59, 59, 999);
+    return { monthStart, monthEnd };
+  };
+
+  const monthFilters: Record<string, unknown>[] = [];
+  if (dueYear && dueMonth !== undefined) {
+    const y = parseInt(dueYear, 10);
+    const m = parseInt(dueMonth, 10);
+    if (!Number.isNaN(y) && !Number.isNaN(m)) {
+      const { monthStart, monthEnd } = monthBounds(y, m);
+      const now = new Date();
+      const isCurrentMonth = y === now.getFullYear() && m === now.getMonth();
+      monthFilters.push({
+        OR: [
+          { dueDate: { gte: monthStart, lte: monthEnd } },
+          ...(isCurrentMonth ? [{ dueDate: null }] : []),
+        ],
+      });
+    }
+  }
+  if (completedYear && completedMonth !== undefined) {
+    const y = parseInt(completedYear, 10);
+    const m = parseInt(completedMonth, 10);
+    if (!Number.isNaN(y) && !Number.isNaN(m)) {
+      const { monthStart, monthEnd } = monthBounds(y, m);
+      monthFilters.push({ completedAt: { gte: monthStart, lte: monthEnd } });
+    }
+  }
 
   const tasks = await prisma.task.findMany({
     where: {
@@ -243,6 +275,7 @@ tasksRouter.get("/", async (c) => {
       ...(resolvedAssigneeId ? { assignments: { some: { userId: resolvedAssigneeId } } } : {}),
       // "me" is a shorthand that resolves to the authenticated user's ID
       ...(creatorId ? { creatorId: creatorId === "me" ? user.id : creatorId } : {}),
+      ...(monthFilters.length ? { AND: monthFilters } : {}),
     },
     include: {
       assignments: {

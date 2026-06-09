@@ -27,6 +27,15 @@ export function markFooterEnterpriseWorkspaceSelect() {
   lastFooterWorkspaceSelectAt = Date.now();
 }
 
+/** Persist + notify shell routes (sidebar, Chat URL sync, etc.). */
+export function switchEnterpriseWorkspace(teamId: string, setSelectedTeamId: (id: string) => void): void {
+  const id = teamId.trim();
+  if (!id) return;
+  setPersistedEnterpriseTeamId(id);
+  markFooterEnterpriseWorkspaceSelect();
+  setSelectedTeamId(id);
+}
+
 /** True shortly after a footer workspace change — skip URL→shell sync so Chat does not fight the picker. */
 export function isRecentFooterEnterpriseWorkspaceSelect(ms = 800) {
   return Date.now() - lastFooterWorkspaceSelectAt < ms;

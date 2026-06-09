@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   cancelMyJoinRequest,
   deleteTeam,
@@ -10,6 +11,8 @@ import {
 import { WorkspaceCreateJoinModals } from "./WorkspaceCreateJoinModals";
 type Props = {
   teams: WebTeamRow[];
+  selectedTeamId: string;
+  onSelectWorkspace: (teamId: string) => void;
   onRefresh: () => Promise<void>;
   onWorkspaceDeleted?: (deletedId: string) => Promise<void>;
 };
@@ -25,17 +28,11 @@ function roleLabel(role: string): string {
   return "Member";
 }
 
-function IconUsersTile() {
-  return (
-    <span className="enterprise-profile-workspace-tile" aria-hidden>
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-        <circle cx="9" cy="7" r="4" />
-        <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-      </svg>
-    </span>
-  );
+function roleBadgeClass(role: string): string {
+  if (role === "owner") return "enterprise-team-role-badge enterprise-team-role-badge-owner";
+  if (role === "team_leader") return "enterprise-team-role-badge enterprise-team-role-badge-leader";
+  if (role === "admin") return "enterprise-team-role-badge enterprise-team-role-badge-admin";
+  return "enterprise-team-role-badge";
 }
 
 function IconUserPlus({ size = 16 }: { size?: number }) {
@@ -58,24 +55,23 @@ function IconPlus({ size = 16 }: { size?: number }) {
   );
 }
 
-function IconLogOut() {
+function IconCheckSmall() {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-      <polyline points="16 17 21 12 16 7" />
-      <line x1="21" y1="12" x2="9" y2="12" />
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden>
+      <path d="M20 6 9 17l-5-5" />
     </svg>
   );
 }
 
-export function ProfileTeamsSection({ teams, onRefresh, onWorkspaceDeleted }: Props) {
+export function ProfileTeamsSection({ teams, selectedTeamId, onSelectWorkspace, onRefresh, onWorkspaceDeleted }: Props) {
   const [pending, setPending] = useState<MyJoinRequestRow[]>([]);
   const [cancelId, setCancelId] = useState<string | null>(null);
   const [leaveId, setLeaveId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<WebTeamRow | null>(null);
-  const [deletePhrase, setDeletePhrase] = useState("");
   const [deletePassword, setDeletePassword] = useState("");
+  const [deleteShowPassword, setDeleteShowPassword] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteErr, setDeleteErr] = useState<string | null>(null);
   const [workspaceMenuId, setWorkspaceMenuId] = useState<string | null>(null);
   const [sectionErr, setSectionErr] = useState<string | null>(null);
   const [joinOpen, setJoinOpen] = useState(false);
@@ -84,12 +80,31 @@ export function ProfileTeamsSection({ teams, onRefresh, onWorkspaceDeleted }: Pr
 
   const closeDeleteModal = () => {
     setDeleteTarget(null);
-    setDeletePhrase("");
     setDeletePassword("");
+    setDeleteShowPassword(false);
+    setDeleteErr(null);
   };
 
-  const deleteConfirmationReady =
-    deletePhrase.trim() === "DELETE" || deletePassword.trim().length > 0;
+  const deleteConfirmationReady = deletePassword.trim().length > 0;
+
+  const handleConfirmDeleteWorkspace = async () => {
+    if (!deleteTarget || !deleteConfirmationReady || deleteBusy) return;
+    setDeleteErr(null);
+    setDeleteBusy(true);
+    try {
+      await deleteTeam(deleteTarget.id, { password: deletePassword });
+      const deletedId = deleteTarget.id;
+      closeDeleteModal();
+      await onRefresh();
+      await loadPending();
+      if (onWorkspaceDeleted) await onWorkspaceDeleted(deletedId);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Could not delete workspace.";
+      setDeleteErr(msg === "Incorrect password" ? "Incorrect password. Please try again." : msg);
+    } finally {
+      setDeleteBusy(false);
+    }
+  };
 
   useEffect(() => {
     if (!workspaceMenuId) return;
@@ -115,9 +130,9 @@ export function ProfileTeamsSection({ teams, onRefresh, onWorkspaceDeleted }: Pr
 
   return (
     <section className="enterprise-card enterprise-profile-teams">
-      <div className="enterprise-profile-workspaces-head">
+      <div className="enterprise-card-head enterprise-card-head-row enterprise-profile-workspaces-head">
         <div>
-          <h2 className="enterprise-card-title enterprise-card-title-spaced enterprise-profile-workspaces-title">Workspaces</h2>
+          <h2 className="enterprise-card-title enterprise-profile-workspaces-title">Workspaces</h2>
           <p className="enterprise-muted enterprise-profile-workspaces-sub">
             Manage the workspaces you belong to. Each workspace has its own plan on the Plan page.
           </p>
@@ -130,7 +145,11 @@ export function ProfileTeamsSection({ teams, onRefresh, onWorkspaceDeleted }: Pr
           >
             <IconUserPlus size={14} /> Create workspace
           </button>
-          <button type="button" className="enterprise-profile-join-workspace-btn enterprise-profile-edit-btn-with-icon" onClick={() => setJoinOpen(true)}>
+          <button
+            type="button"
+            className="enterprise-profile-edit-btn enterprise-profile-edit-btn-with-icon"
+            onClick={() => setJoinOpen(true)}
+          >
             <IconPlus size={14} /> Join workspace
           </button>
         </div>
@@ -158,6 +177,7 @@ export function ProfileTeamsSection({ teams, onRefresh, onWorkspaceDeleted }: Pr
         }}
       />
 
+      <div className="enterprise-profile-teams-scroll">
       {pending.length > 0 ? (
         <div className="enterprise-profile-pending-block">
           <div className="enterprise-muted enterprise-profile-subhead">Pending join requests</div>
@@ -197,20 +217,46 @@ export function ProfileTeamsSection({ teams, onRefresh, onWorkspaceDeleted }: Pr
       {teams.length === 0 ? (
         <p className="enterprise-muted">You are not in any workspace yet.</p>
       ) : (
-        <ul className="enterprise-profile-workspace-card-list">
+        <div className="enterprise-profile-ws-card-grid">
           {teams.map((t) => {
             const members = t._count?.members ?? 0;
-            const subline = `${members} member${members === 1 ? "" : "s"} · Team access enabled`;
+            const isCurrent = t.id === selectedTeamId;
+            const memberLine = `${members} member${members === 1 ? "" : "s"} · Team access enabled`;
             return (
-              <li key={t.id} className="enterprise-profile-workspace-card">
-                <IconUsersTile />
-                <div className="enterprise-profile-workspace-card-main">
-                  <div className="enterprise-profile-workspace-card-name">{t.name}</div>
-                  <div className="enterprise-muted enterprise-profile-workspace-card-meta">{subline}</div>
-                </div>
-                <div className="enterprise-profile-workspace-card-actions">
-                  <span className="enterprise-team-account-pill-badge">{roleLabel(t.role)}</span>
-                  {isWorkspaceOwner(t.role) ? (
+              <article
+                key={t.id}
+                className={`enterprise-profile-ws-card${isCurrent ? " enterprise-profile-ws-card-current" : ""}`}
+                data-testid={`profile-workspace-card-${t.id}`}
+                aria-current={isCurrent ? "true" : undefined}
+              >
+                <div className="enterprise-profile-ws-card-body">
+                  <div className="enterprise-profile-ws-card-icon" aria-hidden>
+                    {t.image ? (
+                      <img
+                        src={t.image}
+                        alt=""
+                        className="enterprise-profile-ws-card-icon-img"
+                      />
+                    ) : (
+                      <span className="enterprise-profile-ws-card-icon-initials">
+                        {t.name?.[0]?.toUpperCase() ?? "W"}
+                      </span>
+                    )}
+                  </div>
+                  <div className="enterprise-profile-ws-card-main">
+                    <h3 className="enterprise-profile-ws-card-name">{t.name}</h3>
+                    {isCurrent ? (
+                      <p className="enterprise-profile-ws-active-line">
+                        <IconCheckSmall />
+                        Active workspace
+                      </p>
+                    ) : null}
+                    <p className="enterprise-muted enterprise-profile-ws-card-meta">{memberLine}</p>
+                  </div>
+                  <div className="enterprise-profile-ws-card-top-right">
+                    {isCurrent ? (
+                      <span className="enterprise-profile-ws-current-badge">Current</span>
+                    ) : null}
                     <div className="enterprise-profile-workspace-menu-wrap">
                       <button
                         type="button"
@@ -227,53 +273,71 @@ export function ProfileTeamsSection({ teams, onRefresh, onWorkspaceDeleted }: Pr
                       </button>
                       {workspaceMenuId === t.id ? (
                         <div className="enterprise-profile-workspace-menu" role="menu">
-                          <button
-                            type="button"
-                            role="menuitem"
-                            className="enterprise-profile-workspace-menu-danger"
-                            data-testid={`delete-workspace-${t.id}`}
-                            onClick={() => {
-                              setWorkspaceMenuId(null);
-                              setSectionErr(null);
-                              setDeletePhrase("");
-                              setDeletePassword("");
-                              setDeleteTarget(t);
-                            }}
-                          >
-                            Delete workspace
-                          </button>
+                          {isWorkspaceOwner(t.role) ? (
+                            <button
+                              type="button"
+                              role="menuitem"
+                              className="enterprise-profile-workspace-menu-danger"
+                              data-testid={`delete-workspace-${t.id}`}
+                              onClick={() => {
+                                setWorkspaceMenuId(null);
+                                setDeleteErr(null);
+                                setDeletePassword("");
+                                setDeleteTarget(t);
+                              }}
+                            >
+                              Delete workspace
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              role="menuitem"
+                              disabled={leaveId === t.id}
+                              onClick={async () => {
+                                if (!window.confirm(`Leave “${t.name}”? You will lose access until invited again.`)) return;
+                                setWorkspaceMenuId(null);
+                                setSectionErr(null);
+                                setLeaveId(t.id);
+                                try {
+                                  await leaveTeam(t.id);
+                                  await onRefresh();
+                                  await loadPending();
+                                } catch (err) {
+                                  setSectionErr(err instanceof Error ? err.message : "Could not leave workspace.");
+                                } finally {
+                                  setLeaveId(null);
+                                }
+                              }}
+                            >
+                              {leaveId === t.id ? "Leaving…" : "Leave workspace"}
+                            </button>
+                          )}
                         </div>
                       ) : null}
                     </div>
+                  </div>
+                </div>
+                <footer className="enterprise-profile-ws-card-foot">
+                  <span className={roleBadgeClass(t.role)}>{roleLabel(t.role)}</span>
+                  {isCurrent ? (
+                    <span className="enterprise-profile-ws-card-foot-spacer" aria-hidden="true" />
                   ) : (
                     <button
                       type="button"
-                      className="enterprise-team-leave-inline"
-                      disabled={leaveId === t.id}
-                      onClick={async () => {
-                        if (!window.confirm(`Leave “${t.name}”? You will lose access until invited again.`)) return;
-                        setSectionErr(null);
-                        setLeaveId(t.id);
-                        try {
-                          await leaveTeam(t.id);
-                          await onRefresh();
-                          await loadPending();
-                        } catch (e) {
-                          setSectionErr(e instanceof Error ? e.message : "Could not leave workspace.");
-                        } finally {
-                          setLeaveId(null);
-                        }
-                      }}
+                      className="enterprise-profile-ws-select-btn"
+                      onClick={() => onSelectWorkspace(t.id)}
+                      data-testid={`profile-workspace-switch-${t.id}`}
                     >
-                      <IconLogOut /> {leaveId === t.id ? "Leaving…" : "Leave"}
+                      Select
                     </button>
                   )}
-                </div>
-              </li>
+                </footer>
+              </article>
             );
           })}
-        </ul>
+        </div>
       )}
+      </div>
 
       {deleteTarget ? (
         <div
@@ -292,63 +356,62 @@ export function ProfileTeamsSection({ teams, onRefresh, onWorkspaceDeleted }: Pr
               This permanently deletes <strong>{deleteTarget.name}</strong> and all its tasks, messages, calendar events,
               and files. Members keep their personal accounts.
             </p>
-            <p className="enterprise-profile-delete-or">Confirm with either option below:</p>
-            <label className="enterprise-muted enterprise-profile-delete-label" htmlFor="delete-workspace-phrase">
-              Type <strong>DELETE</strong>
-            </label>
-            <input
-              id="delete-workspace-phrase"
-              className="auth-input"
-              value={deletePhrase}
-              onChange={(e) => setDeletePhrase(e.target.value)}
-              placeholder="DELETE"
-              autoComplete="off"
-              autoCapitalize="characters"
-              data-testid="delete-workspace-phrase-input"
-            />
-            <p className="enterprise-profile-delete-or-divider" aria-hidden>
-              or
+            <p className="enterprise-muted enterprise-profile-delete-copy" style={{ marginBottom: "1rem" }}>
+              Enter your account password to confirm.
             </p>
             <label className="enterprise-muted enterprise-profile-delete-label" htmlFor="delete-workspace-password">
               Your account password
             </label>
-            <input
-              id="delete-workspace-password"
-              type="password"
-              className="auth-input"
-              value={deletePassword}
-              onChange={(e) => setDeletePassword(e.target.value)}
-              placeholder="Password"
-              autoComplete="current-password"
-              data-testid="delete-workspace-password-input"
-            />
+            <div className="enterprise-profile-delete-password-row">
+              <input
+                id="delete-workspace-password"
+                type={deleteShowPassword ? "text" : "password"}
+                className="auth-input"
+                value={deletePassword}
+                onChange={(e) => {
+                  setDeletePassword(e.target.value);
+                  setDeleteErr(null);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && deleteConfirmationReady && !deleteBusy) {
+                    e.preventDefault();
+                    void handleConfirmDeleteWorkspace();
+                  }
+                }}
+                placeholder="Enter your password"
+                autoComplete="current-password"
+                data-testid="delete-workspace-password-input"
+              />
+              <button
+                type="button"
+                className="enterprise-profile-delete-password-toggle"
+                onClick={() => setDeleteShowPassword((v) => !v)}
+              >
+                {deleteShowPassword ? "Hide" : "Show"}
+              </button>
+            </div>
+            <p className="enterprise-profile-delete-forgot">
+              <Link
+                to="/forgot-password"
+                className="auth-v2-inline-link"
+                data-testid="delete-workspace-forgot-password"
+                onClick={() => closeDeleteModal()}
+              >
+                Forgot password?
+              </Link>
+            </p>
+            {deleteErr ? (
+              <p className="enterprise-form-error" role="alert">
+                {deleteErr}
+              </p>
+            ) : null}
             <div className="enterprise-profile-delete-actions">
               <button
                 type="button"
                 className="enterprise-team-btn-destructive enterprise-profile-delete-submit"
                 disabled={deleteBusy || !deleteConfirmationReady}
                 data-testid="confirm-delete-workspace"
-                onClick={async () => {
-                  if (!deleteConfirmationReady) return;
-                  setSectionErr(null);
-                  setDeleteBusy(true);
-                  try {
-                    const confirmation =
-                      deletePhrase.trim() === "DELETE"
-                        ? { confirmPhrase: "DELETE" as const }
-                        : { password: deletePassword };
-                    await deleteTeam(deleteTarget.id, confirmation);
-                    const deletedId = deleteTarget.id;
-                    closeDeleteModal();
-                    await onRefresh();
-                    await loadPending();
-                    if (onWorkspaceDeleted) await onWorkspaceDeleted(deletedId);
-                  } catch (e) {
-                    setSectionErr(e instanceof Error ? e.message : "Could not delete workspace.");
-                  } finally {
-                    setDeleteBusy(false);
-                  }
-                }}
+                onClick={() => void handleConfirmDeleteWorkspace()}
               >
                 {deleteBusy ? "Deleting…" : "Delete forever"}
               </button>

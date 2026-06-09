@@ -3,7 +3,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { AlenioWorkspaceLoading } from "./AlenioWorkspaceLoading";
 import { clearAccessToken, getAuthClient } from "../lib/auth-client";
-import { setPersistedEnterpriseTeamId, markFooterEnterpriseWorkspaceSelect } from "../lib/enterprise-selected-team";
+import {
+  isRecentFooterEnterpriseWorkspaceSelect,
+  setPersistedEnterpriseTeamId,
+  switchEnterpriseWorkspace,
+} from "../lib/enterprise-selected-team";
 import type { WebMeUser, WebTeamRow } from "../lib/api";
 
 export type EnterpriseNavId = "activity" | "chat" | "execute" | "team" | "plan" | "profile";
@@ -134,10 +138,11 @@ export function EnterpriseLayout({
   showActivityExecuteNav,
 }: Props) {
   const [showWorkspaceOverlay, setShowWorkspaceOverlay] = useState(false);
-  /** User changed workspace from the sidebar select; until cleared, `workspaceOverlayLoading` controls how long the overlay may stay up. */
+  /** User changed workspace (sidebar or profile); until cleared, `workspaceOverlayLoading` controls how long the overlay may stay up. */
   const [sidebarWorkspaceSwitch, setSidebarWorkspaceSwitch] = useState(false);
   const overlayStartedAtRef = useRef<number | null>(null);
   const hideOverlayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prevSelectedTeamIdRef = useRef(selectedTeamId);
 
   const clearPendingHideTimer = useCallback(() => {
     if (hideOverlayTimerRef.current) {
@@ -153,15 +158,26 @@ export function EnterpriseLayout({
     setSidebarWorkspaceSwitch(false);
   }, [clearPendingHideTimer]);
 
-  const handleWorkspaceSelectChange = (teamId: string) => {
-    setPersistedEnterpriseTeamId(teamId);
-    markFooterEnterpriseWorkspaceSelect();
+  const beginWorkspaceSwitchOverlay = useCallback(() => {
     clearPendingHideTimer();
     overlayStartedAtRef.current = Date.now();
     setShowWorkspaceOverlay(true);
     setSidebarWorkspaceSwitch(true);
+  }, [clearPendingHideTimer]);
+
+  const handleWorkspaceSelectChange = (teamId: string) => {
+    switchEnterpriseWorkspace(teamId, onTeamChange);
+    beginWorkspaceSwitchOverlay();
     onTeamChange(teamId);
   };
+
+  useEffect(() => {
+    const prev = prevSelectedTeamIdRef.current;
+    prevSelectedTeamIdRef.current = selectedTeamId;
+    if (!selectedTeamId || prev === selectedTeamId || prev === "") return;
+    if (!isRecentFooterEnterpriseWorkspaceSelect()) return;
+    beginWorkspaceSwitchOverlay();
+  }, [selectedTeamId, beginWorkspaceSwitchOverlay]);
 
   useEffect(() => {
     if (!sidebarWorkspaceSwitch) return;

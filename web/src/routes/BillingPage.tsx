@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useEnterpriseShell } from "../contexts/EnterpriseShellContext";
 import {
-  fetchWebCheckoutConfig,
   fetchWebTeamSubscription,
   postWebBillingCheckout,
   postWebBillingPortal,
@@ -10,6 +9,7 @@ import {
   type WebTeamRow,
   type WebTeamSubscription,
 } from "../lib/api";
+import { loadWebCheckoutConfig, peekWebCheckoutConfig, type WebCheckoutConfig } from "../lib/checkout-config-cache";
 import { FREE_INCLUDED, FREE_LOCKED, TEAM_FEATURES } from "../lib/plan-catalog";
 
 function planLabel(plan: string): string {
@@ -70,7 +70,8 @@ export function BillingPage() {
   const [subRetryKey, setSubRetryKey] = useState(0);
   const [actionErr, setActionErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [checkoutCfg, setCheckoutCfg] = useState<{ configured: boolean; missingKeys: string[] } | null>(null);
+  const [checkoutCfg, setCheckoutCfg] = useState<WebCheckoutConfig | null>(() => peekWebCheckoutConfig());
+  const [checkoutCfgLoading, setCheckoutCfgLoading] = useState(() => peekWebCheckoutConfig() === null);
   const autoCheckoutStarted = useRef(false);
   /** Team id for which `sub` was last loaded successfully (enables silent background refresh). */
   const loadedSubTeamIdRef = useRef<string | null>(null);
@@ -189,21 +190,28 @@ export function BillingPage() {
 
   useEffect(() => {
     if (!isOwner) {
-      setCheckoutCfg(null);
+      setCheckoutCfgLoading(false);
       return;
     }
     let cancelled = false;
-    void fetchWebCheckoutConfig()
+    const cached = peekWebCheckoutConfig();
+    if (cached) {
+      setCheckoutCfg(cached);
+      setCheckoutCfgLoading(false);
+    } else {
+      setCheckoutCfgLoading(true);
+    }
+    void loadWebCheckoutConfig()
       .then((d) => {
         if (!cancelled) setCheckoutCfg(d);
       })
-      .catch(() => {
-        if (!cancelled) setCheckoutCfg(null);
+      .finally(() => {
+        if (!cancelled) setCheckoutCfgLoading(false);
       });
     return () => {
       cancelled = true;
     };
-  }, [isOwner, selectedTeamId]);
+  }, [isOwner]);
 
   const clearBillingParam = useCallback(() => {
     setParams(
@@ -260,7 +268,7 @@ export function BillingPage() {
     const subscribe = params.get("subscribe");
     if (subscribe !== "1") return;
     if (!teams?.length || !selectedTeamId || !isOwner || showPlanLoading || subErr || sub === null) return;
-    if (checkoutCfg === null) return;
+    if (checkoutCfgLoading || checkoutCfg === null) return;
     if (!checkoutCfg.configured) {
       setParams(
         (prev) => {
@@ -299,6 +307,7 @@ export function BillingPage() {
     setParams,
     onSubscribe,
     checkoutCfg,
+    checkoutCfgLoading,
   ]);
 
   const isActiveTeamPlan =
@@ -306,12 +315,19 @@ export function BillingPage() {
     (sub.plan === "team" || sub.plan === "pro") &&
     ["active", "trialing", "past_due", "incomplete", "paused"].includes(sub.status);
   const currentPlanTier: "free" | "team" = isActiveTeamPlan ? "team" : "free";
-  const workspaceName = teams?.find((t) => t.id === selectedTeamId)?.name ?? "Workspace";
   const showSubscribeCta = isOwner && !!sub && !stripeActive && !mobileManaged && currentPlanTier === "free";
+  const showCheckoutNotConfigured =
+    !checkoutCfgLoading &&
+    !!checkoutCfg &&
+    !checkoutCfg.configured &&
+    isOwner &&
+    !showPlanLoading &&
+    sub !== null &&
+    currentPlanTier === "free";
 
   if (me === undefined) {
     return (
-      <div className="enterprise-dashboard-inner" style={{ maxWidth: 960 }}>
+      <div className="enterprise-tab-shell enterprise-tab-shell-billing">
         <p className="enterprise-muted">Loading…</p>
       </div>
     );
@@ -319,7 +335,7 @@ export function BillingPage() {
 
   return (
     <>
-      <div className="enterprise-dashboard-inner" style={{ maxWidth: 960 }}>
+      <div className="enterprise-tab-shell enterprise-tab-shell-scroll enterprise-tab-shell-billing">
         {billingFlash === "success" ? (
           <div className="enterprise-card" style={{ marginBottom: 16, borderColor: "rgba(34,197,94,0.45)" }}>
             <p style={{ margin: 0 }}>Thanks — your payment is processing. It may take a moment for your plan to update.</p>
@@ -343,29 +359,22 @@ export function BillingPage() {
           </p>
         ) : null}
 
-        {/* Hero */}
-        <header style={{ textAlign: "center", marginBottom: 8 }}>
+        <section className="enterprise-card" style={{ marginBottom: 16 }}>
           {showPlanLoading ? (
-            <p className="enterprise-muted" style={{ marginBottom: 12 }}>
+            <p className="enterprise-muted" style={{ margin: "0 0 8px" }}>
               Loading plan…
             </p>
           ) : null}
-          <h1 className="enterprise-page-title" style={{ marginBottom: 8 }}>
-            Choose the plan that fits your team
-          </h1>
-          <p className="enterprise-muted" style={{ maxWidth: 480, margin: "0 auto 8px", lineHeight: 1.5 }}>
+          <p className="enterprise-muted" style={{ margin: 0, lineHeight: 1.5 }}>
             Simple pricing. No hidden fees. Cancel anytime. Subscriptions are per workspace — only the{" "}
             <strong>owner</strong> can start checkout or open the billing portal.
           </p>
           {!showPlanLoading && sub && subscriptionLine(sub, stripeActive) ? (
-            <p className="enterprise-muted" style={{ fontSize: 14, marginTop: 4 }}>
+            <p className="enterprise-muted" style={{ fontSize: 14, marginTop: 8, marginBottom: 0 }}>
               {subscriptionLine(sub, stripeActive)}
             </p>
           ) : null}
-          <p className="enterprise-muted" style={{ fontSize: 14, marginTop: 6 }}>
-            <strong>{workspaceName}</strong>
-          </p>
-        </header>
+        </section>
 
         {subErr ? (
           <div className="enterprise-card" role="alert" style={{ marginBottom: 20 }}>
@@ -566,7 +575,7 @@ export function BillingPage() {
               ))}
             </ul>
             <div style={{ marginTop: 20 }}>
-              {checkoutCfg && !checkoutCfg.configured && isOwner && currentPlanTier === "free" ? (
+              {showCheckoutNotConfigured ? (
                 <div
                   role="status"
                   style={{
@@ -598,7 +607,7 @@ export function BillingPage() {
                     <button
                       type="button"
                       className="auth-submit"
-                      disabled={busy || !!subErr || (checkoutCfg !== null && !checkoutCfg.configured)}
+                      disabled={busy || !!subErr || checkoutCfgLoading || (checkoutCfg !== null && !checkoutCfg.configured)}
                       onClick={onSubscribe}
                     >
                       {busy ? "Opening checkout…" : "Upgrade to Team"}

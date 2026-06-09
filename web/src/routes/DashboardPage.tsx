@@ -9,10 +9,12 @@ import {
   startOfDay,
 } from "../lib/calendar-mobile-parity";
 import { getUSHolidays } from "../lib/us-federal-holidays";
+import { canShowVideoJoin, isInVideoMeetingBannerWindow, isVideoMeetingLeaderRole } from "../lib/video-meeting-join";
 import {
   createWebTask,
   createWebTeamEvent,
   createVideoRoom,
+  deleteWebTask,
   deleteWebTeamEvent,
   fetchCoreTeamTasks,
   fetchWebTeam,
@@ -102,6 +104,13 @@ function assigneeInitials(name: string | null, email: string | null | undefined)
   return "?";
 }
 
+function canDeleteTask(task: ApiTask, meId: string | undefined, role: string): boolean {
+  if (!meId) return false;
+  const creatorId = task.creatorId ?? task.creator?.id;
+  if (creatorId === meId) return true;
+  return role === "owner" || role === "admin";
+}
+
 type TaskTab = "active" | "completed" | "team";
 const PRIORITIES = [
   { label: "Low", value: "low" },
@@ -158,6 +167,7 @@ export function DashboardPage() {
   const [eventAddChoiceOpen, setEventAddChoiceOpen] = useState(false);
   const [newEventIsVideoMeeting, setNewEventIsVideoMeeting] = useState(false);
   const [upcomingMeetings, setUpcomingMeetings] = useState<UpcomingVideoMeeting[]>([]);
+  const [meetingNow, setMeetingNow] = useState(() => Date.now());
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [videoTitle, setVideoTitle] = useState("");
   const [videoLoading, setVideoLoading] = useState(false);
@@ -168,6 +178,9 @@ export function DashboardPage() {
   const [editDescription, setEditDescription] = useState("");
   const [editPriority, setEditPriority] = useState("medium");
   const [editDueDate, setEditDueDate] = useState("");
+  const [taskMenuId, setTaskMenuId] = useState<string | null>(null);
+  const [taskDeleteId, setTaskDeleteId] = useState<string | null>(null);
+  const [taskActionError, setTaskActionError] = useState<string | null>(null);
 
   const now = new Date();
 
@@ -241,6 +254,11 @@ export function DashboardPage() {
   }, [createOpen, me?.id, createTeamDetail?.members]);
 
   useEffect(() => {
+    const id = window.setInterval(() => setMeetingNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  useEffect(() => {
     let cancelled = false;
     const loadUpcoming = async () => {
       try {
@@ -263,6 +281,20 @@ export function DashboardPage() {
   useEffect(() => {
     setSelectedDate(new Date());
   }, [selectedTeamId]);
+
+  useEffect(() => {
+    if (!taskMenuId) return;
+    const close = (e: MouseEvent) => {
+      const target = e.target;
+      if (target instanceof Element && target.closest(".enterprise-task-row-actions")) return;
+      setTaskMenuId(null);
+    };
+    const timer = window.setTimeout(() => document.addEventListener("click", close), 0);
+    return () => {
+      window.clearTimeout(timer);
+      document.removeEventListener("click", close);
+    };
+  }, [taskMenuId]);
 
   const selectedTeam = teams?.find((t) => t.id === selectedTeamId);
 
@@ -309,6 +341,27 @@ export function DashboardPage() {
   const myRole = selectedTeam?.role ?? "";
   const isOwnerOrLeader = myRole === "owner" || myRole === "team_leader";
   const isOwnerOrAdmin = myRole === "owner" || myRole === "admin";
+
+  const handleDeleteTask = async (task: ApiTask) => {
+    if (!selectedTeamId || !canDeleteTask(task, me?.id, myRole)) return;
+    const ok = window.confirm(`Delete "${task.title}"? This cannot be undone.`);
+    if (!ok) return;
+    setTaskDeleteId(task.id);
+    setTaskActionError(null);
+    setTaskMenuId(null);
+    try {
+      await deleteWebTask(task.id, selectedTeamId);
+      if (selectedTaskModal?.id === task.id) {
+        setSelectedTaskModal(null);
+        setTaskEditMode(false);
+      }
+      await refreshTeamData(selectedTeamId);
+    } catch (err) {
+      setTaskActionError(err instanceof Error ? err.message : "Could not delete task.");
+    } finally {
+      setTaskDeleteId(null);
+    }
+  };
 
   const visibleEvents = useMemo(() => {
     const uid = me?.id ?? null;
@@ -443,19 +496,14 @@ export function DashboardPage() {
 
   const activeUpcomingMeeting = useMemo(() => {
     if (!selectedTeamId) return null;
-    const nowMs = Date.now();
-    /** Match `GET /api/video/upcoming` window (starts within ~60 min, or in progress). */
-    const upcomingLeadMs = 60 * 60 * 1000;
     return (
       upcomingMeetings
         .filter((m) => m.event.teamId === selectedTeamId)
-        .find((m) => {
-          const start = new Date(m.event.startDate).getTime();
-          const end = m.event.endDate ? new Date(m.event.endDate).getTime() : start + 60 * 60 * 1000;
-          return nowMs <= end && start - nowMs <= upcomingLeadMs;
-        }) ?? null
+        .find((m) =>
+          isInVideoMeetingBannerWindow(m.event.startDate, m.event.endDate, meetingNow),
+        ) ?? null
     );
-  }, [upcomingMeetings, selectedTeamId]);
+  }, [upcomingMeetings, selectedTeamId, meetingNow]);
 
   const openVideoCall = async (roomId: string, title: string) => {
     setVideoLoading(true);
@@ -473,7 +521,7 @@ export function DashboardPage() {
 
   if (me === undefined) {
     return (
-      <div className="enterprise-dashboard-inner">
+      <div className="enterprise-tab-shell">
         <p className="enterprise-muted" data-testid="dashboard-loading">
           Loading…
         </p>
@@ -483,7 +531,7 @@ export function DashboardPage() {
 
   return (
     <>
-      <div className="enterprise-dashboard-inner" data-testid="dashboard-screen">
+      <div className="enterprise-tab-shell enterprise-tab-shell-scroll" data-testid="dashboard-screen">
         {tasksErr ? (
           <p className="enterprise-banner-warn" role="status">
             {tasksErr}
@@ -499,14 +547,21 @@ export function DashboardPage() {
             <div>
               <strong>Upcoming video meeting:</strong> {activeUpcomingMeeting.event.title}
             </div>
-            <button
-              type="button"
-              className="enterprise-task-modal-btn enterprise-task-modal-btn-primary"
-              onClick={() => void openVideoCall(activeUpcomingMeeting.event.id, activeUpcomingMeeting.event.title)}
-              disabled={videoLoading}
-            >
-              {videoLoading ? "Joining…" : "Join call"}
-            </button>
+            {canShowVideoJoin(
+              activeUpcomingMeeting.event.startDate,
+              activeUpcomingMeeting.event.endDate,
+              meetingNow,
+              isVideoMeetingLeaderRole(activeUpcomingMeeting.userRole),
+            ) ? (
+              <button
+                type="button"
+                className="enterprise-task-modal-btn enterprise-task-modal-btn-primary"
+                onClick={() => void openVideoCall(activeUpcomingMeeting.event.id, activeUpcomingMeeting.event.title)}
+                disabled={videoLoading}
+              >
+                {videoLoading ? "Joining…" : "Join call"}
+              </button>
+            ) : null}
           </div>
         ) : null}
 
@@ -784,17 +839,24 @@ export function DashboardPage() {
                               <span className="enterprise-cal-day-event-name">{event.title}</span>
                               {event.isVideoMeeting ? (
                                 <div className="enterprise-cal-day-event-meeting-actions">
-                                  <button
-                                    type="button"
-                                    className="enterprise-cal-badge-video enterprise-cal-video-join"
-                                    title="Join video meeting"
-                                    aria-label={`Join video meeting: ${event.title}`}
-                                    onClick={() => void openVideoCall(event.id, event.title)}
-                                    disabled={videoLoading}
-                                    data-testid={`event-join-${event.id}`}
-                                  >
-                                    {videoLoading ? "Joining…" : "Join"}
-                                  </button>
+                                  {canShowVideoJoin(
+                                    event.startDate,
+                                    event.endDate,
+                                    meetingNow,
+                                    isOwnerOrLeader,
+                                  ) ? (
+                                    <button
+                                      type="button"
+                                      className="enterprise-cal-badge-video enterprise-cal-video-join"
+                                      title="Join video meeting"
+                                      aria-label={`Join video meeting: ${event.title}`}
+                                      onClick={() => void openVideoCall(event.id, event.title)}
+                                      disabled={videoLoading}
+                                      data-testid={`event-join-${event.id}`}
+                                    >
+                                      {videoLoading ? "Joining…" : "Join"}
+                                    </button>
+                                  ) : null}
                                   <span className="enterprise-cal-day-event-badges">{badgesContent}</span>
                                 </div>
                               ) : (
@@ -888,6 +950,11 @@ export function DashboardPage() {
                 </svg>
               </span>
             </div>
+            {taskActionError ? (
+              <p className="enterprise-form-error" role="alert" style={{ marginBottom: "0.75rem" }}>
+                {taskActionError}
+              </p>
+            ) : null}
             <div className="enterprise-table-wrap">
               <table className="enterprise-table">
                 <thead>
@@ -950,15 +1017,49 @@ export function DashboardPage() {
                           <td>
                             <span className={statusClass(t.status)}>{statusLabel(t.status)}</span>
                           </td>
-                          <td>
-                            <button
-                              type="button"
-                              className="enterprise-row-more"
-                              aria-label="More options"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              ⋮
-                            </button>
+                          <td
+                            className="enterprise-table-td-actions"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <div className="enterprise-task-row-actions">
+                              <button
+                                type="button"
+                                className="enterprise-row-more"
+                                aria-label={`Actions for ${t.title}`}
+                                aria-expanded={taskMenuId === t.id}
+                                aria-haspopup="menu"
+                                data-testid={`task-menu-${t.id}`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setTaskMenuId((prev) => (prev === t.id ? null : t.id));
+                                }}
+                              >
+                                ⋮
+                              </button>
+                              {taskMenuId === t.id ? (
+                                <div className="enterprise-task-row-menu" role="menu">
+                                  {canDeleteTask(t, me?.id, myRole) ? (
+                                    <button
+                                      type="button"
+                                      className="enterprise-task-row-menu-danger"
+                                      role="menuitem"
+                                      disabled={taskDeleteId === t.id}
+                                      data-testid={`task-delete-${t.id}`}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        void handleDeleteTask(t);
+                                      }}
+                                    >
+                                      {taskDeleteId === t.id ? "Deleting…" : "Delete"}
+                                    </button>
+                                  ) : (
+                                    <p className="enterprise-task-row-menu-muted" role="presentation">
+                                      No actions available
+                                    </p>
+                                  )}
+                                </div>
+                              ) : null}
+                            </div>
                           </td>
                         </tr>
                       );
@@ -1596,6 +1697,7 @@ function mergeTaskLists(webTasks: ApiTask[], coreTasks: ApiTask[]): ApiTask[] {
     byId.set(c.id, {
       ...prev,
       ...c,
+      creatorId: c.creatorId ?? prev.creatorId ?? c.creator?.id ?? prev.creator?.id,
       assignments: c.assignments?.length ? c.assignments : prev.assignments,
       subtasks: c.subtasks?.length ? c.subtasks : prev.subtasks,
       attachmentUrl: c.attachmentUrl ?? prev.attachmentUrl,

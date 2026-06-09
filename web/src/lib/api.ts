@@ -119,6 +119,7 @@ export type WebMeUser = {
 export type WebTeamRow = {
   id: string;
   name: string;
+  image?: string | null;
   createdAt: string;
   role: string;
   _count: { members: number; tasks: number };
@@ -205,8 +206,16 @@ export function deleteApiAccount(password: string) {
   });
 }
 
-export function fetchWebTeams() {
-  return apiGetJson<{ data: WebTeamRow[] }>("/web/api/teams").then((r) => r.data);
+export async function fetchWebTeams() {
+  const [webRes, mobileRes] = await Promise.all([
+    apiGetJson<{ data: WebTeamRow[] }>("/web/api/teams"),
+    apiGetJson<{ data: Array<{ id: string; image?: string | null }> }>("/api/teams").catch(() => null),
+  ]);
+  const mobileImageById = new Map((mobileRes?.data ?? []).map((t) => [t.id, t.image]));
+  return webRes.data.map((t) => ({
+    ...t,
+    image: t.image || mobileImageById.get(t.id) || null,
+  }));
 }
 
 export type WebTeamJoinRequest = {
@@ -563,6 +572,17 @@ export function deleteWebTeamEvent(teamId: string, eventId: string) {
     `/web/api/teams/${encodeURIComponent(teamId)}/events/${encodeURIComponent(eventId)}`,
     { method: "DELETE" },
   ).then((r) => r.data);
+}
+
+export async function deleteWebTask(taskId: string, teamId?: string) {
+  const tid = encodeURIComponent(taskId);
+  try {
+    return await apiRequest<{ data: { ok: true } }>(`/web/api/tasks/${tid}`, { method: "DELETE" }).then((r) => r.data);
+  } catch (e) {
+    if (!teamId) throw e;
+    await apiRequest<unknown>(`/api/teams/${encodeURIComponent(teamId)}/tasks/${tid}`, { method: "DELETE" });
+    return { ok: true as const };
+  }
 }
 
 export function updateWebTeamEvent(

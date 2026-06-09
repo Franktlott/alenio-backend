@@ -7,10 +7,7 @@ export function TeamPage() {
     me,
     teams,
     selectedTeamId,
-    setSelectedTeamId,
     refreshMeAndTeams,
-    setShellMainClassSuffix,
-    setShellContentClassSuffix,
     setWorkspaceMainLoading,
   } = useEnterpriseShell();
   const [workspaceOverlayLoading, setWorkspaceOverlayLoading] = useState(false);
@@ -26,46 +23,26 @@ export function TeamPage() {
     return () => setWorkspaceMainLoading(false);
   }, [hasNoTeams, workspaceOverlayLoading, setWorkspaceMainLoading]);
 
-  useEffect(() => {
-    if (hasNoTeams) {
-      setShellMainClassSuffix("enterprise-app-chat");
-      setShellContentClassSuffix("enterprise-content-flush");
-    } else {
-      setShellMainClassSuffix("");
-      setShellContentClassSuffix("");
-    }
-    return () => {
-      setShellMainClassSuffix("");
-      setShellContentClassSuffix("");
-    };
-  }, [hasNoTeams, setShellMainClassSuffix, setShellContentClassSuffix]);
-
   if (me === undefined) {
     return (
-      <div className="enterprise-dashboard-inner">
+      <div className="enterprise-tab-shell">
         <p className="enterprise-muted">Loading…</p>
       </div>
     );
   }
 
   return (
-    <>
-      {hasNoTeams ? (
-        <div className="chat-app-body chat-app-body-enterprise chat-app-body-no-teams">
-          <TeamTabPanel teams={teams} selectedTeamId={selectedTeamId} me={me} onTeamsRefresh={refreshMeAndTeams} />
-        </div>
-      ) : (
-        <div className="enterprise-dashboard-inner enterprise-profile-page">
-          <h1 className="enterprise-page-title enterprise-profile-page-title">Team</h1>
-          <TeamTabPanel
-            teams={teams}
-            selectedTeamId={selectedTeamId}
-            me={me}
-            onTeamsRefresh={refreshMeAndTeams}
-            onWorkspaceSwitchLoading={setWorkspaceOverlayLoading}
-          />
-        </div>
-      )}
-    </>
+    <div
+      className={`enterprise-tab-shell enterprise-tab-shell-scroll enterprise-team-page-shell${hasNoTeams ? " chat-app-body-no-teams" : ""}`}
+      data-testid="team-screen"
+    >
+      <TeamTabPanel
+        teams={teams}
+        selectedTeamId={selectedTeamId}
+        me={me}
+        onTeamsRefresh={refreshMeAndTeams}
+        onWorkspaceSwitchLoading={hasNoTeams ? undefined : setWorkspaceOverlayLoading}
+      />
+    </div>
   );
 }

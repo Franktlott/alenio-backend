@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import QRCode from "qrcode";
 import { NoTeamsEmptyState } from "./NoTeamsEmptyState";
@@ -72,6 +72,116 @@ function IconLogOut() {
       <polyline points="16 17 21 12 16 7" />
       <line x1="21" y1="12" x2="9" y2="12" />
     </svg>
+  );
+}
+
+function IconQr({ size = 20 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <rect x="3" y="3" width="7" height="7" rx="1" />
+      <rect x="14" y="3" width="7" height="7" rx="1" />
+      <rect x="3" y="14" width="7" height="7" rx="1" />
+      <path d="M14 14h3v3h-3zM17 17h3v3h-3zM14 20h3" />
+    </svg>
+  );
+}
+
+function IconAlertTriangle({ size = 18 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+      <line x1="12" y1="9" x2="12" y2="13" />
+      <line x1="12" y1="17" x2="12.01" y2="17" />
+    </svg>
+  );
+}
+
+type TeamSectionShellProps = {
+  title: string;
+  hint?: string;
+  wired: boolean;
+  children: ReactNode;
+  className?: string;
+};
+
+function TeamSectionShell({ title, hint, wired, children, className = "" }: TeamSectionShellProps) {
+  return (
+    <section
+      className={`enterprise-card enterprise-team-block${wired ? "" : " enterprise-team-section--coming-soon"}${className ? ` ${className}` : ""}`}
+      aria-disabled={!wired}
+    >
+      <div className="enterprise-team-section-head">
+        <div>
+          <h2 className="enterprise-card-title enterprise-card-title-spaced">{title}</h2>
+          {hint ? <p className="enterprise-muted enterprise-team-members-sub">{hint}</p> : null}
+        </div>
+        {!wired ? <span className="enterprise-team-coming-soon-badge">Coming soon</span> : null}
+      </div>
+      <div className={wired ? undefined : "enterprise-team-section-placeholder"}>{children}</div>
+    </section>
+  );
+}
+
+function TeamOverviewPreview() {
+  return (
+    <div className="enterprise-team-overview" aria-hidden>
+      <div className="enterprise-team-overview-ring">
+        <svg viewBox="0 0 116 116" className="enterprise-team-overview-ring-svg" aria-hidden>
+          <circle cx="58" cy="58" r="48" fill="none" stroke="#e5e7eb" strokeWidth="10" />
+          <circle
+            cx="58"
+            cy="58"
+            r="48"
+            fill="none"
+            stroke="#4f46e5"
+            strokeWidth="10"
+            strokeDasharray="90 211"
+            strokeLinecap="round"
+            transform="rotate(-90 58 58)"
+          />
+        </svg>
+        <div className="enterprise-team-overview-ring-label">
+          <strong>—%</strong>
+          <span>6-month</span>
+        </div>
+      </div>
+      <div className="enterprise-team-overview-stats">
+        <div className="enterprise-team-overview-stat">
+          <strong className="enterprise-stat-open">—</strong>
+          <span>Open</span>
+        </div>
+        <div className="enterprise-team-overview-stat">
+          <strong className="enterprise-stat-progress">—</strong>
+          <span>In progress</span>
+        </div>
+        <div className="enterprise-team-overview-stat">
+          <strong className="enterprise-stat-overdue">—</strong>
+          <span>Overdue</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TeamPerformancePreview() {
+  return (
+    <div className="enterprise-team-performance-preview" aria-hidden>
+      <svg viewBox="0 0 400 120" className="enterprise-team-performance-chart" preserveAspectRatio="none" aria-hidden>
+        <line x1="40" y1="20" x2="380" y2="20" stroke="#e0e7ff" strokeWidth="1" strokeDasharray="3 3" />
+        <line x1="40" y1="55" x2="380" y2="55" stroke="#e0e7ff" strokeWidth="1" strokeDasharray="3 3" />
+        <line x1="40" y1="90" x2="380" y2="90" stroke="#e0e7ff" strokeWidth="1" strokeDasharray="3 3" />
+        <polyline
+          points="40,78 120,62 200,48 280,40 360,32"
+          fill="none"
+          stroke="#4361ee"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <path d="M40,78 L120,62 L200,48 L280,40 L360,32 L360,90 L40,90 Z" fill="#4361ee" fillOpacity="0.08" />
+      </svg>
+      <p className="enterprise-muted enterprise-team-performance-hint">Monthly completion rate across the team</p>
+    </div>
   );
 }
 
@@ -375,86 +485,87 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
     );
   }
 
+  const teamOverviewWired = false;
+  const teamPerformanceWired = false;
+
   return (
-    <div className="enterprise-team-tab">
+    <div className="enterprise-team-tab enterprise-team-page">
       {tabErr ? (
         <p className="enterprise-form-error" role="alert" style={{ marginBottom: 12 }}>
           {tabErr}
         </p>
       ) : null}
 
-      <section className="enterprise-card enterprise-profile-account enterprise-team-ws-profile-card">
-        <div className="enterprise-profile-account-head">
-          <h2 className="enterprise-card-title enterprise-card-title-spaced enterprise-profile-account-title">Workspace</h2>
-          <div className="enterprise-team-ws-head-actions">
-            {myRole !== "owner" ? (
+      <div className="enterprise-team-stack">
+        <div className="enterprise-team-toolbar">
+          {myRole !== "owner" ? (
+            <button
+              type="button"
+              className="enterprise-team-leave-inline enterprise-team-toolbar-btn"
+              disabled={leaveBusy}
+              onClick={() => void onLeaveTeam()}
+            >
+              <IconLogOut /> {leaveBusy ? "Leaving…" : "Leave"}
+            </button>
+          ) : null}
+          {!isEditingWorkspace ? (
+            <>
               <button
                 type="button"
-                className="enterprise-team-leave-inline"
-                disabled={leaveBusy}
-                onClick={() => void onLeaveTeam()}
+                className="enterprise-profile-edit-btn enterprise-profile-edit-btn-with-icon enterprise-team-toolbar-btn"
+                onClick={() => void shareInvite()}
               >
-                <IconLogOut /> {leaveBusy ? "Leaving…" : "Leave"}
+                <IconUserPlus size={14} /> Add member
               </button>
-            ) : null}
-            {!isEditingWorkspace ? (
-              <>
+              <button type="button" className="enterprise-profile-edit-btn enterprise-team-toolbar-btn" onClick={() => void copyInvite()}>
+                Copy code
+              </button>
+              {manageMembers ? (
                 <button
                   type="button"
-                  className="enterprise-profile-edit-btn enterprise-profile-edit-btn-with-icon"
-                  onClick={() => void shareInvite()}
-                >
-                  <IconUserPlus size={14} /> Add member
-                </button>
-                <button type="button" className="enterprise-profile-edit-btn" onClick={() => void copyInvite()}>
-                  Copy code
-                </button>
-                {manageMembers ? (
-                  <button
-                    type="button"
-                    className="enterprise-profile-edit-btn enterprise-profile-edit-btn-with-icon"
-                    onClick={() => {
-                      setTabErr(null);
-                      setIsEditingWorkspace(true);
-                      setNameEdit(teamDetail.name);
-                    }}
-                  >
-                    <IconPencil /> Edit
-                  </button>
-                ) : null}
-              </>
-            ) : (
-              <div className="enterprise-profile-account-actions">
-                <button
-                  type="button"
-                  className="enterprise-profile-cancel-btn"
-                  disabled={nameSaving}
+                  className="enterprise-profile-edit-btn enterprise-profile-edit-btn-with-icon enterprise-team-toolbar-btn"
                   onClick={() => {
-                    setIsEditingWorkspace(false);
-                    setNameEdit(teamDetail.name);
                     setTabErr(null);
+                    setIsEditingWorkspace(true);
+                    setNameEdit(teamDetail.name);
                   }}
                 >
-                  Cancel
+                  <IconPencil /> Edit
                 </button>
-                <button
-                  type="button"
-                  className="auth-submit"
-                  disabled={nameSaving || !nameEdit.trim()}
-                  onClick={() => void onSaveTeamName()}
-                >
-                  {nameSaving ? "Saving…" : "Save workspace"}
-                </button>
-              </div>
-            )}
-          </div>
+              ) : null}
+            </>
+          ) : (
+            <div className="enterprise-profile-account-actions enterprise-team-toolbar-edit-actions">
+              <button
+                type="button"
+                className="enterprise-profile-cancel-btn"
+                disabled={nameSaving}
+                onClick={() => {
+                  setIsEditingWorkspace(false);
+                  setNameEdit(teamDetail.name);
+                  setTabErr(null);
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="auth-submit"
+                disabled={nameSaving || !nameEdit.trim()}
+                onClick={() => void onSaveTeamName()}
+              >
+                {nameSaving ? "Saving…" : "Save workspace"}
+              </button>
+            </div>
+          )}
         </div>
-        <div className="enterprise-profile-account-row">
-            <div className="enterprise-profile-avatar-col">
+
+        <section className="enterprise-team-hero">
+          <div className="enterprise-team-hero-inner">
             {manageMembers && isEditingWorkspace ? (
               <button
                 type="button"
-                className="enterprise-profile-avatar-btn"
+                className="enterprise-team-avatar-btn"
                 disabled={photoBusy}
                 onClick={() => void onPickTeamPhoto()}
                 title="Change workspace photo"
@@ -462,133 +573,167 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                 {photoBusy ? (
                   <span className="enterprise-muted">…</span>
                 ) : teamDetail.image ? (
-                  <img src={teamDetail.image} alt={`${teamDetail.name ?? "Workspace"} photo`} className="enterprise-profile-avatar-img" />
+                  <img src={teamDetail.image} alt={`${teamDetail.name ?? "Workspace"} photo`} className="enterprise-team-avatar-img" />
                 ) : (
-                  <span className="enterprise-profile-avatar-initials">{teamDetail.name?.[0]?.toUpperCase() ?? "T"}</span>
+                  <span className="enterprise-team-avatar-letter">{teamDetail.name?.[0]?.toUpperCase() ?? "T"}</span>
                 )}
               </button>
             ) : (
-              <div className="enterprise-profile-avatar-preview">
+              <div className="enterprise-team-avatar-btn" aria-hidden>
                 {photoBusy ? (
                   <span className="enterprise-muted">…</span>
                 ) : teamDetail.image ? (
-                  <img src={teamDetail.image} alt={`${teamDetail.name ?? "Workspace"} photo`} className="enterprise-profile-avatar-img" />
+                  <img src={teamDetail.image} alt={`${teamDetail.name ?? "Workspace"} photo`} className="enterprise-team-avatar-img" />
                 ) : (
-                  <span className="enterprise-profile-avatar-initials">{teamDetail.name?.[0]?.toUpperCase() ?? "T"}</span>
+                  <span className="enterprise-team-avatar-letter">{teamDetail.name?.[0]?.toUpperCase() ?? "T"}</span>
                 )}
               </div>
             )}
-            {manageMembers && isEditingWorkspace ? (
-              <button type="button" className="enterprise-team-pill-btn" disabled={photoBusy} onClick={() => void onPickTeamPhoto()}>
-                {photoBusy ? "Updating…" : "Update photo"}
-              </button>
+            <div className="enterprise-team-hero-text">
+              {isEditingWorkspace && manageMembers ? (
+                <>
+                  <label className="enterprise-team-hero-label" htmlFor="team-ws-name">
+                    Workspace name
+                  </label>
+                  <input
+                    id="team-ws-name"
+                    className="auth-input enterprise-team-name-input"
+                    value={nameEdit}
+                    onChange={(e) => setNameEdit(e.target.value)}
+                    autoComplete="organization"
+                  />
+                  {manageMembers ? (
+                    <button
+                      type="button"
+                      className="enterprise-team-hero-photo-btn"
+                      disabled={photoBusy}
+                      onClick={() => void onPickTeamPhoto()}
+                    >
+                      {photoBusy ? "Updating photo…" : "Update photo"}
+                    </button>
+                  ) : null}
+                </>
+              ) : (
+                <>
+                  <h2 className="enterprise-team-title">{teamDetail.name}</h2>
+                  <p className="enterprise-team-code">{teamDetail.inviteCode}</p>
+                  <p className="enterprise-team-hint">Share this code to invite team members</p>
+                  <span className="enterprise-team-hero-role-badge">
+                    {roleLabel(myRole)} · Team access enabled
+                  </span>
+                </>
+              )}
+            </div>
+            {!isEditingWorkspace ? (
+              <div className="enterprise-team-hero-actions">
+                <button type="button" className="enterprise-team-hero-icon-btn" aria-label="QR code" onClick={() => setQrOpen(true)}>
+                  <IconQr />
+                </button>
+                <button type="button" className="enterprise-team-hero-icon-btn enterprise-team-hero-icon-btn-primary" aria-label="Share invite" onClick={() => void shareInvite()}>
+                  <IconUserPlus size={20} />
+                </button>
+              </div>
             ) : null}
           </div>
-          <div className="enterprise-profile-account-fields">
-            {isEditingWorkspace && manageMembers ? (
-              <>
-                <label className="enterprise-muted enterprise-profile-label" htmlFor="team-ws-name">
-                  Workspace name
-                </label>
-                <input
-                  id="team-ws-name"
-                  className="auth-input enterprise-profile-name-input"
-                  value={nameEdit}
-                  onChange={(e) => setNameEdit(e.target.value)}
-                  autoComplete="organization"
-                />
-                <p className="enterprise-profile-edit-hint">Invite code stays the same for everyone.</p>
-              </>
-            ) : (
-              <>
-                <span className="enterprise-muted enterprise-profile-label">Workspace name</span>
-                <p className="enterprise-profile-name-display">{teamDetail.name}</p>
-              </>
-            )}
-            <span className="enterprise-team-account-pill-badge">
-              {roleLabel(myRole)} · Team access enabled
-            </span>
-            <div className="enterprise-team-code-row-ws enterprise-team-ws-invite-tools">
-              <span className="enterprise-team-code-mono">{teamDetail.inviteCode}</span>
-              <button type="button" className="enterprise-team-pill-btn" onClick={() => void copyInvite()}>
-                Copy
-              </button>
-              <button type="button" className="enterprise-team-pill-btn" onClick={() => void shareInvite()}>
-                Share
-              </button>
-              <button type="button" className="enterprise-team-pill-btn" onClick={() => setQrOpen(true)}>
-                QR code
-              </button>
-            </div>
-            <p className="enterprise-team-hint-ws">Share this code to invite team members</p>
-          </div>
-        </div>
-      </section>
-
-      {manageJoin && incoming.length > 0 ? (
-        <section className="enterprise-card enterprise-team-section">
-          <h3 className="enterprise-card-title">Pending requests ({incoming.length})</h3>
-          <ul className="enterprise-team-incoming-list">
-            {incoming.map((req) => (
-              <li key={req.id} className="enterprise-team-incoming-item">
-                <div>
-                  <strong>{req.user.name ?? req.user.email ?? "Someone"}</strong>
-                  <span className="enterprise-muted"> wants to join</span>
-                </div>
-                <div className="enterprise-team-incoming-actions">
-                  <button
-                    type="button"
-                    className="enterprise-join-requests-btn enterprise-join-requests-btn-decline"
-                    onClick={async () => {
-                      try {
-                        await rejectTeamJoinRequest(selectedTeamId, req.id);
-                        await loadTeamContext();
-                      } catch (e) {
-                        setTabErr(e instanceof Error ? e.message : "Decline failed.");
-                      }
-                    }}
-                  >
-                    Decline
-                  </button>
-                  <button
-                    type="button"
-                    className="enterprise-join-requests-btn enterprise-join-requests-btn-approve"
-                    onClick={async () => {
-                      try {
-                        await approveTeamJoinRequest(selectedTeamId, req.id);
-                        await loadTeamContext();
-                        await onTeamsRefresh();
-                      } catch (e) {
-                        setTabErr(e instanceof Error ? e.message : "Approve failed.");
-                      }
-                    }}
-                  >
-                    Approve
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
         </section>
-      ) : null}
 
-      <section className="enterprise-card enterprise-profile-teams">
-        <div className="enterprise-team-members-head">
-          <div>
-            <h2 className="enterprise-card-title enterprise-card-title-spaced">Team members</h2>
-            <p className="enterprise-muted enterprise-profile-teams-hint enterprise-team-members-sub">
-              People in this workspace.
-            </p>
-          </div>
-        </div>
-        {manageMembers ? (
-          <p className="enterprise-muted enterprise-team-owner-hint">
-            {myRole === "owner"
-              ? "Tap a member to change role, transfer ownership, or remove."
-              : "Tap a member to remove them from the team."}
-          </p>
+        {manageJoin && incoming.length > 0 ? (
+          <section className="enterprise-card enterprise-team-section">
+            <h3 className="enterprise-card-title">Pending requests ({incoming.length})</h3>
+            <ul className="enterprise-team-incoming-list">
+              {incoming.map((req) => (
+                <li key={req.id} className="enterprise-team-incoming-item">
+                  <div>
+                    <strong>{req.user.name ?? req.user.email ?? "Someone"}</strong>
+                    <span className="enterprise-muted"> wants to join</span>
+                  </div>
+                  <div className="enterprise-team-incoming-actions">
+                    <button
+                      type="button"
+                      className="enterprise-join-requests-btn enterprise-join-requests-btn-decline"
+                      onClick={async () => {
+                        try {
+                          await rejectTeamJoinRequest(selectedTeamId, req.id);
+                          await loadTeamContext();
+                        } catch (e) {
+                          setTabErr(e instanceof Error ? e.message : "Decline failed.");
+                        }
+                      }}
+                    >
+                      Decline
+                    </button>
+                    <button
+                      type="button"
+                      className="enterprise-join-requests-btn enterprise-join-requests-btn-approve"
+                      onClick={async () => {
+                        try {
+                          await approveTeamJoinRequest(selectedTeamId, req.id);
+                          await loadTeamContext();
+                          await onTeamsRefresh();
+                        } catch (e) {
+                          setTabErr(e instanceof Error ? e.message : "Approve failed.");
+                        }
+                      }}
+                    >
+                      Approve
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </section>
         ) : null}
-        <ul className="enterprise-team-member-card-list">
+
+        <TeamSectionShell
+          title="Team overview"
+          hint="Open, in progress, and overdue tasks at a glance."
+          wired={teamOverviewWired}
+        >
+          <TeamOverviewPreview />
+        </TeamSectionShell>
+
+        {overdueTaskCount > 0 ? (
+          <Link to="/dashboard" className="enterprise-team-attention enterprise-team-attention-banner">
+            <span className="enterprise-team-attention-icon" aria-hidden>
+              <IconAlertTriangle />
+            </span>
+            <span className="enterprise-team-attention-copy">
+              <strong>Needs attention</strong>
+              <span>
+                {overdueTaskCount} overdue task{overdueTaskCount !== 1 ? "s" : ""} across the team
+              </span>
+            </span>
+            <span className="enterprise-team-attention-chevron" aria-hidden>
+              ›
+            </span>
+          </Link>
+        ) : null}
+
+        <TeamSectionShell
+          title="Performance trends"
+          hint="Monthly completion rate across the team."
+          wired={teamPerformanceWired}
+        >
+          <TeamPerformancePreview />
+        </TeamSectionShell>
+
+        <section className="enterprise-card enterprise-profile-teams enterprise-team-members-panel">
+          <div className="enterprise-team-members-head">
+            <div>
+              <h2 className="enterprise-card-title enterprise-card-title-spaced">Team members</h2>
+              <p className="enterprise-muted enterprise-profile-teams-hint enterprise-team-members-sub">
+                People in this workspace.
+              </p>
+            </div>
+          </div>
+          {manageMembers ? (
+            <p className="enterprise-muted enterprise-team-owner-hint">
+              {myRole === "owner"
+                ? "Tap a member to change role, transfer ownership, or remove."
+                : "Tap a member to remove them from the team."}
+            </p>
+          ) : null}
+          <ul className="enterprise-team-member-card-list">
           {sortedMembers.map((m) => {
             const stats = memberStats?.[m.userId];
             const streak = stats?.streak ?? 0;
@@ -598,7 +743,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
             return (
               <li key={m.id} className="enterprise-team-member-card-item">
                 <div
-                  className={`enterprise-team-member-wrap enterprise-team-member-card-inner ${isSelf ? "enterprise-team-member-self" : ""}`}
+                  className={`enterprise-team-member-card-inner ${isSelf ? "enterprise-team-member-self" : ""}`}
                 >
                   <button
                     type="button"
@@ -647,16 +792,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
           })}
         </ul>
       </section>
-
-      {overdueTaskCount > 0 ? (
-        <div className="enterprise-team-attention">
-          <strong>Needs attention</strong>
-          <span>
-            {overdueTaskCount} overdue task{overdueTaskCount !== 1 ? "s" : ""} — review on{" "}
-            <Link to="/dashboard">Workspace</Link>.
-          </span>
-        </div>
-      ) : null}
+      </div>
 
       {qrOpen ? (
         <div className="enterprise-modal-backdrop" role="presentation" onClick={() => setQrOpen(false)}>

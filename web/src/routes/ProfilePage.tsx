@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { LEGAL_COMPANY_NAME, LEGAL_PARENT_COMPANY_NAME } from "../lib/legal-constants";
 import { clearAccessToken, getAuthClient } from "../lib/auth-client";
@@ -12,7 +12,7 @@ import {
   type WebMeUser,
   type WebTeamRow,
 } from "../lib/api";
-import { pickEnterpriseTeamId, setPersistedEnterpriseTeamId } from "../lib/enterprise-selected-team";
+import { pickEnterpriseTeamId, setPersistedEnterpriseTeamId, switchEnterpriseWorkspace } from "../lib/enterprise-selected-team";
 
 function userInitials(user: WebMeUser | null): string {
   if (!user) return "?";
@@ -48,7 +48,7 @@ export function ProfilePage() {
     teams,
     setTeams,
     selectedTeamId,
-    setWorkspaceMainLoading,
+    setSelectedTeamId,
     refreshMeAndTeams,
   } = useEnterpriseShell();
   const [nameEdit, setNameEdit] = useState("");
@@ -57,7 +57,6 @@ export function ProfilePage() {
   const [photoBusy, setPhotoBusy] = useState(false);
   const [formErr, setFormErr] = useState<string | null>(null);
   const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
-  const prevWorkspaceRef = useRef("");
 
   const onAccountDeleted = async () => {
     try {
@@ -73,32 +72,6 @@ export function ProfilePage() {
   useEffect(() => {
     if (me) setNameEdit((prev) => (prev === "" || !isEditing ? me.name?.trim() ?? "" : prev));
   }, [me?.id, me?.name, isEditing]);
-
-  useEffect(() => {
-    if (!selectedTeamId) {
-      prevWorkspaceRef.current = selectedTeamId;
-      return;
-    }
-    const prev = prevWorkspaceRef.current;
-    if (prev === "") {
-      prevWorkspaceRef.current = selectedTeamId;
-      return;
-    }
-    if (prev === selectedTeamId) return;
-    prevWorkspaceRef.current = selectedTeamId;
-    let cancelled = false;
-    setWorkspaceMainLoading(true);
-    void (async () => {
-      try {
-        await refreshMeAndTeams();
-      } finally {
-        if (!cancelled) setWorkspaceMainLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedTeamId, refreshMeAndTeams, setWorkspaceMainLoading]);
 
   const onSaveProfile = async () => {
     if (!me || !nameEdit.trim()) return;
@@ -157,20 +130,17 @@ export function ProfilePage() {
 
   if (me === undefined) {
     return (
-      <div className="enterprise-dashboard-inner enterprise-profile-page">
-        <div className="enterprise-profile-page-body">
-          <p className="enterprise-muted">Loading…</p>
-        </div>
+      <div className="enterprise-tab-shell">
+        <p className="enterprise-muted">Loading…</p>
       </div>
     );
   }
 
   return (
     <>
-      <div className="enterprise-dashboard-inner enterprise-profile-page">
+      <div className="enterprise-tab-shell enterprise-profile-page" data-testid="profile-screen">
         <div className="enterprise-profile-page-body">
-          <h1 className="enterprise-page-title enterprise-profile-page-title">Profile</h1>
-
+          <div className="enterprise-profile-grid">
           <section className="enterprise-card enterprise-profile-account">
             <div className="enterprise-profile-account-head">
             <h2 className="enterprise-card-title enterprise-card-title-spaced enterprise-profile-account-title">Account</h2>
@@ -270,48 +240,54 @@ export function ProfilePage() {
 
           <ProfileTeamsSection
             teams={teams ?? []}
+            selectedTeamId={selectedTeamId}
+            onSelectWorkspace={(teamId) => {
+              if (!teamId || teamId === selectedTeamId) return;
+              switchEnterpriseWorkspace(teamId, setSelectedTeamId);
+            }}
             onRefresh={refreshMeAndTeams}
             onWorkspaceDeleted={async (deletedId) => {
               const fresh = await fetchWebTeams();
               setTeams(fresh ?? []);
               if (selectedTeamId === deletedId) {
                 const next = pickEnterpriseTeamId(fresh ?? [], "");
-                setSelectedTeamId(next);
-                setPersistedEnterpriseTeamId(next);
+                switchEnterpriseWorkspace(next, setSelectedTeamId);
               }
               await refreshMeAndTeams();
             }}
           />
-        </div>
+          </div>
 
         <footer className="enterprise-profile-legal" aria-labelledby="profile-legal-heading">
           <div className="enterprise-profile-legal-inner">
-            <h2 id="profile-legal-heading" className="enterprise-profile-legal-title">
-              Legal information
-            </h2>
-            <nav className="enterprise-profile-legal-nav" aria-label="Legal documents">
-              <Link to="/privacy" className="enterprise-profile-legal-link">
-                Privacy Policy
-              </Link>
-              <span className="enterprise-profile-legal-sep" aria-hidden>
-                |
-              </span>
-              <Link to="/terms" className="enterprise-profile-legal-link">
-                Terms of Service
-              </Link>
-              <span className="enterprise-profile-legal-sep" aria-hidden>
-                |
-              </span>
-              <button
-                type="button"
-                className="enterprise-profile-legal-link"
-                id="account-deletion"
-                onClick={() => setDeleteAccountOpen(true)}
-                data-testid="account-deletion-link"
-              >
-                Account deletion
-              </button>
-            </nav>
+            <div className="enterprise-profile-legal-copy">
+              <h2 id="profile-legal-heading" className="enterprise-profile-legal-title">
+                Legal information
+              </h2>
+              <nav className="enterprise-profile-legal-nav" aria-label="Legal documents">
+                <Link to="/privacy" className="enterprise-profile-legal-link">
+                  Privacy Policy
+                </Link>
+                <span className="enterprise-profile-legal-sep" aria-hidden>
+                  |
+                </span>
+                <Link to="/terms" className="enterprise-profile-legal-link">
+                  Terms of Service
+                </Link>
+                <span className="enterprise-profile-legal-sep" aria-hidden>
+                  |
+                </span>
+                <button
+                  type="button"
+                  className="enterprise-profile-legal-link"
+                  id="account-deletion"
+                  onClick={() => setDeleteAccountOpen(true)}
+                  data-testid="account-deletion-link"
+                >
+                  Account deletion
+                </button>
+              </nav>
+            </div>
             <dl className="enterprise-profile-legal-entity">
               <div className="enterprise-profile-legal-entity-row">
                 <dt>Operating entity</dt>
@@ -324,6 +300,7 @@ export function ProfilePage() {
             </dl>
           </div>
         </footer>
+        </div>
       </div>
 
       <DeleteAccountModal

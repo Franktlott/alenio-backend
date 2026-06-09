@@ -89,6 +89,31 @@ function toLocalIso(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+function buildWorkspaceTasksPath(
+  teamId: string,
+  opts: {
+    filter: FilterTab;
+    calendarYear: number;
+    calendarMonth: number;
+    cursor?: string;
+    myTasks?: boolean;
+    creatorIdMe?: boolean;
+  },
+): string {
+  const params = new URLSearchParams({ limit: "50" });
+  if (opts.myTasks) params.set("myTasks", "true");
+  if (opts.creatorIdMe) params.set("creatorId", "me");
+  if (opts.filter === "completed") {
+    params.set("completedYear", String(opts.calendarYear));
+    params.set("completedMonth", String(opts.calendarMonth));
+    params.set("status", "done");
+  } else {
+    params.set("dueYear", String(opts.calendarYear));
+    params.set("dueMonth", String(opts.calendarMonth));
+  }
+  if (opts.cursor) params.set("cursor", opts.cursor);
+  return `/api/teams/${teamId}/tasks?${params.toString()}`;
+}
 
 function MiniCalendar({
   tasks,
@@ -96,16 +121,20 @@ function MiniCalendar({
   holidays,
   selectedDay,
   onSelectDay,
+  viewYear,
+  viewMonth,
+  onViewMonthChange,
 }: {
   tasks: Task[];
   events: CalendarEvent[];
   holidays: USFederalHoliday[];
   selectedDay: string | null;
   onSelectDay: (iso: string | null) => void;
+  viewYear: number;
+  viewMonth: number;
+  onViewMonthChange: (year: number, month: number) => void;
 }) {
   const today = new Date();
-  const [viewYear, setViewYear] = useState(today.getFullYear());
-  const [viewMonth, setViewMonth] = useState(today.getMonth());
   const [weekRowWidth, setWeekRowWidth] = useState(0);
 
   const firstDay = new Date(viewYear, viewMonth, 1).getDay();
@@ -142,12 +171,12 @@ function MiniCalendar({
   for (let i = 0; i < allCells.length; i += 7) weeks.push(allCells.slice(i, i + 7));
 
   const prevMonth = () => {
-    if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1); }
-    else setViewMonth(m => m - 1);
+    if (viewMonth === 0) onViewMonthChange(viewYear - 1, 11);
+    else onViewMonthChange(viewYear, viewMonth - 1);
   };
   const nextMonth = () => {
-    if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1); }
-    else setViewMonth(m => m + 1);
+    if (viewMonth === 11) onViewMonthChange(viewYear + 1, 0);
+    else onViewMonthChange(viewYear, viewMonth + 1);
   };
 
   return (
@@ -565,6 +594,8 @@ export default function TasksScreen() {
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
   const [memberDropdownOpen, setMemberDropdownOpen] = useState(false);
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const [calendarYear, setCalendarYear] = useState(() => new Date().getFullYear());
+  const [calendarMonth, setCalendarMonth] = useState(() => new Date().getMonth());
 
   const [teamCompletedExpanded, setTeamCompletedExpanded] = useState(false);
   const [confirmCompleteTask, setConfirmCompleteTask] = useState<Task | null>(null);
@@ -622,29 +653,51 @@ export default function TasksScreen() {
     }
   }, [openModal]);
 
+  const handleViewMonthChange = useCallback((year: number, month: number) => {
+    setCalendarYear(year);
+    setCalendarMonth(month);
+    setSelectedDay(null);
+    setVisibleCount(5);
+    setNextCursor(null);
+  }, []);
+
+  useEffect(() => {
+    const now = new Date();
+    setCalendarYear(now.getFullYear());
+    setCalendarMonth(now.getMonth());
+    setSelectedDay(null);
+    setNextCursor(null);
+  }, [activeTeamId]);
+
   const onRefresh = async () => {
     setRefreshing(true);
     setNextCursor(null);
-    await queryClient.invalidateQueries({ queryKey: ["tasks", activeTeamId, "mine"] });
-    await queryClient.invalidateQueries({ queryKey: ["tasks", activeTeamId, "team"] });
+    await queryClient.invalidateQueries({ queryKey: ["tasks", activeTeamId] });
     await queryClient.invalidateQueries({ queryKey: ["calendar-events", activeTeamId] });
     await queryClient.invalidateQueries({ queryKey: ["upcoming-video-meetings"] });
     setRefreshing(false);
   };
 
   const handleLoadMore = async () => {
-    if (!activeTeamId || !nextCursor || loadingMore) return;
+    if (!activeTeamId || !nextCursor || loadingMore || filter === "assigned") return;
     setLoadingMore(true);
+    const queryKey = ["tasks", activeTeamId, "mine", calendarYear, calendarMonth, filter] as const;
     try {
       const result = await api.get<{ tasks: Task[]; nextCursor: string | null }>(
-        `/api/teams/${activeTeamId}/tasks?myTasks=true&cursor=${nextCursor}&limit=50`
+        buildWorkspaceTasksPath(activeTeamId, {
+          filter,
+          calendarYear,
+          calendarMonth,
+          cursor: nextCursor,
+          myTasks: true,
+        }),
       );
       queryClient.setQueryData<{ tasks: Task[]; nextCursor: string | null }>(
-        ["tasks", activeTeamId, "mine"],
+        queryKey,
         (prev) => ({
           tasks: [...(prev?.tasks ?? []), ...result.tasks],
           nextCursor: result.nextCursor,
-        })
+        }),
       );
       setNextCursor(result.nextCursor);
     } finally {
@@ -680,26 +733,56 @@ export default function TasksScreen() {
 
   // My tasks (assigned to me, or created by me with no assignment) — Active & Completed tabs
   const { data: myTasksData, isLoading } = useQuery({
-    queryKey: ["tasks", activeTeamId, "mine"],
+    queryKey: ["tasks", activeTeamId, "mine", calendarYear, calendarMonth, filter],
     queryFn: async () => {
-      const result = await api.get<{ tasks: Task[]; nextCursor: string | null }>(`/api/teams/${activeTeamId}/tasks?myTasks=true`);
+      const result = await api.get<{ tasks: Task[]; nextCursor: string | null }>(
+        buildWorkspaceTasksPath(activeTeamId!, {
+          filter,
+          calendarYear,
+          calendarMonth,
+          myTasks: true,
+        }),
+      );
       setNextCursor(result.nextCursor);
       return result;
     },
-    enabled: !!activeTeamId && isPro,
+    enabled: !!activeTeamId && isPro && filter !== "assigned",
   });
   const allTasks: Task[] = myTasksData?.tasks ?? [];
 
   // Tasks I created — used for Team tab (will filter client-side for assigned-to-others)
   const { data: teamTasksData } = useQuery({
-    queryKey: ["tasks", activeTeamId, "team"],
+    queryKey: ["tasks", activeTeamId, "team", calendarYear, calendarMonth],
     queryFn: async () => {
-      const result = await api.get<{ tasks: Task[]; nextCursor: string | null }>(`/api/teams/${activeTeamId}/tasks?creatorId=me`);
+      const result = await api.get<{ tasks: Task[]; nextCursor: string | null }>(
+        buildWorkspaceTasksPath(activeTeamId!, {
+          filter: "all",
+          calendarYear,
+          calendarMonth,
+          creatorIdMe: true,
+        }),
+      );
       return result;
     },
     enabled: !!activeTeamId && isPro && filter === "assigned",
   });
   const teamTasks: Task[] = teamTasksData?.tasks ?? [];
+
+  const { data: teamCompletedTasksData } = useQuery({
+    queryKey: ["tasks", activeTeamId, "team-completed", calendarYear, calendarMonth],
+    queryFn: async () => {
+      const result = await api.get<{ tasks: Task[]; nextCursor: string | null }>(
+        buildWorkspaceTasksPath(activeTeamId!, {
+          filter: "completed",
+          calendarYear,
+          calendarMonth,
+          creatorIdMe: true,
+        }),
+      );
+      return result;
+    },
+    enabled: !!activeTeamId && isPro && filter === "assigned",
+  });
 
   // Team members for the member filter (Team tab only)
   const { data: teamData } = useQuery({
@@ -919,7 +1002,8 @@ export default function TasksScreen() {
 
   useEffect(() => {
     setVisibleCount(5);
-  }, [filter]);
+    setNextCursor(null);
+  }, [filter, calendarYear, calendarMonth]);
 
   // Active: tasks assigned to me (or mine with no assignment), open
   // Completed: same pool, done only
@@ -940,7 +1024,17 @@ export default function TasksScreen() {
     return true;
   });
 
-  const tasks: Task[] = filteredTasks.slice().sort((a, b) => {
+  const dayScopedTasks = selectedDay
+    ? filteredTasks.filter((t) => {
+        if (filter === "completed") {
+          return t.completedAt ? toLocalIso(new Date(t.completedAt)) === selectedDay : false;
+        }
+        if (!t.dueDate) return false;
+        return toLocalIso(new Date(t.dueDate)) === selectedDay;
+      })
+    : filteredTasks;
+
+  const tasks: Task[] = dayScopedTasks.slice().sort((a, b) => {
     if (sort === "priority") {
       const order = { urgent: 0, high: 1, medium: 2, low: 3 };
       return (order[a.priority as keyof typeof order] ?? 2) - (order[b.priority as keyof typeof order] ?? 2);
@@ -958,10 +1052,17 @@ export default function TasksScreen() {
 
   const showTasksEmptyState = !isLoading && tasks.length === 0;
 
-  const currentYear = new Date().getFullYear();
-  const holidays = [...getUSHolidays(currentYear), ...getUSHolidays(currentYear + 1)];
+  const holidays = React.useMemo(() => {
+    const years = new Set([calendarYear, calendarYear - 1, calendarYear + 1, new Date().getFullYear()]);
+    return [...years].sort((a, b) => a - b).flatMap((y) => getUSHolidays(y));
+  }, [calendarYear]);
 
-  const targetIso = selectedDay ?? toLocalIso(new Date());
+  const today = new Date();
+  const targetIso =
+    selectedDay ??
+    (calendarYear === today.getFullYear() && calendarMonth === today.getMonth()
+      ? toLocalIso(today)
+      : toLocalIso(new Date(calendarYear, calendarMonth, 1)));
   const dayEvents = calendarEvents.filter((ev) => {
     const evStart = startOfDay(new Date(ev.startDate));
     const evEnd = ev.endDate ? startOfDay(new Date(ev.endDate)) : evStart;
@@ -977,12 +1078,13 @@ export default function TasksScreen() {
   });
 
   // Completed tasks delegated to others (for Team tab collapsed section)
-  const teamCompletedTasks = teamTasks.filter((t) => {
-    if (t.status !== "done") return false;
+  const teamCompletedTasks = (teamCompletedTasksData?.tasks ?? []).filter((t) => {
     if ((t.assignments ?? []).length === 0) return false;
     if (!(t.assignments ?? []).some((a) => a.userId !== currentUserId)) return false;
     return true;
   });
+
+  const calendarTasks = filter === "assigned" ? teamTasks : allTasks;
 
   const assignedCount = allTasks.filter((t) =>
     t.creator?.id === currentUserId &&
@@ -1082,7 +1184,16 @@ export default function TasksScreen() {
         {/* Fixed top section: calendar, events, filter tabs */}
         <View style={{ flexShrink: 0 }}>
           {/* Mini Calendar */}
-          <MiniCalendar tasks={allTasks} events={calendarEvents} holidays={holidays} selectedDay={selectedDay} onSelectDay={setSelectedDay} />
+          <MiniCalendar
+            tasks={calendarTasks}
+            events={calendarEvents}
+            holidays={holidays}
+            selectedDay={selectedDay}
+            onSelectDay={setSelectedDay}
+            viewYear={calendarYear}
+            viewMonth={calendarMonth}
+            onViewMonthChange={handleViewMonthChange}
+          />
 
           {/* Events section — below calendar, above filter tabs */}
           {(dayEvents.length > 0 || dayHolidays.length > 0) ? (

@@ -13,14 +13,10 @@ export type EnterpriseRouteHandle = {
 };
 
 /** Route-specific shell classes (BrowserRouter has no route `handle`; mirror App routes here). */
-function routeLayoutHandleFromPath(pathname: string): EnterpriseRouteHandle {
-  if (pathname.startsWith("/chat")) {
-    return {
-      enterpriseMainClassName: "enterprise-app-chat",
-      enterpriseContentClassName: "enterprise-content-flush",
-    };
-  }
-  return {};
+function routeLayoutHandleFromPath(_pathname: string): EnterpriseRouteHandle {
+  return {
+    enterpriseContentClassName: "enterprise-content-flush",
+  };
 }
 
 function activeNavFromPath(pathname: string): EnterpriseNavId {
@@ -106,7 +102,14 @@ export function EnterpriseShellLayout() {
     }
     if (lastTeamRefreshForSelectedIdRef.current === selectedTeamId) return;
     lastTeamRefreshForSelectedIdRef.current = selectedTeamId;
-    void refreshMeAndTeams();
+    let cancelled = false;
+    setWorkspaceMainLoading(true);
+    void refreshMeAndTeams().finally(() => {
+      if (!cancelled) setWorkspaceMainLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [selectedTeamId, teams, refreshMeAndTeams]);
 
   /** Once per navigation onto /billing — avoids refresh+setTeams thrashing layout redirects. */

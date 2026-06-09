@@ -8,8 +8,6 @@ import {
   type ApiActivityItem,
 } from "../lib/api";
 
-/** App icon at repo `web/icon.png` (bundled by Vite). */
-import activityHeaderLogo from "../../icon.png";
 import { ActivityFeedItem, CELEBRATION_TYPES } from "../components/activity/ActivityFeedPrimitives";
 
 const REACTION_HINT_KEY = "alenio_activity_reaction_hint";
@@ -173,7 +171,7 @@ export function ActivityPage() {
 
   if (me === undefined) {
     return (
-      <div className="enterprise-dashboard-inner">
+      <div className="enterprise-tab-shell">
         <p className="enterprise-muted">Loading…</p>
       </div>
     );
@@ -181,57 +179,60 @@ export function ActivityPage() {
 
   return (
     <>
-      <div className="enterprise-dashboard-inner enterprise-activity-page" data-testid="activity-screen">
-        <header className="enterprise-activity-header">
-          <div className="enterprise-activity-header-inner">
-            <img src={activityHeaderLogo} alt="Alenio" className="enterprise-activity-header-logo" />
-            <div className="enterprise-activity-header-titles">
-              <h1 className="enterprise-activity-h1">Activity</h1>
-              <p className="enterprise-activity-sub">Team wins, celebrations, and updates from the last 7 days.</p>
-            </div>
-            <div className="enterprise-activity-header-actions">
-              <button type="button" className="enterprise-activity-celebrate-btn" onClick={() => setCelebrateOpen(true)} data-testid="celebrate-button">
+      <div className="enterprise-tab-shell enterprise-activity-page" data-testid="activity-screen">
+        <section className="enterprise-card enterprise-activity-card enterprise-tab-fill-card">
+          <div className="enterprise-card-head enterprise-card-head-row">
+            <p className="enterprise-muted" style={{ margin: 0, fontSize: "0.875rem", lineHeight: 1.45 }}>
+              Team wins, celebrations, and updates from the last 7 days.
+            </p>
+            <div className="enterprise-tab-card-head-actions">
+              <button
+                type="button"
+                className="enterprise-activity-celebrate-btn enterprise-activity-celebrate-btn-inline"
+                onClick={() => setCelebrateOpen(true)}
+                data-testid="celebrate-button"
+              >
                 <span aria-hidden>🎉</span> Celebrate
               </button>
             </div>
           </div>
-        </header>
 
-        <section className="enterprise-card enterprise-activity-card">
-          {listErr ? <p className="enterprise-banner-warn">{listErr}</p> : null}
+          <div className="enterprise-tab-fill-card-body">
+            {listErr ? <p className="enterprise-banner-warn">{listErr}</p> : null}
 
-          {loading && items.length === 0 ? (
-            <p className="enterprise-muted">Loading activity…</p>
-          ) : items.length === 0 && !listErr ? (
-            <div className="enterprise-activity-empty">
-              <span className="enterprise-activity-empty-icon" aria-hidden>
-                ◎
-              </span>
-              <h2 className="enterprise-activity-empty-title">No activity yet</h2>
-              <p className="enterprise-activity-empty-copy">
-                Completed tasks, new members, calendar events, and celebrations will show up here.
-              </p>
-            </div>
-          ) : (
-            <div className="enterprise-activity-feed">
-              {items.map((item, index) => (
-                <div key={item.id} className="enterprise-activity-feed-item-wrap">
-                  <ActivityFeedItem
-                    item={item}
-                    currentUserId={me?.id}
-                    showPicker={openPickerId === item.id}
-                    onOpenPicker={() => setOpenPickerId(item.id)}
-                    onClosePicker={() => setOpenPickerId(null)}
-                    onToggleReaction={(emoji) => toggleReaction(item.id, emoji)}
-                  />
-                  {index === 0 && showReactionHint ? hintLine : null}
-                  {index < items.length - 1 && item.type !== "task_milestone" ? (
-                    <hr className="enterprise-activity-sep" />
-                  ) : null}
-                </div>
-              ))}
-            </div>
-          )}
+            {loading && items.length === 0 ? (
+              <p className="enterprise-muted">Loading activity…</p>
+            ) : items.length === 0 && !listErr ? (
+              <div className="enterprise-activity-empty">
+                <span className="enterprise-activity-empty-icon" aria-hidden>
+                  ◎
+                </span>
+                <h2 className="enterprise-activity-empty-title">No activity yet</h2>
+                <p className="enterprise-activity-empty-copy">
+                  Completed tasks, new members, calendar events, and celebrations will show up here.
+                </p>
+              </div>
+            ) : (
+              <div className="enterprise-activity-feed">
+                {items.map((item, index) => (
+                  <div key={item.id} className="enterprise-activity-feed-item-wrap">
+                    <ActivityFeedItem
+                      item={item}
+                      currentUserId={me?.id}
+                      showPicker={openPickerId === item.id}
+                      onOpenPicker={() => setOpenPickerId(item.id)}
+                      onClosePicker={() => setOpenPickerId(null)}
+                      onToggleReaction={(emoji) => toggleReaction(item.id, emoji)}
+                    />
+                    {index === 0 && showReactionHint ? hintLine : null}
+                    {index < items.length - 1 && item.type !== "task_milestone" ? (
+                      <hr className="enterprise-activity-sep" />
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </section>
       </div>
 

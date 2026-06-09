@@ -73,7 +73,7 @@ webRouter.get("/api/teams", async (c) => {
     include: {
       team: {
         select: {
-          id: true, name: true, createdAt: true,
+          id: true, name: true, image: true, createdAt: true,
           _count: { select: { members: true, tasks: true } },
         },
       },
@@ -130,7 +130,7 @@ webRouter.post("/api/teams", async (c) => {
           create: { userId: userId, role: "owner" },
         },
       },
-      select: { id: true, name: true, createdAt: true, _count: { select: { members: true, tasks: true } } },
+      select: { id: true, name: true, image: true, createdAt: true, _count: { select: { members: true, tasks: true } } },
     });
   } catch (err) {
     if (isPrismaUniqueOnName(err)) {
