@@ -70,6 +70,7 @@ function serializeGoal(goal: {
   skill: string;
   steps: string;
   status?: string | null;
+  closedAt?: Date | null;
   createdById: string;
   createdAt: Date;
   createdBy?: { id: string; name: string; email: string; image: string | null };
@@ -88,6 +89,7 @@ function serializeGoal(goal: {
     skill: goal.skill,
     steps: parseSteps(goal.steps),
     status: normalizeStatus(goal.status),
+    closedAt: goal.closedAt ? goal.closedAt.toISOString() : null,
     createdById: goal.createdById,
     createdAt: goal.createdAt.toISOString(),
     createdBy: goal.createdBy,
@@ -252,7 +254,10 @@ developmentGoalsRouter.patch(
     try {
       const goal = await prisma.developmentGoal.update({
         where: { id: goalId },
-        data: { status: body.status },
+        data: {
+          status: body.status,
+          closedAt: body.status === "closed" ? new Date() : null,
+        },
         include: goalInclude,
       });
       return c.json({ data: serializeGoal(goal) });
@@ -293,6 +298,53 @@ developmentGoalsRouter.delete("/:memberUserId/development-goals/:goalId", async 
     return prismaRouteError(c, err, "[development-goals] DELETE failed");
   }
 });
+
+// DELETE /api/teams/:teamId/members/:memberUserId/development-goals/:goalId/notes/:noteId
+developmentGoalsRouter.delete(
+  "/:memberUserId/development-goals/:goalId/notes/:noteId",
+  async (c) => {
+    const teamId = c.req.param("teamId") as string;
+    const memberUserId = c.req.param("memberUserId") as string;
+    const goalId = c.req.param("goalId") as string;
+    const noteId = c.req.param("noteId") as string;
+
+    const membership = await getMembership(c, teamId);
+    if (!membership) {
+      return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
+    }
+
+    const canEditNote =
+      isManagerRole(membership.role) || membership.userId === memberUserId;
+    if (!canEditNote) {
+      return c.json({ error: { message: "Not allowed to edit notes", code: "FORBIDDEN" } }, 403);
+    }
+
+    const note = await prisma.developmentGoalNote.findFirst({
+      where: {
+        id: noteId,
+        goalId,
+        goal: { teamId, memberUserId },
+      },
+    });
+    if (!note) {
+      return c.json({ error: { message: "Note not found", code: "NOT_FOUND" } }, 404);
+    }
+
+    try {
+      await prisma.developmentGoalNote.delete({ where: { id: noteId } });
+      const updated = await prisma.developmentGoal.findUnique({
+        where: { id: goalId },
+        include: goalInclude,
+      });
+      if (!updated) {
+        return c.json({ error: { message: "Goal not found", code: "NOT_FOUND" } }, 404);
+      }
+      return c.json({ data: serializeGoal(updated) });
+    } catch (err) {
+      return prismaRouteError(c, err, "[development-goals] DELETE note failed");
+    }
+  },
+);
 
 // PATCH /api/teams/:teamId/members/:memberUserId/development-goals/:goalId/notes/:noteId
 developmentGoalsRouter.patch(

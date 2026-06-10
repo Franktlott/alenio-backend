@@ -77,6 +77,11 @@ export async function ensureDevelopmentPlanSchema(prisma: PrismaClient): Promise
         ADD COLUMN IF NOT EXISTS "status" TEXT NOT NULL DEFAULT 'active';
     `);
 
+    await prisma.$executeRawUnsafe(`
+      ALTER TABLE "DevelopmentGoal"
+        ADD COLUMN IF NOT EXISTS "closedAt" TIMESTAMP(3);
+    `);
+
     console.log("[startup] development plan database tables ensured");
   } catch (err) {
     console.error("[startup] ensureDevelopmentPlanSchema failed:", err);

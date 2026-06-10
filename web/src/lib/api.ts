@@ -1200,6 +1200,7 @@ export type DevelopmentGoal = {
   skill: string;
   steps: string[];
   status: DevelopmentGoalStatus;
+  closedAt: string | null;
   createdById: string;
   createdAt: string;
   createdBy?: { id: string; name: string; email: string; image: string | null };
@@ -1290,6 +1291,20 @@ export function updateDevelopmentGoalNote(
   return developmentGoalsRequest<{ data: DevelopmentGoal }>(
     { api: `${paths.api}/notes/${note}`, web: `${paths.web}/notes/${note}` },
     { method: "PATCH", body: JSON.stringify({ body }) },
+  ).then((r) => r.data);
+}
+
+export function deleteDevelopmentGoalNote(
+  teamId: string,
+  memberUserId: string,
+  goalId: string,
+  noteId: string,
+) {
+  const paths = developmentGoalsPaths(teamId, memberUserId, goalId);
+  const note = encodeURIComponent(noteId);
+  return developmentGoalsRequest<{ data: DevelopmentGoal }>(
+    { api: `${paths.api}/notes/${note}`, web: `${paths.web}/notes/${note}` },
+    { method: "DELETE" },
   ).then((r) => r.data);
 }
 

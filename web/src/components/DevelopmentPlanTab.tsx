@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type MouseEvent, type ReactNode } from "react";
 import {
   addDevelopmentGoalNote,
   createDevelopmentGoal,
   deleteDevelopmentGoal,
+  deleteDevelopmentGoalNote,
   fetchDevelopmentGoals,
   setDevelopmentGoalStatus,
   updateDevelopmentGoal,
@@ -57,6 +58,10 @@ function lastUpdatedAt(goal: DevelopmentGoal): string {
   return goal.notes.reduce((latest, note) =>
     new Date(note.createdAt) > new Date(latest) ? note.createdAt : latest,
   goal.notes[0].createdAt);
+}
+
+function closedDateForGoal(goal: DevelopmentGoal): string {
+  return goal.closedAt ?? lastUpdatedAt(goal);
 }
 
 function GoalTargetIcon() {
@@ -193,20 +198,97 @@ function GoalFormFields({ skill, steps, skillId, onSkillChange, onStepsChange }:
 }
 
 type ProgressNotesEditorProps = {
-  existingNotes: DevelopmentGoalNote[];
-  existingEdits: Record<string, string>;
-  newNotes: string[];
-  onExistingChange: (noteId: string, body: string) => void;
-  onNewNotesChange: (notes: string[]) => void;
+  notes: DevelopmentGoalNote[];
+  teamId: string;
+  memberUserId: string;
+  goalId: string;
+  onGoalUpdated: (goal: DevelopmentGoal) => void;
 };
 
 function ProgressNotesEditor({
-  existingNotes,
-  existingEdits,
-  newNotes,
-  onExistingChange,
-  onNewNotesChange,
+  notes,
+  teamId,
+  memberUserId,
+  goalId,
+  onGoalUpdated,
 }: ProgressNotesEditorProps) {
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState("");
+  const [newNotes, setNewNotes] = useState<string[]>([]);
+  const [noteErr, setNoteErr] = useState<string | null>(null);
+  const [savingKey, setSavingKey] = useState<string | null>(null);
+
+  const startEdit = (note: DevelopmentGoalNote) => {
+    setNoteErr(null);
+    setEditingNoteId(note.id);
+    setEditDraft(note.body);
+  };
+
+  const cancelEdit = () => {
+    setEditingNoteId(null);
+    setEditDraft("");
+  };
+
+  const onSaveExisting = async (noteId: string) => {
+    const trimmed = editDraft.trim();
+    if (!trimmed) {
+      setNoteErr("Progress notes cannot be empty.");
+      return;
+    }
+    setSavingKey(`edit-${noteId}`);
+    setNoteErr(null);
+    try {
+      const updated = await updateDevelopmentGoalNote(
+        teamId,
+        memberUserId,
+        goalId,
+        noteId,
+        trimmed,
+      );
+      onGoalUpdated(updated);
+      setEditingNoteId(null);
+      setEditDraft("");
+    } catch (e) {
+      setNoteErr(e instanceof Error ? e.message : "Could not save note.");
+    } finally {
+      setSavingKey(null);
+    }
+  };
+
+  const onRemoveExisting = async (note: DevelopmentGoalNote) => {
+    if (!window.confirm("Remove this note? This cannot be undone.")) return;
+    setSavingKey(`delete-${note.id}`);
+    setNoteErr(null);
+    try {
+      const updated = await deleteDevelopmentGoalNote(teamId, memberUserId, goalId, note.id);
+      onGoalUpdated(updated);
+      if (editingNoteId === note.id) cancelEdit();
+    } catch (e) {
+      setNoteErr(e instanceof Error ? e.message : "Could not remove note.");
+    } finally {
+      setSavingKey(null);
+    }
+  };
+
+  const onSaveNew = async (index: number) => {
+    const trimmed = newNotes[index]?.trim();
+    if (!trimmed) {
+      setNoteErr("Progress notes cannot be empty.");
+      return;
+    }
+    setSavingKey(`new-${index}`);
+    setNoteErr(null);
+    try {
+      const updated = await addDevelopmentGoalNote(teamId, memberUserId, goalId, trimmed);
+      onGoalUpdated(updated);
+      setNewNotes((prev) => prev.filter((_, i) => i !== index));
+    } catch (e) {
+      setNoteErr(e instanceof Error ? e.message : "Could not save note.");
+    } finally {
+      setSavingKey(null);
+    }
+  };
+
   return (
     <li className="enterprise-oneone-fill-field">
       <section className="enterprise-oneone-followup">
@@ -220,32 +302,86 @@ function ProgressNotesEditor({
           <button
             type="button"
             className="enterprise-oneone-templates-pane-btn"
-            onClick={() => onNewNotesChange([...newNotes, ""])}
+            onClick={() => {
+              setNoteErr(null);
+              setNewNotes((prev) => [...prev, ""]);
+            }}
           >
             Add note
           </button>
         </div>
 
-        {existingNotes.length === 0 && newNotes.length === 0 ? (
+        {noteErr ? <p className="enterprise-form-error" role="alert">{noteErr}</p> : null}
+
+        {notes.length === 0 && newNotes.length === 0 ? (
           <p className="enterprise-muted enterprise-oneone-followup-empty">No notes yet.</p>
         ) : null}
 
-        {existingNotes.length > 0 ? (
+        {notes.length > 0 ? (
           <ul className="enterprise-dev-plan-note-drafts">
-            {existingNotes.map((note) => (
-              <li key={note.id} className="enterprise-dev-plan-note-draft">
-                <p className="enterprise-oneone-followup-item-meta">
-                  {displayUserName(note.createdBy)} · {formatWhen(note.createdAt)}
-                </p>
-                <textarea
-                  className="auth-input enterprise-oneone-fill-textarea"
-                  rows={3}
-                  value={existingEdits[note.id] ?? note.body}
-                  aria-label={`Edit note from ${formatWhen(note.createdAt)}`}
-                  onChange={(e) => onExistingChange(note.id, e.target.value)}
-                />
-              </li>
-            ))}
+            {notes.map((note) => {
+              const isEditing = editingNoteId === note.id;
+              const isSaving = savingKey === `edit-${note.id}` || savingKey === `delete-${note.id}`;
+              return (
+                <li key={note.id} className="enterprise-dev-plan-note-draft">
+                  <p className="enterprise-oneone-followup-item-meta">
+                    {displayUserName(note.createdBy)} · {formatWhen(note.createdAt)}
+                  </p>
+                  {isEditing ? (
+                    <>
+                      <textarea
+                        className="auth-input enterprise-oneone-fill-textarea"
+                        rows={3}
+                        value={editDraft}
+                        aria-label={`Edit note from ${formatWhen(note.createdAt)}`}
+                        onChange={(e) => setEditDraft(e.target.value)}
+                        disabled={isSaving}
+                      />
+                      <div className="enterprise-dev-plan-note-actions">
+                        <button
+                          type="button"
+                          className="enterprise-oneone-templates-pane-btn"
+                          disabled={isSaving}
+                          onClick={() => void onSaveExisting(note.id)}
+                        >
+                          {savingKey === `edit-${note.id}` ? "Saving…" : "Save note"}
+                        </button>
+                        <button
+                          type="button"
+                          className="enterprise-oneone-templates-table-action"
+                          disabled={isSaving}
+                          onClick={cancelEdit}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <p className="enterprise-dev-plan-note-readonly">{note.body}</p>
+                      <div className="enterprise-dev-plan-note-actions">
+                        <button
+                          type="button"
+                          className="enterprise-oneone-templates-pane-btn"
+                          disabled={Boolean(savingKey)}
+                          onClick={() => startEdit(note)}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          className="enterprise-oneone-templates-table-action enterprise-oneone-templates-table-action--danger"
+                          disabled={Boolean(savingKey)}
+                          onClick={() => void onRemoveExisting(note)}
+                        >
+                          {savingKey === `delete-${note.id}` ? "Removing…" : "Remove"}
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         ) : null}
 
@@ -261,14 +397,26 @@ function ProgressNotesEditor({
                     placeholder="Add a note about progress…"
                     value={note}
                     aria-label={`New note ${index + 1}`}
+                    disabled={savingKey === `new-${index}`}
                     onChange={(e) =>
-                      onNewNotesChange(newNotes.map((n, i) => (i === index ? e.target.value : n)))
+                      setNewNotes(newNotes.map((n, i) => (i === index ? e.target.value : n)))
                     }
                   />
+                </div>
+                <div className="enterprise-dev-plan-note-actions">
+                  <button
+                    type="button"
+                    className="enterprise-oneone-templates-pane-btn"
+                    disabled={savingKey === `new-${index}`}
+                    onClick={() => void onSaveNew(index)}
+                  >
+                    {savingKey === `new-${index}` ? "Saving…" : "Save note"}
+                  </button>
                   <button
                     type="button"
                     className="enterprise-oneone-templates-table-action enterprise-oneone-templates-table-action--danger"
-                    onClick={() => onNewNotesChange(newNotes.filter((_, i) => i !== index))}
+                    disabled={savingKey === `new-${index}`}
+                    onClick={() => setNewNotes(newNotes.filter((_, i) => i !== index))}
                   >
                     Remove
                   </button>
@@ -288,6 +436,7 @@ type DevPlanGoalModalProps = {
   err: string | null;
   saving: boolean;
   saveLabel: string;
+  showSave?: boolean;
   onClose: () => void;
   onSave: () => void;
   children: ReactNode;
@@ -299,6 +448,7 @@ function DevPlanGoalModal({
   err,
   saving,
   saveLabel,
+  showSave = true,
   onClose,
   onSave,
   children,
@@ -340,20 +490,188 @@ function DevPlanGoalModal({
               disabled={saving}
               onClick={onClose}
             >
-              Cancel
+              {showSave ? "Cancel" : "Close"}
             </button>
-            <button
-              type="button"
-              className="enterprise-oneone-templates-primary-btn enterprise-oneone-fill-save"
-              disabled={saving}
-              onClick={onSave}
-            >
-              {saving ? "Saving…" : saveLabel}
-            </button>
+            {showSave ? (
+              <button
+                type="button"
+                className="enterprise-oneone-templates-primary-btn enterprise-oneone-fill-save"
+                disabled={saving}
+                onClick={onSave}
+              >
+                {saving ? "Saving…" : saveLabel}
+              </button>
+            ) : null}
           </div>
         </footer>
       </div>
     </div>
+  );
+}
+
+type DevelopmentGoalCardProps = {
+  goal: DevelopmentGoal;
+  menuGoalId: string | null;
+  statusSavingId: string | null;
+  canUpdate: boolean;
+  onOpenUpdate: (goal: DevelopmentGoal) => void;
+  onToggleMenu: (goalId: string, e: MouseEvent) => void;
+  onReopen: (goal: DevelopmentGoal) => void;
+  onDelete: (goal: DevelopmentGoal) => void;
+  onMarkComplete: (goal: DevelopmentGoal) => void;
+};
+
+function DevelopmentGoalCard({
+  goal,
+  menuGoalId,
+  statusSavingId,
+  canUpdate,
+  onOpenUpdate,
+  onToggleMenu,
+  onReopen,
+  onDelete,
+  onMarkComplete,
+}: DevelopmentGoalCardProps) {
+  const isClosed = goal.status === "closed";
+
+  return (
+    <li
+      className={`enterprise-dev-plan-goal${isClosed ? " enterprise-dev-plan-goal--closed" : ""}${menuGoalId === goal.id ? " enterprise-dev-plan-goal--menu-open" : ""}`}
+    >
+      <header className="enterprise-dev-plan-goal-top">
+        <span className="enterprise-dev-plan-goal-icon">
+          <GoalTargetIcon />
+        </span>
+        <div className="enterprise-dev-plan-goal-title-block">
+          <h4 className="enterprise-dev-plan-skill">{goal.skill}</h4>
+          <p className="enterprise-dev-plan-added">
+            Added {formatWhen(goal.createdAt)}
+            {goal.createdBy ? ` · ${displayUserName(goal.createdBy)}` : ""}
+          </p>
+        </div>
+        <div className="enterprise-dev-plan-goal-actions">
+          {canUpdate ? (
+            <button
+              type="button"
+              className="enterprise-dev-plan-update-btn"
+              onClick={() => onOpenUpdate(goal)}
+              disabled={statusSavingId === goal.id}
+            >
+              Update
+            </button>
+          ) : null}
+          {canUpdate ? (
+            <div className="enterprise-dev-plan-goal-menu-wrap">
+              <button
+                type="button"
+                className="enterprise-dev-plan-kebab"
+                aria-label="Goal options"
+                aria-expanded={menuGoalId === goal.id}
+                disabled={statusSavingId === goal.id}
+                onClick={(e) => onToggleMenu(goal.id, e)}
+              >
+                ⋮
+              </button>
+              {menuGoalId === goal.id ? (
+                <div className="enterprise-dev-plan-goal-menu" role="menu">
+                  {isClosed ? (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onReopen(goal);
+                      }}
+                    >
+                      Reopen goal
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="enterprise-dev-plan-goal-menu-danger"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDelete(goal);
+                    }}
+                  >
+                    Delete goal
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      </header>
+
+      {goal.steps.length > 0 ? (
+        <section className="enterprise-dev-plan-goal-section">
+          <p className="enterprise-dev-plan-section-label">Steps to develop this skill</p>
+          <ul className="enterprise-dev-plan-step-list">
+            {goal.steps.map((step, index) => (
+              <li key={`${goal.id}-step-${index}`}>
+                <span className="enterprise-dev-plan-step-check">
+                  <StepCheckIcon />
+                </span>
+                <span>
+                  {index + 1}. {step}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      <section className="enterprise-dev-plan-goal-section">
+        <p className="enterprise-dev-plan-section-label">Notes</p>
+        {goal.notes.length === 0 ? (
+          <p className="enterprise-dev-plan-notes-empty">No notes yet.</p>
+        ) : (
+          <ul className="enterprise-dev-plan-note-list">
+            {goal.notes.map((note) => (
+              <li key={note.id} className="enterprise-dev-plan-note">
+                <p className="enterprise-dev-plan-note-body">{note.body}</p>
+                <p className="enterprise-dev-plan-note-meta">
+                  {displayUserName(note.createdBy)} · {formatWhen(note.createdAt)}
+                </p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <footer className="enterprise-dev-plan-goal-footer">
+        <p className="enterprise-dev-plan-goal-dates">
+          <CalendarIcon />
+          <span>
+            {isClosed ? (
+              <>
+                Closed {formatDateOnly(closedDateForGoal(goal))} · Created{" "}
+                {formatDateOnly(goal.createdAt)}
+              </>
+            ) : (
+              <>
+                Created {formatDateOnly(goal.createdAt)} · Last updated{" "}
+                {formatDateOnly(lastUpdatedAt(goal))}
+              </>
+            )}
+          </span>
+        </p>
+        <div className="enterprise-dev-plan-goal-footer-actions">
+          {canUpdate && !isClosed ? (
+            <button
+              type="button"
+              className="enterprise-dev-plan-complete-btn"
+              disabled={statusSavingId === goal.id}
+              onClick={() => onMarkComplete(goal)}
+            >
+              {statusSavingId === goal.id ? "Saving…" : "Mark complete"}
+            </button>
+          ) : null}
+          <GoalStatusBadge status={goal.status} />
+        </div>
+      </footer>
+    </li>
   );
 }
 
@@ -372,12 +690,14 @@ export function DevelopmentPlanTab({
   const [updateGoal, setUpdateGoal] = useState<DevelopmentGoal | null>(null);
   const [skill, setSkill] = useState("");
   const [steps, setSteps] = useState<string[]>([""]);
-  const [existingNoteEdits, setExistingNoteEdits] = useState<Record<string, string>>({});
-  const [newNotes, setNewNotes] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [menuGoalId, setMenuGoalId] = useState<string | null>(null);
   const [statusSavingId, setStatusSavingId] = useState<string | null>(null);
+  const [closedSectionOpen, setClosedSectionOpen] = useState(false);
   const canUpdate = canCreate || canAddNotes;
+
+  const activeGoals = goals.filter((g) => g.status !== "closed");
+  const closedGoals = goals.filter((g) => g.status === "closed");
 
   useEffect(() => {
     if (!menuGoalId) return;
@@ -407,9 +727,12 @@ export function DevelopmentPlanTab({
   const resetCreateForm = () => {
     setSkill("");
     setSteps([""]);
-    setExistingNoteEdits({});
-    setNewNotes([]);
     setErr(null);
+  };
+
+  const syncGoalUpdate = (updated: DevelopmentGoal) => {
+    setGoals((prev) => prev.map((g) => (g.id === updated.id ? updated : g)));
+    setUpdateGoal((prev) => (prev?.id === updated.id ? updated : prev));
   };
 
   const openCreate = () => {
@@ -424,8 +747,6 @@ export function DevelopmentPlanTab({
     setUpdateGoal(goal);
     setSkill(goal.skill);
     setSteps(goal.steps.length > 0 ? goal.steps : [""]);
-    setExistingNoteEdits(Object.fromEntries(goal.notes.map((note) => [note.id, note.body])));
-    setNewNotes([]);
   };
 
   const closeModals = () => {
@@ -466,69 +787,32 @@ export function DevelopmentPlanTab({
 
     const trimmedSkill = skill.trim();
     const trimmedSteps = steps.map((s) => s.trim()).filter(Boolean);
-    const trimmedNewNotes = newNotes.map((n) => n.trim()).filter(Boolean);
 
-    if (canCreate) {
-      if (!trimmedSkill) {
-        setErr("Enter a developmental skill.");
-        return;
-      }
-      if (trimmedSteps.length === 0) {
-        setErr("Add at least one step.");
-        return;
-      }
-    }
-
-    const emptyExistingNote = updateGoal.notes.find(
-      (note) => !(existingNoteEdits[note.id]?.trim()),
-    );
-    if (emptyExistingNote) {
-      setErr("Progress notes cannot be empty.");
+    if (!trimmedSkill) {
+      setErr("Enter a developmental skill.");
       return;
     }
-
-    const changedExistingNotes = updateGoal.notes.filter(
-      (note) => (existingNoteEdits[note.id]?.trim() ?? "") !== note.body.trim(),
-    );
+    if (trimmedSteps.length === 0) {
+      setErr("Add at least one step.");
+      return;
+    }
 
     const goalFieldsChanged =
       trimmedSkill !== updateGoal.skill.trim() ||
       JSON.stringify(trimmedSteps) !== JSON.stringify(updateGoal.steps);
 
-    const hasNoteChanges = changedExistingNotes.length > 0 || trimmedNewNotes.length > 0;
-
-    if (!goalFieldsChanged && !hasNoteChanges) {
-      setErr("Change the goal, update a note, or add a new note before saving.");
+    if (!goalFieldsChanged) {
+      setErr("Change the skill or steps before saving.");
       return;
     }
 
     setSaving(true);
     setErr(null);
     try {
-      let updated = updateGoal;
-
-      if (canCreate && goalFieldsChanged) {
-        updated = await updateDevelopmentGoal(teamId, memberUserId, updateGoal.id, {
-          skill: trimmedSkill,
-          steps: trimmedSteps,
-        });
-      }
-
-      if (canAddNotes) {
-        for (const note of changedExistingNotes) {
-          updated = await updateDevelopmentGoalNote(
-            teamId,
-            memberUserId,
-            updateGoal.id,
-            note.id,
-            existingNoteEdits[note.id].trim(),
-          );
-        }
-        for (const body of trimmedNewNotes) {
-          updated = await addDevelopmentGoalNote(teamId, memberUserId, updateGoal.id, body);
-        }
-      }
-
+      const updated = await updateDevelopmentGoal(teamId, memberUserId, updateGoal.id, {
+        skill: trimmedSkill,
+        steps: trimmedSteps,
+      });
       setGoals((prev) => prev.map((g) => (g.id === updateGoal.id ? updated : g)));
       closeModals();
     } catch (e) {
@@ -653,142 +937,29 @@ export function DevelopmentPlanTab({
         </div>
       ) : (
         <>
-          <ul className="enterprise-dev-plan-goals">
-            {goals.map((goal) => (
-              <li
-                key={goal.id}
-                className={`enterprise-dev-plan-goal${goal.status === "closed" ? " enterprise-dev-plan-goal--closed" : ""}${menuGoalId === goal.id ? " enterprise-dev-plan-goal--menu-open" : ""}`}
-              >
-                <header className="enterprise-dev-plan-goal-top">
-                  <span className="enterprise-dev-plan-goal-icon">
-                    <GoalTargetIcon />
-                  </span>
-                  <div className="enterprise-dev-plan-goal-title-block">
-                    <h4 className="enterprise-dev-plan-skill">{goal.skill}</h4>
-                    <p className="enterprise-dev-plan-added">
-                      Added {formatWhen(goal.createdAt)}
-                      {goal.createdBy ? ` · ${displayUserName(goal.createdBy)}` : ""}
-                    </p>
-                  </div>
-                  <div className="enterprise-dev-plan-goal-actions">
-                    {canUpdate ? (
-                      <button
-                        type="button"
-                        className="enterprise-dev-plan-update-btn"
-                        onClick={() => openUpdate(goal)}
-                        disabled={statusSavingId === goal.id}
-                      >
-                        Update
-                      </button>
-                    ) : null}
-                    {canUpdate ? (
-                      <div className="enterprise-dev-plan-goal-menu-wrap">
-                        <button
-                          type="button"
-                          className="enterprise-dev-plan-kebab"
-                          aria-label="Goal options"
-                          aria-expanded={menuGoalId === goal.id}
-                          disabled={statusSavingId === goal.id}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setMenuGoalId((current) => (current === goal.id ? null : goal.id));
-                          }}
-                        >
-                          ⋮
-                        </button>
-                        {menuGoalId === goal.id ? (
-                          <div className="enterprise-dev-plan-goal-menu" role="menu">
-                            {goal.status === "closed" ? (
-                              <button
-                                type="button"
-                                role="menuitem"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  void onReopenGoal(goal);
-                                }}
-                              >
-                                Reopen goal
-                              </button>
-                            ) : null}
-                            <button
-                              type="button"
-                              role="menuitem"
-                              className="enterprise-dev-plan-goal-menu-danger"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                void onDeleteGoal(goal);
-                              }}
-                            >
-                              Delete goal
-                            </button>
-                          </div>
-                        ) : null}
-                      </div>
-                    ) : null}
-                  </div>
-                </header>
-
-                {goal.steps.length > 0 ? (
-                  <section className="enterprise-dev-plan-goal-section">
-                    <p className="enterprise-dev-plan-section-label">Steps to develop this skill</p>
-                    <ul className="enterprise-dev-plan-step-list">
-                      {goal.steps.map((step, index) => (
-                        <li key={`${goal.id}-step-${index}`}>
-                          <span className="enterprise-dev-plan-step-check">
-                            <StepCheckIcon />
-                          </span>
-                          <span>
-                            {index + 1}. {step}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  </section>
-                ) : null}
-
-                <section className="enterprise-dev-plan-goal-section">
-                  <p className="enterprise-dev-plan-section-label">Notes</p>
-                  {goal.notes.length === 0 ? (
-                    <p className="enterprise-dev-plan-notes-empty">No notes yet.</p>
-                  ) : (
-                    <ul className="enterprise-dev-plan-note-list">
-                      {goal.notes.map((note) => (
-                        <li key={note.id} className="enterprise-dev-plan-note">
-                          <p className="enterprise-dev-plan-note-body">{note.body}</p>
-                          <p className="enterprise-dev-plan-note-meta">
-                            {displayUserName(note.createdBy)} · {formatWhen(note.createdAt)}
-                          </p>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </section>
-
-                <footer className="enterprise-dev-plan-goal-footer">
-                  <p className="enterprise-dev-plan-goal-dates">
-                    <CalendarIcon />
-                    <span>
-                      Created {formatDateOnly(goal.createdAt)} · Last updated{" "}
-                      {formatDateOnly(lastUpdatedAt(goal))}
-                    </span>
-                  </p>
-                  <div className="enterprise-dev-plan-goal-footer-actions">
-                    {canUpdate && goal.status !== "closed" ? (
-                      <button
-                        type="button"
-                        className="enterprise-dev-plan-complete-btn"
-                        disabled={statusSavingId === goal.id}
-                        onClick={() => void onMarkComplete(goal)}
-                      >
-                        {statusSavingId === goal.id ? "Saving…" : "Mark complete"}
-                      </button>
-                    ) : null}
-                    <GoalStatusBadge status={goal.status} />
-                  </div>
-                </footer>
-              </li>
-            ))}
-          </ul>
+          {activeGoals.length > 0 ? (
+            <ul className="enterprise-dev-plan-goals">
+              {activeGoals.map((goal) => (
+                <DevelopmentGoalCard
+                  key={goal.id}
+                  goal={goal}
+                  menuGoalId={menuGoalId}
+                  statusSavingId={statusSavingId}
+                  canUpdate={canUpdate}
+                  onOpenUpdate={openUpdate}
+                  onToggleMenu={(goalId, e) => {
+                    e.stopPropagation();
+                    setMenuGoalId((current) => (current === goalId ? null : goalId));
+                  }}
+                  onReopen={(g) => void onReopenGoal(g)}
+                  onDelete={(g) => void onDeleteGoal(g)}
+                  onMarkComplete={(g) => void onMarkComplete(g)}
+                />
+              ))}
+            </ul>
+          ) : closedGoals.length > 0 ? (
+            <p className="enterprise-muted enterprise-dev-plan-no-active">No active developmental goals.</p>
+          ) : null}
 
           {canCreate ? (
             <div className="enterprise-dev-plan-grow">
@@ -801,6 +972,46 @@ export function DevelopmentPlanTab({
                 New developmental goal
               </button>
             </div>
+          ) : null}
+
+          {closedGoals.length > 0 ? (
+            <section className="enterprise-dev-plan-closed">
+              <button
+                type="button"
+                className="enterprise-dev-plan-closed-toggle"
+                aria-expanded={closedSectionOpen}
+                onClick={() => setClosedSectionOpen((open) => !open)}
+              >
+                <span className="enterprise-dev-plan-closed-toggle-label">
+                  Closed goals
+                  <span className="enterprise-dev-plan-closed-count">{closedGoals.length}</span>
+                </span>
+                <span className="enterprise-dev-plan-closed-chevron" aria-hidden>
+                  {closedSectionOpen ? "▾" : "▸"}
+                </span>
+              </button>
+              {closedSectionOpen ? (
+                <ul className="enterprise-dev-plan-goals enterprise-dev-plan-goals--closed">
+                  {closedGoals.map((goal) => (
+                    <DevelopmentGoalCard
+                      key={goal.id}
+                      goal={goal}
+                      menuGoalId={menuGoalId}
+                      statusSavingId={statusSavingId}
+                      canUpdate={canUpdate}
+                      onOpenUpdate={openUpdate}
+                      onToggleMenu={(goalId, e) => {
+                        e.stopPropagation();
+                        setMenuGoalId((current) => (current === goalId ? null : goalId));
+                      }}
+                      onReopen={(g) => void onReopenGoal(g)}
+                      onDelete={(g) => void onDeleteGoal(g)}
+                      onMarkComplete={(g) => void onMarkComplete(g)}
+                    />
+                  ))}
+                </ul>
+              ) : null}
+            </section>
           ) : null}
         </>
       )}
@@ -831,6 +1042,7 @@ export function DevelopmentPlanTab({
           err={err}
           saving={saving}
           saveLabel="Save changes"
+          showSave={canCreate}
           onClose={closeModals}
           onSave={() => void onSaveUpdate()}
         >
@@ -845,13 +1057,11 @@ export function DevelopmentPlanTab({
           ) : null}
           {canAddNotes ? (
             <ProgressNotesEditor
-              existingNotes={updateGoal.notes}
-              existingEdits={existingNoteEdits}
-              newNotes={newNotes}
-              onExistingChange={(noteId, body) =>
-                setExistingNoteEdits((prev) => ({ ...prev, [noteId]: body }))
-              }
-              onNewNotesChange={setNewNotes}
+              notes={updateGoal.notes}
+              teamId={teamId}
+              memberUserId={memberUserId}
+              goalId={updateGoal.id}
+              onGoalUpdated={syncGoalUpdate}
             />
           ) : null}
         </DevPlanGoalModal>

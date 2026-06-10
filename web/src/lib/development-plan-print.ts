@@ -70,49 +70,84 @@ function renderNotesHtml(goal: DevelopmentGoal): string {
     .join("");
 }
 
+function closedDateForGoal(goal: DevelopmentGoal): string {
+  const iso = goal.closedAt ?? lastUpdatedAt(goal);
+  return formatPrintDate(iso);
+}
+
+function renderActiveGoalHtml(goal: DevelopmentGoal, index: number): string {
+  const addedBy = displayUserName(goal.createdBy);
+  const created = formatPrintDate(goal.createdAt);
+  const updated = formatPrintDate(lastUpdatedAt(goal));
+
+  return `
+    <div class="goal">
+      <div class="goal-head">
+        <span class="goal-num">${index + 1}</span>
+        <div class="goal-title-block">
+          <h2 class="goal-title">${escapeHtml(goal.skill)}</h2>
+          <p class="goal-meta">Added ${escapeHtml(created)} · ${escapeHtml(addedBy)}</p>
+        </div>
+        <span class="goal-status goal-status--active">Active</span>
+      </div>
+
+      <div class="goal-block">
+        <h3 class="block-label">Steps to develop this skill</h3>
+        ${renderStepsHtml(goal.steps)}
+      </div>
+
+      <div class="goal-block">
+        <h3 class="block-label">Progress notes</h3>
+        ${renderNotesHtml(goal)}
+      </div>
+
+      <div class="goal-footer">
+        <span>Created ${escapeHtml(created)}</span>
+        <span>Last updated ${escapeHtml(updated)}</span>
+      </div>
+    </div>
+  `;
+}
+
+function renderClosedGoalRowHtml(goal: DevelopmentGoal): string {
+  const closed = closedDateForGoal(goal);
+  return `
+    <li class="closed-goal-row">
+      <span class="closed-goal-title">${escapeHtml(goal.skill)}</span>
+      <span class="closed-goal-date">Closed ${escapeHtml(closed)}</span>
+    </li>
+  `;
+}
+
+function renderSingleGoalHtml(goal: DevelopmentGoal, index: number): string {
+  return renderActiveGoalHtml(goal, index);
+}
+
 function renderGoalsHtml(goals: DevelopmentGoal[]): string {
   if (goals.length === 0) {
     return `<p class="empty-doc">No developmental goals have been added yet.</p>`;
   }
 
-  return goals
-    .map((goal, index) => {
-      const addedBy = displayUserName(goal.createdBy);
-      const created = formatPrintDate(goal.createdAt);
-      const updated = formatPrintDate(lastUpdatedAt(goal));
+  const active = goals.filter((g) => g.status !== "closed");
+  const closed = goals.filter((g) => g.status === "closed");
+  let html = "";
+  let index = 0;
 
-      const status = goal.status === "closed" ? "closed" : "active";
-      const statusLabel = status === "closed" ? "Closed" : "Active";
+  for (const goal of active) {
+    html += renderSingleGoalHtml(goal, index);
+    index += 1;
+  }
 
-      return `
-        <div class="goal${status === "closed" ? " goal--closed" : ""}">
-          <div class="goal-head">
-            <span class="goal-num">${index + 1}</span>
-            <div class="goal-title-block">
-              <h2 class="goal-title">${escapeHtml(goal.skill)}</h2>
-              <p class="goal-meta">Added ${escapeHtml(created)} · ${escapeHtml(addedBy)}</p>
-            </div>
-            <span class="goal-status goal-status--${status}">${statusLabel}</span>
-          </div>
+  if (closed.length > 0) {
+    html += `<h2 class="print-closed-heading">Closed goals</h2>`;
+    html += `<ul class="closed-goal-list">`;
+    for (const goal of closed) {
+      html += renderClosedGoalRowHtml(goal);
+    }
+    html += `</ul>`;
+  }
 
-          <div class="goal-block">
-            <h3 class="block-label">Steps to develop this skill</h3>
-            ${renderStepsHtml(goal.steps)}
-          </div>
-
-          <div class="goal-block">
-            <h3 class="block-label">Progress notes</h3>
-            ${renderNotesHtml(goal)}
-          </div>
-
-          <div class="goal-footer">
-            <span>Created ${escapeHtml(created)}</span>
-            <span>Last updated ${escapeHtml(updated)}</span>
-          </div>
-        </div>
-      `;
-    })
-    .join("");
+  return html;
 }
 
 function buildPrintHtml(options: DevelopmentPlanPrintOptions, logoUrl: string): string {
@@ -266,6 +301,47 @@ function buildPrintHtml(options: DevelopmentPlanPrintOptions, logoUrl: string): 
     }
     .goal--closed .goal-num {
       background: #94a3b8;
+    }
+    .print-closed-heading {
+      margin: 14px 0 8px;
+      padding-top: 10px;
+      border-top: 1px solid #cbd5e1;
+      font-size: 8pt;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: #64748b;
+    }
+    .closed-goal-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .closed-goal-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 6px 10px;
+      border-bottom: 1px solid #eef2f6;
+      background: #fafbfc;
+    }
+    .closed-goal-row:last-child {
+      border-bottom: none;
+    }
+    .closed-goal-title {
+      font-size: 8.5pt;
+      font-weight: 600;
+      color: #334155;
+    }
+    .closed-goal-date {
+      flex-shrink: 0;
+      font-size: 7pt;
+      color: #64748b;
+      white-space: nowrap;
     }
     .goal-block {
       padding: 7px 10px;

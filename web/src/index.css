@@ -2606,6 +2606,71 @@ input {
   filter: brightness(1.05);
 }
 
+.enterprise-dev-plan-no-active {
+  margin: 0 0 0.75rem;
+  font-size: 0.8125rem;
+}
+
+.enterprise-dev-plan-closed {
+  margin-top: 0.75rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fafbfc;
+  overflow: hidden;
+}
+
+.enterprise-dev-plan-closed-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  border: none;
+  background: #f8fafc;
+  padding: 0.65rem 0.85rem;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.enterprise-dev-plan-closed-toggle:hover {
+  background: #f1f5f9;
+}
+
+.enterprise-dev-plan-closed-toggle-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: #475569;
+}
+
+.enterprise-dev-plan-closed-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: #475569;
+  background: #e2e8f0;
+}
+
+.enterprise-dev-plan-closed-chevron {
+  color: #94a3b8;
+  font-size: 0.875rem;
+  line-height: 1;
+}
+
+.enterprise-dev-plan-goals--closed {
+  padding: 0.65rem 0.75rem 0.75rem;
+  border-top: 1px solid #e2e8f0;
+  background: #fff;
+}
+
 .enterprise-dev-plan-goal-modal {
   max-width: min(620px, 96vw);
 }
@@ -2665,6 +2730,21 @@ input {
 .enterprise-dev-plan-note-draft .enterprise-oneone-fill-textarea {
   width: 100%;
   min-height: 72px;
+}
+
+.enterprise-dev-plan-note-readonly {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: #0f172a;
+  white-space: pre-wrap;
+  line-height: 1.4;
+}
+
+.enterprise-dev-plan-note-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
 }
 
 .enterprise-team-profile-facts {

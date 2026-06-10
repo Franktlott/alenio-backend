@@ -134,18 +134,6 @@ function IconStatCalendar() {
   );
 }
 
-function IconTemplatePlan() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-      <polyline points="14 2 14 8 20 8" />
-      <line x1="16" y1="13" x2="8" y2="13" />
-      <line x1="16" y1="17" x2="8" y2="17" />
-      <polyline points="10 9 9 9 8 9" />
-    </svg>
-  );
-}
-
 function IconTemplateOneOne() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
@@ -500,9 +488,8 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
     );
   }
 
-  const developmentPlanTemplatesWired = false;
   const canManageOneOneTemplates = myRole === "owner";
-  const showTemplateManageRow = manageMembers || canManageOneOneTemplates;
+  const showTemplateManageRow = canManageOneOneTemplates;
 
   return (
     <div className="enterprise-team-tab enterprise-team-page">
@@ -635,30 +622,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
           ) : null}
 
           {showTemplateManageRow ? (
-            <div
-              className={`enterprise-team-template-manage-row${
-                manageMembers && canManageOneOneTemplates ? "" : " enterprise-team-template-manage-row--single"
-              }`}
-            >
-              {manageMembers ? (
-              <div
-                className={`enterprise-team-template-manage-card${developmentPlanTemplatesWired ? "" : " enterprise-team-template-manage-card--soon"}`}
-              >
-                <span className="enterprise-team-template-manage-icon enterprise-team-template-manage-icon--plan" aria-hidden>
-                  <IconTemplatePlan />
-                </span>
-                <div className="enterprise-team-template-manage-copy">
-                  <strong>Development plan templates</strong>
-                  {!developmentPlanTemplatesWired ? (
-                    <span className="enterprise-team-coming-soon-badge">Coming soon</span>
-                  ) : null}
-                </div>
-                <button type="button" className="enterprise-team-template-manage-btn" disabled={!developmentPlanTemplatesWired}>
-                  Manage
-                </button>
-              </div>
-              ) : null}
-              {canManageOneOneTemplates ? (
+            <div className="enterprise-team-template-manage-row">
               <div className="enterprise-team-template-manage-card">
                 <span className="enterprise-team-template-manage-icon enterprise-team-template-manage-icon--oneone" aria-hidden>
                   <IconTemplateOneOne />
@@ -670,7 +634,6 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                   Manage
                 </button>
               </div>
-              ) : null}
             </div>
           ) : null}
 
