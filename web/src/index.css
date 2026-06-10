@@ -2666,6 +2666,60 @@ input {
   border-color: #cbd5e1;
 }
 
+.enterprise-dev-plan-notes-editor {
+  margin-top: 0;
+}
+
+.enterprise-dev-plan-notes-editor-empty {
+  margin: 0;
+  font-size: 0.75rem;
+  color: #94a3b8;
+}
+
+.enterprise-dev-plan-modal-note-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.enterprise-dev-plan-modal-note-list--new {
+  margin-top: 0.65rem;
+  padding-top: 0.65rem;
+  border-top: 1px dashed #e8edf3;
+}
+
+.enterprise-dev-plan-modal-note-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.enterprise-dev-plan-modal-note-meta {
+  margin: 0;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+.enterprise-dev-plan-modal-note-meta--new {
+  color: #6366f1;
+}
+
+.enterprise-dev-plan-modal-note-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+}
+
+.enterprise-dev-plan-modal-note-input {
+  flex: 1;
+  min-width: 0;
+  min-height: 3.25rem;
+}
+
 .enterprise-team-profile-facts {
   margin: 0;
   display: grid;

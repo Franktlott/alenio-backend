@@ -1274,3 +1274,18 @@ export function addDevelopmentGoalNote(
     { method: "POST", body: JSON.stringify({ body }) },
   ).then((r) => r.data);
 }
+
+export function updateDevelopmentGoalNote(
+  teamId: string,
+  memberUserId: string,
+  goalId: string,
+  noteId: string,
+  body: string,
+) {
+  const paths = developmentGoalsPaths(teamId, memberUserId, goalId);
+  const note = encodeURIComponent(noteId);
+  return developmentGoalsRequest<{ data: DevelopmentGoal }>(
+    { api: `${paths.api}/notes/${note}`, web: `${paths.web}/notes/${note}` },
+    { method: "PATCH", body: JSON.stringify({ body }) },
+  ).then((r) => r.data);
+}

@@ -4,7 +4,9 @@ import {
   createDevelopmentGoal,
   fetchDevelopmentGoals,
   updateDevelopmentGoal,
+  updateDevelopmentGoalNote,
   type DevelopmentGoal,
+  type DevelopmentGoalNote,
 } from "../lib/api";
 
 type Props = {
@@ -101,98 +103,150 @@ function GrowIllustration() {
 type GoalFormFieldsProps = {
   skill: string;
   steps: string[];
-  note: string;
-  showGoalFields: boolean;
-  showNoteField: boolean;
   skillId: string;
   onSkillChange: (value: string) => void;
   onStepsChange: (value: string[]) => void;
-  onNoteChange: (value: string) => void;
 };
 
-function GoalFormFields({
-  skill,
-  steps,
-  note,
-  showGoalFields,
-  showNoteField,
-  skillId,
-  onSkillChange,
-  onStepsChange,
-  onNoteChange,
-}: GoalFormFieldsProps) {
+function GoalFormFields({ skill, steps, skillId, onSkillChange, onStepsChange }: GoalFormFieldsProps) {
   return (
-    <div className="enterprise-dev-plan-form">
-      {showGoalFields ? (
-        <>
-          <div className="enterprise-dev-plan-form-field">
-            <label className="enterprise-dev-plan-field-label" htmlFor={skillId}>
-              Developmental skill
-            </label>
-            <input
-              id={skillId}
-              className="enterprise-dev-plan-input"
-              value={skill}
-              onChange={(e) => onSkillChange(e.target.value)}
-              placeholder="e.g. Conflict resolution, Time management"
-            />
-          </div>
+    <>
+      <div className="enterprise-dev-plan-form-field">
+        <label className="enterprise-dev-plan-field-label" htmlFor={skillId}>
+          Developmental skill
+        </label>
+        <input
+          id={skillId}
+          className="enterprise-dev-plan-input"
+          value={skill}
+          onChange={(e) => onSkillChange(e.target.value)}
+          placeholder="e.g. Conflict resolution, Time management"
+        />
+      </div>
 
-          <div className="enterprise-dev-plan-form-field">
-            <div className="enterprise-dev-plan-steps-editor-head">
-              <span className="enterprise-dev-plan-field-label">Steps to develop this skill</span>
-              <button
-                type="button"
-                className="enterprise-dev-plan-add-step"
-                onClick={() => onStepsChange([...steps, ""])}
-              >
-                + Add step
-              </button>
-            </div>
-            <ul className="enterprise-dev-plan-step-inputs">
-              {steps.map((step, index) => (
-                <li key={`step-input-${index}`} className="enterprise-dev-plan-step-row">
-                  <span className="enterprise-dev-plan-step-num">{index + 1}</span>
-                  <input
-                    className="enterprise-dev-plan-input enterprise-dev-plan-step-input"
-                    value={step}
-                    placeholder={`Step ${index + 1}`}
-                    aria-label={`Step ${index + 1}`}
-                    onChange={(e) =>
-                      onStepsChange(steps.map((s, i) => (i === index ? e.target.value : s)))
-                    }
-                  />
-                  {steps.length > 1 ? (
-                    <button
-                      type="button"
-                      className="enterprise-dev-plan-remove-step"
-                      aria-label={`Remove step ${index + 1}`}
-                      onClick={() => onStepsChange(steps.filter((_, i) => i !== index))}
-                    >
-                      ×
-                    </button>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
-          </div>
-        </>
+      <div className="enterprise-dev-plan-form-field">
+        <div className="enterprise-dev-plan-steps-editor-head">
+          <span className="enterprise-dev-plan-field-label">Steps to develop this skill</span>
+          <button
+            type="button"
+            className="enterprise-dev-plan-add-step"
+            onClick={() => onStepsChange([...steps, ""])}
+          >
+            + Add step
+          </button>
+        </div>
+        <ul className="enterprise-dev-plan-step-inputs">
+          {steps.map((step, index) => (
+            <li key={`step-input-${index}`} className="enterprise-dev-plan-step-row">
+              <span className="enterprise-dev-plan-step-num">{index + 1}</span>
+              <input
+                className="enterprise-dev-plan-input enterprise-dev-plan-step-input"
+                value={step}
+                placeholder={`Step ${index + 1}`}
+                aria-label={`Step ${index + 1}`}
+                onChange={(e) =>
+                  onStepsChange(steps.map((s, i) => (i === index ? e.target.value : s)))
+                }
+              />
+              {steps.length > 1 ? (
+                <button
+                  type="button"
+                  className="enterprise-dev-plan-remove-step"
+                  aria-label={`Remove step ${index + 1}`}
+                  onClick={() => onStepsChange(steps.filter((_, i) => i !== index))}
+                >
+                  ×
+                </button>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      </div>
+    </>
+  );
+}
+
+type ProgressNotesEditorProps = {
+  existingNotes: DevelopmentGoalNote[];
+  existingEdits: Record<string, string>;
+  newNotes: string[];
+  onExistingChange: (noteId: string, body: string) => void;
+  onNewNotesChange: (notes: string[]) => void;
+};
+
+function ProgressNotesEditor({
+  existingNotes,
+  existingEdits,
+  newNotes,
+  onExistingChange,
+  onNewNotesChange,
+}: ProgressNotesEditorProps) {
+  return (
+    <div className="enterprise-dev-plan-form-field enterprise-dev-plan-notes-editor">
+      <div className="enterprise-dev-plan-steps-editor-head">
+        <span className="enterprise-dev-plan-field-label">Progress notes</span>
+        <button
+          type="button"
+          className="enterprise-dev-plan-add-step"
+          onClick={() => onNewNotesChange([...newNotes, ""])}
+        >
+          + Add note
+        </button>
+      </div>
+
+      {existingNotes.length === 0 && newNotes.length === 0 ? (
+        <p className="enterprise-dev-plan-notes-editor-empty">No notes yet. Add one to track progress.</p>
       ) : null}
 
-      {showNoteField ? (
-        <div className="enterprise-dev-plan-form-field">
-          <label className="enterprise-dev-plan-field-label" htmlFor={`${skillId}-note`}>
-            Progress note
-          </label>
-          <textarea
-            id={`${skillId}-note`}
-            className="enterprise-dev-plan-input enterprise-dev-plan-textarea"
-            rows={3}
-            placeholder="Add a note about progress…"
-            value={note}
-            onChange={(e) => onNoteChange(e.target.value)}
-          />
-        </div>
+      {existingNotes.length > 0 ? (
+        <ul className="enterprise-dev-plan-modal-note-list">
+          {existingNotes.map((note) => (
+            <li key={note.id} className="enterprise-dev-plan-modal-note-item">
+              <p className="enterprise-dev-plan-modal-note-meta">
+                {displayUserName(note.createdBy)} · {formatWhen(note.createdAt)}
+              </p>
+              <textarea
+                className="enterprise-dev-plan-input enterprise-dev-plan-textarea enterprise-dev-plan-modal-note-input"
+                rows={2}
+                value={existingEdits[note.id] ?? note.body}
+                aria-label={`Edit note from ${formatWhen(note.createdAt)}`}
+                onChange={(e) => onExistingChange(note.id, e.target.value)}
+              />
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      {newNotes.length > 0 ? (
+        <ul className="enterprise-dev-plan-modal-note-list enterprise-dev-plan-modal-note-list--new">
+          {newNotes.map((note, index) => (
+            <li key={`new-note-${index}`} className="enterprise-dev-plan-modal-note-item">
+              <p className="enterprise-dev-plan-modal-note-meta enterprise-dev-plan-modal-note-meta--new">
+                New note
+              </p>
+              <div className="enterprise-dev-plan-modal-note-row">
+                <textarea
+                  className="enterprise-dev-plan-input enterprise-dev-plan-textarea enterprise-dev-plan-modal-note-input"
+                  rows={2}
+                  placeholder="Add a note about progress…"
+                  value={note}
+                  aria-label={`New note ${index + 1}`}
+                  onChange={(e) =>
+                    onNewNotesChange(newNotes.map((n, i) => (i === index ? e.target.value : n)))
+                  }
+                />
+                <button
+                  type="button"
+                  className="enterprise-dev-plan-remove-step"
+                  aria-label={`Remove new note ${index + 1}`}
+                  onClick={() => onNewNotesChange(newNotes.filter((_, i) => i !== index))}
+                >
+                  ×
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
       ) : null}
     </div>
   );
@@ -206,7 +260,8 @@ export function DevelopmentPlanTab({ teamId, memberUserId, canCreate, canAddNote
   const [updateGoal, setUpdateGoal] = useState<DevelopmentGoal | null>(null);
   const [skill, setSkill] = useState("");
   const [steps, setSteps] = useState<string[]>([""]);
-  const [updateNote, setUpdateNote] = useState("");
+  const [existingNoteEdits, setExistingNoteEdits] = useState<Record<string, string>>({});
+  const [newNotes, setNewNotes] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const canUpdate = canCreate || canAddNotes;
 
@@ -231,7 +286,8 @@ export function DevelopmentPlanTab({ teamId, memberUserId, canCreate, canAddNote
   const resetCreateForm = () => {
     setSkill("");
     setSteps([""]);
-    setUpdateNote("");
+    setExistingNoteEdits({});
+    setNewNotes([]);
     setErr(null);
   };
 
@@ -247,7 +303,8 @@ export function DevelopmentPlanTab({ teamId, memberUserId, canCreate, canAddNote
     setUpdateGoal(goal);
     setSkill(goal.skill);
     setSteps(goal.steps.length > 0 ? goal.steps : [""]);
-    setUpdateNote("");
+    setExistingNoteEdits(Object.fromEntries(goal.notes.map((note) => [note.id, note.body])));
+    setNewNotes([]);
   };
 
   const closeModals = () => {
@@ -288,7 +345,7 @@ export function DevelopmentPlanTab({ teamId, memberUserId, canCreate, canAddNote
 
     const trimmedSkill = skill.trim();
     const trimmedSteps = steps.map((s) => s.trim()).filter(Boolean);
-    const trimmedNote = updateNote.trim();
+    const trimmedNewNotes = newNotes.map((n) => n.trim()).filter(Boolean);
 
     if (canCreate) {
       if (!trimmedSkill) {
@@ -301,17 +358,26 @@ export function DevelopmentPlanTab({ teamId, memberUserId, canCreate, canAddNote
       }
     }
 
-    if (!canCreate && canAddNotes && !trimmedNote) {
-      setErr("Add a progress note or update the goal.");
+    const emptyExistingNote = updateGoal.notes.find(
+      (note) => !(existingNoteEdits[note.id]?.trim()),
+    );
+    if (emptyExistingNote) {
+      setErr("Progress notes cannot be empty.");
       return;
     }
+
+    const changedExistingNotes = updateGoal.notes.filter(
+      (note) => (existingNoteEdits[note.id]?.trim() ?? "") !== note.body.trim(),
+    );
 
     const goalFieldsChanged =
       trimmedSkill !== updateGoal.skill.trim() ||
       JSON.stringify(trimmedSteps) !== JSON.stringify(updateGoal.steps);
 
-    if (canCreate && goalFieldsChanged === false && !trimmedNote) {
-      setErr("Change the goal or add a progress note before saving.");
+    const hasNoteChanges = changedExistingNotes.length > 0 || trimmedNewNotes.length > 0;
+
+    if (!goalFieldsChanged && !hasNoteChanges) {
+      setErr("Change the goal, update a note, or add a new note before saving.");
       return;
     }
 
@@ -327,8 +393,19 @@ export function DevelopmentPlanTab({ teamId, memberUserId, canCreate, canAddNote
         });
       }
 
-      if (canAddNotes && trimmedNote) {
-        updated = await addDevelopmentGoalNote(teamId, memberUserId, updateGoal.id, trimmedNote);
+      if (canAddNotes) {
+        for (const note of changedExistingNotes) {
+          updated = await updateDevelopmentGoalNote(
+            teamId,
+            memberUserId,
+            updateGoal.id,
+            note.id,
+            existingNoteEdits[note.id].trim(),
+          );
+        }
+        for (const body of trimmedNewNotes) {
+          updated = await addDevelopmentGoalNote(teamId, memberUserId, updateGoal.id, body);
+        }
       }
 
       setGoals((prev) => prev.map((g) => (g.id === updateGoal.id ? updated : g)));
@@ -493,17 +570,15 @@ export function DevelopmentPlanTab({ teamId, memberUserId, canCreate, canAddNote
 
             <div className="enterprise-dev-plan-modal-body">
               {err ? <p className="enterprise-form-error" role="alert">{err}</p> : null}
-              <GoalFormFields
-                skill={skill}
-                steps={steps}
-                note=""
-                showGoalFields
-                showNoteField={false}
-                skillId="dev-plan-skill"
-                onSkillChange={setSkill}
-                onStepsChange={setSteps}
-                onNoteChange={() => {}}
-              />
+              <div className="enterprise-dev-plan-form">
+                <GoalFormFields
+                  skill={skill}
+                  steps={steps}
+                  skillId="dev-plan-skill"
+                  onSkillChange={setSkill}
+                  onStepsChange={setSteps}
+                />
+              </div>
             </div>
 
             <footer className="enterprise-dev-plan-modal-footer">
@@ -550,17 +625,28 @@ export function DevelopmentPlanTab({ teamId, memberUserId, canCreate, canAddNote
 
             <div className="enterprise-dev-plan-modal-body">
               {err ? <p className="enterprise-form-error" role="alert">{err}</p> : null}
-              <GoalFormFields
-                skill={skill}
-                steps={steps}
-                note={updateNote}
-                showGoalFields={canCreate}
-                showNoteField={canAddNotes}
-                skillId="dev-plan-update-skill"
-                onSkillChange={setSkill}
-                onStepsChange={setSteps}
-                onNoteChange={setUpdateNote}
-              />
+              <div className="enterprise-dev-plan-form">
+                {canCreate ? (
+                  <GoalFormFields
+                    skill={skill}
+                    steps={steps}
+                    skillId="dev-plan-update-skill"
+                    onSkillChange={setSkill}
+                    onStepsChange={setSteps}
+                  />
+                ) : null}
+                {canAddNotes ? (
+                  <ProgressNotesEditor
+                    existingNotes={updateGoal.notes}
+                    existingEdits={existingNoteEdits}
+                    newNotes={newNotes}
+                    onExistingChange={(noteId, body) =>
+                      setExistingNoteEdits((prev) => ({ ...prev, [noteId]: body }))
+                    }
+                    onNewNotesChange={setNewNotes}
+                  />
+                ) : null}
+              </div>
             </div>
 
             <footer className="enterprise-dev-plan-modal-footer">
