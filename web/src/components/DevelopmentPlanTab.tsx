@@ -1,4 +1,13 @@
-import { useCallback, useEffect, useState, type MouseEvent, type ReactNode } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+  type MouseEvent,
+  type ReactNode,
+} from "react";
 import {
   addDevelopmentGoalNote,
   createDevelopmentGoal,
@@ -197,6 +206,11 @@ function GoalFormFields({ skill, steps, skillId, onSkillChange, onStepsChange }:
   );
 }
 
+export type ProgressNotesEditorHandle = {
+  hasUnsavedChanges: () => boolean;
+  savePendingChanges: () => Promise<boolean>;
+};
+
 type ProgressNotesEditorProps = {
   notes: DevelopmentGoalNote[];
   teamId: string;
@@ -205,13 +219,11 @@ type ProgressNotesEditorProps = {
   onGoalUpdated: (goal: DevelopmentGoal) => void;
 };
 
-function ProgressNotesEditor({
-  notes,
-  teamId,
-  memberUserId,
-  goalId,
-  onGoalUpdated,
-}: ProgressNotesEditorProps) {
+const ProgressNotesEditor = forwardRef<ProgressNotesEditorHandle, ProgressNotesEditorProps>(
+  function ProgressNotesEditor(
+    { notes, teamId, memberUserId, goalId, onGoalUpdated },
+    ref,
+  ) {
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");
   const [newNotes, setNewNotes] = useState<string[]>([]);
@@ -288,6 +300,71 @@ function ProgressNotesEditor({
       setSavingKey(null);
     }
   };
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      hasUnsavedChanges: () => {
+        if (newNotes.some((note) => note.trim())) return true;
+        if (!editingNoteId) return false;
+        const original = notes.find((note) => note.id === editingNoteId);
+        return editDraft.trim() !== (original?.body.trim() ?? "");
+      },
+      savePendingChanges: async () => {
+        if (editingNoteId) {
+          const trimmed = editDraft.trim();
+          if (!trimmed) {
+            setNoteErr("Progress notes cannot be empty.");
+            return false;
+          }
+          const original = notes.find((note) => note.id === editingNoteId);
+          if (trimmed !== (original?.body.trim() ?? "")) {
+            setSavingKey(`edit-${editingNoteId}`);
+            setNoteErr(null);
+            try {
+              const updated = await updateDevelopmentGoalNote(
+                teamId,
+                memberUserId,
+                goalId,
+                editingNoteId,
+                trimmed,
+              );
+              onGoalUpdated(updated);
+              setEditingNoteId(null);
+              setEditDraft("");
+            } catch (e) {
+              setNoteErr(e instanceof Error ? e.message : "Could not save note.");
+              return false;
+            } finally {
+              setSavingKey(null);
+            }
+          } else {
+            setEditingNoteId(null);
+            setEditDraft("");
+          }
+        }
+
+        const pendingNewNotes = newNotes.map((note) => note.trim()).filter(Boolean);
+        for (let index = 0; index < pendingNewNotes.length; index += 1) {
+          const body = pendingNewNotes[index];
+          setSavingKey(`new-${index}`);
+          setNoteErr(null);
+          try {
+            const updated = await addDevelopmentGoalNote(teamId, memberUserId, goalId, body);
+            onGoalUpdated(updated);
+          } catch (e) {
+            setNoteErr(e instanceof Error ? e.message : "Could not save note.");
+            return false;
+          } finally {
+            setSavingKey(null);
+          }
+        }
+        setNewNotes([]);
+        return true;
+      },
+    }),
+    [editDraft, editingNoteId, goalId, memberUserId, newNotes, notes, onGoalUpdated, teamId],
+  );
 
   return (
     <li className="enterprise-oneone-fill-field">
@@ -428,7 +505,8 @@ function ProgressNotesEditor({
       </section>
     </li>
   );
-}
+  },
+);
 
 type DevPlanGoalModalProps = {
   title: string;
@@ -688,6 +766,8 @@ export function DevelopmentPlanTab({
   const [err, setErr] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [updateGoal, setUpdateGoal] = useState<DevelopmentGoal | null>(null);
+  const [updateGoalInitial, setUpdateGoalInitial] = useState<DevelopmentGoal | null>(null);
+  const notesEditorRef = useRef<ProgressNotesEditorHandle>(null);
   const [skill, setSkill] = useState("");
   const [steps, setSteps] = useState<string[]>([""]);
   const [saving, setSaving] = useState(false);
@@ -745,6 +825,7 @@ export function DevelopmentPlanTab({
     setCreateOpen(false);
     setErr(null);
     setUpdateGoal(goal);
+    setUpdateGoalInitial(goal);
     setSkill(goal.skill);
     setSteps(goal.steps.length > 0 ? goal.steps : [""]);
   };
@@ -752,6 +833,7 @@ export function DevelopmentPlanTab({
   const closeModals = () => {
     setCreateOpen(false);
     setUpdateGoal(null);
+    setUpdateGoalInitial(null);
     resetCreateForm();
   };
 
@@ -800,20 +882,31 @@ export function DevelopmentPlanTab({
     const goalFieldsChanged =
       trimmedSkill !== updateGoal.skill.trim() ||
       JSON.stringify(trimmedSteps) !== JSON.stringify(updateGoal.steps);
+    const notesChangedDuringSession =
+      JSON.stringify(updateGoal.notes) !== JSON.stringify(updateGoalInitial?.notes ?? []);
+    const hasPendingNoteChanges = notesEditorRef.current?.hasUnsavedChanges() ?? false;
 
-    if (!goalFieldsChanged) {
-      setErr("Change the skill or steps before saving.");
+    if (!goalFieldsChanged && !notesChangedDuringSession && !hasPendingNoteChanges) {
+      closeModals();
       return;
     }
 
     setSaving(true);
     setErr(null);
     try {
-      const updated = await updateDevelopmentGoal(teamId, memberUserId, updateGoal.id, {
-        skill: trimmedSkill,
-        steps: trimmedSteps,
-      });
-      setGoals((prev) => prev.map((g) => (g.id === updateGoal.id ? updated : g)));
+      if (hasPendingNoteChanges) {
+        const saved = await notesEditorRef.current?.savePendingChanges();
+        if (!saved) return;
+      }
+
+      if (goalFieldsChanged) {
+        const updated = await updateDevelopmentGoal(teamId, memberUserId, updateGoal.id, {
+          skill: trimmedSkill,
+          steps: trimmedSteps,
+        });
+        setGoals((prev) => prev.map((g) => (g.id === updateGoal.id ? updated : g)));
+      }
+
       closeModals();
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Could not update goal.");
@@ -1057,6 +1150,7 @@ export function DevelopmentPlanTab({
           ) : null}
           {canAddNotes ? (
             <ProgressNotesEditor
+              ref={notesEditorRef}
               notes={updateGoal.notes}
               teamId={teamId}
               memberUserId={memberUserId}
