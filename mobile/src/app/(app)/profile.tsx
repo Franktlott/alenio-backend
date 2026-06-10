@@ -668,9 +668,13 @@ export default function ProfileScreen() {
             subtitle={
               teamsLoading
                 ? undefined
-                : teams.length > 1
-                  ? WORKSPACE_SWITCH_HINT
-                  : undefined
+                : canManageActiveTeam
+                  ? teams.length > 1
+                    ? "Tap another workspace to switch. Press and hold current workspace to edit."
+                    : "Press and hold your workspace to edit settings."
+                  : teams.length > 1
+                    ? WORKSPACE_SWITCH_HINT
+                    : undefined
             }
           >
             <ProfileWorkspaceList

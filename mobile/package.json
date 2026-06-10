@@ -139,7 +139,7 @@
     "@tanstack/eslint-plugin-query": "^5.62.10",
     "@testing-library/react-native": "^13.3.3",
     "@types/jest": "^30.0.0",
-    "@types/react": "~19.0.10",
+    "@types/react": "~19.1.1",
     "@typescript-eslint/eslint-plugin": "^8.29.1",
     "@typescript-eslint/parser": "^8.29.1",
     "babel-plugin-module-resolver": "^5.0.2",

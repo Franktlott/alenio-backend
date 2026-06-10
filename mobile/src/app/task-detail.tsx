@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   View,
   Text,
@@ -21,6 +21,14 @@ import { useSession } from "@/lib/auth/use-session";
 import { toast } from "burnt";
 import type { Task, TaskStatus, Team, Subtask, SubtaskCompletion } from "@/lib/types";
 import { useDemoMode } from "@/lib/useDemo";
+import { OneOnOneAssociateFeedbackForm } from "@/components/OneOnOneAssociateFeedbackForm";
+import type { OneOnOneAssociateFeedbackContext } from "@/lib/one-on-one-feedback-api";
+import { fetchOneOnOneAssociateFeedbackContext } from "@/lib/one-on-one-feedback-api";
+import {
+  formatTaskDescriptionForDisplay,
+  isFeedbackTaskDescription,
+  parseFeedbackTaskDescription,
+} from "@/lib/one-on-one-feedback";
 
 const STATUS_OPTIONS: { key: "open" | "in_progress" | "completed" | "overdue"; label: string; value: TaskStatus; color: string }[] = [
   { key: "open", label: "Open", value: "todo", color: "#64748B" },
@@ -51,6 +59,7 @@ export default function TaskDetailScreen() {
   const [draftTitle, setDraftTitle] = useState<string>("");
   const [draftDescription, setDraftDescription] = useState<string>("");
   const [draftPriority, setDraftPriority] = useState<string>("");
+  const [feedbackContext, setFeedbackContext] = useState<OneOnOneAssociateFeedbackContext | null>(null);
 
   const { data: task, isLoading } = useQuery({
     queryKey: ["task", taskId, teamId],
@@ -145,6 +154,12 @@ export default function TaskDetailScreen() {
   const members = team?.members ?? [];
   const assignedIds = new Set((task?.assignments ?? []).map((a) => a.userId));
   const isSelfAssigned = !!currentUserId && assignedIds.has(currentUserId);
+  const feedbackMeta = useMemo(
+    () => (task?.description ? parseFeedbackTaskDescription(task.description) : null),
+    [task?.description],
+  );
+  const isFeedbackTask = isFeedbackTaskDescription(task?.description);
+  const isFeedbackAssignee = !!feedbackMeta && isSelfAssigned;
   const isCreator = !!currentUserId && task?.creator?.id === currentUserId && !isDemo;
   const isCompleted = task?.status === "done";
   const isOwnerOrLeader = team?.role === "owner" || team?.role === "team_leader" || team?.role === "admin";
@@ -167,6 +182,30 @@ export default function TaskDetailScreen() {
       setDraftPriority(task.priority);
     }
   }, [isEditMode]);
+
+  useEffect(() => {
+    if (!feedbackMeta || !isFeedbackAssignee || isCompleted) {
+      setFeedbackContext(null);
+      return;
+    }
+    let cancelled = false;
+    void fetchOneOnOneAssociateFeedbackContext(
+      feedbackMeta.teamId,
+      feedbackMeta.memberUserId,
+      feedbackMeta.meetingId,
+      feedbackMeta.fieldId,
+    )
+      .then((context) => {
+        if (cancelled) return;
+        setFeedbackContext(context.submitted ? null : context);
+      })
+      .catch(() => {
+        if (!cancelled) setFeedbackContext(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [feedbackMeta, isFeedbackAssignee, isCompleted]);
 
   const handleToggleMember = (userId: string) => {
     if (assignedIds.has(userId)) {
@@ -330,8 +369,23 @@ export default function TaskDetailScreen() {
           </View>
         ) : null}
 
+        {feedbackContext && feedbackMeta ? (
+          <OneOnOneAssociateFeedbackForm
+            teamId={feedbackMeta.teamId}
+            memberUserId={feedbackMeta.memberUserId}
+            meetingId={feedbackMeta.meetingId}
+            context={feedbackContext}
+            onSubmitted={() => {
+              setFeedbackContext(null);
+              void queryClient.invalidateQueries({ queryKey: ["task", taskId, teamId] });
+              void queryClient.invalidateQueries({ queryKey: ["tasks", teamId] });
+              router.back();
+            }}
+          />
+        ) : null}
+
         {/* Description */}
-        {isEditMode ? (
+        {isEditMode && !isFeedbackTask ? (
           <TextInput
             value={draftDescription}
             onChangeText={setDraftDescription}
@@ -341,8 +395,10 @@ export default function TaskDetailScreen() {
             placeholderTextColor="#94A3B8"
             testID="edit-description-input"
           />
-        ) : task.description ? (
-          <Text className="text-base text-slate-600 dark:text-slate-400 mb-4 leading-relaxed">{task.description}</Text>
+        ) : task.description && !feedbackContext ? (
+          <Text className="text-base text-slate-600 dark:text-slate-400 mb-4 leading-relaxed">
+            {formatTaskDescriptionForDisplay(task.description)}
+          </Text>
         ) : null}
 
         {/* Attachment photo */}
@@ -376,6 +432,7 @@ export default function TaskDetailScreen() {
         ) : null}
 
         {/* Status */}
+        {!(isFeedbackTask && isFeedbackAssignee && !isCompleted) ? (
         <View className="mb-4">
           <Text className="text-sm font-semibold text-slate-500 mb-2">Status</Text>
           <View className="flex-row flex-wrap" style={{ gap: 8 }}>
@@ -436,6 +493,7 @@ export default function TaskDetailScreen() {
             })}
           </View>
         </View>
+        ) : null}
 
         {/* Subtasks */}
         {(() => {

@@ -252,6 +252,51 @@ export function rejectTeamJoinRequest(teamId: string, requestId: string) {
   );
 }
 
+export type WebTeamInvite = {
+  id: string;
+  teamId: string;
+  email: string;
+  invitedById: string;
+  status: string;
+  acceptedUserId: string | null;
+  createdAt: string;
+  expiresAt: string;
+  acceptedAt: string | null;
+  invitedBy?: { id: string; name: string | null; email: string | null; image: string | null };
+  acceptedUser?: { id: string; name: string | null; email: string | null; image: string | null } | null;
+};
+
+export function fetchTeamInvites(teamId: string) {
+  return apiGetJson<{ data: WebTeamInvite[] }>(
+    `/api/teams/${encodeURIComponent(teamId)}/invites`,
+  ).then((r) => r.data);
+}
+
+export function inviteMemberByEmail(teamId: string, email: string) {
+  return apiPostJson<{
+    data: {
+      added: boolean;
+      user?: { id: string; name: string | null; email: string | null; image: string | null };
+      role?: string;
+      invite?: WebTeamInvite;
+      emailSent?: boolean;
+    };
+  }>(`/api/teams/${encodeURIComponent(teamId)}/invites`, { email }).then((r) => r.data);
+}
+
+export function cancelTeamInvite(teamId: string, inviteId: string) {
+  return apiDeleteJson<{ data: { cancelled: boolean } }>(
+    `/api/teams/${encodeURIComponent(teamId)}/invites/${encodeURIComponent(inviteId)}`,
+  ).then((r) => r.data);
+}
+
+export function resendTeamInvite(teamId: string, inviteId: string) {
+  return apiPostJson<{ data: WebTeamInvite }>(
+    `/api/teams/${encodeURIComponent(teamId)}/invites/${encodeURIComponent(inviteId)}/resend`,
+    {},
+  ).then((r) => r.data);
+}
+
 export async function fetchWebTeamSubscription(teamId: string): Promise<WebTeamSubscription> {
   const q = encodeURIComponent(teamId);
   try {

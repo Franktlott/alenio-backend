@@ -49,8 +49,13 @@ async function getMembership(
   return null;
 }
 
-function isManagerRole(role: string): boolean {
-  return role === "owner" || role === "team_leader" || role === "admin";
+function canManageDevelopmentGoal(
+  membership: { role: string; userId: string },
+  memberUserId: string,
+): boolean {
+  const isLeaderRole =
+    membership.role === "owner" || membership.role === "team_leader" || membership.role === "admin";
+  return isLeaderRole || membership.userId === memberUserId;
 }
 
 function parseSteps(raw: string): string[] {
@@ -148,8 +153,7 @@ developmentGoalsRouter.post(
       return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
     }
 
-    const canCreate =
-      isManagerRole(membership.role) || membership.userId === memberUserId;
+    const canCreate = canManageDevelopmentGoal(membership, memberUserId);
     if (!canCreate) {
       return c.json({ error: { message: "Not allowed to add development goals", code: "FORBIDDEN" } }, 403);
     }
@@ -194,8 +198,7 @@ developmentGoalsRouter.patch(
       return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
     }
 
-    const canUpdate =
-      isManagerRole(membership.role) || membership.userId === memberUserId;
+    const canUpdate = canManageDevelopmentGoal(membership, memberUserId);
     if (!canUpdate) {
       return c.json({ error: { message: "Not allowed to update development goals", code: "FORBIDDEN" } }, 403);
     }
@@ -238,8 +241,7 @@ developmentGoalsRouter.patch(
       return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
     }
 
-    const canUpdate =
-      isManagerRole(membership.role) || membership.userId === memberUserId;
+    const canUpdate = canManageDevelopmentGoal(membership, memberUserId);
     if (!canUpdate) {
       return c.json({ error: { message: "Not allowed to update development goals", code: "FORBIDDEN" } }, 403);
     }
@@ -278,8 +280,7 @@ developmentGoalsRouter.delete("/:memberUserId/development-goals/:goalId", async 
     return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
   }
 
-  const canDelete =
-    isManagerRole(membership.role) || membership.userId === memberUserId;
+  const canDelete = canManageDevelopmentGoal(membership, memberUserId);
   if (!canDelete) {
     return c.json({ error: { message: "Not allowed to delete development goals", code: "FORBIDDEN" } }, 403);
   }
@@ -313,8 +314,7 @@ developmentGoalsRouter.delete(
       return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
     }
 
-    const canEditNote =
-      isManagerRole(membership.role) || membership.userId === memberUserId;
+    const canEditNote = canManageDevelopmentGoal(membership, memberUserId);
     if (!canEditNote) {
       return c.json({ error: { message: "Not allowed to edit notes", code: "FORBIDDEN" } }, 403);
     }
@@ -362,8 +362,7 @@ developmentGoalsRouter.patch(
       return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
     }
 
-    const canEditNote =
-      isManagerRole(membership.role) || membership.userId === memberUserId;
+    const canEditNote = canManageDevelopmentGoal(membership, memberUserId);
     if (!canEditNote) {
       return c.json({ error: { message: "Not allowed to edit notes", code: "FORBIDDEN" } }, 403);
     }
@@ -414,8 +413,7 @@ developmentGoalsRouter.post(
       return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
     }
 
-    const canAddNote =
-      isManagerRole(membership.role) || membership.userId === memberUserId;
+    const canAddNote = canManageDevelopmentGoal(membership, memberUserId);
     if (!canAddNote) {
       return c.json({ error: { message: "Not allowed to add notes", code: "FORBIDDEN" } }, 403);
     }

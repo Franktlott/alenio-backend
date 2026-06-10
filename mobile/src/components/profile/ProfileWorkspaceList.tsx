@@ -1,6 +1,7 @@
 import React from "react";
-import { View, Text, Pressable, ActivityIndicator, type ViewStyle } from "react-native";
-import { Building2, Check, ChevronRight, Plus, Settings2 } from "lucide-react-native";
+import { View, Text, Pressable, ActivityIndicator } from "react-native";
+import * as Haptics from "expo-haptics";
+import { Building2, Check, ChevronRight, Plus } from "lucide-react-native";
 import type { Team } from "@/lib/types";
 import {
   WorkspaceTeamAvatar,
@@ -34,16 +35,27 @@ function ProfileWorkspaceRow({
   isActive,
   pendingCount,
   onPress,
+  onLongPress,
 }: {
   team: TeamWithRole;
   isActive: boolean;
   pendingCount: number;
   onPress: () => void;
+  onLongPress?: () => void;
 }) {
   return (
     <Pressable
       onPress={onPress}
-      disabled={isActive}
+      onLongPress={
+        isActive && onLongPress
+          ? () => {
+              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              onLongPress();
+            }
+          : undefined
+      }
+      delayLongPress={400}
+      disabled={isActive && !onLongPress}
       testID={`team-row-${team.id}`}
       style={({ pressed }) => ({
         backgroundColor: isActive ? "#F8FAFC" : pressed ? "#F8FAFC" : "transparent",
@@ -63,9 +75,10 @@ function ProfileWorkspaceRow({
           <Text style={PROFILE_UI.rowTitle} numberOfLines={1}>
             {team.name}
           </Text>
-          <Text style={PROFILE_UI.rowSubtitle} numberOfLines={1}>
+          <Text style={PROFILE_UI.rowSubtitle} numberOfLines={2}>
             {formatTeamRole(team.role)}
             {isActive ? " · Current" : null}
+            {isActive && onLongPress ? " · Hold to edit" : null}
           </Text>
         </View>
         {pendingCount > 0 ? (
@@ -168,6 +181,7 @@ export function ProfileWorkspaceList({
               onPress={() => {
                 if (!isActive) onSelectTeam(team.id);
               }}
+              onLongPress={isActive && onManageActive ? onManageActive : undefined}
             />
           </View>
         );
@@ -189,19 +203,6 @@ export function ProfileWorkspaceList({
       {!isDemo ? (
         <>
           <ProfileDivider />
-          {onManageActive ? (
-            <>
-              <ProfileMenuRow
-                icon={Settings2}
-                iconColor="#4338CA"
-                title="Workspace settings"
-                subtitle="Name, invites, and members"
-                onPress={onManageActive}
-                testID="manage-active-workspace"
-              />
-              <ProfileDivider inset />
-            </>
-          ) : null}
           <ProfileMenuRow
             icon={Plus}
             title="Add workspace"

@@ -40,11 +40,15 @@ import {
 import { syncPrismaSchemaOnStartup } from "./lib/sync-prisma-schema";
 import { ensureOneOnOneSchema } from "./lib/ensure-one-on-one-schema";
 import { ensureDevelopmentPlanSchema } from "./lib/ensure-development-plan-schema";
+import { ensureTeamInviteSchema } from "./lib/ensure-team-invite-schema";
 import { developmentGoalsRouter } from "./routes/development-goals";
+import { teamInvitesPublicRouter } from "./routes/team-invites";
+import { redeemPendingInvitesForUser } from "./lib/team-invites";
 
 syncPrismaSchemaOnStartup();
 const oneOnOneSchemaReady = ensureOneOnOneSchema(prisma);
 const developmentPlanSchemaReady = ensureDevelopmentPlanSchema(prisma);
+const teamInviteSchemaReady = ensureTeamInviteSchema(prisma);
 
 type Variables = {
   user: AppUser | null;
@@ -99,6 +103,7 @@ app.use("*", logger());
 app.use("*", async (_c, next) => {
   await oneOnOneSchemaReady;
   await developmentPlanSchemaReady;
+  await teamInviteSchemaReady;
   await next();
 });
 
@@ -152,6 +157,14 @@ app.use("*", async (c, next) => {
       authEmail: sessionEmail,
       finalAuthenticatedUserId: user.id,
     });
+
+    if (user.email) {
+      try {
+        await redeemPendingInvitesForUser(user.id, user.email);
+      } catch (err) {
+        console.error("[auth-middleware] redeemPendingInvitesForUser failed:", err);
+      }
+    }
   }
   await next();
 });
@@ -749,6 +762,7 @@ app.route("/api/teams/:teamId/messages", messagesRouter);
 app.route("/api/teams/:teamId/templates", templatesRouter);
 app.route("/api/teams/:teamId/subscription", subscriptionRouter);
 app.route("/api/teams", teamsRouter);
+app.route("/api/team-invites", teamInvitesPublicRouter);
 app.route("/api/tasks/mine", myTasksRouter);
 app.route("/api/dms", dmsRouter);
 app.route("/api/join-requests", joinRequestsRouter);

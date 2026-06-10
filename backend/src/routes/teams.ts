@@ -1,10 +1,21 @@
 import { Hono } from "hono";
+import { zValidator } from "@hono/zod-validator";
+import { z } from "zod";
 import { prisma } from "../prisma";
 import { auth, verifyEmailPassword } from "../auth";
 import { authGuard } from "../middleware/auth-guard";
 import { sendPushToUsers } from "../lib/push";
 import { logActivity } from "../lib/activity";
 import { isPrismaUniqueOnName, isTeamDisplayNameTaken, normalizeTeamName } from "../lib/team-name";
+import {
+  canInviteMembers,
+  generateInviteToken,
+  inviteExpiresAt,
+  inviteOrAddMemberByEmail,
+  listPendingTeamInvites,
+  sendTeamInviteEmail,
+  serializeTeamInvite,
+} from "../lib/team-invites";
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
   session: typeof auth.$Infer.Session.session | null;
@@ -471,6 +482,152 @@ teamsRouter.post("/:teamId/join-requests/:requestId/reject", async (c) => {
   );
 
   return c.json({ data: { success: true } });
+});
+
+const inviteEmailSchema = z.object({
+  email: z.string().trim().email("Enter a valid email address"),
+});
+
+// GET /api/teams/:teamId/invites
+teamsRouter.get("/:teamId/invites", async (c) => {
+  const user = c.get("user")!;
+  const { teamId } = c.req.param();
+
+  if (!(await canInviteMembers(teamId, user.id))) {
+    return c.json({ error: { message: "You cannot view invites for this workspace", code: "FORBIDDEN" } }, 403);
+  }
+
+  const data = await listPendingTeamInvites(teamId);
+  return c.json({ data });
+});
+
+// POST /api/teams/:teamId/invites
+teamsRouter.post("/:teamId/invites", zValidator("json", inviteEmailSchema), async (c) => {
+  const user = c.get("user")!;
+  const { teamId } = c.req.param();
+  const { email } = c.req.valid("json");
+
+  if (!(await canInviteMembers(teamId, user.id))) {
+    return c.json({ error: { message: "You cannot invite members to this workspace", code: "FORBIDDEN" } }, 403);
+  }
+
+  const team = await prisma.team.findUnique({
+    where: { id: teamId },
+    select: { id: true, name: true },
+  });
+  if (!team) {
+    return c.json({ error: { message: "Workspace not found", code: "NOT_FOUND" } }, 404);
+  }
+
+  try {
+    const result = await inviteOrAddMemberByEmail({
+      teamId,
+      email,
+      invitedById: user.id,
+      inviterName: user.name ?? user.email ?? "A team leader",
+      teamName: team.name,
+    });
+
+    if (result.kind === "added") {
+      return c.json({
+        data: {
+          added: true,
+          user: result.user,
+          role: result.role,
+        },
+      });
+    }
+
+    return c.json({
+      data: {
+        added: false,
+        invite: result.invite,
+        emailSent: result.emailSent,
+      },
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "";
+    if (msg === "ALREADY_MEMBER") {
+      return c.json({ error: { message: "This person is already in the workspace", code: "CONFLICT" } }, 409);
+    }
+    if (msg === "VALIDATION") {
+      return c.json({ error: { message: "Enter a valid email address", code: "VALIDATION_ERROR" } }, 400);
+    }
+    throw err;
+  }
+});
+
+// DELETE /api/teams/:teamId/invites/:inviteId
+teamsRouter.delete("/:teamId/invites/:inviteId", async (c) => {
+  const user = c.get("user")!;
+  const { teamId, inviteId } = c.req.param();
+
+  if (!(await canInviteMembers(teamId, user.id))) {
+    return c.json({ error: { message: "You cannot manage invites for this workspace", code: "FORBIDDEN" } }, 403);
+  }
+
+  const invite = await prisma.teamInvite.findFirst({
+    where: { id: inviteId, teamId, status: "pending" },
+  });
+  if (!invite) {
+    return c.json({ error: { message: "Invite not found", code: "NOT_FOUND" } }, 404);
+  }
+
+  await prisma.teamInvite.update({
+    where: { id: inviteId },
+    data: { status: "cancelled" },
+  });
+
+  return c.json({ data: { cancelled: true } });
+});
+
+// POST /api/teams/:teamId/invites/:inviteId/resend
+teamsRouter.post("/:teamId/invites/:inviteId/resend", async (c) => {
+  const user = c.get("user")!;
+  const { teamId, inviteId } = c.req.param();
+
+  if (!(await canInviteMembers(teamId, user.id))) {
+    return c.json({ error: { message: "You cannot manage invites for this workspace", code: "FORBIDDEN" } }, 403);
+  }
+
+  const invite = await prisma.teamInvite.findFirst({
+    where: { id: inviteId, teamId, status: "pending" },
+    include: { team: { select: { name: true } } },
+  });
+  if (!invite) {
+    return c.json({ error: { message: "Invite not found", code: "NOT_FOUND" } }, 404);
+  }
+
+  const token = generateInviteToken();
+  const updated = await prisma.teamInvite.update({
+    where: { id: inviteId },
+    data: { token, expiresAt: inviteExpiresAt(), invitedById: user.id },
+    include: {
+      invitedBy: { select: { id: true, name: true, email: true, image: true } },
+      acceptedUser: { select: { id: true, name: true, email: true, image: true } },
+    },
+  });
+
+  const inviter = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { name: true, email: true },
+  });
+
+  const emailResult = await sendTeamInviteEmail({
+    to: invite.email,
+    teamName: invite.team.name,
+    inviterName: inviter?.name ?? inviter?.email ?? "A team leader",
+    token,
+  });
+
+  if (!emailResult.sent) {
+    return c.json(
+      { error: { message: emailResult.error ?? "Failed to send invite email", code: "EMAIL_SEND_FAILED" } },
+      500,
+    );
+  }
+
+  return c.json({ data: serializeTeamInvite(updated) });
 });
 
 // DELETE /api/teams/:teamId/members/:memberId - remove a member (owner only)

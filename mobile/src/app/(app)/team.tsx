@@ -18,21 +18,15 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Copy,
   UserPlus,
-  MessageCircle,
   AlertCircle,
-  UserMinus,
   Clock,
   X,
   Check,
-  ListChecks,
-  Flame,
   Crown,
   Camera,
   Trash2,
-  Star,
   ChevronLeft,
   ChevronRight,
-  CalendarDays,
   QrCode,
   AlertTriangle,
 } from "lucide-react-native";
@@ -48,6 +42,14 @@ import QRCode from "react-native-qrcode-svg";
 import { router } from "expo-router";
 import type { Team, TeamMember, Task } from "@/lib/types";
 import { NoTeamPlaceholder } from "@/components/NoTeamPlaceholder";
+import { AddMemberModal } from "@/components/AddMemberModal";
+import {
+  cancelTeamInvite,
+  fetchTeamInvites,
+  inviteMemberByEmail,
+  resendTeamInvite,
+  type TeamInvite,
+} from "@/lib/team-invites-api";
 import { useDemoMode, showDemoAlert } from "@/lib/useDemo";
 import { useSubscriptionStore } from "@/lib/state/subscription-store";
 import Svg, { Path, Circle, Line, Text as SvgText, Polyline } from "react-native-svg";
@@ -237,61 +239,6 @@ export default function TeamScreen() {
     enabled: !!activeTeamId,
   });
 
-  const dmMutation = useMutation({
-    mutationFn: (recipientId: string) =>
-      api.post<{ id: string; recipient: { name: string } | null }>("/api/dms/find-or-create", { recipientId }),
-    onSuccess: (conv) => {
-      queryClient.invalidateQueries({ queryKey: ["conversations"] });
-      router.push({ pathname: "/dm-chat", params: { conversationId: conv.id, recipientName: conv.recipient?.name ?? "Direct Message" } });
-    },
-  });
-
-  const removeMutation = useMutation({
-    mutationFn: (userId: string) =>
-      api.delete(`/api/teams/${activeTeamId}/members/${userId}`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["team", activeTeamId] });
-      queryClient.invalidateQueries({ queryKey: ["member-stats", activeTeamId] });
-    },
-  });
-
-  const setRoleMutation = useMutation({
-    mutationFn: ({ userId, role }: { userId: string; role: string }) =>
-      api.patch(`/api/teams/${activeTeamId}/members/${userId}/role`, { role }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["team", activeTeamId] });
-      toast({ title: "Role updated", preset: "done" });
-    },
-  });
-
-  const transferOwnershipMutation = useMutation({
-    mutationFn: (userId: string) =>
-      api.post(`/api/teams/${activeTeamId}/transfer-ownership`, { userId }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["team", activeTeamId] });
-      setSelectedMemberId(null);
-      toast({ title: "Ownership transferred", preset: "done" });
-    },
-    onError: () => {
-      toast({ title: "Transfer failed", preset: "error" });
-    },
-  });
-
-  const handleRemove = (member: TeamMember) => {
-    Alert.alert(
-      "Remove Member",
-      `Remove ${member.user.name} from the team?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Remove",
-          style: "destructive",
-          onPress: () => removeMutation.mutate(member.userId),
-        },
-      ]
-    );
-  };
-
   const currentMembership = team?.members?.find((m) => m.userId === session?.user?.id);
   const isOwner = currentMembership?.role === "owner" || currentMembership?.role === "team_leader";
 
@@ -370,8 +317,53 @@ export default function TeamScreen() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["team-join-requests", activeTeamId] }),
   });
 
+  const { data: pendingInvites = [] } = useQuery({
+    queryKey: ["team-invites", activeTeamId],
+    queryFn: () => fetchTeamInvites(activeTeamId!),
+    enabled: !!activeTeamId && isOwner && !isDemo,
+    refetchInterval: 30000,
+  });
+
+  const [addMemberOpen, setAddMemberOpen] = useState(false);
+  const [addMemberError, setAddMemberError] = useState<string | null>(null);
+
+  const inviteMemberMutation = useMutation({
+    mutationFn: (email: string) => inviteMemberByEmail(activeTeamId!, email),
+    onSuccess: (result) => {
+      setAddMemberError(null);
+      setAddMemberOpen(false);
+      queryClient.invalidateQueries({ queryKey: ["team-invites", activeTeamId] });
+      queryClient.invalidateQueries({ queryKey: ["team", activeTeamId] });
+      if (result.added && result.user) {
+        toast({ title: `${result.user.name} added to the team`, preset: "done" });
+      } else if (result.emailSent) {
+        toast({ title: "Invite email sent", preset: "done" });
+      } else {
+        toast({ title: "Invite created (email not sent — check server email config)", preset: "none" });
+      }
+    },
+    onError: (err: Error) => {
+      const msg = err.message;
+      setAddMemberError(
+        msg.includes("404")
+          ? "Could not reach the invite service. Restart your backend dev server so it picks up the latest code."
+          : msg,
+      );
+    },
+  });
+
+  const cancelInviteMutation = useMutation({
+    mutationFn: (inviteId: string) => cancelTeamInvite(activeTeamId!, inviteId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["team-invites", activeTeamId] }),
+  });
+
+  const resendInviteMutation = useMutation({
+    mutationFn: (inviteId: string) => resendTeamInvite(activeTeamId!, inviteId),
+    onSuccess: () => toast({ title: "Invite resent", preset: "done" }),
+    onError: (err: Error) => toast({ title: err.message, preset: "error" }),
+  });
+
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
 
   const { data: memberStats } = useQuery({
     queryKey: ["member-stats", activeTeamId],
@@ -389,14 +381,12 @@ export default function TeamScreen() {
     enabled: !!activeTeamId,
   });
 
-  const selectedMember = team?.members?.find((m) => m.userId === selectedMemberId) ?? null;
-  const selectedStats = selectedMemberId ? memberStats?.[selectedMemberId] : null;
-
   const onRefresh = async () => {
     setRefreshing(true);
     await queryClient.invalidateQueries({ queryKey: ["team", activeTeamId] });
     await queryClient.invalidateQueries({ queryKey: ["member-stats", activeTeamId] });
     await queryClient.invalidateQueries({ queryKey: ["monthly-completion", activeTeamId] });
+    await queryClient.invalidateQueries({ queryKey: ["team-invites", activeTeamId] });
     setRefreshing(false);
   };
 
@@ -729,6 +719,59 @@ export default function TeamScreen() {
           </View>
         ) : null}
 
+        {isOwner && !isDemo && pendingInvites.length > 0 ? (
+          <View style={{ marginTop: 12, marginBottom: 4 }}>
+            <Text style={{ paddingHorizontal: 16, fontSize: 11, fontWeight: "700", color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 8 }}>
+              Pending Invites ({pendingInvites.length})
+            </Text>
+            {pendingInvites.map((invite: TeamInvite) => (
+              <View
+                key={invite.id}
+                style={{
+                  backgroundColor: "white",
+                  marginHorizontal: 12,
+                  marginBottom: 8,
+                  borderRadius: 14,
+                  padding: 14,
+                  shadowColor: "#000",
+                  shadowOpacity: 0.04,
+                  shadowRadius: 6,
+                  shadowOffset: { width: 0, height: 2 },
+                  elevation: 2,
+                }}
+              >
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 14, fontWeight: "700", color: "#0F172A" }}>{invite.email}</Text>
+                    <Text style={{ fontSize: 12, color: "#64748B", marginTop: 2 }}>Waiting to join</Text>
+                  </View>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "#EEF2FF", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 20 }}>
+                    <Clock size={11} color="#4361EE" />
+                    <Text style={{ fontSize: 11, fontWeight: "600", color: "#3730A3" }}>Invited</Text>
+                  </View>
+                </View>
+                <View style={{ flexDirection: "row", gap: 8 }}>
+                  <Pressable
+                    onPress={() => cancelInviteMutation.mutate(invite.id)}
+                    style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 10, borderRadius: 10, borderWidth: 1.5, borderColor: "#E2E8F0" }}
+                    testID={`cancel-invite-${invite.id}`}
+                  >
+                    <Text style={{ fontSize: 13, fontWeight: "600", color: "#64748B" }}>Cancel</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => resendInviteMutation.mutate(invite.id)}
+                    disabled={resendInviteMutation.isPending}
+                    style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 10, borderRadius: 10, backgroundColor: "#4361EE" }}
+                    testID={`resend-invite-${invite.id}`}
+                  >
+                    <Text style={{ fontSize: 13, fontWeight: "700", color: "white" }}>Resend</Text>
+                  </Pressable>
+                </View>
+              </View>
+            ))}
+          </View>
+        ) : null}
+
         {/* ── 2. AT A GLANCE CARD (paid only, unified) ──────────────── */}
         {isPaid ? (
           <View
@@ -869,6 +912,27 @@ export default function TeamScreen() {
             }}
           >
             <Text style={{ fontSize: 16, fontWeight: "700", color: "#0F172A" }}>Team Members</Text>
+            {isOwner && !isDemo ? (
+              <Pressable
+                onPress={() => {
+                  setAddMemberError(null);
+                  setAddMemberOpen(true);
+                }}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 6,
+                  backgroundColor: "#EEF2FF",
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                  borderRadius: 10,
+                }}
+                testID="add-member-button"
+              >
+                <UserPlus size={16} color="#4361EE" />
+                <Text style={{ fontSize: 13, fontWeight: "700", color: "#4361EE" }}>Add</Text>
+              </Pressable>
+            ) : null}
           </View>
 
           {/* Member rows */}
@@ -890,7 +954,12 @@ export default function TeamScreen() {
             return (
               <Pressable
                 key={item.id}
-                onPress={() => setSelectedMemberId(item.userId)}
+                onPress={() =>
+                  router.push({
+                    pathname: "/member-profile",
+                    params: { teamId: activeTeamId ?? "", memberUserId: item.userId },
+                  })
+                }
                 testID={`member-row-${item.userId}`}
                 style={{
                   flexDirection: "row",
@@ -980,7 +1049,7 @@ export default function TeamScreen() {
           >
             <Crown size={14} color="#4361EE" />
             <Text style={{ fontSize: 12, color: "#4361EE", fontWeight: "600", flex: 1 }}>
-              Tap any member to manage their role or remove them.
+              Tap any member to view their profile, development plan, and 1:1 history.
             </Text>
           </View>
         ) : null}
@@ -1080,169 +1149,19 @@ export default function TeamScreen() {
         </Pressable>
       </Modal>
 
-      {/* ── Member Detail Modal ─────────────────────────────────────── */}
-      <Modal visible={!!selectedMember} transparent animationType="slide" onRequestClose={() => setSelectedMemberId(null)}>
-        <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "flex-end" }} onPress={() => setSelectedMemberId(null)}>
-          <Pressable onPress={(e) => e.stopPropagation()}>
-            <View style={{ backgroundColor: "white", borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 40 }}>
-              <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: "#E2E8F0", alignSelf: "center", marginTop: 12, marginBottom: 4 }} />
-              <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ margin: 16, borderRadius: 18, padding: 20 }}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
-                  <View style={{ width: 60, height: 60, borderRadius: 30, backgroundColor: "rgba(255,255,255,0.25)", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-                    {selectedMember?.user.image ? (
-                      <Image source={{ uri: selectedMember.user.image }} style={{ width: 60, height: 60 }} resizeMode="cover" />
-                    ) : (
-                      <Text style={{ fontSize: 24, fontWeight: "800", color: "white" }}>{selectedMember?.user.name?.[0]?.toUpperCase() ?? "?"}</Text>
-                    )}
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 18, fontWeight: "800", color: "white" }}>{selectedMember?.user.name}</Text>
-                    <View style={{ marginTop: 6, alignSelf: "flex-start", backgroundColor: "rgba(255,255,255,0.2)", borderRadius: 20, paddingHorizontal: 10, paddingVertical: 3 }}>
-                      <Text style={{ fontSize: 11, fontWeight: "700", color: "white" }}>
-                        {selectedMember?.role === "owner" ? "Owner" : selectedMember?.role === "team_leader" ? "Team Leader" : "Member"}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-              </LinearGradient>
+      <AddMemberModal
+        visible={addMemberOpen}
+        teamName={team?.name ?? "Team"}
+        saving={inviteMemberMutation.isPending}
+        error={addMemberError}
+        onClose={() => {
+          setAddMemberError(null);
+          setAddMemberOpen(false);
+        }}
+        onClearError={() => setAddMemberError(null)}
+        onSubmit={(email) => inviteMemberMutation.mutate(email)}
+      />
 
-              {isPaid ? (
-                <View style={{ flexDirection: "row", paddingHorizontal: 16, gap: 10, marginBottom: 12 }}>
-                  <View style={{ flex: 1, backgroundColor: "#FFF7ED", borderRadius: 16, padding: 14, alignItems: "center", gap: 4 }}>
-                    <Text style={{ fontSize: 28, fontWeight: "900", color: "#F97316" }}>{selectedStats?.streak ?? 0}</Text>
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                      <Flame size={13} color="#F97316" />
-                      <Text style={{ fontSize: 11, fontWeight: "700", color: "#9A3412" }}>Streak</Text>
-                    </View>
-                  </View>
-                  <View style={{ flex: 1, backgroundColor: "#F5F3FF", borderRadius: 16, padding: 14, alignItems: "center", gap: 4 }}>
-                    <Text style={{ fontSize: 28, fontWeight: "900", color: "#7C3AED" }}>{selectedStats?.personalBestStreak ?? 0}</Text>
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                      <Star size={13} color="#7C3AED" />
-                      <Text style={{ fontSize: 11, fontWeight: "700", color: "#4C1D95" }}>Personal Best</Text>
-                    </View>
-                  </View>
-                </View>
-              ) : null}
-
-              {isPaid ? (
-                <View style={{ flexDirection: "row", paddingHorizontal: 16, gap: 10, marginBottom: 16 }}>
-                  <View style={{ flex: 1, backgroundColor: "#EEF2FF", borderRadius: 16, padding: 14, alignItems: "center", gap: 4 }}>
-                    <Text style={{ fontSize: 28, fontWeight: "900", color: "#4361EE" }}>{selectedStats?.activeTasks ?? 0}</Text>
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                      <ListChecks size={13} color="#4361EE" />
-                      <Text style={{ fontSize: 11, fontWeight: "700", color: "#3730A3" }}>Active</Text>
-                    </View>
-                  </View>
-                  <View style={{ flex: 1, backgroundColor: (selectedStats?.overdueTasks ?? 0) > 0 ? "#FEF2F2" : "#F8FAFC", borderRadius: 16, padding: 14, alignItems: "center", gap: 4 }}>
-                    <Text style={{ fontSize: 28, fontWeight: "900", color: (selectedStats?.overdueTasks ?? 0) > 0 ? "#EF4444" : "#94A3B8" }}>{selectedStats?.overdueTasks ?? 0}</Text>
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                      <AlertCircle size={13} color={(selectedStats?.overdueTasks ?? 0) > 0 ? "#EF4444" : "#94A3B8"} />
-                      <Text style={{ fontSize: 11, fontWeight: "700", color: (selectedStats?.overdueTasks ?? 0) > 0 ? "#991B1B" : "#94A3B8" }}>Overdue</Text>
-                    </View>
-                  </View>
-                </View>
-              ) : null}
-
-              {selectedMember?.joinedAt ? (
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginHorizontal: 16, backgroundColor: "#F8FAFC", borderRadius: 12, padding: 12, marginBottom: 16 }}>
-                  <CalendarDays size={16} color="#94A3B8" />
-                  <Text style={{ fontSize: 13, color: "#64748B" }}>
-                    Joined {new Date(selectedMember.joinedAt).toLocaleDateString("en-US", { month: "long", year: "numeric" })}
-                  </Text>
-                </View>
-              ) : null}
-
-              {/* Owner manage actions (in member detail) */}
-              {isOwner && !isDemo && selectedMember?.userId !== session?.user?.id && selectedMember?.role !== "owner" && selectedMember?.role !== "team_leader" ? (
-                <View style={{ flexDirection: "row", gap: 8, paddingHorizontal: 16, marginBottom: 12 }}>
-                  <Pressable
-                    onPress={() => handleRemove(selectedMember!)}
-                    style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 10, borderRadius: 10, borderWidth: 1.5, borderColor: "#FECACA" }}
-                    testID={`remove-member-modal-${selectedMember?.userId}`}
-                  >
-                    <UserMinus size={14} color="#EF4444" />
-                    <Text style={{ fontSize: 13, fontWeight: "600", color: "#EF4444" }}>Remove</Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => {
-                      if (!selectedMember) return;
-                      const isLeader = selectedMember.role === "team_leader";
-                      Alert.alert(
-                        isLeader ? "Remove Team Leader" : "Make Team Leader",
-                        isLeader
-                          ? `Remove team leader role from ${selectedMember.user.name}?`
-                          : `Give ${selectedMember.user.name} team leader access?`,
-                        [
-                          { text: "Cancel", style: "cancel" },
-                          {
-                            text: isLeader ? "Remove" : "Confirm",
-                            style: isLeader ? "destructive" : "default",
-                            onPress: () => setRoleMutation.mutate({ userId: selectedMember.userId, role: isLeader ? "member" : "team_leader" }),
-                          },
-                        ]
-                      );
-                    }}
-                    style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 10, borderRadius: 10, borderWidth: 1.5, borderColor: "#EDE9FE" }}
-                    testID={`role-change-modal-${selectedMember?.userId}`}
-                  >
-                    <Crown size={14} color="#7C3AED" />
-                    <Text style={{ fontSize: 13, fontWeight: "600", color: "#7C3AED" }}>Set Leader</Text>
-                  </Pressable>
-                </View>
-              ) : null}
-
-              {currentMembership?.role === "owner" && selectedMember?.userId !== session?.user?.id && selectedMember?.role !== "owner" ? (
-                <Pressable
-                  testID="transfer-ownership-button"
-                  onPress={() => {
-                    Alert.alert(
-                      "Transfer Ownership",
-                      `Give full ownership of this team to ${selectedMember?.user.name}? You will become a regular member and cannot undo this yourself.`,
-                      [
-                        { text: "Cancel", style: "cancel" },
-                        {
-                          text: "Transfer",
-                          style: "destructive",
-                          onPress: () => transferOwnershipMutation.mutate(selectedMember!.userId),
-                        },
-                      ]
-                    );
-                  }}
-                  style={{ flexDirection: "row", alignItems: "center", gap: 10, marginHorizontal: 16, marginBottom: 12, backgroundColor: "#FFF7ED", borderRadius: 14, padding: 14, borderWidth: 1, borderColor: "#FED7AA" }}
-                >
-                  <Crown size={18} color="#F97316" />
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 14, fontWeight: "700", color: "#C2410C" }}>Transfer Ownership</Text>
-                    <Text style={{ fontSize: 12, color: "#9A3412", marginTop: 1 }}>Make {selectedMember?.user.name} the new owner</Text>
-                  </View>
-                  <ChevronRight size={16} color="#F97316" />
-                </Pressable>
-              ) : null}
-
-              <View style={{ flexDirection: "row", gap: 10, paddingHorizontal: 16 }}>
-                {selectedMember?.userId !== session?.user?.id ? (
-                  <Pressable
-                    onPress={() => { setSelectedMemberId(null); dmMutation.mutate(selectedMember!.userId); }}
-                    style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: "#4361EE", paddingVertical: 14, borderRadius: 14 }}
-                    testID="member-detail-message"
-                  >
-                    <MessageCircle size={16} color="white" />
-                    <Text style={{ color: "white", fontWeight: "700", fontSize: 15 }}>Message</Text>
-                  </Pressable>
-                ) : null}
-                <Pressable
-                  onPress={() => setSelectedMemberId(null)}
-                  style={{ flex: selectedMember?.userId !== session?.user?.id ? 0 : 1, paddingHorizontal: 20, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: "#F1F5F9", paddingVertical: 14, borderRadius: 14 }}
-                  testID="member-detail-close"
-                >
-                  <Text style={{ color: "#64748B", fontWeight: "700", fontSize: 15 }}>Close</Text>
-                </Pressable>
-              </View>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
     </SafeAreaView>
   );
 }

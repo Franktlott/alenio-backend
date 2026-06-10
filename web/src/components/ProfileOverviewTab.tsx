@@ -50,6 +50,11 @@ function daysSinceText(days: number): string {
   return `${days} days`;
 }
 
+function formatUpdatedWithDays(iso: string): string {
+  const days = daysSinceDate(iso);
+  return `${formatDateOnly(iso)} · ${daysSinceText(days)}`;
+}
+
 export function ProfileOverviewTab({
   teamId,
   memberUserId,
@@ -62,6 +67,7 @@ export function ProfileOverviewTab({
   const [err, setErr] = useState<string | null>(null);
   const [activeGoals, setActiveGoals] = useState<DevelopmentGoal[]>([]);
   const [lastOneOnOneDate, setLastOneOnOneDate] = useState<string | null>(null);
+  const [oneOnOneCount, setOneOnOneCount] = useState(0);
 
   const loadOverview = useCallback(async () => {
     setLoading(true);
@@ -78,6 +84,7 @@ export function ProfileOverviewTab({
           (a, b) => new Date(lastUpdatedAt(b)).getTime() - new Date(lastUpdatedAt(a)).getTime(),
         );
       setActiveGoals(active);
+      setOneOnOneCount(meetings.length);
 
       const latestMeeting = [...meetings].sort(
         (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
@@ -87,6 +94,7 @@ export function ProfileOverviewTab({
       setErr(e instanceof Error ? e.message : "Could not load overview.");
       setActiveGoals([]);
       setLastOneOnOneDate(null);
+      setOneOnOneCount(0);
     } finally {
       setLoading(false);
     }
@@ -101,76 +109,87 @@ export function ProfileOverviewTab({
     [lastOneOnOneDate],
   );
 
+  const kpis = [
+    { label: "Active goals", value: loading ? "—" : String(activeGoals.length) },
+    {
+      label: "Last 1:1",
+      value: loading ? "—" : lastOneOnOneDate ? formatDateOnly(lastOneOnOneDate) : "None",
+    },
+    {
+      label: "Days since 1:1",
+      value: loading ? "—" : lastOneOnOneDate ? daysSinceText(daysSinceOneOnOne ?? 0) : "—",
+    },
+    { label: "Total 1:1s", value: loading ? "—" : String(oneOnOneCount) },
+    ...(streak != null && streak > 0 ? [{ label: "Streak", value: `${streak}d` }] : []),
+    ...(overdueTasks != null && overdueTasks > 0
+      ? [{ label: "Overdue", value: String(overdueTasks), tone: "warning" as const }]
+      : []),
+  ];
+
+  const profileMeta = [roleLabel, email].filter(Boolean).join(" · ");
+
   return (
     <div className="enterprise-profile-overview">
-      <section className="enterprise-team-profile-section">
-        <h3 className="enterprise-team-profile-section-title">At a glance</h3>
-        <dl className="enterprise-team-profile-facts">
+      <section className="enterprise-overview-snapshot">
+        <header className="enterprise-overview-snapshot-head">
           <div>
-            <dt>Role</dt>
-            <dd>{roleLabel}</dd>
+            <p className="enterprise-overview-kicker">Overview</p>
+            <h3 className="enterprise-overview-title">Member snapshot</h3>
           </div>
-          {email ? (
-            <div>
-              <dt>Email</dt>
-              <dd>{email}</dd>
-            </div>
-          ) : null}
-          {streak != null && streak > 0 ? (
-            <div>
-              <dt>Streak</dt>
-              <dd>🔥 {streak} days</dd>
-            </div>
-          ) : null}
-          {overdueTasks != null && overdueTasks > 0 ? (
-            <div>
-              <dt>Overdue tasks</dt>
-              <dd className="enterprise-stat-overdue">{overdueTasks}</dd>
-            </div>
-          ) : null}
-        </dl>
-      </section>
+          {profileMeta ? <p className="enterprise-overview-snapshot-meta">{profileMeta}</p> : null}
+        </header>
 
-      {err ? <p className="enterprise-form-error" role="alert">{err}</p> : null}
-
-      <section className="enterprise-team-profile-section enterprise-profile-overview-section">
-        <h3 className="enterprise-team-profile-section-title">Active development goals</h3>
-        {loading ? (
-          <p className="enterprise-muted">Loading…</p>
-        ) : activeGoals.length === 0 ? (
-          <p className="enterprise-muted">No active development goals.</p>
-        ) : (
-          <ul className="enterprise-profile-overview-goals">
-            {activeGoals.map((goal) => (
-              <li key={goal.id} className="enterprise-profile-overview-goal">
-                <span className="enterprise-profile-overview-goal-title">{goal.skill}</span>
-                <span className="enterprise-profile-overview-goal-date">
-                  Updated {formatDateOnly(lastUpdatedAt(goal))}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      <section className="enterprise-team-profile-section enterprise-profile-overview-section">
-        <h3 className="enterprise-team-profile-section-title">1:1 check-ins</h3>
-        {loading ? (
-          <p className="enterprise-muted">Loading…</p>
-        ) : lastOneOnOneDate ? (
-          <dl className="enterprise-profile-overview-oneone">
-            <div>
-              <dt>Last 1:1</dt>
-              <dd>{formatDateOnly(lastOneOnOneDate)}</dd>
+        <div className="enterprise-overview-kpi-row">
+          {kpis.map((kpi) => (
+            <div
+              key={kpi.label}
+              className={`enterprise-overview-kpi${kpi.tone === "warning" ? " enterprise-overview-kpi--warning" : ""}`}
+            >
+              <span className="enterprise-overview-kpi-label">{kpi.label}</span>
+              <span className="enterprise-overview-kpi-value">{kpi.value}</span>
             </div>
-            <div>
-              <dt>Days since last 1:1</dt>
-              <dd>{daysSinceText(daysSinceOneOnOne ?? 0)}</dd>
+          ))}
+        </div>
+
+        {err ? <p className="enterprise-form-error enterprise-overview-snapshot-error" role="alert">{err}</p> : null}
+
+        <div className="enterprise-overview-snapshot-section">
+          <div className="enterprise-overview-snapshot-section-head">
+            <h4>Active development goals</h4>
+            {!loading && activeGoals.length > 0 ? (
+              <span className="enterprise-overview-snapshot-count">{activeGoals.length}</span>
+            ) : null}
+          </div>
+
+          {loading ? (
+            <p className="enterprise-overview-inline-empty">Loading…</p>
+          ) : activeGoals.length === 0 ? (
+            <p className="enterprise-overview-inline-empty">No active development goals.</p>
+          ) : (
+            <div className="enterprise-overview-goals-scroll">
+              <table className="enterprise-overview-goals-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Goal</th>
+                    <th scope="col">Last updated</th>
+                    <th scope="col">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {activeGoals.map((goal) => (
+                    <tr key={goal.id}>
+                      <td className="enterprise-overview-goals-table-goal">{goal.skill}</td>
+                      <td>{formatUpdatedWithDays(lastUpdatedAt(goal))}</td>
+                      <td>
+                        <span className="enterprise-overview-goal-pill">Active</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          </dl>
-        ) : (
-          <p className="enterprise-muted">No 1:1 meetings yet.</p>
-        )}
+          )}
+        </div>
       </section>
     </div>
   );

@@ -314,7 +314,7 @@ export function TaskDetailPage() {
                 context={feedbackContext}
                 onSubmitted={() => {
                   setFeedbackContext(null);
-                  void fetchWebTaskDetail(taskId, workspaceId || undefined).then(setTask).catch(() => undefined);
+                  navigate("/dashboard");
                 }}
               />
             </section>

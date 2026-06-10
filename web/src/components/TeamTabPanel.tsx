@@ -6,15 +6,19 @@ import { TeamMemberProfilePanel } from "./TeamMemberProfilePanel";
 import { OneOnOneTemplatesModal } from "./OneOnOneTemplatesModal";
 import {
   approveTeamJoinRequest,
+  cancelTeamInvite,
+  fetchTeamInvites,
   fetchTeamJoinRequests,
   fetchTeamMemberStats,
   fetchWebTeam,
   fetchWebTeamSubscription,
   fetchWebTeamTasks,
+  inviteMemberByEmail,
   leaveTeam,
   patchApiTeam,
   rejectTeamJoinRequest,
   removeTeamMemberApi,
+  resendTeamInvite,
   setTeamMemberRole,
   transferTeamOwnership,
   uploadTeamPhoto,
@@ -22,6 +26,7 @@ import {
   type TeamMemberStatsMap,
   type WebMeUser,
   type WebTeamDetail,
+  type WebTeamInvite,
   type WebTeamJoinRequest,
   type WebTeamMemberRow,
   type WebTeamRow,
@@ -181,8 +186,14 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
   const [overviewTasks, setOverviewTasks] = useState<ApiTask[]>([]);
   const [isPaid, setIsPaid] = useState(false);
   const [incoming, setIncoming] = useState<WebTeamJoinRequest[]>([]);
+  const [pendingInvites, setPendingInvites] = useState<WebTeamInvite[]>([]);
   const [loading, setLoading] = useState(false);
   const [tabErr, setTabErr] = useState<string | null>(null);
+
+  const [addMemberOpen, setAddMemberOpen] = useState(false);
+  const [addMemberEmail, setAddMemberEmail] = useState("");
+  const [addMemberBusy, setAddMemberBusy] = useState(false);
+  const [addMemberError, setAddMemberError] = useState<string | null>(null);
 
   const [nameEdit, setNameEdit] = useState("");
   const [nameSaving, setNameSaving] = useState(false);
@@ -212,6 +223,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
       setMemberStats(null);
       setOverviewTasks([]);
       setIncoming([]);
+      setPendingInvites([]);
       return;
     }
     setLoading(true);
@@ -221,17 +233,19 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
       setTeamDetail(detail);
       setNameEdit(detail.name);
       const manageJoin = canManageJoinRequests(detail.myRole);
-      const [stats, tasks, sub, joinList] = await Promise.all([
+      const [stats, tasks, sub, joinList, inviteList] = await Promise.all([
         fetchTeamMemberStats(selectedTeamId).catch(() => null),
         fetchWebTeamTasks(selectedTeamId).catch(() => []),
         fetchWebTeamSubscription(selectedTeamId).catch(() => null),
         manageJoin ? fetchTeamJoinRequests(selectedTeamId).catch(() => []) : Promise.resolve([]),
+        manageJoin ? fetchTeamInvites(selectedTeamId).catch(() => []) : Promise.resolve([]),
       ]);
       setMemberStats(stats);
       setOverviewTasks(Array.isArray(tasks) ? tasks : []);
       const plan = sub?.plan ?? "free";
       setIsPaid(plan === "team" || plan === "pro");
       setIncoming(manageJoin ? joinList : []);
+      setPendingInvites(manageJoin ? inviteList : []);
     } catch (e) {
       setTabErr(e instanceof Error ? e.message : "Could not load team.");
       setTeamDetail(null);
@@ -384,6 +398,31 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
     }
   };
 
+  const onAddMemberByEmail = async () => {
+    if (!selectedTeamId || !addMemberEmail.trim()) return;
+    setAddMemberBusy(true);
+    setAddMemberError(null);
+    try {
+      const result = await inviteMemberByEmail(selectedTeamId, addMemberEmail.trim());
+      setAddMemberOpen(false);
+      setAddMemberEmail("");
+      setAddMemberError(null);
+      await loadTeamContext();
+      if (result.added) {
+        await onTeamsRefresh();
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Could not add member.";
+      setAddMemberError(
+        msg.includes("Not found")
+          ? "Invite service is not available on this server yet. Deploy the latest backend, or use local dev with the backend running."
+          : msg,
+      );
+    } finally {
+      setAddMemberBusy(false);
+    }
+  };
+
   const openMemberModal = (m: WebTeamMemberRow) => {
     setMemberModal(m);
     setRolePick(m.role === "team_leader" ? "team_leader" : "member");
@@ -526,13 +565,18 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                   <IconSearch />
                 </span>
               </div>
-              <button
-                type="button"
-                className="enterprise-team-list-add-btn"
-                onClick={() => void shareInvite()}
-              >
-                + Add member
-              </button>
+              {manageJoin ? (
+                <button
+                  type="button"
+                  className="enterprise-team-list-add-btn"
+                  onClick={() => {
+                    setAddMemberError(null);
+                    setAddMemberOpen(true);
+                  }}
+                >
+                  + Add member
+                </button>
+              ) : null}
             </div>
           </header>
 
@@ -599,6 +643,51 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                         }}
                       >
                         Approve
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
+          {manageJoin && pendingInvites.length > 0 ? (
+            <section className="enterprise-card enterprise-team-section enterprise-team-pending-compact">
+              <h3 className="enterprise-card-title">Pending invites ({pendingInvites.length})</h3>
+              <ul className="enterprise-team-incoming-list">
+                {pendingInvites.map((invite) => (
+                  <li key={invite.id} className="enterprise-team-incoming-item">
+                    <div>
+                      <strong>{invite.email}</strong>
+                      <span className="enterprise-muted"> invited</span>
+                    </div>
+                    <div className="enterprise-team-incoming-actions">
+                      <button
+                        type="button"
+                        className="enterprise-join-requests-btn enterprise-join-requests-btn-decline"
+                        onClick={async () => {
+                          try {
+                            await cancelTeamInvite(selectedTeamId, invite.id);
+                            await loadTeamContext();
+                          } catch (e) {
+                            setTabErr(e instanceof Error ? e.message : "Cancel failed.");
+                          }
+                        }}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        className="enterprise-join-requests-btn enterprise-join-requests-btn-approve"
+                        onClick={async () => {
+                          try {
+                            await resendTeamInvite(selectedTeamId, invite.id);
+                          } catch (e) {
+                            setTabErr(e instanceof Error ? e.message : "Resend failed.");
+                          }
+                        }}
+                      >
+                        Resend
                       </button>
                     </div>
                   </li>
@@ -710,9 +799,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
               roleLabel={roleLabel(selectedMember.role)}
               roleBadgeClass={roleBadgeClass(selectedMember.role)}
               canManage={canOpenMemberRow(myRole, selectedMember)}
-              canCreateOneOne={
-                selectedMember.userId === myId || myRole === "owner" || myRole === "team_leader"
-              }
+              canCreateOneOne={myRole === "owner" || myRole === "team_leader"}
               canCreateDevGoal={
                 selectedMember.userId === myId ||
                 myRole === "owner" ||
@@ -831,6 +918,63 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
               </button>
             </div>
             <p className="enterprise-team-hint-ws">Share this code to invite team members</p>
+          </div>
+        </div>
+      ) : null}
+
+      {addMemberOpen ? (
+        <div
+          className="enterprise-modal-backdrop"
+          role="presentation"
+          onClick={() => {
+            setAddMemberError(null);
+            setAddMemberOpen(false);
+          }}
+        >
+          <div className="enterprise-modal-sheet" role="dialog" aria-label="Add member" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              className="enterprise-task-modal-close"
+              aria-label="Close"
+              onClick={() => {
+                setAddMemberError(null);
+                setAddMemberOpen(false);
+              }}
+            >
+              ×
+            </button>
+            <h3 style={{ marginTop: 0 }}>Add member</h3>
+            <p className="enterprise-muted">
+              Enter their email. If they already use Alenio, they&apos;ll be added right away. Otherwise we&apos;ll email them an invite link.
+            </p>
+            {addMemberError ? (
+              <p className="enterprise-form-error" role="alert" style={{ marginBottom: 16 }}>
+                {addMemberError}
+              </p>
+            ) : null}
+            <label className="enterprise-muted" style={{ fontSize: 13, display: "block", marginBottom: 6 }}>
+              Email address
+            </label>
+            <input
+              type="email"
+              className="enterprise-team-list-search"
+              style={{ width: "100%", marginBottom: 16 }}
+              placeholder="name@company.com"
+              value={addMemberEmail}
+              onChange={(e) => {
+                setAddMemberEmail(e.target.value);
+                setAddMemberError(null);
+              }}
+              autoComplete="email"
+            />
+            <button
+              type="button"
+              className="auth-submit"
+              disabled={addMemberBusy || !addMemberEmail.trim()}
+              onClick={() => void onAddMemberByEmail()}
+            >
+              {addMemberBusy ? "Adding…" : "Add member"}
+            </button>
           </div>
         </div>
       ) : null}

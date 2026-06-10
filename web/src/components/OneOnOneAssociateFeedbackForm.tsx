@@ -118,7 +118,7 @@ export function OneOnOneAssociateFeedbackForm({
           disabled={saving}
           onClick={() => void onSubmit()}
         >
-          {saving ? "Saving…" : "Submit feedback"}
+          {saving ? "Saving…" : "Submit feedback & complete"}
         </button>
       </div>
     </div>

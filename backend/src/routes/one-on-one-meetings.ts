@@ -98,8 +98,7 @@ function parseResponses(raw: string): Record<string, string | number> {
   }
 }
 
-function canCreateMeeting(membership: { role: string }, memberUserId: string, userId: string) {
-  if (memberUserId === userId) return true;
+function canManageOneOnOne(membership: { role: string }): boolean {
   return membership.role === "owner" || membership.role === "team_leader";
 }
 
@@ -229,14 +228,8 @@ function validateResponses(fields: TemplateField[], responses: Record<string, st
   return null;
 }
 
-function canModifyMeeting(
-  membership: { role: string },
-  memberUserId: string,
-  userId: string,
-  createdById: string,
-) {
-  if (createdById === userId) return true;
-  return canCreateMeeting(membership, memberUserId, userId);
+function canModifyMeeting(membership: { role: string }) {
+  return canManageOneOnOne(membership);
 }
 
 async function validateFollowUpAssignees(
@@ -454,7 +447,7 @@ oneOnOneMeetingsRouter.post(
       return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
     }
 
-    if (!canCreateMeeting(membership, memberUserId, user.id)) {
+    if (!canManageOneOnOne(membership)) {
       return c.json({ error: { message: "You cannot create a 1:1 for this member", code: "FORBIDDEN" } }, 403);
     }
 
@@ -572,7 +565,7 @@ oneOnOneMeetingsRouter.patch(
       return c.json({ error: { message: "1:1 not found", code: "NOT_FOUND" } }, 404);
     }
 
-    if (!canModifyMeeting(membership, memberUserId, user.id, existing.createdById)) {
+    if (!canModifyMeeting(membership)) {
       return c.json({ error: { message: "You cannot edit this 1:1", code: "FORBIDDEN" } }, 403);
     }
 
@@ -757,7 +750,7 @@ oneOnOneMeetingsRouter.delete("/:memberUserId/one-on-ones/:meetingId", async (c)
     return c.json({ error: { message: "1:1 not found", code: "NOT_FOUND" } }, 404);
   }
 
-  if (!canModifyMeeting(membership, memberUserId, user.id, existing.createdById)) {
+  if (!canModifyMeeting(membership)) {
     return c.json({ error: { message: "You cannot delete this 1:1", code: "FORBIDDEN" } }, 403);
   }
 

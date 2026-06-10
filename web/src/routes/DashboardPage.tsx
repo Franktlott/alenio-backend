@@ -1223,13 +1223,10 @@ export function DashboardPage() {
                       context={feedbackContext}
                       onSubmitted={async () => {
                         setFeedbackContext(null);
-                        if (!selectedTeamId || !selectedTaskModal) return;
+                        if (!selectedTeamId) return;
                         await refreshTeamData(selectedTeamId);
-                        const refreshed = mergeTaskLists(
-                          await fetchWebTeamTasks(selectedTeamId),
-                          await fetchCoreTeamTasks(selectedTeamId).catch(() => []),
-                        ).find((item) => item.id === selectedTaskModal.id);
-                        if (refreshed) setSelectedTaskModal(refreshed);
+                        setSelectedTaskModal(null);
+                        setTaskEditMode(false);
                       }}
                     />
                   </section>
@@ -1315,8 +1312,6 @@ export function DashboardPage() {
                 <div className="enterprise-task-side-card">
                   <h4>Task details</h4>
                   <dl className="enterprise-task-modal-dl">
-                    <dt>Task ID</dt>
-                    <dd>{selectedTaskModal.id}</dd>
                     <dt>Created</dt>
                     <dd>{formatModalDate(selectedTaskModal.createdAt)}</dd>
                     <dt>Last updated</dt>
@@ -1361,6 +1356,7 @@ export function DashboardPage() {
                 {taskSaving ? "Saving…" : taskEditMode ? "Save task" : "Edit task"}
               </button>
               ) : null}
+              {!(isSelectedTaskFeedback && selectedTaskModal.status !== "done") ? (
               <button
                 type="button"
                 className="enterprise-task-modal-btn enterprise-task-modal-btn-primary"
@@ -1381,6 +1377,10 @@ export function DashboardPage() {
                     const updated = await updateCoreTeamTask(selectedTeamId, selectedTaskModal.id, { status: nextStatus });
                     setSelectedTaskModal(updated);
                     await refreshTeamData(selectedTeamId);
+                    if (!isReopen) {
+                      setSelectedTaskModal(null);
+                      setTaskEditMode(false);
+                    }
                   } catch (err) {
                     setTaskError(err instanceof Error ? err.message : "Could not update task status.");
                   } finally {
@@ -1390,6 +1390,7 @@ export function DashboardPage() {
               >
                 {selectedTaskModal.status === "done" ? "Reopen task" : "Mark as complete"}
               </button>
+              ) : null}
             </footer>
           </div>
         </div>

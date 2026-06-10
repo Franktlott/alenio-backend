@@ -1,19 +1,8 @@
-import type { Query, QueryClient } from "@tanstack/react-query";
+import type { QueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api/api";
 import type { Team, Task, CalendarEvent } from "@/lib/types";
 import { hasTeamPlan } from "@/lib/plan-access-copy";
 import { useSubscriptionStore } from "@/lib/state/subscription-store";
-import { useWorkspaceSwitchStore } from "@/lib/state/workspace-switch-store";
-
-export const WORKSPACE_OVERLAY_MIN_MS = 4000;
-
-export function isWorkspaceSwitchFetch(query: Query, teamId: string): boolean {
-  if (query.state.fetchStatus !== "fetching") return false;
-  const key = query.queryKey;
-  if (!Array.isArray(key)) return false;
-  if (key[0] === "teams") return true;
-  return key.includes(teamId);
-}
 
 export type SwitchWorkspaceOptions = {
   /** Route to open after the overlay dismisses (e.g. `/(app)/team`). */
@@ -28,10 +17,6 @@ export async function performWorkspaceSwitch(
 ): Promise<boolean> {
   if (!teamId || teamId === activeTeamId) return false;
 
-  const teams = queryClient.getQueryData<Team[]>(["teams"]);
-  const teamName = teams?.find((t) => t.id === teamId)?.name ?? null;
-  const { startSession } = useWorkspaceSwitchStore.getState();
-  startSession(teamName);
   useSubscriptionStore.getState().setPlan("free");
   setActiveTeamId(teamId);
 
