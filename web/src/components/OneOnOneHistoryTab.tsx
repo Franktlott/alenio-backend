@@ -35,6 +35,51 @@ function fieldTypeLabel(type: string): string {
   return FIELD_TYPE_LABELS[type] ?? type;
 }
 
+type PreviewSectionGroup = {
+  section: OneOnOneTemplateField;
+  fields: OneOnOneTemplateField[];
+};
+
+function groupPreviewSections(fields: OneOnOneTemplateField[]): PreviewSectionGroup[] {
+  const sorted = [...fields].sort((a, b) => a.order - b.order);
+  const groups: PreviewSectionGroup[] = [];
+  let current: PreviewSectionGroup | null = null;
+
+  for (const field of sorted) {
+    if (field.type === "section") {
+      current = { section: field, fields: [] };
+      groups.push(current);
+    } else if (field.type === "associate_notes") {
+      continue;
+    } else if (current) {
+      current.fields.push(field);
+    } else {
+      current = {
+        section: {
+          id: "__preview_general__",
+          label: "Responses",
+          type: "section",
+          order: 0,
+        },
+        fields: [field],
+      };
+      groups.push(current);
+    }
+  }
+
+  return groups;
+}
+
+function renderPreviewQuestion(field: OneOnOneTemplateField, answer: string | number | undefined) {
+  if (answer === undefined || answer === "" || answer === 0) return null;
+  return (
+    <div key={field.id} className="enterprise-oneone-preview-question">
+      <div className="enterprise-oneone-preview-question-label">{field.label}</div>
+      <div className="enterprise-oneone-preview-question-answer">{formatAssociateResponseDisplay(answer)}</div>
+    </div>
+  );
+}
+
 function formatMeetingDate(iso: string): string {
   try {
     return new Date(iso).toLocaleDateString(undefined, {
@@ -480,49 +525,48 @@ export function OneOnOneHistoryTab({
   );
 
   const renderMeetingPreviewBody = (meeting: OneOnOneMeeting) => {
-    const fields = [...meeting.templateFields].sort((a, b) => a.order - b.order);
+    const groups = groupPreviewSections(meeting.templateFields);
+    const associateAnswer = meeting.responses[ASSOCIATE_FEEDBACK_FIELD_ID];
+    const showAssociateFeedback =
+      (associateAnswer !== undefined && associateAnswer !== "" && associateAnswer !== 0) ||
+      meeting.associateFeedbackPending;
+
     return (
       <>
-        <dl className="enterprise-oneone-preview-responses">
-          {fields.map((field) => {
-            if (field.type === "section") {
-              return (
-                <div key={field.id} className="enterprise-oneone-history-section-label">
-                  <dt>{field.label}</dt>
-                </div>
-              );
-            }
-            if (field.type === "associate_notes") return null;
-            const answer = meeting.responses[field.id];
-            if (answer === undefined || answer === "" || answer === 0) return null;
+        <div className="enterprise-oneone-preview-sections">
+          {groups.map((group) => {
+            const questions = group.fields
+              .map((field) => renderPreviewQuestion(field, meeting.responses[field.id]))
+              .filter(Boolean);
+            if (questions.length === 0) return null;
             return (
-              <div key={field.id} className="enterprise-oneone-history-response">
-                <dt>{field.label}</dt>
-                <dd>{formatAssociateResponseDisplay(answer)}</dd>
-              </div>
+              <section key={group.section.id} className="enterprise-oneone-preview-section-block">
+                <h3 className="enterprise-oneone-preview-section-heading">{group.section.label}</h3>
+                <div className="enterprise-oneone-preview-section-content">{questions}</div>
+              </section>
             );
           })}
-          {(() => {
-            const answer = meeting.responses[ASSOCIATE_FEEDBACK_FIELD_ID];
-            if (answer !== undefined && answer !== "" && answer !== 0) {
-              return (
-                <div className="enterprise-oneone-history-response">
-                  <dt>{ASSOCIATE_FEEDBACK_LABEL}</dt>
-                  <dd>{formatAssociateResponseDisplay(answer)}</dd>
-                </div>
-              );
-            }
-            if (meeting.associateFeedbackPending) {
-              return (
-                <div className="enterprise-oneone-history-response">
-                  <dt>{ASSOCIATE_FEEDBACK_LABEL}</dt>
-                  <dd className="enterprise-muted">Awaiting associate feedback</dd>
-                </div>
-              );
-            }
-            return null;
-          })()}
-        </dl>
+          {showAssociateFeedback ? (
+            <section className="enterprise-oneone-preview-section-block">
+              <h3 className="enterprise-oneone-preview-section-heading">{ASSOCIATE_FEEDBACK_LABEL}</h3>
+              <div className="enterprise-oneone-preview-section-content">
+                {associateAnswer !== undefined && associateAnswer !== "" && associateAnswer !== 0 ? (
+                  <div className="enterprise-oneone-preview-question">
+                    <div className="enterprise-oneone-preview-question-answer">
+                      {formatAssociateResponseDisplay(associateAnswer)}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="enterprise-oneone-preview-question">
+                    <div className="enterprise-oneone-preview-question-answer enterprise-muted">
+                      Awaiting associate feedback
+                    </div>
+                  </div>
+                )}
+              </div>
+            </section>
+          ) : null}
+        </div>
         {meeting.followUpTasks?.length ? renderFollowUpTaskList(meeting.followUpTasks) : null}
       </>
     );
