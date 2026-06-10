@@ -45,7 +45,6 @@ import {
   ProfileSection,
 } from "@/components/profile/ProfileEnterpriseUI";
 import { ProfileWorkspaceList } from "@/components/profile/ProfileWorkspaceList";
-import { NoTeamPlaceholder } from "@/components/NoTeamPlaceholder";
 
 const DEMO_EMAIL = "demo@alenio.app";
 
@@ -562,14 +561,6 @@ export default function ProfileScreen() {
   ];
   const dayIndex = new Date().getDay();
   const natureImageUrl = `https://images.unsplash.com/${naturePhotos[dayIndex]}?w=800&h=320&fit=crop&auto=format&q=80`;
-
-  if (!teamsLoading && teams.length === 0 && !isDemo) {
-    return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: "#F1F5F9" }} edges={[]} testID="profile-no-team-screen">
-        <NoTeamPlaceholder />
-      </SafeAreaView>
-    );
-  }
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#F1F5F9" }} edges={[]} testID="profile-screen">

@@ -157,6 +157,8 @@ export function EnterpriseShellLayout() {
 
   const topBarPageTitle = enterpriseNavTitle(activeNav);
   const hasNoTeams = teams !== null && teams.length === 0;
+  const isProfileRoute = location.pathname.startsWith("/profile");
+  const showNoTeamsEmptyState = hasNoTeams && !isProfileRoute;
 
   const workspaceOwner =
     teams !== null && !!effectiveTeamId && teams.find((t) => t.id === effectiveTeamId)?.role === "owner";
@@ -239,7 +241,7 @@ export function EnterpriseShellLayout() {
           <div className="enterprise-tab-shell">
             <p className="enterprise-muted">Loading…</p>
           </div>
-        ) : hasNoTeams ? (
+        ) : showNoTeamsEmptyState ? (
           <div className="chat-app-body chat-app-body-enterprise chat-app-body-no-teams enterprise-tab-shell">
             <NoTeamsEmptyState onRefreshWorkspaces={refreshMeAndTeams} />
           </div>
