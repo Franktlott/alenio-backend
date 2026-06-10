@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { WebTeamMemberRow } from "../lib/api";
 import { DevelopmentPlanTab } from "./DevelopmentPlanTab";
 import { OneOnOneHistoryTab } from "./OneOnOneHistoryTab";
+import { ProfileOverviewTab } from "./ProfileOverviewTab";
 
 const PROFILE_TABS = ["Overview", "Development plan", "1:1 history"] as const;
 
@@ -111,33 +112,14 @@ export function TeamMemberProfilePanel({
 
       <div className="enterprise-team-profile-body">
         {activeTab === "Overview" ? (
-          <section className="enterprise-team-profile-section">
-            <h3 className="enterprise-team-profile-section-title">At a glance</h3>
-            <dl className="enterprise-team-profile-facts">
-              <div>
-                <dt>Role</dt>
-                <dd>{roleLabel}</dd>
-              </div>
-              {member.user.email ? (
-                <div>
-                  <dt>Email</dt>
-                  <dd>{member.user.email}</dd>
-                </div>
-              ) : null}
-              {streak != null && streak > 0 ? (
-                <div>
-                  <dt>Streak</dt>
-                  <dd>🔥 {streak} days</dd>
-                </div>
-              ) : null}
-              {overdueTasks != null && overdueTasks > 0 ? (
-                <div>
-                  <dt>Overdue tasks</dt>
-                  <dd className="enterprise-stat-overdue">{overdueTasks}</dd>
-                </div>
-              ) : null}
-            </dl>
-          </section>
+          <ProfileOverviewTab
+            teamId={teamId}
+            memberUserId={member.userId}
+            roleLabel={roleLabel}
+            email={member.user.email}
+            streak={streak}
+            overdueTasks={overdueTasks}
+          />
         ) : activeTab === "Development plan" ? (
           <DevelopmentPlanTab
             teamId={teamId}

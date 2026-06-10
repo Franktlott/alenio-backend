@@ -2133,6 +2133,77 @@ input {
   color: #0f172a;
 }
 
+.enterprise-profile-overview {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.enterprise-profile-overview-section {
+  margin: 0;
+}
+
+.enterprise-profile-overview-goals {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.enterprise-profile-overview-goal {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid #e8edf3;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.enterprise-profile-overview-goal-title {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #0f172a;
+  line-height: 1.35;
+}
+
+.enterprise-profile-overview-goal-date {
+  flex-shrink: 0;
+  font-size: 0.6875rem;
+  color: #64748b;
+  white-space: nowrap;
+}
+
+.enterprise-profile-overview-oneone {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 0.75rem;
+}
+
+.enterprise-profile-overview-oneone div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.enterprise-profile-overview-oneone dt {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #94a3b8;
+}
+
+.enterprise-profile-overview-oneone dd {
+  margin: 0;
+  font-size: 0.875rem;
+  color: #0f172a;
+}
+
 .enterprise-dev-plan {
   display: flex;
   flex-direction: column;
