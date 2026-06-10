@@ -1213,12 +1213,19 @@ function developmentGoalsPaths(teamId: string, memberUserId: string, goalId?: st
   return { api: `${base}${suffix}`, web: `${webBase}${suffix}` };
 }
 
+function isLikelyMissingRouteError(message: string): boolean {
+  return (
+    message === "Not found" ||
+    message === "Not found — this may not exist or you may not have access."
+  );
+}
+
 async function developmentGoalsRequest<T>(paths: { api: string; web: string }, init?: RequestInit): Promise<T> {
   try {
     return await apiRequest<T>(paths.api, init);
   } catch (e) {
     const msg = e instanceof Error ? e.message : "";
-    if (msg.includes("Not found")) {
+    if (isLikelyMissingRouteError(msg)) {
       return apiRequest<T>(paths.web, init);
     }
     throw e;
