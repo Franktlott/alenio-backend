@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import QRCode from "qrcode";
 import { NoTeamsEmptyState } from "./NoTeamsEmptyState";
+import { AddMemberModal } from "./AddMemberModal";
 import { TeamMemberProfilePanel } from "./TeamMemberProfilePanel";
 import { OneOnOneTemplatesModal } from "./OneOnOneTemplatesModal";
 import {
@@ -167,8 +168,38 @@ function canOpenMemberRow(meRole: string, m: WebTeamMemberRow): boolean {
   return true;
 }
 
+function canViewMemberProfile(meRole: string, targetUserId: string, myId: string): boolean {
+  if (!myId || targetUserId === myId) return true;
+  return meRole === "owner" || meRole === "team_leader";
+}
+
 function memberSort(a: WebTeamMemberRow, b: WebTeamMemberRow): number {
   return (a.user.name ?? "").localeCompare(b.user.name ?? "");
+}
+
+function IconMail({ size = 18 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+      <polyline points="22,6 12,13 2,6" />
+    </svg>
+  );
+}
+
+function formatInviteDate(iso: string): string {
+  return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+function formatInviteExpiry(iso: string): string {
+  const days = Math.ceil((new Date(iso).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+  if (days <= 0) return "Expired";
+  if (days === 1) return "Expires tomorrow";
+  return `Expires in ${days} days`;
+}
+
+function inviteInitial(email: string): string {
+  const local = email.split("@")[0] ?? email;
+  return (local[0] ?? "?").toUpperCase();
 }
 
 type Props = {
@@ -191,9 +222,9 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
   const [tabErr, setTabErr] = useState<string | null>(null);
 
   const [addMemberOpen, setAddMemberOpen] = useState(false);
-  const [addMemberEmail, setAddMemberEmail] = useState("");
   const [addMemberBusy, setAddMemberBusy] = useState(false);
   const [addMemberError, setAddMemberError] = useState<string | null>(null);
+  const [inviteActionId, setInviteActionId] = useState<string | null>(null);
 
   const [nameEdit, setNameEdit] = useState("");
   const [nameSaving, setNameSaving] = useState(false);
@@ -272,6 +303,18 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
   useEffect(() => {
     setIsEditingWorkspace(false);
   }, [selectedTeamId]);
+
+  useEffect(() => {
+    if (!teamDetail || !myId) return;
+    if (canViewMemberProfile(teamDetail.myRole, selectedMemberId ?? myId, myId)) return;
+    setSelectedMemberId(myId);
+  }, [teamDetail, myId, selectedMemberId]);
+
+  useEffect(() => {
+    if (!teamDetail || !myId) return;
+    if (teamDetail.myRole === "owner" || teamDetail.myRole === "team_leader") return;
+    setSelectedMemberId(myId);
+  }, [teamDetail?.id, teamDetail?.myRole, myId]);
 
   useEffect(() => {
     if (!qrOpen || !teamDetail?.inviteCode) {
@@ -398,14 +441,13 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
     }
   };
 
-  const onAddMemberByEmail = async () => {
-    if (!selectedTeamId || !addMemberEmail.trim()) return;
+  const onAddMemberByEmail = async (email: string) => {
+    if (!selectedTeamId || !email.trim()) return;
     setAddMemberBusy(true);
     setAddMemberError(null);
     try {
-      const result = await inviteMemberByEmail(selectedTeamId, addMemberEmail.trim());
+      const result = await inviteMemberByEmail(selectedTeamId, email.trim());
       setAddMemberOpen(false);
-      setAddMemberEmail("");
       setAddMemberError(null);
       await loadTeamContext();
       if (result.added) {
@@ -605,93 +647,158 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
           </div>
 
           {manageJoin && incoming.length > 0 ? (
-            <section className="enterprise-card enterprise-team-section enterprise-team-pending-compact">
-              <h3 className="enterprise-card-title">Pending requests ({incoming.length})</h3>
-              <ul className="enterprise-team-incoming-list">
-                {incoming.map((req) => (
-                  <li key={req.id} className="enterprise-team-incoming-item">
-                    <div>
-                      <strong>{req.user.name ?? req.user.email ?? "Someone"}</strong>
-                      <span className="enterprise-muted"> wants to join</span>
-                    </div>
-                    <div className="enterprise-team-incoming-actions">
-                      <button
-                        type="button"
-                        className="enterprise-join-requests-btn enterprise-join-requests-btn-decline"
-                        onClick={async () => {
-                          try {
-                            await rejectTeamJoinRequest(selectedTeamId, req.id);
-                            await loadTeamContext();
-                          } catch (e) {
-                            setTabErr(e instanceof Error ? e.message : "Decline failed.");
-                          }
-                        }}
-                      >
-                        Decline
-                      </button>
-                      <button
-                        type="button"
-                        className="enterprise-join-requests-btn enterprise-join-requests-btn-approve"
-                        onClick={async () => {
-                          try {
-                            await approveTeamJoinRequest(selectedTeamId, req.id);
-                            await loadTeamContext();
-                            await onTeamsRefresh();
-                          } catch (e) {
-                            setTabErr(e instanceof Error ? e.message : "Approve failed.");
-                          }
-                        }}
-                      >
-                        Approve
-                      </button>
-                    </div>
-                  </li>
-                ))}
+            <section className="enterprise-team-pending-panel" aria-label="Pending join requests">
+              <header className="enterprise-team-pending-head">
+                <span className="enterprise-team-pending-head-icon enterprise-team-pending-head-icon--request" aria-hidden>
+                  <IconUserPlus />
+                </span>
+                <div className="enterprise-team-pending-head-copy">
+                  <h3 className="enterprise-team-pending-title">Pending requests</h3>
+                  <p className="enterprise-team-pending-sub">
+                    {incoming.length} {incoming.length === 1 ? "person wants" : "people want"} to join
+                  </p>
+                </div>
+              </header>
+              <ul className="enterprise-team-pending-list">
+                {incoming.map((req) => {
+                  const name = req.user.name ?? req.user.email ?? "Someone";
+                  return (
+                    <li key={req.id} className="enterprise-team-pending-row">
+                      <span className="enterprise-team-pending-avatar enterprise-team-pending-avatar--person">
+                        {req.user.image ? (
+                          <img src={req.user.image} alt={name} />
+                        ) : (
+                          (name[0] ?? "?").toUpperCase()
+                        )}
+                      </span>
+                      <div className="enterprise-team-pending-main">
+                        <div className="enterprise-team-pending-topline">
+                          <strong className="enterprise-team-pending-email">{name}</strong>
+                          <span className="enterprise-team-pending-badge enterprise-team-pending-badge--request">Join request</span>
+                        </div>
+                        <p className="enterprise-team-pending-meta">
+                          Requested {formatInviteDate(req.createdAt)}
+                          {req.user.email ? (
+                            <>
+                              <span className="enterprise-team-pending-dot" aria-hidden>·</span>
+                              {req.user.email}
+                            </>
+                          ) : null}
+                        </p>
+                      </div>
+                      <div className="enterprise-team-pending-actions">
+                        <button
+                          type="button"
+                          className="enterprise-team-pending-btn enterprise-team-pending-btn-ghost"
+                          onClick={async () => {
+                            try {
+                              await rejectTeamJoinRequest(selectedTeamId, req.id);
+                              await loadTeamContext();
+                            } catch (e) {
+                              setTabErr(e instanceof Error ? e.message : "Decline failed.");
+                            }
+                          }}
+                        >
+                          Decline
+                        </button>
+                        <button
+                          type="button"
+                          className="enterprise-team-pending-btn enterprise-team-pending-btn-primary"
+                          onClick={async () => {
+                            try {
+                              await approveTeamJoinRequest(selectedTeamId, req.id);
+                              await loadTeamContext();
+                              await onTeamsRefresh();
+                            } catch (e) {
+                              setTabErr(e instanceof Error ? e.message : "Approve failed.");
+                            }
+                          }}
+                        >
+                          Approve
+                        </button>
+                      </div>
+                    </li>
+                  );
+                })}
               </ul>
             </section>
           ) : null}
 
           {manageJoin && pendingInvites.length > 0 ? (
-            <section className="enterprise-card enterprise-team-section enterprise-team-pending-compact">
-              <h3 className="enterprise-card-title">Pending invites ({pendingInvites.length})</h3>
-              <ul className="enterprise-team-incoming-list">
-                {pendingInvites.map((invite) => (
-                  <li key={invite.id} className="enterprise-team-incoming-item">
-                    <div>
-                      <strong>{invite.email}</strong>
-                      <span className="enterprise-muted"> invited</span>
-                    </div>
-                    <div className="enterprise-team-incoming-actions">
-                      <button
-                        type="button"
-                        className="enterprise-join-requests-btn enterprise-join-requests-btn-decline"
-                        onClick={async () => {
-                          try {
-                            await cancelTeamInvite(selectedTeamId, invite.id);
-                            await loadTeamContext();
-                          } catch (e) {
-                            setTabErr(e instanceof Error ? e.message : "Cancel failed.");
-                          }
-                        }}
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="button"
-                        className="enterprise-join-requests-btn enterprise-join-requests-btn-approve"
-                        onClick={async () => {
-                          try {
-                            await resendTeamInvite(selectedTeamId, invite.id);
-                          } catch (e) {
-                            setTabErr(e instanceof Error ? e.message : "Resend failed.");
-                          }
-                        }}
-                      >
-                        Resend
-                      </button>
-                    </div>
-                  </li>
-                ))}
+            <section className="enterprise-team-pending-panel" aria-label="Pending invites">
+              <header className="enterprise-team-pending-head">
+                <span className="enterprise-team-pending-head-icon" aria-hidden>
+                  <IconMail />
+                </span>
+                <div className="enterprise-team-pending-head-copy">
+                  <h3 className="enterprise-team-pending-title">Pending invites</h3>
+                  <p className="enterprise-team-pending-sub">
+                    {pendingInvites.length} waiting for {pendingInvites.length === 1 ? "a response" : "responses"}
+                  </p>
+                </div>
+              </header>
+              <ul className="enterprise-team-pending-list">
+                {pendingInvites.map((invite) => {
+                  const inviter = invite.invitedBy?.name ?? invite.invitedBy?.email ?? "A team leader";
+                  const busy = inviteActionId === invite.id;
+                  return (
+                    <li key={invite.id} className="enterprise-team-pending-row">
+                      <span className="enterprise-team-pending-avatar">{inviteInitial(invite.email)}</span>
+                      <div className="enterprise-team-pending-main">
+                        <div className="enterprise-team-pending-topline">
+                          <strong className="enterprise-team-pending-email">{invite.email}</strong>
+                          <span className="enterprise-team-pending-badge">Awaiting signup</span>
+                        </div>
+                        <p className="enterprise-team-pending-meta">
+                          Invited by <strong>{inviter}</strong>
+                          <span className="enterprise-team-pending-dot" aria-hidden>·</span>
+                          Sent {formatInviteDate(invite.createdAt)}
+                          <span className="enterprise-team-pending-dot" aria-hidden>·</span>
+                          {formatInviteExpiry(invite.expiresAt)}
+                        </p>
+                      </div>
+                      <div className="enterprise-team-pending-actions">
+                        <button
+                          type="button"
+                          className="enterprise-team-pending-btn enterprise-team-pending-btn-ghost"
+                          disabled={busy}
+                          onClick={async () => {
+                            setInviteActionId(invite.id);
+                            setTabErr(null);
+                            try {
+                              await cancelTeamInvite(selectedTeamId, invite.id);
+                              await loadTeamContext();
+                            } catch (e) {
+                              setTabErr(e instanceof Error ? e.message : "Cancel failed.");
+                            } finally {
+                              setInviteActionId(null);
+                            }
+                          }}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          className="enterprise-team-pending-btn enterprise-team-pending-btn-primary"
+                          disabled={busy}
+                          onClick={async () => {
+                            setInviteActionId(invite.id);
+                            setTabErr(null);
+                            try {
+                              await resendTeamInvite(selectedTeamId, invite.id);
+                            } catch (e) {
+                              setTabErr(e instanceof Error ? e.message : "Resend failed.");
+                            } finally {
+                              setInviteActionId(null);
+                            }
+                          }}
+                        >
+                          {busy ? "Sending…" : "Resend invite"}
+                        </button>
+                      </div>
+                    </li>
+                  );
+                })}
               </ul>
             </section>
           ) : null}
@@ -740,15 +847,11 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
               {filteredMembers.map((m) => {
                 const isSelf = m.userId === myId;
                 const isSelected = m.userId === selectedMemberId;
+                const canView = canViewMemberProfile(myRole, m.userId, myId);
                 const displayName = m.user.name ?? m.user.email ?? "Member";
-                return (
-                  <li key={m.id}>
-                    <button
-                      type="button"
-                      className={`enterprise-team-roster-card${isSelected ? " enterprise-team-roster-card--selected" : ""}${isSelf ? " enterprise-team-roster-card--self" : ""}`}
-                      onClick={() => setSelectedMemberId(m.userId)}
-                      data-testid={`team-roster-member-${m.userId}`}
-                    >
+                const cardClass = `enterprise-team-roster-card${isSelected ? " enterprise-team-roster-card--selected" : ""}${isSelf ? " enterprise-team-roster-card--self" : ""}${!canView ? " enterprise-team-roster-card--static" : ""}`;
+                const cardBody = (
+                  <>
                       <span className="enterprise-team-roster-avatar">
                         {m.user.image ? (
                           <img src={m.user.image} alt={displayName} />
@@ -779,7 +882,24 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                           <span className="enterprise-team-roster-chevron" aria-hidden>›</span>
                         </span>
                       </span>
-                    </button>
+                  </>
+                );
+                return (
+                  <li key={m.id}>
+                    {canView ? (
+                      <button
+                        type="button"
+                        className={cardClass}
+                        onClick={() => setSelectedMemberId(m.userId)}
+                        data-testid={`team-roster-member-${m.userId}`}
+                      >
+                        {cardBody}
+                      </button>
+                    ) : (
+                      <div className={cardClass} data-testid={`team-roster-member-${m.userId}`}>
+                        {cardBody}
+                      </div>
+                    )}
                   </li>
                 );
               })}
@@ -788,7 +908,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
         </aside>
 
         <main className="enterprise-team-split-detail">
-          {selectedMember ? (
+          {selectedMember && canViewMemberProfile(myRole, selectedMember.userId, myId) ? (
             <TeamMemberProfilePanel
               key={selectedMember.userId}
               teamId={teamDetail.id}
@@ -922,62 +1042,19 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
         </div>
       ) : null}
 
-      {addMemberOpen ? (
-        <div
-          className="enterprise-modal-backdrop"
-          role="presentation"
-          onClick={() => {
-            setAddMemberError(null);
-            setAddMemberOpen(false);
-          }}
-        >
-          <div className="enterprise-modal-sheet" role="dialog" aria-label="Add member" onClick={(e) => e.stopPropagation()}>
-            <button
-              type="button"
-              className="enterprise-task-modal-close"
-              aria-label="Close"
-              onClick={() => {
-                setAddMemberError(null);
-                setAddMemberOpen(false);
-              }}
-            >
-              ×
-            </button>
-            <h3 style={{ marginTop: 0 }}>Add member</h3>
-            <p className="enterprise-muted">
-              Enter their email. If they already use Alenio, they&apos;ll be added right away. Otherwise we&apos;ll email them an invite link.
-            </p>
-            {addMemberError ? (
-              <p className="enterprise-form-error" role="alert" style={{ marginBottom: 16 }}>
-                {addMemberError}
-              </p>
-            ) : null}
-            <label className="enterprise-muted" style={{ fontSize: 13, display: "block", marginBottom: 6 }}>
-              Email address
-            </label>
-            <input
-              type="email"
-              className="enterprise-team-list-search"
-              style={{ width: "100%", marginBottom: 16 }}
-              placeholder="name@company.com"
-              value={addMemberEmail}
-              onChange={(e) => {
-                setAddMemberEmail(e.target.value);
-                setAddMemberError(null);
-              }}
-              autoComplete="email"
-            />
-            <button
-              type="button"
-              className="auth-submit"
-              disabled={addMemberBusy || !addMemberEmail.trim()}
-              onClick={() => void onAddMemberByEmail()}
-            >
-              {addMemberBusy ? "Adding…" : "Add member"}
-            </button>
-          </div>
-        </div>
-      ) : null}
+      <AddMemberModal
+        open={addMemberOpen}
+        teamId={selectedTeamId}
+        teamName={teamDetail.name}
+        confirming={addMemberBusy}
+        error={addMemberError}
+        onClose={() => {
+          setAddMemberError(null);
+          setAddMemberOpen(false);
+        }}
+        onClearError={() => setAddMemberError(null)}
+        onConfirm={(email) => void onAddMemberByEmail(email)}
+      />
 
       {qrOpen ? (
         <div className="enterprise-modal-backdrop" role="presentation" onClick={() => setQrOpen(false)}>

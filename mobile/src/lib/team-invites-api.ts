@@ -14,8 +14,27 @@ export type TeamInvite = {
   acceptedUser?: { id: string; name: string; email: string; image: string | null } | null;
 };
 
+export type TeamInvitePreview = {
+  email: string;
+  found: boolean;
+  alreadyMember: boolean;
+  pendingInvite: boolean;
+  user?: { id: string; name: string; email: string; image: string | null };
+  workspaces?: Array<{
+    id: string;
+    name: string;
+    image: string | null;
+    role: string;
+    isCurrentTeam: boolean;
+  }>;
+};
+
 export function fetchTeamInvites(teamId: string) {
   return api.get<TeamInvite[]>(`/api/teams/${teamId}/invites`);
+}
+
+export function previewTeamInvite(teamId: string, email: string) {
+  return api.post<TeamInvitePreview>(`/api/teams/${teamId}/invites/preview`, { email });
 }
 
 export function inviteMemberByEmail(teamId: string, email: string) {

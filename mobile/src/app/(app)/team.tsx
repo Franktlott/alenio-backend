@@ -240,7 +240,11 @@ export default function TeamScreen() {
   });
 
   const currentMembership = team?.members?.find((m) => m.userId === session?.user?.id);
-  const isOwner = currentMembership?.role === "owner" || currentMembership?.role === "team_leader";
+  const myRole = currentMembership?.role;
+  const myId = session?.user?.id ?? "";
+  const isOwner = myRole === "owner" || myRole === "team_leader";
+  const canViewMemberProfile = (targetUserId: string) =>
+    !myId || targetUserId === myId || myRole === "owner" || myRole === "team_leader";
 
   const [uploadingTeamImage, setUploadingTeamImage] = useState(false);
   const [photoMenuOpen, setPhotoMenuOpen] = useState(false);
@@ -950,27 +954,20 @@ export default function TeamScreen() {
             const completed = stats?.completedTasks ?? 0;
             const overdue = stats?.overdueTasks ?? 0;
             const streak = stats?.streak ?? 0;
-            const isCurrentUser = item.userId === session?.user?.id;
-            return (
-              <Pressable
-                key={item.id}
-                onPress={() =>
-                  router.push({
-                    pathname: "/member-profile",
-                    params: { teamId: activeTeamId ?? "", memberUserId: item.userId },
-                  })
-                }
-                testID={`member-row-${item.userId}`}
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  paddingHorizontal: 14,
-                  paddingVertical: 10,
-                  borderTopWidth: 1,
-                  borderTopColor: "#F1F5F9",
-                  backgroundColor: isCurrentUser ? "#F1F5F9" : "white",
-                }}
-              >
+            const isCurrentUser = item.userId === myId;
+            const canView = canViewMemberProfile(item.userId);
+            const rowStyle = {
+              flexDirection: "row" as const,
+              alignItems: "center" as const,
+              paddingHorizontal: 14,
+              paddingVertical: 10,
+              borderTopWidth: 1,
+              borderTopColor: "#F1F5F9",
+              backgroundColor: isCurrentUser ? "#F1F5F9" : "white",
+              opacity: canView ? 1 : 0.72,
+            };
+            const rowContent = (
+              <>
                 {/* Avatar */}
                 <View
                   style={{
@@ -1020,7 +1017,26 @@ export default function TeamScreen() {
                     ) : null}
                   </View>
                 </View>
+              </>
+            );
+            return canView ? (
+              <Pressable
+                key={item.id}
+                onPress={() =>
+                  router.push({
+                    pathname: "/member-profile",
+                    params: { teamId: activeTeamId ?? "", memberUserId: item.userId },
+                  })
+                }
+                testID={`member-row-${item.userId}`}
+                style={rowStyle}
+              >
+                {rowContent}
               </Pressable>
+            ) : (
+              <View key={item.id} testID={`member-row-${item.userId}`} style={rowStyle}>
+                {rowContent}
+              </View>
             );
           })}
 
@@ -1032,7 +1048,6 @@ export default function TeamScreen() {
           </ScrollView>
         </View>
 
-        {/* ── Owner hint row ─────────────────────────────────────────── */}
         {isOwner && !isDemo ? (
           <View
             style={{
@@ -1049,7 +1064,22 @@ export default function TeamScreen() {
           >
             <Crown size={14} color="#4361EE" />
             <Text style={{ fontSize: 12, color: "#4361EE", fontWeight: "600", flex: 1 }}>
-              Tap any member to view their profile, development plan, and 1:1 history.
+              Tap a member to view their profile, development plan, and 1:1 history.
+            </Text>
+          </View>
+        ) : !isDemo ? (
+          <View
+            style={{
+              marginHorizontal: 12,
+              marginTop: 8,
+              marginBottom: 8,
+              borderRadius: 12,
+              backgroundColor: "#F8FAFC",
+              padding: 10,
+            }}
+          >
+            <Text style={{ fontSize: 12, color: "#64748B", fontWeight: "600" }}>
+              Tap your name to view your profile, development plan, and 1:1 history.
             </Text>
           </View>
         ) : null}
@@ -1151,15 +1181,16 @@ export default function TeamScreen() {
 
       <AddMemberModal
         visible={addMemberOpen}
+        teamId={activeTeamId ?? ""}
         teamName={team?.name ?? "Team"}
-        saving={inviteMemberMutation.isPending}
+        confirming={inviteMemberMutation.isPending}
         error={addMemberError}
         onClose={() => {
           setAddMemberError(null);
           setAddMemberOpen(false);
         }}
         onClearError={() => setAddMemberError(null)}
-        onSubmit={(email) => inviteMemberMutation.mutate(email)}
+        onConfirm={(email) => inviteMemberMutation.mutate(email)}
       />
 
     </SafeAreaView>

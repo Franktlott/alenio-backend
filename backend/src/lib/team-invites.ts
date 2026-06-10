@@ -253,6 +253,68 @@ export async function redeemPendingInvitesForUser(
   return joined;
 }
 
+export async function previewInviteByEmail(teamId: string, email: string) {
+  const normalized = normalizeInviteEmail(email);
+  if (!normalized || !normalized.includes("@")) {
+    throw new Error("VALIDATION");
+  }
+
+  const existingUser = await prisma.user.findUnique({
+    where: { email: normalized },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      image: true,
+      teamMembers: {
+        select: {
+          role: true,
+          team: { select: { id: true, name: true, image: true } },
+        },
+        orderBy: { joinedAt: "asc" },
+      },
+    },
+  });
+
+  const pendingInvite = await prisma.teamInvite.findFirst({
+    where: { teamId, email: normalized, status: "pending", expiresAt: { gt: new Date() } },
+    select: { id: true },
+  });
+
+  if (!existingUser) {
+    return {
+      email: normalized,
+      found: false,
+      alreadyMember: false,
+      pendingInvite: Boolean(pendingInvite),
+    };
+  }
+
+  const membership = await prisma.teamMember.findUnique({
+    where: { userId_teamId: { userId: existingUser.id, teamId } },
+  });
+
+  return {
+    email: normalized,
+    found: true,
+    alreadyMember: Boolean(membership),
+    pendingInvite: Boolean(pendingInvite),
+    user: {
+      id: existingUser.id,
+      name: existingUser.name,
+      email: existingUser.email,
+      image: existingUser.image,
+    },
+    workspaces: existingUser.teamMembers.map((row) => ({
+      id: row.team.id,
+      name: row.team.name,
+      image: row.team.image,
+      role: row.role,
+      isCurrentTeam: row.team.id === teamId,
+    })),
+  };
+}
+
 export async function inviteOrAddMemberByEmail(input: {
   teamId: string;
   email: string;

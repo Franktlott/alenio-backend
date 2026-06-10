@@ -202,6 +202,20 @@ export default function MemberProfileScreen() {
     );
   }
 
+  const canViewProfile = isSelf || myRole === "owner" || myRole === "team_leader";
+  if (!canViewProfile) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: "#F8FAFC", alignItems: "center", justifyContent: "center", paddingHorizontal: 24 }}>
+        <Text style={{ color: "#64748B", textAlign: "center", lineHeight: 22 }}>
+          You can only view your own profile. Owners and team leaders can view other members.
+        </Text>
+        <Pressable onPress={() => router.back()} style={{ marginTop: 16 }}>
+          <Text style={{ color: "#4361EE", fontWeight: "700" }}>Go back</Text>
+        </Pressable>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#F8FAFC" }} edges={["top", "bottom"]}>
       <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingVertical: 8, gap: 8 }}>

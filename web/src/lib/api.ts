@@ -266,9 +266,31 @@ export type WebTeamInvite = {
   acceptedUser?: { id: string; name: string | null; email: string | null; image: string | null } | null;
 };
 
+export type WebTeamInvitePreview = {
+  email: string;
+  found: boolean;
+  alreadyMember: boolean;
+  pendingInvite: boolean;
+  user?: { id: string; name: string | null; email: string | null; image: string | null };
+  workspaces?: Array<{
+    id: string;
+    name: string;
+    image: string | null;
+    role: string;
+    isCurrentTeam: boolean;
+  }>;
+};
+
 export function fetchTeamInvites(teamId: string) {
   return apiGetJson<{ data: WebTeamInvite[] }>(
     `/api/teams/${encodeURIComponent(teamId)}/invites`,
+  ).then((r) => r.data);
+}
+
+export function previewTeamInvite(teamId: string, email: string) {
+  return apiPostJson<{ data: WebTeamInvitePreview }>(
+    `/api/teams/${encodeURIComponent(teamId)}/invites/preview`,
+    { email },
   ).then((r) => r.data);
 }
 

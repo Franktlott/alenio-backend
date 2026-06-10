@@ -12,6 +12,7 @@ import {
   generateInviteToken,
   inviteExpiresAt,
   inviteOrAddMemberByEmail,
+  previewInviteByEmail,
   listPendingTeamInvites,
   sendTeamInviteEmail,
   serializeTeamInvite,
@@ -550,6 +551,28 @@ teamsRouter.post("/:teamId/invites", zValidator("json", inviteEmailSchema), asyn
     if (msg === "ALREADY_MEMBER") {
       return c.json({ error: { message: "This person is already in the workspace", code: "CONFLICT" } }, 409);
     }
+    if (msg === "VALIDATION") {
+      return c.json({ error: { message: "Enter a valid email address", code: "VALIDATION_ERROR" } }, 400);
+    }
+    throw err;
+  }
+});
+
+// POST /api/teams/:teamId/invites/preview
+teamsRouter.post("/:teamId/invites/preview", zValidator("json", inviteEmailSchema), async (c) => {
+  const user = c.get("user")!;
+  const { teamId } = c.req.param();
+  const { email } = c.req.valid("json");
+
+  if (!(await canInviteMembers(teamId, user.id))) {
+    return c.json({ error: { message: "You cannot invite members to this workspace", code: "FORBIDDEN" } }, 403);
+  }
+
+  try {
+    const data = await previewInviteByEmail(teamId, email);
+    return c.json({ data });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "";
     if (msg === "VALIDATION") {
       return c.json({ error: { message: "Enter a valid email address", code: "VALIDATION_ERROR" } }, 400);
     }
