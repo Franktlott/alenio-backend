@@ -294,6 +294,28 @@ export function previewTeamInvite(teamId: string, email: string) {
   ).then((r) => r.data);
 }
 
+export type WebTeamInviteLinkPreview = {
+  teamId: string;
+  teamName: string;
+  teamImage: string | null;
+  inviterName: string | null;
+  email: string;
+  expiresAt: string;
+};
+
+export function fetchTeamInviteByToken(token: string) {
+  return apiGetJson<{ data: WebTeamInviteLinkPreview }>(
+    `/api/team-invites/${encodeURIComponent(token)}`,
+  ).then((r) => r.data);
+}
+
+export function redeemTeamInvite(token: string) {
+  return apiPostJson<{ data: { teamId: string; teamName: string } }>(
+    "/api/team-invites/redeem",
+    { token },
+  ).then((r) => r.data);
+}
+
 export function inviteMemberByEmail(teamId: string, email: string) {
   return apiPostJson<{
     data: {

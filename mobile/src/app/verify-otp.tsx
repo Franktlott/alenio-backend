@@ -21,15 +21,19 @@ import { formatAuthFlowError } from "@/lib/auth/auth-errors";
 import { clearPendingSignUp, getPendingSignUp } from "@/lib/auth/pending-signup";
 import { clearSignedOutMark, SESSION_QUERY_KEY, useInvalidateSession } from "@/lib/auth/use-session";
 import { fetchMeUser, ME_QUERY_KEY } from "@/lib/auth/me-query";
+import { finishMobilePostAuth } from "@/lib/auth/finish-post-auth";
+import { setPendingTeamInviteToken } from "@/lib/auth/pending-team-invite";
 
 /** Better Auth defaults to 6; some projects use longer OTPs. */
 const OTP_MIN_LEN = 6;
 const OTP_MAX_LEN = 10;
 
 export default function VerifyOtp() {
-  const params = useLocalSearchParams<{ email?: string | string[] }>();
+  const params = useLocalSearchParams<{ email?: string | string[]; inviteToken?: string | string[] }>();
   const emailRaw = params.email;
   const email = typeof emailRaw === "string" ? emailRaw : emailRaw?.[0] ?? "";
+  const inviteToken =
+    typeof params.inviteToken === "string" ? params.inviteToken : params.inviteToken?.[0] ?? "";
 
   const [otp, setOtp] = useState<string>("");
   const [loading, setLoading] = useState(false);
@@ -38,6 +42,10 @@ export default function VerifyOtp() {
   const [resendHint, setResendHint] = useState<string | null>(null);
   const invalidateSession = useInvalidateSession();
   const queryClient = useQueryClient();
+
+  React.useEffect(() => {
+    if (inviteToken) setPendingTeamInviteToken(inviteToken);
+  }, [inviteToken]);
 
   const handleVerify = async () => {
     setError(null);
@@ -121,6 +129,7 @@ export default function VerifyOtp() {
           router.replace("/sign-in");
           return;
         }
+        await finishMobilePostAuth(queryClient);
         await queryClient.refetchQueries({ queryKey: SESSION_QUERY_KEY });
         router.replace("/(app)/chat");
       } else {

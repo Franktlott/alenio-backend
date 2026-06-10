@@ -55,6 +55,19 @@ export function resendTeamInvite(teamId: string, inviteId: string) {
   return api.post<TeamInvite>(`/api/teams/${teamId}/invites/${inviteId}/resend`, {});
 }
 
+export type TeamInviteLinkPreview = {
+  teamId: string;
+  teamName: string;
+  teamImage: string | null;
+  inviterName: string | null;
+  email: string;
+  expiresAt: string;
+};
+
+export function fetchTeamInviteByToken(token: string) {
+  return api.get<TeamInviteLinkPreview>(`/api/team-invites/${encodeURIComponent(token)}`);
+}
+
 export function redeemTeamInvite(token: string) {
   return api.post<{ teamId: string; teamName: string }>("/api/team-invites/redeem", { token });
 }

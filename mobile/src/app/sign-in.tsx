@@ -29,10 +29,21 @@ import { fetch } from "expo/fetch";
 import { readJsonSafe } from "@/lib/api/api";
 import { provisionBackendUserAfterAuth } from "@/lib/auth/sync-backend-user";
 import { fetchMeUser, ME_QUERY_KEY } from "@/lib/auth/me-query";
+import { setPendingTeamInviteToken } from "@/lib/auth/pending-team-invite";
+import { finishMobilePostAuth } from "@/lib/auth/finish-post-auth";
 
 export default function SignIn() {
-  const { reason } = useLocalSearchParams<{ reason?: string }>();
-  const [email, setEmail] = useState("");
+  const params = useLocalSearchParams<{
+    reason?: string;
+    email?: string | string[];
+    inviteToken?: string | string[];
+  }>();
+  const { reason } = params;
+  const emailFromInvite =
+    typeof params.email === "string" ? params.email : params.email?.[0] ?? "";
+  const inviteToken =
+    typeof params.inviteToken === "string" ? params.inviteToken : params.inviteToken?.[0] ?? "";
+  const [email, setEmail] = useState(emailFromInvite.trim().toLowerCase());
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -45,6 +56,14 @@ export default function SignIn() {
       setError("Please sign in again to continue.");
     }
   }, [reason]);
+
+  useEffect(() => {
+    if (emailFromInvite) setEmail(emailFromInvite.trim().toLowerCase());
+  }, [emailFromInvite]);
+
+  useEffect(() => {
+    if (inviteToken) setPendingTeamInviteToken(inviteToken);
+  }, [inviteToken]);
 
   const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -102,7 +121,10 @@ export default function SignIn() {
         }
         clearAccessToken();
         markSessionSignedOut(60_000);
-        router.replace({ pathname: "/verify-otp", params: { email: emailNorm } });
+        router.replace({
+          pathname: "/verify-otp",
+          params: inviteToken ? { email: emailNorm, inviteToken } : { email: emailNorm },
+        });
         return;
       }
       if (result.error) {
@@ -149,6 +171,7 @@ export default function SignIn() {
           setError("Could not load your profile. Try signing in again.");
           return;
         }
+        await finishMobilePostAuth(queryClient);
         await queryClient.refetchQueries({ queryKey: SESSION_QUERY_KEY });
         router.replace("/(app)/chat");
       }

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Eye, EyeOff } from "lucide-react-native";
 import {
   View,
@@ -19,18 +19,33 @@ import { markSessionSignedOut } from "@/lib/auth/use-session";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { StatusBar } from "expo-status-bar";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
+import { setPendingTeamInviteToken } from "@/lib/auth/pending-team-invite";
 import { LEGAL_APP_NAME, LEGAL_COMPANY_NAME, LEGAL_PARENT_COMPANY_NAME } from "@/lib/legal-constants";
 
 export default function SignUp() {
+  const params = useLocalSearchParams<{ email?: string | string[]; inviteToken?: string | string[] }>();
+  const emailFromInvite =
+    typeof params.email === "string" ? params.email : params.email?.[0] ?? "";
+  const inviteToken =
+    typeof params.inviteToken === "string" ? params.inviteToken : params.inviteToken?.[0] ?? "";
+
   const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(emailFromInvite.trim().toLowerCase());
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (emailFromInvite) setEmail(emailFromInvite.trim().toLowerCase());
+  }, [emailFromInvite]);
+
+  useEffect(() => {
+    if (inviteToken) setPendingTeamInviteToken(inviteToken);
+  }, [inviteToken]);
 
   const handleSignUp = async () => {
     setError(null);
@@ -82,7 +97,10 @@ export default function SignUp() {
       clearAccessToken();
       markSessionSignedOut(60_000);
       setPendingSignUp(emailNorm, password);
-      router.replace({ pathname: "/verify-otp", params: { email: emailNorm } });
+      router.replace({
+        pathname: "/verify-otp",
+        params: inviteToken ? { email: emailNorm, inviteToken } : { email: emailNorm },
+      });
     } catch (err) {
       console.warn("[sign-up]", err);
       setError(formatAuthFlowError(err));

@@ -1,27 +1,29 @@
-import { type FormEvent, useMemo, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useSearchParams } from "react-router-dom";
 import {
   ensureWebSessionAndToken,
   getAuthClient,
   setAccessTokenFromAuthData,
-  syncBackendUser,
 } from "../lib/auth-client";
 import { formatAuthFlowError } from "../lib/auth-errors";
-import { createWebTeam } from "../lib/api";
+import { finishPostAuthNavigation, setPendingInviteToken } from "../lib/invite-auth";
 
 const OTP_MIN = 6;
 const OTP_MAX = 10;
-const WORKSPACE_STORAGE_KEY = "alenio_web_signup_workspace";
 
 export function VerifyPage() {
   const [params] = useSearchParams();
   const email = useMemo(() => (params.get("email") ?? "").trim().toLowerCase(), [params]);
-  const workspaceFromUrl = useMemo(() => (params.get("workspace") ?? "").trim(), [params]);
+  const inviteToken = useMemo(() => (params.get("invite") ?? "").trim(), [params]);
   const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hint, setHint] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (inviteToken) setPendingInviteToken(inviteToken);
+  }, [inviteToken]);
 
   if (!email) {
     return <Navigate to="/login" replace />;
@@ -60,25 +62,8 @@ export function VerifyPage() {
         setError("Verified, but session did not start. Try signing in, then open Chat from the sidebar.");
         return;
       }
-      await syncBackendUser();
-      const ws =
-        sessionStorage.getItem(WORKSPACE_STORAGE_KEY)?.trim() ||
-        workspaceFromUrl ||
-        "";
-      if (ws) {
-        try {
-          await createWebTeam(ws);
-        } catch (ce) {
-          setError(
-            ce instanceof Error
-              ? ce.message
-              : "Could not create your workspace. Try again or create a team from Team.",
-          );
-          return;
-        }
-        sessionStorage.removeItem(WORKSPACE_STORAGE_KEY);
-      }
-      window.location.href = "/chat";
+      const dest = await finishPostAuthNavigation();
+      window.location.href = dest;
     } catch (err) {
       setError(formatAuthFlowError(err));
     } finally {
@@ -117,7 +102,7 @@ export function VerifyPage() {
           <h1 className="auth-v2-hero-title">
             Verify your email.
             <br />
-            <span>Secure your workspace access.</span>
+            <span>Secure your account access.</span>
           </h1>
           <p className="auth-v2-hero-copy">Finish verification to continue into your enterprise dashboard.</p>
         </div>

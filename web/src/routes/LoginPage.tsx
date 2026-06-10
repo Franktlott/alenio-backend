@@ -6,15 +6,21 @@ import {
   getAccessToken,
   getAuthClient,
   setAccessTokenFromAuthData,
-  syncBackendUser,
 } from "../lib/auth-client";
 import { formatAuthFlowError, isEmailNotVerifiedError } from "../lib/auth-errors";
+import { finishPostAuthNavigation, setPendingInviteToken } from "../lib/invite-auth";
 import { isJwtExpiredSkew, looksLikeJwt } from "../lib/token";
 
 export function LoginPage() {
   const [params] = useSearchParams();
   const reason = params.get("reason");
+  const inviteToken = (params.get("invite") ?? "").trim();
+  const emailFromInvite = (params.get("email") ?? "").trim().toLowerCase();
   const existing = getAccessToken();
+
+  useEffect(() => {
+    if (inviteToken) setPendingInviteToken(inviteToken);
+  }, [inviteToken]);
 
   useEffect(() => {
     const t = getAccessToken();
@@ -27,7 +33,7 @@ export function LoginPage() {
     return <Navigate to="/chat" replace />;
   }
 
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(emailFromInvite);
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(
@@ -77,8 +83,8 @@ export function LoginPage() {
         setError("Sign-in did not return a session. Try again.");
         return;
       }
-      await syncBackendUser();
-      window.location.href = "/chat";
+      const dest = await finishPostAuthNavigation();
+      window.location.href = dest;
     } catch (err) {
       setError(formatAuthFlowError(err));
     } finally {

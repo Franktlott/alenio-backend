@@ -274,6 +274,7 @@ function RootLayoutNav() {
             <Stack.Screen name="reset-password" />
             <Stack.Screen name="verify-otp" />
           </Stack.Protected>
+          <Stack.Screen name="invite/[token]" />
           <Stack.Screen name="privacy-policy" />
           <Stack.Screen name="terms-of-service" />
         </Stack>

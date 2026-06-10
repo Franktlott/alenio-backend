@@ -1,22 +1,23 @@
-import { type FormEvent, useEffect, useState } from "react";
-import { Link, Navigate } from "react-router-dom";
+import { type FormEvent, useEffect, useMemo, useState } from "react";
+import { Link, Navigate, useSearchParams } from "react-router-dom";
 import {
   clearAccessToken,
   ensureWebSessionAndToken,
   getAccessToken,
   getAuthClient,
   setAccessTokenFromAuthData,
-  syncBackendUser,
 } from "../lib/auth-client";
 import { formatAuthFlowError, isEmailNotVerifiedError } from "../lib/auth-errors";
 import { isJwtExpiredSkew, looksLikeJwt } from "../lib/token";
-import { createWebTeam } from "../lib/api";
+import { finishPostAuthNavigation, setPendingInviteToken } from "../lib/invite-auth";
 import { LEGAL_COMPANY_NAME, LEGAL_PARENT_COMPANY_NAME } from "../lib/legal-constants";
 
-const WORKSPACE_STORAGE_KEY = "alenio_web_signup_workspace";
-
 export function SignUpPage() {
+  const [params] = useSearchParams();
+  const inviteToken = useMemo(() => (params.get("invite") ?? "").trim(), [params]);
+  const emailFromInvite = useMemo(() => (params.get("email") ?? "").trim().toLowerCase(), [params]);
   const existing = getAccessToken();
+
   useEffect(() => {
     const t = getAccessToken();
     if (t && looksLikeJwt(t) && isJwtExpiredSkew(t)) {
@@ -24,16 +25,23 @@ export function SignUpPage() {
     }
   }, []);
 
+  useEffect(() => {
+    if (inviteToken) setPendingInviteToken(inviteToken);
+  }, [inviteToken]);
+
   if (existing && looksLikeJwt(existing) && !isJwtExpiredSkew(existing)) {
     return <Navigate to="/chat" replace />;
   }
 
   const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(emailFromInvite);
   const [password, setPassword] = useState("");
-  const [workspace, setWorkspace] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (emailFromInvite) setEmail(emailFromInvite);
+  }, [emailFromInvite]);
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -41,7 +49,6 @@ export function SignUpPage() {
     setError(null);
     const nameTrim = name.trim();
     const emailNorm = email.trim().toLowerCase();
-    const ws = workspace.trim();
     if (!nameTrim) {
       setError("Enter your name.");
       return;
@@ -56,10 +63,6 @@ export function SignUpPage() {
     }
     if (password.length < 8) {
       setError("Password must be at least 8 characters.");
-      return;
-    }
-    if (!ws) {
-      setError("Enter a workspace name (your team will use this in Alenio).");
       return;
     }
     setLoading(true);
@@ -79,9 +82,10 @@ export function SignUpPage() {
             setError(sent.error.message ?? "Could not send verification email.");
             return;
           }
-          sessionStorage.setItem(WORKSPACE_STORAGE_KEY, ws);
           clearAccessToken();
-          window.location.href = `/verify?email=${encodeURIComponent(emailNorm)}&workspace=${encodeURIComponent(ws)}`;
+          const q = new URLSearchParams({ email: emailNorm });
+          if (inviteToken) q.set("invite", inviteToken);
+          window.location.href = `/verify?${q.toString()}`;
           return;
         }
         setError(result.error.message ?? "Could not create account.");
@@ -101,9 +105,10 @@ export function SignUpPage() {
           setError(sent.error.message ?? "Could not send verification email.");
           return;
         }
-        sessionStorage.setItem(WORKSPACE_STORAGE_KEY, ws);
         clearAccessToken();
-        window.location.href = `/verify?email=${encodeURIComponent(emailNorm)}&workspace=${encodeURIComponent(ws)}`;
+        const q = new URLSearchParams({ email: emailNorm });
+        if (inviteToken) q.set("invite", inviteToken);
+        window.location.href = `/verify?${q.toString()}`;
         return;
       }
 
@@ -112,15 +117,8 @@ export function SignUpPage() {
         setError("Account created but session did not start. Try signing in.");
         return;
       }
-      await syncBackendUser();
-      try {
-        await createWebTeam(ws);
-      } catch (ce) {
-        setError(ce instanceof Error ? ce.message : "Could not create workspace. Try from Team after sign-in.");
-        return;
-      }
-      sessionStorage.removeItem(WORKSPACE_STORAGE_KEY);
-      window.location.href = "/chat";
+      const dest = await finishPostAuthNavigation();
+      window.location.href = dest;
     } catch (err) {
       setError(formatAuthFlowError(err));
     } finally {
@@ -136,13 +134,14 @@ export function SignUpPage() {
             ← Back to website
           </Link>
           <h1 className="auth-v2-hero-title">
-            Create your workspace.
+            Create your account.
             <br />
             <span>Same plan on web and mobile.</span>
           </h1>
           <p className="auth-v2-hero-copy">
-            Start in Chat right away. Upgrade to the Team plan anytime from Plan in the sidebar — subscriptions started
-            in the mobile app use the App Store instead.
+            {inviteToken
+              ? "After you verify your email, you'll join the workspace from your invite automatically."
+              : "Start in Chat right away. You can create or join a workspace anytime from Team."}
           </p>
         </div>
       </section>
@@ -150,7 +149,7 @@ export function SignUpPage() {
         <div className="auth-v2-card">
           <div className="auth-v2-card-head">
             <p className="auth-v2-eyebrow">Web sign-up</p>
-            <h2 className="auth-heading">Account &amp; workspace</h2>
+            <h2 className="auth-heading">Your account</h2>
             <p className="auth-sub">Use a strong password. You&apos;ll confirm your email next if required.</p>
           </div>
           <form onSubmit={onSubmit}>
@@ -180,21 +179,8 @@ export function SignUpPage() {
               placeholder="you@company.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              readOnly={!!emailFromInvite}
               data-testid="sign-up-email"
-            />
-            <label className="auth-label" htmlFor="su-workspace">
-              Workspace name
-            </label>
-            <input
-              id="su-workspace"
-              name="workspace"
-              type="text"
-              className="auth-input"
-              autoComplete="organization"
-              placeholder="e.g. Acme Retail"
-              value={workspace}
-              onChange={(e) => setWorkspace(e.target.value)}
-              data-testid="sign-up-workspace"
             />
             <label className="auth-label" htmlFor="su-password">
               Password
