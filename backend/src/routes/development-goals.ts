@@ -25,6 +25,14 @@ const createNoteSchema = z.object({
   body: z.string().trim().min(1, "Note is required").max(5000),
 });
 
+const updateStatusSchema = z.object({
+  status: z.enum(["active", "closed"]),
+});
+
+function normalizeStatus(raw: string | null | undefined): "active" | "closed" {
+  return raw === "closed" ? "closed" : "active";
+}
+
 async function getMembership(
   c: { get: (key: "user" | "session") => unknown },
   teamId: string,
@@ -61,6 +69,7 @@ function serializeGoal(goal: {
   memberUserId: string;
   skill: string;
   steps: string;
+  status?: string | null;
   createdById: string;
   createdAt: Date;
   createdBy?: { id: string; name: string; email: string; image: string | null };
@@ -78,6 +87,7 @@ function serializeGoal(goal: {
     memberUserId: goal.memberUserId,
     skill: goal.skill,
     steps: parseSteps(goal.steps),
+    status: normalizeStatus(goal.status),
     createdById: goal.createdById,
     createdAt: goal.createdAt.toISOString(),
     createdBy: goal.createdBy,
@@ -210,6 +220,79 @@ developmentGoalsRouter.patch(
     }
   },
 );
+
+// PATCH /api/teams/:teamId/members/:memberUserId/development-goals/:goalId/status
+developmentGoalsRouter.patch(
+  "/:memberUserId/development-goals/:goalId/status",
+  zValidator("json", updateStatusSchema),
+  async (c) => {
+    const teamId = c.req.param("teamId") as string;
+    const memberUserId = c.req.param("memberUserId") as string;
+    const goalId = c.req.param("goalId") as string;
+    const body = c.req.valid("json");
+
+    const membership = await getMembership(c, teamId);
+    if (!membership) {
+      return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
+    }
+
+    const canUpdate =
+      isManagerRole(membership.role) || membership.userId === memberUserId;
+    if (!canUpdate) {
+      return c.json({ error: { message: "Not allowed to update development goals", code: "FORBIDDEN" } }, 403);
+    }
+
+    const existing = await prisma.developmentGoal.findFirst({
+      where: { id: goalId, teamId, memberUserId },
+    });
+    if (!existing) {
+      return c.json({ error: { message: "Goal not found", code: "NOT_FOUND" } }, 404);
+    }
+
+    try {
+      const goal = await prisma.developmentGoal.update({
+        where: { id: goalId },
+        data: { status: body.status },
+        include: goalInclude,
+      });
+      return c.json({ data: serializeGoal(goal) });
+    } catch (err) {
+      return prismaRouteError(c, err, "[development-goals] PATCH status failed");
+    }
+  },
+);
+
+// DELETE /api/teams/:teamId/members/:memberUserId/development-goals/:goalId
+developmentGoalsRouter.delete("/:memberUserId/development-goals/:goalId", async (c) => {
+  const teamId = c.req.param("teamId") as string;
+  const memberUserId = c.req.param("memberUserId") as string;
+  const goalId = c.req.param("goalId") as string;
+
+  const membership = await getMembership(c, teamId);
+  if (!membership) {
+    return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
+  }
+
+  const canDelete =
+    isManagerRole(membership.role) || membership.userId === memberUserId;
+  if (!canDelete) {
+    return c.json({ error: { message: "Not allowed to delete development goals", code: "FORBIDDEN" } }, 403);
+  }
+
+  const existing = await prisma.developmentGoal.findFirst({
+    where: { id: goalId, teamId, memberUserId },
+  });
+  if (!existing) {
+    return c.json({ error: { message: "Goal not found", code: "NOT_FOUND" } }, 404);
+  }
+
+  try {
+    await prisma.developmentGoal.delete({ where: { id: goalId } });
+    return c.json({ data: { deleted: true } });
+  } catch (err) {
+    return prismaRouteError(c, err, "[development-goals] DELETE failed");
+  }
+});
 
 // PATCH /api/teams/:teamId/members/:memberUserId/development-goals/:goalId/notes/:noteId
 developmentGoalsRouter.patch(

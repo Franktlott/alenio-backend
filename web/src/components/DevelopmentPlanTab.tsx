@@ -1,17 +1,23 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import {
   addDevelopmentGoalNote,
   createDevelopmentGoal,
+  deleteDevelopmentGoal,
   fetchDevelopmentGoals,
+  setDevelopmentGoalStatus,
   updateDevelopmentGoal,
   updateDevelopmentGoalNote,
   type DevelopmentGoal,
   type DevelopmentGoalNote,
+  type DevelopmentGoalStatus,
 } from "../lib/api";
+import { printDevelopmentPlan } from "../lib/development-plan-print";
 
 type Props = {
   teamId: string;
   memberUserId: string;
+  memberName: string;
+  managerName: string | null;
   canCreate: boolean;
   canAddNotes: boolean;
 };
@@ -87,6 +93,19 @@ function CalendarIcon() {
   );
 }
 
+function goalStatusLabel(status: DevelopmentGoalStatus | undefined): string {
+  return status === "closed" ? "Closed" : "Active";
+}
+
+function GoalStatusBadge({ status }: { status: DevelopmentGoalStatus | undefined }) {
+  const normalized = status === "closed" ? "closed" : "active";
+  return (
+    <span
+      className={`enterprise-dev-plan-status-badge enterprise-dev-plan-status-badge--${normalized}`}
+    >
+      {goalStatusLabel(normalized)}
+    </span>
+  );
 function GrowIllustration() {
   return (
     <svg width="40" height="40" viewBox="0 0 48 48" fill="none" aria-hidden>
@@ -111,57 +130,62 @@ type GoalFormFieldsProps = {
 function GoalFormFields({ skill, steps, skillId, onSkillChange, onStepsChange }: GoalFormFieldsProps) {
   return (
     <>
-      <div className="enterprise-dev-plan-form-field">
-        <label className="enterprise-dev-plan-field-label" htmlFor={skillId}>
+      <li className="enterprise-oneone-fill-field">
+        <label className="enterprise-oneone-fill-label" htmlFor={skillId}>
           Developmental skill
         </label>
         <input
           id={skillId}
-          className="enterprise-dev-plan-input"
+          className="auth-input enterprise-oneone-fill-input"
           value={skill}
           onChange={(e) => onSkillChange(e.target.value)}
           placeholder="e.g. Conflict resolution, Time management"
         />
-      </div>
+      </li>
 
-      <div className="enterprise-dev-plan-form-field">
-        <div className="enterprise-dev-plan-steps-editor-head">
-          <span className="enterprise-dev-plan-field-label">Steps to develop this skill</span>
-          <button
-            type="button"
-            className="enterprise-dev-plan-add-step"
-            onClick={() => onStepsChange([...steps, ""])}
-          >
-            + Add step
-          </button>
-        </div>
-        <ul className="enterprise-dev-plan-step-inputs">
-          {steps.map((step, index) => (
-            <li key={`step-input-${index}`} className="enterprise-dev-plan-step-row">
-              <span className="enterprise-dev-plan-step-num">{index + 1}</span>
-              <input
-                className="enterprise-dev-plan-input enterprise-dev-plan-step-input"
-                value={step}
-                placeholder={`Step ${index + 1}`}
-                aria-label={`Step ${index + 1}`}
-                onChange={(e) =>
-                  onStepsChange(steps.map((s, i) => (i === index ? e.target.value : s)))
-                }
-              />
-              {steps.length > 1 ? (
-                <button
-                  type="button"
-                  className="enterprise-dev-plan-remove-step"
-                  aria-label={`Remove step ${index + 1}`}
-                  onClick={() => onStepsChange(steps.filter((_, i) => i !== index))}
-                >
-                  ×
-                </button>
-              ) : null}
-            </li>
-          ))}
-        </ul>
-      </div>
+      <li className="enterprise-oneone-fill-field">
+        <section className="enterprise-oneone-followup">
+          <div className="enterprise-oneone-followup-head">
+            <div>
+              <h4 className="enterprise-oneone-followup-title">Steps to develop this skill</h4>
+              <p className="enterprise-muted enterprise-oneone-followup-sub">
+                Action items to build this skill over time.
+              </p>
+            </div>
+            <button
+              type="button"
+              className="enterprise-oneone-templates-pane-btn"
+              onClick={() => onStepsChange([...steps, ""])}
+            >
+              Add step
+            </button>
+          </div>
+          <ul className="enterprise-oneone-followup-drafts">
+            {steps.map((step, index) => (
+              <li key={`step-input-${index}`} className="enterprise-dev-plan-step-draft">
+                <input
+                  className="auth-input enterprise-oneone-followup-input"
+                  value={step}
+                  placeholder={`Step ${index + 1}`}
+                  aria-label={`Step ${index + 1}`}
+                  onChange={(e) =>
+                    onStepsChange(steps.map((s, i) => (i === index ? e.target.value : s)))
+                  }
+                />
+                {steps.length > 1 ? (
+                  <button
+                    type="button"
+                    className="enterprise-oneone-templates-table-action enterprise-oneone-templates-table-action--danger"
+                    onClick={() => onStepsChange(steps.filter((_, i) => i !== index))}
+                  >
+                    Remove
+                  </button>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </section>
+      </li>
     </>
   );
 }
@@ -182,77 +206,163 @@ function ProgressNotesEditor({
   onNewNotesChange,
 }: ProgressNotesEditorProps) {
   return (
-    <div className="enterprise-dev-plan-form-field enterprise-dev-plan-notes-editor">
-      <div className="enterprise-dev-plan-steps-editor-head">
-        <span className="enterprise-dev-plan-field-label">Progress notes</span>
-        <button
-          type="button"
-          className="enterprise-dev-plan-add-step"
-          onClick={() => onNewNotesChange([...newNotes, ""])}
-        >
-          + Add note
-        </button>
-      </div>
+    <li className="enterprise-oneone-fill-field">
+      <section className="enterprise-oneone-followup">
+        <div className="enterprise-oneone-followup-head">
+          <div>
+            <h4 className="enterprise-oneone-followup-title">Progress notes</h4>
+            <p className="enterprise-muted enterprise-oneone-followup-sub">
+              Track updates and reflections over time.
+            </p>
+          </div>
+          <button
+            type="button"
+            className="enterprise-oneone-templates-pane-btn"
+            onClick={() => onNewNotesChange([...newNotes, ""])}
+          >
+            Add note
+          </button>
+        </div>
 
-      {existingNotes.length === 0 && newNotes.length === 0 ? (
-        <p className="enterprise-dev-plan-notes-editor-empty">No notes yet. Add one to track progress.</p>
-      ) : null}
+        {existingNotes.length === 0 && newNotes.length === 0 ? (
+          <p className="enterprise-muted enterprise-oneone-followup-empty">No notes yet.</p>
+        ) : null}
 
-      {existingNotes.length > 0 ? (
-        <ul className="enterprise-dev-plan-modal-note-list">
-          {existingNotes.map((note) => (
-            <li key={note.id} className="enterprise-dev-plan-modal-note-item">
-              <p className="enterprise-dev-plan-modal-note-meta">
-                {displayUserName(note.createdBy)} · {formatWhen(note.createdAt)}
-              </p>
-              <textarea
-                className="enterprise-dev-plan-input enterprise-dev-plan-textarea enterprise-dev-plan-modal-note-input"
-                rows={2}
-                value={existingEdits[note.id] ?? note.body}
-                aria-label={`Edit note from ${formatWhen(note.createdAt)}`}
-                onChange={(e) => onExistingChange(note.id, e.target.value)}
-              />
-            </li>
-          ))}
-        </ul>
-      ) : null}
-
-      {newNotes.length > 0 ? (
-        <ul className="enterprise-dev-plan-modal-note-list enterprise-dev-plan-modal-note-list--new">
-          {newNotes.map((note, index) => (
-            <li key={`new-note-${index}`} className="enterprise-dev-plan-modal-note-item">
-              <p className="enterprise-dev-plan-modal-note-meta enterprise-dev-plan-modal-note-meta--new">
-                New note
-              </p>
-              <div className="enterprise-dev-plan-modal-note-row">
+        {existingNotes.length > 0 ? (
+          <ul className="enterprise-dev-plan-note-drafts">
+            {existingNotes.map((note) => (
+              <li key={note.id} className="enterprise-dev-plan-note-draft">
+                <p className="enterprise-oneone-followup-item-meta">
+                  {displayUserName(note.createdBy)} · {formatWhen(note.createdAt)}
+                </p>
                 <textarea
-                  className="enterprise-dev-plan-input enterprise-dev-plan-textarea enterprise-dev-plan-modal-note-input"
-                  rows={2}
-                  placeholder="Add a note about progress…"
-                  value={note}
-                  aria-label={`New note ${index + 1}`}
-                  onChange={(e) =>
-                    onNewNotesChange(newNotes.map((n, i) => (i === index ? e.target.value : n)))
-                  }
+                  className="auth-input enterprise-oneone-fill-textarea"
+                  rows={3}
+                  value={existingEdits[note.id] ?? note.body}
+                  aria-label={`Edit note from ${formatWhen(note.createdAt)}`}
+                  onChange={(e) => onExistingChange(note.id, e.target.value)}
                 />
-                <button
-                  type="button"
-                  className="enterprise-dev-plan-remove-step"
-                  aria-label={`Remove new note ${index + 1}`}
-                  onClick={() => onNewNotesChange(newNotes.filter((_, i) => i !== index))}
-                >
-                  ×
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
-      ) : null}
+              </li>
+            ))}
+          </ul>
+        ) : null}
+
+        {newNotes.length > 0 ? (
+          <ul className="enterprise-dev-plan-note-drafts enterprise-dev-plan-note-drafts--new">
+            {newNotes.map((note, index) => (
+              <li key={`new-note-${index}`} className="enterprise-dev-plan-note-draft">
+                <p className="enterprise-oneone-followup-item-meta">New note</p>
+                <div className="enterprise-dev-plan-step-draft">
+                  <textarea
+                    className="auth-input enterprise-oneone-fill-textarea"
+                    rows={3}
+                    placeholder="Add a note about progress…"
+                    value={note}
+                    aria-label={`New note ${index + 1}`}
+                    onChange={(e) =>
+                      onNewNotesChange(newNotes.map((n, i) => (i === index ? e.target.value : n)))
+                    }
+                  />
+                  <button
+                    type="button"
+                    className="enterprise-oneone-templates-table-action enterprise-oneone-templates-table-action--danger"
+                    onClick={() => onNewNotesChange(newNotes.filter((_, i) => i !== index))}
+                  >
+                    Remove
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </section>
+    </li>
+  );
+}
+
+type DevPlanGoalModalProps = {
+  title: string;
+  subtitle?: string;
+  err: string | null;
+  saving: boolean;
+  saveLabel: string;
+  onClose: () => void;
+  onSave: () => void;
+  children: ReactNode;
+};
+
+function DevPlanGoalModal({
+  title,
+  subtitle,
+  err,
+  saving,
+  saveLabel,
+  onClose,
+  onSave,
+  children,
+}: DevPlanGoalModalProps) {
+  return (
+    <div className="enterprise-modal-backdrop" role="presentation" onClick={onClose}>
+      <div
+        className="enterprise-modal-sheet enterprise-oneone-preview-modal enterprise-dev-plan-goal-modal"
+        role="dialog"
+        aria-label={title}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <header className="enterprise-oneone-preview-header">
+          <div className="enterprise-oneone-preview-header-text">
+            <p className="enterprise-oneone-templates-kicker">Development plan</p>
+            <h2 className="enterprise-oneone-preview-title">{title}</h2>
+            {subtitle ? <p className="enterprise-oneone-preview-meta">{subtitle}</p> : null}
+          </div>
+          <button
+            type="button"
+            className="enterprise-oneone-templates-close"
+            aria-label="Close"
+            onClick={onClose}
+          >
+            ×
+          </button>
+        </header>
+
+        <div className="enterprise-oneone-preview-body">
+          {err ? <p className="enterprise-form-error" role="alert">{err}</p> : null}
+          <ul className="enterprise-oneone-fill-fields">{children}</ul>
+        </div>
+
+        <footer className="enterprise-dev-plan-modal-foot">
+          <div className="enterprise-oneone-fill-actions">
+            <button
+              type="button"
+              className="enterprise-profile-cancel-btn"
+              disabled={saving}
+              onClick={onClose}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="enterprise-oneone-templates-primary-btn enterprise-oneone-fill-save"
+              disabled={saving}
+              onClick={onSave}
+            >
+              {saving ? "Saving…" : saveLabel}
+            </button>
+          </div>
+        </footer>
+      </div>
     </div>
   );
 }
 
-export function DevelopmentPlanTab({ teamId, memberUserId, canCreate, canAddNotes }: Props) {
+export function DevelopmentPlanTab({
+  teamId,
+  memberUserId,
+  memberName,
+  managerName,
+  canCreate,
+  canAddNotes,
+}: Props) {
   const [goals, setGoals] = useState<DevelopmentGoal[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
@@ -263,7 +373,16 @@ export function DevelopmentPlanTab({ teamId, memberUserId, canCreate, canAddNote
   const [existingNoteEdits, setExistingNoteEdits] = useState<Record<string, string>>({});
   const [newNotes, setNewNotes] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+  const [menuGoalId, setMenuGoalId] = useState<string | null>(null);
+  const [statusSavingId, setStatusSavingId] = useState<string | null>(null);
   const canUpdate = canCreate || canAddNotes;
+
+  useEffect(() => {
+    if (!menuGoalId) return;
+    const close = () => setMenuGoalId(null);
+    document.addEventListener("click", close);
+    return () => document.removeEventListener("click", close);
+  }, [menuGoalId]);
 
   const loadGoals = useCallback(async () => {
     setLoading(true);
@@ -417,6 +536,80 @@ export function DevelopmentPlanTab({ teamId, memberUserId, canCreate, canAddNote
     }
   };
 
+  const onPrint = () => {
+    try {
+      printDevelopmentPlan({
+        goals,
+        memberName,
+        managerName,
+      });
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Could not open print view.");
+    }
+  };
+
+  const onMarkComplete = async (goal: DevelopmentGoal) => {
+    if (
+      !window.confirm(
+        `Mark "${goal.skill}" as complete? The goal will move to closed status.`,
+      )
+    ) {
+      return;
+    }
+    setStatusSavingId(goal.id);
+    setMenuGoalId(null);
+    setErr(null);
+    try {
+      const updated = await setDevelopmentGoalStatus(teamId, memberUserId, goal.id, "closed");
+      setGoals((prev) => prev.map((g) => (g.id === goal.id ? updated : g)));
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Could not mark goal complete.");
+    } finally {
+      setStatusSavingId(null);
+    }
+  };
+
+  const onReopenGoal = async (goal: DevelopmentGoal) => {
+    if (!window.confirm(`Reopen "${goal.skill}"? It will return to active status.`)) {
+      return;
+    }
+    setStatusSavingId(goal.id);
+    setMenuGoalId(null);
+    setErr(null);
+    try {
+      const updated = await setDevelopmentGoalStatus(teamId, memberUserId, goal.id, "active");
+      setGoals((prev) => prev.map((g) => (g.id === goal.id ? updated : g)));
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Could not reopen goal.");
+    } finally {
+      setStatusSavingId(null);
+    }
+  };
+
+  const onDeleteGoal = async (goal: DevelopmentGoal) => {
+    if (
+      !window.confirm(
+        `Delete "${goal.skill}"? This removes the goal and all progress notes. This cannot be undone.`,
+      )
+    ) {
+      return;
+    }
+    setStatusSavingId(goal.id);
+    setMenuGoalId(null);
+    setErr(null);
+    if (updateGoal?.id === goal.id) {
+      closeModals();
+    }
+    try {
+      await deleteDevelopmentGoal(teamId, memberUserId, goal.id);
+      setGoals((prev) => prev.filter((g) => g.id !== goal.id));
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Could not delete goal.");
+    } finally {
+      setStatusSavingId(null);
+    }
+  };
+
   return (
     <div className="enterprise-dev-plan" data-testid="development-plan-tab">
       <div className="enterprise-dev-plan-head">
@@ -426,11 +619,21 @@ export function DevelopmentPlanTab({ teamId, memberUserId, canCreate, canAddNote
             Skills to build, action steps, and progress notes over time.
           </p>
         </div>
-        {canCreate ? (
-          <button type="button" className="enterprise-dev-plan-new-btn" onClick={openCreate}>
-            New developmental goal
+        <div className="enterprise-dev-plan-head-actions">
+          <button
+            type="button"
+            className="enterprise-dev-plan-print-btn"
+            onClick={onPrint}
+            disabled={loading}
+          >
+            Print / PDF
           </button>
-        ) : null}
+          {canCreate ? (
+            <button type="button" className="enterprise-dev-plan-new-btn" onClick={openCreate}>
+              New developmental goal
+            </button>
+          ) : null}
+        </div>
       </div>
 
       {err && !createOpen && !updateGoal ? <p className="enterprise-form-error" role="alert">{err}</p> : null}
@@ -450,7 +653,10 @@ export function DevelopmentPlanTab({ teamId, memberUserId, canCreate, canAddNote
         <>
           <ul className="enterprise-dev-plan-goals">
             {goals.map((goal) => (
-              <li key={goal.id} className="enterprise-dev-plan-goal">
+              <li
+                key={goal.id}
+                className={`enterprise-dev-plan-goal${goal.status === "closed" ? " enterprise-dev-plan-goal--closed" : ""}${menuGoalId === goal.id ? " enterprise-dev-plan-goal--menu-open" : ""}`}
+              >
                 <header className="enterprise-dev-plan-goal-top">
                   <span className="enterprise-dev-plan-goal-icon">
                     <GoalTargetIcon />
@@ -468,18 +674,55 @@ export function DevelopmentPlanTab({ teamId, memberUserId, canCreate, canAddNote
                         type="button"
                         className="enterprise-dev-plan-update-btn"
                         onClick={() => openUpdate(goal)}
+                        disabled={statusSavingId === goal.id}
                       >
                         Update
                       </button>
                     ) : null}
-                    <button
-                      type="button"
-                      className="enterprise-dev-plan-kebab"
-                      aria-label="Goal options"
-                      disabled
-                    >
-                      ⋮
-                    </button>
+                    {canUpdate ? (
+                      <div className="enterprise-dev-plan-goal-menu-wrap">
+                        <button
+                          type="button"
+                          className="enterprise-dev-plan-kebab"
+                          aria-label="Goal options"
+                          aria-expanded={menuGoalId === goal.id}
+                          disabled={statusSavingId === goal.id}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setMenuGoalId((current) => (current === goal.id ? null : goal.id));
+                          }}
+                        >
+                          ⋮
+                        </button>
+                        {menuGoalId === goal.id ? (
+                          <div className="enterprise-dev-plan-goal-menu" role="menu">
+                            {goal.status === "closed" ? (
+                              <button
+                                type="button"
+                                role="menuitem"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  void onReopenGoal(goal);
+                                }}
+                              >
+                                Reopen goal
+                              </button>
+                            ) : null}
+                            <button
+                              type="button"
+                              role="menuitem"
+                              className="enterprise-dev-plan-goal-menu-danger"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void onDeleteGoal(goal);
+                              }}
+                            >
+                              Delete goal
+                            </button>
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
                   </div>
                 </header>
 
@@ -527,7 +770,19 @@ export function DevelopmentPlanTab({ teamId, memberUserId, canCreate, canAddNote
                       {formatDateOnly(lastUpdatedAt(goal))}
                     </span>
                   </p>
-                  <span className="enterprise-dev-plan-status-badge">In progress</span>
+                  <div className="enterprise-dev-plan-goal-footer-actions">
+                    {canUpdate && goal.status !== "closed" ? (
+                      <button
+                        type="button"
+                        className="enterprise-dev-plan-complete-btn"
+                        disabled={statusSavingId === goal.id}
+                        onClick={() => void onMarkComplete(goal)}
+                      >
+                        {statusSavingId === goal.id ? "Saving…" : "Mark complete"}
+                      </button>
+                    ) : null}
+                    <GoalStatusBadge status={goal.status} />
+                  </div>
                 </footer>
               </li>
             ))}
@@ -549,126 +804,55 @@ export function DevelopmentPlanTab({ teamId, memberUserId, canCreate, canAddNote
       )}
 
       {createOpen ? (
-        <div className="enterprise-modal-backdrop" role="presentation" onClick={closeModals}>
-          <div
-            className="enterprise-modal-sheet enterprise-dev-plan-modal"
-            role="dialog"
-            aria-label="New developmental goal"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <header className="enterprise-dev-plan-modal-head">
-              <h3>New developmental goal</h3>
-              <button
-                type="button"
-                className="enterprise-oneone-templates-close"
-                aria-label="Close"
-                onClick={closeModals}
-              >
-                ×
-              </button>
-            </header>
-
-            <div className="enterprise-dev-plan-modal-body">
-              {err ? <p className="enterprise-form-error" role="alert">{err}</p> : null}
-              <div className="enterprise-dev-plan-form">
-                <GoalFormFields
-                  skill={skill}
-                  steps={steps}
-                  skillId="dev-plan-skill"
-                  onSkillChange={setSkill}
-                  onStepsChange={setSteps}
-                />
-              </div>
-            </div>
-
-            <footer className="enterprise-dev-plan-modal-footer">
-              <button
-                type="button"
-                className="enterprise-dev-plan-modal-cancel"
-                disabled={saving}
-                onClick={closeModals}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="enterprise-oneone-templates-primary-btn"
-                disabled={saving}
-                onClick={() => void onSaveGoal()}
-              >
-                {saving ? "Saving…" : "Save goal"}
-              </button>
-            </footer>
-          </div>
-        </div>
+        <DevPlanGoalModal
+          title="New developmental goal"
+          err={err}
+          saving={saving}
+          saveLabel="Save goal"
+          onClose={closeModals}
+          onSave={() => void onSaveGoal()}
+        >
+          <GoalFormFields
+            skill={skill}
+            steps={steps}
+            skillId="dev-plan-skill"
+            onSkillChange={setSkill}
+            onStepsChange={setSteps}
+          />
+        </DevPlanGoalModal>
       ) : null}
 
       {updateGoal ? (
-        <div className="enterprise-modal-backdrop" role="presentation" onClick={closeModals}>
-          <div
-            className="enterprise-modal-sheet enterprise-dev-plan-modal"
-            role="dialog"
-            aria-label="Update developmental goal"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <header className="enterprise-dev-plan-modal-head">
-              <h3>Update developmental goal</h3>
-              <button
-                type="button"
-                className="enterprise-oneone-templates-close"
-                aria-label="Close"
-                onClick={closeModals}
-              >
-                ×
-              </button>
-            </header>
-
-            <div className="enterprise-dev-plan-modal-body">
-              {err ? <p className="enterprise-form-error" role="alert">{err}</p> : null}
-              <div className="enterprise-dev-plan-form">
-                {canCreate ? (
-                  <GoalFormFields
-                    skill={skill}
-                    steps={steps}
-                    skillId="dev-plan-update-skill"
-                    onSkillChange={setSkill}
-                    onStepsChange={setSteps}
-                  />
-                ) : null}
-                {canAddNotes ? (
-                  <ProgressNotesEditor
-                    existingNotes={updateGoal.notes}
-                    existingEdits={existingNoteEdits}
-                    newNotes={newNotes}
-                    onExistingChange={(noteId, body) =>
-                      setExistingNoteEdits((prev) => ({ ...prev, [noteId]: body }))
-                    }
-                    onNewNotesChange={setNewNotes}
-                  />
-                ) : null}
-              </div>
-            </div>
-
-            <footer className="enterprise-dev-plan-modal-footer">
-              <button
-                type="button"
-                className="enterprise-dev-plan-modal-cancel"
-                disabled={saving}
-                onClick={closeModals}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="enterprise-oneone-templates-primary-btn"
-                disabled={saving}
-                onClick={() => void onSaveUpdate()}
-              >
-                {saving ? "Saving…" : "Save changes"}
-              </button>
-            </footer>
-          </div>
-        </div>
+        <DevPlanGoalModal
+          title="Update developmental goal"
+          subtitle={updateGoal.skill}
+          err={err}
+          saving={saving}
+          saveLabel="Save changes"
+          onClose={closeModals}
+          onSave={() => void onSaveUpdate()}
+        >
+          {canCreate ? (
+            <GoalFormFields
+              skill={skill}
+              steps={steps}
+              skillId="dev-plan-update-skill"
+              onSkillChange={setSkill}
+              onStepsChange={setSteps}
+            />
+          ) : null}
+          {canAddNotes ? (
+            <ProgressNotesEditor
+              existingNotes={updateGoal.notes}
+              existingEdits={existingNoteEdits}
+              newNotes={newNotes}
+              onExistingChange={(noteId, body) =>
+                setExistingNoteEdits((prev) => ({ ...prev, [noteId]: body }))
+              }
+              onNewNotesChange={setNewNotes}
+            />
+          ) : null}
+        </DevPlanGoalModal>
       ) : null}
     </div>
   );

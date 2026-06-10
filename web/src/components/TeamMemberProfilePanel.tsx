@@ -142,6 +142,8 @@ export function TeamMemberProfilePanel({
           <DevelopmentPlanTab
             teamId={teamId}
             memberUserId={member.userId}
+            memberName={displayName}
+            managerName={managerName}
             canCreate={canCreateDevGoal}
             canAddNotes={canAddDevNotes}
           />

@@ -1191,12 +1191,15 @@ export type DevelopmentGoalNote = {
   createdBy: { id: string; name: string; email: string; image: string | null };
 };
 
+export type DevelopmentGoalStatus = "active" | "closed";
+
 export type DevelopmentGoal = {
   id: string;
   teamId: string;
   memberUserId: string;
   skill: string;
   steps: string[];
+  status: DevelopmentGoalStatus;
   createdById: string;
   createdAt: string;
   createdBy?: { id: string; name: string; email: string; image: string | null };
@@ -1288,4 +1291,24 @@ export function updateDevelopmentGoalNote(
     { api: `${paths.api}/notes/${note}`, web: `${paths.web}/notes/${note}` },
     { method: "PATCH", body: JSON.stringify({ body }) },
   ).then((r) => r.data);
+}
+
+export function setDevelopmentGoalStatus(
+  teamId: string,
+  memberUserId: string,
+  goalId: string,
+  status: DevelopmentGoalStatus,
+) {
+  const paths = developmentGoalsPaths(teamId, memberUserId, goalId);
+  return developmentGoalsRequest<{ data: DevelopmentGoal }>(
+    { api: `${paths.api}/status`, web: `${paths.web}/status` },
+    { method: "PATCH", body: JSON.stringify({ status }) },
+  ).then((r) => r.data);
+}
+
+export function deleteDevelopmentGoal(teamId: string, memberUserId: string, goalId: string) {
+  const paths = developmentGoalsPaths(teamId, memberUserId, goalId);
+  return developmentGoalsRequest<{ data: { deleted: boolean } }>(paths, {
+    method: "DELETE",
+  });
 }

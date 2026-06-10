@@ -4,6 +4,7 @@ import {
   ASSOCIATE_FEEDBACK_LABEL,
   formatAssociateResponseDisplay,
 } from "./one-on-one-feedback";
+import { alenioLogoUrl, escapeHtml, printHtmlInHiddenFrame } from "./print-html";
 
 export type OneOnOnePrintOptions = {
   meeting: OneOnOneMeeting;
@@ -12,14 +13,6 @@ export type OneOnOnePrintOptions = {
   meetingNumber: number;
   introText?: string | null;
 };
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
 
 function formatPrintDate(iso: string): string {
   try {
@@ -463,55 +456,10 @@ function buildPrintHtml(options: OneOnOnePrintOptions, logoUrl: string): string 
 </html>`;
 }
 
-function removePrintFrame(frame: HTMLIFrameElement): void {
-  frame.parentNode?.removeChild(frame);
-}
-
-function printHtmlInHiddenFrame(html: string): void {
-  const frame = document.createElement("iframe");
-  frame.setAttribute("aria-hidden", "true");
-  frame.title = "1:1 print preview";
-  frame.style.cssText =
-    "position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;pointer-events:none";
-  document.body.appendChild(frame);
-
-  const frameWin = frame.contentWindow;
-  if (!frameWin) {
-    removePrintFrame(frame);
-    throw new Error("Could not open print view.");
-  }
-
-  const doc = frameWin.document;
-  doc.open();
-  doc.write(html);
-  doc.close();
-
-  const cleanup = () => removePrintFrame(frame);
-  const triggerPrint = () => {
-    try {
-      frameWin.focus();
-      frameWin.print();
-    } catch {
-      cleanup();
-      throw new Error("Could not open print view.");
-    }
-  };
-
-  if ("onafterprint" in frameWin) {
-    frameWin.onafterprint = cleanup;
-  } else {
-    setTimeout(cleanup, 1500);
-  }
-
-  // Brief delay so layout and logo can finish loading before print.
-  setTimeout(triggerPrint, 350);
-}
-
 /** Opens a print dialog; user can choose "Save as PDF". */
 export function printOneOnOneMeeting(options: OneOnOnePrintOptions): void {
-  const logoUrl = `${window.location.origin}/alenio-logo.png`;
-  const html = buildPrintHtml(options, logoUrl);
-  printHtmlInHiddenFrame(html);
+  const html = buildPrintHtml(options, alenioLogoUrl());
+  printHtmlInHiddenFrame(html, "1:1 print preview");
 }
 
 export function meetingNumberFor(meetings: OneOnOneMeeting[], meetingId: string): number {
