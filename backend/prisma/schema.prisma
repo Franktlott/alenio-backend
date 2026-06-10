@@ -28,6 +28,8 @@ model User {
   templatesCreated TaskTemplate[] @relation("TemplateCreator")
   oneOnOneTemplatesCreated OneOnOneTemplate[] @relation("OneOnOneTemplateCreator")
   oneOnOneMeetingsCreated OneOnOneMeeting[] @relation("OneOnOneMeetingCreator")
+  developmentGoalsCreated DevelopmentGoal[] @relation("DevelopmentGoalCreator")
+  developmentGoalNotesCreated DevelopmentGoalNote[] @relation("DevelopmentGoalNoteCreator")
   phoneNumber   String?
   phoneNumberVerified Boolean @default(false)
   pushToken     String?
@@ -107,6 +109,7 @@ model Team {
   polls       Poll[]
   oneOnOneTemplates OneOnOneTemplate[]
   oneOnOneMeetings OneOnOneMeeting[]
+  developmentGoals DevelopmentGoal[]
 }
 
 model TeamSubscription {
@@ -272,6 +275,34 @@ model OneOnOneMeeting {
   followUpTasks  Task[]
 
   @@index([teamId, memberUserId])
+}
+
+model DevelopmentGoal {
+  id           String   @id @default(cuid())
+  teamId       String
+  team         Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  memberUserId String
+  skill        String
+  /** JSON string array of step labels */
+  steps        String
+  createdById  String
+  createdBy    User     @relation("DevelopmentGoalCreator", fields: [createdById], references: [id])
+  createdAt    DateTime @default(now())
+  notes        DevelopmentGoalNote[]
+
+  @@index([teamId, memberUserId])
+}
+
+model DevelopmentGoalNote {
+  id          String          @id @default(cuid())
+  goalId      String
+  goal        DevelopmentGoal @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  body        String
+  createdById String
+  createdBy   User            @relation("DevelopmentGoalNoteCreator", fields: [createdById], references: [id])
+  createdAt   DateTime        @default(now())
+
+  @@index([goalId])
 }
 
 model Message {

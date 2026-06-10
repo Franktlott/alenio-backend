@@ -1182,3 +1182,75 @@ export function submitOneOnOneAssociateFeedback(
     body: JSON.stringify(input),
   }).then((r) => r.data);
 }
+
+export type DevelopmentGoalNote = {
+  id: string;
+  body: string;
+  createdAt: string;
+  createdById: string;
+  createdBy: { id: string; name: string; email: string; image: string | null };
+};
+
+export type DevelopmentGoal = {
+  id: string;
+  teamId: string;
+  memberUserId: string;
+  skill: string;
+  steps: string[];
+  createdById: string;
+  createdAt: string;
+  createdBy?: { id: string; name: string; email: string; image: string | null };
+  notes: DevelopmentGoalNote[];
+};
+
+function developmentGoalsPaths(teamId: string, memberUserId: string, goalId?: string) {
+  const team = encodeURIComponent(requireTeamId(teamId));
+  const member = encodeURIComponent(requireTeamId(memberUserId));
+  const base = `/api/teams/${team}/members/${member}/development-goals`;
+  const webBase = `/web/api/teams/${team}/members/${member}/development-goals`;
+  if (!goalId) return { api: base, web: webBase };
+  const suffix = `/${encodeURIComponent(goalId)}`;
+  return { api: `${base}${suffix}`, web: `${webBase}${suffix}` };
+}
+
+async function developmentGoalsRequest<T>(paths: { api: string; web: string }, init?: RequestInit): Promise<T> {
+  try {
+    return await apiRequest<T>(paths.api, init);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "";
+    if (msg.includes("Not found")) {
+      return apiRequest<T>(paths.web, init);
+    }
+    throw e;
+  }
+}
+
+export function fetchDevelopmentGoals(teamId: string, memberUserId: string) {
+  const paths = developmentGoalsPaths(teamId, memberUserId);
+  return developmentGoalsRequest<{ data: DevelopmentGoal[] }>(paths).then((r) => r.data ?? []);
+}
+
+export function createDevelopmentGoal(
+  teamId: string,
+  memberUserId: string,
+  input: { skill: string; steps: string[] },
+) {
+  const paths = developmentGoalsPaths(teamId, memberUserId);
+  return developmentGoalsRequest<{ data: DevelopmentGoal }>(paths, {
+    method: "POST",
+    body: JSON.stringify(input),
+  }).then((r) => r.data);
+}
+
+export function addDevelopmentGoalNote(
+  teamId: string,
+  memberUserId: string,
+  goalId: string,
+  body: string,
+) {
+  const paths = developmentGoalsPaths(teamId, memberUserId, goalId);
+  return developmentGoalsRequest<{ data: DevelopmentGoal }>(
+    { api: `${paths.api}/notes`, web: `${paths.web}/notes` },
+    { method: "POST", body: JSON.stringify({ body }) },
+  ).then((r) => r.data);
+}

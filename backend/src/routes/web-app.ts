@@ -6,6 +6,7 @@ import { logActivity } from "../lib/activity";
 import { mountWebStripeBilling } from "./web-stripe-billing";
 import { oneOnOneTemplatesRouter } from "./one-on-one-templates";
 import { oneOnOneMeetingsRouter } from "./one-on-one-meetings";
+import { developmentGoalsRouter } from "./development-goals";
 import { reconcileStripeForSubscriptionRead } from "../lib/stripe-billing";
 import { getTeamSubscription, teamSubscriptionRowHasTeamFeatures } from "./subscription";
 import { webPrismaUserIdFromContext } from "../lib/web-prisma-user";
@@ -153,6 +154,7 @@ mountWebStripeBilling(webRouter);
 // 1:1 templates + meeting history (register before generic /api/teams/:id routes).
 webRouter.route("/api/teams/:teamId/one-on-one-templates", oneOnOneTemplatesRouter);
 webRouter.route("/api/teams/:teamId/members", oneOnOneMeetingsRouter);
+webRouter.route("/api/teams/:teamId/members", developmentGoalsRouter);
 
 // ── API: get team detail ──────────────────────────────────────────────────────
 webRouter.get("/api/teams/:id", async (c) => {

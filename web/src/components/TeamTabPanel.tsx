@@ -750,6 +750,18 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
               canCreateOneOne={
                 selectedMember.userId === myId || myRole === "owner" || myRole === "team_leader"
               }
+              canCreateDevGoal={
+                selectedMember.userId === myId ||
+                myRole === "owner" ||
+                myRole === "team_leader" ||
+                myRole === "admin"
+              }
+              canAddDevNotes={
+                selectedMember.userId === myId ||
+                myRole === "owner" ||
+                myRole === "team_leader" ||
+                myRole === "admin"
+              }
               streak={isPaid ? memberStats?.[selectedMember.userId]?.streak : undefined}
               overdueTasks={memberStats?.[selectedMember.userId]?.overdueTasks}
               onBack={() => setSelectedMemberId(null)}

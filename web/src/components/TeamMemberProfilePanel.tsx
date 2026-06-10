@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { WebTeamMemberRow } from "../lib/api";
+import { DevelopmentPlanTab } from "./DevelopmentPlanTab";
 import { OneOnOneHistoryTab } from "./OneOnOneHistoryTab";
 
 const PROFILE_TABS = ["Overview", "Development plan", "1:1 history"] as const;
@@ -16,6 +17,8 @@ type Props = {
   roleBadgeClass: string;
   canManage: boolean;
   canCreateOneOne: boolean;
+  canCreateDevGoal: boolean;
+  canAddDevNotes: boolean;
   streak?: number;
   overdueTasks?: number;
   onBack: () => void;
@@ -32,6 +35,8 @@ export function TeamMemberProfilePanel({
   roleBadgeClass,
   canManage,
   canCreateOneOne,
+  canCreateDevGoal,
+  canAddDevNotes,
   streak,
   overdueTasks,
   onBack,
@@ -134,13 +139,12 @@ export function TeamMemberProfilePanel({
             </dl>
           </section>
         ) : activeTab === "Development plan" ? (
-          <div className="enterprise-team-profile-tab-coming-soon" aria-label="Development plan content">
-            <span className="enterprise-team-coming-soon-badge">Coming soon</span>
-            <p className="enterprise-team-profile-tab-coming-soon-title">Development plan</p>
-            <p className="enterprise-muted enterprise-team-profile-tab-coming-soon-copy">
-              Target roles, strengths, action plans, and manager notes will show up here.
-            </p>
-          </div>
+          <DevelopmentPlanTab
+            teamId={teamId}
+            memberUserId={member.userId}
+            canCreate={canCreateDevGoal}
+            canAddNotes={canAddDevNotes}
+          />
         ) : (
           <OneOnOneHistoryTab
             teamId={teamId}

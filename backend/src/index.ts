@@ -39,9 +39,12 @@ import {
 } from "./lib/firebase-storage";
 import { syncPrismaSchemaOnStartup } from "./lib/sync-prisma-schema";
 import { ensureOneOnOneSchema } from "./lib/ensure-one-on-one-schema";
+import { ensureDevelopmentPlanSchema } from "./lib/ensure-development-plan-schema";
+import { developmentGoalsRouter } from "./routes/development-goals";
 
 syncPrismaSchemaOnStartup();
 const oneOnOneSchemaReady = ensureOneOnOneSchema(prisma);
+const developmentPlanSchemaReady = ensureDevelopmentPlanSchema(prisma);
 
 type Variables = {
   user: AppUser | null;
@@ -95,6 +98,7 @@ app.use("*", logger());
 // Ensure 1:1 tables exist before handling API requests (fixes 500 when db push was skipped).
 app.use("*", async (_c, next) => {
   await oneOnOneSchemaReady;
+  await developmentPlanSchemaReady;
   await next();
 });
 
@@ -739,6 +743,7 @@ app.route("/api/sample", sampleRouter);
 app.route("/api/users", usersRouter);
 app.route("/api/teams/:teamId/one-on-one-templates", oneOnOneTemplatesRouter);
 app.route("/api/teams/:teamId/members", oneOnOneMeetingsRouter);
+app.route("/api/teams/:teamId/members", developmentGoalsRouter);
 app.route("/api/teams/:teamId/tasks", tasksRouter);
 app.route("/api/teams/:teamId/messages", messagesRouter);
 app.route("/api/teams/:teamId/templates", templatesRouter);
