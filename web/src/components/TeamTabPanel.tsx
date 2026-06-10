@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import QRCode from "qrcode";
-import { NoTeamsEmptyState } from "./NoTeamsEmptyState";
 import { AddMemberModal } from "./AddMemberModal";
 import { TeamMemberProfilePanel } from "./TeamMemberProfilePanel";
 import { OneOnOneTemplatesModal } from "./OneOnOneTemplatesModal";
@@ -245,7 +244,6 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
   const [workspaceSettingsOpen, setWorkspaceSettingsOpen] = useState(false);
   const [oneOneTemplatesOpen, setOneOneTemplatesOpen] = useState(false);
 
-  const hasTeams = (teams?.length ?? 0) > 0;
   const myId = me?.id ?? "";
 
   const loadTeamContext = useCallback(async () => {
@@ -540,14 +538,6 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
   const myRole = teamDetail?.myRole ?? "";
   const manageJoin = canManageJoinRequests(myRole);
   const manageMembers = canRemoveMembers(myRole);
-
-  if (!hasTeams) {
-    return (
-      <div className="enterprise-team-tab">
-        <NoTeamsEmptyState onRefreshWorkspaces={onTeamsRefresh} />
-      </div>
-    );
-  }
 
   if (!selectedTeamId) {
     return (

@@ -10,7 +10,6 @@ import {
 } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useEnterpriseShell } from "../contexts/EnterpriseShellContext";
-import { NoTeamsEmptyState } from "../components/NoTeamsEmptyState";
 import { ChatMessageMedia } from "../components/ChatMessageMedia";
 import { linkifyText } from "../lib/linkify";
 import { isRecentFooterEnterpriseWorkspaceSelect } from "../lib/enterprise-selected-team";
@@ -487,18 +486,7 @@ export function ChatPage() {
 
   return (
     <>
-      <div
-        className={`chat-app-body chat-app-body-enterprise${teams && teams.length === 0 ? " chat-app-body-no-teams" : ""}`}
-        data-testid="chat-screen"
-      >
-        {loadErr && !teams?.length ? <p className="auth-error chat-app-error">{loadErr}</p> : null}
-
-        {teams && teams.length === 0 ? (
-          <NoTeamsEmptyState onRefreshWorkspaces={refreshMeAndTeams} />
-        ) : null}
-
-        {teams && teams.length > 0 ? (
-          <>
+      <div className="chat-app-body chat-app-body-enterprise" data-testid="chat-screen">
             <aside className="chat-sidebar" aria-label="Channels">
               <div className="chat-sidebar-card">
                 <p className="chat-workspace-hint">Workspace is set in the left sidebar.</p>
@@ -779,8 +767,6 @@ export function ChatPage() {
                 </p>
               ) : null}
             </div>
-          </>
-        ) : null}
       </div>
 
       {pollModalOpen ? (

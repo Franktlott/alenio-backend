@@ -12,16 +12,10 @@ export function TeamPage() {
   } = useEnterpriseShell();
   const [workspaceOverlayLoading, setWorkspaceOverlayLoading] = useState(false);
 
-  const hasNoTeams = teams !== null && teams.length === 0;
-
   useEffect(() => {
-    if (hasNoTeams) {
-      setWorkspaceMainLoading(false);
-      return;
-    }
     setWorkspaceMainLoading(workspaceOverlayLoading);
     return () => setWorkspaceMainLoading(false);
-  }, [hasNoTeams, workspaceOverlayLoading, setWorkspaceMainLoading]);
+  }, [workspaceOverlayLoading, setWorkspaceMainLoading]);
 
   if (me === undefined) {
     return (
@@ -32,16 +26,13 @@ export function TeamPage() {
   }
 
   return (
-    <div
-      className={`enterprise-tab-shell enterprise-team-page-shell${hasNoTeams ? " chat-app-body-no-teams" : ""}`}
-      data-testid="team-screen"
-    >
+    <div className="enterprise-tab-shell enterprise-team-page-shell" data-testid="team-screen">
       <TeamTabPanel
         teams={teams}
         selectedTeamId={selectedTeamId}
         me={me}
         onTeamsRefresh={refreshMeAndTeams}
-        onWorkspaceSwitchLoading={hasNoTeams ? undefined : setWorkspaceOverlayLoading}
+        onWorkspaceSwitchLoading={setWorkspaceOverlayLoading}
       />
     </div>
   );

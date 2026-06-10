@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { DashboardTopBar } from "../components/DashboardTopBar";
 import { EnterpriseLayout, type EnterpriseNavId } from "../components/EnterpriseLayout";
+import { NoTeamsEmptyState } from "../components/NoTeamsEmptyState";
 import { EnterpriseShellContext, type EnterpriseShellContextValue } from "../contexts/EnterpriseShellContext";
 import { fetchWebMe, fetchWebTeams, type WebMeUser, type WebTeamRow } from "../lib/api";
 import { pickEnterpriseTeamId, teamsWorkspaceSelectionKey } from "../lib/enterprise-selected-team";
@@ -155,6 +156,7 @@ export function EnterpriseShellLayout() {
   }, [teams, selectedTeamId]);
 
   const topBarPageTitle = enterpriseNavTitle(activeNav);
+  const hasNoTeams = teams !== null && teams.length === 0;
 
   const workspaceOwner =
     teams !== null && !!effectiveTeamId && teams.find((t) => t.id === effectiveTeamId)?.role === "owner";
@@ -233,7 +235,17 @@ export function EnterpriseShellLayout() {
         showPlanNav={workspaceOwner}
         showActivityExecuteNav={showActivityExecuteNav}
       >
-        <Outlet />
+        {teams === null ? (
+          <div className="enterprise-tab-shell">
+            <p className="enterprise-muted">Loading…</p>
+          </div>
+        ) : hasNoTeams ? (
+          <div className="chat-app-body chat-app-body-enterprise chat-app-body-no-teams enterprise-tab-shell">
+            <NoTeamsEmptyState onRefreshWorkspaces={refreshMeAndTeams} />
+          </div>
+        ) : (
+          <Outlet />
+        )}
       </EnterpriseLayout>
     </EnterpriseShellContext.Provider>
   );
