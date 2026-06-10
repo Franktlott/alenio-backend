@@ -1249,6 +1249,19 @@ export function createDevelopmentGoal(
   }).then((r) => r.data);
 }
 
+export function updateDevelopmentGoal(
+  teamId: string,
+  memberUserId: string,
+  goalId: string,
+  input: { skill: string; steps: string[] },
+) {
+  const paths = developmentGoalsPaths(teamId, memberUserId, goalId);
+  return developmentGoalsRequest<{ data: DevelopmentGoal }>(paths, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  }).then((r) => r.data);
+}
+
 export function addDevelopmentGoalNote(
   teamId: string,
   memberUserId: string,
