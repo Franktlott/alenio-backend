@@ -306,12 +306,21 @@ export function DevelopmentPlanTab({ teamId, memberUserId, canCreate, canAddNote
       return;
     }
 
+    const goalFieldsChanged =
+      trimmedSkill !== updateGoal.skill.trim() ||
+      JSON.stringify(trimmedSteps) !== JSON.stringify(updateGoal.steps);
+
+    if (canCreate && goalFieldsChanged === false && !trimmedNote) {
+      setErr("Change the goal or add a progress note before saving.");
+      return;
+    }
+
     setSaving(true);
     setErr(null);
     try {
       let updated = updateGoal;
 
-      if (canCreate) {
+      if (canCreate && goalFieldsChanged) {
         updated = await updateDevelopmentGoal(teamId, memberUserId, updateGoal.id, {
           skill: trimmedSkill,
           steps: trimmedSteps,
