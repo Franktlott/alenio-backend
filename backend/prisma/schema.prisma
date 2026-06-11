@@ -251,6 +251,7 @@ model OneOnOneTemplate {
   description String?
   /** JSON array of { id, label, type, order, required?, ratingMax? } */
   fields      String
+  libraryKey  String?
   createdById String
   createdBy   User     @relation("OneOnOneTemplateCreator", fields: [createdById], references: [id])
   createdAt   DateTime @default(now())

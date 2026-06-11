@@ -12,6 +12,7 @@ import { messagesRouter } from "./routes/messages";
 import { dmsRouter } from "./routes/dms";
 import { templatesRouter } from "./routes/templates";
 import { oneOnOneTemplatesRouter } from "./routes/one-on-one-templates";
+import { checkInTemplateLibraryRouter } from "./routes/check-in-template-library";
 import { oneOnOneMeetingsRouter } from "./routes/one-on-one-meetings";
 import { joinRequestsRouter } from "./routes/join-requests";
 import { calendarRouter, initMeetingReminders } from "./routes/calendar";
@@ -754,6 +755,7 @@ app.delete("/api/user", async (c) => {
 // Routes
 app.route("/api/sample", sampleRouter);
 app.route("/api/users", usersRouter);
+app.route("/api/check-in-template-library", checkInTemplateLibraryRouter);
 app.route("/api/teams/:teamId/one-on-one-templates", oneOnOneTemplatesRouter);
 app.route("/api/teams/:teamId/members", oneOnOneMeetingsRouter);
 app.route("/api/teams/:teamId/members", developmentGoalsRouter);

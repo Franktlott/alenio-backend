@@ -5,7 +5,10 @@ import { prisma } from "../prisma";
 import { auth } from "../auth";
 import { authGuard } from "../middleware/auth-guard";
 import { prismaRouteError } from "../lib/prisma-errors";
-import { buildDefaultOneOnOneTemplateRecords } from "../lib/default-one-on-one-templates";
+import {
+  cloneLibraryFieldsForTeam,
+  getCheckInLibraryDefByKey,
+} from "../lib/check-in-template-library";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -67,6 +70,7 @@ function serializeTemplate(template: {
   title: string;
   description: string | null;
   fields: string;
+  libraryKey?: string | null;
   createdById: string;
   createdAt: Date;
   updatedAt: Date;
@@ -77,6 +81,7 @@ function serializeTemplate(template: {
     teamId: template.teamId,
     title: template.title,
     description: template.description,
+    libraryKey: template.libraryKey ?? null,
     fields: parseFields(template.fields),
     createdById: template.createdById,
     createdAt: template.createdAt.toISOString(),
@@ -91,30 +96,8 @@ const upsertSchema = z.object({
   fields: z.array(fieldSchema).min(1, "Add at least one field"),
 });
 
-async function ensureDefaultTemplates(teamId: string) {
-  const count = await prisma.oneOnOneTemplate.count({ where: { teamId } });
-  if (count > 0) return;
-
-  const owner = await prisma.teamMember.findFirst({
-    where: { teamId, role: "owner" },
-    select: { userId: true },
-  });
-  if (!owner) return;
-
-  const defaults = buildDefaultOneOnOneTemplateRecords();
-  await prisma.$transaction(
-    defaults.map((template) =>
-      prisma.oneOnOneTemplate.create({
-        data: {
-          teamId,
-          title: template.title,
-          description: template.description,
-          fields: JSON.stringify(template.fields),
-          createdById: owner.userId,
-        },
-      }),
-    ),
-  );
+function requireOwner(membership: { role: string } | null) {
+  return membership?.role === "owner";
 }
 
 // GET /api/teams/:teamId/one-on-one-templates
@@ -127,8 +110,6 @@ oneOnOneTemplatesRouter.get("/", async (c) => {
   }
 
   try {
-    await ensureDefaultTemplates(teamId);
-
     const templates = await prisma.oneOnOneTemplate.findMany({
       where: { teamId },
       include: {
@@ -143,13 +124,58 @@ oneOnOneTemplatesRouter.get("/", async (c) => {
   }
 });
 
+// POST /api/teams/:teamId/one-on-one-templates/from-library/:libraryKey
+oneOnOneTemplatesRouter.post("/from-library/:libraryKey", async (c) => {
+  const user = c.get("user")!;
+  const teamId = c.req.param("teamId") as string;
+  const libraryKey = c.req.param("libraryKey") as string;
+
+  const membership = await getMembership(c, teamId);
+  if (!requireOwner(membership)) {
+    return c.json({ error: { message: "Only the workspace owner can add check-in templates", code: "FORBIDDEN" } }, 403);
+  }
+
+  const def = getCheckInLibraryDefByKey(libraryKey);
+  if (!def) {
+    return c.json({ error: { message: "Library template not found", code: "NOT_FOUND" } }, 404);
+  }
+
+  try {
+    const existing = await prisma.oneOnOneTemplate.findFirst({
+      where: { teamId, libraryKey },
+    });
+    if (existing) {
+      return c.json({ error: { message: "This template is already on your team", code: "ALREADY_EXISTS" } }, 409);
+    }
+
+    const fields = cloneLibraryFieldsForTeam(def);
+    const template = await prisma.oneOnOneTemplate.create({
+      data: {
+        teamId,
+        title: def.title,
+        description: def.description,
+        fields: JSON.stringify(fields),
+        libraryKey,
+        createdById: user.id,
+      },
+      include: {
+        createdBy: { select: { id: true, name: true, email: true, image: true } },
+      },
+    });
+
+    return c.json({ data: serializeTemplate(template) }, 201);
+  } catch (err) {
+    return prismaRouteError(c, err, "[one-on-one-templates] POST from-library failed");
+  }
+});
+
 // POST /api/teams/:teamId/one-on-one-templates
 oneOnOneTemplatesRouter.post("/", zValidator("json", upsertSchema), async (c) => {
   const user = c.get("user")!;
   const teamId = c.req.param("teamId") as string;
 
   const membership = await getMembership(c, teamId);
-  if (!membership || membership.role !== "owner") {
+  if (!requireOwner(membership)) {
     return c.json({ error: { message: "Only the workspace owner can create check-in templates", code: "FORBIDDEN" } }, 403);
   }
 
@@ -181,12 +207,11 @@ oneOnOneTemplatesRouter.patch(
   "/:templateId",
   zValidator("json", upsertSchema),
   async (c) => {
-    const user = c.get("user")!;
     const teamId = c.req.param("teamId") as string;
     const templateId = c.req.param("templateId") as string;
 
     const membership = await getMembership(c, teamId);
-    if (!membership || membership.role !== "owner") {
+    if (!requireOwner(membership)) {
       return c.json({ error: { message: "Only the workspace owner can edit check-in templates", code: "FORBIDDEN" } }, 403);
     }
 
@@ -222,7 +247,7 @@ oneOnOneTemplatesRouter.delete("/:templateId", async (c) => {
   const templateId = c.req.param("templateId") as string;
 
   const membership = await getMembership(c, teamId);
-  if (!membership || membership.role !== "owner") {
+  if (!requireOwner(membership)) {
     return c.json({ error: { message: "Only the workspace owner can delete check-in templates", code: "FORBIDDEN" } }, 403);
   }
 

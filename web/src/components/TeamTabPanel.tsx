@@ -296,8 +296,6 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
   const [memberSearch, setMemberSearch] = useState("");
   const [workspaceSettingsOpen, setWorkspaceSettingsOpen] = useState(false);
   const [oneOneTemplatesOpen, setOneOneTemplatesOpen] = useState(false);
-  const [profileInitialTab, setProfileInitialTab] = useState<"Overview" | "Growth" | "Check-In" | null>(null);
-  const [pendingCheckInTemplateId, setPendingCheckInTemplateId] = useState<string | null>(null);
 
   const myId = me?.id ?? "";
 
@@ -968,12 +966,6 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
               }
               streak={isPaid ? memberStats?.[selectedMember.userId]?.streak : undefined}
               overdueTasks={memberStats?.[selectedMember.userId]?.overdueTasks}
-              initialTab={profileInitialTab ?? undefined}
-              initialCheckInTemplateId={pendingCheckInTemplateId}
-              onCheckInTemplateConsumed={() => {
-                setProfileInitialTab(null);
-                setPendingCheckInTemplateId(null);
-              }}
               onBack={() => setSelectedMemberId(null)}
               onManage={() => openMemberModal(selectedMember)}
             />
@@ -1162,14 +1154,6 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
         teamId={teamDetail.id}
         open={oneOneTemplatesOpen}
         onClose={() => setOneOneTemplatesOpen(false)}
-        members={sortedMembers}
-        canAssign={myRole === "owner" || myRole === "team_leader"}
-        onAssign={(templateId, memberUserId) => {
-          setOneOneTemplatesOpen(false);
-          setSelectedMemberId(memberUserId);
-          setProfileInitialTab("Check-In");
-          setPendingCheckInTemplateId(templateId);
-        }}
       />
     </div>
   );

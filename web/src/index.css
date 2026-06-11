@@ -5960,6 +5960,55 @@ input {
   color: #b91c1c;
 }
 
+.enterprise-oneone-templates-list-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding: 0 1.25rem 1.25rem;
+  max-height: min(70vh, 640px);
+  min-height: 120px;
+  overflow: auto;
+}
+
+.enterprise-oneone-templates-section-head {
+  margin-bottom: 0.75rem;
+}
+
+.enterprise-oneone-templates-section-title {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.enterprise-oneone-templates-section-sub {
+  margin: 0.2rem 0 0;
+  font-size: 0.8125rem;
+}
+
+.enterprise-oneone-templates-section--library {
+  padding-top: 1rem;
+  border-top: 1px solid #e2e8f0;
+}
+
+.enterprise-oneone-templates-empty-panel--compact {
+  padding: 1rem 1.1rem;
+}
+
+.enterprise-oneone-templates-table-action--primary {
+  color: #1e3a8a;
+}
+
+.enterprise-oneone-templates-table-action--primary:hover:not(:disabled) {
+  background: #eef2ff;
+  color: #1e3a8a;
+}
+
+.enterprise-oneone-templates-table-action--primary:disabled {
+  opacity: 0.65;
+  cursor: default;
+}
+
 .enterprise-oneone-templates-assign-overlay {
   position: absolute;
   inset: 0;
@@ -6030,10 +6079,6 @@ input {
   font-size: 0.8125rem;
   border-radius: 6px;
   box-shadow: none;
-}
-
-.enterprise-oneone-templates-list-wrap {
-  min-height: 120px;
 }
 
 .enterprise-oneone-templates-empty {

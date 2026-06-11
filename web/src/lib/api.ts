@@ -1124,11 +1124,19 @@ export type OneOnOneTemplate = {
   teamId: string;
   title: string;
   description: string | null;
+  libraryKey?: string | null;
   fields: OneOnOneTemplateField[];
   createdById: string;
   createdAt: string;
   updatedAt: string;
   createdBy?: { id: string; name: string; email: string; image: string | null };
+};
+
+export type CheckInLibraryTemplate = {
+  key: string;
+  title: string;
+  description: string | null;
+  fields: OneOnOneTemplateField[];
 };
 
 export type OneOnOneTemplateInput = {
@@ -1201,6 +1209,22 @@ export function deleteOneOnOneTemplate(teamId: string, templateId: string) {
     { api: `${paths.api}${suffix}`, web: `${paths.web}${suffix}` },
     { method: "DELETE" },
   );
+}
+
+export function fetchCheckInTemplateLibrary() {
+  return oneOnOneRequest<{ data: CheckInLibraryTemplate[] }>({
+    api: "/api/check-in-template-library",
+    web: "/web/api/check-in-template-library",
+  }).then((r) => r.data ?? []);
+}
+
+export function addCheckInTemplateFromLibrary(teamId: string, libraryKey: string) {
+  const paths = oneOnOneTemplatesPaths(teamId);
+  const suffix = `/from-library/${encodeURIComponent(libraryKey)}`;
+  return oneOnOneRequest<{ data: OneOnOneTemplate }>(
+    { api: `${paths.api}${suffix}`, web: `${paths.web}${suffix}` },
+    { method: "POST" },
+  ).then((r) => r.data);
 }
 
 export type OneOnOneFollowUpTask = {

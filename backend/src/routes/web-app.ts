@@ -5,6 +5,7 @@ import { sendPushToUsers } from "../lib/push";
 import { logActivity } from "../lib/activity";
 import { mountWebStripeBilling } from "./web-stripe-billing";
 import { oneOnOneTemplatesRouter } from "./one-on-one-templates";
+import { checkInTemplateLibraryRouter } from "./check-in-template-library";
 import { oneOnOneMeetingsRouter } from "./one-on-one-meetings";
 import { developmentGoalsRouter } from "./development-goals";
 import { reconcileStripeForSubscriptionRead } from "../lib/stripe-billing";
@@ -152,6 +153,7 @@ webRouter.post("/api/teams", async (c) => {
 mountWebStripeBilling(webRouter);
 
 // 1:1 templates + meeting history (register before generic /api/teams/:id routes).
+webRouter.route("/api/check-in-template-library", checkInTemplateLibraryRouter);
 webRouter.route("/api/teams/:teamId/one-on-one-templates", oneOnOneTemplatesRouter);
 webRouter.route("/api/teams/:teamId/members", oneOnOneMeetingsRouter);
 webRouter.route("/api/teams/:teamId/members", developmentGoalsRouter);
