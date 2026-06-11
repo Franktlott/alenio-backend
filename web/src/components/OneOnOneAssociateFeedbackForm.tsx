@@ -60,7 +60,7 @@ export function OneOnOneAssociateFeedbackForm({
         <p className="enterprise-muted">
           {submittedMode === "none"
             ? "Recorded as no feedback entered."
-            : "Your 1:1 feedback was added to the check-in."}
+            : "Your check-in feedback was saved."}
         </p>
       </div>
     );

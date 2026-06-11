@@ -94,7 +94,7 @@ export function OneOnOneFeedbackPage() {
       user={me ?? null}
       onSignOutNavigate={(path) => navigate(path)}
       topBar={
-        <DashboardTopBar user={me ?? null} pageTitle="1:1 feedback" />
+        <DashboardTopBar user={me ?? null} pageTitle="Check-in feedback" />
       }
       showPlanNav={showPlanNav}
       showActivityExecuteNav={showActivityExecuteNav}
@@ -106,7 +106,7 @@ export function OneOnOneFeedbackPage() {
 
         <article className="enterprise-card enterprise-oneone-feedback-card">
           <header className="enterprise-oneone-feedback-card-head">
-            <p className="enterprise-oneone-templates-kicker">1:1 feedback</p>
+            <p className="enterprise-oneone-templates-kicker">Check-in feedback</p>
             <h1 className="enterprise-oneone-feedback-card-title">Share your check-in notes</h1>
           </header>
 

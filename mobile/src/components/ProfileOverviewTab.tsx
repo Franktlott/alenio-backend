@@ -161,14 +161,14 @@ export function ProfileOverviewTab({ teamId, memberUserId, streak, overdueTasks 
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
         <KpiCard label="Active goals" value={String(activeGoals.length)} />
         <KpiCard
-          label="Last 1:1"
+          label="Last check-in"
           value={lastOneOnOneDate ? formatDateOnly(lastOneOnOneDate) : "None"}
         />
         <KpiCard
-          label="Days since 1:1"
+          label="Days since check-in"
           value={lastOneOnOneDate ? daysSinceText(daysSinceOneOnOne ?? 0) : "—"}
         />
-        <KpiCard label="Total 1:1s" value={String(oneOnOneCount)} />
+        <KpiCard label="Total check-ins" value={String(oneOnOneCount)} />
         {streak != null && streak > 0 ? <KpiCard label="Streak" value={`${streak}d`} /> : null}
         {overdueTasks != null && overdueTasks > 0 ? (
           <KpiCard label="Overdue" value={String(overdueTasks)} warning />

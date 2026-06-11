@@ -644,7 +644,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
               <span className="enterprise-team-stat-icon" aria-hidden><IconStatCalendar /></span>
               <span className="enterprise-team-stat-copy">
                 <strong>—</strong>
-                <span>Upcoming 1:1s</span>
+                <span>Upcoming check-ins</span>
               </span>
             </div>
           </div>
@@ -827,7 +827,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                   <IconTemplateOneOne />
                 </span>
                 <div className="enterprise-team-template-manage-copy">
-                  <strong>1:1 templates</strong>
+                  <strong>Check-in templates</strong>
                 </div>
                 <button type="button" className="enterprise-team-template-manage-btn" onClick={() => setOneOneTemplatesOpen(true)}>
                   Manage
@@ -902,7 +902,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                             </span>
                           </span>
                           <span className="enterprise-team-roster-kpi">
-                            <span className="enterprise-team-roster-kpi-label">Last 1:1</span>
+                            <span className="enterprise-team-roster-kpi-label">Last check-in</span>
                             <span className="enterprise-team-roster-kpi-value">
                               {statsReady ? formatDaysSinceOneOnOne(daysSinceOneOnOne) : "…"}
                             </span>

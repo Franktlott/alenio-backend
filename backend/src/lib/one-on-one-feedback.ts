@@ -30,7 +30,7 @@ export function isAssociateRequestedField(field: OneOnOneTemplateFieldLike): boo
 }
 
 export function encodeFeedbackTaskDescription(meta: OneOnOneFeedbackMeta): string {
-  return `${ONEONE_FEEDBACK_MARKER}\n${JSON.stringify(meta)}\n\nShare your 1:1 feedback for "${meta.fieldLabel}" or select that you have no feedback to enter.`;
+  return `${ONEONE_FEEDBACK_MARKER}\n${JSON.stringify(meta)}\n\nShare your check-in feedback for "${meta.fieldLabel}" or select that you have no feedback to enter.`;
 }
 
 export function parseFeedbackTaskDescription(description: string | null | undefined): OneOnOneFeedbackMeta | null {

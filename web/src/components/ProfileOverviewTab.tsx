@@ -112,14 +112,14 @@ export function ProfileOverviewTab({
   const kpis = [
     { label: "Active goals", value: loading ? "—" : String(activeGoals.length) },
     {
-      label: "Last 1:1",
+      label: "Last check-in",
       value: loading ? "—" : lastOneOnOneDate ? formatDateOnly(lastOneOnOneDate) : "None",
     },
     {
-      label: "Days since 1:1",
+      label: "Days since check-in",
       value: loading ? "—" : lastOneOnOneDate ? daysSinceText(daysSinceOneOnOne ?? 0) : "—",
     },
-    { label: "Total 1:1s", value: loading ? "—" : String(oneOnOneCount) },
+    { label: "Total check-ins", value: loading ? "—" : String(oneOnOneCount) },
     ...(streak != null && streak > 0 ? [{ label: "Streak", value: `${streak}d` }] : []),
     ...(overdueTasks != null && overdueTasks > 0
       ? [{ label: "Overdue", value: String(overdueTasks), tone: "warning" as const }]

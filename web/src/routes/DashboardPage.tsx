@@ -1198,7 +1198,7 @@ export function DashboardPage() {
 
                 {feedbackContext && selectedTaskFeedbackMeta ? (
                   <section className="enterprise-task-modal-section enterprise-oneone-feedback-task-section">
-                    <h4>1:1 feedback</h4>
+                    <h4>Check-in feedback</h4>
                     <OneOnOneAssociateFeedbackForm
                       teamId={selectedTaskFeedbackMeta.teamId}
                       memberUserId={selectedTaskFeedbackMeta.memberUserId}

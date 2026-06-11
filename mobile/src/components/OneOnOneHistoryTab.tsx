@@ -167,7 +167,7 @@ export function OneOnOneHistoryTab({
       const list = await fetchOneOnOneMeetings(teamId, memberUserId);
       setMeetings(list);
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "Could not load 1:1 history.");
+      setErr(e instanceof Error ? e.message : "Could not load check-in history.");
     } finally {
       setLoadingMeetings(false);
     }
@@ -198,7 +198,7 @@ export function OneOnOneHistoryTab({
       const list = await fetchOneOnOneTemplates(teamId);
       setTemplates(list);
       if (list.length === 0) {
-        setErr("No 1:1 templates yet. Ask your workspace owner to create templates on the web Team page.");
+        setErr("No check-in templates yet. Ask your workspace owner to create templates on the web Team page.");
       }
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Could not load templates.");
@@ -274,9 +274,9 @@ export function OneOnOneHistoryTab({
       setEditingMeeting(null);
       setResponses({});
       setFollowUpDrafts([]);
-      toast({ title: "1:1 saved", preset: "done" });
+      toast({ title: "Check-in saved", preset: "done" });
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "Could not save 1:1.");
+      setErr(e instanceof Error ? e.message : "Could not save check-in.");
     } finally {
       setSaving(false);
     }
@@ -285,8 +285,8 @@ export function OneOnOneHistoryTab({
   const onDelete = (meeting: OneOnOneMeeting) => {
     setMenuMeetingId(null);
     Alert.alert(
-      "Delete 1:1?",
-      `Delete this 1:1 from ${formatMeetingDate(meeting.createdAt)}? This cannot be undone.`,
+      "Delete check-in?",
+      `Delete this check-in from ${formatMeetingDate(meeting.createdAt)}? This cannot be undone.`,
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -297,7 +297,7 @@ export function OneOnOneHistoryTab({
               await deleteOneOnOneMeeting(teamId, memberUserId, meeting.id);
               if (previewMeeting?.id === meeting.id) setPreviewMeeting(null);
               await loadMeetings();
-              toast({ title: "1:1 deleted", preset: "done" });
+              toast({ title: "Check-in deleted", preset: "done" });
             } catch (e) {
               toast({ title: e instanceof Error ? e.message : "Could not delete", preset: "error" });
             }
@@ -392,7 +392,7 @@ export function OneOnOneHistoryTab({
           </Pressable>
           <View style={{ flex: 1 }}>
             <Text style={{ fontSize: 17, fontWeight: "800", color: "#0F172A" }}>
-              {editingMeeting ? "Edit 1:1" : selectedTemplate.title}
+              {editingMeeting ? "Edit check-in" : selectedTemplate.title}
             </Text>
             <Text style={{ fontSize: 12, color: "#64748B" }}>{memberName}</Text>
           </View>
@@ -538,7 +538,7 @@ export function OneOnOneHistoryTab({
               opacity: saving ? 0.6 : 1,
             }}
           >
-            <Text style={{ fontWeight: "700", color: "white" }}>{saving ? "Saving…" : "Save 1:1"}</Text>
+            <Text style={{ fontWeight: "700", color: "white" }}>{saving ? "Saving…" : "Save check-in"}</Text>
           </Pressable>
         </View>
       </View>
@@ -589,7 +589,7 @@ export function OneOnOneHistoryTab({
     <View style={{ gap: 16 }}>
       <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" }}>
         <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 18, fontWeight: "800", color: "#0F172A" }}>1:1 history</Text>
+          <Text style={{ fontSize: 18, fontWeight: "800", color: "#0F172A" }}>Check-in history</Text>
           <Text style={{ fontSize: 13, color: "#64748B", marginTop: 2 }}>
             Meetings with {memberName}
           </Text>
@@ -608,7 +608,7 @@ export function OneOnOneHistoryTab({
             }}
           >
             <Plus size={16} color="white" />
-            <Text style={{ fontSize: 13, fontWeight: "700", color: "white" }}>New 1:1</Text>
+            <Text style={{ fontSize: 13, fontWeight: "700", color: "white" }}>New check-in</Text>
           </Pressable>
         ) : null}
       </View>
@@ -624,7 +624,7 @@ export function OneOnOneHistoryTab({
           }}
         >
           <Text style={{ fontSize: 13, color: "#64748B", lineHeight: 18 }}>
-            View only on mobile. Create and edit 1:1s from the web Team page.
+            View only on mobile. Create and edit check-ins from the web Team page.
           </Text>
         </View>
       ) : null}
@@ -635,7 +635,7 @@ export function OneOnOneHistoryTab({
         <Text style={{ fontSize: 13, color: "#DC2626" }}>{err}</Text>
       ) : meetings.length === 0 ? (
         <Text style={{ fontSize: 13, color: "#94A3B8" }}>
-          {canCreate ? "No 1:1 meetings yet. Tap New 1:1 to start one." : "No 1:1 meetings recorded."}
+          {canCreate ? "No check-ins yet. Tap New check-in to start one." : "No check-ins recorded."}
         </Text>
       ) : (
         <View style={{ gap: 10 }}>
@@ -827,7 +827,7 @@ export function OneOnOneHistoryTab({
                     alignItems: "center",
                   }}
                 >
-                  <Text style={{ fontWeight: "700", color: "white" }}>Edit 1:1</Text>
+                  <Text style={{ fontWeight: "700", color: "white" }}>Edit check-in</Text>
                 </Pressable>
               </View>
             ) : null}

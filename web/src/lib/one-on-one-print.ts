@@ -164,7 +164,7 @@ function buildPrintHtml(options: OneOnOnePrintOptions, logoUrl: string): string 
   const { meeting, memberName, managerName, meetingNumber, introText } = options;
   const intro =
     introText?.trim() ||
-    "This 1:1 template is designed to help managers and team members have meaningful conversations, align on priorities, and support ongoing growth and development.";
+    "This check-in template is designed to help managers and team members have meaningful conversations, align on priorities, and support ongoing growth and development.";
   const sectionsHtml = renderSections(meeting.templateFields, meeting.responses) + renderAssociateFeedbackHtml(meeting);
   const followUpTasksHtml = renderFollowUpTasksHtml(meeting.followUpTasks ?? []);
   const dateStr = formatPrintDate(meeting.createdAt);
@@ -175,7 +175,7 @@ function buildPrintHtml(options: OneOnOnePrintOptions, logoUrl: string): string 
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>${escapeHtml(meeting.templateTitle)} — 1:1</title>
+  <title>${escapeHtml(meeting.templateTitle)} — Check-in</title>
   <style>
     @page { size: letter; margin: 0.38in 0.42in; }
     * { box-sizing: border-box; }
@@ -413,7 +413,7 @@ function buildPrintHtml(options: OneOnOnePrintOptions, logoUrl: string): string 
     <div class="top-row">
       <img src="${escapeHtml(logoUrl)}" alt="Alenio" class="brand-logo" />
       <div class="doc-type">
-        <p class="doc-type-kicker">1:1 Meeting</p>
+        <p class="doc-type-kicker">Check-in</p>
         <h1 class="doc-type-title">${escapeHtml(meeting.templateTitle)}</h1>
       </div>
     </div>
@@ -422,7 +422,7 @@ function buildPrintHtml(options: OneOnOnePrintOptions, logoUrl: string): string 
       <div class="meta-item"><label>Employee</label><span>${escapeHtml(memberName)}</span></div>
       <div class="meta-item"><label>Manager</label><span>${escapeHtml(manager)}</span></div>
       <div class="meta-item"><label>Date</label><span>${escapeHtml(dateStr)}</span></div>
-      <div class="meta-item"><label>Meeting #</label><span>${meetingNumber}</span></div>
+      <div class="meta-item"><label>Check-in #</label><span>${meetingNumber}</span></div>
     </div>
 
     <p class="intro">${escapeHtml(intro)}</p>
@@ -432,12 +432,12 @@ function buildPrintHtml(options: OneOnOnePrintOptions, logoUrl: string): string 
     <div class="footer-grid">
       <div class="footer-col">
         <h4>Action items</h4>
-        <p>Follow-up tasks from this 1:1</p>
+        <p>Follow-up tasks from this check-in</p>
         ${followUpTasksHtml}
       </div>
       <div class="footer-col">
         <h4>Follow up</h4>
-        <p>Date of next 1:1</p>
+        <p>Date of next check-in</p>
         <div class="footer-line"></div>
       </div>
       <div class="footer-col">
@@ -459,7 +459,7 @@ function buildPrintHtml(options: OneOnOnePrintOptions, logoUrl: string): string 
 /** Opens a print dialog; user can choose "Save as PDF". */
 export function printOneOnOneMeeting(options: OneOnOnePrintOptions): void {
   const html = buildPrintHtml(options, alenioLogoUrl());
-  printHtmlInHiddenFrame(html, "1:1 print preview");
+  printHtmlInHiddenFrame(html, "Check-in print preview");
 }
 
 export function meetingNumberFor(meetings: OneOnOneMeeting[], meetingId: string): number {

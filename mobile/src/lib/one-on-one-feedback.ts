@@ -38,7 +38,7 @@ export function formatTaskDescriptionForDisplay(description: string | null | und
     .join("\n")
     .trim();
   if (human) return human;
-  return `Share your 1:1 feedback for "${meta.fieldLabel}" or select that you have no feedback to enter.`;
+  return `Share your check-in feedback for "${meta.fieldLabel}" or select that you have no feedback to enter.`;
 }
 
 export function formatAssociateResponseDisplay(value: string | number | undefined | null): string {

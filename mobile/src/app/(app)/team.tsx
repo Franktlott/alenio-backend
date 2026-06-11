@@ -1064,7 +1064,7 @@ export default function TeamScreen() {
           >
             <Crown size={14} color="#4361EE" />
             <Text style={{ fontSize: 12, color: "#4361EE", fontWeight: "600", flex: 1 }}>
-              Tap a member to view their profile, development plan, and 1:1 history.
+              Tap a member to view their profile, growth plan, and check-in history.
             </Text>
           </View>
         ) : !isDemo ? (
@@ -1079,7 +1079,7 @@ export default function TeamScreen() {
             }}
           >
             <Text style={{ fontSize: 12, color: "#64748B", fontWeight: "600" }}>
-              Tap your name to view your profile, development plan, and 1:1 history.
+              Tap your name to view your profile, growth plan, and check-in history.
             </Text>
           </View>
         ) : null}

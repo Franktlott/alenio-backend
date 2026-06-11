@@ -375,7 +375,7 @@ export function OneOnOneTemplatesModal({ teamId, open, onClose }: Props) {
       <div
         className={`enterprise-modal-sheet enterprise-oneone-templates-modal${view === "editor" ? " enterprise-oneone-templates-modal--editor" : " enterprise-oneone-templates-modal--list"}`}
         role="dialog"
-        aria-label="1:1 templates"
+        aria-label="Check-in templates"
         onClick={(e) => e.stopPropagation()}
       >
         {view === "list" ? (
@@ -383,7 +383,7 @@ export function OneOnOneTemplatesModal({ teamId, open, onClose }: Props) {
             <header className="enterprise-oneone-templates-list-header">
               <div className="enterprise-oneone-templates-list-header-text">
                 <p className="enterprise-oneone-templates-kicker">Team · Check-ins</p>
-                <h2 className="enterprise-oneone-templates-title">1:1 templates</h2>
+                <h2 className="enterprise-oneone-templates-title">Check-in templates</h2>
                 <p className="enterprise-oneone-templates-subtitle">
                   Standardize manager check-ins with reusable question sets.
                 </p>
@@ -404,7 +404,7 @@ export function OneOnOneTemplatesModal({ teamId, open, onClose }: Props) {
                 <div className="enterprise-oneone-templates-empty-panel">
                   <p className="enterprise-oneone-templates-empty-title">No templates yet</p>
                   <p className="enterprise-muted enterprise-oneone-templates-empty">
-                    Create a template to define questions, ratings, and notes for 1:1 check-ins.
+                    Create a template to define questions, ratings, and notes for check-ins.
                   </p>
                   <button type="button" className="enterprise-oneone-templates-primary-btn" onClick={openCreate}>
                     Create template
@@ -584,7 +584,7 @@ export function OneOnOneTemplatesModal({ teamId, open, onClose }: Props) {
                     <div>
                       <h3 className="enterprise-oneone-templates-fields-pane-title">Template fields</h3>
                       <p className="enterprise-muted enterprise-oneone-templates-fields-pane-sub">
-                        Add sections and questions for this 1:1 check-in.
+                        Add sections and questions for this check-in.
                       </p>
                     </div>
                     <div className="enterprise-oneone-templates-fields-pane-actions">

@@ -121,7 +121,7 @@ oneOnOneTemplatesRouter.post("/", zValidator("json", upsertSchema), async (c) =>
 
   const membership = await getMembership(c, teamId);
   if (!membership || membership.role !== "owner") {
-    return c.json({ error: { message: "Only the workspace owner can create 1:1 templates", code: "FORBIDDEN" } }, 403);
+    return c.json({ error: { message: "Only the workspace owner can create check-in templates", code: "FORBIDDEN" } }, 403);
   }
 
   const body = c.req.valid("json");
@@ -158,7 +158,7 @@ oneOnOneTemplatesRouter.patch(
 
     const membership = await getMembership(c, teamId);
     if (!membership || membership.role !== "owner") {
-      return c.json({ error: { message: "Only the workspace owner can edit 1:1 templates", code: "FORBIDDEN" } }, 403);
+      return c.json({ error: { message: "Only the workspace owner can edit check-in templates", code: "FORBIDDEN" } }, 403);
     }
 
     const existing = await prisma.oneOnOneTemplate.findFirst({
@@ -194,7 +194,7 @@ oneOnOneTemplatesRouter.delete("/:templateId", async (c) => {
 
   const membership = await getMembership(c, teamId);
   if (!membership || membership.role !== "owner") {
-    return c.json({ error: { message: "Only the workspace owner can delete 1:1 templates", code: "FORBIDDEN" } }, 403);
+    return c.json({ error: { message: "Only the workspace owner can delete check-in templates", code: "FORBIDDEN" } }, 403);
   }
 
   const existing = await prisma.oneOnOneTemplate.findFirst({

@@ -314,7 +314,7 @@ async function createMeetingAssociateFeedbackRequest(
   const description = encodeFeedbackTaskDescription(meta);
   const task = await prisma.task.create({
     data: {
-      title: `1:1 feedback: ${meeting.templateTitle}`,
+      title: `Check-in feedback: ${meeting.templateTitle}`,
       description,
       priority: "medium",
       status: "todo",
@@ -328,7 +328,7 @@ async function createMeetingAssociateFeedbackRequest(
   if (meeting.memberUserId !== creatorId) {
     await sendPushToUsers(
       [meeting.memberUserId],
-      "1:1 feedback requested",
+      "Check-in feedback requested",
       `${managerName} asked you to share feedback for ${meeting.templateTitle}`,
       { taskId: task.id, teamId: meeting.teamId, type: "oneone_feedback" },
       "notifTaskAssigned",
@@ -396,7 +396,7 @@ async function createFollowUpTasks(
         );
       } catch (linkErr) {
         console.error("[one-on-one-meetings] task link update failed:", linkErr);
-        throw new Error("Could not link follow-up task to this 1:1.");
+        throw new Error("Could not link follow-up task to this check-in.");
       }
     }
   }
@@ -448,7 +448,7 @@ oneOnOneMeetingsRouter.post(
     }
 
     if (!canManageOneOnOne(membership)) {
-      return c.json({ error: { message: "You cannot create a 1:1 for this member", code: "FORBIDDEN" } }, 403);
+      return c.json({ error: { message: "You cannot create a check-in for this member", code: "FORBIDDEN" } }, 403);
     }
 
     const targetMember = await prisma.teamMember.findUnique({
@@ -562,11 +562,11 @@ oneOnOneMeetingsRouter.patch(
       where: { id: meetingId, teamId, memberUserId },
     });
     if (!existing) {
-      return c.json({ error: { message: "1:1 not found", code: "NOT_FOUND" } }, 404);
+      return c.json({ error: { message: "Check-in not found", code: "NOT_FOUND" } }, 404);
     }
 
     if (!canModifyMeeting(membership)) {
-      return c.json({ error: { message: "You cannot edit this 1:1", code: "FORBIDDEN" } }, 403);
+      return c.json({ error: { message: "You cannot edit this check-in", code: "FORBIDDEN" } }, 403);
     }
 
     const body = c.req.valid("json");
@@ -611,7 +611,7 @@ oneOnOneMeetingsRouter.patch(
         include: meetingInclude,
       });
       if (!meeting) {
-        return c.json({ error: { message: "1:1 not found", code: "NOT_FOUND" } }, 404);
+        return c.json({ error: { message: "Check-in not found", code: "NOT_FOUND" } }, 404);
       }
       return c.json({ data: await serializeMeetingWithTasks(meeting) });
     } catch (err) {
@@ -641,7 +641,7 @@ oneOnOneMeetingsRouter.get("/:memberUserId/one-on-ones/:meetingId/associate-feed
     where: { id: meetingId, teamId, memberUserId },
   });
   if (!meeting) {
-    return c.json({ error: { message: "1:1 not found", code: "NOT_FOUND" } }, 404);
+    return c.json({ error: { message: "Check-in not found", code: "NOT_FOUND" } }, 404);
   }
 
   const fields = parseJsonArray(meeting.templateFields) as TemplateField[];
@@ -693,7 +693,7 @@ oneOnOneMeetingsRouter.post(
       where: { id: meetingId, teamId, memberUserId },
     });
     if (!meeting) {
-      return c.json({ error: { message: "1:1 not found", code: "NOT_FOUND" } }, 404);
+      return c.json({ error: { message: "Check-in not found", code: "NOT_FOUND" } }, 404);
     }
 
     const fields = parseJsonArray(meeting.templateFields) as TemplateField[];
@@ -724,7 +724,7 @@ oneOnOneMeetingsRouter.post(
       include: meetingInclude,
     });
     if (!updated) {
-      return c.json({ error: { message: "1:1 not found", code: "NOT_FOUND" } }, 404);
+      return c.json({ error: { message: "Check-in not found", code: "NOT_FOUND" } }, 404);
     }
 
     return c.json({ data: await serializeMeetingWithTasks(updated) });
@@ -747,11 +747,11 @@ oneOnOneMeetingsRouter.delete("/:memberUserId/one-on-ones/:meetingId", async (c)
     where: { id: meetingId, teamId, memberUserId },
   });
   if (!existing) {
-    return c.json({ error: { message: "1:1 not found", code: "NOT_FOUND" } }, 404);
+    return c.json({ error: { message: "Check-in not found", code: "NOT_FOUND" } }, 404);
   }
 
   if (!canModifyMeeting(membership)) {
-    return c.json({ error: { message: "You cannot delete this 1:1", code: "FORBIDDEN" } }, 403);
+    return c.json({ error: { message: "You cannot delete this check-in", code: "FORBIDDEN" } }, 403);
   }
 
   try {

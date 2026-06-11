@@ -266,7 +266,7 @@ async function seedDemoData(ownerId: string) {
       { title: "Design Review", description: "Review new onboarding flow designs with the full team.", startDate: d(3, 14, 0), endDate: d(3, 15, 0), allDay: false, color: "#7C3AED", teamId: team.id, createdById: sarah },
       { title: "Investor Meeting", description: "Series A pitch meeting with Sequoia partners.", startDate: d(5, 13, 0), allDay: false, endDate: d(5, 14, 0), color: "#F59E0B", teamId: team.id, createdById: ownerId },
       { title: "Q2 Kickoff", description: "All-hands to kick off Q2 goals and strategy.", startDate: d(7), allDay: true, color: "#EF4444", teamId: team.id, createdById: ownerId },
-      { title: "1:1 with Sarah", description: "Weekly sync with team lead.", startDate: d(2, 10, 0), endDate: d(2, 10, 30), allDay: false, color: "#06B6D4", teamId: team.id, createdById: ownerId },
+      { title: "Check-in with Sarah", description: "Weekly sync with team lead.", startDate: d(2, 10, 0), endDate: d(2, 10, 30), allDay: false, color: "#06B6D4", teamId: team.id, createdById: ownerId },
     ],
   });
 

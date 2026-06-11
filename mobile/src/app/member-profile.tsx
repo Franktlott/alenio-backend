@@ -32,7 +32,7 @@ import { ProfileOverviewTab } from "@/components/ProfileOverviewTab";
 import { DevelopmentPlanTab } from "@/components/DevelopmentPlanTab";
 import { OneOnOneHistoryTab } from "@/components/OneOnOneHistoryTab";
 
-const PROFILE_TABS = ["Overview", "Growth", "Conversations"] as const;
+const PROFILE_TABS = ["Overview", "Growth", "Check-In"] as const;
 type ProfileTab = (typeof PROFILE_TABS)[number];
 
 function roleLabel(role: TeamRole): string {
@@ -50,8 +50,16 @@ function roleLabel(role: TeamRole): string {
 
 function parseTab(value: string | string[] | undefined): ProfileTab {
   const raw = Array.isArray(value) ? value[0] : value;
-  if (raw === "growth" || raw === "dev-plan" || raw === "Development plan" || raw === "Growth") return "Growth";
-  if (raw === "conversations" || raw === "one-on-one" || raw === "1:1 history" || raw === "Conversations") return "Conversations";
+  if (raw === "check-in" || raw === "check_in" || raw === "growth" || raw === "dev-plan" || raw === "Development plan" || raw === "Growth") return "Growth";
+  if (
+    raw === "conversations" ||
+    raw === "one-on-one" ||
+    raw === "1:1 history" ||
+    raw === "Conversations" ||
+    raw === "Check-In"
+  ) {
+    return "Check-In";
+  }
   return "Overview";
 }
 

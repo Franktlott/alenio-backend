@@ -223,7 +223,7 @@ export function OneOnOneHistoryTab({
       const list = await fetchOneOnOneMeetings(teamId, memberUserId);
       setMeetings(list);
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "Could not load 1:1 history.");
+      setErr(e instanceof Error ? e.message : "Could not load check-in history.");
     } finally {
       setLoadingMeetings(false);
     }
@@ -258,7 +258,7 @@ export function OneOnOneHistoryTab({
       const list = await fetchOneOnOneTemplates(teamId);
       setTemplates(list);
       if (list.length === 0) {
-        setErr("No 1:1 templates yet. The workspace owner can create templates from the Team page.");
+        setErr("No check-in templates yet. The workspace owner can create templates from the Team page.");
       }
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Could not load templates.");
@@ -342,7 +342,7 @@ export function OneOnOneHistoryTab({
       setResponses({});
       setFollowUpDrafts([]);
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "Could not save 1:1.");
+      setErr(e instanceof Error ? e.message : "Could not save check-in.");
     } finally {
       setSaving(false);
     }
@@ -400,7 +400,7 @@ export function OneOnOneHistoryTab({
   };
 
   const onDelete = async (meeting: OneOnOneMeeting) => {
-    if (!window.confirm(`Delete this 1:1 from ${formatMeetingDate(meeting.createdAt)}? This cannot be undone.`)) {
+    if (!window.confirm(`Delete this check-in from ${formatMeetingDate(meeting.createdAt)}? This cannot be undone.`)) {
       return;
     }
     setErr(null);
@@ -415,7 +415,7 @@ export function OneOnOneHistoryTab({
       }
       await loadMeetings();
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "Could not delete 1:1.");
+      setErr(e instanceof Error ? e.message : "Could not delete check-in.");
     }
   };
 
@@ -584,15 +584,15 @@ export function OneOnOneHistoryTab({
         <div
           className="enterprise-modal-sheet enterprise-oneone-preview-modal"
           role="dialog"
-          aria-label={`${previewMeeting.templateTitle} 1:1`}
+          aria-label={`${previewMeeting.templateTitle} check-in`}
           onClick={(e) => e.stopPropagation()}
         >
           <header className="enterprise-oneone-preview-header">
             <div className="enterprise-oneone-preview-header-text">
-              <p className="enterprise-oneone-templates-kicker">1:1 Meeting</p>
+              <p className="enterprise-oneone-templates-kicker">Check-in</p>
               <h2 className="enterprise-oneone-preview-title">{previewMeeting.templateTitle}</h2>
               <p className="enterprise-oneone-preview-meta">
-                {formatMeetingDate(previewMeeting.createdAt)} · Meeting #{meetingNum}
+                {formatMeetingDate(previewMeeting.createdAt)} · Check-in #{meetingNum}
                 {managerName ? ` · Manager: ${managerName}` : ""}
               </p>
               <div className="enterprise-oneone-preview-status">
@@ -670,7 +670,7 @@ export function OneOnOneHistoryTab({
           <div className="enterprise-dev-plan-empty">
             <p className="enterprise-dev-plan-empty-title">No templates available</p>
             <p className="enterprise-muted">
-              Ask your workspace owner to create 1:1 templates from the Team page.
+              Ask your workspace owner to create check-in templates from the Team page.
             </p>
           </div>
         ) : null}
@@ -688,7 +688,7 @@ export function OneOnOneHistoryTab({
           ← {editingMeeting ? "Back to history" : "Choose another template"}
         </button>
         <h3 className="enterprise-oneone-history-heading">
-          {editingMeeting ? "Edit 1:1" : selectedTemplate.title}
+          {editingMeeting ? "Edit check-in" : selectedTemplate.title}
         </h3>
         {!editingMeeting && selectedTemplate.description ? (
           <p className="enterprise-muted enterprise-oneone-history-sub">{selectedTemplate.description}</p>
@@ -787,7 +787,7 @@ export function OneOnOneHistoryTab({
             disabled={saving}
             onClick={onSaveClick}
           >
-            {saving ? "Saving…" : editingMeeting ? "Save changes" : "Save 1:1"}
+            {saving ? "Saving…" : editingMeeting ? "Save changes" : "Save check-in"}
           </button>
         </div>
         {renderFeedbackPromptModal()}
@@ -799,7 +799,7 @@ export function OneOnOneHistoryTab({
     <div className="enterprise-oneone-history">
       <div className="enterprise-dev-plan-head">
         <div>
-          <h3 className="enterprise-team-profile-section-title">1:1 history</h3>
+          <h3 className="enterprise-team-profile-section-title">Check-in history</h3>
           <p className="enterprise-muted enterprise-dev-plan-sub">
             Recorded manager check-ins for this team member.
           </p>
@@ -812,7 +812,7 @@ export function OneOnOneHistoryTab({
               disabled={loadingTemplates}
               onClick={() => void startCreate()}
             >
-              {loadingTemplates ? "Loading…" : "New 1:1"}
+              {loadingTemplates ? "Loading…" : "New check-in"}
             </button>
           </div>
         ) : null}
@@ -823,7 +823,7 @@ export function OneOnOneHistoryTab({
       ) : null}
       {!loadingMeetings && meetings.length === 0 ? (
         <div className="enterprise-dev-plan-empty">
-          <p className="enterprise-dev-plan-empty-title">No 1:1s recorded yet</p>
+          <p className="enterprise-dev-plan-empty-title">No check-ins recorded yet</p>
           <p className="enterprise-muted">
             {canCreate ? "Start a check-in using a workspace template." : "Check-ins will appear here once recorded."}
           </p>
@@ -832,7 +832,7 @@ export function OneOnOneHistoryTab({
       {meetings.length > 0 ? (
         <div className="enterprise-oneone-history-table-wrap">
           <div className="enterprise-oneone-history-table-head" aria-hidden>
-            <span>Meeting</span>
+            <span>Check-in</span>
             <span className="enterprise-oneone-history-table-actions-col">Actions</span>
           </div>
           <ul className="enterprise-oneone-history-list">

@@ -306,7 +306,7 @@ export function TaskDetailPage() {
 
           {feedbackContext && feedbackMeta ? (
             <section className="task-detail-section enterprise-oneone-feedback-task-section">
-              <h2 className="task-detail-section-title">1:1 feedback</h2>
+              <h2 className="task-detail-section-title">Check-in feedback</h2>
               <OneOnOneAssociateFeedbackForm
                 teamId={feedbackMeta.teamId}
                 memberUserId={feedbackMeta.memberUserId}

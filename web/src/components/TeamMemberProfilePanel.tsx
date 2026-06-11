@@ -4,7 +4,7 @@ import { DevelopmentPlanTab } from "./DevelopmentPlanTab";
 import { OneOnOneHistoryTab } from "./OneOnOneHistoryTab";
 import { ProfileOverviewTab } from "./ProfileOverviewTab";
 
-const PROFILE_TABS = ["Overview", "Growth", "Conversations"] as const;
+const PROFILE_TABS = ["Overview", "Growth", "Check-In"] as const;
 
 type ProfileTab = (typeof PROFILE_TABS)[number];
 
