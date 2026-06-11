@@ -1005,7 +1005,7 @@ export function DevelopmentPlanTab({
             onClick={onPrint}
             disabled={loading}
           >
-            Print / PDF
+            Save PDF
           </button>
           {canCreate ? (
             <button type="button" className="enterprise-dev-plan-new-btn" onClick={openCreate}>

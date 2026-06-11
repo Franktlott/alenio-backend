@@ -1,10 +1,10 @@
-import type { OneOnOneMeeting, OneOnOneTemplateField } from "./api";
+import type { OneOnOneMeeting, OneOnOneTemplateField } from "./member-profile-api";
 import {
   ASSOCIATE_FEEDBACK_FIELD_ID,
   ASSOCIATE_FEEDBACK_LABEL,
   formatAssociateResponseDisplay,
 } from "./one-on-one-feedback";
-import { alenioLogoUrl, escapeHtml, printHtmlInHiddenFrame } from "./print-html";
+import { ALENIO_LOGO_URL, escapeHtml, sharePdfFromHtml } from "./print-html";
 
 export type OneOnOnePrintOptions = {
   meeting: OneOnOneMeeting;
@@ -456,13 +456,11 @@ function buildPrintHtml(options: OneOnOnePrintOptions, logoUrl: string): string 
 </html>`;
 }
 
-/** Opens the browser print dialog; choose Save as PDF to download. */
-export function printOneOnOneMeeting(options: OneOnOnePrintOptions): void {
-  const html = buildPrintHtml(options, alenioLogoUrl());
-  printHtmlInHiddenFrame(html, "Check-in print preview");
+/** Opens the share sheet so the user can save as PDF. */
+export async function saveOneOnOneMeetingPdf(options: OneOnOnePrintOptions): Promise<void> {
+  const html = buildPrintHtml(options, ALENIO_LOGO_URL);
+  await sharePdfFromHtml(html, "Save check-in PDF");
 }
-
-export const saveOneOnOneMeetingPdf = printOneOnOneMeeting;
 
 export function meetingNumberFor(meetings: OneOnOneMeeting[], meetingId: string): number {
   const sorted = [...meetings].sort(

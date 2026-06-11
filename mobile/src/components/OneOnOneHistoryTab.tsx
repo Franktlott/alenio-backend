@@ -26,6 +26,7 @@ import {
   type OneOnOneFollowUpTaskInput,
 } from "@/lib/member-profile-api";
 import { appendLeaderCommentsIfMissing } from "@/lib/check-in-leader-comments";
+import { meetingNumberFor, saveOneOnOneMeetingPdf } from "@/lib/one-on-one-print";
 import {
   ASSOCIATE_FEEDBACK_FIELD_ID,
   ASSOCIATE_FEEDBACK_LABEL,
@@ -138,6 +139,7 @@ export function OneOnOneHistoryTab({
   const [loadingMeetings, setLoadingMeetings] = useState(false);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [savingPdf, setSavingPdf] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [followUpDrafts, setFollowUpDrafts] = useState<FollowUpDraft[]>([]);
   const [feedbackPromptOpen, setFeedbackPromptOpen] = useState(false);
@@ -282,6 +284,26 @@ export function OneOnOneHistoryTab({
       setErr(e instanceof Error ? e.message : "Could not save check-in.");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const onSavePdf = async (meeting: OneOnOneMeeting) => {
+    setSavingPdf(true);
+    setMenuMeetingId(null);
+    try {
+      await saveOneOnOneMeetingPdf({
+        meeting,
+        memberName,
+        managerName,
+        meetingNumber: meetingNumberFor(meetings, meeting.id),
+      });
+    } catch (e) {
+      toast({
+        title: e instanceof Error ? e.message : "Could not save PDF.",
+        preset: "error",
+      });
+    } finally {
+      setSavingPdf(false);
     }
   };
 
@@ -697,6 +719,15 @@ export function OneOnOneHistoryTab({
                   {menuMeetingId === meeting.id ? (
                     <View style={{ marginTop: 10, backgroundColor: "#F8FAFC", borderRadius: 10, overflow: "hidden" }}>
                       <Pressable
+                        onPress={() => void onSavePdf(meeting)}
+                        disabled={savingPdf}
+                        style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: "#E2E8F0" }}
+                      >
+                        <Text style={{ fontSize: 14, fontWeight: "600", color: "#334155" }}>
+                          {savingPdf ? "Saving…" : "Save PDF"}
+                        </Text>
+                      </Pressable>
+                      <Pressable
                         onPress={() => startEdit(meeting)}
                         style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: "#E2E8F0" }}
                       >
@@ -747,9 +778,27 @@ export function OneOnOneHistoryTab({
                   {previewMeeting ? formatMeetingDate(previewMeeting.createdAt) : ""}
                 </Text>
               </View>
-              <Pressable onPress={() => setPreviewMeeting(null)} hitSlop={12}>
-                <X size={22} color="#64748B" />
-              </Pressable>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                <Pressable
+                  onPress={() => previewMeeting && void onSavePdf(previewMeeting)}
+                  disabled={!previewMeeting || savingPdf}
+                  style={{
+                    borderWidth: 1,
+                    borderColor: "#D8DEE8",
+                    borderRadius: 10,
+                    paddingHorizontal: 12,
+                    paddingVertical: 8,
+                    opacity: !previewMeeting || savingPdf ? 0.55 : 1,
+                  }}
+                >
+                  <Text style={{ fontSize: 13, fontWeight: "700", color: "#334155" }}>
+                    {savingPdf ? "Saving…" : "Save PDF"}
+                  </Text>
+                </Pressable>
+                <Pressable onPress={() => setPreviewMeeting(null)} hitSlop={12}>
+                  <X size={22} color="#64748B" />
+                </Pressable>
+              </View>
             </View>
             {previewMeeting ? (
               <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 24 }}>

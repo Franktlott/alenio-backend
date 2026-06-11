@@ -10,7 +10,7 @@ import {
   type OneOnOneTemplateField,
   type OneOnOneFollowUpTaskInput,
 } from "../lib/api";
-import { meetingNumberFor, printOneOnOneMeeting } from "../lib/one-on-one-print";
+import { meetingNumberFor, saveOneOnOneMeetingPdf } from "../lib/one-on-one-print";
 import {
   ASSOCIATE_FEEDBACK_FIELD_ID,
   ASSOCIATE_FEEDBACK_LABEL,
@@ -424,7 +424,7 @@ export function OneOnOneHistoryTab({
 
   const onPrint = (meeting: OneOnOneMeeting) => {
     try {
-      printOneOnOneMeeting({
+      saveOneOnOneMeetingPdf({
         meeting,
         memberName,
         managerName,
@@ -602,14 +602,23 @@ export function OneOnOneHistoryTab({
                 <MeetingStatusBadge meeting={previewMeeting} />
               </div>
             </div>
-            <button
-              type="button"
-              className="enterprise-oneone-templates-close"
-              aria-label="Close preview"
-              onClick={() => setPreviewMeeting(null)}
-            >
-              ×
-            </button>
+            <div className="enterprise-oneone-preview-header-actions">
+              <button
+                type="button"
+                className="enterprise-dev-plan-print-btn"
+                onClick={() => onPrint(previewMeeting)}
+              >
+                Save PDF
+              </button>
+              <button
+                type="button"
+                className="enterprise-oneone-templates-close"
+                aria-label="Close preview"
+                onClick={() => setPreviewMeeting(null)}
+              >
+                ×
+              </button>
+            </div>
           </header>
           <div className="enterprise-oneone-preview-body">{renderMeetingPreviewBody(previewMeeting)}</div>
         </div>
@@ -883,7 +892,7 @@ export function OneOnOneHistoryTab({
                             onPrint(meeting);
                           }}
                         >
-                          Print / PDF
+                          Save PDF
                         </button>
                         {canModify ? (
                           <>

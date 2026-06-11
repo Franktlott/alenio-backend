@@ -6859,6 +6859,13 @@ input {
   flex-shrink: 0;
 }
 
+.enterprise-oneone-preview-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-shrink: 0;
+}
+
 .enterprise-oneone-preview-header-text {
   min-width: 0;
 }

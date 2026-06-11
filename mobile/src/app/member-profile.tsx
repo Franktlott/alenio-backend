@@ -371,6 +371,7 @@ export default function MemberProfileScreen() {
               teamId={teamId}
               memberUserId={memberUserId}
               memberName={displayName}
+              managerName={managerName}
               canCreate={canCreateDevGoal}
               canAddNotes={canAddDevNotes}
             />
