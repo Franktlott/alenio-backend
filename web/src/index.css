@@ -5991,8 +5991,127 @@ input {
   border-top: 1px solid #e2e8f0;
 }
 
+.enterprise-oneone-templates-team-actions {
+  margin-bottom: 0.75rem;
+}
+
+.enterprise-oneone-templates-library-search-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #fff;
+  color: #0f172a;
+  padding: 0.55rem 0.9rem;
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.enterprise-oneone-templates-library-search-btn:hover {
+  background: #f8fafc;
+  border-color: #94a3b8;
+}
+
+.enterprise-oneone-templates-library-back {
+  display: inline-flex;
+  border: none;
+  background: none;
+  padding: 0;
+  margin: 0 0 0.35rem;
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #64748b;
+  cursor: pointer;
+}
+
+.enterprise-oneone-templates-library-back:hover {
+  color: #0f172a;
+}
+
+.enterprise-oneone-templates-library-search {
+  display: block;
+  margin-bottom: 0.85rem;
+}
+
+.enterprise-oneone-templates-library-search-input {
+  width: 100%;
+}
+
+.enterprise-oneone-templates-library-empty {
+  margin: 0.5rem 0 0;
+  font-size: 0.875rem;
+}
+
+.enterprise-oneone-templates-library-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.enterprise-oneone-templates-library-item {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+  padding: 0.65rem 0.75rem;
+}
+
+.enterprise-oneone-templates-library-item-main {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: none;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+}
+
+.enterprise-oneone-templates-library-item-title {
+  display: block;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.enterprise-oneone-templates-library-item-desc {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.8125rem;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+.enterprise-oneone-templates-library-item-meta {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+  color: #94a3b8;
+}
+
+.enterprise-oneone-templates-library-item-actions {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.25rem;
+  flex-shrink: 0;
+}
+
 .enterprise-oneone-templates-empty-panel--compact {
   padding: 1rem 1.1rem;
+}
+
+.enterprise-oneone-templates-empty-panel--compact .enterprise-oneone-templates-library-search-btn {
+  margin-top: 0.75rem;
 }
 
 .enterprise-oneone-templates-table-action--primary {

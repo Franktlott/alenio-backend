@@ -99,7 +99,7 @@ export function getCheckInTemplateLibrary(): CheckInLibraryTemplate[] {
     title: def.title,
     description: def.description,
     fields: buildLibraryFields(def, def.key),
-  }));
+  })).sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: "base" }));
 }
 
 export function getCheckInLibraryTemplateByKey(libraryKey: string): CheckInLibraryTemplate | null {
