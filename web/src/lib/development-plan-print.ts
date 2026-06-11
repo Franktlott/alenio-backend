@@ -466,5 +466,3 @@ export function printDevelopmentPlan(options: DevelopmentPlanPrintOptions): void
   const html = buildPrintHtml(options, alenioLogoUrl());
   printHtmlInHiddenFrame(html, "Development plan print preview");
 }
-
-export const saveDevelopmentPlanPdf = printDevelopmentPlan;

@@ -26,7 +26,7 @@ import {
   type DevelopmentGoal,
   type DevelopmentGoalNote,
 } from "@/lib/member-profile-api";
-import { saveDevelopmentPlanPdf } from "@/lib/development-plan-print";
+import { printDevelopmentPlan } from "@/lib/development-plan-print";
 
 type Props = {
   teamId: string;
@@ -84,7 +84,7 @@ export function DevelopmentPlanTab({
   const [steps, setSteps] = useState<string[]>([""]);
   const [modalErr, setModalErr] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [savingPdf, setSavingPdf] = useState(false);
+  const [printingPdf, setPrintingPdf] = useState(false);
 
   const [newNotes, setNewNotes] = useState<string[]>([]);
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
@@ -110,22 +110,22 @@ export function DevelopmentPlanTab({
   const activeGoals = goals.filter((g) => g.status !== "closed");
   const closedGoals = goals.filter((g) => g.status === "closed");
 
-  const onSavePdf = async () => {
+  const onPrint = async () => {
     if (goals.length === 0) return;
-    setSavingPdf(true);
+    setPrintingPdf(true);
     setErr(null);
     try {
-      await saveDevelopmentPlanPdf({
+      await printDevelopmentPlan({
         goals,
         memberName,
         managerName,
       });
     } catch (e) {
-      const message = e instanceof Error ? e.message : "Could not save PDF.";
+      const message = e instanceof Error ? e.message : "Could not open print view.";
       setErr(message);
       toast({ title: message, preset: "error" });
     } finally {
-      setSavingPdf(false);
+      setPrintingPdf(false);
     }
   };
 
@@ -443,19 +443,19 @@ export function DevelopmentPlanTab({
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
           {goals.length > 0 ? (
             <Pressable
-              onPress={() => void onSavePdf()}
-              disabled={loading || savingPdf}
+              onPress={() => void onPrint()}
+              disabled={loading || printingPdf}
               style={{
                 borderWidth: 1,
                 borderColor: "#D8DEE8",
                 borderRadius: 10,
                 paddingHorizontal: 12,
                 paddingVertical: 8,
-                opacity: loading || savingPdf ? 0.55 : 1,
+                opacity: loading || printingPdf ? 0.55 : 1,
               }}
             >
               <Text style={{ fontSize: 13, fontWeight: "700", color: "#334155" }}>
-                {savingPdf ? "Saving…" : "Save PDF"}
+                {printingPdf ? "Printing…" : "Print"}
               </Text>
             </Pressable>
           ) : null}

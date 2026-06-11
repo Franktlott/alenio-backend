@@ -4,7 +4,7 @@ import {
   ASSOCIATE_FEEDBACK_LABEL,
   formatAssociateResponseDisplay,
 } from "./one-on-one-feedback";
-import { ALENIO_LOGO_URL, escapeHtml, sharePdfFromHtml } from "./print-html";
+import { ALENIO_LOGO_URL, escapeHtml, printHtml } from "./print-html";
 
 export type OneOnOnePrintOptions = {
   meeting: OneOnOneMeeting;
@@ -456,10 +456,10 @@ function buildPrintHtml(options: OneOnOnePrintOptions, logoUrl: string): string 
 </html>`;
 }
 
-/** Opens the share sheet so the user can save as PDF. */
-export async function saveOneOnOneMeetingPdf(options: OneOnOnePrintOptions): Promise<void> {
+/** Opens the native print dialog for a check-in. */
+export async function printOneOnOneMeeting(options: OneOnOnePrintOptions): Promise<void> {
   const html = buildPrintHtml(options, ALENIO_LOGO_URL);
-  await sharePdfFromHtml(html, "Save check-in PDF");
+  await printHtml(html);
 }
 
 export function meetingNumberFor(meetings: OneOnOneMeeting[], meetingId: string): number {

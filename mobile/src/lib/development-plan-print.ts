@@ -1,5 +1,5 @@
 import type { DevelopmentGoal } from "./member-profile-api";
-import { ALENIO_LOGO_URL, escapeHtml, sharePdfFromHtml } from "./print-html";
+import { ALENIO_LOGO_URL, escapeHtml, printHtml } from "./print-html";
 
 export type DevelopmentPlanPrintOptions = {
   goals: DevelopmentGoal[];
@@ -461,8 +461,8 @@ function buildPrintHtml(options: DevelopmentPlanPrintOptions, logoUrl: string): 
 </html>`;
 }
 
-/** Opens the share sheet so the user can save as PDF. */
-export async function saveDevelopmentPlanPdf(options: DevelopmentPlanPrintOptions): Promise<void> {
+/** Opens the native print dialog for the development plan. */
+export async function printDevelopmentPlan(options: DevelopmentPlanPrintOptions): Promise<void> {
   const html = buildPrintHtml(options, ALENIO_LOGO_URL);
-  await sharePdfFromHtml(html, "Save development plan PDF");
+  await printHtml(html);
 }

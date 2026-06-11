@@ -10,7 +10,7 @@ import {
   type OneOnOneTemplateField,
   type OneOnOneFollowUpTaskInput,
 } from "../lib/api";
-import { meetingNumberFor, saveOneOnOneMeetingPdf } from "../lib/one-on-one-print";
+import { meetingNumberFor, printOneOnOneMeeting } from "../lib/one-on-one-print";
 import {
   ASSOCIATE_FEEDBACK_FIELD_ID,
   ASSOCIATE_FEEDBACK_LABEL,
@@ -424,7 +424,7 @@ export function OneOnOneHistoryTab({
 
   const onPrint = (meeting: OneOnOneMeeting) => {
     try {
-      saveOneOnOneMeetingPdf({
+      printOneOnOneMeeting({
         meeting,
         memberName,
         managerName,
@@ -608,7 +608,7 @@ export function OneOnOneHistoryTab({
                 className="enterprise-dev-plan-print-btn"
                 onClick={() => onPrint(previewMeeting)}
               >
-                Save PDF
+                Print
               </button>
               <button
                 type="button"
@@ -892,7 +892,7 @@ export function OneOnOneHistoryTab({
                             onPrint(meeting);
                           }}
                         >
-                          Save PDF
+                          Print
                         </button>
                         {canModify ? (
                           <>

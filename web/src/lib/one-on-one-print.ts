@@ -462,8 +462,6 @@ export function printOneOnOneMeeting(options: OneOnOnePrintOptions): void {
   printHtmlInHiddenFrame(html, "Check-in print preview");
 }
 
-export const saveOneOnOneMeetingPdf = printOneOnOneMeeting;
-
 export function meetingNumberFor(meetings: OneOnOneMeeting[], meetingId: string): number {
   const sorted = [...meetings].sort(
     (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
