@@ -1917,6 +1917,46 @@ input {
   letter-spacing: 0.02em;
 }
 
+.enterprise-team-roster-overdue {
+  margin-left: 0.5rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: #dc2626;
+  letter-spacing: 0;
+}
+
+.enterprise-team-roster-kpis {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem 1rem;
+  margin-top: 0.35rem;
+}
+
+.enterprise-team-roster-kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 3.5rem;
+}
+
+.enterprise-team-roster-kpi-label {
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+.enterprise-team-roster-kpi-value {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: #334155;
+}
+
+.enterprise-team-roster-kpi-icon {
+  font-size: 0.75rem;
+}
+
 .enterprise-team-roster-progress-block {
   margin-top: 0.35rem;
   display: flex;
@@ -1959,6 +1999,12 @@ input {
   color: #64748b;
   min-width: 2rem;
   text-align: right;
+}
+
+.enterprise-team-roster-progress-caption {
+  display: block;
+  font-size: 0.6875rem;
+  color: #94a3b8;
 }
 
 .enterprise-team-roster-oneone {

@@ -473,7 +473,19 @@ tasksRouter.get("/member-stats", async (c) => {
     userTasks[a.userId]!.push(a.task);
   }
 
-  const statsMap: Record<string, { activeTasks: number; overdueTasks: number; completedTasks: number; streak: number; personalBestStreak: number }> = {};
+  const statsMap: Record<
+    string,
+    {
+      activeTasks: number;
+      overdueTasks: number;
+      completedTasks: number;
+      streak: number;
+      personalBestStreak: number;
+      activeDevGoals: number;
+      devEngagementPct: number;
+      daysSinceLastOneOnOne: number | null;
+    }
+  > = {};
 
   const monthStart = new Date(targetYear, targetMonth, 1);
   const monthEnd = new Date(targetYear, targetMonth + 1, 0, 23, 59, 59, 999);
@@ -495,14 +507,82 @@ tasksRouter.get("/member-stats", async (c) => {
     // Use the stored streak (set at task completion time, survives task deletion)
     const streak = storedStreaks[userId] ?? 0;
 
-    statsMap[userId] = { activeTasks, overdueTasks, completedTasks, streak, personalBestStreak: 0 };
+    statsMap[userId] = {
+      activeTasks,
+      overdueTasks,
+      completedTasks,
+      streak,
+      personalBestStreak: 0,
+      activeDevGoals: 0,
+      devEngagementPct: 0,
+      daysSinceLastOneOnOne: null,
+    };
   }
+
+  const emptyStats = (streak: number) => ({
+    activeTasks: 0,
+    overdueTasks: 0,
+    completedTasks: 0,
+    streak,
+    personalBestStreak: 0,
+    activeDevGoals: 0,
+    devEngagementPct: 0,
+    daysSinceLastOneOnOne: null as number | null,
+  });
 
   // Also include members with no tasks but a stored streak
   for (const m of teamMembers) {
     if (!statsMap[m.userId]) {
-      statsMap[m.userId] = { activeTasks: 0, overdueTasks: 0, completedTasks: 0, streak: m.currentStreak, personalBestStreak: 0 };
+      statsMap[m.userId] = emptyStats(m.currentStreak);
     }
+  }
+
+  const [devGoals, oneOnOnes] = await Promise.all([
+    prisma.developmentGoal.findMany({
+      where: { teamId, status: { not: "closed" } },
+      select: {
+        memberUserId: true,
+        _count: { select: { notes: true } },
+      },
+    }),
+    prisma.oneOnOneMeeting.findMany({
+      where: { teamId },
+      select: { memberUserId: true, createdAt: true },
+      orderBy: { createdAt: "desc" },
+    }),
+  ]);
+
+  const devByMember: Record<string, { active: number; engaged: number }> = {};
+  for (const goal of devGoals) {
+    const bucket = devByMember[goal.memberUserId] ?? { active: 0, engaged: 0 };
+    bucket.active += 1;
+    if (goal._count.notes > 0) bucket.engaged += 1;
+    devByMember[goal.memberUserId] = bucket;
+  }
+
+  const lastOneOnOneByMember: Record<string, Date> = {};
+  for (const meeting of oneOnOnes) {
+    if (!lastOneOnOneByMember[meeting.memberUserId]) {
+      lastOneOnOneByMember[meeting.memberUserId] = meeting.createdAt;
+    }
+  }
+
+  const daysSinceCalendar = (then: Date): number => {
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfThen = new Date(then.getFullYear(), then.getMonth(), then.getDate());
+    return Math.max(0, Math.floor((startOfToday.getTime() - startOfThen.getTime()) / 86_400_000));
+  };
+
+  for (const m of teamMembers) {
+    const row = statsMap[m.userId] ?? emptyStats(m.currentStreak);
+    const dev = devByMember[m.userId] ?? { active: 0, engaged: 0 };
+    const lastMeeting = lastOneOnOneByMember[m.userId];
+    row.activeDevGoals = dev.active;
+    row.devEngagementPct =
+      dev.active === 0 ? 0 : Math.round((dev.engaged / dev.active) * 100);
+    row.daysSinceLastOneOnOne = lastMeeting ? daysSinceCalendar(lastMeeting) : null;
+    statsMap[m.userId] = row;
   }
 
   // Fetch personalBestStreak for all users in the map

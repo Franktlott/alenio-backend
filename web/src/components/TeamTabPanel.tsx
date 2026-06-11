@@ -59,6 +59,25 @@ function roleAbbrev(role: string): string {
   return "MBR";
 }
 
+function formatStreakLabel(streak: number, paid: boolean): string {
+  if (!paid) return "—";
+  if (streak <= 0) return "0d";
+  return `${streak}d`;
+}
+
+function formatActiveGoalsLabel(count: number): string {
+  if (count === 0) return "No active goals";
+  if (count === 1) return "1 active goal";
+  return `${count} active goals`;
+}
+
+function formatDaysSinceOneOnOne(days: number | null | undefined): string {
+  if (days == null) return "Never";
+  if (days === 0) return "Today";
+  if (days === 1) return "1 day";
+  return `${days} days`;
+}
+
 function IconUserPlus({ size = 22 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
@@ -839,6 +858,13 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                 const isSelected = m.userId === selectedMemberId;
                 const canView = canViewMemberProfile(myRole, m.userId, myId);
                 const displayName = m.user.name ?? m.user.email ?? "Member";
+                const stats = memberStats?.[m.userId];
+                const statsReady = memberStats !== null;
+                const activeDevGoals = stats?.activeDevGoals ?? 0;
+                const devPct = stats?.devEngagementPct ?? 0;
+                const daysSinceOneOnOne = stats?.daysSinceLastOneOnOne;
+                const streak = stats?.streak ?? 0;
+                const overdue = stats?.overdueTasks ?? 0;
                 const cardClass = `enterprise-team-roster-card${isSelected ? " enterprise-team-roster-card--selected" : ""}${isSelf ? " enterprise-team-roster-card--self" : ""}${!canView ? " enterprise-team-roster-card--static" : ""}`;
                 const cardBody = (
                   <>
@@ -853,23 +879,59 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                         <span className="enterprise-team-roster-name">
                           {displayName}
                           {isSelf ? " (you)" : ""}
+                          {overdue > 0 ? (
+                            <span className="enterprise-team-roster-overdue" title={`${overdue} overdue task${overdue !== 1 ? "s" : ""}`}>
+                              {overdue} overdue
+                            </span>
+                          ) : null}
                         </span>
                         <span className="enterprise-team-roster-role">{roleAbbrev(m.role)}</span>
-                        <span className="enterprise-team-roster-progress-block enterprise-team-roster-metric--soon">
+                        <span className="enterprise-team-roster-kpis">
+                          <span className="enterprise-team-roster-kpi">
+                            <span className="enterprise-team-roster-kpi-label">Streak</span>
+                            <span className="enterprise-team-roster-kpi-value">
+                              {statsReady ? (
+                                <>
+                                  {isPaid && streak > 0 ? <span className="enterprise-team-roster-kpi-icon" aria-hidden>🔥 </span> : null}
+                                  {formatStreakLabel(streak, isPaid)}
+                                </>
+                              ) : (
+                                "…"
+                              )}
+                            </span>
+                          </span>
+                          <span className="enterprise-team-roster-kpi">
+                            <span className="enterprise-team-roster-kpi-label">Goals</span>
+                            <span className="enterprise-team-roster-kpi-value">
+                              {statsReady ? activeDevGoals : "…"}
+                            </span>
+                          </span>
+                        </span>
+                        <span className="enterprise-team-roster-progress-block">
                           <span className="enterprise-team-roster-metric-label">Development progress</span>
                           <span className="enterprise-team-roster-progress-row">
                             <span className="enterprise-team-roster-progress" aria-hidden>
-                              <span className="enterprise-team-roster-progress-fill" style={{ width: "0%" }} />
+                              <span
+                                className="enterprise-team-roster-progress-fill"
+                                style={{ width: statsReady ? `${devPct}%` : "0%" }}
+                              />
                             </span>
-                            <span className="enterprise-team-roster-progress-pct">—</span>
+                            <span className="enterprise-team-roster-progress-pct">
+                              {statsReady ? (activeDevGoals > 0 ? `${devPct}%` : "—") : "…"}
+                            </span>
+                          </span>
+                          <span className="enterprise-team-roster-progress-caption">
+                            {statsReady ? formatActiveGoalsLabel(activeDevGoals) : "Loading…"}
                           </span>
                         </span>
                       </span>
-                      <span className="enterprise-team-roster-oneone enterprise-team-roster-metric--soon">
-                        <span className="enterprise-team-roster-metric-label">Next 1:1</span>
+                      <span className="enterprise-team-roster-oneone">
+                        <span className="enterprise-team-roster-metric-label">Last 1:1</span>
                         <span className="enterprise-team-roster-oneone-row">
-                          <span className="enterprise-team-roster-metric-value">—</span>
-                          <span className="enterprise-team-roster-chevron" aria-hidden>›</span>
+                          <span className="enterprise-team-roster-metric-value">
+                            {statsReady ? formatDaysSinceOneOnOne(daysSinceOneOnOne) : "…"}
+                          </span>
+                          {canView ? <span className="enterprise-team-roster-chevron" aria-hidden>›</span> : null}
                         </span>
                       </span>
                   </>

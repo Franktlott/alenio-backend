@@ -848,10 +848,18 @@ export function patchApiTeam(teamId: string, body: { name?: string; image?: stri
   ).then((r) => r.data);
 }
 
-export type TeamMemberStatsMap = Record<
-  string,
-  { activeTasks: number; overdueTasks: number; completedTasks: number; streak: number; personalBestStreak: number }
->;
+export type TeamMemberStatsRow = {
+  activeTasks: number;
+  overdueTasks: number;
+  completedTasks: number;
+  streak: number;
+  personalBestStreak: number;
+  activeDevGoals: number;
+  devEngagementPct: number;
+  daysSinceLastOneOnOne: number | null;
+};
+
+export type TeamMemberStatsMap = Record<string, TeamMemberStatsRow>;
 
 export function fetchTeamMemberStats(teamId: string) {
   return apiGetJson<{ data: TeamMemberStatsMap }>(
