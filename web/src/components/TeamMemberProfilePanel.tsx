@@ -4,7 +4,7 @@ import { DevelopmentPlanTab } from "./DevelopmentPlanTab";
 import { OneOnOneHistoryTab } from "./OneOnOneHistoryTab";
 import { ProfileOverviewTab } from "./ProfileOverviewTab";
 
-const PROFILE_TABS = ["Overview", "Development plan", "1:1 history"] as const;
+const PROFILE_TABS = ["Overview", "Growth", "Conversations"] as const;
 
 type ProfileTab = (typeof PROFILE_TABS)[number];
 
@@ -120,7 +120,7 @@ export function TeamMemberProfilePanel({
             streak={streak}
             overdueTasks={overdueTasks}
           />
-        ) : activeTab === "Development plan" ? (
+        ) : activeTab === "Growth" ? (
           <DevelopmentPlanTab
             teamId={teamId}
             memberUserId={member.userId}

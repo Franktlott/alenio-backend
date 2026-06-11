@@ -32,7 +32,7 @@ import { ProfileOverviewTab } from "@/components/ProfileOverviewTab";
 import { DevelopmentPlanTab } from "@/components/DevelopmentPlanTab";
 import { OneOnOneHistoryTab } from "@/components/OneOnOneHistoryTab";
 
-const PROFILE_TABS = ["Overview", "Development plan", "1:1 history"] as const;
+const PROFILE_TABS = ["Overview", "Growth", "Conversations"] as const;
 type ProfileTab = (typeof PROFILE_TABS)[number];
 
 function roleLabel(role: TeamRole): string {
@@ -50,8 +50,8 @@ function roleLabel(role: TeamRole): string {
 
 function parseTab(value: string | string[] | undefined): ProfileTab {
   const raw = Array.isArray(value) ? value[0] : value;
-  if (raw === "dev-plan" || raw === "Development plan") return "Development plan";
-  if (raw === "one-on-one" || raw === "1:1 history") return "1:1 history";
+  if (raw === "growth" || raw === "dev-plan" || raw === "Development plan" || raw === "Growth") return "Growth";
+  if (raw === "conversations" || raw === "one-on-one" || raw === "1:1 history" || raw === "Conversations") return "Conversations";
   return "Overview";
 }
 
@@ -358,7 +358,7 @@ export default function MemberProfileScreen() {
               streak={isPaid ? stats?.streak : undefined}
               overdueTasks={stats?.overdueTasks}
             />
-          ) : activeTab === "Development plan" ? (
+          ) : activeTab === "Growth" ? (
             <DevelopmentPlanTab
               teamId={teamId}
               memberUserId={memberUserId}
