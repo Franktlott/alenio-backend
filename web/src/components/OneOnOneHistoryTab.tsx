@@ -16,6 +16,7 @@ import {
   ASSOCIATE_FEEDBACK_LABEL,
   formatAssociateResponseDisplay,
 } from "../lib/one-on-one-feedback";
+import { appendLeaderCommentsIfMissing } from "../lib/check-in-leader-comments";
 import {
   getOneOnOneMeetingStatusFromMeeting,
   oneOnOneMeetingStatusClass,
@@ -27,7 +28,7 @@ const FIELD_TYPE_LABELS: Record<string, string> = {
   short_text: "Short answer",
   long_text: "Long answer",
   rating: "Rating",
-  manager_notes: "Manager notes",
+  manager_notes: "Leader comments",
   associate_notes: "Associate notes",
 };
 
@@ -268,10 +269,12 @@ export function OneOnOneHistoryTab({
   }, [teamId]);
 
   const pickTemplate = (template: OneOnOneTemplate) => {
-    setSelectedTemplate(template);
+    const fields = appendLeaderCommentsIfMissing(template.fields);
+    const withLeaderComments = { ...template, fields };
+    setSelectedTemplate(withLeaderComments);
     setEditingMeeting(null);
     const initial: Record<string, string | number> = {};
-    for (const field of template.fields) {
+    for (const field of fields) {
       if (field.type === "section") continue;
       if (field.type === "rating") initial[field.id] = 0;
       else initial[field.id] = "";

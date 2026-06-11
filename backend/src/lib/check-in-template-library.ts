@@ -1,4 +1,10 @@
 import { randomUUID } from "crypto";
+import {
+  LEADER_COMMENTS_FIELD_LABEL,
+  LEADER_COMMENTS_HELP_TEXT,
+  LEADER_COMMENTS_SECTION_LABEL,
+  appendLeaderCommentsFields,
+} from "./check-in-leader-comments";
 
 export type CheckInLibraryField = {
   id: string;
@@ -90,6 +96,24 @@ function buildLibraryFields(def: LibraryDef, idPrefix: string): CheckInLibraryFi
       helpText: null,
     });
   });
+  const leaderOrder = def.questions.length + 1;
+  fields.push(
+    {
+      id: `${idPrefix}__leader_section`,
+      label: LEADER_COMMENTS_SECTION_LABEL,
+      type: "section",
+      order: leaderOrder,
+      required: false,
+    },
+    {
+      id: `${idPrefix}__leader_notes`,
+      label: LEADER_COMMENTS_FIELD_LABEL,
+      type: "manager_notes",
+      order: leaderOrder + 1,
+      required: false,
+      helpText: LEADER_COMMENTS_HELP_TEXT,
+    },
+  );
   return fields;
 }
 
@@ -138,5 +162,5 @@ export function cloneLibraryFieldsForTeam(def: LibraryDef): CheckInLibraryField[
       helpText: null,
     });
   });
-  return fields;
+  return appendLeaderCommentsFields(fields);
 }

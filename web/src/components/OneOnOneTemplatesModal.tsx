@@ -11,6 +11,7 @@ import {
   type OneOnOneTemplateField,
   type OneOnOneTemplateFieldType,
 } from "../lib/api";
+import { appendLeaderCommentsIfMissing } from "../lib/check-in-leader-comments";
 
 const QUESTION_TYPE_OPTIONS: {
   value: OneOnOneTemplateFieldType;
@@ -20,7 +21,7 @@ const QUESTION_TYPE_OPTIONS: {
   { value: "short_text", label: "Short answer", defaultLabel: "Question" },
   { value: "long_text", label: "Long answer", defaultLabel: "Question" },
   { value: "rating", label: "Rating", defaultLabel: "Rating" },
-  { value: "manager_notes", label: "Manager notes", defaultLabel: "Manager notes" },
+  { value: "manager_notes", label: "Leader comments", defaultLabel: "Summary & commitments" },
 ];
 
 type SectionGroup = {
@@ -106,10 +107,11 @@ function normalizeLoadedFields(fields: OneOnOneTemplateField[]): OneOnOneTemplat
 
 function emptyEditorState() {
   const section = newSection("");
+  const base = flattenSections([{ section, fields: [newQuestion("short_text")] }]);
   return {
     title: "",
     description: "",
-    fields: flattenSections([{ section, fields: [newQuestion("short_text")] }]),
+    fields: appendLeaderCommentsIfMissing(base),
   };
 }
 

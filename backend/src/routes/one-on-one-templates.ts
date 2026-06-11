@@ -9,6 +9,7 @@ import {
   cloneLibraryFieldsForTeam,
   getCheckInLibraryDefByKey,
 } from "../lib/check-in-template-library";
+import { appendLeaderCommentsFields } from "../lib/check-in-leader-comments";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -180,7 +181,7 @@ oneOnOneTemplatesRouter.post("/", zValidator("json", upsertSchema), async (c) =>
   }
 
   const body = c.req.valid("json");
-  const fields = [...body.fields].sort((a, b) => a.order - b.order);
+  const fields = appendLeaderCommentsFields([...body.fields].sort((a, b) => a.order - b.order));
 
   try {
     const template = await prisma.oneOnOneTemplate.create({

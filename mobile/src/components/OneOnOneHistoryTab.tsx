@@ -25,6 +25,7 @@ import {
   type OneOnOneTemplateField,
   type OneOnOneFollowUpTaskInput,
 } from "@/lib/member-profile-api";
+import { appendLeaderCommentsIfMissing } from "@/lib/check-in-leader-comments";
 import {
   ASSOCIATE_FEEDBACK_FIELD_ID,
   ASSOCIATE_FEEDBACK_LABEL,
@@ -208,10 +209,12 @@ export function OneOnOneHistoryTab({
   };
 
   const pickTemplate = (template: OneOnOneTemplate) => {
-    setSelectedTemplate(template);
+    const fields = appendLeaderCommentsIfMissing(template.fields);
+    const withLeaderComments = { ...template, fields };
+    setSelectedTemplate(withLeaderComments);
     setEditingMeeting(null);
     const initial: Record<string, string | number> = {};
-    for (const field of template.fields) {
+    for (const field of fields) {
       if (field.type === "section") continue;
       if (field.type === "rating") initial[field.id] = 0;
       else initial[field.id] = "";

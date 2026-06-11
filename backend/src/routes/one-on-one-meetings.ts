@@ -14,6 +14,7 @@ import {
   NO_FEEDBACK_VALUE,
   type OneOnOneTemplateFieldLike,
 } from "../lib/one-on-one-feedback";
+import { appendLeaderCommentsFields } from "../lib/check-in-leader-comments";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -466,11 +467,13 @@ oneOnOneMeetingsRouter.post(
       return c.json({ error: { message: "Template not found", code: "NOT_FOUND" } }, 404);
     }
 
-    const fields = parseJsonArray(template.fields);
+    const fields = appendLeaderCommentsFields(parseJsonArray(template.fields));
     const validationError = validateResponses(fields, body.responses);
     if (validationError) {
       return c.json({ error: { message: validationError, code: "VALIDATION_ERROR" } }, 400);
     }
+
+    const templateFieldsJson = JSON.stringify(fields);
 
     const followUpTasks = body.followUpTasks ?? [];
     const followUpError = await validateFollowUpAssignees(teamId, memberUserId, user.id, followUpTasks);
@@ -486,7 +489,7 @@ oneOnOneMeetingsRouter.post(
             memberUserId,
             templateId: template.id,
             templateTitle: template.title,
-            templateFields: template.fields,
+            templateFields: templateFieldsJson,
             responses: JSON.stringify(body.responses),
             createdById: user.id,
           },
