@@ -119,6 +119,14 @@ export async function sendTeamInviteEmail(input: {
   }
 
   const { webUrl, appUrl } = buildInviteLinks(input.token);
+  const iosStore = env.IOS_APP_STORE_URL?.trim() ?? "";
+  const androidStore = env.ANDROID_PLAY_STORE_URL?.trim() ?? "";
+  const storeLinks = [
+    iosStore ? `<a href="${iosStore}" style="color: #4361EE;">App Store</a>` : "",
+    androidStore ? `<a href="${androidStore}" style="color: #4361EE;">Google Play</a>` : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
   const resend = new Resend(env.RESEND_API_KEY);
   const { error } = await resend.emails.send({
     from: env.FROM_EMAIL,
@@ -129,15 +137,18 @@ export async function sendTeamInviteEmail(input: {
         <h2 style="color: #4361EE; margin-bottom: 8px;">You're invited to ${input.teamName}</h2>
         <p style="color: #475569; line-height: 1.6;">
           <strong>${input.inviterName}</strong> added you to their workspace on Alenio.
-          Open the link below to sign in or create your account — you'll join automatically.
+          On your phone, open the app link below. On a computer, use the web link.
         </p>
-        <p style="margin: 24px 0;">
-          <a href="${webUrl}" style="display: inline-block; background: #4361EE; color: white; text-decoration: none; padding: 12px 20px; border-radius: 10px; font-weight: 600;">
-            Join ${input.teamName}
+        <p style="margin: 20px 0 12px;">
+          <a href="${appUrl}" style="display: inline-block; background: #4361EE; color: white; text-decoration: none; padding: 12px 20px; border-radius: 10px; font-weight: 600; margin-right: 8px; margin-bottom: 8px;">
+            Open in Alenio app
+          </a>
+          <a href="${webUrl}" style="display: inline-block; background: #EEF2FF; color: #4361EE; text-decoration: none; padding: 12px 20px; border-radius: 10px; font-weight: 600; margin-bottom: 8px;">
+            Continue on web
           </a>
         </p>
-        <p style="color: #94A3B8; font-size: 13px; line-height: 1.5;">
-          On mobile, you can also open: <a href="${appUrl}">${appUrl}</a><br />
+        ${storeLinks ? `<p style="color: #64748B; font-size: 13px; line-height: 1.5;">Don't have the app yet? ${storeLinks}</p>` : ""}
+        <p style="color: #94A3B8; font-size: 13px; line-height: 1.5; margin-top: 16px;">
           This invite expires in ${INVITE_TTL_DAYS} days.
         </p>
       </div>

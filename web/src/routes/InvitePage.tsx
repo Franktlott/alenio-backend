@@ -1,13 +1,17 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { MobileAppCta } from "../components/MobileAppCta";
 import { fetchTeamInviteByToken } from "../lib/api";
+import { getInviteAppUrl } from "../lib/app-links";
 import { ensureWebSessionAndToken, getAccessToken } from "../lib/auth-client";
 import { finishPostAuthNavigation, setPendingInviteToken } from "../lib/invite-auth";
+import { isMobileBrowser } from "../lib/mobile-browser";
 import { isJwtExpiredSkew, looksLikeJwt } from "../lib/token";
 
 export function InvitePage() {
   const { token = "" } = useParams();
   const navigate = useNavigate();
+  const onMobile = useMemo(() => isMobileBrowser(), []);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<Awaited<ReturnType<typeof fetchTeamInviteByToken>> | null>(null);
@@ -96,71 +100,101 @@ export function InvitePage() {
     );
   }
 
+  const teamCard = (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
+        padding: 16,
+        marginBottom: 20,
+        borderRadius: 12,
+        background: "var(--surface-muted)",
+        border: "1px solid var(--border)",
+      }}
+    >
+      {preview.teamImage ? (
+        <img src={preview.teamImage} alt="" style={{ width: 48, height: 48, borderRadius: 12, objectFit: "cover" }} />
+      ) : (
+        <span
+          style={{
+            width: 48,
+            height: 48,
+            borderRadius: 12,
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "var(--accent-soft, #EEF2FF)",
+            color: "var(--accent)",
+            fontWeight: 700,
+            fontSize: 18,
+          }}
+        >
+          {(preview.teamName[0] ?? "?").toUpperCase()}
+        </span>
+      )}
+      <div>
+        <strong>{preview.teamName}</strong>
+        <p className="auth-sub" style={{ margin: "4px 0 0" }}>
+          Workspace invite for {preview.email}
+        </p>
+      </div>
+    </div>
+  );
+
   return (
     <div className="auth-v2-shell" data-testid="invite-screen">
-      <section className="auth-v2-hero">
-        <div className="auth-v2-hero-inner">
-          <Link to="/" className="auth-v2-back-site">
-            ← Back to website
-          </Link>
-          <h1 className="auth-v2-hero-title">
-            You&apos;re invited.
-            <br />
-            <span>Join {preview.teamName}</span>
-          </h1>
-          <p className="auth-v2-hero-copy">
-            {preview.inviterName ? `${preview.inviterName} invited you` : "A team leader invited you"} to collaborate on Alenio.
-            Create an account with <strong>{preview.email}</strong> to join automatically.
-          </p>
-        </div>
-      </section>
+      {!onMobile ? (
+        <section className="auth-v2-hero">
+          <div className="auth-v2-hero-inner">
+            <Link to="/" className="auth-v2-back-site">
+              ← Back to website
+            </Link>
+            <h1 className="auth-v2-hero-title">
+              You&apos;re invited.
+              <br />
+              <span>Join {preview.teamName}</span>
+            </h1>
+            <p className="auth-v2-hero-copy">
+              {preview.inviterName ? `${preview.inviterName} invited you` : "A team leader invited you"} to collaborate on Alenio.
+              Create an account with <strong>{preview.email}</strong> to join automatically.
+            </p>
+          </div>
+        </section>
+      ) : null}
       <main className="auth-v2-main">
         <div className="auth-v2-card">
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 12,
-              padding: 16,
-              marginBottom: 20,
-              borderRadius: 12,
-              background: "var(--surface-muted)",
-              border: "1px solid var(--border)",
-            }}
-          >
-            {preview.teamImage ? (
-              <img src={preview.teamImage} alt="" style={{ width: 48, height: 48, borderRadius: 12, objectFit: "cover" }} />
-            ) : (
-              <span
-                style={{
-                  width: 48,
-                  height: 48,
-                  borderRadius: 12,
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  background: "var(--accent-soft, #EEF2FF)",
-                  color: "var(--accent)",
-                  fontWeight: 700,
-                  fontSize: 18,
-                }}
-              >
-                {(preview.teamName[0] ?? "?").toUpperCase()}
-              </span>
-            )}
-            <div>
-              <strong>{preview.teamName}</strong>
-              <p className="auth-sub" style={{ margin: "4px 0 0" }}>
-                Workspace invite for {preview.email}
-              </p>
-            </div>
-          </div>
-          <button type="button" className="auth-btn-primary" onClick={startSignUp} data-testid="invite-create-account">
-            Create account
-          </button>
-          <button type="button" className="auth-btn-secondary" onClick={startSignIn} style={{ marginTop: 12 }} data-testid="invite-sign-in">
-            I already have an account
-          </button>
+          {onMobile ? (
+            <>
+              <div className="auth-v2-card-head">
+                <p className="auth-v2-eyebrow">Team invite</p>
+                <h2 className="auth-heading">Join {preview.teamName}</h2>
+                <p className="auth-sub">
+                  {preview.inviterName ? `${preview.inviterName} invited you` : "You were invited"} to Alenio. The mobile app is the best experience on your phone.
+                </p>
+              </div>
+              {teamCard}
+              <MobileAppCta
+                appUrl={getInviteAppUrl(token)}
+                primaryLabel="Open invite in app"
+                onContinueInBrowser={startSignUp}
+                continueInBrowserLabel="Create account in browser"
+              />
+              <button type="button" className="mobile-app-cta-browser" onClick={startSignIn} data-testid="invite-sign-in">
+                I already have an account
+              </button>
+            </>
+          ) : (
+            <>
+              {teamCard}
+              <button type="button" className="auth-btn-primary" onClick={startSignUp} data-testid="invite-create-account">
+                Create account
+              </button>
+              <button type="button" className="auth-btn-secondary" onClick={startSignIn} style={{ marginTop: 12 }} data-testid="invite-sign-in">
+                I already have an account
+              </button>
+            </>
+          )}
         </div>
       </main>
     </div>

@@ -1,6 +1,8 @@
-import { fetchWebTeams, redeemTeamInvite } from "./api";
+import { fetchWebMe, fetchWebTeams, redeemTeamInvite } from "./api";
 import { syncBackendUser } from "./auth-client";
+import { setMobileHandoffEmail } from "./app-links";
 import { setPersistedEnterpriseTeamId } from "./enterprise-selected-team";
+import { isMobileBrowser } from "./mobile-browser";
 
 const INVITE_TOKEN_KEY = "alenio_pending_invite_token";
 
@@ -35,6 +37,16 @@ export async function finishPostAuthNavigation(): Promise<string> {
     await fetchWebTeams();
   } catch {
     /* chat will show join/create if needed */
+  }
+
+  if (isMobileBrowser()) {
+    try {
+      const me = await fetchWebMe();
+      if (me?.email) setMobileHandoffEmail(me.email);
+    } catch {
+      /* handoff page still works without email */
+    }
+    return "/get-app";
   }
 
   return "/chat";

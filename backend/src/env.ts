@@ -29,6 +29,9 @@ const envSchema = z.object({
   FROM_EMAIL: z.string().optional().default("noreply@yourdomain.com"),
   // Mobile app deep link scheme (e.g. "alenio")
   APP_SCHEME: z.string().optional().default("alenio"),
+  /** Optional: linked from team invite emails */
+  IOS_APP_STORE_URL: z.string().optional(),
+  ANDROID_PLAY_STORE_URL: z.string().optional(),
   // Daily.co video
   DAILY_API_KEY: z.string().optional(),
   /** Optional: web Team checkout and customer portal (secret key and price id below) */

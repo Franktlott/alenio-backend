@@ -13756,3 +13756,51 @@ button.enterprise-profile-legal-link {
     padding-right: 0;
   }
 }
+
+.mobile-app-cta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.mobile-app-cta-store {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  text-decoration: none;
+}
+
+.mobile-app-cta-store-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.mobile-app-cta-browser {
+  margin-top: 0.25rem;
+  padding: 0.5rem;
+  border: none;
+  background: none;
+  color: var(--muted, #64748b);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.mobile-app-cta-browser:hover {
+  color: var(--text, #0f172a);
+}
+
+.mobile-get-app-shell .auth-v2-main {
+  min-height: 100vh;
+  align-items: center;
+  justify-content: center;
+}
+
+.mobile-get-app-card {
+  max-width: 420px;
+  width: 100%;
+}

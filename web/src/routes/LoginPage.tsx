@@ -9,6 +9,7 @@ import {
 } from "../lib/auth-client";
 import { formatAuthFlowError, isEmailNotVerifiedError } from "../lib/auth-errors";
 import { finishPostAuthNavigation, setPendingInviteToken } from "../lib/invite-auth";
+import { isMobileBrowser } from "../lib/mobile-browser";
 import { isJwtExpiredSkew, looksLikeJwt } from "../lib/token";
 
 export function LoginPage() {
@@ -30,7 +31,7 @@ export function LoginPage() {
   }, []);
 
   if (existing && looksLikeJwt(existing) && !isJwtExpiredSkew(existing)) {
-    return <Navigate to="/chat" replace />;
+    return <Navigate to={isMobileBrowser() ? "/get-app" : "/chat"} replace />;
   }
 
   const [email, setEmail] = useState(emailFromInvite);

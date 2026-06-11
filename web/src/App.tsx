@@ -24,6 +24,7 @@ import { TermsOfServicePage } from "./routes/TermsOfServicePage";
 import { WebsiteHomePage } from "./routes/WebsiteHomePage";
 import { PricingPage } from "./routes/PricingPage";
 import { InvitePage } from "./routes/InvitePage";
+import { GetAppPage } from "./routes/GetAppPage";
 import { getActiveApiTarget, getWebEnvConfigError } from "./lib/env-config";
 
 function missingWebEnvMessage(): string | null {
@@ -105,6 +106,7 @@ export default function App() {
         <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/verify" element={<VerifyPage />} />
         <Route path="/invite/:token" element={<InvitePage />} />
+        <Route path="/get-app" element={<GetAppPage />} />
         <Route path="/privacy" element={<PrivacyPolicyPage />} />
         <Route path="/terms" element={<TermsOfServicePage />} />
         <Route path="/account-deletion" element={<AccountDeletionPage />} />

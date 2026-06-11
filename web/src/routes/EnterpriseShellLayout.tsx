@@ -5,7 +5,9 @@ import { EnterpriseLayout, type EnterpriseNavId } from "../components/Enterprise
 import { NoTeamsEmptyState } from "../components/NoTeamsEmptyState";
 import { EnterpriseShellContext, type EnterpriseShellContextValue } from "../contexts/EnterpriseShellContext";
 import { fetchWebMe, fetchWebTeams, type WebMeUser, type WebTeamRow } from "../lib/api";
+import { hasMobileWebPreferred } from "../lib/app-links";
 import { pickEnterpriseTeamId, teamsWorkspaceSelectionKey } from "../lib/enterprise-selected-team";
+import { isMobileBrowser } from "../lib/mobile-browser";
 import { enterpriseNavTitle } from "../lib/enterprise-nav";
 
 export type EnterpriseRouteHandle = {
@@ -167,6 +169,12 @@ export function EnterpriseShellLayout() {
     teams === null ||
     !effectiveTeamId ||
     teams.find((t) => t.id === effectiveTeamId)?.hasTeamFeatures !== false;
+
+  /** Phone browsers should use the native app unless the user chose web explicitly. */
+  useLayoutEffect(() => {
+    if (!isMobileBrowser() || hasMobileWebPreferred()) return;
+    navigate("/get-app", { replace: true });
+  }, [navigate]);
 
   /** Plan / billing is owner-only; Activity / Workspace require Team plan. Runs in layout effect so URL settles before paint (avoids replaceState thrash with Chat sync). */
   useLayoutEffect(() => {

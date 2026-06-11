@@ -10,6 +10,7 @@ import {
 import { formatAuthFlowError, isEmailNotVerifiedError } from "../lib/auth-errors";
 import { isJwtExpiredSkew, looksLikeJwt } from "../lib/token";
 import { finishPostAuthNavigation, setPendingInviteToken } from "../lib/invite-auth";
+import { isMobileBrowser } from "../lib/mobile-browser";
 import { LEGAL_COMPANY_NAME, LEGAL_PARENT_COMPANY_NAME } from "../lib/legal-constants";
 
 export function SignUpPage() {
@@ -30,7 +31,7 @@ export function SignUpPage() {
   }, [inviteToken]);
 
   if (existing && looksLikeJwt(existing) && !isJwtExpiredSkew(existing)) {
-    return <Navigate to="/chat" replace />;
+    return <Navigate to={isMobileBrowser() ? "/get-app" : "/chat"} replace />;
   }
 
   const [name, setName] = useState("");
