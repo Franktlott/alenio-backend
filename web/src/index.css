@@ -1830,7 +1830,7 @@ input {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.65rem;
+  gap: 0.5rem;
 }
 
 .enterprise-team-roster-card {
@@ -1838,10 +1838,10 @@ input {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: 0.85rem;
-  padding: 0.95rem 1rem;
+  gap: 0.65rem;
+  padding: 0.55rem 0.75rem;
   border: 1px solid #e8edf3;
-  border-radius: 16px;
+  border-radius: 12px;
   background: #fff;
   cursor: pointer;
   text-align: left;
@@ -1876,14 +1876,14 @@ input {
 }
 
 .enterprise-team-roster-avatar {
-  width: 48px;
-  height: 48px;
+  width: 40px;
+  height: 40px;
   border-radius: 999px;
   overflow: hidden;
   background: #eef2ff;
   color: #4361ee;
   font-weight: 800;
-  font-size: 1rem;
+  font-size: 0.875rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1900,21 +1900,31 @@ input {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
+  gap: 0.15rem;
+}
+
+.enterprise-team-roster-headline {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.5rem;
+  min-width: 0;
 }
 
 .enterprise-team-roster-name {
-  font-size: 0.9375rem;
+  font-size: 0.875rem;
   font-weight: 700;
   color: #0f172a;
-  line-height: 1.25;
+  line-height: 1.2;
 }
 
 .enterprise-team-roster-role {
-  font-size: 0.75rem;
-  font-weight: 600;
+  font-size: 0.6875rem;
+  font-weight: 700;
   color: #94a3b8;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  flex-shrink: 0;
 }
 
 .enterprise-team-roster-overdue {
@@ -1928,27 +1938,27 @@ input {
 .enterprise-team-roster-kpis {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.65rem 1rem;
-  margin-top: 0.35rem;
+  gap: 0.35rem 1.25rem;
 }
 
 .enterprise-team-roster-kpi {
   display: flex;
-  flex-direction: column;
-  gap: 0.1rem;
-  min-width: 3.5rem;
+  align-items: baseline;
+  gap: 0.3rem;
+  min-width: 0;
 }
 
 .enterprise-team-roster-kpi-label {
   font-size: 0.625rem;
   font-weight: 700;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
   color: #94a3b8;
+  flex-shrink: 0;
 }
 
 .enterprise-team-roster-kpi-value {
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
   font-weight: 700;
   color: #334155;
 }
@@ -2036,9 +2046,11 @@ input {
 
 .enterprise-team-roster-chevron {
   color: #94a3b8;
-  font-size: 1.1rem;
+  font-size: 1rem;
   line-height: 1;
   flex-shrink: 0;
+  align-self: center;
+  padding-left: 0.15rem;
 }
 
 .enterprise-team-roster-card--selected .enterprise-team-roster-chevron {
@@ -3316,19 +3328,12 @@ input {
   }
 
   .enterprise-team-roster-card {
-    grid-template-columns: auto minmax(0, 1fr);
-    grid-template-rows: auto auto;
+    gap: 0.55rem;
+    padding: 0.5rem 0.65rem;
   }
 
-  .enterprise-team-roster-oneone {
-    grid-column: 1 / -1;
-    border-left: none;
-    border-top: 1px solid #e8edf3;
-    padding-left: 0;
-    padding-top: 0.65rem;
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
+  .enterprise-team-roster-kpis {
+    gap: 0.3rem 0.85rem;
   }
 }
 

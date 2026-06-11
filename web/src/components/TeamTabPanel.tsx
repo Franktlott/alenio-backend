@@ -65,12 +65,6 @@ function formatStreakLabel(streak: number, paid: boolean): string {
   return `${streak}d`;
 }
 
-function formatActiveGoalsLabel(count: number): string {
-  if (count === 0) return "No active goals";
-  if (count === 1) return "1 active goal";
-  return `${count} active goals`;
-}
-
 function formatDaysSinceOneOnOne(days: number | null | undefined): string {
   if (days == null) return "Never";
   if (days === 0) return "Today";
@@ -861,7 +855,6 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                 const stats = memberStats?.[m.userId];
                 const statsReady = memberStats !== null;
                 const activeDevGoals = stats?.activeDevGoals ?? 0;
-                const devPct = stats?.devEngagementPct ?? 0;
                 const daysSinceOneOnOne = stats?.daysSinceLastOneOnOne;
                 const streak = stats?.streak ?? 0;
                 const overdue = stats?.overdueTasks ?? 0;
@@ -876,16 +869,18 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                         )}
                       </span>
                       <span className="enterprise-team-roster-main">
-                        <span className="enterprise-team-roster-name">
-                          {displayName}
-                          {isSelf ? " (you)" : ""}
-                          {overdue > 0 ? (
-                            <span className="enterprise-team-roster-overdue" title={`${overdue} overdue task${overdue !== 1 ? "s" : ""}`}>
-                              {overdue} overdue
-                            </span>
-                          ) : null}
+                        <span className="enterprise-team-roster-headline">
+                          <span className="enterprise-team-roster-name">
+                            {displayName}
+                            {isSelf ? " (you)" : ""}
+                            {overdue > 0 ? (
+                              <span className="enterprise-team-roster-overdue" title={`${overdue} overdue task${overdue !== 1 ? "s" : ""}`}>
+                                {overdue} overdue
+                              </span>
+                            ) : null}
+                          </span>
+                          <span className="enterprise-team-roster-role">{roleAbbrev(m.role)}</span>
                         </span>
-                        <span className="enterprise-team-roster-role">{roleAbbrev(m.role)}</span>
                         <span className="enterprise-team-roster-kpis">
                           <span className="enterprise-team-roster-kpi">
                             <span className="enterprise-team-roster-kpi-label">Streak</span>
@@ -906,34 +901,19 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                               {statsReady ? activeDevGoals : "…"}
                             </span>
                           </span>
-                        </span>
-                        <span className="enterprise-team-roster-progress-block">
-                          <span className="enterprise-team-roster-metric-label">Development progress</span>
-                          <span className="enterprise-team-roster-progress-row">
-                            <span className="enterprise-team-roster-progress" aria-hidden>
-                              <span
-                                className="enterprise-team-roster-progress-fill"
-                                style={{ width: statsReady ? `${devPct}%` : "0%" }}
-                              />
+                          <span className="enterprise-team-roster-kpi">
+                            <span className="enterprise-team-roster-kpi-label">Last 1:1</span>
+                            <span className="enterprise-team-roster-kpi-value">
+                              {statsReady ? formatDaysSinceOneOnOne(daysSinceOneOnOne) : "…"}
                             </span>
-                            <span className="enterprise-team-roster-progress-pct">
-                              {statsReady ? (activeDevGoals > 0 ? `${devPct}%` : "—") : "…"}
-                            </span>
-                          </span>
-                          <span className="enterprise-team-roster-progress-caption">
-                            {statsReady ? formatActiveGoalsLabel(activeDevGoals) : "Loading…"}
                           </span>
                         </span>
                       </span>
-                      <span className="enterprise-team-roster-oneone">
-                        <span className="enterprise-team-roster-metric-label">Last 1:1</span>
-                        <span className="enterprise-team-roster-oneone-row">
-                          <span className="enterprise-team-roster-metric-value">
-                            {statsReady ? formatDaysSinceOneOnOne(daysSinceOneOnOne) : "…"}
-                          </span>
-                          {canView ? <span className="enterprise-team-roster-chevron" aria-hidden>›</span> : null}
+                      {canView ? (
+                        <span className="enterprise-team-roster-chevron" aria-hidden>
+                          ›
                         </span>
-                      </span>
+                      ) : null}
                   </>
                 );
                 return (
