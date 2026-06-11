@@ -7,6 +7,7 @@ import {
   type OneOnOneTemplate,
   type OneOnOneTemplateField,
   type OneOnOneTemplateFieldType,
+  type WebTeamMemberRow,
 } from "../lib/api";
 
 const QUESTION_TYPE_OPTIONS: {
@@ -114,11 +115,21 @@ type Props = {
   teamId: string;
   open: boolean;
   onClose: () => void;
+  members?: WebTeamMemberRow[];
+  canAssign?: boolean;
+  onAssign?: (templateId: string, memberUserId: string) => void;
 };
 
 type EditorView = "edit" | "preview";
 
-export function OneOnOneTemplatesModal({ teamId, open, onClose }: Props) {
+export function OneOnOneTemplatesModal({
+  teamId,
+  open,
+  onClose,
+  members = [],
+  canAssign = false,
+  onAssign,
+}: Props) {
   const [templates, setTemplates] = useState<OneOnOneTemplate[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -126,6 +137,9 @@ export function OneOnOneTemplatesModal({ teamId, open, onClose }: Props) {
   const [view, setView] = useState<"list" | "editor">("list");
   const [editorView, setEditorView] = useState<EditorView>("edit");
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [previewOnly, setPreviewOnly] = useState(false);
+  const [assignTemplate, setAssignTemplate] = useState<OneOnOneTemplate | null>(null);
+  const [assignMemberId, setAssignMemberId] = useState("");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [fields, setFields] = useState<OneOnOneTemplateField[]>([]);
@@ -161,6 +175,9 @@ export function OneOnOneTemplatesModal({ teamId, open, onClose }: Props) {
     setView("list");
     setEditorView("edit");
     setEditingId(null);
+    setPreviewOnly(false);
+    setAssignTemplate(null);
+    setAssignMemberId("");
     setMoreOpen(false);
     setFieldMenuId(null);
     void loadTemplates();
@@ -179,6 +196,7 @@ export function OneOnOneTemplatesModal({ teamId, open, onClose }: Props) {
   const openCreate = () => {
     const blank = emptyEditorState();
     setEditingId(null);
+    setPreviewOnly(false);
     setTitle(blank.title);
     setDescription(blank.description);
     setFields(blank.fields);
@@ -189,17 +207,40 @@ export function OneOnOneTemplatesModal({ teamId, open, onClose }: Props) {
     setView("editor");
   };
 
-  const openEdit = (template: OneOnOneTemplate) => {
+  const loadTemplateIntoEditor = (template: OneOnOneTemplate, mode: EditorView, readOnly: boolean) => {
     const normalized = normalizeLoadedFields(template.fields);
     setEditingId(template.id);
+    setPreviewOnly(readOnly);
     setTitle(template.title);
     setDescription(template.description ?? "");
     setFields(normalized);
     setSelectedFieldId(normalized.find((f) => !isSection(f))?.id ?? null);
     setCollapsedSections(new Set());
     setErr(null);
-    setEditorView("edit");
+    setEditorView(mode);
     setView("editor");
+  };
+
+  const openEdit = (template: OneOnOneTemplate) => {
+    loadTemplateIntoEditor(template, "edit", false);
+  };
+
+  const openPreview = (template: OneOnOneTemplate) => {
+    loadTemplateIntoEditor(template, "preview", true);
+  };
+
+  const openAssign = (template: OneOnOneTemplate) => {
+    setAssignTemplate(template);
+    setAssignMemberId(members[0]?.userId ?? "");
+    setErr(null);
+  };
+
+  const confirmAssign = () => {
+    if (!assignTemplate || !assignMemberId || !onAssign) return;
+    onAssign(assignTemplate.id, assignMemberId);
+    setAssignTemplate(null);
+    setAssignMemberId("");
+    onClose();
   };
 
   const updateField = (id: string, patch: Partial<OneOnOneTemplateField>) => {
@@ -390,7 +431,7 @@ export function OneOnOneTemplatesModal({ teamId, open, onClose }: Props) {
               </div>
               <div className="enterprise-oneone-templates-list-header-actions">
                 <button type="button" className="enterprise-oneone-templates-primary-btn" onClick={openCreate}>
-                  Create template
+                  + New Template
                 </button>
                 <button type="button" className="enterprise-oneone-templates-close" aria-label="Close" onClick={onClose}>
                   ×
@@ -404,10 +445,10 @@ export function OneOnOneTemplatesModal({ teamId, open, onClose }: Props) {
                 <div className="enterprise-oneone-templates-empty-panel">
                   <p className="enterprise-oneone-templates-empty-title">No templates yet</p>
                   <p className="enterprise-muted enterprise-oneone-templates-empty">
-                    Create a template to define questions, ratings, and notes for check-ins.
+                    Add a starter template or build your own question set for check-ins.
                   </p>
                   <button type="button" className="enterprise-oneone-templates-primary-btn" onClick={openCreate}>
-                    Create template
+                    + New Template
                   </button>
                 </div>
               ) : null}
@@ -432,7 +473,7 @@ export function OneOnOneTemplatesModal({ teamId, open, onClose }: Props) {
                               <button
                                 type="button"
                                 className="enterprise-oneone-templates-table-link"
-                                onClick={() => openEdit(template)}
+                                onClick={() => openPreview(template)}
                               >
                                 <span className="enterprise-oneone-templates-table-name">{template.title}</span>
                                 {template.description ? (
@@ -447,10 +488,26 @@ export function OneOnOneTemplatesModal({ teamId, open, onClose }: Props) {
                               <button
                                 type="button"
                                 className="enterprise-oneone-templates-table-action"
+                                onClick={() => openPreview(template)}
+                              >
+                                Preview
+                              </button>
+                              <button
+                                type="button"
+                                className="enterprise-oneone-templates-table-action"
                                 onClick={() => openEdit(template)}
                               >
                                 Edit
                               </button>
+                              {canAssign && onAssign ? (
+                                <button
+                                  type="button"
+                                  className="enterprise-oneone-templates-table-action"
+                                  onClick={() => openAssign(template)}
+                                >
+                                  Assign
+                                </button>
+                              ) : null}
                               <button
                                 type="button"
                                 className="enterprise-oneone-templates-table-action enterprise-oneone-templates-table-action--danger"
@@ -480,6 +537,7 @@ export function OneOnOneTemplatesModal({ teamId, open, onClose }: Props) {
                     setView("list");
                     setEditingId(null);
                     setEditorView("edit");
+                    setPreviewOnly(false);
                     setErr(null);
                   }}
                 >
@@ -500,13 +558,26 @@ export function OneOnOneTemplatesModal({ teamId, open, onClose }: Props) {
                 </div>
               </div>
               <div className="enterprise-oneone-templates-editor-top-actions">
-                <button
-                  type="button"
-                  className={`enterprise-oneone-templates-toolbar-btn${editorView === "preview" ? " enterprise-oneone-templates-toolbar-btn--active" : ""}`}
-                  onClick={() => setEditorView((v) => (v === "preview" ? "edit" : "preview"))}
-                >
-                  Preview
-                </button>
+                {previewOnly ? (
+                  <button
+                    type="button"
+                    className="enterprise-oneone-templates-toolbar-btn"
+                    onClick={() => {
+                      setPreviewOnly(false);
+                      setEditorView("edit");
+                    }}
+                  >
+                    Edit template
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className={`enterprise-oneone-templates-toolbar-btn${editorView === "preview" ? " enterprise-oneone-templates-toolbar-btn--active" : ""}`}
+                    onClick={() => setEditorView((v) => (v === "preview" ? "edit" : "preview"))}
+                  >
+                    Preview
+                  </button>
+                )}
                 <div className="enterprise-oneone-templates-more-wrap">
                   <button
                     type="button"
@@ -538,14 +609,16 @@ export function OneOnOneTemplatesModal({ teamId, open, onClose }: Props) {
                     </div>
                   ) : null}
                 </div>
-                <button
-                  type="button"
-                  className="enterprise-oneone-templates-primary-btn enterprise-oneone-templates-save-btn"
-                  disabled={saving}
-                  onClick={() => void onSave()}
-                >
-                  {saving ? "Saving…" : "Save template"}
-                </button>
+                {!previewOnly ? (
+                  <button
+                    type="button"
+                    className="enterprise-oneone-templates-primary-btn enterprise-oneone-templates-save-btn"
+                    disabled={saving}
+                    onClick={() => void onSave()}
+                  >
+                    {saving ? "Saving…" : "Save template"}
+                  </button>
+                ) : null}
                 <button type="button" className="enterprise-oneone-templates-close" aria-label="Close" onClick={onClose}>
                   ×
                 </button>
@@ -559,6 +632,9 @@ export function OneOnOneTemplatesModal({ teamId, open, onClose }: Props) {
                 <p className="enterprise-muted enterprise-oneone-templates-preview-intro">
                   This is how team members will see the check-in form.
                 </p>
+                {description.trim() ? (
+                  <p className="enterprise-muted enterprise-oneone-templates-preview-desc">{description.trim()}</p>
+                ) : null}
                 {sectionGroups.map((group) => (
                   <section key={group.section.id} className="enterprise-oneone-templates-preview-section">
                     <h3>{group.section.label.trim() || "Untitled section"}</h3>
@@ -827,17 +903,67 @@ export function OneOnOneTemplatesModal({ teamId, open, onClose }: Props) {
               </div>
             )}
 
-            <label className="enterprise-oneone-templates-desc-row">
-              <span className="enterprise-muted">Description (optional)</span>
-              <input
-                className="auth-input enterprise-oneone-templates-desc-input"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="When to use this template"
-              />
-            </label>
+            {editorView === "edit" ? (
+              <label className="enterprise-oneone-templates-desc-row">
+                <span className="enterprise-muted">Description (optional)</span>
+                <input
+                  className="auth-input enterprise-oneone-templates-desc-input"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="When to use this template"
+                />
+              </label>
+            ) : null}
           </>
         )}
+
+        {assignTemplate ? (
+          <div
+            className="enterprise-oneone-templates-assign-overlay"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="assign-check-in-template-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 id="assign-check-in-template-title" className="enterprise-oneone-templates-assign-title">
+              Assign check-in template
+            </h3>
+            <p className="enterprise-muted enterprise-oneone-templates-assign-copy">
+              Start a check-in with <strong>{assignTemplate.title}</strong> for a team member.
+            </p>
+            <label className="enterprise-oneone-templates-assign-label" htmlFor="assign-check-in-member">
+              Team member
+            </label>
+            <select
+              id="assign-check-in-member"
+              className="auth-input enterprise-oneone-templates-assign-select"
+              value={assignMemberId}
+              onChange={(e) => setAssignMemberId(e.target.value)}
+            >
+              {members.map((member) => {
+                const name = member.user.name ?? member.user.email ?? "Member";
+                return (
+                  <option key={member.userId} value={member.userId}>
+                    {name}
+                  </option>
+                );
+              })}
+            </select>
+            <div className="enterprise-oneone-templates-assign-actions">
+              <button type="button" className="auth-btn-secondary" onClick={() => setAssignTemplate(null)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="enterprise-oneone-templates-primary-btn"
+                disabled={!assignMemberId}
+                onClick={confirmAssign}
+              >
+                Assign check-in
+              </button>
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   );

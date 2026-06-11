@@ -5,6 +5,7 @@ import { prisma } from "../prisma";
 import { auth } from "../auth";
 import { authGuard } from "../middleware/auth-guard";
 import { prismaRouteError } from "../lib/prisma-errors";
+import { buildDefaultOneOnOneTemplateRecords } from "../lib/default-one-on-one-templates";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -90,6 +91,32 @@ const upsertSchema = z.object({
   fields: z.array(fieldSchema).min(1, "Add at least one field"),
 });
 
+async function ensureDefaultTemplates(teamId: string) {
+  const count = await prisma.oneOnOneTemplate.count({ where: { teamId } });
+  if (count > 0) return;
+
+  const owner = await prisma.teamMember.findFirst({
+    where: { teamId, role: "owner" },
+    select: { userId: true },
+  });
+  if (!owner) return;
+
+  const defaults = buildDefaultOneOnOneTemplateRecords();
+  await prisma.$transaction(
+    defaults.map((template) =>
+      prisma.oneOnOneTemplate.create({
+        data: {
+          teamId,
+          title: template.title,
+          description: template.description,
+          fields: JSON.stringify(template.fields),
+          createdById: owner.userId,
+        },
+      }),
+    ),
+  );
+}
+
 // GET /api/teams/:teamId/one-on-one-templates
 oneOnOneTemplatesRouter.get("/", async (c) => {
   const teamId = c.req.param("teamId") as string;
@@ -100,6 +127,8 @@ oneOnOneTemplatesRouter.get("/", async (c) => {
   }
 
   try {
+    await ensureDefaultTemplates(teamId);
+
     const templates = await prisma.oneOnOneTemplate.findMany({
       where: { teamId },
       include: {

@@ -114,6 +114,8 @@ type Props = {
   leaderUserId: string | null;
   canCreate: boolean;
   canModify: boolean;
+  initialTemplateId?: string;
+  onInitialTemplateConsumed?: () => void;
 };
 
 type View = "list" | "pick" | "fill";
@@ -178,6 +180,8 @@ export function OneOnOneHistoryTab({
   leaderUserId,
   canCreate,
   canModify,
+  initialTemplateId,
+  onInitialTemplateConsumed,
 }: Props) {
   const [view, setView] = useState<View>("list");
   const [meetings, setMeetings] = useState<OneOnOneMeeting[]>([]);
@@ -281,6 +285,39 @@ export function OneOnOneHistoryTab({
     setErr(null);
     setView("fill");
   };
+
+  useEffect(() => {
+    if (!initialTemplateId || !canCreate || !teamId) return;
+    let cancelled = false;
+
+    void (async () => {
+      setLoadingTemplates(true);
+      setErr(null);
+      try {
+        const list = await fetchOneOnOneTemplates(teamId);
+        if (cancelled) return;
+        const template = list.find((item) => item.id === initialTemplateId);
+        if (template) {
+          pickTemplate(template);
+        } else {
+          setErr("That check-in template is no longer available.");
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setErr(e instanceof Error ? e.message : "Could not load check-in template.");
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingTemplates(false);
+          onInitialTemplateConsumed?.();
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [initialTemplateId, canCreate, teamId, onInitialTemplateConsumed]);
 
   useEffect(() => {
     if (!menuMeetingId) return;

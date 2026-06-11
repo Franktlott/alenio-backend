@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { WebTeamMemberRow } from "../lib/api";
 import { DevelopmentPlanTab } from "./DevelopmentPlanTab";
 import { OneOnOneHistoryTab } from "./OneOnOneHistoryTab";
@@ -22,6 +22,9 @@ type Props = {
   canAddDevNotes: boolean;
   streak?: number;
   overdueTasks?: number;
+  initialTab?: ProfileTab;
+  initialCheckInTemplateId?: string | null;
+  onCheckInTemplateConsumed?: () => void;
   onBack: () => void;
   onManage: () => void;
 };
@@ -40,11 +43,18 @@ export function TeamMemberProfilePanel({
   canAddDevNotes,
   streak,
   overdueTasks,
+  initialTab,
+  initialCheckInTemplateId,
+  onCheckInTemplateConsumed,
   onBack,
   onManage,
 }: Props) {
-  const [activeTab, setActiveTab] = useState<ProfileTab>("Overview");
+  const [activeTab, setActiveTab] = useState<ProfileTab>(initialTab ?? "Overview");
   const displayName = member.user.name ?? member.user.email ?? "Member";
+
+  useEffect(() => {
+    if (initialTab) setActiveTab(initialTab);
+  }, [initialTab, member.userId]);
 
   return (
     <div className="enterprise-team-profile" data-testid="team-member-profile">
@@ -138,6 +148,8 @@ export function TeamMemberProfilePanel({
             leaderUserId={leaderUserId}
             canCreate={canCreateOneOne}
             canModify={canCreateOneOne}
+            initialTemplateId={initialCheckInTemplateId ?? undefined}
+            onInitialTemplateConsumed={onCheckInTemplateConsumed}
           />
         )}
       </div>
