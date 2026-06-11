@@ -21,8 +21,16 @@ const QUESTION_TYPE_OPTIONS: {
   { value: "short_text", label: "Short answer", defaultLabel: "Question" },
   { value: "long_text", label: "Long answer", defaultLabel: "Question" },
   { value: "rating", label: "Rating", defaultLabel: "Rating" },
-  { value: "manager_notes", label: "Leader comments", defaultLabel: "Summary & commitments" },
 ];
+
+const FIELD_TYPE_LABELS: Record<OneOnOneTemplateFieldType, string> = {
+  section: "Section",
+  short_text: "Short answer",
+  long_text: "Long answer",
+  rating: "Rating",
+  manager_notes: "Leader comments",
+  associate_notes: "Associate notes",
+};
 
 type SectionGroup = {
   section: OneOnOneTemplateField;
@@ -35,7 +43,7 @@ function isSection(f: OneOnOneTemplateField) {
 
 function fieldTypeLabel(type: OneOnOneTemplateFieldType, ratingMax?: number): string {
   if (type === "rating") return `Rating (1-${ratingMax ?? 5})`;
-  return QUESTION_TYPE_OPTIONS.find((o) => o.value === type)?.label ?? type;
+  return FIELD_TYPE_LABELS[type] ?? type;
 }
 
 function newSection(title: string): OneOnOneTemplateField {
@@ -703,6 +711,15 @@ export function OneOnOneTemplatesModal({ teamId, open, onClose }: Props) {
                   />
                   {isDraft ? <span className="enterprise-oneone-templates-draft-badge">Draft</span> : null}
                 </div>
+                {!previewOnly && editorView === "edit" ? (
+                  <input
+                    className="enterprise-oneone-templates-editor-desc-input"
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="Short description (optional)"
+                    aria-label="Template description"
+                  />
+                ) : null}
               </div>
               <div className="enterprise-oneone-templates-editor-top-actions">
                 {previewOnly && !editingId ? (
@@ -962,30 +979,39 @@ export function OneOnOneTemplatesModal({ teamId, open, onClose }: Props) {
                         onChange={(e) => updateField(selectedField.id, { label: e.target.value })}
                       />
                       <p className="enterprise-muted enterprise-oneone-templates-field-hint">
-                        This is the question your team member will see.
+                        {selectedField.type === "manager_notes"
+                          ? "Leaders fill this in when running the check-in."
+                          : "This is the question your team member will see."}
                       </p>
 
                       <label className="enterprise-oneone-templates-field-form-label" htmlFor="oneone-field-type">
                         Type
                       </label>
-                      <select
-                        id="oneone-field-type"
-                        className="auth-input enterprise-oneone-templates-field-form-input"
-                        value={selectedField.type}
-                        onChange={(e) => {
-                          const type = e.target.value as OneOnOneTemplateFieldType;
-                          updateField(selectedField.id, {
-                            type,
-                            ...(type === "rating" ? { ratingMax: selectedField.ratingMax ?? 5 } : {}),
-                          });
-                        }}
-                      >
-                        {QUESTION_TYPE_OPTIONS.map((opt) => (
-                          <option key={opt.value} value={opt.value}>
-                            {opt.label}
-                          </option>
-                        ))}
-                      </select>
+                      {selectedField.type === "manager_notes" ? (
+                        <p className="enterprise-oneone-templates-field-type-readonly" id="oneone-field-type">
+                          Leader comments
+                          <span className="enterprise-muted"> Added automatically to every check-in.</span>
+                        </p>
+                      ) : (
+                        <select
+                          id="oneone-field-type"
+                          className="auth-input enterprise-oneone-templates-field-form-input"
+                          value={selectedField.type}
+                          onChange={(e) => {
+                            const type = e.target.value as OneOnOneTemplateFieldType;
+                            updateField(selectedField.id, {
+                              type,
+                              ...(type === "rating" ? { ratingMax: selectedField.ratingMax ?? 5 } : {}),
+                            });
+                          }}
+                        >
+                          {QUESTION_TYPE_OPTIONS.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
+                      )}
 
                       <label className="enterprise-oneone-templates-field-check">
                         <input
@@ -1054,17 +1080,6 @@ export function OneOnOneTemplatesModal({ teamId, open, onClose }: Props) {
               </div>
             )}
 
-            {editorView === "edit" ? (
-              <label className="enterprise-oneone-templates-desc-row">
-                <span className="enterprise-muted">Description (optional)</span>
-                <input
-                  className="auth-input enterprise-oneone-templates-desc-input"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="When to use this template"
-                />
-              </label>
-            ) : null}
           </>
         )}
       </div>
