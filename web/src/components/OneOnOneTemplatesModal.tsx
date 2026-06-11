@@ -497,6 +497,15 @@ export function OneOnOneTemplatesModal({ teamId, open, onClose }: Props) {
                 </p>
               </div>
               <div className="enterprise-oneone-templates-list-header-actions">
+                {!loading && templates.length > 0 ? (
+                  <button
+                    type="button"
+                    className="enterprise-oneone-templates-library-search-btn enterprise-oneone-templates-library-search-btn--header"
+                    onClick={openLibraryBrowse}
+                  >
+                    Search check-in library
+                  </button>
+                ) : null}
                 <button type="button" className="enterprise-oneone-templates-primary-btn" onClick={openCreate}>
                   + New Template
                 </button>
@@ -508,11 +517,8 @@ export function OneOnOneTemplatesModal({ teamId, open, onClose }: Props) {
             {err ? <p className="enterprise-form-error enterprise-oneone-templates-list-error" role="alert">{err}</p> : null}
             <div className="enterprise-oneone-templates-list-wrap">
               <section className="enterprise-oneone-templates-section">
-                <header className="enterprise-oneone-templates-section-head">
+                <header className="enterprise-oneone-templates-section-head enterprise-oneone-templates-section-head--compact">
                   <h3 className="enterprise-oneone-templates-section-title">Your team templates</h3>
-                  <p className="enterprise-muted enterprise-oneone-templates-section-sub">
-                    Check-ins available for managers to use with team members.
-                  </p>
                 </header>
                 {loading ? <p className="enterprise-muted enterprise-oneone-templates-list-status">Loading team templates…</p> : null}
                 {!loading && templates.length === 0 ? (
@@ -527,74 +533,52 @@ export function OneOnOneTemplatesModal({ teamId, open, onClose }: Props) {
                   </div>
                 ) : null}
                 {!loading && templates.length > 0 ? (
-                  <>
-                    <div className="enterprise-oneone-templates-team-actions">
-                      <button type="button" className="enterprise-oneone-templates-library-search-btn" onClick={openLibraryBrowse}>
-                        Search check-in library
-                      </button>
-                    </div>
-                    <div className="enterprise-oneone-templates-table-wrap">
-                      <table className="enterprise-oneone-templates-table">
-                        <thead>
-                          <tr>
-                            <th scope="col">Template</th>
-                            <th scope="col">Questions</th>
-                            <th scope="col" className="enterprise-oneone-templates-table-actions-col">
-                              <span className="visually-hidden">Actions</span>
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {sortedTeamTemplates.map((template) => {
-                          const questionCount = template.fields.filter((f) => f.type !== "section").length;
-                          return (
-                            <tr key={template.id} className="enterprise-oneone-templates-table-row">
-                              <td>
-                                <button
-                                  type="button"
-                                  className="enterprise-oneone-templates-table-link"
-                                  onClick={() => openPreview(template)}
-                                >
-                                  <span className="enterprise-oneone-templates-table-name">{template.title}</span>
-                                  {template.description ? (
-                                    <span className="enterprise-oneone-templates-table-desc">{template.description}</span>
-                                  ) : null}
-                                </button>
-                              </td>
-                              <td className="enterprise-oneone-templates-table-meta">
+                  <div className="enterprise-oneone-templates-scroll-panel">
+                    <ul className="enterprise-oneone-templates-compact-list">
+                      {sortedTeamTemplates.map((template) => {
+                        const questionCount = template.fields.filter((f) => f.type !== "section").length;
+                        return (
+                          <li key={template.id} className="enterprise-oneone-templates-compact-item">
+                            <button
+                              type="button"
+                              className="enterprise-oneone-templates-compact-main"
+                              onClick={() => openPreview(template)}
+                              title={template.description ?? undefined}
+                            >
+                              <span className="enterprise-oneone-templates-compact-title">{template.title}</span>
+                              <span className="enterprise-oneone-templates-compact-meta">
                                 {questionCount} question{questionCount !== 1 ? "s" : ""}
-                              </td>
-                              <td className="enterprise-oneone-templates-table-actions">
-                                <button
-                                  type="button"
-                                  className="enterprise-oneone-templates-table-action"
-                                  onClick={() => openPreview(template)}
-                                >
-                                  Preview
-                                </button>
-                                <button
-                                  type="button"
-                                  className="enterprise-oneone-templates-table-action"
-                                  onClick={() => openEdit(template)}
-                                >
-                                  Edit
-                                </button>
-                                <button
-                                  type="button"
-                                  className="enterprise-oneone-templates-table-action enterprise-oneone-templates-table-action--danger"
-                                  aria-label={`Delete ${template.title}`}
-                                  onClick={() => void onDeleteTemplate(template)}
-                                >
-                                  Delete
-                                </button>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+                              </span>
+                            </button>
+                            <div className="enterprise-oneone-templates-compact-actions">
+                              <button
+                                type="button"
+                                className="enterprise-oneone-templates-table-action"
+                                onClick={() => openPreview(template)}
+                              >
+                                Preview
+                              </button>
+                              <button
+                                type="button"
+                                className="enterprise-oneone-templates-table-action"
+                                onClick={() => openEdit(template)}
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                className="enterprise-oneone-templates-table-action enterprise-oneone-templates-table-action--danger"
+                                aria-label={`Delete ${template.title}`}
+                                onClick={() => void onDeleteTemplate(template)}
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
                   </div>
-                  </>
                 ) : null}
               </section>
             </div>
@@ -619,7 +603,7 @@ export function OneOnOneTemplatesModal({ teamId, open, onClose }: Props) {
               </div>
             </header>
             {err ? <p className="enterprise-form-error enterprise-oneone-templates-list-error" role="alert">{err}</p> : null}
-            <div className="enterprise-oneone-templates-list-wrap">
+            <div className="enterprise-oneone-templates-list-wrap enterprise-oneone-templates-list-wrap--library">
               <label className="enterprise-oneone-templates-library-search">
                 <span className="visually-hidden">Search check-in library</span>
                 <input
@@ -631,55 +615,55 @@ export function OneOnOneTemplatesModal({ teamId, open, onClose }: Props) {
                   autoFocus
                 />
               </label>
-              {libraryLoading ? <p className="enterprise-muted enterprise-oneone-templates-list-status">Loading library…</p> : null}
-              {!libraryLoading && filteredLibrary.length === 0 ? (
-                <p className="enterprise-muted enterprise-oneone-templates-library-empty">
-                  {librarySearch.trim() ? "No check-ins match your search." : "No library templates available."}
-                </p>
-              ) : null}
-              {!libraryLoading && filteredLibrary.length > 0 ? (
-                <ul className="enterprise-oneone-templates-library-list">
-                  {filteredLibrary.map((item) => {
-                    const questionCount = item.fields.filter((f) => f.type !== "section").length;
-                    const onTeam = teamLibraryKeys.has(item.key);
-                    return (
-                      <li key={item.key} className="enterprise-oneone-templates-library-item">
-                        <button
-                          type="button"
-                          className="enterprise-oneone-templates-library-item-main"
-                          onClick={() => openLibraryPreview(item)}
-                        >
-                          <span className="enterprise-oneone-templates-library-item-title">{item.title}</span>
-                          {item.description ? (
-                            <span className="enterprise-oneone-templates-library-item-desc">{item.description}</span>
-                          ) : null}
-                          <span className="enterprise-oneone-templates-library-item-meta">
-                            {questionCount} question{questionCount !== 1 ? "s" : ""}
-                            {onTeam ? " · On team" : ""}
-                          </span>
-                        </button>
-                        <div className="enterprise-oneone-templates-library-item-actions">
+              <div className="enterprise-oneone-templates-scroll-panel">
+                {libraryLoading ? <p className="enterprise-muted enterprise-oneone-templates-list-status">Loading library…</p> : null}
+                {!libraryLoading && filteredLibrary.length === 0 ? (
+                  <p className="enterprise-muted enterprise-oneone-templates-library-empty">
+                    {librarySearch.trim() ? "No check-ins match your search." : "No library templates available."}
+                  </p>
+                ) : null}
+                {!libraryLoading && filteredLibrary.length > 0 ? (
+                  <ul className="enterprise-oneone-templates-compact-list">
+                    {filteredLibrary.map((item) => {
+                      const questionCount = item.fields.filter((f) => f.type !== "section").length;
+                      const onTeam = teamLibraryKeys.has(item.key);
+                      return (
+                        <li key={item.key} className="enterprise-oneone-templates-compact-item">
                           <button
                             type="button"
-                            className="enterprise-oneone-templates-table-action"
+                            className="enterprise-oneone-templates-compact-main"
                             onClick={() => openLibraryPreview(item)}
+                            title={item.description ?? undefined}
                           >
-                            Preview
+                            <span className="enterprise-oneone-templates-compact-title">{item.title}</span>
+                            <span className="enterprise-oneone-templates-compact-meta">
+                              {questionCount} question{questionCount !== 1 ? "s" : ""}
+                              {onTeam ? " · On team" : ""}
+                            </span>
                           </button>
-                          <button
-                            type="button"
-                            className="enterprise-oneone-templates-table-action enterprise-oneone-templates-table-action--primary"
-                            disabled={onTeam || addingLibraryKey === item.key}
-                            onClick={() => void addLibraryToTeam(item.key)}
-                          >
-                            {onTeam ? "On team" : addingLibraryKey === item.key ? "Adding…" : "Add to team"}
-                          </button>
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
-              ) : null}
+                          <div className="enterprise-oneone-templates-compact-actions">
+                            <button
+                              type="button"
+                              className="enterprise-oneone-templates-table-action"
+                              onClick={() => openLibraryPreview(item)}
+                            >
+                              Preview
+                            </button>
+                            <button
+                              type="button"
+                              className="enterprise-oneone-templates-table-action enterprise-oneone-templates-table-action--primary"
+                              disabled={onTeam || addingLibraryKey === item.key}
+                              onClick={() => void addLibraryToTeam(item.key)}
+                            >
+                              {onTeam ? "On team" : addingLibraryKey === item.key ? "Adding…" : "Add to team"}
+                            </button>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : null}
+              </div>
             </div>
           </>
         ) : (
