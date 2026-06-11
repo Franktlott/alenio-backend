@@ -1,3 +1,4 @@
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useEnterpriseShell } from "../contexts/EnterpriseShellContext";
 import {
@@ -5,18 +6,16 @@ import {
   fetchWebTeam,
   postActivityCelebrate,
   postActivityReaction,
-  type ApiActivityItem,
 } from "../lib/api";
+import { queryKeys } from "../lib/query-keys";
 
 import { ActivityFeedItem, CELEBRATION_TYPES } from "../components/activity/ActivityFeedPrimitives";
 
 const REACTION_HINT_KEY = "alenio_activity_reaction_hint";
 
 export function ActivityPage() {
-  const { me, teams, selectedTeamId, setSelectedTeamId, setWorkspaceMainLoading } = useEnterpriseShell();
-  const [items, setItems] = useState<ApiActivityItem[]>([]);
-  const [listErr, setListErr] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const queryClient = useQueryClient();
+  const { me, teams, selectedTeamId, setSelectedTeamId } = useEnterpriseShell();
   const [openPickerId, setOpenPickerId] = useState<string | null>(null);
   const [showReactionHint, setShowReactionHint] = useState(false);
   const [celebrateOpen, setCelebrateOpen] = useState(false);
@@ -33,34 +32,24 @@ export function ActivityPage() {
     [],
   );
 
-  const loadActivity = useCallback(async () => {
-    if (!selectedTeamId) return;
-    setLoading(true);
-    try {
+  const activityQuery = useQuery({
+    queryKey: queryKeys.activity(selectedTeamId),
+    queryFn: async () => {
       const data = await fetchTeamActivity(selectedTeamId);
-      setItems(Array.isArray(data) ? data : []);
-      setListErr(null);
-    } catch (e) {
-      setItems([]);
-      setListErr(e instanceof Error ? e.message : "Could not load activity.");
-    } finally {
-      setLoading(false);
-    }
-  }, [selectedTeamId]);
+      return Array.isArray(data) ? data : [];
+    },
+    enabled: !!selectedTeamId,
+    refetchInterval: 15_000,
+  });
 
-  useEffect(() => {
-    setWorkspaceMainLoading(loading);
-    return () => setWorkspaceMainLoading(false);
-  }, [loading, setWorkspaceMainLoading]);
+  const items = activityQuery.data ?? [];
+  const listErr =
+    activityQuery.error instanceof Error ? activityQuery.error.message : activityQuery.isError ? "Could not load activity." : null;
+  const showInitialLoading = activityQuery.isPending && items.length === 0;
 
-  useEffect(() => {
-    void loadActivity();
-  }, [loadActivity]);
-
-  useEffect(() => {
-    const id = window.setInterval(() => void loadActivity(), 15000);
-    return () => window.clearInterval(id);
-  }, [loadActivity]);
+  const refreshActivity = useCallback(async () => {
+    await queryClient.invalidateQueries({ queryKey: queryKeys.activity(selectedTeamId) });
+  }, [queryClient, selectedTeamId]);
 
   useEffect(() => {
     if (sessionStorage.getItem(REACTION_HINT_KEY) !== "1") setShowReactionHint(true);
@@ -127,12 +116,12 @@ export function ActivityPage() {
       if (!selectedTeamId) return;
       try {
         await postActivityReaction(selectedTeamId, activityId, emoji);
-        await loadActivity();
+        await refreshActivity();
       } catch {
         setListErr("Could not update reaction.");
       }
     },
-    [selectedTeamId, loadActivity],
+    [selectedTeamId, refreshActivity],
   );
 
   const onCelebrateSubmit = async () => {
@@ -152,7 +141,7 @@ export function ActivityPage() {
       setCelebrateTarget(null);
       setCelebrateType(CELEBRATION_TYPES[0]!.key);
       setCelebrateMessage("");
-      await loadActivity();
+      await refreshActivity();
     } catch (e) {
       setCelebrateErr(e instanceof Error ? e.message : "Could not post celebration.");
     } finally {
@@ -200,7 +189,7 @@ export function ActivityPage() {
           <div className="enterprise-tab-fill-card-body">
             {listErr ? <p className="enterprise-banner-warn">{listErr}</p> : null}
 
-            {loading && items.length === 0 ? (
+            {showInitialLoading ? (
               <p className="enterprise-muted">Loading activity…</p>
             ) : items.length === 0 && !listErr ? (
               <div className="enterprise-activity-empty">

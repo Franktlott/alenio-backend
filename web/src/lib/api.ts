@@ -403,6 +403,41 @@ export function fetchTeamTopics(teamId: string) {
   return apiGetJson<{ data: TeamTopic[] }>(`/api/teams/${encodeURIComponent(teamId)}/topics`).then((r) => r.data);
 }
 
+export function createTeamTopic(
+  teamId: string,
+  input: { name: string; description?: string; color?: string },
+) {
+  return apiPostJson<{ data: TeamTopic }>(`/api/teams/${encodeURIComponent(teamId)}/topics`, {
+    name: input.name.trim(),
+    description: input.description?.trim() || undefined,
+    color: input.color || "#4361EE",
+  }).then((r) => r.data);
+}
+
+export type UserSearchRow = {
+  id: string;
+  name: string | null;
+  email: string | null;
+  image: string | null;
+};
+
+export function searchUsers(query: string) {
+  const q = query.trim();
+  if (!q) return Promise.resolve([] as UserSearchRow[]);
+  return apiGetJson<{ data: UserSearchRow[] }>(`/api/users/search?q=${encodeURIComponent(q)}`).then((r) => r.data);
+}
+
+export function findOrCreateDm(recipientId: string) {
+  return apiPostJson<{ data: DmConversation }>("/api/dms/find-or-create", { recipientId }).then((r) => r.data);
+}
+
+export function createGroupDm(input: { name: string; participantIds: string[] }) {
+  return apiPostJson<{ data: DmConversation }>("/api/dms/create-group", {
+    name: input.name.trim(),
+    participantIds: input.participantIds,
+  }).then((r) => r.data);
+}
+
 export function fetchDmConversations() {
   return apiGetJson<{ data: DmConversation[] }>("/api/dms").then((r) => r.data);
 }

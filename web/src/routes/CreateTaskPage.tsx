@@ -1,11 +1,12 @@
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useEnterpriseShell } from "../contexts/EnterpriseShellContext";
 import {
   createWebTask,
   fetchWebTeam,
-  type WebTeamDetail,
 } from "../lib/api";
+import { queryKeys } from "../lib/query-keys";
 
 const PRIORITIES = [
   { label: "Low", value: "low" },
@@ -32,8 +33,7 @@ export function CreateTaskPage() {
   const [params] = useSearchParams();
   const teamIdFromUrl = params.get("teamId")?.trim() ?? "";
 
-  const { me, teams, selectedTeamId, setSelectedTeamId, setWorkspaceMainLoading } = useEnterpriseShell();
-  const [teamDetail, setTeamDetail] = useState<WebTeamDetail | null>(null);
+  const { me, teams, selectedTeamId, setSelectedTeamId } = useEnterpriseShell();
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -48,7 +48,12 @@ export function CreateTaskPage() {
 
   const [saving, setSaving] = useState(false);
   const [formErr, setFormErr] = useState<string | null>(null);
-  const [teamDetailLoading, setTeamDetailLoading] = useState(false);
+  const teamDetailQuery = useQuery({
+    queryKey: queryKeys.teamDetail(selectedTeamId),
+    queryFn: () => fetchWebTeam(selectedTeamId),
+    enabled: !!selectedTeamId,
+  });
+  const teamDetail = teamDetailQuery.data ?? null;
 
   useEffect(() => {
     if (!teams?.length) return;
@@ -56,30 +61,6 @@ export function CreateTaskPage() {
       setSelectedTeamId(teamIdFromUrl);
     }
   }, [teams, teamIdFromUrl, selectedTeamId, setSelectedTeamId]);
-
-  useEffect(() => {
-    setWorkspaceMainLoading(teamDetailLoading);
-    return () => setWorkspaceMainLoading(false);
-  }, [teamDetailLoading, setWorkspaceMainLoading]);
-
-  useEffect(() => {
-    if (!selectedTeamId) return;
-    let cancelled = false;
-    setTeamDetailLoading(true);
-    void (async () => {
-      try {
-        const d = await fetchWebTeam(selectedTeamId);
-        if (!cancelled) setTeamDetail(d);
-      } catch {
-        if (!cancelled) setTeamDetail(null);
-      } finally {
-        if (!cancelled) setTeamDetailLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedTeamId]);
 
   useEffect(() => {
     if (!me?.id || !teamDetail?.members?.length) return;

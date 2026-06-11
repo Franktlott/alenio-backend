@@ -1,3 +1,4 @@
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   type ClipboardEvent,
   type KeyboardEvent,
@@ -10,18 +11,24 @@ import {
   useState,
 } from "react";
 import { useSearchParams } from "react-router-dom";
+import { queryKeys } from "../lib/query-keys";
 import { useEnterpriseShell } from "../contexts/EnterpriseShellContext";
+import { CreateChannelModal, CreateGroupModal, NewDmModal } from "../components/ChatCreateModals";
 import { ChatMessageMedia } from "../components/ChatMessageMedia";
 import { linkifyText } from "../lib/linkify";
 import { isRecentFooterEnterpriseWorkspaceSelect } from "../lib/enterprise-selected-team";
 import {
+  createGroupDm,
   createTeamPoll,
+  createTeamTopic,
   createVideoRoom,
   fetchDmConversations,
   fetchDmMessages,
   fetchTeamMessages,
   fetchTeamPolls,
   fetchTeamTopics,
+  fetchWebTeam,
+  findOrCreateDm,
   postDmMessage,
   postTeamMessage,
   uploadChatMedia,
@@ -30,7 +37,6 @@ import {
   type DmConversation,
   type DirectChatMessage,
   type TeamChatMessage,
-  type TeamTopic,
 } from "../lib/api";
 
 const MESSAGE_REFRESH_MS = 4000;
@@ -198,16 +204,13 @@ function conversationRecencyMs(c: DmConversation): number {
 }
 
 export function ChatPage() {
+  const queryClient = useQueryClient();
   const [params, setParams] = useSearchParams();
   const teamIdFromUrl = params.get("teamId")?.trim() ?? "";
   const topicIdFromUrl = params.get("topicId")?.trim() ?? "";
   const conversationIdFromUrl = params.get("conversationId")?.trim() ?? "";
 
   const { me, teams, selectedTeamId, setSelectedTeamId, refreshMeAndTeams } = useEnterpriseShell();
-  const [topics, setTopics] = useState<TeamTopic[]>([]);
-  const [conversations, setConversations] = useState<DmConversation[]>([]);
-  const [messages, setMessages] = useState<Array<TeamChatMessage | DirectChatMessage>>([]);
-  const [loadErr, setLoadErr] = useState<string | null>(null);
   const [sendErr, setSendErr] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
@@ -217,7 +220,6 @@ export function ChatPage() {
     previewUrl: string;
     isVideo: boolean;
   } | null>(null);
-  const [polls, setPolls] = useState<ApiPoll[]>([]);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [videoTitle, setVideoTitle] = useState("");
   const [videoLoading, setVideoLoading] = useState(false);
@@ -228,6 +230,11 @@ export function ChatPage() {
   const [pollDurationHours, setPollDurationHours] = useState(24);
   const [pollSaving, setPollSaving] = useState(false);
   const [pollVoteId, setPollVoteId] = useState<string | null>(null);
+  const [createChannelOpen, setCreateChannelOpen] = useState(false);
+  const [newDmOpen, setNewDmOpen] = useState(false);
+  const [createGroupOpen, setCreateGroupOpen] = useState(false);
+  const [createSaving, setCreateSaving] = useState(false);
+  const [createErr, setCreateErr] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -241,23 +248,68 @@ export function ChatPage() {
   const isDmMode = Boolean(selectedConversationId);
 
   const selectedTeamName = teams?.find((t) => t.id === selectedTeamId)?.name ?? "";
+  const threadId = isDmMode ? selectedConversationId : `${selectedTeamId}:${selectedTopicId}`;
 
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const dms = await fetchDmConversations();
-        if (cancelled) return;
-        setConversations(dms ?? []);
-      } catch (e) {
-        if (cancelled) return;
-        setLoadErr(e instanceof Error ? e.message : "Could not load.");
+  const conversationsQuery = useQuery({
+    queryKey: queryKeys.chatConversations,
+    queryFn: () => fetchDmConversations(),
+  });
+
+  const topicsQuery = useQuery({
+    queryKey: queryKeys.chatTopics(selectedTeamId),
+    queryFn: () => fetchTeamTopics(selectedTeamId),
+    enabled: !!selectedTeamId,
+  });
+
+  const teamDetailQuery = useQuery({
+    queryKey: queryKeys.teamDetail(selectedTeamId),
+    queryFn: () => fetchWebTeam(selectedTeamId),
+    enabled: !!selectedTeamId,
+  });
+
+  const threadQuery = useQuery({
+    queryKey: queryKeys.chatThread(isDmMode ? "dm" : "team", threadId),
+    queryFn: async () => {
+      if (isDmMode) {
+        return {
+          messages: await fetchDmMessages(selectedConversationId),
+          polls: [] as ApiPoll[],
+        };
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+      const [messages, polls] = await Promise.all([
+        fetchTeamMessages(selectedTeamId, selectedTopicId),
+        fetchTeamPolls(selectedTeamId, selectedTopicId),
+      ]);
+      return { messages, polls };
+    },
+    enabled: isDmMode ? !!selectedConversationId : !!selectedTeamId,
+    refetchInterval: MESSAGE_REFRESH_MS,
+  });
+
+  const conversations = conversationsQuery.data ?? [];
+  const topics = topicsQuery.data ?? [];
+  const teamDetail = teamDetailQuery.data ?? null;
+  const messages = threadQuery.data?.messages ?? [];
+  const polls = threadQuery.data?.polls ?? [];
+  const loadErr =
+    conversationsQuery.error instanceof Error
+      ? conversationsQuery.error.message
+      : threadQuery.error instanceof Error
+        ? threadQuery.error.message
+        : conversationsQuery.isError || threadQuery.isError
+          ? "Could not load."
+          : null;
+  const loadingMeetings = threadQuery.isPending && messages.length === 0;
+
+  const refreshConversations = useCallback(async () => {
+    await queryClient.invalidateQueries({ queryKey: queryKeys.chatConversations });
+  }, [queryClient]);
+
+  const refreshChat = useCallback(async () => {
+    await queryClient.invalidateQueries({
+      queryKey: queryKeys.chatThread(isDmMode ? "dm" : "team", threadId),
+    });
+  }, [queryClient, isDmMode, threadId]);
 
   useEffect(() => {
     if (!teams?.length) return;
@@ -278,23 +330,7 @@ export function ChatPage() {
     setParams({ teamId: selectedTeamId, topicId: selectedTopicId }, { replace: true });
   }, [teams, selectedTeamId, teamIdFromUrl, topicIdFromUrl, selectedTopicId, isDmMode, setParams]);
 
-  useEffect(() => {
-    if (!selectedTeamId) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const data = await fetchTeamTopics(selectedTeamId);
-        if (cancelled) return;
-        setTopics(data);
-      } catch {
-        if (cancelled) return;
-        setTopics([]);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedTeamId]);
+  const canCreateChannel = teamDetail?.myRole === "owner" || teamDetail?.myRole === "admin";
 
   const discardPendingAttachment = useCallback(() => {
     setPendingAttachment((prev) => {
@@ -316,53 +352,6 @@ export function ChatPage() {
       if (p?.previewUrl) URL.revokeObjectURL(p.previewUrl);
     };
   }, []);
-
-  const refreshChat = useCallback(async () => {
-    if (isDmMode) {
-      if (!selectedConversationId) return;
-      try {
-        const data = await fetchDmMessages(selectedConversationId);
-        setMessages(data);
-        setLoadErr(null);
-      } catch (e) {
-        setLoadErr(e instanceof Error ? e.message : "Could not load messages.");
-      }
-      return;
-    }
-    if (!selectedTeamId) return;
-    try {
-      const [data, pollData] = await Promise.all([
-        fetchTeamMessages(selectedTeamId, selectedTopicId),
-        fetchTeamPolls(selectedTeamId, selectedTopicId),
-      ]);
-      setMessages(data);
-      setPolls(pollData);
-      setLoadErr(null);
-    } catch (e) {
-      setLoadErr(e instanceof Error ? e.message : "Could not load messages.");
-    }
-  }, [selectedTeamId, selectedTopicId, isDmMode, selectedConversationId]);
-
-  useEffect(() => {
-    if (isDmMode) setPolls([]);
-    if (isDmMode) {
-      if (!selectedConversationId) return;
-      void refreshChat();
-      return;
-    }
-    if (!selectedTeamId) return;
-    void refreshChat();
-  }, [selectedTeamId, selectedTopicId, isDmMode, selectedConversationId, refreshChat]);
-
-  useEffect(() => {
-    if (isDmMode) {
-      if (!selectedConversationId) return;
-    } else if (!selectedTeamId) {
-      return;
-    }
-    const id = window.setInterval(() => void refreshChat(), MESSAGE_REFRESH_MS);
-    return () => window.clearInterval(id);
-  }, [selectedTeamId, selectedConversationId, refreshChat, isDmMode]);
 
   const threadKey = useMemo(
     () =>
@@ -412,15 +401,12 @@ export function ChatPage() {
   const onTeamChange = (id: string) => {
     setSelectedTeamId(id);
     setParams({ teamId: id, topicId: "general" });
-    setMessages([]);
-    setTopics([]);
     setSendErr(null);
   };
 
   const onTopicChange = (topicId: string) => {
     if (!selectedTeamId) return;
     setParams({ teamId: selectedTeamId, topicId });
-    setMessages([]);
     setSendErr(null);
   };
 
@@ -428,8 +414,60 @@ export function ChatPage() {
     const next: Record<string, string> = { conversationId };
     if (selectedTeamId) next.teamId = selectedTeamId;
     setParams(next);
-    setMessages([]);
     setSendErr(null);
+  };
+
+  const closeCreateModals = () => {
+    setCreateChannelOpen(false);
+    setNewDmOpen(false);
+    setCreateGroupOpen(false);
+    setCreateErr(null);
+  };
+
+  const onCreateChannel = async (input: { name: string; description: string; color: string }) => {
+    if (!selectedTeamId) return;
+    setCreateSaving(true);
+    setCreateErr(null);
+    try {
+      const topic = await createTeamTopic(selectedTeamId, input);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.chatTopics(selectedTeamId) });
+      closeCreateModals();
+      onTopicChange(topic.id);
+    } catch (e) {
+      setCreateErr(e instanceof Error ? e.message : "Could not create channel.");
+    } finally {
+      setCreateSaving(false);
+    }
+  };
+
+  const onStartDm = async (recipientId: string) => {
+    setCreateSaving(true);
+    setCreateErr(null);
+    try {
+      const conv = await findOrCreateDm(recipientId);
+      await refreshConversations();
+      closeCreateModals();
+      onConversationChange(conv.id);
+    } catch (e) {
+      setCreateErr(e instanceof Error ? e.message : "Could not start direct message.");
+    } finally {
+      setCreateSaving(false);
+    }
+  };
+
+  const onCreateGroup = async (input: { name: string; participantIds: string[] }) => {
+    setCreateSaving(true);
+    setCreateErr(null);
+    try {
+      const conv = await createGroupDm(input);
+      await refreshConversations();
+      closeCreateModals();
+      onConversationChange(conv.id);
+    } catch (e) {
+      setCreateErr(e instanceof Error ? e.message : "Could not create group.");
+    } finally {
+      setCreateSaving(false);
+    }
   };
 
   const send = async () => {
@@ -456,8 +494,7 @@ export function ChatPage() {
         discardPendingAttachment();
         setDraft("");
         await refreshChat();
-        const dms = await fetchDmConversations();
-        setConversations(dms ?? []);
+        await refreshConversations();
       } catch (e) {
         setSendErr(e instanceof Error ? e.message : "Could not send attachment.");
       } finally {
@@ -477,8 +514,7 @@ export function ChatPage() {
       }
       setDraft("");
       await refreshChat();
-      const dms = await fetchDmConversations();
-      setConversations(dms ?? []);
+      await refreshConversations();
     } catch (e) {
       setSendErr(e instanceof Error ? e.message : "Send failed.");
     } finally {
@@ -638,7 +674,16 @@ export function ChatPage() {
     setActionErr(null);
     try {
       const updated = await voteTeamPoll(selectedTeamId, pollId, optionId);
-      setPolls((prev) => prev.map((p) => (p.id === pollId ? updated : p)));
+      queryClient.setQueryData(
+        queryKeys.chatThread("team", threadId),
+        (prev: { messages: Array<TeamChatMessage | DirectChatMessage>; polls: ApiPoll[] } | undefined) =>
+          prev
+            ? {
+                ...prev,
+                polls: prev.polls.map((p) => (p.id === pollId ? updated : p)),
+              }
+            : prev,
+      );
     } catch (e) {
       setActionErr(e instanceof Error ? e.message : "Could not record vote.");
     } finally {
@@ -667,9 +712,20 @@ export function ChatPage() {
                 <div className="chat-sidebar-section">
                   <div className="chat-sidebar-section-head">
                     <span className="chat-channels-label">Channels</span>
-                    <button type="button" className="chat-sidebar-add-btn" aria-label="Add channel" title="Coming soon">
-                      <IconPlus />
-                    </button>
+                    {canCreateChannel ? (
+                      <button
+                        type="button"
+                        className="chat-sidebar-add-btn"
+                        aria-label="Add channel"
+                        onClick={() => {
+                          setCreateErr(null);
+                          setCreateChannelOpen(true);
+                        }}
+                        data-testid="chat-add-channel"
+                      >
+                        <IconPlus />
+                      </button>
+                    ) : null}
                   </div>
                   <ul className="chat-channel-list">
                     <li
@@ -723,11 +779,23 @@ export function ChatPage() {
                 <div className="chat-sidebar-section">
                   <div className="chat-sidebar-section-head">
                     <span className="chat-channels-label">Direct messages</span>
-                    <button type="button" className="chat-sidebar-add-btn" aria-label="New direct message" title="Coming soon">
+                    <button
+                      type="button"
+                      className="chat-sidebar-add-btn"
+                      aria-label="New direct message"
+                      onClick={() => {
+                        setCreateErr(null);
+                        setNewDmOpen(true);
+                      }}
+                      data-testid="chat-add-dm"
+                    >
                       <IconPlus />
                     </button>
                   </div>
                   <ul className="chat-channel-list">
+                    {directConversations.length === 0 ? (
+                      <li className="chat-sidebar-empty">No direct messages yet</li>
+                    ) : null}
                     {directConversations.map((conv) => {
                       const user = conv.recipient ?? conv.participants[0];
                       const label = user?.name ?? user?.email ?? "Direct message";
@@ -757,11 +825,23 @@ export function ChatPage() {
                 <div className="chat-sidebar-section">
                   <div className="chat-sidebar-section-head">
                     <span className="chat-channels-label">Group messages</span>
-                    <button type="button" className="chat-sidebar-add-btn" aria-label="New group message" title="Coming soon">
+                    <button
+                      type="button"
+                      className="chat-sidebar-add-btn"
+                      aria-label="New group message"
+                      onClick={() => {
+                        setCreateErr(null);
+                        setCreateGroupOpen(true);
+                      }}
+                      data-testid="chat-add-group"
+                    >
                       <IconPlus />
                     </button>
                   </div>
                   <ul className="chat-channel-list">
+                    {groupConversations.length === 0 ? (
+                      <li className="chat-sidebar-empty">No group messages yet</li>
+                    ) : null}
                     {groupConversations.map((conv) => (
                       <li
                         key={conv.id}
@@ -919,7 +999,9 @@ export function ChatPage() {
                   <div ref={messagesContainerRef} className="chat-messages" data-testid="chat-message-list">
                     {messages.length === 0 ? (
                       <p className="chat-messages-empty">
-                        No messages yet. Say hello{selectedTeamName ? ` in ${selectedTeamName}` : ""}.
+                        {loadingMeetings
+                          ? "Loading messages…"
+                          : `No messages yet. Say hello${selectedTeamName ? ` in ${selectedTeamName}` : ""}.`}
                       </p>
                     ) : (
                       messageBlocks.map((block) => {
@@ -1096,6 +1178,32 @@ export function ChatPage() {
               ) : null}
             </div>
       </div>
+
+      <CreateChannelModal
+        open={createChannelOpen}
+        saving={createSaving}
+        error={createChannelOpen ? createErr : null}
+        onClose={closeCreateModals}
+        onSubmit={(input) => void onCreateChannel(input)}
+      />
+      <NewDmModal
+        open={newDmOpen}
+        saving={createSaving}
+        error={newDmOpen ? createErr : null}
+        teamMembers={teamDetail?.members ?? []}
+        myUserId={me?.id ?? ""}
+        onClose={closeCreateModals}
+        onPick={(userId) => void onStartDm(userId)}
+      />
+      <CreateGroupModal
+        open={createGroupOpen}
+        saving={createSaving}
+        error={createGroupOpen ? createErr : null}
+        teamMembers={teamDetail?.members ?? []}
+        myUserId={me?.id ?? ""}
+        onClose={closeCreateModals}
+        onSubmit={(input) => void onCreateGroup(input)}
+      />
 
       {pollModalOpen ? (
         <div

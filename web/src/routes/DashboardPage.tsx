@@ -1,6 +1,8 @@
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useEnterpriseShell } from "../contexts/EnterpriseShellContext";
+import { queryKeys } from "../lib/query-keys";
 import {
   computeWeekBars,
   getDaysInMonth,
@@ -133,13 +135,10 @@ const STATUSES = [
 ] as const;
 
 export function DashboardPage() {
+  const queryClient = useQueryClient();
   const navigate = useNavigate();
   const location = useLocation();
-  const { me, teams, selectedTeamId, setSelectedTeamId, setWorkspaceMainLoading } = useEnterpriseShell();
-  const [tasks, setTasks] = useState<ApiTask[]>([]);
-  const [events, setEvents] = useState<ApiCalendarEvent[]>([]);
-  const [tasksErr, setTasksErr] = useState<string | null>(null);
-  const [teamDataLoading, setTeamDataLoading] = useState(false);
+  const { me, teams, selectedTeamId, setSelectedTeamId } = useEnterpriseShell();
   const [calendarView, setCalendarView] = useState(() => new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(() => new Date());
   const [taskTab, setTaskTab] = useState<TaskTab>("active");
@@ -209,10 +208,34 @@ export function DashboardPage() {
     });
   }, [location.hash]);
 
-  useEffect(() => {
-    setWorkspaceMainLoading(!!selectedTeamId && teamDataLoading);
-    return () => setWorkspaceMainLoading(false);
-  }, [selectedTeamId, teamDataLoading, setWorkspaceMainLoading]);
+  const dashboardQuery = useQuery({
+    queryKey: queryKeys.dashboard(selectedTeamId),
+    queryFn: async () => {
+      const [webTasks, coreTasks, evs] = await Promise.all([
+        fetchWebTeamTasks(selectedTeamId),
+        fetchCoreTeamTasks(selectedTeamId).catch(() => []),
+        fetchWebTeamEvents(selectedTeamId),
+      ]);
+      return {
+        tasks: mergeTaskLists(webTasks, coreTasks),
+        events: evs,
+      };
+    },
+    enabled: !!selectedTeamId,
+  });
+
+  const tasks = dashboardQuery.data?.tasks ?? [];
+  const events = dashboardQuery.data?.events ?? [];
+  const tasksErr =
+    dashboardQuery.error instanceof Error
+      ? dashboardQuery.error.message
+      : dashboardQuery.isError
+        ? "Could not load tasks."
+        : null;
+
+  const refreshTeamData = async (teamId: string) => {
+    await queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(teamId) });
+  };
 
   useEffect(() => {
     if (!evMenuId) return;
@@ -220,36 +243,6 @@ export function DashboardPage() {
     document.addEventListener("click", closeMenu);
     return () => document.removeEventListener("click", closeMenu);
   }, [evMenuId]);
-
-  useEffect(() => {
-    if (!selectedTeamId) return;
-    let cancelled = false;
-    setTeamDataLoading(true);
-    (async () => {
-      try {
-        const [webTasks, coreTasks, evs] = await Promise.all([
-          fetchWebTeamTasks(selectedTeamId),
-          fetchCoreTeamTasks(selectedTeamId).catch(() => []),
-          fetchWebTeamEvents(selectedTeamId),
-        ]);
-        if (cancelled) return;
-        const merged = mergeTaskLists(webTasks, coreTasks);
-        setTasks(merged);
-        setEvents(evs);
-        setTasksErr(null);
-      } catch (e) {
-        if (cancelled) return;
-        setTasks([]);
-        setEvents([]);
-        setTasksErr(e instanceof Error ? e.message : "Could not load tasks.");
-      } finally {
-        if (!cancelled) setTeamDataLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedTeamId]);
 
   useEffect(() => {
     if (!createOpen || !selectedTeamId) return;
@@ -321,16 +314,6 @@ export function DashboardPage() {
   }, [taskMenuId]);
 
   const selectedTeam = teams?.find((t) => t.id === selectedTeamId);
-
-  const refreshTeamData = async (teamId: string) => {
-    const [webTasks, coreTasks, evs] = await Promise.all([
-      fetchWebTeamTasks(teamId),
-      fetchCoreTeamTasks(teamId).catch(() => []),
-      fetchWebTeamEvents(teamId),
-    ]);
-    setTasks(mergeTaskLists(webTasks, coreTasks));
-    setEvents(evs);
-  };
 
   const openTaskDetail = (taskId: string) => {
     const t = tasks.find((item) => item.id === taskId) ?? null;
@@ -797,7 +780,7 @@ export function DashboardPage() {
                     </h3>
                     <p className="enterprise-cal-day-panel-hint">Scheduled items for this date.</p>
                   </div>
-                  {teamDataLoading ? (
+                  {dashboardQuery.isPending && !dashboardQuery.data ? (
                     <div className="enterprise-cal-day-loading">Loading…</div>
                   ) : selectedEvents.length === 0 && selectedTasks.length === 0 && selectedHolidays.length === 0 ? (
                     <div className="enterprise-dashboard-empty enterprise-cal-day-empty">

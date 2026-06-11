@@ -1,6 +1,8 @@
+import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useEnterpriseShell } from "../contexts/EnterpriseShellContext";
+import { queryKeys } from "../lib/query-keys";
 import {
   fetchWebTeamSubscription,
   postWebBillingCheckout,
@@ -63,130 +65,60 @@ function subscriptionLine(sub: WebTeamSubscription, stripeActive: boolean): stri
 export function BillingPage() {
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
-  const { me, teams, selectedTeamId, setSelectedTeamId, setWorkspaceMainLoading } = useEnterpriseShell();
-  const [sub, setSub] = useState<WebTeamSubscription | null>(null);
-  const [subLoading, setSubLoading] = useState(false);
-  const [subErr, setSubErr] = useState<string | null>(null);
-  const [subRetryKey, setSubRetryKey] = useState(0);
+  const { me, teams, selectedTeamId, setSelectedTeamId } = useEnterpriseShell();
   const [actionErr, setActionErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [checkoutCfg, setCheckoutCfg] = useState<WebCheckoutConfig | null>(() => peekWebCheckoutConfig());
   const [checkoutCfgLoading, setCheckoutCfgLoading] = useState(() => peekWebCheckoutConfig() === null);
   const autoCheckoutStarted = useRef(false);
-  /** Team id for which `sub` was last loaded successfully (enables silent background refresh). */
-  const loadedSubTeamIdRef = useRef<string | null>(null);
 
   const billingFlash = params.get("billing");
-  /** True only on first load / workspace switch / retry after error — not on 35s poll or focus refresh. */
-  const showPlanLoading = subLoading && !sub;
+  const myRole = teams === null ? undefined : teams.find((t) => t.id === selectedTeamId)?.role;
+  const isOwner = myRole === "owner";
+  const teamListErr =
+    teams && selectedTeamId && !teams.some((t) => t.id === selectedTeamId)
+      ? "That workspace is not in your team list. Pick another workspace above."
+      : null;
 
-  useEffect(() => {
-    setWorkspaceMainLoading(showPlanLoading);
-    return () => setWorkspaceMainLoading(false);
-  }, [showPlanLoading, setWorkspaceMainLoading]);
+  const subQuery = useQuery({
+    queryKey: queryKeys.teamSubscription(selectedTeamId),
+    queryFn: () => fetchWebTeamSubscription(selectedTeamId),
+    enabled: !!selectedTeamId && teams !== null && !!isOwner && !teamListErr,
+    refetchInterval: (query) => {
+      const s = query.state.data;
+      if (!s) return false;
+      const billable =
+        !!s.stripeSubscriptionId?.trim() ||
+        ((s.plan === "team" || s.plan === "pro") &&
+          ["active", "trialing", "past_due", "incomplete", "paused"].includes(s.status));
+      return billable ? 35_000 : false;
+    },
+  });
 
-  useEffect(() => {
-    if (!selectedTeamId) {
-      loadedSubTeamIdRef.current = null;
-      setSub(null);
-      setSubErr(null);
-      setSubLoading(false);
-      return;
-    }
-    if (teams !== null) {
-      const row = teams.find((t) => t.id === selectedTeamId);
-      if (!row || row.role !== "owner") {
-        loadedSubTeamIdRef.current = null;
-        setSub(null);
-        setSubErr(null);
-        setSubLoading(false);
-        return;
-      }
-    }
-    if (teams && !teams.some((t) => t.id === selectedTeamId)) {
-      loadedSubTeamIdRef.current = null;
-      setSub(null);
-      setSubErr("That workspace is not in your team list. Pick another workspace above.");
-      setSubLoading(false);
-      return;
-    }
-    const silentRefresh = loadedSubTeamIdRef.current === selectedTeamId;
-    let cancelled = false;
-    if (!silentRefresh) {
-      setSubLoading(true);
-      setSubErr(null);
-      setSub(null);
-    }
-    (async () => {
-      try {
-        const s = await fetchWebTeamSubscription(selectedTeamId);
-        if (cancelled) return;
-        setSub(s);
-        setSubErr(null);
-        loadedSubTeamIdRef.current = selectedTeamId;
-      } catch (e) {
-        if (cancelled) return;
-        if (silentRefresh) return;
-        loadedSubTeamIdRef.current = null;
-        setSub(null);
-        setSubErr(e instanceof Error ? e.message : "Could not load subscription.");
-      } finally {
-        if (!cancelled && !silentRefresh) setSubLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedTeamId, teams, subRetryKey]);
+  const sub = subQuery.data ?? null;
+  const subErr =
+    teamListErr ??
+    (subQuery.error instanceof Error
+      ? subQuery.error.message
+      : subQuery.isError
+        ? "Could not load subscription."
+        : null);
+  const showPlanLoading = subQuery.isPending && !sub;
+  const subLoading = subQuery.isFetching;
 
   /** After checkout redirect, webhooks can lag; refetch subscription until it reflects payment. */
   useEffect(() => {
     if (billingFlash !== "success" || !selectedTeamId) return;
-    setSubRetryKey((k) => k + 1);
+    void subQuery.refetch();
     let n = 0;
     const max = 44;
     const id = window.setInterval(() => {
       n += 1;
-      setSubRetryKey((k) => k + 1);
+      void subQuery.refetch();
       if (n >= max) window.clearInterval(id);
     }, 2000);
     return () => window.clearInterval(id);
-  }, [billingFlash, selectedTeamId]);
-
-  /** Return from billing portal / another tab: refetch so plan matches webhooks without a full reload. */
-  useEffect(() => {
-    if (!selectedTeamId) return;
-    const bumpIfVisible = () => {
-      if (document.visibilityState === "visible") setSubRetryKey((k) => k + 1);
-    };
-    window.addEventListener("focus", bumpIfVisible);
-    document.addEventListener("visibilitychange", bumpIfVisible);
-    return () => {
-      window.removeEventListener("focus", bumpIfVisible);
-      document.removeEventListener("visibilitychange", bumpIfVisible);
-    };
-  }, [selectedTeamId]);
-
-  /**
-   * While Plan shows a billable workspace, poll the API so payment-provider–driven DB changes
-   * (downgrade, cancel, past_due) show up without asking the user to refresh.
-   */
-  useEffect(() => {
-    if (!selectedTeamId || !sub) return;
-    const billable =
-      !!sub.stripeSubscriptionId?.trim() ||
-      ((sub.plan === "team" || sub.plan === "pro") &&
-        ["active", "trialing", "past_due", "incomplete", "paused"].includes(sub.status));
-    if (!billable) return;
-    const id = window.setInterval(() => {
-      if (document.visibilityState !== "visible") return;
-      setSubRetryKey((k) => k + 1);
-    }, 35_000);
-    return () => window.clearInterval(id);
-  }, [selectedTeamId, sub]);
-
-  const myRole = teams === null ? undefined : teams.find((t) => t.id === selectedTeamId)?.role;
-  const isOwner = myRole === "owner";
+  }, [billingFlash, selectedTeamId, subQuery]);
 
   useEffect(() => {
     if (!isOwner) {
@@ -381,7 +313,7 @@ export function BillingPage() {
             <p className="enterprise-form-error" style={{ marginBottom: 12 }}>
               {subErr}
             </p>
-            <button type="button" className="enterprise-inline-link" onClick={() => setSubRetryKey((k) => k + 1)}>
+            <button type="button" className="enterprise-inline-link" onClick={() => void subQuery.refetch()}>
               Try again
             </button>
           </div>

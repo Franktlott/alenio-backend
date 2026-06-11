@@ -1,4 +1,6 @@
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { queryKeys } from "../lib/query-keys";
 import { Link } from "react-router-dom";
 import QRCode from "qrcode";
 import { AddMemberModal } from "./AddMemberModal";
@@ -164,6 +166,27 @@ function IconTemplateOneOne() {
   );
 }
 
+async function fetchTeamContext(teamId: string) {
+  const detail = await fetchWebTeam(teamId);
+  const manageJoin = canManageJoinRequests(detail.myRole);
+  const [stats, tasks, sub, joinList, inviteList] = await Promise.all([
+    fetchTeamMemberStats(teamId).catch(() => null),
+    fetchWebTeamTasks(teamId).catch(() => []),
+    fetchWebTeamSubscription(teamId).catch(() => null),
+    manageJoin ? fetchTeamJoinRequests(teamId).catch(() => []) : Promise.resolve([]),
+    manageJoin ? fetchTeamInvites(teamId).catch(() => []) : Promise.resolve([]),
+  ]);
+  const plan = sub?.plan ?? "free";
+  return {
+    detail,
+    memberStats: stats,
+    overviewTasks: Array.isArray(tasks) ? tasks : [],
+    isPaid: plan === "team" || plan === "pro",
+    incoming: manageJoin ? joinList : [],
+    pendingInvites: manageJoin ? inviteList : [],
+  };
+}
+
 function canManageJoinRequests(role: string): boolean {
   return role === "owner" || role === "team_leader";
 }
@@ -224,14 +247,31 @@ type Props = {
 };
 
 export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWorkspaceSwitchLoading }: Props) {
-  const [teamDetail, setTeamDetail] = useState<WebTeamDetail | null>(null);
-  const [memberStats, setMemberStats] = useState<TeamMemberStatsMap | null>(null);
-  const [overviewTasks, setOverviewTasks] = useState<ApiTask[]>([]);
-  const [isPaid, setIsPaid] = useState(false);
-  const [incoming, setIncoming] = useState<WebTeamJoinRequest[]>([]);
-  const [pendingInvites, setPendingInvites] = useState<WebTeamInvite[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [tabErr, setTabErr] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const teamContextQuery = useQuery({
+    queryKey: queryKeys.teamContext(selectedTeamId),
+    queryFn: () => fetchTeamContext(selectedTeamId),
+    enabled: !!selectedTeamId,
+  });
+
+  const teamDetail = teamContextQuery.data?.detail ?? null;
+  const memberStats = teamContextQuery.data?.memberStats ?? null;
+  const overviewTasks = teamContextQuery.data?.overviewTasks ?? [];
+  const isPaid = teamContextQuery.data?.isPaid ?? false;
+  const incoming = teamContextQuery.data?.incoming ?? [];
+  const pendingInvites = teamContextQuery.data?.pendingInvites ?? [];
+  const tabErr =
+    teamContextQuery.error instanceof Error
+      ? teamContextQuery.error.message
+      : teamContextQuery.isError
+        ? "Could not load team."
+        : null;
+  const showInitialLoading = teamContextQuery.isPending && !teamContextQuery.data;
+
+  const reloadTeamContext = useCallback(async () => {
+    if (!selectedTeamId) return;
+    await queryClient.invalidateQueries({ queryKey: queryKeys.teamContext(selectedTeamId) });
+  }, [queryClient, selectedTeamId]);
 
   const [addMemberOpen, setAddMemberOpen] = useState(false);
   const [addMemberBusy, setAddMemberBusy] = useState(false);
@@ -259,57 +299,17 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
 
   const myId = me?.id ?? "";
 
-  const loadTeamContext = useCallback(async () => {
-    if (!selectedTeamId) {
-      setTeamDetail(null);
-      setMemberStats(null);
-      setOverviewTasks([]);
-      setIncoming([]);
-      setPendingInvites([]);
-      return;
-    }
-    setLoading(true);
-    setTabErr(null);
-    try {
-      const detail = await fetchWebTeam(selectedTeamId);
-      setTeamDetail(detail);
-      setNameEdit(detail.name);
-      const manageJoin = canManageJoinRequests(detail.myRole);
-      const [stats, tasks, sub, joinList, inviteList] = await Promise.all([
-        fetchTeamMemberStats(selectedTeamId).catch(() => null),
-        fetchWebTeamTasks(selectedTeamId).catch(() => []),
-        fetchWebTeamSubscription(selectedTeamId).catch(() => null),
-        manageJoin ? fetchTeamJoinRequests(selectedTeamId).catch(() => []) : Promise.resolve([]),
-        manageJoin ? fetchTeamInvites(selectedTeamId).catch(() => []) : Promise.resolve([]),
-      ]);
-      setMemberStats(stats);
-      setOverviewTasks(Array.isArray(tasks) ? tasks : []);
-      const plan = sub?.plan ?? "free";
-      setIsPaid(plan === "team" || plan === "pro");
-      setIncoming(manageJoin ? joinList : []);
-      setPendingInvites(manageJoin ? inviteList : []);
-    } catch (e) {
-      setTabErr(e instanceof Error ? e.message : "Could not load team.");
-      setTeamDetail(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [selectedTeamId]);
-
   useEffect(() => {
-    void loadTeamContext();
-  }, [loadTeamContext]);
+    if (teamDetail) setNameEdit(teamDetail.name);
+  }, [teamDetail?.id, teamDetail?.name]);
 
   useEffect(() => {
     if (!onWorkspaceSwitchLoading) return;
-    const busy = Boolean(
-      selectedTeamId && loading && (!teamDetail || teamDetail.id !== selectedTeamId),
-    );
-    onWorkspaceSwitchLoading(busy);
+    onWorkspaceSwitchLoading(showInitialLoading);
     return () => {
       onWorkspaceSwitchLoading(false);
     };
-  }, [selectedTeamId, loading, teamDetail, onWorkspaceSwitchLoading]);
+  }, [showInitialLoading, onWorkspaceSwitchLoading]);
 
   useEffect(() => {
     setIsEditingWorkspace(false);
@@ -400,7 +400,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
     try {
       await patchApiTeam(selectedTeamId, { name: nameEdit.trim() });
       setIsEditingWorkspace(false);
-      await loadTeamContext();
+      await reloadTeamContext();
       await onTeamsRefresh();
     } catch (e) {
       setTabErr(e instanceof Error ? e.message : "Could not update name.");
@@ -421,7 +421,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
       try {
         const up = await uploadTeamPhoto(file, selectedTeamId);
         await patchApiTeam(selectedTeamId, { image: up.url });
-        await loadTeamContext();
+        await reloadTeamContext();
         await onTeamsRefresh();
       } catch (e) {
         setTabErr(e instanceof Error ? e.message : "Photo upload failed.");
@@ -460,7 +460,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
       const result = await inviteMemberByEmail(selectedTeamId, email.trim());
       setAddMemberOpen(false);
       setAddMemberError(null);
-      await loadTeamContext();
+      await reloadTeamContext();
       if (result.added) {
         await onTeamsRefresh();
       }
@@ -489,7 +489,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
     try {
       await setTeamMemberRole(selectedTeamId, memberModal.userId, rolePick);
       setMemberModal(null);
-      await loadTeamContext();
+      await reloadTeamContext();
       await onTeamsRefresh();
     } catch (e) {
       setTabErr(e instanceof Error ? e.message : "Could not update role.");
@@ -506,7 +506,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
     try {
       await transferTeamOwnership(selectedTeamId, memberModal.userId);
       setMemberModal(null);
-      await loadTeamContext();
+      await reloadTeamContext();
       await onTeamsRefresh();
     } catch (e) {
       setTabErr(e instanceof Error ? e.message : "Transfer failed.");
@@ -523,7 +523,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
     try {
       await removeTeamMemberApi(selectedTeamId, memberModal.userId);
       setMemberModal(null);
-      await loadTeamContext();
+      await reloadTeamContext();
       await onTeamsRefresh();
     } catch (e) {
       setTabErr(e instanceof Error ? e.message : "Could not remove member.");
@@ -560,7 +560,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
     );
   }
 
-  if (loading && (!teamDetail || teamDetail.id !== selectedTeamId)) {
+  if (showInitialLoading) {
     return <div className="enterprise-team-tab enterprise-team-tab-loading-host" aria-busy="true" />;
   }
 
@@ -696,7 +696,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                           onClick={async () => {
                             try {
                               await rejectTeamJoinRequest(selectedTeamId, req.id);
-                              await loadTeamContext();
+                              await reloadTeamContext();
                             } catch (e) {
                               setTabErr(e instanceof Error ? e.message : "Decline failed.");
                             }
@@ -710,7 +710,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                           onClick={async () => {
                             try {
                               await approveTeamJoinRequest(selectedTeamId, req.id);
-                              await loadTeamContext();
+                              await reloadTeamContext();
                               await onTeamsRefresh();
                             } catch (e) {
                               setTabErr(e instanceof Error ? e.message : "Approve failed.");
@@ -770,7 +770,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                             setTabErr(null);
                             try {
                               await cancelTeamInvite(selectedTeamId, invite.id);
-                              await loadTeamContext();
+                              await reloadTeamContext();
                             } catch (e) {
                               setTabErr(e instanceof Error ? e.message : "Cancel failed.");
                             } finally {
