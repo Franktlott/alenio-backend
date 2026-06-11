@@ -326,7 +326,7 @@ function buildPrintHtml(options: OneOnOnePrintOptions, logoUrl: string): string 
     }
     .footer-grid {
       display: grid;
-      grid-template-columns: 1.2fr 0.8fr 0.8fr;
+      grid-template-columns: 2fr 1fr;
       gap: 0;
       border-top: 1px solid #cbd5e1;
       margin-top: 12px;
@@ -386,6 +386,20 @@ function buildPrintHtml(options: OneOnOnePrintOptions, logoUrl: string): string 
       color: #64748b;
       font-weight: 500;
     }
+    .footer-next-checkin {
+      margin-top: 8px;
+      padding-top: 6px;
+      border-top: 1px solid #e2e8f0;
+    }
+    .footer-next-label {
+      display: block;
+      font-size: 6.5pt;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      color: #64748b;
+      text-transform: uppercase;
+      margin-bottom: 3px;
+    }
     .bottom-bar {
       display: flex;
       justify-content: space-between;
@@ -431,14 +445,13 @@ function buildPrintHtml(options: OneOnOnePrintOptions, logoUrl: string): string 
 
     <div class="footer-grid">
       <div class="footer-col">
-        <h4>Action items</h4>
-        <p>Follow-up tasks from this check-in</p>
+        <h4>Follow-up & action items</h4>
+        <p>Tasks from this check-in and date of next check-in</p>
         ${followUpTasksHtml}
-      </div>
-      <div class="footer-col">
-        <h4>Follow up</h4>
-        <p>Date of next check-in</p>
-        <div class="footer-line"></div>
+        <div class="footer-next-checkin">
+          <span class="footer-next-label">Next check-in</span>
+          <div class="footer-line"></div>
+        </div>
       </div>
       <div class="footer-col">
         <h4>Prepared by</h4>
