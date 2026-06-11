@@ -21,7 +21,7 @@ import {
   type DevelopmentGoalNote,
   type DevelopmentGoalStatus,
 } from "../lib/api";
-import { printDevelopmentPlan } from "../lib/development-plan-print";
+import { saveDevelopmentPlanPdf } from "../lib/development-plan-print";
 
 type Props = {
   teamId: string;
@@ -771,6 +771,7 @@ export function DevelopmentPlanTab({
   const [skill, setSkill] = useState("");
   const [steps, setSteps] = useState<string[]>([""]);
   const [saving, setSaving] = useState(false);
+  const [savingPdf, setSavingPdf] = useState(false);
   const [menuGoalId, setMenuGoalId] = useState<string | null>(null);
   const [statusSavingId, setStatusSavingId] = useState<string | null>(null);
   const [closedSectionOpen, setClosedSectionOpen] = useState(false);
@@ -915,15 +916,19 @@ export function DevelopmentPlanTab({
     }
   };
 
-  const onPrint = () => {
+  const onPrint = async () => {
+    setSavingPdf(true);
+    setErr(null);
     try {
-      printDevelopmentPlan({
+      await saveDevelopmentPlanPdf({
         goals,
         memberName,
         managerName,
       });
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "Could not open print view.");
+      setErr(e instanceof Error ? e.message : "Could not save PDF.");
+    } finally {
+      setSavingPdf(false);
     }
   };
 
@@ -1002,10 +1007,10 @@ export function DevelopmentPlanTab({
           <button
             type="button"
             className="enterprise-dev-plan-print-btn"
-            onClick={onPrint}
-            disabled={loading}
+            onClick={() => void onPrint()}
+            disabled={loading || savingPdf}
           >
-            Save PDF
+            {savingPdf ? "Saving…" : "Save PDF"}
           </button>
           {canCreate ? (
             <button type="button" className="enterprise-dev-plan-new-btn" onClick={openCreate}>

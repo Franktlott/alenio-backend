@@ -191,6 +191,7 @@ export function OneOnOneHistoryTab({
   const [loadingMeetings, setLoadingMeetings] = useState(false);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [savingPdf, setSavingPdf] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [followUpDrafts, setFollowUpDrafts] = useState<FollowUpDraft[]>([]);
   const [feedbackPromptOpen, setFeedbackPromptOpen] = useState(false);
@@ -422,16 +423,21 @@ export function OneOnOneHistoryTab({
     }
   };
 
-  const onPrint = (meeting: OneOnOneMeeting) => {
+  const onPrint = async (meeting: OneOnOneMeeting) => {
+    setSavingPdf(true);
+    setMenuMeetingId(null);
+    setErr(null);
     try {
-      saveOneOnOneMeetingPdf({
+      await saveOneOnOneMeetingPdf({
         meeting,
         memberName,
         managerName,
         meetingNumber: meetingNumberFor(meetings, meeting.id),
       });
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "Could not open print view.");
+      setErr(e instanceof Error ? e.message : "Could not save PDF.");
+    } finally {
+      setSavingPdf(false);
     }
   };
 
@@ -606,9 +612,10 @@ export function OneOnOneHistoryTab({
               <button
                 type="button"
                 className="enterprise-dev-plan-print-btn"
-                onClick={() => onPrint(previewMeeting)}
+                disabled={savingPdf}
+                onClick={() => void onPrint(previewMeeting)}
               >
-                Save PDF
+                {savingPdf ? "Saving…" : "Save PDF"}
               </button>
               <button
                 type="button"
@@ -886,13 +893,13 @@ export function OneOnOneHistoryTab({
                         <button
                           type="button"
                           role="menuitem"
+                          disabled={savingPdf}
                           onClick={(e) => {
                             e.stopPropagation();
-                            setMenuMeetingId(null);
-                            onPrint(meeting);
+                            void onPrint(meeting);
                           }}
                         >
-                          Save PDF
+                          {savingPdf ? "Saving…" : "Save PDF"}
                         </button>
                         {canModify ? (
                           <>
