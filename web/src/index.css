@@ -5674,7 +5674,7 @@ input {
 .enterprise-oneone-history {
   display: flex;
   flex-direction: column;
-  gap: 0.65rem;
+  gap: 1rem;
 }
 
 .enterprise-oneone-history-panel-head {

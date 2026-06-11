@@ -667,8 +667,8 @@ export function OneOnOneHistoryTab({
           </div>
         ) : null}
         {!loadingTemplates && templates.length === 0 && !err ? (
-          <div className="enterprise-oneone-history-empty-panel">
-            <p className="enterprise-oneone-history-empty-title">No templates available</p>
+          <div className="enterprise-dev-plan-empty">
+            <p className="enterprise-dev-plan-empty-title">No templates available</p>
             <p className="enterprise-muted">
               Ask your workspace owner to create 1:1 templates from the Team page.
             </p>
@@ -797,21 +797,24 @@ export function OneOnOneHistoryTab({
 
   return (
     <div className="enterprise-oneone-history">
-      <div className="enterprise-oneone-history-panel-head">
-        <div className="enterprise-oneone-history-panel-head-text">
-          <p className="enterprise-oneone-templates-kicker">Check-ins</p>
-          <h3 className="enterprise-oneone-history-heading">1:1 history</h3>
-          <p className="enterprise-oneone-history-sub">Recorded manager check-ins for this team member.</p>
+      <div className="enterprise-dev-plan-head">
+        <div>
+          <h3 className="enterprise-team-profile-section-title">1:1 history</h3>
+          <p className="enterprise-muted enterprise-dev-plan-sub">
+            Recorded manager check-ins for this team member.
+          </p>
         </div>
         {canCreate ? (
-          <button
-            type="button"
-            className="enterprise-oneone-templates-primary-btn enterprise-oneone-history-new-btn"
-            disabled={loadingTemplates}
-            onClick={() => void startCreate()}
-          >
-            {loadingTemplates ? "Loading…" : "New 1:1"}
-          </button>
+          <div className="enterprise-dev-plan-head-actions">
+            <button
+              type="button"
+              className="enterprise-dev-plan-new-btn"
+              disabled={loadingTemplates}
+              onClick={() => void startCreate()}
+            >
+              {loadingTemplates ? "Loading…" : "New 1:1"}
+            </button>
+          </div>
         ) : null}
       </div>
       {err ? <p className="enterprise-form-error" role="alert">{err}</p> : null}
@@ -819,16 +822,11 @@ export function OneOnOneHistoryTab({
         <p className="enterprise-muted enterprise-oneone-history-loading">Loading check-ins…</p>
       ) : null}
       {!loadingMeetings && meetings.length === 0 ? (
-        <div className="enterprise-oneone-history-empty-panel">
-          <p className="enterprise-oneone-history-empty-title">No 1:1s recorded yet</p>
-          <p className="enterprise-muted enterprise-oneone-history-empty">
+        <div className="enterprise-dev-plan-empty">
+          <p className="enterprise-dev-plan-empty-title">No 1:1s recorded yet</p>
+          <p className="enterprise-muted">
             {canCreate ? "Start a check-in using a workspace template." : "Check-ins will appear here once recorded."}
           </p>
-          {canCreate ? (
-            <button type="button" className="enterprise-oneone-templates-primary-btn" onClick={() => void startCreate()}>
-              New 1:1
-            </button>
-          ) : null}
         </div>
       ) : null}
       {meetings.length > 0 ? (
