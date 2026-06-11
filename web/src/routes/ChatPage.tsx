@@ -21,6 +21,7 @@ import {
   createGroupDm,
   createTeamPoll,
   createTeamTopic,
+  deleteTeamTopic,
   createVideoRoom,
   fetchDmConversations,
   fetchDmMessages,
@@ -37,6 +38,7 @@ import {
   type DmConversation,
   type DirectChatMessage,
   type TeamChatMessage,
+  type TeamTopic,
 } from "../lib/api";
 
 const MESSAGE_REFRESH_MS = 4000;
@@ -235,6 +237,8 @@ export function ChatPage() {
   const [createGroupOpen, setCreateGroupOpen] = useState(false);
   const [createSaving, setCreateSaving] = useState(false);
   const [createErr, setCreateErr] = useState<string | null>(null);
+  const [deleteChannelTopic, setDeleteChannelTopic] = useState<TeamTopic | null>(null);
+  const [deleteChannelSaving, setDeleteChannelSaving] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -585,6 +589,35 @@ export function ChatPage() {
       : `# ${topics.find((t) => t.id === selectedTopicId)?.name ?? "channel"}`;
 
   const activeTopic = selectedTopicId === "general" ? null : topics.find((t) => t.id === selectedTopicId);
+  const canDeleteCurrentChannel = canCreateChannel && !isDmMode && !!activeTopic;
+
+  const openDeleteChannel = (topic: TeamTopic) => {
+    setDeleteChannelTopic(topic);
+    setActionErr(null);
+  };
+
+  const closeDeleteChannel = () => {
+    if (deleteChannelSaving) return;
+    setDeleteChannelTopic(null);
+    setActionErr(null);
+  };
+
+  const onDeleteChannel = async () => {
+    if (!selectedTeamId || !deleteChannelTopic) return;
+    setDeleteChannelSaving(true);
+    setActionErr(null);
+    try {
+      await deleteTeamTopic(selectedTeamId, deleteChannelTopic.id);
+      setDeleteChannelTopic(null);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.chatTopics(selectedTeamId) });
+      onTopicChange("general");
+    } catch (e) {
+      setActionErr(e instanceof Error ? e.message : "Could not delete channel.");
+    } finally {
+      setDeleteChannelSaving(false);
+    }
+  };
+
   const channelHeaderTitle = isDmMode
     ? conversationLabel ?? "Direct message"
     : selectedTopicId === "general"
@@ -743,11 +776,6 @@ export function ChatPage() {
                       <span className="chat-channel-item-label">
                         <span className="chat-channel-hash">#</span> Team chat
                       </span>
-                      {!isDmMode && selectedTopicId === "general" ? (
-                        <span className="chat-channel-settings" aria-hidden>
-                          <IconGear />
-                        </span>
-                      ) : null}
                     </li>
                     {topics.map((topic) => (
                       <li
@@ -766,10 +794,20 @@ export function ChatPage() {
                         <span className="chat-channel-item-label">
                           <span className="chat-channel-hash">#</span> {topic.name}
                         </span>
-                        {!isDmMode && selectedTopicId === topic.id ? (
-                          <span className="chat-channel-settings" aria-hidden>
+                        {!isDmMode && selectedTopicId === topic.id && canCreateChannel ? (
+                          <button
+                            type="button"
+                            className="chat-channel-settings-btn"
+                            aria-label={`Delete ${topic.name}`}
+                            title="Delete channel"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openDeleteChannel(topic);
+                            }}
+                            data-testid={`chat-delete-channel-${topic.id}`}
+                          >
                             <IconGear />
-                          </span>
+                          </button>
                         ) : null}
                       </li>
                     ))}
@@ -939,6 +977,20 @@ export function ChatPage() {
                               >
                                 Create poll
                               </button>
+                              {canDeleteCurrentChannel && activeTopic ? (
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  className="chat-header-more-item chat-header-more-item--danger"
+                                  onClick={() => {
+                                    setMoreMenuOpen(false);
+                                    openDeleteChannel(activeTopic);
+                                  }}
+                                  data-testid="chat-delete-channel"
+                                >
+                                  Delete channel
+                                </button>
+                              ) : null}
                             </>
                           ) : (
                             <span className="chat-header-more-muted">No extra actions</span>
@@ -1204,6 +1256,45 @@ export function ChatPage() {
         onClose={closeCreateModals}
         onSubmit={(input) => void onCreateGroup(input)}
       />
+
+      {deleteChannelTopic ? (
+        <div className="enterprise-modal-backdrop" role="presentation" onClick={closeDeleteChannel}>
+          <div
+            className="enterprise-modal-panel chat-delete-channel-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="chat-delete-channel-title"
+            onClick={(e) => e.stopPropagation()}
+            data-testid="chat-delete-channel-modal"
+          >
+            <h3 id="chat-delete-channel-title" className="enterprise-modal-title">
+              Delete channel?
+            </h3>
+            <p className="enterprise-muted enterprise-modal-sub">
+              Delete <strong>#{deleteChannelTopic.name}</strong>? All messages will be permanently removed.
+            </p>
+            {actionErr ? (
+              <p className="auth-error" role="alert">
+                {actionErr}
+              </p>
+            ) : null}
+            <div className="enterprise-modal-actions">
+              <button type="button" className="auth-btn-secondary" onClick={closeDeleteChannel} disabled={deleteChannelSaving}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="enterprise-team-btn-destructive"
+                disabled={deleteChannelSaving}
+                onClick={() => void onDeleteChannel()}
+                data-testid="confirm-delete-channel"
+              >
+                {deleteChannelSaving ? "Deleting…" : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {pollModalOpen ? (
         <div

@@ -414,6 +414,12 @@ export function createTeamTopic(
   }).then((r) => r.data);
 }
 
+export function deleteTeamTopic(teamId: string, topicId: string) {
+  return apiDeleteJson<void>(
+    `/api/teams/${encodeURIComponent(teamId)}/topics/${encodeURIComponent(topicId)}`,
+  );
+}
+
 export type UserSearchRow = {
   id: string;
   name: string | null;

@@ -540,6 +540,29 @@ input {
   flex-shrink: 0;
 }
 
+.chat-channel-settings-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.2rem;
+  margin: -0.2rem;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #6366f1;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.chat-channel-settings-btn:hover {
+  background: rgba(99, 102, 241, 0.12);
+}
+
+.chat-channel-settings-btn:focus-visible {
+  outline: 2px solid #6366f1;
+  outline-offset: 1px;
+}
+
 .chat-dm-item {
   justify-content: flex-start;
 }
@@ -783,6 +806,18 @@ input {
 .chat-header-more-item:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.chat-header-more-item--danger {
+  color: #dc2626;
+}
+
+.chat-header-more-item--danger:hover:not(:disabled) {
+  background: #fef2f2;
+}
+
+.chat-delete-channel-modal .enterprise-modal-sub {
+  margin-bottom: 1rem;
 }
 
 .chat-header-more-muted {
