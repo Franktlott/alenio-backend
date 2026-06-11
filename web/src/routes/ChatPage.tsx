@@ -1,6 +1,7 @@
 import {
   type ClipboardEvent,
   type KeyboardEvent,
+  type ReactNode,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -8,7 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import { useEnterpriseShell } from "../contexts/EnterpriseShellContext";
 import { ChatMessageMedia } from "../components/ChatMessageMedia";
 import { linkifyText } from "../lib/linkify";
@@ -58,13 +59,132 @@ const POLL_DURATION_OPTIONS = [
   { label: "7 days", value: 168 },
 ] as const;
 
-function formatChatTime(iso: string): string {
+function initialsFromUser(user: { name: string | null; email: string | null }): string {
+  const n = user.name?.trim() || user.email?.trim() || "";
+  const parts = n.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  if (parts.length === 1 && parts[0].length >= 2) return parts[0].slice(0, 2).toUpperCase();
+  if (parts.length === 1) return parts[0][0].toUpperCase();
+  return "?";
+}
+
+function dateKey(iso: string): string {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+}
+
+function formatDateSeparator(iso: string): string {
   try {
     const d = new Date(iso);
-    return d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const msgDay = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    const diffDays = Math.round((today.getTime() - msgDay.getTime()) / 86400000);
+    if (diffDays === 0) return "Today";
+    if (diffDays === 1) return "Yesterday";
+    return d.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
+  } catch {
+    return "Earlier";
+  }
+}
+
+function formatMessageTime(iso: string): string {
+  try {
+    return new Date(iso).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
   } catch {
     return "";
   }
+}
+
+function renderMessageText(text: string): ReactNode {
+  const segments = text.split(/(@[\w.-]+)/g);
+  return segments.map((seg, i) => {
+    if (/^@[\w.-]+$/.test(seg)) {
+      return (
+        <span key={`m-${i}`} className="chat-mention">
+          {seg}
+        </span>
+      );
+    }
+    return <span key={`t-${i}`}>{linkifyText(seg)}</span>;
+  });
+}
+
+function ChatAvatar({
+  user,
+  size = "md",
+}: {
+  user: { name: string | null; email: string | null; image: string | null };
+  size?: "sm" | "md";
+}) {
+  const label = user.name ?? user.email ?? "Member";
+  const className = `chat-avatar chat-avatar--${size}`;
+  if (user.image) {
+    return <img src={user.image} alt={label} className={className} />;
+  }
+  return <span className={`${className} chat-avatar-fallback`}>{initialsFromUser(user)}</span>;
+}
+
+function IconPlus() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden>
+      <path d="M12 5v14M5 12h14" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function IconGear() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function IconUsers() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+    </svg>
+  );
+}
+
+function IconPin() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <path d="M12 17v5M9 3h6l1 7h4l-5 5v3H9v-3L4 10h4L9 3z" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function IconSearch() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <circle cx="11" cy="11" r="7" />
+      <path d="M20 20l-3.5-3.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function IconMore() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+      <circle cx="5" cy="12" r="1.75" />
+      <circle cx="12" cy="12" r="1.75" />
+      <circle cx="19" cy="12" r="1.75" />
+    </svg>
+  );
+}
+
+function IconGroup() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <path d="M17 21v-2a4 4 0 0 0-3-3.87M9 21v-2a4 4 0 0 1 0-7.75M13 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0zM23 21v-2a4 4 0 0 0-2.66-3.76" strokeLinecap="round" />
+    </svg>
+  );
 }
 
 function conversationRecencyMs(c: DmConversation): number {
@@ -111,6 +231,10 @@ export function ChatPage() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const moreMenuRef = useRef<HTMLDivElement>(null);
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
 
   const selectedTopicId = topicIdFromUrl || "general";
   const selectedConversationId = conversationIdFromUrl;
@@ -373,9 +497,14 @@ export function ChatPage() {
     const file = mediaFileFromClipboard(e.clipboardData);
     if (!file) return;
     e.preventDefault();
+    attachFile(file);
+  };
+
+  const attachFile = useCallback((file: File) => {
     if (sending || mediaUploading) return;
     if (isDmMode && !selectedConversationId) return;
     if (!isDmMode && !selectedTeamId) return;
+    if (!file.type.startsWith("image/") && !file.type.startsWith("video/")) return;
 
     setPendingAttachment((prev) => {
       if (prev?.previewUrl) URL.revokeObjectURL(prev.previewUrl);
@@ -386,7 +515,18 @@ export function ChatPage() {
       };
     });
     setSendErr(null);
-  };
+  }, [sending, mediaUploading, isDmMode, selectedConversationId, selectedTeamId]);
+
+  useEffect(() => {
+    if (!moreMenuOpen) return;
+    const onDoc = (e: MouseEvent) => {
+      if (moreMenuRef.current && !moreMenuRef.current.contains(e.target as Node)) {
+        setMoreMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [moreMenuOpen]);
 
   const directConversations = useMemo(
     () => conversations.filter((c) => !c.isGroup).sort((a, b) => conversationRecencyMs(b) - conversationRecencyMs(a)),
@@ -407,6 +547,39 @@ export function ChatPage() {
     selectedTopicId === "general"
       ? "Team chat"
       : `# ${topics.find((t) => t.id === selectedTopicId)?.name ?? "channel"}`;
+
+  const activeTopic = selectedTopicId === "general" ? null : topics.find((t) => t.id === selectedTopicId);
+  const channelHeaderTitle = isDmMode
+    ? conversationLabel ?? "Direct message"
+    : selectedTopicId === "general"
+      ? "Team chat"
+      : activeTopic?.name ?? "Team chat";
+  const channelHeaderHash = !isDmMode;
+  const channelDescription = isDmMode
+    ? activeConversation?.isGroup
+      ? `${activeConversation.participants.length} members`
+      : "Private conversation"
+    : activeTopic?.description?.trim() ||
+      (selectedTopicId === "general" ? "General team conversations and updates." : `Messages in ${activeTopic?.name ?? "this channel"}.`);
+  const memberCount = isDmMode
+    ? activeConversation?.participants.length ?? 0
+    : teams?.find((t) => t.id === selectedTeamId)?._count?.members ?? 0;
+
+  const messageBlocks = useMemo(() => {
+    const blocks: Array<
+      { kind: "date"; label: string; key: string } | { kind: "message"; message: TeamChatMessage | DirectChatMessage }
+    > = [];
+    let lastDate = "";
+    for (const m of messages) {
+      const key = dateKey(m.createdAt);
+      if (key !== lastDate) {
+        blocks.push({ kind: "date", label: formatDateSeparator(m.createdAt), key: `d-${key}` });
+        lastDate = key;
+      }
+      blocks.push({ kind: "message", message: m });
+    }
+    return blocks;
+  }, [messages]);
 
   const chatVideoRoomId = selectedTeamId && !isDmMode ? `chat-${selectedTeamId}-${selectedTopicId}` : "";
 
@@ -489,135 +662,211 @@ export function ChatPage() {
       <div className="chat-app-body chat-app-body-enterprise" data-testid="chat-screen">
             <aside className="chat-sidebar" aria-label="Channels">
               <div className="chat-sidebar-card">
-                <p className="chat-workspace-hint">Workspace is set in the left sidebar.</p>
-                <div className="chat-channels-label">Channels</div>
-                <ul className="chat-channel-list">
-                  <li
-                    className={`chat-channel-item ${selectedTopicId === "general" ? "chat-channel-item-active" : ""}`}
-                    onClick={() => onTopicChange("general")}
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        onTopicChange("general");
-                      }
-                    }}
-                  >
-                    <span>
-                      <span className="chat-channel-hash">#</span> Team chat
-                    </span>
-                  </li>
-                  {topics.map((topic) => (
+                <h2 className="chat-sidebar-title">Chat</h2>
+
+                <div className="chat-sidebar-section">
+                  <div className="chat-sidebar-section-head">
+                    <span className="chat-channels-label">Channels</span>
+                    <button type="button" className="chat-sidebar-add-btn" aria-label="Add channel" title="Coming soon">
+                      <IconPlus />
+                    </button>
+                  </div>
+                  <ul className="chat-channel-list">
                     <li
-                      key={topic.id}
-                      className={`chat-channel-item ${selectedTopicId === topic.id ? "chat-channel-item-active" : ""}`}
-                      onClick={() => onTopicChange(topic.id)}
+                      className={`chat-channel-item ${!isDmMode && selectedTopicId === "general" ? "chat-channel-item-active" : ""}`}
+                      onClick={() => onTopicChange("general")}
                       role="button"
                       tabIndex={0}
                       onKeyDown={(e) => {
                         if (e.key === "Enter" || e.key === " ") {
                           e.preventDefault();
-                          onTopicChange(topic.id);
+                          onTopicChange("general");
                         }
                       }}
                     >
-                      <span>
-                        <span className="chat-channel-hash">#</span> {topic.name}
+                      <span className="chat-channel-item-label">
+                        <span className="chat-channel-hash">#</span> Team chat
                       </span>
+                      {!isDmMode && selectedTopicId === "general" ? (
+                        <span className="chat-channel-settings" aria-hidden>
+                          <IconGear />
+                        </span>
+                      ) : null}
                     </li>
-                  ))}
-                </ul>
-                <div className="chat-channels-label">Direct messages</div>
-                <ul className="chat-channel-list">
-                  {directConversations.map((conv) => (
-                    <li
-                      key={conv.id}
-                      className={`chat-channel-item ${selectedConversationId === conv.id ? "chat-channel-item-active" : ""}`}
-                      onClick={() => onConversationChange(conv.id)}
-                      role="button"
-                      tabIndex={0}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          onConversationChange(conv.id);
-                        }
-                      }}
-                    >
-                      <span>{conv.recipient?.name ?? conv.recipient?.email ?? "Direct message"}</span>
-                    </li>
-                  ))}
-                </ul>
-                <div className="chat-channels-label">Group messages</div>
-                <ul className="chat-channel-list">
-                  {groupConversations.map((conv) => (
-                    <li
-                      key={conv.id}
-                      className={`chat-channel-item ${selectedConversationId === conv.id ? "chat-channel-item-active" : ""}`}
-                      onClick={() => onConversationChange(conv.id)}
-                      role="button"
-                      tabIndex={0}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          onConversationChange(conv.id);
-                        }
-                      }}
-                    >
-                      <span>{conv.name ?? "Group chat"}</span>
-                    </li>
-                  ))}
-                </ul>
+                    {topics.map((topic) => (
+                      <li
+                        key={topic.id}
+                        className={`chat-channel-item ${!isDmMode && selectedTopicId === topic.id ? "chat-channel-item-active" : ""}`}
+                        onClick={() => onTopicChange(topic.id)}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            onTopicChange(topic.id);
+                          }
+                        }}
+                      >
+                        <span className="chat-channel-item-label">
+                          <span className="chat-channel-hash">#</span> {topic.name}
+                        </span>
+                        {!isDmMode && selectedTopicId === topic.id ? (
+                          <span className="chat-channel-settings" aria-hidden>
+                            <IconGear />
+                          </span>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                <div className="chat-sidebar-section">
+                  <div className="chat-sidebar-section-head">
+                    <span className="chat-channels-label">Direct messages</span>
+                    <button type="button" className="chat-sidebar-add-btn" aria-label="New direct message" title="Coming soon">
+                      <IconPlus />
+                    </button>
+                  </div>
+                  <ul className="chat-channel-list">
+                    {directConversations.map((conv) => {
+                      const user = conv.recipient ?? conv.participants[0];
+                      const label = user?.name ?? user?.email ?? "Direct message";
+                      return (
+                        <li
+                          key={conv.id}
+                          className={`chat-channel-item chat-dm-item ${selectedConversationId === conv.id ? "chat-channel-item-active" : ""}`}
+                          onClick={() => onConversationChange(conv.id)}
+                          role="button"
+                          tabIndex={0}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              onConversationChange(conv.id);
+                            }
+                          }}
+                        >
+                          {user ? <ChatAvatar user={user} size="sm" /> : null}
+                          <span className="chat-dm-item-name">{label}</span>
+                          <span className="chat-dm-status chat-dm-status--offline" aria-hidden />
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+
+                <div className="chat-sidebar-section">
+                  <div className="chat-sidebar-section-head">
+                    <span className="chat-channels-label">Group messages</span>
+                    <button type="button" className="chat-sidebar-add-btn" aria-label="New group message" title="Coming soon">
+                      <IconPlus />
+                    </button>
+                  </div>
+                  <ul className="chat-channel-list">
+                    {groupConversations.map((conv) => (
+                      <li
+                        key={conv.id}
+                        className={`chat-channel-item chat-group-item ${selectedConversationId === conv.id ? "chat-channel-item-active" : ""}`}
+                        onClick={() => onConversationChange(conv.id)}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            onConversationChange(conv.id);
+                          }
+                        }}
+                      >
+                        <span className="chat-group-icon" aria-hidden>
+                          <IconGroup />
+                        </span>
+                        <span className="chat-group-item-copy">
+                          <span className="chat-group-item-name">{conv.name ?? "Group chat"}</span>
+                          <span className="chat-group-item-meta">{conv.participants.length} members</span>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               </div>
             </aside>
 
             <div className="chat-main-column">
               <div className="chat-main-card">
-                <div
-                  className={`chat-main-toolbar chat-main-toolbar-compact ${!isDmMode ? "chat-main-toolbar-with-actions" : ""}`}
-                >
-                  <Link to="/dashboard" className="chat-back-link" data-testid="chat-back-link">
-                    ← Dashboard
-                  </Link>
-                  <div className="chat-main-titles">
-                    <h1 className="chat-main-title">
-                      {isDmMode
-                        ? conversationLabel ?? "Direct message"
-                        : selectedTopicId === "general"
-                          ? "Team chat"
-                          : `# ${topics.find((t) => t.id === selectedTopicId)?.name ?? "Team chat"}`}
-                    </h1>
-                    <p className="chat-main-subtitle">
-                      {isDmMode
-                        ? "Direct and group messaging"
-                        : `${selectedTeamName ? selectedTeamName : "Team chat"} · same as in the mobile app`}
-                    </p>
-                  </div>
-                  {!isDmMode ? (
-                    <div className="chat-toolbar-actions">
-                      <button
-                        type="button"
-                        className="enterprise-task-modal-btn enterprise-task-modal-btn-secondary chat-toolbar-action-btn"
-                        onClick={() => void openChatVideo()}
-                        disabled={videoLoading || !selectedTeamId}
-                        data-testid="chat-start-meeting"
-                      >
-                        {videoLoading ? "Starting…" : "Start virtual meeting"}
-                      </button>
-                      <button
-                        type="button"
-                        className="enterprise-task-modal-btn enterprise-task-modal-btn-secondary chat-toolbar-action-btn"
-                        onClick={() => {
-                          setActionErr(null);
-                          setPollModalOpen(true);
-                        }}
-                        disabled={!selectedTeamId}
-                        data-testid="chat-create-poll"
-                      >
-                        Create poll
-                      </button>
+                <div className="chat-channel-header">
+                  <div className="chat-channel-header-main">
+                    <div className="chat-channel-header-title-row">
+                      <h1 className="chat-channel-header-title">
+                        {channelHeaderHash ? <span className="chat-channel-hash">#</span> : null}
+                        {channelHeaderTitle}
+                      </h1>
+                      <span className="chat-channel-header-chevron" aria-hidden>
+                        ▾
+                      </span>
                     </div>
-                  ) : null}
+                    <p className="chat-channel-header-desc">{channelDescription}</p>
+                  </div>
+                  <div className="chat-channel-header-actions">
+                    {memberCount > 0 ? (
+                      <button type="button" className="chat-header-icon-btn" aria-label={`${memberCount} members`} title={`${memberCount} members`}>
+                        <IconUsers />
+                        <span className="chat-header-icon-count">{memberCount}</span>
+                      </button>
+                    ) : null}
+                    <button type="button" className="chat-header-icon-btn" aria-label="Pinned messages" title="Pinned messages">
+                      <IconPin />
+                    </button>
+                    <button type="button" className="chat-header-icon-btn" aria-label="Search messages" title="Search messages">
+                      <IconSearch />
+                    </button>
+                    <div className="chat-header-more-wrap" ref={moreMenuRef}>
+                      <button
+                        type="button"
+                        className="chat-header-icon-btn"
+                        aria-label="More actions"
+                        aria-expanded={moreMenuOpen}
+                        onClick={() => setMoreMenuOpen((v) => !v)}
+                      >
+                        <IconMore />
+                      </button>
+                      {moreMenuOpen ? (
+                        <div className="chat-header-more-menu" role="menu">
+                          {!isDmMode ? (
+                            <>
+                              <button
+                                type="button"
+                                role="menuitem"
+                                className="chat-header-more-item"
+                                disabled={videoLoading || !selectedTeamId}
+                                onClick={() => {
+                                  setMoreMenuOpen(false);
+                                  void openChatVideo();
+                                }}
+                                data-testid="chat-start-meeting"
+                              >
+                                {videoLoading ? "Starting meeting…" : "Start virtual meeting"}
+                              </button>
+                              <button
+                                type="button"
+                                role="menuitem"
+                                className="chat-header-more-item"
+                                disabled={!selectedTeamId}
+                                onClick={() => {
+                                  setMoreMenuOpen(false);
+                                  setActionErr(null);
+                                  setPollModalOpen(true);
+                                }}
+                                data-testid="chat-create-poll"
+                              >
+                                Create poll
+                              </button>
+                            </>
+                          ) : (
+                            <span className="chat-header-more-muted">No extra actions</span>
+                          )}
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
                 </div>
 
                 {actionErr ? (
@@ -669,35 +918,71 @@ export function ChatPage() {
                   ) : null}
                   <div ref={messagesContainerRef} className="chat-messages" data-testid="chat-message-list">
                     {messages.length === 0 ? (
-                      <p style={{ color: "var(--muted)", fontSize: "0.875rem", margin: 0 }}>
+                      <p className="chat-messages-empty">
                         No messages yet. Say hello{selectedTeamName ? ` in ${selectedTeamName}` : ""}.
                       </p>
                     ) : (
-                      messages.map((m) => {
-                        const mine = me?.id && m.senderId === me.id;
-                        return (
-                          <div key={m.id} style={{ display: "flex", flexDirection: "column" }}>
-                            <div
-                              className="chat-meta"
-                              style={mine ? { alignSelf: "flex-end", textAlign: "right" } : undefined}
-                            >
-                              <strong>{m.sender.name ?? m.sender.email ?? "Member"}</strong>
-                              <span style={{ marginLeft: 8 }}>{formatChatTime(m.createdAt)}</span>
+                      messageBlocks.map((block) => {
+                        if (block.kind === "date") {
+                          return (
+                            <div key={block.key} className="chat-date-divider">
+                              <span className="chat-date-divider-label">{block.label}</span>
                             </div>
-                            <div className={`chat-bubble ${mine ? "chat-bubble-mine" : "chat-bubble-other"}`}>
-                              <div className="chat-bubble-content">
-                                {m.content ? <div className="chat-text">{linkifyText(m.content)}</div> : null}
+                          );
+                        }
+                        const m = block.message;
+                        const senderName = m.sender.name ?? m.sender.email ?? "Member";
+                        return (
+                          <article key={m.id} className="chat-message-row">
+                            <ChatAvatar user={m.sender} size="md" />
+                            <div className="chat-message-body">
+                              <div className="chat-message-head">
+                                <strong className="chat-message-author">{senderName}</strong>
+                                <time className="chat-message-time" dateTime={m.createdAt}>
+                                  {formatMessageTime(m.createdAt)}
+                                </time>
+                              </div>
+                              <div className="chat-message-content">
+                                {m.content ? <div className="chat-text">{renderMessageText(m.content)}</div> : null}
                                 {m.mediaUrl ? <ChatMessageMedia url={m.mediaUrl} mediaType={m.mediaType} /> : null}
                               </div>
+                              <div className="chat-message-reactions" aria-label="Reactions">
+                                <button type="button" className="chat-reaction-add" aria-label="Add reaction" title="Add reaction">
+                                  <span aria-hidden>😊</span>
+                                  <span className="chat-reaction-add-plus">+</span>
+                                </button>
+                              </div>
                             </div>
-                          </div>
+                          </article>
                         );
                       })
                     )}
                     <div ref={messagesEndRef} />
                   </div>
-                  <div className="chat-composer">
-                    <div className="chat-composer-main">
+                  <div className="chat-composer chat-composer-v2">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*,video/*"
+                      className="chat-composer-file-input"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) attachFile(file);
+                        e.target.value = "";
+                      }}
+                    />
+                    <input
+                      ref={imageInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="chat-composer-file-input"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) attachFile(file);
+                        e.target.value = "";
+                      }}
+                    />
+                    <div className="chat-composer-box">
                       {pendingAttachment ? (
                         <div className="chat-composer-pending">
                           <div className="chat-composer-pending-preview">
@@ -715,7 +1000,7 @@ export function ChatPage() {
                           </div>
                           <div className="chat-composer-pending-actions">
                             <span className="chat-composer-pending-label">
-                              {pendingAttachment.isVideo ? "Video" : "Photo"} — add a caption if you want, then Send
+                              {pendingAttachment.isVideo ? "Video" : "Photo"} attached
                             </span>
                             <button
                               type="button"
@@ -733,26 +1018,69 @@ export function ChatPage() {
                         onChange={(e) => setDraft(e.target.value)}
                         onKeyDown={onKeyDown}
                         onPaste={onPaste}
-                        placeholder="Write a message… Enter to send · Shift+Enter new line · Paste image or video to attach"
-                        rows={2}
+                        placeholder="Type a message…"
+                        rows={3}
                         disabled={(!selectedTeamId && !isDmMode) || sending || mediaUploading}
                         data-testid="chat-input"
                       />
+                      <div className="chat-composer-toolbar">
+                        <div className="chat-composer-tools">
+                          <button
+                            type="button"
+                            className="chat-composer-tool"
+                            aria-label="Attach file"
+                            title="Attach image or video"
+                            onClick={() => fileInputRef.current?.click()}
+                          >
+                            📎
+                          </button>
+                          <button
+                            type="button"
+                            className="chat-composer-tool"
+                            aria-label="Add image"
+                            title="Add image"
+                            onClick={() => imageInputRef.current?.click()}
+                          >
+                            🖼
+                          </button>
+                          <button type="button" className="chat-composer-tool" aria-label="Add emoji" title="Coming soon">
+                            😊
+                          </button>
+                          <button
+                            type="button"
+                            className="chat-composer-tool"
+                            aria-label="Mention someone"
+                            title="Mention someone"
+                            onClick={() => setDraft((d) => (d.endsWith("@") || d.endsWith(" @") ? d : `${d}${d.length ? " " : ""}@`))}
+                          >
+                            @
+                          </button>
+                          <button type="button" className="chat-composer-tool" aria-label="Add GIF" title="Coming soon">
+                            GIF
+                          </button>
+                        </div>
+                        <div className="chat-composer-send-row">
+                          <span className="chat-composer-hint">Shift + Enter for new line</span>
+                          <button
+                            type="button"
+                            className="chat-send chat-send-v2"
+                            onClick={() => void send()}
+                            disabled={
+                              sending ||
+                              mediaUploading ||
+                              (!draft.trim() && !pendingAttachment) ||
+                              (!selectedTeamId && !isDmMode)
+                            }
+                            data-testid="chat-send"
+                          >
+                            {mediaUploading ? "Sending…" : sending ? "…" : "Send"}
+                            <span className="chat-send-chevron" aria-hidden>
+                              ▾
+                            </span>
+                          </button>
+                        </div>
+                      </div>
                     </div>
-                    <button
-                      type="button"
-                      className="chat-send"
-                      onClick={() => void send()}
-                      disabled={
-                        sending ||
-                        mediaUploading ||
-                        (!draft.trim() && !pendingAttachment) ||
-                        (!selectedTeamId && !isDmMode)
-                      }
-                      data-testid="chat-send"
-                    >
-                      {mediaUploading ? "Sending…" : sending ? "…" : "Send"}
-                    </button>
                   </div>
                 </div>
               </div>
