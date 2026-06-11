@@ -853,7 +853,7 @@ export function OneOnOneHistoryTab({
           <Pressable onPress={(e) => e.stopPropagation?.()} style={{ backgroundColor: "white", borderRadius: 16, padding: 20 }}>
             <Text style={{ fontSize: 18, fontWeight: "800", color: "#0F172A" }}>Request feedback?</Text>
             <Text style={{ fontSize: 14, color: "#64748B", marginTop: 8, lineHeight: 20 }}>
-              Request feedback and commitments from {memberName}? They&apos;ll receive a task to share their notes.
+              Request associate feedback and commitments from {memberName}? They&apos;ll receive a task to share their notes.
             </Text>
             <View style={{ flexDirection: "row", gap: 10, marginTop: 20 }}>
               <Pressable

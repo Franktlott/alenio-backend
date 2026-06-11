@@ -1,7 +1,7 @@
 export const ONEONE_FEEDBACK_MARKER = "[alenio:oneone-feedback]";
 export const NO_FEEDBACK_VALUE = "__no_feedback__";
 export const ASSOCIATE_FEEDBACK_FIELD_ID = "__oneone_associate_feedback__";
-export const ASSOCIATE_FEEDBACK_LABEL = "Feedback & commitments";
+export const ASSOCIATE_FEEDBACK_LABEL = "Associate feedback and commitments";
 
 export type AssociateRequestMode = "task" | "message";
 
