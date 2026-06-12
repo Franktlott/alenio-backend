@@ -265,7 +265,12 @@ export function OneOnOneHistoryTab({
     try {
       const normalized = normalizeResponses(selectedTemplate.fields);
       const followUpTasks = buildFollowUpPayload(editingMeeting);
-      const payload = { responses: normalized, followUpTasks, requestAssociateFeedback };
+      const payload = {
+        responses: normalized,
+        followUpTasks,
+        requestAssociateFeedback,
+        status: "published" as const,
+      };
       if (editingMeeting) {
         await updateOneOnOneMeeting(teamId, memberUserId, editingMeeting.id, payload);
       } else {
@@ -283,6 +288,35 @@ export function OneOnOneHistoryTab({
       toast({ title: "Check-in saved", preset: "done" });
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Could not save check-in.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const performSaveDraft = async () => {
+    if (!selectedTemplate || saving) return;
+    setSaving(true);
+    setErr(null);
+    try {
+      const normalized = normalizeResponses(selectedTemplate.fields);
+      const payload = { responses: normalized, status: "draft" as const };
+      if (editingMeeting) {
+        await updateOneOnOneMeeting(teamId, memberUserId, editingMeeting.id, payload);
+      } else {
+        await createOneOnOneMeeting(teamId, memberUserId, {
+          templateId: selectedTemplate.id,
+          ...payload,
+        });
+      }
+      await loadMeetings();
+      setView("list");
+      setSelectedTemplate(null);
+      setEditingMeeting(null);
+      setResponses({});
+      setFollowUpDrafts([]);
+      toast({ title: "Draft saved", preset: "done" });
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Could not save draft.");
     } finally {
       setSaving(false);
     }
@@ -580,8 +614,25 @@ export function OneOnOneHistoryTab({
             borderTopWidth: 1,
             borderTopColor: "#F1F5F9",
             backgroundColor: "white",
+            gap: 10,
           }}
         >
+          {!editingMeeting || editingMeeting.status === "draft" ? (
+            <Pressable
+              onPress={() => void performSaveDraft()}
+              disabled={saving}
+              style={{
+                borderRadius: 12,
+                paddingVertical: 14,
+                alignItems: "center",
+                borderWidth: 1,
+                borderColor: "#E2E8F0",
+                opacity: saving ? 0.6 : 1,
+              }}
+            >
+              <Text style={{ fontWeight: "700", color: "#475569" }}>{saving ? "Saving…" : "Save draft"}</Text>
+            </Pressable>
+          ) : null}
           <Pressable
             onPress={() => setFeedbackPromptOpen(true)}
             disabled={saving}
@@ -593,7 +644,15 @@ export function OneOnOneHistoryTab({
               opacity: saving ? 0.6 : 1,
             }}
           >
-            <Text style={{ fontWeight: "700", color: "white" }}>{saving ? "Saving…" : "Save check-in"}</Text>
+            <Text style={{ fontWeight: "700", color: "white" }}>
+              {saving
+                ? "Saving…"
+                : editingMeeting?.status === "draft"
+                  ? "Publish check-in"
+                  : editingMeeting
+                    ? "Save changes"
+                    : "Save check-in"}
+            </Text>
           </Pressable>
         </View>
       </View>
@@ -697,8 +756,12 @@ export function OneOnOneHistoryTab({
           {[...meetings]
             .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
             .map((meeting) => {
+              const isDraft = meeting.status === "draft";
               const status = getOneOnOneMeetingStatusFromMeeting(meeting);
-              const colors = oneOnOneMeetingStatusColors(status);
+              const colors = isDraft
+                ? { bg: "#EEF2FF", text: "#4338CA" }
+                : oneOnOneMeetingStatusColors(status);
+              const statusLabel = isDraft ? "Draft" : oneOnOneMeetingStatusLabel(status);
               return (
                 <Pressable
                   key={meeting.id}
@@ -730,7 +793,7 @@ export function OneOnOneHistoryTab({
                         }}
                       >
                         <Text style={{ fontSize: 11, fontWeight: "700", color: colors.text }}>
-                          {oneOnOneMeetingStatusLabel(status)}
+                          {statusLabel}
                         </Text>
                       </View>
                     </View>

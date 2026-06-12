@@ -273,6 +273,8 @@ model OneOnOneMeeting {
   templateFields String
   /** JSON object: { [fieldId]: string | number } */
   responses      String
+  /** draft = saved but not published; published = finalized check-in */
+  status         String            @default("published")
   createdById    String
   createdBy      User              @relation("OneOnOneMeetingCreator", fields: [createdById], references: [id])
   createdAt      DateTime          @default(now())

@@ -48,12 +48,14 @@ const createMeetingSchema = z.object({
   responses: z.record(z.string(), z.union([z.string(), z.number()])),
   followUpTasks: z.array(followUpTaskSchema).optional(),
   requestAssociateFeedback: z.boolean().optional(),
+  status: z.enum(["draft", "published"]).optional(),
 });
 
 const updateMeetingSchema = z.object({
   responses: z.record(z.string(), z.union([z.string(), z.number()])),
   followUpTasks: z.array(followUpTaskSchema).optional(),
   requestAssociateFeedback: z.boolean().optional(),
+  status: z.enum(["draft", "published"]).optional(),
 });
 
 const meetingInclude = {
@@ -134,6 +136,7 @@ function serializeMeeting(meeting: {
   templateTitle: string;
   templateFields: string;
   responses: string;
+  status?: string;
   createdById: string;
   createdAt: Date;
   createdBy?: { id: string; name: string; email: string; image: string | null };
@@ -146,6 +149,7 @@ function serializeMeeting(meeting: {
     templateTitle: meeting.templateTitle,
     templateFields: parseJsonArray(meeting.templateFields),
     responses: parseResponses(meeting.responses),
+    status: meeting.status === "draft" ? "draft" : "published",
     createdById: meeting.createdById,
     createdAt: meeting.createdAt.toISOString(),
     createdBy: meeting.createdBy,
@@ -189,13 +193,16 @@ async function serializeMeetingWithTasks(meeting: {
   templateTitle: string;
   templateFields: string;
   responses: string;
+  status?: string;
   createdById: string;
   createdAt: Date;
   createdBy?: { id: string; name: string; email: string; image: string | null };
 }) {
   const followUpTasks = await loadFollowUpTasks(meeting.id);
   const responses = parseResponses(meeting.responses);
+  const isDraft = meeting.status === "draft";
   const associateFeedbackPending =
+    !isDraft &&
     !associateFeedbackAnswered(responses) &&
     (await feedbackRequestAlreadySent(meeting.id, ASSOCIATE_FEEDBACK_FIELD_ID));
   return {
@@ -205,12 +212,17 @@ async function serializeMeetingWithTasks(meeting: {
   };
 }
 
-function validateResponses(fields: TemplateField[], responses: Record<string, string | number>) {
+function validateResponses(
+  fields: TemplateField[],
+  responses: Record<string, string | number>,
+  options?: { draft?: boolean },
+) {
+  const draft = options?.draft === true;
   for (const field of fields) {
     if (field.type === "section" || field.type === "associate_notes") continue;
     if (isAssociateRequestedField(field)) continue;
     const value = responses[field.id];
-    if (field.required) {
+    if (field.required && !draft) {
       if (field.type === "rating") {
         const num = typeof value === "number" ? value : Number(value);
         if (!Number.isFinite(num) || num < 1) {
@@ -430,8 +442,13 @@ oneOnOneMeetingsRouter.get("/:memberUserId/one-on-ones", async (c) => {
   }
 
   try {
+    const where: { teamId: string; memberUserId: string; status?: string } = { teamId, memberUserId };
+    if (!canManageOneOnOne(membership)) {
+      where.status = "published";
+    }
+
     const meetings = await prisma.oneOnOneMeeting.findMany({
-      where: { teamId, memberUserId },
+      where,
       include: meetingInclude,
       orderBy: { createdAt: "desc" },
     });
@@ -469,6 +486,7 @@ oneOnOneMeetingsRouter.post(
     }
 
     const body = c.req.valid("json");
+    const isDraft = body.status === "draft";
     const template = await prisma.oneOnOneTemplate.findFirst({
       where: { id: body.templateId, teamId },
     });
@@ -477,14 +495,14 @@ oneOnOneMeetingsRouter.post(
     }
 
     const fields = appendLeaderCommentsFields(parseJsonArray(template.fields));
-    const validationError = validateResponses(fields, body.responses);
+    const validationError = validateResponses(fields, body.responses, { draft: isDraft });
     if (validationError) {
       return c.json({ error: { message: validationError, code: "VALIDATION_ERROR" } }, 400);
     }
 
     const templateFieldsJson = JSON.stringify(fields);
 
-    const followUpTasks = body.followUpTasks ?? [];
+    const followUpTasks = isDraft ? [] : (body.followUpTasks ?? []);
     const followUpError = await validateFollowUpAssignees(teamId, memberUserId, user.id, followUpTasks);
     if (followUpError) {
       return c.json({ error: { message: followUpError, code: "VALIDATION_ERROR" } }, 400);
@@ -500,6 +518,7 @@ oneOnOneMeetingsRouter.post(
             templateTitle: template.title,
             templateFields: templateFieldsJson,
             responses: JSON.stringify(body.responses),
+            status: isDraft ? "draft" : "published",
             createdById: user.id,
           },
           include: meetingInclude,
@@ -540,13 +559,15 @@ oneOnOneMeetingsRouter.post(
       });
 
       const managerName = user.name?.trim() || user.email || "Your manager";
-      await createMeetingAssociateFeedbackRequest(
-        meeting,
-        body.requestAssociateFeedback === true,
-        body.responses,
-        user.id,
-        managerName,
-      );
+      if (!isDraft) {
+        await createMeetingAssociateFeedbackRequest(
+          meeting,
+          body.requestAssociateFeedback === true,
+          body.responses,
+          user.id,
+          managerName,
+        );
+      }
 
       return c.json({ data: await serializeMeetingWithTasks(meeting) }, 201);
     } catch (err) {
@@ -582,13 +603,24 @@ oneOnOneMeetingsRouter.patch(
     }
 
     const body = c.req.valid("json");
+    const nextStatus =
+      body.status ?? (existing.status === "draft" ? "draft" : "published");
+    const isDraft = nextStatus === "draft";
+
+    if (existing.status === "published" && body.status === "draft") {
+      return c.json(
+        { error: { message: "Published check-ins cannot be moved back to draft.", code: "VALIDATION_ERROR" } },
+        400,
+      );
+    }
+
     const fields = parseJsonArray(existing.templateFields);
-    const validationError = validateResponses(fields, body.responses);
+    const validationError = validateResponses(fields, body.responses, { draft: isDraft });
     if (validationError) {
       return c.json({ error: { message: validationError, code: "VALIDATION_ERROR" } }, 400);
     }
 
-    const followUpTasks = body.followUpTasks ?? [];
+    const followUpTasks = isDraft ? [] : (body.followUpTasks ?? []);
     const followUpError = await validateFollowUpAssignees(
       teamId,
       memberUserId,
@@ -602,7 +634,10 @@ oneOnOneMeetingsRouter.patch(
     try {
       await prisma.oneOnOneMeeting.update({
         where: { id: meetingId },
-        data: { responses: JSON.stringify(body.responses) },
+        data: {
+          responses: JSON.stringify(body.responses),
+          status: nextStatus,
+        },
       });
 
       if (followUpTasks.length > 0) {
@@ -610,13 +645,15 @@ oneOnOneMeetingsRouter.patch(
       }
 
       const managerName = user.name?.trim() || user.email || "Your manager";
-      await createMeetingAssociateFeedbackRequest(
-        { id: meetingId, teamId, memberUserId, templateTitle: existing.templateTitle },
-        body.requestAssociateFeedback === true,
-        body.responses,
-        user.id,
-        managerName,
-      );
+      if (!isDraft) {
+        await createMeetingAssociateFeedbackRequest(
+          { id: meetingId, teamId, memberUserId, templateTitle: existing.templateTitle },
+          body.requestAssociateFeedback === true,
+          body.responses,
+          user.id,
+          managerName,
+        );
+      }
 
       const meeting = await prisma.oneOnOneMeeting.findUnique({
         where: { id: meetingId },
@@ -654,6 +691,10 @@ oneOnOneMeetingsRouter.get("/:memberUserId/one-on-ones/:meetingId/associate-feed
   });
   if (!meeting) {
     return c.json({ error: { message: "Check-in not found", code: "NOT_FOUND" } }, 404);
+  }
+
+  if (meeting.status === "draft") {
+    return c.json({ error: { message: "This check-in is still a draft.", code: "FORBIDDEN" } }, 403);
   }
 
   const fields = parseJsonArray(meeting.templateFields) as TemplateField[];
@@ -706,6 +747,10 @@ oneOnOneMeetingsRouter.post(
     });
     if (!meeting) {
       return c.json({ error: { message: "Check-in not found", code: "NOT_FOUND" } }, 404);
+    }
+
+    if (meeting.status === "draft") {
+      return c.json({ error: { message: "This check-in is still a draft.", code: "FORBIDDEN" } }, 403);
     }
 
     const fields = parseJsonArray(meeting.templateFields) as TemplateField[];

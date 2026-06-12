@@ -1252,6 +1252,7 @@ export type OneOnOneMeeting = {
   templateTitle: string;
   templateFields: OneOnOneTemplateField[];
   responses: Record<string, string | number>;
+  status?: "draft" | "published";
   createdById: string;
   createdAt: string;
   createdBy?: { id: string; name: string; email: string; image: string | null };
@@ -1272,6 +1273,7 @@ export function createOneOnOneMeeting(
     responses: Record<string, string | number>;
     followUpTasks?: OneOnOneFollowUpTaskInput[];
     requestAssociateFeedback?: boolean;
+    status?: "draft" | "published";
   },
 ) {
   const paths = oneOnOneMeetingsPaths(teamId, memberUserId);
@@ -1300,6 +1302,7 @@ export function updateOneOnOneMeeting(
     responses: Record<string, string | number>;
     followUpTasks?: OneOnOneFollowUpTaskInput[];
     requestAssociateFeedback?: boolean;
+    status?: "draft" | "published";
   },
 ) {
   const paths = oneOnOneMeetingPaths(teamId, memberUserId, meetingId);

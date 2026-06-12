@@ -84,9 +84,10 @@ export function ProfileOverviewTab({
           (a, b) => new Date(lastUpdatedAt(b)).getTime() - new Date(lastUpdatedAt(a)).getTime(),
         );
       setActiveGoals(active);
-      setOneOnOneCount(meetings.length);
+      const publishedMeetings = meetings.filter((meeting) => meeting.status !== "draft");
+      setOneOnOneCount(publishedMeetings.length);
 
-      const latestMeeting = [...meetings].sort(
+      const latestMeeting = [...publishedMeetings].sort(
         (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
       )[0];
       setLastOneOnOneDate(latestMeeting?.createdAt ?? null);

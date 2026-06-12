@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
+import { AutoResizeTextarea } from "./AutoResizeTextarea";
 import {
   createOneOnOneMeeting,
   deleteOneOnOneMeeting,
@@ -123,6 +125,26 @@ type Props = {
 
 type View = "list" | "pick" | "fill";
 
+/** iPad and smaller: check-in opens full screen automatically. */
+const CHECKIN_COMPACT_MAX_WIDTH = 1024;
+
+function useCompactCheckInLayout() {
+  const [compact, setCompact] = useState(() =>
+    typeof window !== "undefined"
+      ? window.matchMedia(`(max-width: ${CHECKIN_COMPACT_MAX_WIDTH}px)`).matches
+      : false,
+  );
+
+  useEffect(() => {
+    const mq = window.matchMedia(`(max-width: ${CHECKIN_COMPACT_MAX_WIDTH}px)`);
+    const onChange = () => setCompact(mq.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+
+  return compact;
+}
+
 type FollowUpDraft = {
   id: string;
   title: string;
@@ -167,6 +189,13 @@ function assigneeDisplayName(
 }
 
 function MeetingStatusBadge({ meeting }: { meeting: OneOnOneMeeting }) {
+  if (meeting.status === "draft") {
+    return (
+      <span className="enterprise-oneone-status enterprise-oneone-status--draft" title="Draft">
+        Draft
+      </span>
+    );
+  }
   const status = getOneOnOneMeetingStatusFromMeeting(meeting);
   return (
     <span className={oneOnOneMeetingStatusClass(status)} title={oneOnOneMeetingStatusLabel(status)}>
@@ -198,6 +227,10 @@ export function OneOnOneHistoryTab({
   const [err, setErr] = useState<string | null>(null);
   const [followUpDrafts, setFollowUpDrafts] = useState<FollowUpDraft[]>([]);
   const [feedbackPromptOpen, setFeedbackPromptOpen] = useState(false);
+  const [userExpandedFullscreen, setUserExpandedFullscreen] = useState(false);
+  const [listNotice, setListNotice] = useState<string | null>(null);
+  const compactCheckInLayout = useCompactCheckInLayout();
+  const checkInFullscreen = compactCheckInLayout || userExpandedFullscreen;
 
   const resolveLeaderUserId = (meeting?: OneOnOneMeeting | null) =>
     leaderUserId ?? meeting?.createdById ?? null;
@@ -296,6 +329,86 @@ export function OneOnOneHistoryTab({
     return () => document.removeEventListener("click", closeMenu);
   }, [menuMeetingId]);
 
+  useEffect(() => {
+    if (view === "list") setUserExpandedFullscreen(false);
+  }, [view]);
+
+  useEffect(() => {
+    if (!checkInFullscreen || (view !== "fill" && view !== "pick")) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [checkInFullscreen, view]);
+
+  type CheckInShellConfig = {
+    title: string;
+    subtitle?: string;
+    onBack: () => void;
+    backLabel: string;
+    footer?: ReactNode;
+  };
+
+  const renderCheckInShell = (content: ReactNode, config: CheckInShellConfig) => {
+    const { title, subtitle, onBack, backLabel, footer } = config;
+
+    if (checkInFullscreen) {
+      return createPortal(
+        <div className="enterprise-oneone-fill-overlay" role="dialog" aria-modal="true" aria-label={title}>
+          <header className="enterprise-oneone-fill-header">
+            <div className="enterprise-oneone-fill-header-toolbar">
+              <button type="button" className="enterprise-oneone-fill-header-back" onClick={onBack}>
+                ← {backLabel}
+              </button>
+              {!compactCheckInLayout ? (
+                <button
+                  type="button"
+                  className="enterprise-oneone-fill-expand-btn"
+                  onClick={() => setUserExpandedFullscreen(false)}
+                >
+                  Exit full screen
+                </button>
+              ) : null}
+            </div>
+            <div className="enterprise-oneone-fill-header-text">
+              <h2 className="enterprise-oneone-fill-header-title">{title}</h2>
+              {subtitle ? <p className="enterprise-muted enterprise-oneone-fill-header-sub">{subtitle}</p> : null}
+            </div>
+          </header>
+          <div className="enterprise-oneone-fill-body">{content}</div>
+          {footer ? <footer className="enterprise-oneone-fill-footer">{footer}</footer> : null}
+        </div>,
+        document.body,
+      );
+    }
+
+    return (
+      <div className="enterprise-oneone-history">
+        <div className="enterprise-oneone-fill-inline-head">
+          <button type="button" className="enterprise-oneone-history-back" onClick={onBack}>
+            ← {backLabel}
+          </button>
+          <div className="enterprise-oneone-fill-inline-head-row">
+            <div className="enterprise-oneone-fill-inline-head-text">
+              <h3 className="enterprise-oneone-history-heading">{title}</h3>
+              {subtitle ? <p className="enterprise-muted enterprise-oneone-history-sub">{subtitle}</p> : null}
+            </div>
+            <button
+              type="button"
+              className="enterprise-oneone-fill-expand-btn"
+              onClick={() => setUserExpandedFullscreen(true)}
+            >
+              Full screen
+            </button>
+          </div>
+        </div>
+        {content}
+        {footer}
+      </div>
+    );
+  };
+
   const startEdit = (meeting: OneOnOneMeeting) => {
     setPreviewMeeting(null);
     setMenuMeetingId(null);
@@ -333,7 +446,12 @@ export function OneOnOneHistoryTab({
     try {
       const normalized = normalizeResponses(selectedTemplate.fields);
       const followUpTasks = buildFollowUpPayload(editingMeeting);
-      const payload = { responses: normalized, followUpTasks, requestAssociateFeedback };
+      const payload = {
+        responses: normalized,
+        followUpTasks,
+        requestAssociateFeedback,
+        status: "published" as const,
+      };
       if (editingMeeting) {
         await updateOneOnOneMeeting(teamId, memberUserId, editingMeeting.id, payload);
       } else {
@@ -348,8 +466,38 @@ export function OneOnOneHistoryTab({
       setEditingMeeting(null);
       setResponses({});
       setFollowUpDrafts([]);
+      setListNotice(null);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Could not save check-in.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const performSaveDraft = async () => {
+    if (!selectedTemplate || saving) return;
+    setSaving(true);
+    setErr(null);
+    try {
+      const normalized = normalizeResponses(selectedTemplate.fields);
+      const payload = { responses: normalized, status: "draft" as const };
+      if (editingMeeting) {
+        await updateOneOnOneMeeting(teamId, memberUserId, editingMeeting.id, payload);
+      } else {
+        await createOneOnOneMeeting(teamId, memberUserId, {
+          templateId: selectedTemplate.id,
+          ...payload,
+        });
+      }
+      await loadMeetings();
+      setView("list");
+      setSelectedTemplate(null);
+      setEditingMeeting(null);
+      setResponses({});
+      setFollowUpDrafts([]);
+      setListNotice("Draft saved. Reopen it from the list when you're ready to publish.");
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Could not save draft.");
     } finally {
       setSaving(false);
     }
@@ -358,6 +506,10 @@ export function OneOnOneHistoryTab({
   const onSaveClick = () => {
     if (!selectedTemplate || saving) return;
     setFeedbackPromptOpen(true);
+  };
+
+  const onSaveDraftClick = () => {
+    void performSaveDraft();
   };
 
   const renderFeedbackPromptModal = () => {
@@ -482,9 +634,9 @@ export function OneOnOneHistoryTab({
 
     if (isLong) {
       return (
-        <textarea
-          className="auth-input enterprise-oneone-fill-textarea"
-          rows={4}
+        <AutoResizeTextarea
+          className="auth-input enterprise-oneone-fill-textarea enterprise-oneone-fill-textarea--long"
+          minRows={3}
           value={String(value)}
           onChange={(e) => setFieldValue(field.id, e.target.value)}
           placeholder={`Enter ${field.label.toLowerCase()}…`}
@@ -493,9 +645,9 @@ export function OneOnOneHistoryTab({
     }
 
     return (
-      <input
-        type="text"
-        className="auth-input enterprise-oneone-fill-input"
+      <AutoResizeTextarea
+        className="auth-input enterprise-oneone-fill-textarea enterprise-oneone-fill-textarea--short"
+        minRows={1}
         value={String(value)}
         onChange={(e) => setFieldValue(field.id, e.target.value)}
         placeholder={`Enter ${field.label.toLowerCase()}…`}
@@ -661,25 +813,8 @@ export function OneOnOneHistoryTab({
   };
 
   if (view === "pick") {
-    return (
-      <div className="enterprise-oneone-history">
-        <button
-          type="button"
-          className="enterprise-oneone-history-back"
-          onClick={() => {
-            setView("list");
-            setErr(null);
-          }}
-        >
-          ← Back to history
-        </button>
-        <div className="enterprise-oneone-history-panel-head enterprise-oneone-history-panel-head--compact">
-          <div className="enterprise-oneone-history-panel-head-text">
-            <p className="enterprise-oneone-templates-kicker">New check-in</p>
-            <h3 className="enterprise-oneone-history-heading">Choose a template</h3>
-            <p className="enterprise-oneone-history-sub">Select a template to fill out for {memberName}.</p>
-          </div>
-        </div>
+    return renderCheckInShell(
+      <>
         {err ? <p className="enterprise-form-error" role="alert">{err}</p> : null}
         {loadingTemplates ? (
           <p className="enterprise-muted enterprise-oneone-history-loading">Loading templates…</p>
@@ -720,7 +855,16 @@ export function OneOnOneHistoryTab({
             </p>
           </div>
         ) : null}
-      </div>
+      </>,
+      {
+        title: "Choose a template",
+        subtitle: `Select a template to fill out for ${memberName}.`,
+        backLabel: "Back to history",
+        onBack: () => {
+          setView("list");
+          setErr(null);
+        },
+      },
     );
   }
 
@@ -728,22 +872,19 @@ export function OneOnOneHistoryTab({
     const sortedFields = [...selectedTemplate.fields].sort((a, b) => a.order - b.order);
     const existingFollowUps = editingMeeting?.followUpTasks ?? [];
     const leaderLabel = managerName ?? "Leader";
-    return (
-      <div className="enterprise-oneone-history">
-        <button type="button" className="enterprise-oneone-history-back" onClick={exitFill}>
-          ← {editingMeeting ? "Back to history" : "Choose another template"}
-        </button>
-        <h3 className="enterprise-oneone-history-heading">
-          {editingMeeting ? "Edit check-in" : selectedTemplate.title}
-        </h3>
-        {!editingMeeting && selectedTemplate.description ? (
-          <p className="enterprise-muted enterprise-oneone-history-sub">{selectedTemplate.description}</p>
-        ) : null}
-        {editingMeeting ? (
-          <p className="enterprise-muted enterprise-oneone-history-sub">
-            {selectedTemplate.title} · {formatMeetingDate(editingMeeting.createdAt)}
-          </p>
-        ) : null}
+    const fillTitle = editingMeeting
+      ? editingMeeting.status === "draft"
+        ? "Draft check-in"
+        : "Edit check-in"
+      : selectedTemplate.title;
+    const fillSubtitle = editingMeeting
+      ? `${selectedTemplate.title} · ${formatMeetingDate(editingMeeting.createdAt)}`
+      : selectedTemplate.description ?? undefined;
+    const showSaveDraft = !editingMeeting || editingMeeting.status === "draft";
+    const publishLabel = editingMeeting?.status === "draft" ? "Publish check-in" : editingMeeting ? "Save changes" : "Save check-in";
+
+    return renderCheckInShell(
+      <>
         {err ? <p className="enterprise-form-error" role="alert">{err}</p> : null}
         <ul className="enterprise-oneone-fill-fields">
           {sortedFields.map((field) =>
@@ -823,21 +964,39 @@ export function OneOnOneHistoryTab({
             <p className="enterprise-muted enterprise-oneone-followup-empty">No follow-up tasks yet.</p>
           ) : null}
         </section>
-        <div className="enterprise-oneone-fill-actions">
-          <button type="button" className="enterprise-profile-cancel-btn" disabled={saving} onClick={() => setView("list")}>
-            Cancel
-          </button>
-          <button
-            type="button"
-            className="enterprise-oneone-templates-primary-btn enterprise-oneone-fill-save"
-            disabled={saving}
-            onClick={onSaveClick}
-          >
-            {saving ? "Saving…" : editingMeeting ? "Save changes" : "Save check-in"}
-          </button>
-        </div>
         {renderFeedbackPromptModal()}
-      </div>
+      </>,
+      {
+        title: fillTitle,
+        subtitle: fillSubtitle,
+        backLabel: editingMeeting ? "Back to history" : "Choose another template",
+        onBack: exitFill,
+        footer: (
+          <div className="enterprise-oneone-fill-actions enterprise-oneone-fill-actions--multi">
+            <button type="button" className="enterprise-profile-cancel-btn" disabled={saving} onClick={() => setView("list")}>
+              Cancel
+            </button>
+            {showSaveDraft ? (
+              <button
+                type="button"
+                className="enterprise-oneone-fill-draft-btn"
+                disabled={saving}
+                onClick={onSaveDraftClick}
+              >
+                {saving ? "Saving…" : "Save draft"}
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className="enterprise-oneone-templates-primary-btn enterprise-oneone-fill-save"
+              disabled={saving}
+              onClick={onSaveClick}
+            >
+              {saving ? "Saving…" : publishLabel}
+            </button>
+          </div>
+        ),
+      },
     );
   }
 
@@ -863,6 +1022,11 @@ export function OneOnOneHistoryTab({
           </div>
         ) : null}
       </div>
+      {listNotice ? (
+        <p className="enterprise-oneone-history-notice" role="status">
+          {listNotice}
+        </p>
+      ) : null}
       {err ? <p className="enterprise-form-error" role="alert">{err}</p> : null}
       {loadingMeetings && meetings.length === 0 ? (
         <p className="enterprise-muted enterprise-oneone-history-loading">Loading check-ins…</p>
