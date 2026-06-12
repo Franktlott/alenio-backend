@@ -9348,11 +9348,20 @@ button.enterprise-profile-legal-link {
 
 .enterprise-card-cal .enterprise-cal-day-panel {
   flex: 1;
-  min-height: 7.5rem;
-  max-height: 40%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
+  overflow: hidden;
+}
+
+.enterprise-card-cal .enterprise-cal-day-panel-head {
+  flex-shrink: 0;
+}
+
+.enterprise-card-cal .enterprise-cal-day-loading,
+.enterprise-card-cal .enterprise-cal-day-empty {
+  flex: 1;
+  min-height: 0;
 }
 
 .enterprise-card-tasks-body {
@@ -10153,7 +10162,7 @@ button.enterprise-profile-legal-link {
 
 .enterprise-cal-day-empty {
   flex: 1;
-  min-height: 8rem;
+  min-height: 0;
   background: #fff;
   border-radius: 14px;
   border: 1px solid var(--border);
@@ -10161,10 +10170,11 @@ button.enterprise-profile-legal-link {
 }
 
 .enterprise-cal-day-list {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  max-height: 300px;
   overflow-y: auto;
   padding-right: 6px;
   scrollbar-gutter: stable;
