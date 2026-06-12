@@ -190,6 +190,7 @@ export function DashboardPage() {
   const [taskDeleteId, setTaskDeleteId] = useState<string | null>(null);
   const [taskActionError, setTaskActionError] = useState<string | null>(null);
   const [feedbackContext, setFeedbackContext] = useState<OneOnOneAssociateFeedbackContext | null>(null);
+  const [feedbackContextLoading, setFeedbackContextLoading] = useState(false);
   const [feedbackCompletionActive, setFeedbackCompletionActive] = useState(false);
   const feedbackCompletionActiveRef = useRef(false);
   feedbackCompletionActiveRef.current = feedbackCompletionActive;
@@ -203,6 +204,13 @@ export function DashboardPage() {
     !!selectedTaskFeedbackMeta &&
     selectedTaskModal?.assignments.some((assignment) => assignment.user.id === me.id) === true;
   const isSelectedTaskFeedback = isFeedbackTaskDescription(selectedTaskModal?.description);
+  const showFeedbackFormLoading =
+    isSelectedTaskFeedback &&
+    isSelectedTaskFeedbackAssignee &&
+    selectedTaskModal?.status !== "done" &&
+    !feedbackCompletionActive &&
+    feedbackContextLoading &&
+    !feedbackContext;
 
   useEffect(() => {
     const id = location.hash.replace(/^#/, "");
@@ -328,6 +336,7 @@ export function DashboardPage() {
     setTaskEditMode(false);
     setTaskError(null);
     setFeedbackContext(null);
+    setFeedbackContextLoading(false);
     setFeedbackCompletionActive(false);
     setEditTitle(t.title ?? "");
     setEditDescription(t.description ?? "");
@@ -340,13 +349,16 @@ export function DashboardPage() {
 
     if (!selectedTaskFeedbackMeta || !isSelectedTaskFeedbackAssignee) {
       setFeedbackContext(null);
+      setFeedbackContextLoading(false);
       return;
     }
     if (selectedTaskModal?.status === "done" && !feedbackCompletionActive) {
       setFeedbackContext(null);
+      setFeedbackContextLoading(false);
       return;
     }
     let cancelled = false;
+    setFeedbackContextLoading(true);
     (async () => {
       try {
         const context = await fetchOneOnOneAssociateFeedbackContext(
@@ -360,6 +372,8 @@ export function DashboardPage() {
       } catch {
         if (cancelled) return;
         setFeedbackContext(null);
+      } finally {
+        if (!cancelled) setFeedbackContextLoading(false);
       }
     })();
     return () => {
@@ -1236,7 +1250,16 @@ export function DashboardPage() {
                   </section>
                 ) : null}
 
-                {!feedbackContext ? (
+                {showFeedbackFormLoading ? (
+                  <section className="enterprise-task-modal-section enterprise-oneone-feedback-task-section">
+                    <h4>{ASSOCIATE_FEEDBACK_SECTION_TITLE}</h4>
+                    <p className="enterprise-muted" aria-live="polite">
+                      Loading your check-in…
+                    </p>
+                  </section>
+                ) : null}
+
+                {!feedbackContext && !showFeedbackFormLoading ? (
                   <section className="enterprise-task-modal-section">
                     <h4>Description</h4>
                     {taskEditMode && !isSelectedTaskFeedback ? (

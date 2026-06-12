@@ -25,6 +25,7 @@ import { OneOnOneAssociateFeedbackForm } from "@/components/OneOnOneAssociateFee
 import type { OneOnOneAssociateFeedbackContext } from "@/lib/one-on-one-feedback-api";
 import { fetchOneOnOneAssociateFeedbackContext } from "@/lib/one-on-one-feedback-api";
 import {
+  ASSOCIATE_FEEDBACK_SECTION_TITLE,
   formatTaskDescriptionForDisplay,
   isFeedbackTaskDescription,
   parseFeedbackTaskDescription,
@@ -60,6 +61,7 @@ export default function TaskDetailScreen() {
   const [draftDescription, setDraftDescription] = useState<string>("");
   const [draftPriority, setDraftPriority] = useState<string>("");
   const [feedbackContext, setFeedbackContext] = useState<OneOnOneAssociateFeedbackContext | null>(null);
+  const [feedbackContextLoading, setFeedbackContextLoading] = useState(false);
   const [feedbackCompletionActive, setFeedbackCompletionActive] = useState(false);
   const feedbackCompletionActiveRef = useRef(false);
   feedbackCompletionActiveRef.current = feedbackCompletionActive;
@@ -163,8 +165,15 @@ export default function TaskDetailScreen() {
   );
   const isFeedbackTask = isFeedbackTaskDescription(task?.description);
   const isFeedbackAssignee = !!feedbackMeta && isSelfAssigned;
-  const isCreator = !!currentUserId && task?.creator?.id === currentUserId && !isDemo;
   const isCompleted = task?.status === "done";
+  const showFeedbackFormLoading =
+    !!feedbackMeta &&
+    isFeedbackAssignee &&
+    !isCompleted &&
+    !feedbackCompletionActive &&
+    feedbackContextLoading &&
+    !feedbackContext;
+  const isCreator = !!currentUserId && task?.creator?.id === currentUserId && !isDemo;
   const isOwnerOrLeader = team?.role === "owner" || team?.role === "team_leader" || team?.role === "admin";
   const canEdit = (isCreator || isOwnerOrLeader) && !isCompleted;
   const isEditable = canEdit && isEditMode;
@@ -191,13 +200,16 @@ export default function TaskDetailScreen() {
 
     if (!feedbackMeta || !isFeedbackAssignee) {
       setFeedbackContext(null);
+      setFeedbackContextLoading(false);
       return;
     }
     if (isCompleted && !feedbackCompletionActive) {
       setFeedbackContext(null);
+      setFeedbackContextLoading(false);
       return;
     }
     let cancelled = false;
+    setFeedbackContextLoading(true);
     void fetchOneOnOneAssociateFeedbackContext(
       feedbackMeta.teamId,
       feedbackMeta.memberUserId,
@@ -210,6 +222,9 @@ export default function TaskDetailScreen() {
       })
       .catch(() => {
         if (!cancelled) setFeedbackContext(null);
+      })
+      .finally(() => {
+        if (!cancelled) setFeedbackContextLoading(false);
       });
     return () => {
       cancelled = true;
@@ -395,6 +410,25 @@ export default function TaskDetailScreen() {
           />
         ) : null}
 
+        {showFeedbackFormLoading ? (
+          <View
+            style={{
+              borderWidth: 1,
+              borderColor: "#E2E8F0",
+              borderRadius: 12,
+              padding: 16,
+              marginBottom: 16,
+              alignItems: "center",
+              gap: 8,
+            }}
+          >
+            <Text style={{ fontSize: 15, fontWeight: "700", color: "#0F172A", alignSelf: "flex-start" }}>
+              {ASSOCIATE_FEEDBACK_SECTION_TITLE}
+            </Text>
+            <ActivityIndicator color="#4361EE" />
+          </View>
+        ) : null}
+
         {/* Description */}
         {isEditMode && !isFeedbackTask ? (
           <TextInput
@@ -406,7 +440,7 @@ export default function TaskDetailScreen() {
             placeholderTextColor="#94A3B8"
             testID="edit-description-input"
           />
-        ) : task.description && !feedbackContext ? (
+        ) : task.description && !feedbackContext && !showFeedbackFormLoading ? (
           <Text className="text-base text-slate-600 dark:text-slate-400 mb-4 leading-relaxed">
             {formatTaskDescriptionForDisplay(task.description)}
           </Text>

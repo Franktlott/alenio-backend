@@ -80,6 +80,7 @@ export function TaskDetailPage() {
   const [workspaceId, setWorkspaceId] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [feedbackContext, setFeedbackContext] = useState<OneOnOneAssociateFeedbackContext | null>(null);
+  const [feedbackContextLoading, setFeedbackContextLoading] = useState(false);
   const [feedbackCompletionActive, setFeedbackCompletionActive] = useState(false);
   const feedbackCompletionActiveRef = useRef(false);
   feedbackCompletionActiveRef.current = feedbackCompletionActive;
@@ -169,19 +170,29 @@ export function TaskDetailPage() {
     !!me?.id &&
     !!feedbackMeta &&
     task?.assignments.some((assignment) => assignment.user.id === me.id) === true;
+  const showFeedbackFormLoading =
+    !!feedbackMeta &&
+    isFeedbackAssignee &&
+    task?.status !== "done" &&
+    !feedbackCompletionActive &&
+    feedbackContextLoading &&
+    !feedbackContext;
 
   useEffect(() => {
     if (feedbackCompletionActive) return;
 
     if (!feedbackMeta || !isFeedbackAssignee) {
       setFeedbackContext(null);
+      setFeedbackContextLoading(false);
       return;
     }
     if (task?.status === "done" && !feedbackCompletionActive) {
       setFeedbackContext(null);
+      setFeedbackContextLoading(false);
       return;
     }
     let cancelled = false;
+    setFeedbackContextLoading(true);
     (async () => {
       try {
         const context = await fetchOneOnOneAssociateFeedbackContext(
@@ -195,6 +206,8 @@ export function TaskDetailPage() {
       } catch {
         if (cancelled) return;
         setFeedbackContext(null);
+      } finally {
+        if (!cancelled) setFeedbackContextLoading(false);
       }
     })();
     return () => {
@@ -329,6 +342,15 @@ export function TaskDetailPage() {
                   navigate("/dashboard");
                 }}
               />
+            </section>
+          ) : null}
+
+          {showFeedbackFormLoading ? (
+            <section className="task-detail-section enterprise-oneone-feedback-task-section">
+              <h2 className="task-detail-section-title">{ASSOCIATE_FEEDBACK_SECTION_TITLE}</h2>
+              <p className="enterprise-muted" aria-live="polite">
+                Loading your check-in…
+              </p>
             </section>
           ) : null}
 
