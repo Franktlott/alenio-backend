@@ -20,7 +20,6 @@ import {
 const SCREEN_HEIGHT = Dimensions.get("window").height;
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams, Redirect, useFocusEffect } from "expo-router";
-import { useIsFocused } from "@react-navigation/native";
 import { Plus, User, Users, ArrowUpDown, ChevronLeft, ChevronRight, ChevronDown, X, CalendarDays, CheckSquare, Calendar, Check, UserRound, Video, VideoOff, Clock, Lock, Globe, ClipboardList } from "lucide-react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -638,8 +637,15 @@ export default function TasksScreen() {
   const setActiveTeamId = useTeamStore((s) => s.setActiveTeamId);
   const queryClient = useQueryClient();
   const acknowledge = useTaskStore((s) => s.acknowledge);
-  const isFocused = useIsFocused();
-  const workspacePollInterval = isFocused ? 15_000 : false;
+  const [isScreenFocused, setIsScreenFocused] = useState(true);
+  const workspacePollInterval = isScreenFocused ? 15_000 : false;
+
+  useFocusEffect(
+    useCallback(() => {
+      setIsScreenFocused(true);
+      return () => setIsScreenFocused(false);
+    }, [])
+  );
 
   // Clear the task badge when this page is opened
   useFocusEffect(
