@@ -512,14 +512,24 @@ export function OneOnOneHistoryTab({
       <ul className="enterprise-oneone-followup-items">
         {tasks.map((task) => {
           const dueLabel = formatFollowUpDueDate(task.dueDate);
+          const isDone = task.status === "done";
+          const statusLabel =
+            task.status !== "todo" && !isDone ? ` · ${task.status.replace("_", " ")}` : "";
           return (
             <li key={task.id} className="enterprise-oneone-followup-item">
-              <span className="enterprise-oneone-followup-item-title">{task.title}</span>
-              <span className="enterprise-oneone-followup-item-meta">
-                Assigned to {assigneeDisplayName(task.assignee?.id, memberUserId, memberName, leaderUserId, managerName)}
-                {dueLabel ? ` · Due ${dueLabel}` : ""}
-                {task.status !== "todo" ? ` · ${task.status.replace("_", " ")}` : ""}
-              </span>
+              <div className="enterprise-oneone-followup-item-body">
+                <span className="enterprise-oneone-followup-item-title">{task.title}</span>
+                <span className="enterprise-oneone-followup-item-meta">
+                  Assigned to {assigneeDisplayName(task.assignee?.id, memberUserId, memberName, leaderUserId, managerName)}
+                  {dueLabel ? ` · Due ${dueLabel}` : ""}
+                  {statusLabel}
+                </span>
+              </div>
+              <span
+                className={`enterprise-oneone-followup-check${isDone ? " enterprise-oneone-followup-check--done" : ""}`}
+                aria-label={isDone ? "Complete" : "Incomplete"}
+                role="img"
+              />
             </li>
           );
         })}

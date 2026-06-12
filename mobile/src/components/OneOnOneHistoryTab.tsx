@@ -13,7 +13,7 @@ import {
 } from "react-native";
 import { toast } from "burnt";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Plus, X, ChevronLeft, MoreVertical } from "lucide-react-native";
+import { Plus, X, ChevronLeft, MoreVertical, Check } from "lucide-react-native";
 import {
   createOneOnOneMeeting,
   deleteOneOnOneMeeting,
@@ -848,18 +848,46 @@ export function OneOnOneHistoryTab({
                     <Text style={{ fontSize: 14, fontWeight: "800", color: "#0F172A", marginBottom: 8 }}>
                       Follow-up tasks
                     </Text>
-                    {previewMeeting.followUpTasks.map((task) => (
-                      <View
-                        key={task.id}
-                        style={{ marginBottom: 8, padding: 10, backgroundColor: "#F8FAFC", borderRadius: 8 }}
-                      >
-                        <Text style={{ fontSize: 14, fontWeight: "600", color: "#0F172A" }}>{task.title}</Text>
-                        <Text style={{ fontSize: 12, color: "#64748B", marginTop: 2 }}>
-                          {task.assignee?.name ?? "Unassigned"}
-                          {task.dueDate ? ` · Due ${formatMeetingDate(task.dueDate)}` : ""}
-                        </Text>
-                      </View>
-                    ))}
+                    {previewMeeting.followUpTasks.map((task) => {
+                      const isDone = task.status === "done";
+                      return (
+                        <View
+                          key={task.id}
+                          style={{
+                            marginBottom: 8,
+                            padding: 10,
+                            backgroundColor: "#F8FAFC",
+                            borderRadius: 8,
+                            flexDirection: "row",
+                            alignItems: "center",
+                            gap: 10,
+                          }}
+                        >
+                          <View style={{ flex: 1, minWidth: 0 }}>
+                            <Text style={{ fontSize: 14, fontWeight: "600", color: "#0F172A" }}>{task.title}</Text>
+                            <Text style={{ fontSize: 12, color: "#64748B", marginTop: 2 }}>
+                              {task.assignee?.name ?? "Unassigned"}
+                              {task.dueDate ? ` · Due ${formatMeetingDate(task.dueDate)}` : ""}
+                              {task.status !== "todo" && !isDone ? ` · ${task.status.replace("_", " ")}` : ""}
+                            </Text>
+                          </View>
+                          <View
+                            style={{
+                              width: 20,
+                              height: 20,
+                              borderRadius: 10,
+                              borderWidth: 2,
+                              borderColor: isDone ? "#22C55E" : "#CBD5E1",
+                              backgroundColor: isDone ? "#22C55E" : "#FFFFFF",
+                              alignItems: "center",
+                              justifyContent: "center",
+                            }}
+                          >
+                            {isDone ? <Check size={12} color="#FFFFFF" strokeWidth={3} /> : null}
+                          </View>
+                        </View>
+                      );
+                    })}
                   </View>
                 ) : null}
               </ScrollView>
