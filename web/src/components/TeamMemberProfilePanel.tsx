@@ -47,7 +47,10 @@ export function TeamMemberProfilePanel({
   const displayName = member.user.name ?? member.user.email ?? "Member";
 
   return (
-    <div className="enterprise-team-profile" data-testid="team-member-profile">
+    <div
+      className={`enterprise-team-profile${activeTab === "Check-In" ? " enterprise-team-profile--check-in" : ""}`}
+      data-testid="team-member-profile"
+    >
       <button type="button" className="enterprise-team-profile-back" onClick={onBack}>
         ← Back to team
       </button>
@@ -110,7 +113,9 @@ export function TeamMemberProfilePanel({
         ))}
       </nav>
 
-      <div className="enterprise-team-profile-body">
+      <div
+        className={`enterprise-team-profile-body${activeTab === "Check-In" ? " enterprise-team-profile-body--check-in" : ""}`}
+      >
         {activeTab === "Overview" ? (
           <ProfileOverviewTab
             teamId={teamId}

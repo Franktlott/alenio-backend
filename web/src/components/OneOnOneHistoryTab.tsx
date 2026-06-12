@@ -842,7 +842,7 @@ export function OneOnOneHistoryTab({
   }
 
   return (
-    <div className="enterprise-oneone-history">
+    <div className="enterprise-oneone-history enterprise-oneone-history--scrollable">
       <div className="enterprise-dev-plan-head">
         <div>
           <h3 className="enterprise-team-profile-section-title">Check-in history</h3>
