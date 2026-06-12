@@ -632,9 +632,9 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                 <span className="enterprise-team-stat-icon enterprise-team-stat-icon--templates" aria-hidden>
                   <IconTemplateOneOne />
                 </span>
-                <span className="enterprise-team-stat-copy enterprise-team-stat-copy--action">
-                  <strong>Check-in templates</strong>
-                  <span>Manage 1:1 forms</span>
+                <span className="enterprise-team-stat-copy enterprise-team-stat-copy--templates">
+                  <span className="enterprise-team-stat-templates-title">Check-in templates</span>
+                  <span>Manage forms</span>
                 </span>
                 <span className="enterprise-team-stat-chevron" aria-hidden>
                   ›
