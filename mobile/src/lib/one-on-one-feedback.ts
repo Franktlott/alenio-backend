@@ -9,6 +9,8 @@ export const ASSOCIATE_FEEDBACK_SECTION_TITLE = "Your notes";
 export const ASSOCIATE_FEEDBACK_MODE_LABEL = "Share notes";
 export const ASSOCIATE_FEEDBACK_NONE_LABEL = "Nothing to add";
 export const ASSOCIATE_FEEDBACK_SUBMIT_LABEL = "Save notes";
+export const ASSOCIATE_FEEDBACK_COMPLETE_MESSAGE = "Thank you for completing this check-in.";
+export const ASSOCIATE_FEEDBACK_COMPLETE_DELAY_MS = 1400;
 
 export function associateFeedbackTaskTitle(templateTitle: string): string {
   return `Follow up on ${templateTitle}`;

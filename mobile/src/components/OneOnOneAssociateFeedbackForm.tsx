@@ -1,10 +1,12 @@
-import { useState } from "react";
-import { ActivityIndicator, Pressable, Text, TextInput, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { ActivityIndicator, Animated, Pressable, Text, TextInput, View } from "react-native";
 import {
   submitOneOnOneAssociateFeedback,
   type OneOnOneAssociateFeedbackContext,
 } from "@/lib/one-on-one-feedback-api";
 import {
+  ASSOCIATE_FEEDBACK_COMPLETE_DELAY_MS,
+  ASSOCIATE_FEEDBACK_COMPLETE_MESSAGE,
   ASSOCIATE_FEEDBACK_INTRO,
   ASSOCIATE_FEEDBACK_MODE_LABEL,
   ASSOCIATE_FEEDBACK_NONE_LABEL,
@@ -20,6 +22,78 @@ type Props = {
   context: OneOnOneAssociateFeedbackContext;
   onSubmitted?: () => void;
 };
+
+function FeedbackCompleteState({
+  animate,
+  submittedMode,
+}: {
+  animate: boolean;
+  submittedMode: "feedback" | "none";
+}) {
+  const fade = useRef(new Animated.Value(animate ? 0 : 1)).current;
+  const scale = useRef(new Animated.Value(animate ? 0.85 : 1)).current;
+
+  useEffect(() => {
+    if (!animate) return;
+    Animated.parallel([
+      Animated.timing(fade, { toValue: 1, duration: 450, useNativeDriver: true }),
+      Animated.spring(scale, { toValue: 1, friction: 7, useNativeDriver: true }),
+    ]).start();
+  }, [animate, fade, scale]);
+
+  return (
+    <View
+      style={{
+        borderWidth: 1,
+        borderColor: "#BBF7D0",
+        borderRadius: 12,
+        padding: 16,
+        backgroundColor: "#F0FDF4",
+        marginBottom: 16,
+        alignItems: "center",
+      }}
+    >
+      <Animated.View
+        style={{
+          width: 28,
+          height: 28,
+          borderRadius: 14,
+          backgroundColor: "#22C55E",
+          alignItems: "center",
+          justifyContent: "center",
+          marginBottom: 10,
+          opacity: fade,
+          transform: [{ scale }],
+        }}
+      >
+        <Text style={{ color: "#FFFFFF", fontSize: 14, fontWeight: "800", marginTop: -1 }}>✓</Text>
+      </Animated.View>
+      <Animated.Text
+        style={{
+          fontSize: 15,
+          fontWeight: "700",
+          color: "#15803D",
+          textAlign: "center",
+          marginBottom: 4,
+          opacity: fade,
+        }}
+      >
+        {ASSOCIATE_FEEDBACK_COMPLETE_MESSAGE}
+      </Animated.Text>
+      <Animated.Text
+        style={{
+          fontSize: 13,
+          color: "#64748B",
+          lineHeight: 18,
+          textAlign: "center",
+          opacity: fade,
+        }}
+      >
+        {submittedMode === "none" ? "Recorded as nothing to add." : "Your takeaways are saved to the check-in."}
+      </Animated.Text>
+    </View>
+  );
+}
 
 export function OneOnOneAssociateFeedbackForm({
   teamId,
@@ -37,6 +111,16 @@ export function OneOnOneAssociateFeedbackForm({
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [done, setDone] = useState(context.submitted);
+  const [completedInSession, setCompletedInSession] = useState(false);
+  const [submittedMode, setSubmittedMode] = useState<"feedback" | "none">(
+    context.currentResponse === NO_FEEDBACK_VALUE ? "none" : "feedback",
+  );
+
+  useEffect(() => {
+    if (!completedInSession) return;
+    const timer = setTimeout(() => onSubmitted?.(), ASSOCIATE_FEEDBACK_COMPLETE_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [completedInSession, onSubmitted]);
 
   const onSubmit = async () => {
     setSaving(true);
@@ -51,8 +135,9 @@ export function OneOnOneAssociateFeedbackForm({
         fieldId: context.fieldId,
         response,
       });
+      setSubmittedMode(mode);
       setDone(true);
-      onSubmitted?.();
+      setCompletedInSession(true);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Could not save your notes.");
     } finally {
@@ -61,25 +146,7 @@ export function OneOnOneAssociateFeedbackForm({
   };
 
   if (done) {
-    return (
-      <View
-        style={{
-          borderWidth: 1,
-          borderColor: "#E2E8F0",
-          borderRadius: 12,
-          padding: 14,
-          backgroundColor: "#F8FAFC",
-          marginBottom: 16,
-        }}
-      >
-        <Text style={{ fontSize: 15, fontWeight: "700", color: "#0F172A", marginBottom: 4 }}>
-          Thanks — your notes were saved.
-        </Text>
-        <Text style={{ fontSize: 13, color: "#64748B", lineHeight: 18 }}>
-          Your takeaways are saved to the check-in.
-        </Text>
-      </View>
-    );
+    return <FeedbackCompleteState animate={completedInSession} submittedMode={submittedMode} />;
   }
 
   return (

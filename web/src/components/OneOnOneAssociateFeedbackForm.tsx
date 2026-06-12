@@ -1,6 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { submitOneOnOneAssociateFeedback, type OneOnOneAssociateFeedbackContext } from "../lib/api";
 import {
+  ASSOCIATE_FEEDBACK_COMPLETE_DELAY_MS,
+  ASSOCIATE_FEEDBACK_COMPLETE_MESSAGE,
   ASSOCIATE_FEEDBACK_INTRO,
   ASSOCIATE_FEEDBACK_MODE_LABEL,
   ASSOCIATE_FEEDBACK_NONE_LABEL,
@@ -33,9 +35,16 @@ export function OneOnOneAssociateFeedbackForm({
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [done, setDone] = useState(context.submitted);
+  const [completedInSession, setCompletedInSession] = useState(false);
   const [submittedMode, setSubmittedMode] = useState<"feedback" | "none">(
     context.currentResponse === NO_FEEDBACK_VALUE ? "none" : "feedback",
   );
+
+  useEffect(() => {
+    if (!completedInSession) return;
+    const timer = window.setTimeout(() => onSubmitted?.(), ASSOCIATE_FEEDBACK_COMPLETE_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [completedInSession, onSubmitted]);
 
   const onSubmit = async () => {
     setSaving(true);
@@ -52,7 +61,7 @@ export function OneOnOneAssociateFeedbackForm({
       });
       setSubmittedMode(mode);
       setDone(true);
-      onSubmitted?.();
+      setCompletedInSession(true);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Could not save your notes.");
     } finally {
@@ -62,9 +71,16 @@ export function OneOnOneAssociateFeedbackForm({
 
   if (done) {
     return (
-      <div className="enterprise-oneone-feedback-done">
-        <p className="enterprise-oneone-feedback-done-title">Thanks — your notes were saved.</p>
-        <p className="enterprise-muted">
+      <div
+        className={`enterprise-oneone-feedback-done${
+          completedInSession ? " enterprise-oneone-feedback-done--animate" : ""
+        }`}
+        role="status"
+        aria-live="polite"
+      >
+        <div className="enterprise-oneone-feedback-done-check" aria-hidden />
+        <p className="enterprise-oneone-feedback-done-title">{ASSOCIATE_FEEDBACK_COMPLETE_MESSAGE}</p>
+        <p className="enterprise-muted enterprise-oneone-feedback-done-sub">
           {submittedMode === "none" ? "Recorded as nothing to add." : "Your takeaways are saved to the check-in."}
         </p>
       </div>
