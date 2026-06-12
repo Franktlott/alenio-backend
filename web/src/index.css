@@ -1863,8 +1863,9 @@ input {
 
 .enterprise-team-list-title {
   margin: 0;
-  font-size: 1.35rem;
-  font-weight: 800;
+  font-size: 1.125rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
   color: #0f172a;
 }
 
@@ -1900,12 +1901,12 @@ input {
 .enterprise-team-list-search {
   width: 100%;
   margin: 0;
-  padding: 0.7rem 2.75rem 0.7rem 1.05rem;
-  border: 1px solid #e2e8f0;
-  border-radius: 999px;
+  padding: 0.55rem 2.25rem 0.55rem 0.85rem;
+  border: 1px solid #dce3eb;
+  border-radius: 6px;
   background: #fff;
   font-family: inherit;
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   color: #0f172a;
   box-sizing: border-box;
   appearance: none;
@@ -1941,13 +1942,13 @@ input {
   justify-content: center;
   gap: 0.15rem;
   white-space: nowrap;
-  padding: 0.7rem 1.15rem;
-  border-radius: 999px;
+  padding: 0.55rem 0.95rem;
+  border-radius: 6px;
   border: none;
   background: #6366f1;
   color: #fff;
   font-family: inherit;
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   font-weight: 600;
   line-height: 1.2;
   cursor: pointer;
@@ -1966,137 +1967,171 @@ input {
   align-items: center;
   justify-content: center;
   white-space: nowrap;
-  padding: 0.7rem 1rem;
-  border-radius: 999px;
-  border: 1px solid #c7d2fe;
-  background: #eef2ff;
-  color: #4338ca;
+  padding: 0.55rem 0.85rem;
+  border-radius: 6px;
+  border: 1px solid #dce3eb;
+  background: #fff;
+  color: #475569;
   font-family: inherit;
   font-size: 0.8125rem;
-  font-weight: 700;
+  font-weight: 600;
   line-height: 1.2;
   cursor: pointer;
 }
 
 .enterprise-team-pending-chip:hover {
-  background: #e0e7ff;
-  border-color: #a5b4fc;
-}
-
-.enterprise-pending-invites-modal {
-  max-width: 480px;
-  width: min(480px, calc(100vw - 2rem));
-}
-
-.enterprise-pending-invites-modal-head {
-  margin-bottom: 1rem;
-  padding-right: 1.75rem;
-}
-
-.enterprise-pending-invites-modal-head h3 {
-  margin: 0 0 0.25rem;
-  font-size: 1.125rem;
-  font-weight: 800;
+  background: #f8fafc;
+  border-color: #94a3b8;
   color: #0f172a;
 }
 
-.enterprise-pending-invites-modal-head .enterprise-muted {
+.enterprise-pending-invites-modal {
+  position: relative;
+  width: min(440px, 100%);
+  max-height: 84vh;
+  overflow: auto;
+  background: #fff;
+  border: 1px solid #dce3eb;
+  border-radius: 8px;
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.18);
+}
+
+.enterprise-pending-invites-modal-head {
+  padding: 0.85rem 1.125rem;
+  border-bottom: 1px solid #e2e8f0;
+  background: linear-gradient(180deg, #fcfcfd 0%, #f8fafc 100%);
+}
+
+.enterprise-pending-invites-modal-title {
   margin: 0;
-  font-size: 0.875rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: #0f172a;
+}
+
+.enterprise-pending-invites-modal-sub {
+  margin: 0.2rem 0 0;
+  font-size: 0.8125rem;
+  color: #64748b;
+}
+
+.enterprise-pending-invites-modal-empty {
+  margin: 0;
+  padding: 1.25rem 1.125rem;
+  font-size: 0.8125rem;
+  color: #64748b;
 }
 
 .enterprise-pending-invites-modal-list {
   list-style: none;
   margin: 0;
   padding: 0;
-  border: 1px solid #e8edf3;
-  border-radius: 14px;
-  overflow: hidden;
-  background: #fff;
 }
 
-.enterprise-pending-invite-card {
-  padding: 1rem 1.1rem;
-  border-bottom: 1px solid #f1f5f9;
+.enterprise-pending-invite-row {
+  padding: 0.9rem 1.125rem;
+  border-bottom: 1px solid #eef2f6;
 }
 
-.enterprise-pending-invite-card:last-child {
+.enterprise-pending-invite-row:last-child {
   border-bottom: none;
 }
 
-.enterprise-pending-invite-card-top {
+.enterprise-pending-invite-row-main {
   display: flex;
   align-items: flex-start;
   gap: 0.75rem;
 }
 
 .enterprise-pending-invite-avatar {
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);
-  color: #3730a3;
-  font-size: 0.95rem;
-  font-weight: 800;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: #eef2ff;
+  color: #6366f1;
+  font-size: 0.875rem;
+  font-weight: 700;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
 }
 
-.enterprise-pending-invite-card-main {
+.enterprise-pending-invite-copy {
   min-width: 0;
   flex: 1;
 }
 
+.enterprise-pending-invite-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+}
+
 .enterprise-pending-invite-email {
-  display: block;
-  font-size: 0.9375rem;
-  font-weight: 700;
+  font-size: 0.8125rem;
+  font-weight: 600;
   color: #0f172a;
   line-height: 1.35;
   overflow-wrap: anywhere;
 }
 
-.enterprise-pending-invite-badge {
-  display: inline-flex;
-  align-items: center;
-  margin-top: 0.35rem;
-  padding: 0.2rem 0.55rem;
-  border-radius: 999px;
-  background: #fff7ed;
-  color: #c2410c;
-  font-size: 0.6875rem;
-  font-weight: 800;
+.enterprise-pending-invite-status {
+  flex-shrink: 0;
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 0.625rem;
+  font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 
 .enterprise-pending-invite-meta {
-  margin: 0.65rem 0 0;
-  padding-left: calc(40px + 0.75rem);
-  font-size: 0.8125rem;
+  margin: 0.35rem 0 0;
+  font-size: 0.75rem;
   line-height: 1.45;
   color: #64748b;
 }
 
-.enterprise-pending-invite-meta strong {
-  color: #334155;
-  font-weight: 600;
-}
-
-.enterprise-pending-invite-actions {
+.enterprise-pending-invite-row-actions {
   display: flex;
   justify-content: flex-end;
   flex-wrap: wrap;
   gap: 0.5rem;
-  margin-top: 0.85rem;
-  padding-left: calc(40px + 0.75rem);
+  margin-top: 0.75rem;
+  padding-left: calc(36px + 0.75rem);
+}
+
+.enterprise-pending-invite-resend {
+  border: 1px solid #6366f1;
+  border-radius: 6px;
+  padding: 0.42rem 0.8rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  background: #6366f1;
+  color: #fff;
+  white-space: nowrap;
+}
+
+.enterprise-pending-invite-resend:hover:not(:disabled) {
+  background: #4f46e5;
+  border-color: #4f46e5;
+}
+
+.enterprise-pending-invite-resend:disabled,
+.enterprise-pending-invite-row-actions .enterprise-dashboard-btn-outline:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 @media (max-width: 480px) {
-  .enterprise-pending-invite-meta,
-  .enterprise-pending-invite-actions {
+  .enterprise-pending-invite-row-actions {
     padding-left: 0;
   }
 }
@@ -2113,19 +2148,37 @@ input {
 
 .enterprise-team-stat-card {
   background: #fff;
-  border: 1px solid #e8edf3;
-  border-radius: 14px;
-  padding: 0.85rem 0.9rem;
+  border: 1px solid #dce3eb;
+  border-radius: 8px;
+  padding: 0.75rem 0.85rem;
   display: flex;
   align-items: center;
   gap: 0.65rem;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 
+.enterprise-team-stat-card--action {
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  width: 100%;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.enterprise-team-stat-card--action:hover {
+  border-color: #c7d2fe;
+  box-shadow: 0 1px 3px rgba(99, 102, 241, 0.1);
+}
+
+.enterprise-team-stat-card--action:focus-visible {
+  outline: 2px solid #6366f1;
+  outline-offset: 2px;
+}
+
 .enterprise-team-stat-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2147,31 +2200,28 @@ input {
   color: #0891b2;
 }
 
-.enterprise-team-stat-card--templates .enterprise-team-template-manage-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
+.enterprise-team-stat-icon--templates {
+  background: #eef2ff;
+  color: #6366f1;
 }
 
-.enterprise-team-stat-card--templates .enterprise-team-template-manage-icon svg {
-  width: 18px;
-  height: 18px;
-}
-
-.enterprise-team-stat-copy--templates strong {
+.enterprise-team-stat-copy--action strong {
   font-size: 0.8125rem;
-  font-weight: 800;
+  font-weight: 600;
   line-height: 1.25;
 }
 
-.enterprise-team-stat-copy--templates span {
+.enterprise-team-stat-copy--action span {
   font-size: 0.6875rem;
 }
 
-.enterprise-team-stat-card--templates .enterprise-team-template-manage-btn {
+.enterprise-team-stat-chevron {
   margin-left: auto;
-  padding: 0.35rem 0.75rem;
-  font-size: 0.75rem;
+  flex-shrink: 0;
+  color: #94a3b8;
+  font-size: 1.125rem;
+  font-weight: 400;
+  line-height: 1;
 }
 
 .enterprise-team-stat-copy {
@@ -2182,14 +2232,15 @@ input {
 }
 
 .enterprise-team-stat-copy strong {
-  font-size: 1.125rem;
-  font-weight: 800;
+  font-size: 1.0625rem;
+  font-weight: 700;
   color: #0f172a;
   line-height: 1.1;
 }
 
 .enterprise-team-stat-copy span {
   font-size: 0.6875rem;
+  font-weight: 500;
   color: #64748b;
   line-height: 1.25;
 }
@@ -5156,7 +5207,7 @@ input {
 .enterprise-modal-sheet {
   position: relative;
   background: #fff;
-  border-radius: 16px;
+  border-radius: 8px;
   padding: 1.25rem 1.5rem;
   max-width: 400px;
   width: 100%;
@@ -5166,7 +5217,8 @@ input {
 }
 
 .enterprise-modal-sheet.enterprise-pending-invites-modal {
-  max-width: 480px;
+  max-width: 440px;
+  padding: 0;
 }
 
 .enterprise-add-member-modal {

@@ -46,9 +46,9 @@ export function PendingInvitesModal({
   if (!open) return null;
 
   return (
-    <div className="enterprise-modal-backdrop" role="presentation" onClick={onClose}>
+    <div className="enterprise-task-modal-backdrop" role="presentation" onClick={onClose}>
       <div
-        className="enterprise-modal-sheet enterprise-pending-invites-modal"
+        className="enterprise-pending-invites-modal"
         role="dialog"
         aria-label="Pending invites"
         onClick={(e) => e.stopPropagation()}
@@ -57,38 +57,40 @@ export function PendingInvitesModal({
           ×
         </button>
         <header className="enterprise-pending-invites-modal-head">
-          <h3>Pending invites</h3>
-          <p className="enterprise-muted">
+          <h3 className="enterprise-pending-invites-modal-title">Pending invites</h3>
+          <p className="enterprise-pending-invites-modal-sub">
             {invites.length} waiting for {invites.length === 1 ? "a response" : "responses"}
           </p>
         </header>
         {invites.length === 0 ? (
-          <p className="enterprise-muted">No pending invites.</p>
+          <p className="enterprise-pending-invites-modal-empty">No pending invites.</p>
         ) : (
           <ul className="enterprise-pending-invites-modal-list">
             {invites.map((invite) => {
               const inviter = invite.invitedBy?.name ?? invite.invitedBy?.email ?? "A team leader";
               const busy = inviteActionId === invite.id;
               return (
-                <li key={invite.id} className="enterprise-pending-invite-card">
-                  <div className="enterprise-pending-invite-card-top">
+                <li key={invite.id} className="enterprise-pending-invite-row">
+                  <div className="enterprise-pending-invite-row-main">
                     <span className="enterprise-pending-invite-avatar">{inviteInitial(invite.email)}</span>
-                    <div className="enterprise-pending-invite-card-main">
-                      <strong className="enterprise-pending-invite-email">{invite.email}</strong>
-                      <span className="enterprise-pending-invite-badge">Awaiting signup</span>
+                    <div className="enterprise-pending-invite-copy">
+                      <div className="enterprise-pending-invite-line">
+                        <strong className="enterprise-pending-invite-email">{invite.email}</strong>
+                        <span className="enterprise-pending-invite-status">Pending</span>
+                      </div>
+                      <p className="enterprise-pending-invite-meta">
+                        Invited by {inviter}
+                        <span aria-hidden> · </span>
+                        Sent {formatInviteDate(invite.createdAt)}
+                        <span aria-hidden> · </span>
+                        {formatInviteExpiry(invite.expiresAt)}
+                      </p>
                     </div>
                   </div>
-                  <p className="enterprise-pending-invite-meta">
-                    Invited by <strong>{inviter}</strong>
-                    <span aria-hidden> · </span>
-                    Sent {formatInviteDate(invite.createdAt)}
-                    <span aria-hidden> · </span>
-                    {formatInviteExpiry(invite.expiresAt)}
-                  </p>
-                  <div className="enterprise-pending-invite-actions">
+                  <div className="enterprise-pending-invite-row-actions">
                     <button
                       type="button"
-                      className="enterprise-team-pending-btn enterprise-team-pending-btn-ghost"
+                      className="enterprise-dashboard-btn-outline"
                       disabled={busy}
                       onClick={async () => {
                         onInviteActionStart(invite.id);
@@ -106,7 +108,7 @@ export function PendingInvitesModal({
                     </button>
                     <button
                       type="button"
-                      className="enterprise-team-pending-btn enterprise-team-pending-btn-primary"
+                      className="enterprise-pending-invite-resend"
                       disabled={busy}
                       onClick={async () => {
                         onInviteActionStart(invite.id);

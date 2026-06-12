@@ -624,18 +624,22 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
               </span>
             </div>
             {showTemplateManageRow ? (
-              <div className="enterprise-team-stat-card enterprise-team-stat-card--templates">
-                <span className="enterprise-team-template-manage-icon enterprise-team-template-manage-icon--oneone" aria-hidden>
+              <button
+                type="button"
+                className="enterprise-team-stat-card enterprise-team-stat-card--templates enterprise-team-stat-card--action"
+                onClick={() => setOneOneTemplatesOpen(true)}
+              >
+                <span className="enterprise-team-stat-icon enterprise-team-stat-icon--templates" aria-hidden>
                   <IconTemplateOneOne />
                 </span>
-                <span className="enterprise-team-stat-copy enterprise-team-stat-copy--templates">
+                <span className="enterprise-team-stat-copy enterprise-team-stat-copy--action">
                   <strong>Check-in templates</strong>
-                  <span>Set up 1:1 forms</span>
+                  <span>Manage 1:1 forms</span>
                 </span>
-                <button type="button" className="enterprise-team-template-manage-btn" onClick={() => setOneOneTemplatesOpen(true)}>
-                  Manage
-                </button>
-              </div>
+                <span className="enterprise-team-stat-chevron" aria-hidden>
+                  ›
+                </span>
+              </button>
             ) : null}
           </div>
 
