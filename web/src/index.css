@@ -1984,21 +1984,131 @@ input {
 }
 
 .enterprise-pending-invites-modal {
-  max-width: 560px;
-  width: min(560px, calc(100vw - 2rem));
+  max-width: 480px;
+  width: min(480px, calc(100vw - 2rem));
+}
+
+.enterprise-pending-invites-modal-head {
+  margin-bottom: 1rem;
+  padding-right: 1.75rem;
+}
+
+.enterprise-pending-invites-modal-head h3 {
+  margin: 0 0 0.25rem;
+  font-size: 1.125rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.enterprise-pending-invites-modal-head .enterprise-muted {
+  margin: 0;
+  font-size: 0.875rem;
 }
 
 .enterprise-pending-invites-modal-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
   border: 1px solid #e8edf3;
   border-radius: 14px;
   overflow: hidden;
   background: #fff;
 }
 
+.enterprise-pending-invite-card {
+  padding: 1rem 1.1rem;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.enterprise-pending-invite-card:last-child {
+  border-bottom: none;
+}
+
+.enterprise-pending-invite-card-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.enterprise-pending-invite-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);
+  color: #3730a3;
+  font-size: 0.95rem;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.enterprise-pending-invite-card-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.enterprise-pending-invite-email {
+  display: block;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.enterprise-pending-invite-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 0.35rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: #fff7ed;
+  color: #c2410c;
+  font-size: 0.6875rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.enterprise-pending-invite-meta {
+  margin: 0.65rem 0 0;
+  padding-left: calc(40px + 0.75rem);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: #64748b;
+}
+
+.enterprise-pending-invite-meta strong {
+  color: #334155;
+  font-weight: 600;
+}
+
+.enterprise-pending-invite-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.85rem;
+  padding-left: calc(40px + 0.75rem);
+}
+
+@media (max-width: 480px) {
+  .enterprise-pending-invite-meta,
+  .enterprise-pending-invite-actions {
+    padding-left: 0;
+  }
+}
+
 .enterprise-team-stat-row {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.75rem;
+}
+
+.enterprise-team-stat-row--two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .enterprise-team-stat-card {
@@ -2035,6 +2145,33 @@ input {
 .enterprise-team-stat-card--oneone .enterprise-team-stat-icon {
   background: #ecfeff;
   color: #0891b2;
+}
+
+.enterprise-team-stat-card--templates .enterprise-team-template-manage-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+}
+
+.enterprise-team-stat-card--templates .enterprise-team-template-manage-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.enterprise-team-stat-copy--templates strong {
+  font-size: 0.8125rem;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.enterprise-team-stat-copy--templates span {
+  font-size: 0.6875rem;
+}
+
+.enterprise-team-stat-card--templates .enterprise-team-template-manage-btn {
+  margin-left: auto;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.75rem;
 }
 
 .enterprise-team-stat-copy {
@@ -5026,6 +5163,10 @@ input {
   max-height: 90vh;
   overflow: auto;
   box-shadow: 0 20px 50px rgba(15, 23, 42, 0.2);
+}
+
+.enterprise-modal-sheet.enterprise-pending-invites-modal {
+  max-width: 480px;
 }
 
 .enterprise-add-member-modal {

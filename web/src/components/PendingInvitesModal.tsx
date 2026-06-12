@@ -56,34 +56,36 @@ export function PendingInvitesModal({
         <button type="button" className="enterprise-task-modal-close" aria-label="Close" onClick={onClose}>
           ×
         </button>
-        <h3 style={{ marginTop: 0 }}>Pending invites</h3>
-        <p className="enterprise-muted" style={{ marginTop: 0 }}>
-          {invites.length} waiting for {invites.length === 1 ? "a response" : "responses"}
-        </p>
+        <header className="enterprise-pending-invites-modal-head">
+          <h3>Pending invites</h3>
+          <p className="enterprise-muted">
+            {invites.length} waiting for {invites.length === 1 ? "a response" : "responses"}
+          </p>
+        </header>
         {invites.length === 0 ? (
           <p className="enterprise-muted">No pending invites.</p>
         ) : (
-          <ul className="enterprise-team-pending-list enterprise-pending-invites-modal-list">
+          <ul className="enterprise-pending-invites-modal-list">
             {invites.map((invite) => {
               const inviter = invite.invitedBy?.name ?? invite.invitedBy?.email ?? "A team leader";
               const busy = inviteActionId === invite.id;
               return (
-                <li key={invite.id} className="enterprise-team-pending-row">
-                  <span className="enterprise-team-pending-avatar">{inviteInitial(invite.email)}</span>
-                  <div className="enterprise-team-pending-main">
-                    <div className="enterprise-team-pending-topline">
-                      <strong className="enterprise-team-pending-email">{invite.email}</strong>
-                      <span className="enterprise-team-pending-badge">Awaiting signup</span>
+                <li key={invite.id} className="enterprise-pending-invite-card">
+                  <div className="enterprise-pending-invite-card-top">
+                    <span className="enterprise-pending-invite-avatar">{inviteInitial(invite.email)}</span>
+                    <div className="enterprise-pending-invite-card-main">
+                      <strong className="enterprise-pending-invite-email">{invite.email}</strong>
+                      <span className="enterprise-pending-invite-badge">Awaiting signup</span>
                     </div>
-                    <p className="enterprise-team-pending-meta">
-                      Invited by <strong>{inviter}</strong>
-                      <span className="enterprise-team-pending-dot" aria-hidden>·</span>
-                      Sent {formatInviteDate(invite.createdAt)}
-                      <span className="enterprise-team-pending-dot" aria-hidden>·</span>
-                      {formatInviteExpiry(invite.expiresAt)}
-                    </p>
                   </div>
-                  <div className="enterprise-team-pending-actions">
+                  <p className="enterprise-pending-invite-meta">
+                    Invited by <strong>{inviter}</strong>
+                    <span aria-hidden> · </span>
+                    Sent {formatInviteDate(invite.createdAt)}
+                    <span aria-hidden> · </span>
+                    {formatInviteExpiry(invite.expiresAt)}
+                  </p>
+                  <div className="enterprise-pending-invite-actions">
                     <button
                       type="button"
                       className="enterprise-team-pending-btn enterprise-team-pending-btn-ghost"
