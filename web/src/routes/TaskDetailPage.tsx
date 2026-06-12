@@ -177,6 +177,7 @@ export function TaskDetailPage() {
     !feedbackCompletionActive &&
     feedbackContextLoading &&
     !feedbackContext;
+  const showFocusedFeedbackTask = !!feedbackMeta && isFeedbackAssignee;
 
   useEffect(() => {
     if (feedbackCompletionActive) return;
@@ -299,17 +300,20 @@ export function TaskDetailPage() {
           </Link>
         </div>
 
-        <article className="enterprise-card task-detail-card">
+        <article className={`enterprise-card task-detail-card${showFocusedFeedbackTask ? " task-detail-card--feedback-focused" : ""}`}>
           <header className="task-detail-header">
             <h1 className="task-detail-title">{task.title}</h1>
+            {!showFocusedFeedbackTask ? (
             <div className="task-detail-meta-row">
               <span className={priorityClass(task.priority)}>{priorityLabel(task.priority)}</span>
               <span className={statusClass(task.status)}>{statusLabel(task.status)}</span>
               {task.incognito ? <span className="task-detail-badge-incog">Incognito</span> : null}
               {task.isJoint ? <span className="task-detail-badge-joint">Shared</span> : null}
             </div>
+            ) : null}
           </header>
 
+          {!showFocusedFeedbackTask ? (
           <dl className="task-detail-dl">
             <dt>Team</dt>
             <dd>{task.team.name}</dd>
@@ -326,6 +330,7 @@ export function TaskDetailPage() {
             <dt>Created by</dt>
             <dd>{task.creator.name ?? task.creator.email ?? task.creator.id}</dd>
           </dl>
+          ) : null}
 
           {feedbackContext && feedbackMeta ? (
             <section className="task-detail-section enterprise-oneone-feedback-task-section">
@@ -376,6 +381,7 @@ export function TaskDetailPage() {
             </section>
           ) : null}
 
+          {!showFocusedFeedbackTask ? (
           <section className="task-detail-section">
             <h2 className="task-detail-section-title">Assignees</h2>
             {task.assignments.length === 0 ? (
@@ -397,8 +403,9 @@ export function TaskDetailPage() {
               </ul>
             )}
           </section>
+          ) : null}
 
-          {task.subtasks.length > 0 ? (
+          {!showFocusedFeedbackTask && task.subtasks.length > 0 ? (
             <section className="task-detail-section">
               <h2 className="task-detail-section-title">Subtasks</h2>
               <ul className="task-detail-subtasks">
@@ -414,7 +421,9 @@ export function TaskDetailPage() {
             </section>
           ) : null}
 
+          {!showFocusedFeedbackTask ? (
           <p className="task-detail-edit-hint enterprise-muted">To edit this task or change assignees, use the Alenio mobile app.</p>
+          ) : null}
         </article>
       </div>
     </EnterpriseLayout>

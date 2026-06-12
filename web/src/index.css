@@ -11288,6 +11288,23 @@ button.enterprise-profile-legal-link {
   gap: 0.8rem;
 }
 
+.enterprise-task-modal--feedback-focused {
+  max-width: 640px;
+}
+
+.enterprise-task-modal-body--feedback-focused {
+  grid-template-columns: 1fr;
+}
+
+.enterprise-task-modal-body--feedback-focused .enterprise-task-modal-left {
+  border-right: none;
+  padding-right: 0;
+}
+
+.task-detail-card--feedback-focused {
+  max-width: 640px;
+}
+
 .enterprise-task-modal-section {
   margin-bottom: 0.7rem;
 }

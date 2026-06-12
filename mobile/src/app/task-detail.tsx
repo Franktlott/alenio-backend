@@ -173,6 +173,7 @@ export default function TaskDetailScreen() {
     !feedbackCompletionActive &&
     feedbackContextLoading &&
     !feedbackContext;
+  const showFocusedFeedbackTask = isFeedbackTask && isFeedbackAssignee;
   const isCreator = !!currentUserId && task?.creator?.id === currentUserId && !isDemo;
   const isOwnerOrLeader = team?.role === "owner" || team?.role === "team_leader" || team?.role === "admin";
   const canEdit = (isCreator || isOwnerOrLeader) && !isCompleted;
@@ -329,6 +330,7 @@ export default function TaskDetailScreen() {
 
       <ScrollView className="flex-1 px-4" showsVerticalScrollIndicator={false}>
         {/* Priority indicator */}
+        {!showFocusedFeedbackTask ? (
         <View className="flex-row items-center mt-4 mb-2" style={{ gap: 8 }}>
           {isEditMode ? (
             <>
@@ -364,9 +366,10 @@ export default function TaskDetailScreen() {
             </>
           )}
         </View>
+        ) : null}
 
         {/* Title */}
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: task.isJoint ? 8 : 12 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: task.isJoint ? 8 : 12, marginTop: showFocusedFeedbackTask ? 16 : 0 }}>
           {task.incognito ? <Text style={{ fontSize: 20 }}>🕵️</Text> : null}
           {isEditMode ? (
             <TextInput
@@ -545,7 +548,7 @@ export default function TaskDetailScreen() {
         ) : null}
 
         {/* Subtasks */}
-        {(() => {
+        {!showFocusedFeedbackTask ? (() => {
           const subtasks = task.subtasks ?? [];
           const isJointTask = task.isJoint === true;
 
@@ -666,9 +669,10 @@ export default function TaskDetailScreen() {
               ) : null}
             </View>
           );
-        })()}
+        })() : null}
 
         {/* Assignees */}
+        {!showFocusedFeedbackTask ? (
         <View className="mb-4">
           <View className="flex-row items-center justify-between mb-2">
             <Text className="text-sm font-semibold text-slate-500">Assignees</Text>
@@ -753,9 +757,10 @@ export default function TaskDetailScreen() {
             <Text className="text-sm text-slate-400 italic">No one assigned yet</Text>
           )}
         </View>
+        ) : null}
 
         {/* Due date chip (active tasks) */}
-        {task.dueDate && !isCompleted ? (() => {
+        {!showFocusedFeedbackTask && task.dueDate && !isCompleted ? (() => {
           const due = new Date(task.dueDate);
           const overdue = due < new Date();
           return (
@@ -777,6 +782,7 @@ export default function TaskDetailScreen() {
         })() : null}
 
         {/* Meta */}
+        {!showFocusedFeedbackTask ? (
         <View className="mt-2 pt-4 border-t border-slate-100 dark:border-slate-800" style={{ gap: 6 }}>
           <Text className="text-xs text-slate-400">
             Created {new Date(task.createdAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
@@ -803,6 +809,7 @@ export default function TaskDetailScreen() {
             );
           })() : null}
         </View>
+        ) : null}
 
         <View style={{ height: 32 }} />
       </ScrollView>

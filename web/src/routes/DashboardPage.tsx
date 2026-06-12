@@ -211,6 +211,7 @@ export function DashboardPage() {
     !feedbackCompletionActive &&
     feedbackContextLoading &&
     !feedbackContext;
+  const showFocusedFeedbackTask = isSelectedTaskFeedback && isSelectedTaskFeedbackAssignee;
 
   useEffect(() => {
     const id = location.hash.replace(/^#/, "");
@@ -1180,7 +1181,7 @@ export function DashboardPage() {
           }}
         >
           <div
-            className="enterprise-task-modal"
+            className={`enterprise-task-modal${showFocusedFeedbackTask ? " enterprise-task-modal--feedback-focused" : ""}`}
             role="dialog"
             aria-modal="true"
             aria-label="Task details"
@@ -1207,13 +1208,15 @@ export function DashboardPage() {
               ) : (
                 <h3 className="enterprise-task-modal-title">{selectedTaskModal.title}</h3>
               )}
+              {!showFocusedFeedbackTask ? (
               <div className="enterprise-task-modal-meta">
                 <span className={priorityClass(selectedTaskModal.priority)}>{priorityLabel(selectedTaskModal.priority)}</span>
                 <span className={statusClass(selectedTaskModal.status)}>{statusLabel(selectedTaskModal.status)}</span>
               </div>
+              ) : null}
             </header>
 
-            <div className="enterprise-task-modal-body">
+            <div className={`enterprise-task-modal-body${showFocusedFeedbackTask ? " enterprise-task-modal-body--feedback-focused" : ""}`}>
               <section className="enterprise-task-modal-left">
                 {selectedTaskModal.attachmentUrl ? (
                   <section className="enterprise-task-modal-section">
@@ -1272,6 +1275,7 @@ export function DashboardPage() {
                   </section>
                 ) : null}
 
+                {!showFocusedFeedbackTask ? (
                 <section className="enterprise-task-modal-section">
                   <h4>Subtasks</h4>
                   {(selectedTaskModal.subtasks?.length ?? 0) > 0 ? (
@@ -1287,8 +1291,10 @@ export function DashboardPage() {
                     <p className="enterprise-muted">No subtasks</p>
                   )}
                 </section>
+                ) : null}
               </section>
 
+              {!showFocusedFeedbackTask ? (
               <aside className="enterprise-task-modal-right">
                 <div className="enterprise-task-side-card">
                   <div className="enterprise-task-side-row">
@@ -1346,8 +1352,10 @@ export function DashboardPage() {
                   </dl>
                 </div>
               </aside>
+              ) : null}
             </div>
             {taskError ? <p className="auth-error">{taskError}</p> : null}
+            {!showFocusedFeedbackTask ? (
             <footer className="enterprise-task-modal-footer">
               {!isSelectedTaskFeedback ? (
               <button
@@ -1419,6 +1427,7 @@ export function DashboardPage() {
               </button>
               ) : null}
             </footer>
+            ) : null}
           </div>
         </div>
       ) : null}
