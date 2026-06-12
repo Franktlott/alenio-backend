@@ -312,8 +312,10 @@ export function TaskDetailPage() {
                 memberUserId={feedbackMeta.memberUserId}
                 meetingId={feedbackMeta.meetingId}
                 context={feedbackContext}
+                onSaved={() => {
+                  setTask((prev) => (prev ? { ...prev, status: "done" } : null));
+                }}
                 onSubmitted={() => {
-                  setFeedbackContext(null);
                   navigate("/dashboard");
                 }}
               />

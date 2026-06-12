@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { submitOneOnOneAssociateFeedback, type OneOnOneAssociateFeedbackContext } from "../lib/api";
 import {
   ASSOCIATE_FEEDBACK_COMPLETE_DELAY_MS,
@@ -16,6 +16,7 @@ type Props = {
   memberUserId: string;
   meetingId: string;
   context: OneOnOneAssociateFeedbackContext;
+  onSaved?: () => void;
   onSubmitted?: () => void;
 };
 
@@ -24,6 +25,7 @@ export function OneOnOneAssociateFeedbackForm({
   memberUserId,
   meetingId,
   context,
+  onSaved,
   onSubmitted,
 }: Props) {
   const [mode, setMode] = useState<"feedback" | "none">(
@@ -39,12 +41,14 @@ export function OneOnOneAssociateFeedbackForm({
   const [submittedMode, setSubmittedMode] = useState<"feedback" | "none">(
     context.currentResponse === NO_FEEDBACK_VALUE ? "none" : "feedback",
   );
+  const onSubmittedRef = useRef(onSubmitted);
+  onSubmittedRef.current = onSubmitted;
 
   useEffect(() => {
     if (!completedInSession) return;
-    const timer = window.setTimeout(() => onSubmitted?.(), ASSOCIATE_FEEDBACK_COMPLETE_DELAY_MS);
+    const timer = window.setTimeout(() => onSubmittedRef.current?.(), ASSOCIATE_FEEDBACK_COMPLETE_DELAY_MS);
     return () => window.clearTimeout(timer);
-  }, [completedInSession, onSubmitted]);
+  }, [completedInSession]);
 
   const onSubmit = async () => {
     setSaving(true);
@@ -62,6 +66,7 @@ export function OneOnOneAssociateFeedbackForm({
       setSubmittedMode(mode);
       setDone(true);
       setCompletedInSession(true);
+      onSaved?.();
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Could not save your notes.");
     } finally {

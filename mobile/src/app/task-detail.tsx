@@ -375,8 +375,12 @@ export default function TaskDetailScreen() {
             memberUserId={feedbackMeta.memberUserId}
             meetingId={feedbackMeta.meetingId}
             context={feedbackContext}
+            onSaved={() => {
+              queryClient.setQueryData<Task | undefined>(["task", taskId, teamId], (prev) =>
+                prev ? { ...prev, status: "done" } : prev,
+              );
+            }}
             onSubmitted={() => {
-              setFeedbackContext(null);
               void queryClient.invalidateQueries({ queryKey: ["task", taskId, teamId] });
               void queryClient.invalidateQueries({ queryKey: ["tasks", teamId] });
               router.back();

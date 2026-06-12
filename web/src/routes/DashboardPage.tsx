@@ -1205,12 +1205,15 @@ export function DashboardPage() {
                       memberUserId={selectedTaskFeedbackMeta.memberUserId}
                       meetingId={selectedTaskFeedbackMeta.meetingId}
                       context={feedbackContext}
-                      onSubmitted={async () => {
-                        setFeedbackContext(null);
-                        if (!selectedTeamId) return;
-                        await refreshTeamData(selectedTeamId);
+                      onSaved={() => {
+                        setSelectedTaskModal((prev) => (prev ? { ...prev, status: "done" } : null));
+                      }}
+                      onSubmitted={() => {
+                        const teamId = selectedTeamId;
                         setSelectedTaskModal(null);
                         setTaskEditMode(false);
+                        setFeedbackContext(null);
+                        if (teamId) void refreshTeamData(teamId);
                       }}
                     />
                   </section>
