@@ -1066,17 +1066,27 @@ export function ChatPage() {
                         }
                         const m = block.message;
                         const senderName = m.sender.name ?? m.sender.email ?? "Member";
+                        const isMine = me?.id === m.senderId || me?.id === m.sender.id;
                         return (
-                          <article key={m.id} className="chat-message-row">
-                            <ChatAvatar user={m.sender} size="md" />
-                            <div className="chat-message-body">
-                              <div className="chat-message-head">
-                                <strong className="chat-message-author">{senderName}</strong>
-                                <time className="chat-message-time" dateTime={m.createdAt}>
+                          <article
+                            key={m.id}
+                            className={`chat-message-row ${isMine ? "chat-message-row--mine" : "chat-message-row--other"}`}
+                          >
+                            {!isMine ? <ChatAvatar user={m.sender} size="md" /> : null}
+                            <div className={`chat-bubble ${isMine ? "chat-bubble-mine" : "chat-bubble-other"}`}>
+                              {!isMine ? (
+                                <div className="chat-message-head">
+                                  <strong className="chat-message-author">{senderName}</strong>
+                                  <time className="chat-message-time" dateTime={m.createdAt}>
+                                    {formatMessageTime(m.createdAt)}
+                                  </time>
+                                </div>
+                              ) : (
+                                <time className="chat-message-time chat-message-time--mine" dateTime={m.createdAt}>
                                   {formatMessageTime(m.createdAt)}
                                 </time>
-                              </div>
-                              <div className="chat-message-content">
+                              )}
+                              <div className="chat-bubble-content">
                                 {m.content ? <div className="chat-text">{renderMessageText(m.content)}</div> : null}
                                 {m.mediaUrl ? <ChatMessageMedia url={m.mediaUrl} mediaType={m.mediaType} /> : null}
                               </div>
