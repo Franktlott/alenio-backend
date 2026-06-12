@@ -190,6 +190,7 @@ export function DashboardPage() {
   const [taskDeleteId, setTaskDeleteId] = useState<string | null>(null);
   const [taskActionError, setTaskActionError] = useState<string | null>(null);
   const [feedbackContext, setFeedbackContext] = useState<OneOnOneAssociateFeedbackContext | null>(null);
+  const [feedbackCompletionActive, setFeedbackCompletionActive] = useState(false);
 
   const now = new Date();
   const selectedTaskFeedbackMeta = selectedTaskModal?.description
@@ -323,6 +324,7 @@ export function DashboardPage() {
     setTaskEditMode(false);
     setTaskError(null);
     setFeedbackContext(null);
+    setFeedbackCompletionActive(false);
     setEditTitle(t.title ?? "");
     setEditDescription(t.description ?? "");
     setEditPriority(t.priority ?? "medium");
@@ -330,7 +332,11 @@ export function DashboardPage() {
   };
 
   useEffect(() => {
-    if (!selectedTaskFeedbackMeta || !isSelectedTaskFeedbackAssignee || selectedTaskModal?.status === "done") {
+    if (!selectedTaskFeedbackMeta || !isSelectedTaskFeedbackAssignee) {
+      setFeedbackContext(null);
+      return;
+    }
+    if (selectedTaskModal?.status === "done" && !feedbackCompletionActive) {
       setFeedbackContext(null);
       return;
     }
@@ -360,6 +366,7 @@ export function DashboardPage() {
     selectedTaskFeedbackMeta?.fieldId,
     isSelectedTaskFeedbackAssignee,
     selectedTaskModal?.status,
+    feedbackCompletionActive,
   ]);
 
   const resetCreateForm = () => {
@@ -1146,8 +1153,10 @@ export function DashboardPage() {
           className="enterprise-task-modal-backdrop"
           role="presentation"
           onClick={() => {
+            if (feedbackCompletionActive) return;
             setSelectedTaskModal(null);
             setFeedbackContext(null);
+            setFeedbackCompletionActive(false);
           }}
         >
           <div
@@ -1161,10 +1170,12 @@ export function DashboardPage() {
               type="button"
               className="enterprise-task-modal-close"
               onClick={() => {
+                if (feedbackCompletionActive) return;
                 setSelectedTaskModal(null);
                 setTaskEditMode(false);
                 setTaskError(null);
                 setFeedbackContext(null);
+                setFeedbackCompletionActive(false);
               }}
               aria-label="Close"
             >
@@ -1205,11 +1216,10 @@ export function DashboardPage() {
                       memberUserId={selectedTaskFeedbackMeta.memberUserId}
                       meetingId={selectedTaskFeedbackMeta.meetingId}
                       context={feedbackContext}
-                      onSaved={() => {
-                        setSelectedTaskModal((prev) => (prev ? { ...prev, status: "done" } : null));
-                      }}
+                      onCompletionStarted={() => setFeedbackCompletionActive(true)}
                       onSubmitted={() => {
                         const teamId = selectedTeamId;
+                        setFeedbackCompletionActive(false);
                         setSelectedTaskModal(null);
                         setTaskEditMode(false);
                         setFeedbackContext(null);
@@ -1343,7 +1353,7 @@ export function DashboardPage() {
                 {taskSaving ? "Saving…" : taskEditMode ? "Save task" : "Edit task"}
               </button>
               ) : null}
-              {!(isSelectedTaskFeedback && selectedTaskModal.status !== "done") ? (
+              {!isSelectedTaskFeedback ? (
               <button
                 type="button"
                 className="enterprise-task-modal-btn enterprise-task-modal-btn-primary"

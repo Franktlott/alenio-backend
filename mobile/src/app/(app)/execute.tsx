@@ -32,6 +32,7 @@ import { useTaskStore } from "@/lib/state/task-store";
 import type { Task, Team, TeamMember, CalendarEvent } from "@/lib/types";
 import { NoTeamPlaceholder } from "@/components/NoTeamPlaceholder";
 import { useDemoMode, showDemoAlert } from "@/lib/useDemo";
+import { isFeedbackTaskDescription } from "@/lib/one-on-one-feedback";
 import { SafeKeyboardAvoidingView } from "@/lib/safe-keyboard-controller";
 import { getUSHolidays, type USFederalHoliday } from "@/lib/us-federal-holidays";
 import { formatEventTimeRange } from "@/lib/format-event-time";
@@ -381,6 +382,7 @@ function EventRow({ event, onLongPress }: { event: CalendarEvent; onLongPress?: 
 
 function TaskRow({ task, onToggle, onPress, onLongPress }: { task: Task; onToggle: () => void; onPress: () => void; onLongPress?: () => void }) {
   const isDone = task.status === "done";
+  const isLockedFeedbackTask = isDone && isFeedbackTaskDescription(task.description);
   const priority = PRIORITY_CONFIG[task.priority as keyof typeof PRIORITY_CONFIG] ?? PRIORITY_CONFIG.medium;
 
   const fmtDate = (d: string | Date) =>
@@ -479,7 +481,8 @@ function TaskRow({ task, onToggle, onPress, onLongPress }: { task: Task; onToggl
           {/* Row 1: completion control + title */}
           <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
             <Pressable
-              onPress={onToggle}
+              onPress={isLockedFeedbackTask ? undefined : onToggle}
+              disabled={isLockedFeedbackTask}
               hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
               style={{
                 width: 24,
@@ -493,9 +496,10 @@ function TaskRow({ task, onToggle, onPress, onLongPress }: { task: Task; onToggl
                 marginRight: 10,
                 marginTop: 2,
                 flexShrink: 0,
+                opacity: isLockedFeedbackTask ? 0.85 : 1,
               }}
               accessibilityRole="checkbox"
-              accessibilityState={{ checked: isDone }}
+              accessibilityState={{ checked: isDone, disabled: isLockedFeedbackTask }}
             >
               {isDone ? <Text style={{ fontSize: 12, color: "#10B981", fontWeight: "700" }}>✓</Text> : null}
             </Pressable>
@@ -821,7 +825,7 @@ export default function TasksScreen() {
 
   const handleToggleTask = (task: Task) => {
     if (isDemo) { showDemoAlert(); return; }
-    // Always confirm before toggling either direction
+    if (task.status === "done" && isFeedbackTaskDescription(task.description)) return;
     setConfirmCompleteTask(task);
   };
 

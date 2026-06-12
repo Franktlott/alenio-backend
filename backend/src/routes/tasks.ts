@@ -5,6 +5,7 @@ import { authGuard } from "../middleware/auth-guard";
 import { sendPushToUsers } from "../lib/push";
 import { getTeamSubscription } from "./subscription";
 import { logActivity } from "../lib/activity";
+import { isFeedbackTaskDescription } from "../lib/one-on-one-feedback";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -769,8 +770,14 @@ tasksRouter.patch("/:taskId", async (c) => {
   if (task.status === "done" && (title !== undefined || description !== undefined || priority !== undefined || dueDate !== undefined || attachmentUrl !== undefined)) {
     return c.json({ error: { message: "Task is completed. Recall it before making edits.", code: "TASK_COMPLETED" } }, 400);
   }
-  // Tasks cannot be recalled more than 2 hours after completion
+  // Check-in follow-up tasks stay closed once completed.
   if (task.status === "done" && status !== undefined && status !== "done") {
+    if (isFeedbackTaskDescription(task.description)) {
+      return c.json(
+        { error: { message: "Check-in follow-up tasks cannot be reopened.", code: "FEEDBACK_TASK_LOCKED" } },
+        400,
+      );
+    }
     const completedAt = task.completedAt ? new Date(task.completedAt).getTime() : 0;
     const twoHoursMs = 2 * 60 * 60 * 1000;
     if (Date.now() - completedAt > twoHoursMs) {

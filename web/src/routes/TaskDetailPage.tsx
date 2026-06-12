@@ -80,6 +80,7 @@ export function TaskDetailPage() {
   const [workspaceId, setWorkspaceId] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [feedbackContext, setFeedbackContext] = useState<OneOnOneAssociateFeedbackContext | null>(null);
+  const [feedbackCompletionActive, setFeedbackCompletionActive] = useState(false);
 
   useEffect(() => {
     if (!taskId) {
@@ -168,7 +169,11 @@ export function TaskDetailPage() {
     task?.assignments.some((assignment) => assignment.user.id === me.id) === true;
 
   useEffect(() => {
-    if (!feedbackMeta || !isFeedbackAssignee || task?.status === "done") {
+    if (!feedbackMeta || !isFeedbackAssignee) {
+      setFeedbackContext(null);
+      return;
+    }
+    if (task?.status === "done" && !feedbackCompletionActive) {
       setFeedbackContext(null);
       return;
     }
@@ -198,6 +203,7 @@ export function TaskDetailPage() {
     feedbackMeta?.fieldId,
     isFeedbackAssignee,
     task?.status,
+    feedbackCompletionActive,
   ]);
 
   const handleWorkspaceChange = (id: string) => {
@@ -312,10 +318,9 @@ export function TaskDetailPage() {
                 memberUserId={feedbackMeta.memberUserId}
                 meetingId={feedbackMeta.meetingId}
                 context={feedbackContext}
-                onSaved={() => {
-                  setTask((prev) => (prev ? { ...prev, status: "done" } : null));
-                }}
+                onCompletionStarted={() => setFeedbackCompletionActive(true)}
                 onSubmitted={() => {
+                  setFeedbackCompletionActive(false);
                   navigate("/dashboard");
                 }}
               />

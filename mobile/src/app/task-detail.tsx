@@ -60,6 +60,7 @@ export default function TaskDetailScreen() {
   const [draftDescription, setDraftDescription] = useState<string>("");
   const [draftPriority, setDraftPriority] = useState<string>("");
   const [feedbackContext, setFeedbackContext] = useState<OneOnOneAssociateFeedbackContext | null>(null);
+  const [feedbackCompletionActive, setFeedbackCompletionActive] = useState(false);
 
   const { data: task, isLoading } = useQuery({
     queryKey: ["task", taskId, teamId],
@@ -184,7 +185,11 @@ export default function TaskDetailScreen() {
   }, [isEditMode]);
 
   useEffect(() => {
-    if (!feedbackMeta || !isFeedbackAssignee || isCompleted) {
+    if (!feedbackMeta || !isFeedbackAssignee) {
+      setFeedbackContext(null);
+      return;
+    }
+    if (isCompleted && !feedbackCompletionActive) {
       setFeedbackContext(null);
       return;
     }
@@ -205,7 +210,7 @@ export default function TaskDetailScreen() {
     return () => {
       cancelled = true;
     };
-  }, [feedbackMeta, isFeedbackAssignee, isCompleted]);
+  }, [feedbackMeta, isFeedbackAssignee, isCompleted, feedbackCompletionActive]);
 
   const handleToggleMember = (userId: string) => {
     if (assignedIds.has(userId)) {
@@ -375,12 +380,9 @@ export default function TaskDetailScreen() {
             memberUserId={feedbackMeta.memberUserId}
             meetingId={feedbackMeta.meetingId}
             context={feedbackContext}
-            onSaved={() => {
-              queryClient.setQueryData<Task | undefined>(["task", taskId, teamId], (prev) =>
-                prev ? { ...prev, status: "done" } : prev,
-              );
-            }}
+            onCompletionStarted={() => setFeedbackCompletionActive(true)}
             onSubmitted={() => {
+              setFeedbackCompletionActive(false);
               void queryClient.invalidateQueries({ queryKey: ["task", taskId, teamId] });
               void queryClient.invalidateQueries({ queryKey: ["tasks", teamId] });
               router.back();
@@ -417,26 +419,30 @@ export default function TaskDetailScreen() {
         {/* Completed banner */}
         {isCompleted ? (
           <View className="flex-row items-center bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl px-4 py-3 mb-4" style={{ gap: 8 }}>
-            <Text style={{ fontSize: 16 }}>🔒</Text>
+            <Text style={{ fontSize: 16 }}>{isFeedbackTask ? "✓" : "🔒"}</Text>
             <Text className="flex-1 text-sm text-emerald-700 dark:text-emerald-400">
-              Task is completed. Recall it to make edits.
+              {isFeedbackTask
+                ? "This check-in follow-up is complete."
+                : "Task is completed. Recall it to make edits."}
             </Text>
-            <TouchableOpacity
-              onPress={() => { if (!isDemo) setShowRecallConfirm(true); }}
-              disabled={updateMutation.isPending || isDemo}
-              className={`px-3 py-1 rounded-full ${isDemo ? "bg-emerald-300 dark:bg-emerald-800" : "bg-emerald-600"}`}
-            >
-              {updateMutation.isPending ? (
-                <ActivityIndicator size="small" color="white" />
-              ) : (
-                <Text className="text-xs font-semibold text-white">Recall</Text>
-              )}
-            </TouchableOpacity>
+            {!isFeedbackTask ? (
+              <TouchableOpacity
+                onPress={() => { if (!isDemo) setShowRecallConfirm(true); }}
+                disabled={updateMutation.isPending || isDemo}
+                className={`px-3 py-1 rounded-full ${isDemo ? "bg-emerald-300 dark:bg-emerald-800" : "bg-emerald-600"}`}
+              >
+                {updateMutation.isPending ? (
+                  <ActivityIndicator size="small" color="white" />
+                ) : (
+                  <Text className="text-xs font-semibold text-white">Recall</Text>
+                )}
+              </TouchableOpacity>
+            ) : null}
           </View>
         ) : null}
 
         {/* Status */}
-        {!(isFeedbackTask && isFeedbackAssignee && !isCompleted) ? (
+        {!isFeedbackTask ? (
         <View className="mb-4">
           <Text className="text-sm font-semibold text-slate-500 mb-2">Status</Text>
           <View className="flex-row flex-wrap" style={{ gap: 8 }}>

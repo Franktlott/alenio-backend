@@ -66,6 +66,10 @@ export function parseFeedbackTaskDescription(description: string | null | undefi
   }
 }
 
+export function isFeedbackTaskDescription(description: string | null | undefined): boolean {
+  return parseFeedbackTaskDescription(description) !== null;
+}
+
 export function buildFeedbackPath(meta: Pick<OneOnOneFeedbackMeta, "teamId" | "memberUserId" | "meetingId" | "fieldId">): string {
   const params = new URLSearchParams({
     teamId: meta.teamId,

@@ -16,7 +16,7 @@ type Props = {
   memberUserId: string;
   meetingId: string;
   context: OneOnOneAssociateFeedbackContext;
-  onSaved?: () => void;
+  onCompletionStarted?: () => void;
   onSubmitted?: () => void;
 };
 
@@ -25,7 +25,7 @@ export function OneOnOneAssociateFeedbackForm({
   memberUserId,
   meetingId,
   context,
-  onSaved,
+  onCompletionStarted,
   onSubmitted,
 }: Props) {
   const [mode, setMode] = useState<"feedback" | "none">(
@@ -66,7 +66,7 @@ export function OneOnOneAssociateFeedbackForm({
       setSubmittedMode(mode);
       setDone(true);
       setCompletedInSession(true);
-      onSaved?.();
+      onCompletionStarted?.();
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Could not save your notes.");
     } finally {
