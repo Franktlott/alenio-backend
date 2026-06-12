@@ -122,6 +122,23 @@ function canDeleteTask(task: ApiTask, meId: string | undefined, role: string): b
   return role === "owner" || role === "admin";
 }
 
+function taskCreatorId(task: ApiTask): string | undefined {
+  return task.creatorId ?? task.creator?.id;
+}
+
+/** Active/Completed tabs: assigned to me, or created by me with no assignee. */
+function isMyWorkspaceTask(task: ApiTask, userId: string): boolean {
+  if (task.assignments.some((a) => a.user.id === userId)) return true;
+  return taskCreatorId(task) === userId && task.assignments.length === 0;
+}
+
+/** Team tab: tasks I created that are assigned to someone else. */
+function isDelegatedTeamTask(task: ApiTask, userId: string): boolean {
+  if (task.assignments.length === 0) return false;
+  if (taskCreatorId(task) !== userId) return false;
+  return task.assignments.some((a) => a.user.id !== userId);
+}
+
 type TaskTab = "active" | "completed" | "team";
 const PRIORITIES = [
   { label: "Low", value: "low" },
@@ -411,6 +428,12 @@ export function DashboardPage() {
   const myRole = selectedTeam?.role ?? "";
   const isOwnerOrLeader = myRole === "owner" || myRole === "team_leader";
   const isOwnerOrAdmin = myRole === "owner" || myRole === "admin";
+  const isRegularMember = myRole === "member" || !myRole;
+  const canViewTeamTab = !isRegularMember;
+
+  useEffect(() => {
+    if (taskTab === "team" && !canViewTeamTab) setTaskTab("active");
+  }, [taskTab, canViewTeamTab]);
 
   const handleDeleteTask = async (task: ApiTask) => {
     if (!selectedTeamId || !canDeleteTask(task, me?.id, myRole)) return;
@@ -444,7 +467,7 @@ export function DashboardPage() {
 
   const myTasks = useMemo(() => {
     if (!me?.id) return [];
-    return tasks.filter((t) => t.assignments.some((a) => a.user.id === me.id));
+    return tasks.filter((t) => isMyWorkspaceTask(t, me.id));
   }, [tasks, me?.id]);
 
   const getEventsForDay = (day: Date) =>
@@ -486,14 +509,25 @@ export function DashboardPage() {
   const selectedEvents = selectedDate ? getEventsForDay(selectedDate) : [];
   const selectedTasks = selectedDate ? getTasksForDay(selectedDate) : [];
 
-  const activeTasks = useMemo(() => tasks.filter((t) => t.status !== "done"), [tasks]);
-  const completedTasks = useMemo(() => tasks.filter((t) => t.status === "done"), [tasks]);
+  const activeTasks = useMemo(() => myTasks.filter((t) => t.status !== "done"), [myTasks]);
+  const completedTasks = useMemo(() => myTasks.filter((t) => t.status === "done"), [myTasks]);
+
+  const teamTabTasks = useMemo(() => {
+    if (!me?.id) return [];
+    return tasks.filter((t) => isDelegatedTeamTask(t, me.id) && t.status !== "done");
+  }, [tasks, me?.id]);
 
   const tabTasks = useMemo(() => {
     if (taskTab === "completed") return completedTasks;
-    if (taskTab === "team") return activeTasks;
+    if (taskTab === "team") return teamTabTasks;
     return activeTasks;
-  }, [taskTab, activeTasks, completedTasks]);
+  }, [taskTab, activeTasks, completedTasks, teamTabTasks]);
+
+  const taskTabs = useMemo((): TaskTab[] => {
+    const tabs: TaskTab[] = ["active", "completed"];
+    if (canViewTeamTab) tabs.push("team");
+    return tabs;
+  }, [canViewTeamTab]);
 
   const tableRows = useMemo(() => {
     const list = [...tabTasks];
@@ -1002,7 +1036,7 @@ export function DashboardPage() {
                   + Add task
                 </button>
                 <div className="enterprise-task-tabs" role="tablist">
-                  {(["active", "completed", "team"] as const).map((tab) => (
+                  {taskTabs.map((tab) => (
                     <button
                       key={tab}
                       type="button"
@@ -1064,8 +1098,18 @@ export function DashboardPage() {
                             <path d="M9 11l3 3L22 4" />
                             <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
                           </svg>
-                          <p className="enterprise-dashboard-empty-title">No tasks to show</p>
-                          <p className="enterprise-dashboard-empty-sub">Create a task to get started.</p>
+                          <p className="enterprise-dashboard-empty-title">
+                            {taskTab === "completed"
+                              ? "No completed tasks"
+                              : taskTab === "team"
+                                ? "No tasks assigned to others"
+                                : "No active tasks"}
+                          </p>
+                          <p className="enterprise-dashboard-empty-sub">
+                            {taskTab === "team"
+                              ? "Tasks you assign to teammates appear here."
+                              : "Create a task to get started."}
+                          </p>
                         </div>
                       </td>
                     </tr>
