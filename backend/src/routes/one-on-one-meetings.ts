@@ -225,6 +225,12 @@ function validateResponses(fields: TemplateField[], responses: Record<string, st
         return `${field.label} must be between 1 and ${max}.`;
       }
     }
+    if (field.type === "yes_no" && value !== undefined && value !== "") {
+      const answer = String(value).toLowerCase();
+      if (answer !== "yes" && answer !== "no") {
+        return `${field.label} must be Yes or No.`;
+      }
+    }
   }
   return null;
 }

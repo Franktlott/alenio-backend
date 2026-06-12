@@ -1093,6 +1093,7 @@ export type OneOnOneTemplateFieldType =
   | "short_text"
   | "long_text"
   | "rating"
+  | "yes_no"
   | "manager_notes"
   | "associate_notes";
 

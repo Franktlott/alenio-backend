@@ -31,6 +31,7 @@ import {
   ASSOCIATE_FEEDBACK_FIELD_ID,
   ASSOCIATE_FEEDBACK_LABEL,
   formatAssociateResponseDisplay,
+  formatYesNoResponseDisplay,
 } from "@/lib/one-on-one-feedback";
 import {
   getOneOnOneMeetingStatusFromMeeting,
@@ -370,6 +371,35 @@ export function OneOnOneHistoryTab({
               <Text style={{ fontWeight: "700", color: current === n ? "white" : "#64748B" }}>{n}</Text>
             </Pressable>
           ))}
+        </View>
+      );
+    }
+
+    if (field.type === "yes_no") {
+      const current = String(value).toLowerCase();
+      return (
+        <View style={{ flexDirection: "row", gap: 8 }}>
+          {(["yes", "no"] as const).map((option) => {
+            const active = current === option;
+            return (
+              <Pressable
+                key={option}
+                onPress={() => setFieldValue(field.id, option)}
+                style={{
+                  minWidth: 72,
+                  height: 40,
+                  borderRadius: 20,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: active ? "#4361EE" : "#F1F5F9",
+                }}
+              >
+                <Text style={{ fontWeight: "700", color: active ? "white" : "#64748B" }}>
+                  {option === "yes" ? "Yes" : "No"}
+                </Text>
+              </Pressable>
+            );
+          })}
         </View>
       );
     }
@@ -817,7 +847,9 @@ export function OneOnOneHistoryTab({
                         <View key={field.id} style={{ marginBottom: 12 }}>
                           <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748B" }}>{field.label}</Text>
                           <Text style={{ fontSize: 14, color: "#334155", marginTop: 4 }}>
-                            {formatAssociateResponseDisplay(previewMeeting.responses[field.id])}
+                            {field.type === "yes_no"
+                              ? formatYesNoResponseDisplay(previewMeeting.responses[field.id])
+                              : formatAssociateResponseDisplay(previewMeeting.responses[field.id])}
                           </Text>
                         </View>
                       ))}

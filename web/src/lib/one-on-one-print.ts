@@ -30,6 +30,11 @@ function answerText(responses: Record<string, string | number>, field: OneOnOneT
   const raw = responses[field.id];
   if (raw === undefined || raw === "" || raw === 0) return "";
   if (field.type === "associate_notes") return formatAssociateResponseDisplay(raw);
+  if (field.type === "yes_no") {
+    const answer = String(raw).toLowerCase();
+    if (answer === "yes") return "Yes";
+    if (answer === "no") return "No";
+  }
   return String(raw);
 }
 

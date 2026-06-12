@@ -31,3 +31,35 @@ export function appendLeaderCommentsIfMissing(fields: OneOnOneTemplateField[]): 
     },
   ];
 }
+
+function reorderFields(fields: OneOnOneTemplateField[]): OneOnOneTemplateField[] {
+  return fields.map((field, index) => ({ ...field, order: index }));
+}
+
+/** Remove auto-added leader comments from editable template field lists. */
+export function stripLeaderCommentsFields(fields: OneOnOneTemplateField[]): OneOnOneTemplateField[] {
+  const sorted = [...fields].sort((a, b) => a.order - b.order);
+  const skipSectionIds = new Set<string>();
+
+  for (let i = 0; i < sorted.length; i++) {
+    const field = sorted[i];
+    if (field.type !== "section") continue;
+
+    const sectionFields: OneOnOneTemplateField[] = [];
+    let j = i + 1;
+    while (j < sorted.length && sorted[j].type !== "section") {
+      sectionFields.push(sorted[j]);
+      j++;
+    }
+
+    const isLeaderSection =
+      field.label === LEADER_COMMENTS_SECTION_LABEL ||
+      (sectionFields.length > 0 && sectionFields.every((f) => f.type === "manager_notes"));
+
+    if (isLeaderSection) skipSectionIds.add(field.id);
+  }
+
+  return reorderFields(
+    sorted.filter((field) => field.type !== "manager_notes" && !skipSectionIds.has(field.id)),
+  );
+}

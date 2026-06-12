@@ -59,6 +59,14 @@ export function formatAssociateResponseDisplay(value: string | number | undefine
   return String(value);
 }
 
+export function formatYesNoResponseDisplay(value: string | number | undefined | null): string {
+  if (value === undefined || value === null || value === "") return "—";
+  const answer = String(value).toLowerCase();
+  if (answer === "yes") return "Yes";
+  if (answer === "no") return "No";
+  return String(value);
+}
+
 export function associateRequestLabel(mode: AssociateRequestMode | null | undefined): string {
   if (mode === "task") return "Send as task";
   if (mode === "message") return "Send as message";

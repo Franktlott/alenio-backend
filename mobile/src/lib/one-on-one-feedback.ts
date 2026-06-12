@@ -46,3 +46,11 @@ export function formatAssociateResponseDisplay(value: string | number | undefine
   if (String(value) === NO_FEEDBACK_VALUE) return "No feedback entered";
   return String(value);
 }
+
+export function formatYesNoResponseDisplay(value: string | number | undefined | null): string {
+  if (value === undefined || value === null || value === "") return "—";
+  const answer = String(value).toLowerCase();
+  if (answer === "yes") return "Yes";
+  if (answer === "no") return "No";
+  return String(value);
+}

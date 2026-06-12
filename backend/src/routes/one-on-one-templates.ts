@@ -24,6 +24,7 @@ const fieldTypeSchema = z.enum([
   "short_text",
   "long_text",
   "rating",
+  "yes_no",
   "manager_notes",
   "associate_notes",
 ]);

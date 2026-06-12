@@ -11,7 +11,7 @@ import {
   type OneOnOneTemplateField,
   type OneOnOneTemplateFieldType,
 } from "../lib/api";
-import { appendLeaderCommentsIfMissing } from "../lib/check-in-leader-comments";
+import { appendLeaderCommentsIfMissing, stripLeaderCommentsFields } from "../lib/check-in-leader-comments";
 
 const QUESTION_TYPE_OPTIONS: {
   value: OneOnOneTemplateFieldType;
@@ -21,6 +21,7 @@ const QUESTION_TYPE_OPTIONS: {
   { value: "short_text", label: "Short answer", defaultLabel: "Question" },
   { value: "long_text", label: "Long answer", defaultLabel: "Question" },
   { value: "rating", label: "Rating", defaultLabel: "Rating" },
+  { value: "yes_no", label: "Yes or No", defaultLabel: "Question" },
 ];
 
 const FIELD_TYPE_LABELS: Record<OneOnOneTemplateFieldType, string> = {
@@ -28,6 +29,7 @@ const FIELD_TYPE_LABELS: Record<OneOnOneTemplateFieldType, string> = {
   short_text: "Short answer",
   long_text: "Long answer",
   rating: "Rating",
+  yes_no: "Yes or No",
   manager_notes: "Leader comments",
   associate_notes: "Associate notes",
 };
@@ -43,6 +45,7 @@ function isSection(f: OneOnOneTemplateField) {
 
 function fieldTypeLabel(type: OneOnOneTemplateFieldType, ratingMax?: number): string {
   if (type === "rating") return `Rating (1-${ratingMax ?? 5})`;
+  if (type === "yes_no") return "Yes or No";
   return FIELD_TYPE_LABELS[type] ?? type;
 }
 
@@ -108,7 +111,8 @@ function flattenSections(groups: SectionGroup[]): OneOnOneTemplateField[] {
 }
 
 function normalizeLoadedFields(fields: OneOnOneTemplateField[]): OneOnOneTemplateField[] {
-  const sorted = reorderFields([...fields]);
+  const stripped = stripLeaderCommentsFields(fields);
+  const sorted = reorderFields([...stripped]);
   if (sorted.some(isSection)) return sorted;
   return flattenSections([{ section: newSection("Opening"), fields: sorted.filter((f) => !isSection(f)) }]);
 }
@@ -119,7 +123,7 @@ function emptyEditorState() {
   return {
     title: "",
     description: "",
-    fields: appendLeaderCommentsIfMissing(base),
+    fields: base,
   };
 }
 
@@ -155,7 +159,10 @@ export function OneOnOneTemplatesModal({ teamId, open, onClose }: Props) {
   const [fieldMenuId, setFieldMenuId] = useState<string | null>(null);
   const [dragFieldId, setDragFieldId] = useState<string | null>(null);
 
-  const sectionGroups = useMemo(() => parseSections(fields), [fields]);
+  const sectionGroups = useMemo(
+    () => parseSections(editorView === "preview" ? appendLeaderCommentsIfMissing(fields) : fields),
+    [fields, editorView],
+  );
   const selectedField = fields.find((f) => f.id === selectedFieldId && !isSection(f)) ?? null;
   const questionFields = fields.filter((f) => !isSection(f));
 
@@ -445,13 +452,15 @@ export function OneOnOneTemplatesModal({ teamId, open, onClose }: Props) {
       const payload = {
         title: title.trim(),
         description: description.trim() || null,
-        fields: reorderFields(fields).map((f) => ({
-          ...f,
-          label: f.label.trim(),
-          required: isSection(f) ? false : Boolean(f.required),
-          helpText: f.helpText?.trim() || null,
-          ...(f.type === "rating" ? { ratingMax: f.ratingMax ?? 5 } : {}),
-        })),
+        fields: appendLeaderCommentsIfMissing(
+          reorderFields(fields).map((f) => ({
+            ...f,
+            label: f.label.trim(),
+            required: isSection(f) ? false : Boolean(f.required),
+            helpText: f.helpText?.trim() || null,
+            ...(f.type === "rating" ? { ratingMax: f.ratingMax ?? 5 } : {}),
+          })),
+        ),
       };
       if (editingId) {
         await updateOneOnOneTemplate(teamId, editingId, payload);
@@ -979,39 +988,30 @@ export function OneOnOneTemplatesModal({ teamId, open, onClose }: Props) {
                         onChange={(e) => updateField(selectedField.id, { label: e.target.value })}
                       />
                       <p className="enterprise-muted enterprise-oneone-templates-field-hint">
-                        {selectedField.type === "manager_notes"
-                          ? "Leaders fill this in when running the check-in."
-                          : "This is the question your team member will see."}
+                        This is the question your team member will see.
                       </p>
 
                       <label className="enterprise-oneone-templates-field-form-label" htmlFor="oneone-field-type">
                         Type
                       </label>
-                      {selectedField.type === "manager_notes" ? (
-                        <p className="enterprise-oneone-templates-field-type-readonly" id="oneone-field-type">
-                          Leader comments
-                          <span className="enterprise-muted"> Added automatically to every check-in.</span>
-                        </p>
-                      ) : (
-                        <select
-                          id="oneone-field-type"
-                          className="auth-input enterprise-oneone-templates-field-form-input"
-                          value={selectedField.type}
-                          onChange={(e) => {
-                            const type = e.target.value as OneOnOneTemplateFieldType;
-                            updateField(selectedField.id, {
-                              type,
-                              ...(type === "rating" ? { ratingMax: selectedField.ratingMax ?? 5 } : {}),
-                            });
-                          }}
-                        >
-                          {QUESTION_TYPE_OPTIONS.map((opt) => (
-                            <option key={opt.value} value={opt.value}>
-                              {opt.label}
-                            </option>
-                          ))}
-                        </select>
-                      )}
+                      <select
+                        id="oneone-field-type"
+                        className="auth-input enterprise-oneone-templates-field-form-input"
+                        value={selectedField.type}
+                        onChange={(e) => {
+                          const type = e.target.value as OneOnOneTemplateFieldType;
+                          updateField(selectedField.id, {
+                            type,
+                            ...(type === "rating" ? { ratingMax: selectedField.ratingMax ?? 5 } : {}),
+                          });
+                        }}
+                      >
+                        {QUESTION_TYPE_OPTIONS.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
 
                       <label className="enterprise-oneone-templates-field-check">
                         <input

@@ -15,6 +15,7 @@ import {
   ASSOCIATE_FEEDBACK_FIELD_ID,
   ASSOCIATE_FEEDBACK_LABEL,
   formatAssociateResponseDisplay,
+  formatYesNoResponseDisplay,
 } from "../lib/one-on-one-feedback";
 import { appendLeaderCommentsIfMissing } from "../lib/check-in-leader-comments";
 import {
@@ -28,6 +29,7 @@ const FIELD_TYPE_LABELS: Record<string, string> = {
   short_text: "Short answer",
   long_text: "Long answer",
   rating: "Rating",
+  yes_no: "Yes or No",
   manager_notes: "Leader comments",
   associate_notes: "Associate notes",
 };
@@ -73,10 +75,12 @@ function groupPreviewSections(fields: OneOnOneTemplateField[]): PreviewSectionGr
 
 function renderPreviewQuestion(field: OneOnOneTemplateField, answer: string | number | undefined) {
   if (answer === undefined || answer === "" || answer === 0) return null;
+  const display =
+    field.type === "yes_no" ? formatYesNoResponseDisplay(answer) : formatAssociateResponseDisplay(answer);
   return (
     <div key={field.id} className="enterprise-oneone-preview-question">
       <div className="enterprise-oneone-preview-question-label">{field.label}</div>
-      <div className="enterprise-oneone-preview-question-answer">{formatAssociateResponseDisplay(answer)}</div>
+      <div className="enterprise-oneone-preview-question-answer">{display}</div>
     </div>
   );
 }
@@ -452,6 +456,24 @@ export function OneOnOneHistoryTab({
               onClick={() => setFieldValue(field.id, n)}
             >
               {n}
+            </button>
+          ))}
+        </div>
+      );
+    }
+
+    if (field.type === "yes_no") {
+      const current = String(value).toLowerCase();
+      return (
+        <div className="enterprise-oneone-yesno-row">
+          {(["yes", "no"] as const).map((option) => (
+            <button
+              key={option}
+              type="button"
+              className={`enterprise-oneone-yesno-btn${current === option ? " enterprise-oneone-yesno-btn--active" : ""}`}
+              onClick={() => setFieldValue(field.id, option)}
+            >
+              {option === "yes" ? "Yes" : "No"}
             </button>
           ))}
         </div>

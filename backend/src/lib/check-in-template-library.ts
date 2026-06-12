@@ -9,7 +9,7 @@ import {
 export type CheckInLibraryField = {
   id: string;
   label: string;
-  type: "section" | "short_text" | "long_text" | "rating" | "manager_notes" | "associate_notes";
+  type: "section" | "short_text" | "long_text" | "rating" | "yes_no" | "manager_notes" | "associate_notes";
   order: number;
   required: boolean;
   helpText?: string | null;

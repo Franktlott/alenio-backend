@@ -7388,6 +7388,32 @@ input {
   color: #fff;
 }
 
+.enterprise-oneone-yesno-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.enterprise-oneone-yesno-btn {
+  min-width: 64px;
+  height: 32px;
+  padding: 0 0.75rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #fff;
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #475569;
+  cursor: pointer;
+}
+
+.enterprise-oneone-yesno-btn--active {
+  border-color: #0f172a;
+  background: #0f172a;
+  color: #fff;
+}
+
 .enterprise-oneone-fill-actions {
   display: flex;
   justify-content: flex-end;
