@@ -252,6 +252,9 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
     queryKey: queryKeys.teamContext(selectedTeamId),
     queryFn: () => fetchTeamContext(selectedTeamId),
     enabled: !!selectedTeamId,
+    refetchOnMount: false,
+    refetchInterval: 15_000,
+    refetchIntervalInBackground: false,
   });
 
   const teamDetail = teamContextQuery.data?.detail ?? null;

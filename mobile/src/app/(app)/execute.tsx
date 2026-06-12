@@ -694,7 +694,10 @@ export default function TasksScreen() {
   const handleLoadMore = async () => {
     if (!activeTeamId || !nextCursor || loadingMore || filter === "assigned") return;
     setLoadingMore(true);
-    const queryKey = ["tasks", activeTeamId, "mine", calendarYear, calendarMonth, filter] as const;
+    const queryKey =
+      filter === "completed"
+        ? (["tasks", activeTeamId, "mine", calendarYear, calendarMonth, "completed"] as const)
+        : (["tasks", activeTeamId, "mine", calendarYear, calendarMonth, "active"] as const);
     try {
       const result = await api.get<{ tasks: Task[]; nextCursor: string | null }>(
         buildWorkspaceTasksPath(activeTeamId, {
@@ -724,6 +727,10 @@ export default function TasksScreen() {
     enabled: !!session?.user,
   });
 
+  const currentRole = teams?.find((t) => t.id === activeTeamId)?.role ?? "member";
+  const isRegularMember = currentRole === "member";
+  const isOwnerOrLeader = currentRole === "owner" || currentRole === "team_leader";
+
   React.useEffect(() => {
     if (teams && teams.length > 0 && !activeTeamId) {
       setActiveTeamId(teams[0].id);
@@ -744,29 +751,44 @@ export default function TasksScreen() {
     }
   }, [subscription]);
 
-  // My tasks (assigned to me, or created by me with no assignment) — Active & Completed tabs
-  const { data: myTasksData, isLoading } = useQuery({
-    queryKey: ["tasks", activeTeamId, "mine", calendarYear, calendarMonth, filter],
-    queryFn: async () => {
-      const result = await api.get<{ tasks: Task[]; nextCursor: string | null }>(
+  // Prefetch my active + completed tasks so tab switches use cache (no full reload).
+  const { data: myActiveTasksData, isPending: myActivePending } = useQuery({
+    queryKey: ["tasks", activeTeamId, "mine", calendarYear, calendarMonth, "active"],
+    queryFn: async () =>
+      api.get<{ tasks: Task[]; nextCursor: string | null }>(
         buildWorkspaceTasksPath(activeTeamId!, {
-          filter,
+          filter: "all",
           calendarYear,
           calendarMonth,
           myTasks: true,
         }),
-      );
-      setNextCursor(result.nextCursor);
-      return result;
-    },
-    enabled: !!activeTeamId && isPro && filter !== "assigned",
+      ),
+    enabled: !!activeTeamId && isPro,
     refetchInterval: workspacePollInterval,
     refetchIntervalInBackground: false,
   });
-  const allTasks: Task[] = myTasksData?.tasks ?? [];
 
-  // Tasks I created — used for Team tab (will filter client-side for assigned-to-others)
-  const { data: teamTasksData } = useQuery({
+  const { data: myCompletedTasksData, isPending: myCompletedPending } = useQuery({
+    queryKey: ["tasks", activeTeamId, "mine", calendarYear, calendarMonth, "completed"],
+    queryFn: async () =>
+      api.get<{ tasks: Task[]; nextCursor: string | null }>(
+        buildWorkspaceTasksPath(activeTeamId!, {
+          filter: "completed",
+          calendarYear,
+          calendarMonth,
+          myTasks: true,
+        }),
+      ),
+    enabled: !!activeTeamId && isPro,
+    refetchInterval: workspacePollInterval,
+    refetchIntervalInBackground: false,
+  });
+
+  const allTasks: Task[] =
+    filter === "completed" ? (myCompletedTasksData?.tasks ?? []) : (myActiveTasksData?.tasks ?? []);
+
+  // Tasks I created — Team tab (prefetched for leaders so switching tabs is instant)
+  const { data: teamTasksData, isPending: teamTasksPending } = useQuery({
     queryKey: ["tasks", activeTeamId, "team", calendarYear, calendarMonth],
     queryFn: async () => {
       const result = await api.get<{ tasks: Task[]; nextCursor: string | null }>(
@@ -779,7 +801,7 @@ export default function TasksScreen() {
       );
       return result;
     },
-    enabled: !!activeTeamId && isPro && filter === "assigned",
+    enabled: !!activeTeamId && isPro && isOwnerOrLeader,
     refetchInterval: workspacePollInterval,
     refetchIntervalInBackground: false,
   });
@@ -798,7 +820,7 @@ export default function TasksScreen() {
       );
       return result;
     },
-    enabled: !!activeTeamId && isPro && filter === "assigned",
+    enabled: !!activeTeamId && isPro && isOwnerOrLeader,
     refetchInterval: workspacePollInterval,
     refetchIntervalInBackground: false,
   });
@@ -1005,16 +1027,19 @@ export default function TasksScreen() {
   };
 
   const currentUserId = session?.user?.id ?? null;
-  const isOwner = teams?.find((t) => t.id === activeTeamId)?.role === "owner";
-  const currentRole = teams?.find((t) => t.id === activeTeamId)?.role ?? "member";
-  const isRegularMember = currentRole === "member";
-  const isOwnerOrLeader = currentRole === "owner" || currentRole === "team_leader";
 
   React.useEffect(() => {
     if (filter === "assigned" && isRegularMember) setFilter("all");
     if (filter === "assigned" && !currentUserId) setFilter("all");
     if (filter !== "assigned") setSelectedMemberId(null);
   }, [currentUserId, filter, isRegularMember]);
+
+  const showTasksLoading =
+    filter === "assigned"
+      ? teamTasksPending && teamTasks.length === 0
+      : filter === "completed"
+        ? myCompletedPending && allTasks.length === 0
+        : myActivePending && allTasks.length === 0;
 
   useEffect(() => {
     if (filter === "completed") setSort("completed");
@@ -1023,8 +1048,14 @@ export default function TasksScreen() {
 
   useEffect(() => {
     setVisibleCount(5);
-    setNextCursor(null);
-  }, [filter, calendarYear, calendarMonth]);
+    if (filter === "completed") {
+      setNextCursor(myCompletedTasksData?.nextCursor ?? null);
+    } else if (filter === "all") {
+      setNextCursor(myActiveTasksData?.nextCursor ?? null);
+    } else {
+      setNextCursor(null);
+    }
+  }, [filter, calendarYear, calendarMonth, myActiveTasksData?.nextCursor, myCompletedTasksData?.nextCursor]);
 
   // Active: tasks assigned to me (or mine with no assignment), open
   // Completed: same pool, done only
@@ -1071,7 +1102,7 @@ export default function TasksScreen() {
     return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
   });
 
-  const showTasksEmptyState = !isLoading && tasks.length === 0;
+  const showTasksEmptyState = !showTasksLoading && tasks.length === 0;
 
   const holidays = React.useMemo(() => {
     const years = new Set([calendarYear, calendarYear - 1, calendarYear + 1, new Date().getFullYear()]);
@@ -1411,7 +1442,7 @@ export default function TasksScreen() {
           }
         >
           {/* Task list */}
-          {isLoading ? (
+          {showTasksLoading ? (
             <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: 40 }} testID="loading-indicator">
               <ActivityIndicator color="#4361EE" />
             </View>

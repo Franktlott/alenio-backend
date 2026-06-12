@@ -39,7 +39,9 @@ export function ActivityPage() {
       return Array.isArray(data) ? data : [];
     },
     enabled: !!selectedTeamId,
+    refetchOnMount: false,
     refetchInterval: 15_000,
+    refetchIntervalInBackground: false,
   });
 
   const items = activityQuery.data ?? [];

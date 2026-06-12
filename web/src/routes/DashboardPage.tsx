@@ -252,6 +252,7 @@ export function DashboardPage() {
       };
     },
     enabled: !!selectedTeamId,
+    refetchOnMount: false,
     refetchInterval: 15_000,
     refetchIntervalInBackground: false,
   });
