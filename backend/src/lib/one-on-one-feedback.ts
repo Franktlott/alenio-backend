@@ -14,6 +14,15 @@ export function associateFeedbackTaskTitle(templateTitle: string): string {
   return `Follow up on ${templateTitle}`;
 }
 
+export const ASSOCIATE_FEEDBACK_DUE_DAYS = 2;
+
+export function associateFeedbackDueDate(from = new Date()): Date {
+  const due = new Date(from);
+  due.setDate(due.getDate() + ASSOCIATE_FEEDBACK_DUE_DAYS);
+  due.setHours(23, 59, 59, 999);
+  return due;
+}
+
 export type AssociateRequestMode = "task" | "message";
 
 export type OneOnOneFeedbackMeta = {

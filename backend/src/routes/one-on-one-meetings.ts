@@ -9,6 +9,7 @@ import { sendPushToUsers } from "../lib/push";
 import {
   ASSOCIATE_FEEDBACK_FIELD_ID,
   ASSOCIATE_FEEDBACK_LABEL,
+  associateFeedbackDueDate,
   associateFeedbackTaskTitle,
   encodeFeedbackTaskDescription,
   isAssociateRequestedField,
@@ -326,6 +327,7 @@ async function createMeetingAssociateFeedbackRequest(
       description,
       priority: "medium",
       status: "todo",
+      dueDate: associateFeedbackDueDate(),
       teamId: meeting.teamId,
       creatorId,
       oneOnOneMeetingId: meeting.id,
