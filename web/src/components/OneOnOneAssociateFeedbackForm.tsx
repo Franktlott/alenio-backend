@@ -17,6 +17,7 @@ type Props = {
   meetingId: string;
   context: OneOnOneAssociateFeedbackContext;
   onCompletionStarted?: () => void;
+  onCompletionFailed?: () => void;
   onSubmitted?: () => void;
 };
 
@@ -26,6 +27,7 @@ export function OneOnOneAssociateFeedbackForm({
   meetingId,
   context,
   onCompletionStarted,
+  onCompletionFailed,
   onSubmitted,
 }: Props) {
   const [mode, setMode] = useState<"feedback" | "none">(
@@ -59,6 +61,7 @@ export function OneOnOneAssociateFeedbackForm({
         setErr("Add your notes or choose nothing to add.");
         return;
       }
+      onCompletionStarted?.();
       await submitOneOnOneAssociateFeedback(teamId, memberUserId, meetingId, {
         fieldId: context.fieldId,
         response,
@@ -66,8 +69,8 @@ export function OneOnOneAssociateFeedbackForm({
       setSubmittedMode(mode);
       setDone(true);
       setCompletedInSession(true);
-      onCompletionStarted?.();
     } catch (e) {
+      onCompletionFailed?.();
       setErr(e instanceof Error ? e.message : "Could not save your notes.");
     } finally {
       setSaving(false);

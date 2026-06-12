@@ -20,6 +20,7 @@ import {
 const SCREEN_HEIGHT = Dimensions.get("window").height;
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams, Redirect, useFocusEffect } from "expo-router";
+import { useIsFocused } from "@react-navigation/native";
 import { Plus, User, Users, ArrowUpDown, ChevronLeft, ChevronRight, ChevronDown, X, CalendarDays, CheckSquare, Calendar, Check, UserRound, Video, VideoOff, Clock, Lock, Globe, ClipboardList } from "lucide-react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -637,6 +638,8 @@ export default function TasksScreen() {
   const setActiveTeamId = useTeamStore((s) => s.setActiveTeamId);
   const queryClient = useQueryClient();
   const acknowledge = useTaskStore((s) => s.acknowledge);
+  const isFocused = useIsFocused();
+  const workspacePollInterval = isFocused ? 15_000 : false;
 
   // Clear the task badge when this page is opened
   useFocusEffect(
@@ -751,6 +754,8 @@ export default function TasksScreen() {
       return result;
     },
     enabled: !!activeTeamId && isPro && filter !== "assigned",
+    refetchInterval: workspacePollInterval,
+    refetchIntervalInBackground: false,
   });
   const allTasks: Task[] = myTasksData?.tasks ?? [];
 
@@ -769,6 +774,8 @@ export default function TasksScreen() {
       return result;
     },
     enabled: !!activeTeamId && isPro && filter === "assigned",
+    refetchInterval: workspacePollInterval,
+    refetchIntervalInBackground: false,
   });
   const teamTasks: Task[] = teamTasksData?.tasks ?? [];
 
@@ -786,6 +793,8 @@ export default function TasksScreen() {
       return result;
     },
     enabled: !!activeTeamId && isPro && filter === "assigned",
+    refetchInterval: workspacePollInterval,
+    refetchIntervalInBackground: false,
   });
 
   // Team members for the member filter (Team tab only)
@@ -802,6 +811,8 @@ export default function TasksScreen() {
     queryKey: ["calendar-events", activeTeamId],
     queryFn: () => api.get<CalendarEvent[]>(`/api/teams/${activeTeamId}/events`),
     enabled: !!activeTeamId && isPro,
+    refetchInterval: workspacePollInterval,
+    refetchIntervalInBackground: false,
   });
 
   const toggleMutation = useMutation({

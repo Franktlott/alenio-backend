@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useEnterpriseShell } from "../contexts/EnterpriseShellContext";
 import { queryKeys } from "../lib/query-keys";
@@ -191,6 +191,8 @@ export function DashboardPage() {
   const [taskActionError, setTaskActionError] = useState<string | null>(null);
   const [feedbackContext, setFeedbackContext] = useState<OneOnOneAssociateFeedbackContext | null>(null);
   const [feedbackCompletionActive, setFeedbackCompletionActive] = useState(false);
+  const feedbackCompletionActiveRef = useRef(false);
+  feedbackCompletionActiveRef.current = feedbackCompletionActive;
 
   const now = new Date();
   const selectedTaskFeedbackMeta = selectedTaskModal?.description
@@ -224,6 +226,8 @@ export function DashboardPage() {
       };
     },
     enabled: !!selectedTeamId,
+    refetchInterval: 15_000,
+    refetchIntervalInBackground: false,
   });
 
   const tasks = dashboardQuery.data?.tasks ?? [];
@@ -332,6 +336,8 @@ export function DashboardPage() {
   };
 
   useEffect(() => {
+    if (feedbackCompletionActive) return;
+
     if (!selectedTaskFeedbackMeta || !isSelectedTaskFeedbackAssignee) {
       setFeedbackContext(null);
       return;
@@ -349,7 +355,7 @@ export function DashboardPage() {
           selectedTaskFeedbackMeta.meetingId,
           selectedTaskFeedbackMeta.fieldId,
         );
-        if (cancelled) return;
+        if (cancelled || feedbackCompletionActiveRef.current) return;
         setFeedbackContext(context.submitted ? null : context);
       } catch {
         if (cancelled) return;
@@ -1217,6 +1223,7 @@ export function DashboardPage() {
                       meetingId={selectedTaskFeedbackMeta.meetingId}
                       context={feedbackContext}
                       onCompletionStarted={() => setFeedbackCompletionActive(true)}
+                      onCompletionFailed={() => setFeedbackCompletionActive(false)}
                       onSubmitted={() => {
                         const teamId = selectedTeamId;
                         setFeedbackCompletionActive(false);

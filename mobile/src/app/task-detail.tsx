@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   View,
   Text,
@@ -61,6 +61,8 @@ export default function TaskDetailScreen() {
   const [draftPriority, setDraftPriority] = useState<string>("");
   const [feedbackContext, setFeedbackContext] = useState<OneOnOneAssociateFeedbackContext | null>(null);
   const [feedbackCompletionActive, setFeedbackCompletionActive] = useState(false);
+  const feedbackCompletionActiveRef = useRef(false);
+  feedbackCompletionActiveRef.current = feedbackCompletionActive;
 
   const { data: task, isLoading } = useQuery({
     queryKey: ["task", taskId, teamId],
@@ -185,6 +187,8 @@ export default function TaskDetailScreen() {
   }, [isEditMode]);
 
   useEffect(() => {
+    if (feedbackCompletionActive) return;
+
     if (!feedbackMeta || !isFeedbackAssignee) {
       setFeedbackContext(null);
       return;
@@ -201,7 +205,7 @@ export default function TaskDetailScreen() {
       feedbackMeta.fieldId,
     )
       .then((context) => {
-        if (cancelled) return;
+        if (cancelled || feedbackCompletionActiveRef.current) return;
         setFeedbackContext(context.submitted ? null : context);
       })
       .catch(() => {
@@ -381,6 +385,7 @@ export default function TaskDetailScreen() {
             meetingId={feedbackMeta.meetingId}
             context={feedbackContext}
             onCompletionStarted={() => setFeedbackCompletionActive(true)}
+            onCompletionFailed={() => setFeedbackCompletionActive(false)}
             onSubmitted={() => {
               setFeedbackCompletionActive(false);
               void queryClient.invalidateQueries({ queryKey: ["task", taskId, teamId] });

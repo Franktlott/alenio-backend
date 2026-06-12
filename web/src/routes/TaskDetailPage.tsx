@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { DashboardTopBar } from "../components/DashboardTopBar";
 import { EnterpriseLayout } from "../components/EnterpriseLayout";
@@ -81,6 +81,8 @@ export function TaskDetailPage() {
   const [err, setErr] = useState<string | null>(null);
   const [feedbackContext, setFeedbackContext] = useState<OneOnOneAssociateFeedbackContext | null>(null);
   const [feedbackCompletionActive, setFeedbackCompletionActive] = useState(false);
+  const feedbackCompletionActiveRef = useRef(false);
+  feedbackCompletionActiveRef.current = feedbackCompletionActive;
 
   useEffect(() => {
     if (!taskId) {
@@ -169,6 +171,8 @@ export function TaskDetailPage() {
     task?.assignments.some((assignment) => assignment.user.id === me.id) === true;
 
   useEffect(() => {
+    if (feedbackCompletionActive) return;
+
     if (!feedbackMeta || !isFeedbackAssignee) {
       setFeedbackContext(null);
       return;
@@ -186,7 +190,7 @@ export function TaskDetailPage() {
           feedbackMeta.meetingId,
           feedbackMeta.fieldId,
         );
-        if (cancelled) return;
+        if (cancelled || feedbackCompletionActiveRef.current) return;
         setFeedbackContext(context.submitted ? null : context);
       } catch {
         if (cancelled) return;
@@ -319,6 +323,7 @@ export function TaskDetailPage() {
                 meetingId={feedbackMeta.meetingId}
                 context={feedbackContext}
                 onCompletionStarted={() => setFeedbackCompletionActive(true)}
+                onCompletionFailed={() => setFeedbackCompletionActive(false)}
                 onSubmitted={() => {
                   setFeedbackCompletionActive(false);
                   navigate("/dashboard");
