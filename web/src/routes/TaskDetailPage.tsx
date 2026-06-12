@@ -17,7 +17,7 @@ import {
   type WebMeUser,
   type WebTeamRow,
 } from "../lib/api";
-import { parseFeedbackTaskDescription } from "../lib/one-on-one-feedback";
+import { ASSOCIATE_FEEDBACK_SECTION_TITLE, parseFeedbackTaskDescription } from "../lib/one-on-one-feedback";
 
 function formatWhen(iso: string | null): string {
   if (!iso) return "—";
@@ -306,7 +306,7 @@ export function TaskDetailPage() {
 
           {feedbackContext && feedbackMeta ? (
             <section className="task-detail-section enterprise-oneone-feedback-task-section">
-              <h2 className="task-detail-section-title">Check-in feedback</h2>
+              <h2 className="task-detail-section-title">{ASSOCIATE_FEEDBACK_SECTION_TITLE}</h2>
               <OneOnOneAssociateFeedbackForm
                 teamId={feedbackMeta.teamId}
                 memberUserId={feedbackMeta.memberUserId}

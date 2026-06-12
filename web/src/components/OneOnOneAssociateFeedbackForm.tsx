@@ -1,6 +1,13 @@
 import { useState } from "react";
 import { submitOneOnOneAssociateFeedback, type OneOnOneAssociateFeedbackContext } from "../lib/api";
-import { NO_FEEDBACK_VALUE } from "../lib/one-on-one-feedback";
+import {
+  ASSOCIATE_FEEDBACK_INTRO,
+  ASSOCIATE_FEEDBACK_MODE_LABEL,
+  ASSOCIATE_FEEDBACK_NONE_LABEL,
+  ASSOCIATE_FEEDBACK_PLACEHOLDER,
+  ASSOCIATE_FEEDBACK_SUBMIT_LABEL,
+  NO_FEEDBACK_VALUE,
+} from "../lib/one-on-one-feedback";
 
 type Props = {
   teamId: string;
@@ -36,7 +43,7 @@ export function OneOnOneAssociateFeedbackForm({
     try {
       const response = mode === "none" ? NO_FEEDBACK_VALUE : feedback.trim();
       if (mode === "feedback" && !response) {
-        setErr("Enter your feedback or choose no feedback entered.");
+        setErr("Add your notes or choose nothing to add.");
         return;
       }
       await submitOneOnOneAssociateFeedback(teamId, memberUserId, meetingId, {
@@ -47,7 +54,7 @@ export function OneOnOneAssociateFeedbackForm({
       setDone(true);
       onSubmitted?.();
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "Could not submit feedback.");
+      setErr(e instanceof Error ? e.message : "Could not save your notes.");
     } finally {
       setSaving(false);
     }
@@ -56,11 +63,9 @@ export function OneOnOneAssociateFeedbackForm({
   if (done) {
     return (
       <div className="enterprise-oneone-feedback-done">
-        <p className="enterprise-oneone-feedback-done-title">Thanks — your response was saved.</p>
+        <p className="enterprise-oneone-feedback-done-title">Thanks — your notes were saved.</p>
         <p className="enterprise-muted">
-          {submittedMode === "none"
-            ? "Recorded as no feedback entered."
-            : "Your check-in feedback was saved."}
+          {submittedMode === "none" ? "Recorded as nothing to add." : "Your takeaways are saved to the check-in."}
         </p>
       </div>
     );
@@ -68,9 +73,7 @@ export function OneOnOneAssociateFeedbackForm({
 
   return (
     <div className="enterprise-oneone-feedback-form">
-      <p className="enterprise-oneone-feedback-intro">
-        Share your notes for <strong>{context.fieldLabel}</strong> from the {context.meetingTitle} check-in.
-      </p>
+      <p className="enterprise-oneone-feedback-intro">{ASSOCIATE_FEEDBACK_INTRO}</p>
       {context.helpText ? <p className="enterprise-muted enterprise-oneone-feedback-help">{context.helpText}</p> : null}
 
       <div className="enterprise-oneone-feedback-mode">
@@ -81,7 +84,7 @@ export function OneOnOneAssociateFeedbackForm({
             checked={mode === "feedback"}
             onChange={() => setMode("feedback")}
           />
-          <span>Enter feedback</span>
+          <span>{ASSOCIATE_FEEDBACK_MODE_LABEL}</span>
         </label>
         <label className="enterprise-oneone-feedback-mode-option">
           <input
@@ -90,7 +93,7 @@ export function OneOnOneAssociateFeedbackForm({
             checked={mode === "none"}
             onChange={() => setMode("none")}
           />
-          <span>No feedback entered</span>
+          <span>{ASSOCIATE_FEEDBACK_NONE_LABEL}</span>
         </label>
       </div>
 
@@ -100,12 +103,12 @@ export function OneOnOneAssociateFeedbackForm({
           rows={6}
           value={feedback}
           onChange={(e) => setFeedback(e.target.value)}
-          placeholder={`Your thoughts on ${context.fieldLabel.toLowerCase()}…`}
-          aria-label={context.fieldLabel}
+          placeholder={ASSOCIATE_FEEDBACK_PLACEHOLDER}
+          aria-label="Check-in notes"
         />
       ) : (
         <p className="enterprise-muted enterprise-oneone-feedback-none-copy">
-          We&apos;ll record that you have no feedback for this question.
+          We&apos;ll record that you have nothing to add right now.
         </p>
       )}
 
@@ -118,7 +121,7 @@ export function OneOnOneAssociateFeedbackForm({
           disabled={saving}
           onClick={() => void onSubmit()}
         >
-          {saving ? "Saving…" : "Submit feedback & complete"}
+          {saving ? "Saving…" : ASSOCIATE_FEEDBACK_SUBMIT_LABEL}
         </button>
       </div>
     </div>

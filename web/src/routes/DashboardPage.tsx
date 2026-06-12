@@ -37,6 +37,7 @@ import {
   type WebTeamRow,
 } from "../lib/api";
 import {
+  ASSOCIATE_FEEDBACK_SECTION_TITLE,
   formatTaskDescriptionForDisplay,
   isFeedbackTaskDescription,
   parseFeedbackTaskDescription,
@@ -1198,7 +1199,7 @@ export function DashboardPage() {
 
                 {feedbackContext && selectedTaskFeedbackMeta ? (
                   <section className="enterprise-task-modal-section enterprise-oneone-feedback-task-section">
-                    <h4>Check-in feedback</h4>
+                    <h4>{ASSOCIATE_FEEDBACK_SECTION_TITLE}</h4>
                     <OneOnOneAssociateFeedbackForm
                       teamId={selectedTaskFeedbackMeta.teamId}
                       memberUserId={selectedTaskFeedbackMeta.memberUserId}

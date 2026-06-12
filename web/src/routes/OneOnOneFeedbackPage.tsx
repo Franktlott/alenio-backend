@@ -11,6 +11,7 @@ import {
   type WebMeUser,
   type WebTeamRow,
 } from "../lib/api";
+import { ASSOCIATE_FEEDBACK_SECTION_TITLE } from "../lib/one-on-one-feedback";
 
 export function OneOnOneFeedbackPage() {
   const [searchParams] = useSearchParams();
@@ -94,7 +95,7 @@ export function OneOnOneFeedbackPage() {
       user={me ?? null}
       onSignOutNavigate={(path) => navigate(path)}
       topBar={
-        <DashboardTopBar user={me ?? null} pageTitle="Check-in feedback" />
+        <DashboardTopBar user={me ?? null} pageTitle={ASSOCIATE_FEEDBACK_SECTION_TITLE} />
       }
       showPlanNav={showPlanNav}
       showActivityExecuteNav={showActivityExecuteNav}
@@ -106,8 +107,8 @@ export function OneOnOneFeedbackPage() {
 
         <article className="enterprise-card enterprise-oneone-feedback-card">
           <header className="enterprise-oneone-feedback-card-head">
-            <p className="enterprise-oneone-templates-kicker">Check-in feedback</p>
-            <h1 className="enterprise-oneone-feedback-card-title">Share your check-in notes</h1>
+            <p className="enterprise-oneone-templates-kicker">After your check-in</p>
+            <h1 className="enterprise-oneone-feedback-card-title">{ASSOCIATE_FEEDBACK_SECTION_TITLE}</h1>
           </header>
 
           {err && !context ? <p className="enterprise-form-error" role="alert">{err}</p> : null}

@@ -2,6 +2,17 @@ export const ONEONE_FEEDBACK_MARKER = "[alenio:oneone-feedback]";
 export const NO_FEEDBACK_VALUE = "__no_feedback__";
 export const ASSOCIATE_FEEDBACK_FIELD_ID = "__oneone_associate_feedback__";
 export const ASSOCIATE_FEEDBACK_LABEL = "Associate feedback and commitments";
+export const ASSOCIATE_FEEDBACK_INTRO =
+  "This is your time to capture key takeaways, commitments, and next steps from your conversation.";
+export const ASSOCIATE_FEEDBACK_PLACEHOLDER = "Key takeaways, commitments, and next steps…";
+export const ASSOCIATE_FEEDBACK_SECTION_TITLE = "Your notes";
+export const ASSOCIATE_FEEDBACK_MODE_LABEL = "Share notes";
+export const ASSOCIATE_FEEDBACK_NONE_LABEL = "Nothing to add";
+export const ASSOCIATE_FEEDBACK_SUBMIT_LABEL = "Save notes";
+
+export function associateFeedbackTaskTitle(templateTitle: string): string {
+  return `Follow up on ${templateTitle}`;
+}
 
 export type AssociateRequestMode = "task" | "message";
 
@@ -30,7 +41,7 @@ export function isAssociateRequestedField(field: OneOnOneTemplateFieldLike): boo
 }
 
 export function encodeFeedbackTaskDescription(meta: OneOnOneFeedbackMeta): string {
-  return `${ONEONE_FEEDBACK_MARKER}\n${JSON.stringify(meta)}\n\nShare your check-in feedback for "${meta.fieldLabel}" or select that you have no feedback to enter.`;
+  return `${ONEONE_FEEDBACK_MARKER}\n${JSON.stringify(meta)}\n\n${ASSOCIATE_FEEDBACK_INTRO}`;
 }
 
 export function parseFeedbackTaskDescription(description: string | null | undefined): OneOnOneFeedbackMeta | null {
@@ -58,6 +69,6 @@ export function buildFeedbackPath(meta: Pick<OneOnOneFeedbackMeta, "teamId" | "m
 
 export function formatAssociateResponseDisplay(value: string | number | undefined | null): string {
   if (value === undefined || value === null || value === "") return "—";
-  if (String(value) === NO_FEEDBACK_VALUE) return "No feedback entered";
+  if (String(value) === NO_FEEDBACK_VALUE) return "Nothing to add";
   return String(value);
 }

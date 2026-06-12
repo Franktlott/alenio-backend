@@ -381,7 +381,7 @@ export function OneOnOneHistoryTab({
             Request associate feedback and commitments from <strong>{memberName}</strong>?
           </p>
           <p className="enterprise-muted enterprise-oneone-feedback-prompt-sub">
-            If yes, they&apos;ll receive a task to share their notes or select &ldquo;No feedback entered&rdquo;.
+            If yes, they&apos;ll get a gentle nudge to add their takeaways or skip for now.
           </p>
           <div className="enterprise-oneone-feedback-prompt-actions">
             <button

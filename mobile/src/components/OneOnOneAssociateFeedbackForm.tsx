@@ -4,7 +4,14 @@ import {
   submitOneOnOneAssociateFeedback,
   type OneOnOneAssociateFeedbackContext,
 } from "@/lib/one-on-one-feedback-api";
-import { NO_FEEDBACK_VALUE } from "@/lib/one-on-one-feedback";
+import {
+  ASSOCIATE_FEEDBACK_INTRO,
+  ASSOCIATE_FEEDBACK_MODE_LABEL,
+  ASSOCIATE_FEEDBACK_NONE_LABEL,
+  ASSOCIATE_FEEDBACK_PLACEHOLDER,
+  ASSOCIATE_FEEDBACK_SUBMIT_LABEL,
+  NO_FEEDBACK_VALUE,
+} from "@/lib/one-on-one-feedback";
 
 type Props = {
   teamId: string;
@@ -37,7 +44,7 @@ export function OneOnOneAssociateFeedbackForm({
     try {
       const response = mode === "none" ? NO_FEEDBACK_VALUE : feedback.trim();
       if (mode === "feedback" && !response) {
-        setErr("Enter your feedback or choose no feedback entered.");
+        setErr("Add your notes or choose nothing to add.");
         return;
       }
       await submitOneOnOneAssociateFeedback(teamId, memberUserId, meetingId, {
@@ -47,7 +54,7 @@ export function OneOnOneAssociateFeedbackForm({
       setDone(true);
       onSubmitted?.();
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "Could not submit feedback.");
+      setErr(e instanceof Error ? e.message : "Could not save your notes.");
     } finally {
       setSaving(false);
     }
@@ -66,10 +73,10 @@ export function OneOnOneAssociateFeedbackForm({
         }}
       >
         <Text style={{ fontSize: 15, fontWeight: "700", color: "#0F172A", marginBottom: 4 }}>
-          Thanks — your response was saved.
+          Thanks — your notes were saved.
         </Text>
         <Text style={{ fontSize: 13, color: "#64748B", lineHeight: 18 }}>
-          This task is now complete.
+          Your takeaways are saved to the check-in.
         </Text>
       </View>
     );
@@ -87,8 +94,7 @@ export function OneOnOneAssociateFeedbackForm({
       }}
     >
       <Text style={{ fontSize: 13, color: "#475569", lineHeight: 18, marginBottom: 10 }}>
-        Share your notes for <Text style={{ fontWeight: "700", color: "#0F172A" }}>{context.fieldLabel}</Text> from
-        the {context.meetingTitle} check-in.
+        {ASSOCIATE_FEEDBACK_INTRO}
       </Text>
       {context.helpText ? (
         <Text style={{ fontSize: 12, color: "#94A3B8", marginBottom: 10, lineHeight: 17 }}>{context.helpText}</Text>
@@ -107,7 +113,9 @@ export function OneOnOneAssociateFeedbackForm({
             backgroundColor: mode === "feedback" ? "#EEF2FF" : "#FFFFFF",
           }}
         >
-          <Text style={{ fontSize: 12, fontWeight: "600", color: "#334155", textAlign: "center" }}>Enter feedback</Text>
+          <Text style={{ fontSize: 12, fontWeight: "600", color: "#334155", textAlign: "center" }}>
+            {ASSOCIATE_FEEDBACK_MODE_LABEL}
+          </Text>
         </Pressable>
         <Pressable
           onPress={() => setMode("none")}
@@ -121,7 +129,9 @@ export function OneOnOneAssociateFeedbackForm({
             backgroundColor: mode === "none" ? "#EEF2FF" : "#FFFFFF",
           }}
         >
-          <Text style={{ fontSize: 12, fontWeight: "600", color: "#334155", textAlign: "center" }}>No feedback</Text>
+          <Text style={{ fontSize: 12, fontWeight: "600", color: "#334155", textAlign: "center" }}>
+            {ASSOCIATE_FEEDBACK_NONE_LABEL}
+          </Text>
         </Pressable>
       </View>
 
@@ -130,7 +140,7 @@ export function OneOnOneAssociateFeedbackForm({
           value={feedback}
           onChangeText={setFeedback}
           multiline
-          placeholder={`Your thoughts on ${context.fieldLabel.toLowerCase()}…`}
+          placeholder={ASSOCIATE_FEEDBACK_PLACEHOLDER}
           placeholderTextColor="#94A3B8"
           style={{
             minHeight: 110,
@@ -146,7 +156,7 @@ export function OneOnOneAssociateFeedbackForm({
         />
       ) : (
         <Text style={{ fontSize: 12, color: "#94A3B8", marginBottom: 10, lineHeight: 17 }}>
-          We&apos;ll record that you have no feedback for this question.
+          We&apos;ll record that you have nothing to add right now.
         </Text>
       )}
 
@@ -167,7 +177,7 @@ export function OneOnOneAssociateFeedbackForm({
         {saving ? (
           <ActivityIndicator color="#FFFFFF" size="small" />
         ) : (
-          <Text style={{ color: "#FFFFFF", fontSize: 13, fontWeight: "700" }}>Submit feedback & complete</Text>
+          <Text style={{ color: "#FFFFFF", fontSize: 13, fontWeight: "700" }}>{ASSOCIATE_FEEDBACK_SUBMIT_LABEL}</Text>
         )}
       </Pressable>
     </View>

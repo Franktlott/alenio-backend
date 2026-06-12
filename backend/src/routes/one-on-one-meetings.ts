@@ -9,6 +9,7 @@ import { sendPushToUsers } from "../lib/push";
 import {
   ASSOCIATE_FEEDBACK_FIELD_ID,
   ASSOCIATE_FEEDBACK_LABEL,
+  associateFeedbackTaskTitle,
   encodeFeedbackTaskDescription,
   isAssociateRequestedField,
   NO_FEEDBACK_VALUE,
@@ -321,7 +322,7 @@ async function createMeetingAssociateFeedbackRequest(
   const description = encodeFeedbackTaskDescription(meta);
   const task = await prisma.task.create({
     data: {
-      title: `Check-in feedback: ${meeting.templateTitle}`,
+      title: associateFeedbackTaskTitle(meeting.templateTitle),
       description,
       priority: "medium",
       status: "todo",
@@ -335,8 +336,8 @@ async function createMeetingAssociateFeedbackRequest(
   if (meeting.memberUserId !== creatorId) {
     await sendPushToUsers(
       [meeting.memberUserId],
-      "Check-in feedback requested",
-      `${managerName} asked you to share feedback for ${meeting.templateTitle}`,
+      "Time to reflect on your check-in",
+      `${managerName} saved your ${meeting.templateTitle} check-in — add your takeaways when you have a moment.`,
       { taskId: task.id, teamId: meeting.teamId, type: "oneone_feedback" },
       "notifTaskAssigned",
       meeting.teamId,
