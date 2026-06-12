@@ -23,7 +23,6 @@
     "@expo/vector-icons": "^15.0.2",
     "@gorhom/bottom-sheet": "^5",
     "@kolking/react-native-avatar": "^2.1.6",
-    "@nandorojo/galeria": "2.0.0-rc.4",
     "@neondatabase/auth": "^0.2.0-beta.1",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-clipboard/clipboard": "^1.16.2",
