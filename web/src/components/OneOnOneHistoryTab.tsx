@@ -526,7 +526,9 @@ export function OneOnOneHistoryTab({
                 </span>
               </div>
               <span
-                className={`enterprise-oneone-followup-check${isDone ? " enterprise-oneone-followup-check--done" : ""}`}
+                className={`enterprise-oneone-followup-check${
+                  isDone ? " enterprise-oneone-followup-check--done" : " enterprise-oneone-followup-check--open"
+                }`}
                 aria-label={isDone ? "Complete" : "Incomplete"}
                 role="img"
               />

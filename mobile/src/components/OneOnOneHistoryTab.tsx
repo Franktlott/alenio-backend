@@ -877,13 +877,17 @@ export function OneOnOneHistoryTab({
                               height: 20,
                               borderRadius: 10,
                               borderWidth: 2,
-                              borderColor: isDone ? "#22C55E" : "#CBD5E1",
-                              backgroundColor: isDone ? "#22C55E" : "#FFFFFF",
+                              borderColor: isDone ? "#22C55E" : "#EF4444",
+                              backgroundColor: isDone ? "#22C55E" : "#FEF2F2",
                               alignItems: "center",
                               justifyContent: "center",
                             }}
                           >
-                            {isDone ? <Check size={12} color="#FFFFFF" strokeWidth={3} /> : null}
+                            {isDone ? (
+                              <Check size={12} color="#FFFFFF" strokeWidth={3} />
+                            ) : (
+                              <X size={11} color="#EF4444" strokeWidth={3} />
+                            )}
                           </View>
                         </View>
                       );
