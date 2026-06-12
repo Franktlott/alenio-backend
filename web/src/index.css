@@ -1960,6 +1960,41 @@ input {
   background: #4f46e5;
 }
 
+.enterprise-team-pending-chip {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  padding: 0.7rem 1rem;
+  border-radius: 999px;
+  border: 1px solid #c7d2fe;
+  background: #eef2ff;
+  color: #4338ca;
+  font-family: inherit;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.enterprise-team-pending-chip:hover {
+  background: #e0e7ff;
+  border-color: #a5b4fc;
+}
+
+.enterprise-pending-invites-modal {
+  max-width: 560px;
+  width: min(560px, calc(100vw - 2rem));
+}
+
+.enterprise-pending-invites-modal-list {
+  border: 1px solid #e8edf3;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #fff;
+}
+
 .enterprise-team-stat-row {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

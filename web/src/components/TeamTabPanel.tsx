@@ -4,11 +4,11 @@ import { queryKeys } from "../lib/query-keys";
 import { Link } from "react-router-dom";
 import QRCode from "qrcode";
 import { AddMemberModal } from "./AddMemberModal";
+import { PendingInvitesModal } from "./PendingInvitesModal";
 import { TeamMemberProfilePanel } from "./TeamMemberProfilePanel";
 import { OneOnOneTemplatesModal } from "./OneOnOneTemplatesModal";
 import {
   approveTeamJoinRequest,
-  cancelTeamInvite,
   fetchTeamInvites,
   fetchTeamJoinRequests,
   fetchTeamMemberStats,
@@ -20,7 +20,6 @@ import {
   patchApiTeam,
   rejectTeamJoinRequest,
   removeTeamMemberApi,
-  resendTeamInvite,
   setTeamMemberRole,
   transferTeamOwnership,
   uploadTeamPhoto,
@@ -212,29 +211,8 @@ function memberSort(a: WebTeamMemberRow, b: WebTeamMemberRow): number {
   return (a.user.name ?? "").localeCompare(b.user.name ?? "");
 }
 
-function IconMail({ size = 18 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-      <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
-      <polyline points="22,6 12,13 2,6" />
-    </svg>
-  );
-}
-
 function formatInviteDate(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
-}
-
-function formatInviteExpiry(iso: string): string {
-  const days = Math.ceil((new Date(iso).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-  if (days <= 0) return "Expired";
-  if (days === 1) return "Expires tomorrow";
-  return `Expires in ${days} days`;
-}
-
-function inviteInitial(email: string): string {
-  const local = email.split("@")[0] ?? email;
-  return (local[0] ?? "?").toUpperCase();
 }
 
 type Props = {
@@ -277,6 +255,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
   }, [queryClient, selectedTeamId]);
 
   const [addMemberOpen, setAddMemberOpen] = useState(false);
+  const [pendingInvitesOpen, setPendingInvitesOpen] = useState(false);
   const [addMemberBusy, setAddMemberBusy] = useState(false);
   const [addMemberError, setAddMemberError] = useState<string | null>(null);
   const [inviteActionId, setInviteActionId] = useState<string | null>(null);
@@ -614,16 +593,28 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                 </span>
               </div>
               {manageJoin ? (
-                <button
-                  type="button"
-                  className="enterprise-team-list-add-btn"
-                  onClick={() => {
-                    setAddMemberError(null);
-                    setAddMemberOpen(true);
-                  }}
-                >
-                  + Add member
-                </button>
+                <>
+                  {pendingInvites.length > 0 ? (
+                    <button
+                      type="button"
+                      className="enterprise-team-pending-chip"
+                      onClick={() => setPendingInvitesOpen(true)}
+                      aria-label={`${pendingInvites.length} pending invite${pendingInvites.length !== 1 ? "s" : ""}`}
+                    >
+                      {pendingInvites.length} pending
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    className="enterprise-team-list-add-btn"
+                    onClick={() => {
+                      setAddMemberError(null);
+                      setAddMemberOpen(true);
+                    }}
+                  >
+                    + Add member
+                  </button>
+                </>
               ) : null}
             </div>
           </header>
@@ -721,85 +712,6 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                           }}
                         >
                           Approve
-                        </button>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            </section>
-          ) : null}
-
-          {manageJoin && pendingInvites.length > 0 ? (
-            <section className="enterprise-team-pending-panel" aria-label="Pending invites">
-              <header className="enterprise-team-pending-head">
-                <span className="enterprise-team-pending-head-icon" aria-hidden>
-                  <IconMail />
-                </span>
-                <div className="enterprise-team-pending-head-copy">
-                  <h3 className="enterprise-team-pending-title">Pending invites</h3>
-                  <p className="enterprise-team-pending-sub">
-                    {pendingInvites.length} waiting for {pendingInvites.length === 1 ? "a response" : "responses"}
-                  </p>
-                </div>
-              </header>
-              <ul className="enterprise-team-pending-list">
-                {pendingInvites.map((invite) => {
-                  const inviter = invite.invitedBy?.name ?? invite.invitedBy?.email ?? "A team leader";
-                  const busy = inviteActionId === invite.id;
-                  return (
-                    <li key={invite.id} className="enterprise-team-pending-row">
-                      <span className="enterprise-team-pending-avatar">{inviteInitial(invite.email)}</span>
-                      <div className="enterprise-team-pending-main">
-                        <div className="enterprise-team-pending-topline">
-                          <strong className="enterprise-team-pending-email">{invite.email}</strong>
-                          <span className="enterprise-team-pending-badge">Awaiting signup</span>
-                        </div>
-                        <p className="enterprise-team-pending-meta">
-                          Invited by <strong>{inviter}</strong>
-                          <span className="enterprise-team-pending-dot" aria-hidden>·</span>
-                          Sent {formatInviteDate(invite.createdAt)}
-                          <span className="enterprise-team-pending-dot" aria-hidden>·</span>
-                          {formatInviteExpiry(invite.expiresAt)}
-                        </p>
-                      </div>
-                      <div className="enterprise-team-pending-actions">
-                        <button
-                          type="button"
-                          className="enterprise-team-pending-btn enterprise-team-pending-btn-ghost"
-                          disabled={busy}
-                          onClick={async () => {
-                            setInviteActionId(invite.id);
-                            setTabErr(null);
-                            try {
-                              await cancelTeamInvite(selectedTeamId, invite.id);
-                              await reloadTeamContext();
-                            } catch (e) {
-                              setTabErr(e instanceof Error ? e.message : "Cancel failed.");
-                            } finally {
-                              setInviteActionId(null);
-                            }
-                          }}
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          type="button"
-                          className="enterprise-team-pending-btn enterprise-team-pending-btn-primary"
-                          disabled={busy}
-                          onClick={async () => {
-                            setInviteActionId(invite.id);
-                            setTabErr(null);
-                            try {
-                              await resendTeamInvite(selectedTeamId, invite.id);
-                            } catch (e) {
-                              setTabErr(e instanceof Error ? e.message : "Resend failed.");
-                            } finally {
-                              setInviteActionId(null);
-                            }
-                          }}
-                        >
-                          {busy ? "Sending…" : "Resend invite"}
                         </button>
                       </div>
                     </li>
@@ -1089,6 +1001,18 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
         }}
         onClearError={() => setAddMemberError(null)}
         onConfirm={(email) => void onAddMemberByEmail(email)}
+      />
+
+      <PendingInvitesModal
+        open={pendingInvitesOpen}
+        teamId={selectedTeamId}
+        invites={pendingInvites}
+        inviteActionId={inviteActionId}
+        onClose={() => setPendingInvitesOpen(false)}
+        onReload={reloadTeamContext}
+        onError={(message) => setTabErr(message)}
+        onInviteActionStart={setInviteActionId}
+        onInviteActionEnd={() => setInviteActionId(null)}
       />
 
       {qrOpen ? (
