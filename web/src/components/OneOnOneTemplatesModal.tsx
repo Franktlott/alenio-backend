@@ -124,6 +124,7 @@ function emptyEditorState() {
     title: "",
     description: "",
     fields: base,
+    leaderPrep: [] as string[],
   };
 }
 
@@ -152,12 +153,14 @@ export function OneOnOneTemplatesModal({ teamId, open, onClose }: Props) {
   const [previewOnly, setPreviewOnly] = useState(false);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [leaderPrep, setLeaderPrep] = useState<string[]>([]);
   const [fields, setFields] = useState<OneOnOneTemplateField[]>([]);
   const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
   const [moreOpen, setMoreOpen] = useState(false);
   const [fieldMenuId, setFieldMenuId] = useState<string | null>(null);
   const [dragFieldId, setDragFieldId] = useState<string | null>(null);
+  const [dragSectionId, setDragSectionId] = useState<string | null>(null);
 
   const sectionGroups = useMemo(
     () => parseSections(editorView === "preview" ? appendLeaderCommentsIfMissing(fields) : fields),
@@ -259,6 +262,7 @@ export function OneOnOneTemplatesModal({ teamId, open, onClose }: Props) {
     setPreviewOnly(false);
     setTitle(blank.title);
     setDescription(blank.description);
+    setLeaderPrep(blank.leaderPrep);
     setFields(blank.fields);
     setSelectedFieldId(blank.fields.find((f) => !isSection(f))?.id ?? null);
     setCollapsedSections(new Set());
@@ -273,6 +277,7 @@ export function OneOnOneTemplatesModal({ teamId, open, onClose }: Props) {
     setPreviewOnly(readOnly);
     setTitle(template.title);
     setDescription(template.description ?? "");
+    setLeaderPrep(template.leaderPrep ?? []);
     setFields(normalized);
     setSelectedFieldId(normalized.find((f) => !isSection(f))?.id ?? null);
     setCollapsedSections(new Set());
@@ -297,6 +302,7 @@ export function OneOnOneTemplatesModal({ teamId, open, onClose }: Props) {
     setPreviewSource("library");
     setTitle(item.title);
     setDescription(item.description ?? "");
+    setLeaderPrep([]);
     setFields(normalized);
     setSelectedFieldId(null);
     setCollapsedSections(new Set());
@@ -327,13 +333,29 @@ export function OneOnOneTemplatesModal({ teamId, open, onClose }: Props) {
     }
   };
 
+  const updateLeaderPrepItem = (index: number, value: string) => {
+    setLeaderPrep((prev) => prev.map((item, i) => (i === index ? value : item)));
+  };
+
+  const addLeaderPrepItem = () => {
+    setLeaderPrep((prev) => (prev.length >= 8 ? prev : [...prev, ""]));
+  };
+
+  const removeLeaderPrepItem = (index: number) => {
+    setLeaderPrep((prev) => prev.filter((_, i) => i !== index));
+  };
+
   const updateField = (id: string, patch: Partial<OneOnOneTemplateField>) => {
     setFields((prev) => prev.map((f) => (f.id === id ? { ...f, ...patch } : f)));
   };
 
   const addSection = () => {
     const section = newSection("");
-    setFields((prev) => [...prev, section]);
+    setFields((prev) => {
+      const groups = parseSections(prev);
+      groups.push({ section, fields: [] });
+      return flattenSections(groups);
+    });
     setCollapsedSections((prev) => {
       const next = new Set(prev);
       next.delete(section.id);
@@ -366,6 +388,40 @@ export function OneOnOneTemplatesModal({ teamId, open, onClose }: Props) {
     if (selectedFieldId === id) {
       setSelectedFieldId(flat.find((f) => !isSection(f))?.id ?? null);
     }
+    setFieldMenuId(null);
+  };
+
+  const removeSection = (sectionId: string) => {
+    const groups = parseSections(fields);
+    const target = groups.find((group) => group.section.id === sectionId);
+    if (!target) return;
+
+    const sectionLabel = target.section.label.trim() || "Untitled section";
+    const questionCount = target.fields.length;
+    const confirmMessage =
+      questionCount > 0
+        ? `Delete "${sectionLabel}" and its ${questionCount} question${questionCount !== 1 ? "s" : ""}? This cannot be undone.`
+        : `Delete section "${sectionLabel}"?`;
+
+    if (!window.confirm(confirmMessage)) return;
+
+    const deletedQuestionIds = new Set(target.fields.map((field) => field.id));
+    const nextGroups = groups.filter((group) => group.section.id !== sectionId);
+    if (nextGroups.length === 0) {
+      nextGroups.push({ section: newSection("Opening"), fields: [] });
+    }
+    const flat = flattenSections(nextGroups);
+    setFields(flat);
+
+    if (selectedFieldId && deletedQuestionIds.has(selectedFieldId)) {
+      setSelectedFieldId(flat.find((field) => !isSection(field))?.id ?? null);
+    }
+
+    setCollapsedSections((prev) => {
+      const next = new Set(prev);
+      next.delete(sectionId);
+      return next;
+    });
     setFieldMenuId(null);
   };
 
@@ -403,15 +459,49 @@ export function OneOnOneTemplatesModal({ teamId, open, onClose }: Props) {
   const onDragReorder = (targetId: string) => {
     if (!dragFieldId || dragFieldId === targetId) return;
     setFields((prev) => {
-      const from = prev.findIndex((f) => f.id === dragFieldId);
-      const to = prev.findIndex((f) => f.id === targetId);
-      if (from < 0 || to < 0) return prev;
-      const copy = [...prev];
-      const [item] = copy.splice(from, 1);
-      copy.splice(to, 0, item);
-      return reorderFields(copy);
+      const groups = parseSections(prev);
+      let fromGroupIdx = -1;
+      let fromFieldIdx = -1;
+      let toGroupIdx = -1;
+      let toFieldIdx = -1;
+
+      groups.forEach((group, groupIdx) => {
+        group.fields.forEach((field, fieldIdx) => {
+          if (field.id === dragFieldId) {
+            fromGroupIdx = groupIdx;
+            fromFieldIdx = fieldIdx;
+          }
+          if (field.id === targetId) {
+            toGroupIdx = groupIdx;
+            toFieldIdx = fieldIdx;
+          }
+        });
+      });
+
+      if (fromGroupIdx < 0 || toGroupIdx < 0 || fromGroupIdx !== toGroupIdx) return prev;
+
+      const nextFields = [...groups[fromGroupIdx].fields];
+      const [item] = nextFields.splice(fromFieldIdx, 1);
+      nextFields.splice(toFieldIdx, 0, item);
+      groups[fromGroupIdx] = { ...groups[fromGroupIdx], fields: nextFields };
+      return flattenSections(groups);
     });
     setDragFieldId(null);
+  };
+
+  const onSectionDragReorder = (targetSectionId: string) => {
+    if (!dragSectionId || dragSectionId === targetSectionId) return;
+    setFields((prev) => {
+      const groups = parseSections(prev);
+      const from = groups.findIndex((group) => group.section.id === dragSectionId);
+      const to = groups.findIndex((group) => group.section.id === targetSectionId);
+      if (from < 0 || to < 0) return prev;
+      const copy = [...groups];
+      const [item] = copy.splice(from, 1);
+      copy.splice(to, 0, item);
+      return flattenSections(copy);
+    });
+    setDragSectionId(null);
   };
 
   const toggleSection = (sectionId: string) => {
@@ -452,6 +542,7 @@ export function OneOnOneTemplatesModal({ teamId, open, onClose }: Props) {
       const payload = {
         title: title.trim(),
         description: description.trim() || null,
+        leaderPrep: leaderPrep.map((item) => item.trim()).filter(Boolean),
         fields: appendLeaderCommentsIfMissing(
           reorderFields(fields).map((f) => ({
             ...f,
@@ -812,6 +903,19 @@ export function OneOnOneTemplatesModal({ teamId, open, onClose }: Props) {
                 {description.trim() ? (
                   <p className="enterprise-muted enterprise-oneone-templates-preview-desc">{description.trim()}</p>
                 ) : null}
+                {leaderPrep.some((item) => item.trim()) ? (
+                  <section className="enterprise-oneone-templates-preview-prep">
+                    <h3>Leader prep</h3>
+                    <p className="enterprise-muted enterprise-oneone-templates-preview-prep-note">
+                      Leaders see this before starting a check-in. Team members do not.
+                    </p>
+                    <ul>
+                      {leaderPrep.filter((item) => item.trim()).map((item) => (
+                        <li key={item}>{item.trim()}</li>
+                      ))}
+                    </ul>
+                  </section>
+                ) : null}
                 {sectionGroups.map((group) => (
                   <section key={group.section.id} className="enterprise-oneone-templates-preview-section">
                     <h3>{group.section.label.trim() || "Untitled section"}</h3>
@@ -820,7 +924,12 @@ export function OneOnOneTemplatesModal({ teamId, open, onClose }: Props) {
                         <li key={field.id}>
                           <strong>
                             {field.label}
-                            {field.required ? " *" : ""}
+                            {field.required ? (
+                              <span className="enterprise-oneone-templates-question-required" aria-hidden="true">
+                                {" "}
+                                *
+                              </span>
+                            ) : null}
                           </strong>
                           <span className="enterprise-muted">{fieldTypeLabel(field.type, field.ratingMax)}</span>
                           {field.helpText ? <p className="enterprise-muted">{field.helpText}</p> : null}
@@ -833,6 +942,50 @@ export function OneOnOneTemplatesModal({ teamId, open, onClose }: Props) {
             ) : (
               <div className="enterprise-oneone-templates-editor-split">
                 <div className="enterprise-oneone-templates-fields-pane">
+                  <section className="enterprise-oneone-templates-leader-prep">
+                    <div className="enterprise-oneone-templates-leader-prep-head">
+                      <h3 className="enterprise-oneone-templates-leader-prep-title">Leader prep</h3>
+                      <p className="enterprise-muted enterprise-oneone-templates-leader-prep-sub">
+                        Optional reminders for leaders before they start a check-in. Team members won&apos;t see these.
+                      </p>
+                    </div>
+                    {leaderPrep.length > 0 ? (
+                      <ul className="enterprise-oneone-templates-leader-prep-list">
+                        {leaderPrep.map((item, index) => (
+                          <li key={index} className="enterprise-oneone-templates-leader-prep-row">
+                            <input
+                              type="text"
+                              className="auth-input enterprise-oneone-templates-leader-prep-input"
+                              value={item}
+                              onChange={(e) => updateLeaderPrepItem(index, e.target.value)}
+                              placeholder="e.g. Review last check-in notes"
+                              aria-label={`Leader prep reminder ${index + 1}`}
+                            />
+                            <button
+                              type="button"
+                              className="enterprise-oneone-templates-leader-prep-remove"
+                              aria-label={`Remove reminder ${index + 1}`}
+                              onClick={() => removeLeaderPrepItem(index)}
+                            >
+                              Remove
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="enterprise-muted enterprise-oneone-templates-leader-prep-empty">
+                        No prep reminders yet.
+                      </p>
+                    )}
+                    <button
+                      type="button"
+                      className="enterprise-oneone-templates-leader-prep-add"
+                      onClick={addLeaderPrepItem}
+                      disabled={leaderPrep.length >= 8}
+                    >
+                      + Add reminder
+                    </button>
+                  </section>
                   <div className="enterprise-oneone-templates-fields-pane-head">
                     <div>
                       <h3 className="enterprise-oneone-templates-fields-pane-title">Template fields</h3>
@@ -857,9 +1010,38 @@ export function OneOnOneTemplatesModal({ teamId, open, onClose }: Props) {
                   <div className="enterprise-oneone-templates-sections">
                     {sectionGroups.map((group) => {
                       const collapsed = collapsedSections.has(group.section.id);
+                      const sectionDragging = dragSectionId === group.section.id;
+                      const sectionDropTarget = dragSectionId !== null && dragSectionId !== group.section.id;
                       return (
-                        <section key={group.section.id} className="enterprise-oneone-templates-section-block">
+                        <section
+                          key={group.section.id}
+                          className={`enterprise-oneone-templates-section-block${
+                            sectionDragging ? " enterprise-oneone-templates-section-block--dragging" : ""
+                          }${sectionDropTarget ? " enterprise-oneone-templates-section-block--drop-target" : ""}`}
+                          onDragOver={(e) => {
+                            if (!dragSectionId) return;
+                            e.preventDefault();
+                          }}
+                          onDrop={(e) => {
+                            if (!dragSectionId) return;
+                            e.preventDefault();
+                            onSectionDragReorder(group.section.id);
+                          }}
+                        >
                           <div className="enterprise-oneone-templates-section-head">
+                            <button
+                              type="button"
+                              className="enterprise-oneone-templates-section-drag"
+                              aria-label="Reorder section"
+                              draggable
+                              onDragStart={() => {
+                                setDragSectionId(group.section.id);
+                                setDragFieldId(null);
+                              }}
+                              onDragEnd={() => setDragSectionId(null)}
+                            >
+                              ⠿
+                            </button>
                             <button
                               type="button"
                               className="enterprise-oneone-templates-section-toggle"
@@ -888,6 +1070,14 @@ export function OneOnOneTemplatesModal({ teamId, open, onClose }: Props) {
                             >
                               + Question
                             </button>
+                            <button
+                              type="button"
+                              className="enterprise-oneone-templates-section-delete"
+                              aria-label={`Delete section ${group.section.label.trim() || "Untitled section"}`}
+                              onClick={() => removeSection(group.section.id)}
+                            >
+                              Delete
+                            </button>
                           </div>
 
                           {!collapsed ? (
@@ -899,7 +1089,10 @@ export function OneOnOneTemplatesModal({ teamId, open, onClose }: Props) {
                                     selectedFieldId === field.id ? " enterprise-oneone-templates-question-row--selected" : ""
                                   }${fieldMenuId === field.id ? " enterprise-oneone-templates-question-row--menu-open" : ""}`}
                                   draggable
-                                  onDragStart={() => setDragFieldId(field.id)}
+                                  onDragStart={() => {
+                                    setDragFieldId(field.id);
+                                    setDragSectionId(null);
+                                  }}
                                   onDragOver={(e) => e.preventDefault()}
                                   onDrop={() => onDragReorder(field.id)}
                                 >
@@ -915,7 +1108,15 @@ export function OneOnOneTemplatesModal({ teamId, open, onClose }: Props) {
                                     }}
                                   >
                                     <span className="enterprise-oneone-templates-question-num">{qIndex + 1}</span>
-                                    <span className="enterprise-oneone-templates-question-label">{field.label || "Untitled question"}</span>
+                                    <span className="enterprise-oneone-templates-question-label">
+                                      {field.label || "Untitled question"}
+                                      {field.required ? (
+                                        <span className="enterprise-oneone-templates-question-required" aria-hidden="true">
+                                          {" "}
+                                          *
+                                        </span>
+                                      ) : null}
+                                    </span>
                                     <span className="enterprise-oneone-templates-field-type-badge">
                                       {fieldTypeLabel(field.type, field.ratingMax)}
                                     </span>

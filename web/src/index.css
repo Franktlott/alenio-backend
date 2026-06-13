@@ -5611,6 +5611,155 @@ input {
   flex-shrink: 0;
 }
 
+.enterprise-oneone-templates-leader-prep {
+  margin-bottom: 1rem;
+  padding: 0.85rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.enterprise-oneone-templates-leader-prep-title {
+  margin: 0 0 0.2rem;
+  font-size: 0.9375rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.enterprise-oneone-templates-leader-prep-sub,
+.enterprise-oneone-templates-leader-prep-empty {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+
+.enterprise-oneone-templates-leader-prep-list {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.enterprise-oneone-templates-leader-prep-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.enterprise-oneone-templates-leader-prep-input {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: 0.875rem;
+  padding: 0.55rem 0.75rem;
+}
+
+.enterprise-oneone-templates-leader-prep-remove {
+  flex-shrink: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #b91c1c;
+  cursor: pointer;
+  padding: 0.25rem;
+}
+
+.enterprise-oneone-templates-leader-prep-add {
+  margin-top: 0.65rem;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: #6366f1;
+  cursor: pointer;
+  padding: 0;
+}
+
+.enterprise-oneone-templates-leader-prep-add:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.enterprise-oneone-templates-preview-prep {
+  margin: 0 0 1rem;
+  padding: 0.85rem;
+  border: 1px dashed #c7d2fe;
+  border-radius: 8px;
+  background: #eef2ff;
+}
+
+.enterprise-oneone-templates-preview-prep h3 {
+  margin: 0 0 0.25rem;
+  font-size: 0.9375rem;
+  font-weight: 800;
+  color: #312e81;
+}
+
+.enterprise-oneone-templates-preview-prep-note {
+  margin: 0 0 0.5rem;
+  font-size: 0.75rem;
+}
+
+.enterprise-oneone-templates-preview-prep ul {
+  margin: 0;
+  padding-left: 1.1rem;
+  font-size: 0.8125rem;
+  color: #0f172a;
+}
+
+.enterprise-oneone-leader-prep-gate {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  max-width: 40rem;
+}
+
+.enterprise-oneone-leader-prep-kicker {
+  margin: 0;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #6366f1;
+}
+
+.enterprise-oneone-leader-prep-title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.enterprise-oneone-leader-prep-copy {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.45;
+}
+
+.enterprise-oneone-leader-prep-list {
+  margin: 0.35rem 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.enterprise-oneone-leader-prep-list li {
+  padding: 0.65rem 0.75rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+  font-size: 0.875rem;
+  color: #0f172a;
+  line-height: 1.45;
+}
+
 .enterprise-oneone-templates-pane-btn {
   border: 1px solid #e2e8f0;
   background: #fff;
@@ -5756,6 +5905,51 @@ input {
   color: #6366f1;
   cursor: pointer;
   white-space: nowrap;
+}
+
+.enterprise-oneone-templates-section-delete {
+  flex-shrink: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: #b91c1c;
+  cursor: pointer;
+  white-space: nowrap;
+  padding: 0.25rem 0.35rem;
+}
+
+.enterprise-oneone-templates-section-delete:hover {
+  color: #991b1b;
+}
+
+.enterprise-oneone-templates-section-drag {
+  flex-shrink: 0;
+  border: none;
+  background: none;
+  color: #94a3b8;
+  cursor: grab;
+  padding: 0.35rem 0.25rem;
+  font-size: 0.875rem;
+  line-height: 1;
+}
+
+.enterprise-oneone-templates-section-drag:active {
+  cursor: grabbing;
+}
+
+.enterprise-oneone-templates-section-block--dragging {
+  opacity: 0.55;
+}
+
+.enterprise-oneone-templates-section-block--drop-target {
+  box-shadow: inset 0 0 0 2px #6366f1;
+}
+
+.enterprise-oneone-templates-question-required {
+  color: #b91c1c;
+  font-weight: 800;
 }
 
 .enterprise-oneone-templates-question-list {

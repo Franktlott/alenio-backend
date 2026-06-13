@@ -144,6 +144,7 @@ export function OneOnOneHistoryTab({
   const [err, setErr] = useState<string | null>(null);
   const [followUpDrafts, setFollowUpDrafts] = useState<FollowUpDraft[]>([]);
   const [feedbackPromptOpen, setFeedbackPromptOpen] = useState(false);
+  const [prepAcknowledged, setPrepAcknowledged] = useState(false);
 
   const resolveLeaderUserId = (meeting?: OneOnOneMeeting | null) =>
     leaderUserId ?? meeting?.createdById ?? null;
@@ -224,6 +225,7 @@ export function OneOnOneHistoryTab({
     }
     setResponses(initial);
     setFollowUpDrafts([newFollowUpDraft()]);
+    setPrepAcknowledged(false);
     setErr(null);
     setView("fill");
   };
@@ -235,6 +237,7 @@ export function OneOnOneHistoryTab({
     setSelectedTemplate(meetingToFillTemplate(meeting));
     setResponses({ ...meeting.responses });
     setFollowUpDrafts([]);
+    setPrepAcknowledged(true);
     setErr(null);
     setView("fill");
   };
@@ -460,6 +463,75 @@ export function OneOnOneHistoryTab({
 
   const renderFillView = () => {
     if (!selectedTemplate) return null;
+    const leaderPrepItems = (selectedTemplate.leaderPrep ?? []).map((item) => item.trim()).filter(Boolean);
+    const showLeaderPrepGate = !editingMeeting && leaderPrepItems.length > 0 && !prepAcknowledged;
+
+    if (showLeaderPrepGate) {
+      return (
+        <View style={{ flex: 1, backgroundColor: "white" }}>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              padding: 16,
+              borderBottomWidth: 1,
+              borderBottomColor: "#F1F5F9",
+              gap: 12,
+            }}
+          >
+            <Pressable onPress={exitFill} hitSlop={8}>
+              <ChevronLeft size={22} color="#4361EE" />
+            </Pressable>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 17, fontWeight: "800", color: "#0F172A" }}>{selectedTemplate.title}</Text>
+              <Text style={{ fontSize: 12, color: "#64748B" }}>Prep for {memberName}</Text>
+            </View>
+          </View>
+          <ScrollView contentContainerStyle={{ padding: 20, gap: 14 }}>
+            <Text style={{ fontSize: 12, fontWeight: "700", color: "#6366F1", textTransform: "uppercase", letterSpacing: 0.6 }}>
+              Before you begin
+            </Text>
+            <Text style={{ fontSize: 22, fontWeight: "800", color: "#0F172A" }}>Leader prep</Text>
+            <Text style={{ fontSize: 14, color: "#64748B", lineHeight: 20 }}>
+              Quick reminders before this check-in. Only you see this list.
+            </Text>
+            <View style={{ gap: 10, marginTop: 4 }}>
+              {leaderPrepItems.map((item, index) => (
+                <View
+                  key={`${index}-${item}`}
+                  style={{
+                    flexDirection: "row",
+                    gap: 10,
+                    padding: 12,
+                    borderRadius: 12,
+                    backgroundColor: "#F8FAFC",
+                    borderWidth: 1,
+                    borderColor: "#E2E8F0",
+                  }}
+                >
+                  <Text style={{ fontSize: 14, fontWeight: "700", color: "#6366F1" }}>{index + 1}.</Text>
+                  <Text style={{ flex: 1, fontSize: 14, color: "#0F172A", lineHeight: 20 }}>{item}</Text>
+                </View>
+              ))}
+            </View>
+          </ScrollView>
+          <View style={{ padding: 16, borderTopWidth: 1, borderTopColor: "#F1F5F9" }}>
+            <Pressable
+              onPress={() => setPrepAcknowledged(true)}
+              style={{
+                backgroundColor: "#4361EE",
+                borderRadius: 12,
+                paddingVertical: 14,
+                alignItems: "center",
+              }}
+            >
+              <Text style={{ fontWeight: "700", color: "white" }}>Start check-in</Text>
+            </Pressable>
+          </View>
+        </View>
+      );
+    }
+
     const fillFields = selectedTemplate.fields
       .filter((f) => f.type !== "section" && f.type !== "associate_notes")
       .sort((a, b) => a.order - b.order);

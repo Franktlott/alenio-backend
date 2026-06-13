@@ -10,6 +10,7 @@ import {
   getCheckInLibraryDefByKey,
 } from "../lib/check-in-template-library";
 import { appendLeaderCommentsFields } from "../lib/check-in-leader-comments";
+import { normalizeLeaderPrep, parseLeaderPrep, serializeLeaderPrep } from "../lib/leader-prep";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -72,6 +73,7 @@ function serializeTemplate(template: {
   title: string;
   description: string | null;
   fields: string;
+  leaderPrep?: string | null;
   libraryKey?: string | null;
   createdById: string;
   createdAt: Date;
@@ -85,6 +87,7 @@ function serializeTemplate(template: {
     description: template.description,
     libraryKey: template.libraryKey ?? null,
     fields: parseFields(template.fields),
+    leaderPrep: parseLeaderPrep(template.leaderPrep),
     createdById: template.createdById,
     createdAt: template.createdAt.toISOString(),
     updatedAt: template.updatedAt.toISOString(),
@@ -96,6 +99,7 @@ const upsertSchema = z.object({
   title: z.string().min(1, "Title is required").max(120),
   description: z.string().max(500).optional().nullable(),
   fields: z.array(fieldSchema).min(1, "Add at least one field"),
+  leaderPrep: z.array(z.string().max(200)).max(8).optional(),
 });
 
 function requireOwner(membership: { role: string } | null) {
@@ -191,6 +195,7 @@ oneOnOneTemplatesRouter.post("/", zValidator("json", upsertSchema), async (c) =>
         title: body.title.trim(),
         description: body.description?.trim() || null,
         fields: JSON.stringify(fields),
+        leaderPrep: serializeLeaderPrep(body.leaderPrep),
         createdById: user.id,
       },
       include: {
@@ -233,6 +238,7 @@ oneOnOneTemplatesRouter.patch(
         title: body.title.trim(),
         description: body.description?.trim() || null,
         fields: JSON.stringify(fields),
+        leaderPrep: serializeLeaderPrep(body.leaderPrep),
       },
       include: {
         createdBy: { select: { id: true, name: true, email: true, image: true } },

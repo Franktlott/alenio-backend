@@ -98,6 +98,13 @@ export async function ensureOneOnOneSchema(prisma: PrismaClient): Promise<void> 
 
     await prisma.$executeRawUnsafe(`
       DO $$ BEGIN
+        ALTER TABLE "OneOnOneTemplate" ADD COLUMN "leaderPrep" TEXT;
+      EXCEPTION WHEN duplicate_column THEN NULL;
+      END $$;
+    `);
+
+    await prisma.$executeRawUnsafe(`
+      DO $$ BEGIN
         ALTER TABLE "OneOnOneMeeting" ADD COLUMN "status" TEXT NOT NULL DEFAULT 'published';
       EXCEPTION WHEN duplicate_column THEN NULL;
       END $$;

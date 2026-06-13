@@ -1127,6 +1127,7 @@ export type OneOnOneTemplate = {
   description: string | null;
   libraryKey?: string | null;
   fields: OneOnOneTemplateField[];
+  leaderPrep?: string[];
   createdById: string;
   createdAt: string;
   updatedAt: string;
@@ -1144,6 +1145,7 @@ export type OneOnOneTemplateInput = {
   title: string;
   description?: string | null;
   fields: OneOnOneTemplateField[];
+  leaderPrep?: string[];
 };
 
 function requireTeamId(teamId: string): string {

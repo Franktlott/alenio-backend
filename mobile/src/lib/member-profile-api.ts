@@ -50,6 +50,7 @@ export type OneOnOneTemplate = {
   title: string;
   description: string | null;
   fields: OneOnOneTemplateField[];
+  leaderPrep?: string[];
   createdById: string;
   createdAt: string;
   updatedAt: string;

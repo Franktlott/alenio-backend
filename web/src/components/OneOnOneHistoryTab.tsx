@@ -229,6 +229,7 @@ export function OneOnOneHistoryTab({
   const [feedbackPromptOpen, setFeedbackPromptOpen] = useState(false);
   const [userExpandedFullscreen, setUserExpandedFullscreen] = useState(false);
   const [listNotice, setListNotice] = useState<string | null>(null);
+  const [prepAcknowledged, setPrepAcknowledged] = useState(false);
   const compactCheckInLayout = useCompactCheckInLayout();
   const checkInFullscreen = compactCheckInLayout || userExpandedFullscreen;
 
@@ -318,6 +319,7 @@ export function OneOnOneHistoryTab({
     }
     setResponses(initial);
     setFollowUpDrafts([newFollowUpDraft()]);
+    setPrepAcknowledged(false);
     setErr(null);
     setView("fill");
   };
@@ -416,6 +418,7 @@ export function OneOnOneHistoryTab({
     setSelectedTemplate(meetingToFillTemplate(meeting));
     setResponses({ ...meeting.responses });
     setFollowUpDrafts([]);
+    setPrepAcknowledged(true);
     setErr(null);
     setView("fill");
   };
@@ -665,6 +668,7 @@ export function OneOnOneHistoryTab({
       setSelectedTemplate(null);
     }
     setFollowUpDrafts([]);
+    setPrepAcknowledged(false);
     setErr(null);
   };
 
@@ -872,6 +876,43 @@ export function OneOnOneHistoryTab({
     const sortedFields = [...selectedTemplate.fields].sort((a, b) => a.order - b.order);
     const existingFollowUps = editingMeeting?.followUpTasks ?? [];
     const leaderLabel = managerName ?? "Leader";
+    const leaderPrepItems = (selectedTemplate.leaderPrep ?? []).map((item) => item.trim()).filter(Boolean);
+    const showLeaderPrepGate = !editingMeeting && leaderPrepItems.length > 0 && !prepAcknowledged;
+
+    if (showLeaderPrepGate) {
+      return renderCheckInShell(
+        <div className="enterprise-oneone-leader-prep-gate">
+          <p className="enterprise-oneone-leader-prep-kicker">Before you begin</p>
+          <h3 className="enterprise-oneone-leader-prep-title">Leader prep</h3>
+          <p className="enterprise-muted enterprise-oneone-leader-prep-copy">
+            Quick reminders before this check-in with {memberName}. Only you see this list.
+          </p>
+          <ul className="enterprise-oneone-leader-prep-list">
+            {leaderPrepItems.map((item, index) => (
+              <li key={`${index}-${item}`}>{item}</li>
+            ))}
+          </ul>
+        </div>,
+        {
+          title: selectedTemplate.title,
+          subtitle: `Prep for ${memberName}`,
+          backLabel: "Choose another template",
+          onBack: exitFill,
+          footer: (
+            <div className="enterprise-oneone-fill-actions">
+              <button
+                type="button"
+                className="enterprise-oneone-templates-primary-btn enterprise-oneone-fill-save"
+                onClick={() => setPrepAcknowledged(true)}
+              >
+                Start check-in
+              </button>
+            </div>
+          ),
+        },
+      );
+    }
+
     const fillTitle = editingMeeting
       ? editingMeeting.status === "draft"
         ? "Draft check-in"
