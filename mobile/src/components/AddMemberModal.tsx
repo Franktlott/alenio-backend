@@ -11,7 +11,7 @@ import {
   ScrollView,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { X, UserPlus, ChevronLeft } from "lucide-react-native";
+import { X } from "lucide-react-native";
 import { SafeKeyboardAvoidingView } from "@/lib/safe-keyboard-controller";
 import { previewTeamInvite, type TeamInvitePreview } from "@/lib/team-invites-api";
 
@@ -24,6 +24,27 @@ type Props = {
   onClose: () => void;
   onConfirm: (email: string) => void;
   onClearError?: () => void;
+};
+
+const COLORS = {
+  border: "#E2E8F0",
+  headBg: "#F8FAFC",
+  muted: "#64748B",
+  text: "#0F172A",
+  subtext: "#475569",
+  accent: "#6366F1",
+  accentDark: "#4F46E5",
+  successBg: "#ECFDF5",
+  successText: "#047857",
+  inviteBg: "#EFF6FF",
+  inviteText: "#1D4ED8",
+  noteBg: "#FFFBEB",
+  noteBorder: "#FDE68A",
+  noteText: "#92400E",
+  errorBg: "#FEF2F2",
+  errorBorder: "#FECACA",
+  errorText: "#B91C1C",
+  footerBg: "#FCFCFD",
 };
 
 export function AddMemberModal({
@@ -60,6 +81,12 @@ export function AddMemberModal({
     onClose();
   };
 
+  const goBackToEmail = () => {
+    setStep("email");
+    setPreview(null);
+    setPreviewError(null);
+  };
+
   const handleContinue = async () => {
     const trimmed = email.trim();
     if (!trimmed || !teamId) return;
@@ -87,91 +114,83 @@ export function AddMemberModal({
   const otherWorkspaces = (preview?.workspaces ?? []).filter((ws) => !ws.isCurrentTeam);
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={handleClose}>
       <SafeKeyboardAvoidingView
-        style={{ flex: 1, justifyContent: "flex-end" }}
+        style={{ flex: 1, justifyContent: "center", paddingHorizontal: 16, paddingVertical: 24 }}
         behavior="padding"
         keyboardVerticalOffset={Platform.OS === "ios" ? insets.bottom : 0}
       >
         <Pressable
-          style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.4)" }}
+          style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(2, 6, 23, 0.45)" }}
           onPress={handleClose}
         />
-        <Pressable onPress={(e) => e.stopPropagation?.()}>
+        <Pressable onPress={(e) => e.stopPropagation?.()} style={{ width: "100%", maxWidth: 440, alignSelf: "center" }}>
           <View
             style={{
               backgroundColor: "white",
-              borderTopLeftRadius: 24,
-              borderTopRightRadius: 24,
-              paddingHorizontal: 20,
-              paddingTop: 16,
-              paddingBottom: Math.max(insets.bottom, 16) + 16,
+              borderRadius: 8,
+              borderWidth: 1,
+              borderColor: "#DCE3EB",
               maxHeight: "88%",
+              overflow: "hidden",
+              shadowColor: "#0F172A",
+              shadowOpacity: 0.18,
+              shadowRadius: 24,
+              shadowOffset: { width: 0, height: 12 },
+              elevation: 8,
             }}
           >
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                {step === "confirm" ? (
-                  <Pressable
-                    onPress={() => {
-                      setStep("email");
-                      setPreview(null);
-                      setPreviewError(null);
-                    }}
-                    hitSlop={12}
-                    testID="add-member-back"
-                  >
-                    <ChevronLeft size={22} color="#64748B" />
-                  </Pressable>
-                ) : (
-                  <View
-                    style={{
-                      width: 40,
-                      height: 40,
-                      borderRadius: 20,
-                      backgroundColor: "#EEF2FF",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    <UserPlus size={20} color="#4361EE" />
-                  </View>
-                )}
-                <View>
-                  <Text style={{ fontSize: 18, fontWeight: "800", color: "#0F172A" }}>
+            <View
+              style={{
+                paddingHorizontal: 16,
+                paddingTop: 14,
+                paddingBottom: 12,
+                borderBottomWidth: 1,
+                borderBottomColor: COLORS.border,
+                backgroundColor: COLORS.headBg,
+              }}
+            >
+              <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  {step === "confirm" ? (
+                    <Pressable onPress={goBackToEmail} hitSlop={12} testID="add-member-back" style={{ marginBottom: 6 }}>
+                      <Text style={{ fontSize: 13, fontWeight: "600", color: COLORS.muted }}>← Back</Text>
+                    </Pressable>
+                  ) : null}
+                  <Text style={{ fontSize: 15, fontWeight: "600", color: COLORS.text, letterSpacing: -0.2 }}>
                     {step === "confirm" ? "Confirm add" : "Add member"}
                   </Text>
-                  <Text style={{ fontSize: 13, color: "#64748B" }}>{teamName}</Text>
+                  <Text style={{ fontSize: 13, color: COLORS.muted, marginTop: 2 }}>{teamName}</Text>
                 </View>
+                <Pressable onPress={handleClose} hitSlop={12} testID="add-member-close" style={{ paddingTop: 2 }}>
+                  <X size={20} color={COLORS.muted} />
+                </Pressable>
               </View>
-              <Pressable onPress={handleClose} hitSlop={12} testID="add-member-close">
-                <X size={22} color="#64748B" />
-              </Pressable>
             </View>
 
             {step === "email" ? (
-              <>
-                <Text style={{ fontSize: 14, color: "#64748B", lineHeight: 20, marginBottom: 16 }}>
+              <View style={{ paddingHorizontal: 16, paddingVertical: 16 }}>
+                <Text style={{ fontSize: 13, color: COLORS.muted, lineHeight: 19, marginBottom: 14 }}>
                   Enter their email. We&apos;ll look them up before adding them to this workspace.
                 </Text>
 
                 {(error || previewError) ? (
                   <View
                     style={{
-                      backgroundColor: "#FEF2F2",
-                      borderRadius: 12,
-                      padding: 12,
-                      marginBottom: 16,
+                      backgroundColor: COLORS.errorBg,
+                      borderRadius: 6,
+                      padding: 10,
+                      marginBottom: 12,
                       borderWidth: 1,
-                      borderColor: "#FECACA",
+                      borderColor: COLORS.errorBorder,
                     }}
                     testID="add-member-error"
                   >
-                    <Text style={{ fontSize: 14, color: "#B91C1C", lineHeight: 20 }}>{error ?? previewError}</Text>
+                    <Text style={{ fontSize: 13, color: COLORS.errorText, lineHeight: 18 }}>{error ?? previewError}</Text>
                   </View>
                 ) : null}
 
-                <Text style={{ fontSize: 13, fontWeight: "600", color: "#334155", marginBottom: 6 }}>Email address</Text>
+                <Text style={{ fontSize: 12, fontWeight: "600", color: "#475569", marginBottom: 6 }}>Email address</Text>
                 <TextInput
                   value={email}
                   onChangeText={(text) => {
@@ -188,114 +207,127 @@ export function AddMemberModal({
                   onSubmitEditing={() => void handleContinue()}
                   style={{
                     borderWidth: 1,
-                    borderColor: "#E2E8F0",
-                    borderRadius: 12,
-                    paddingHorizontal: 14,
-                    paddingVertical: 12,
-                    fontSize: 16,
-                    color: "#0F172A",
-                    marginBottom: 16,
+                    borderColor: "#DCE3EB",
+                    borderRadius: 6,
+                    paddingHorizontal: 12,
+                    paddingVertical: 10,
+                    fontSize: 14,
+                    color: COLORS.text,
+                    marginBottom: 0,
                   }}
                   testID="add-member-email"
                 />
-
-                <Pressable
-                  onPress={() => void handleContinue()}
-                  disabled={previewLoading || !email.trim()}
-                  style={{
-                    backgroundColor: "#4361EE",
-                    borderRadius: 12,
-                    paddingVertical: 14,
-                    alignItems: "center",
-                    opacity: previewLoading || !email.trim() ? 0.6 : 1,
-                  }}
-                  testID="add-member-continue"
-                >
-                  {previewLoading ? (
-                    <ActivityIndicator color="white" />
-                  ) : (
-                    <Text style={{ color: "white", fontWeight: "700", fontSize: 16 }}>Continue</Text>
-                  )}
-                </Pressable>
-              </>
+              </View>
             ) : (
-              <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-                <View style={{ alignItems: "center", paddingVertical: 12 }}>
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 16, gap: 12 }}
+              >
+                <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 12 }}>
                   <View
                     style={{
-                      width: 72,
-                      height: 72,
-                      borderRadius: 36,
+                      width: 36,
+                      height: 36,
+                      borderRadius: 8,
                       backgroundColor: "#EEF2FF",
                       alignItems: "center",
                       justifyContent: "center",
                       overflow: "hidden",
-                      marginBottom: 12,
                     }}
                   >
                     {preview?.user?.image ? (
-                      <Image source={{ uri: preview.user.image }} style={{ width: 72, height: 72 }} resizeMode="cover" />
+                      <Image source={{ uri: preview.user.image }} style={{ width: 36, height: 36 }} resizeMode="cover" />
                     ) : (
-                      <Text style={{ fontSize: 28, fontWeight: "800", color: "#4361EE" }}>
+                      <Text style={{ fontSize: 14, fontWeight: "700", color: COLORS.accent }}>
                         {displayName[0]?.toUpperCase() ?? "?"}
                       </Text>
                     )}
                   </View>
-                  <Text style={{ fontSize: 20, fontWeight: "800", color: "#0F172A", textAlign: "center" }}>
-                    {displayName}
-                  </Text>
-                  <Text style={{ fontSize: 14, color: "#64748B", marginTop: 4, textAlign: "center" }}>
-                    {preview?.email}
-                  </Text>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 6 }}>
+                      <Text style={{ fontSize: 14, fontWeight: "700", color: COLORS.text, flexShrink: 1 }} numberOfLines={2}>
+                        {displayName}
+                      </Text>
+                      <View
+                        style={{
+                          paddingHorizontal: 7,
+                          paddingVertical: 2,
+                          borderRadius: 999,
+                          backgroundColor: preview?.found ? COLORS.successBg : COLORS.inviteBg,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 10,
+                            fontWeight: "700",
+                            letterSpacing: 0.4,
+                            color: preview?.found ? COLORS.successText : COLORS.inviteText,
+                          }}
+                        >
+                          {preview?.found ? "ON ALENIO" : "NEW INVITE"}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={{ fontSize: 12, color: COLORS.muted, marginTop: 3 }}>{preview?.email}</Text>
+                  </View>
                 </View>
 
                 {preview?.alreadyMember ? (
                   <View
                     style={{
-                      backgroundColor: "#FEF2F2",
-                      borderRadius: 12,
-                      padding: 12,
-                      marginBottom: 16,
+                      backgroundColor: COLORS.errorBg,
+                      borderRadius: 6,
+                      padding: 10,
                       borderWidth: 1,
-                      borderColor: "#FECACA",
+                      borderColor: COLORS.errorBorder,
                     }}
                   >
-                    <Text style={{ fontSize: 14, color: "#B91C1C", lineHeight: 20, textAlign: "center" }}>
+                    <Text style={{ fontSize: 13, color: COLORS.errorText, lineHeight: 18 }}>
                       This person is already in {teamName}.
                     </Text>
                   </View>
                 ) : preview?.found ? (
-                  <Text style={{ fontSize: 14, color: "#475569", lineHeight: 20, textAlign: "center", marginBottom: 16 }}>
-                    Add {preview.user?.name ?? "this person"} to <Text style={{ fontWeight: "700" }}>{teamName}</Text>?
-                    They&apos;ll join right away.
+                  <Text style={{ fontSize: 13, color: COLORS.subtext, lineHeight: 19 }}>
+                    Add <Text style={{ fontWeight: "700" }}>{preview.user?.name ?? "this person"}</Text> to{" "}
+                    <Text style={{ fontWeight: "700" }}>{teamName}</Text>? They&apos;ll join right away.
                   </Text>
                 ) : (
-                  <Text style={{ fontSize: 14, color: "#475569", lineHeight: 20, textAlign: "center", marginBottom: 16 }}>
-                    This email isn&apos;t on Alenio yet. We&apos;ll send an invite to join <Text style={{ fontWeight: "700" }}>{teamName}</Text>.
+                  <Text style={{ fontSize: 13, color: COLORS.subtext, lineHeight: 19 }}>
+                    This email isn&apos;t on Alenio yet. We&apos;ll send an invite to join{" "}
+                    <Text style={{ fontWeight: "700" }}>{teamName}</Text>.
                   </Text>
                 )}
 
                 {preview?.pendingInvite && !preview.alreadyMember ? (
                   <View
                     style={{
-                      backgroundColor: "#FFFBEB",
-                      borderRadius: 12,
-                      padding: 12,
-                      marginBottom: 16,
+                      backgroundColor: COLORS.noteBg,
+                      borderRadius: 6,
+                      padding: 10,
                       borderWidth: 1,
-                      borderColor: "#FDE68A",
+                      borderColor: COLORS.noteBorder,
                     }}
                   >
-                    <Text style={{ fontSize: 13, color: "#92400E", textAlign: "center" }}>
+                    <Text style={{ fontSize: 13, color: COLORS.noteText, lineHeight: 18 }}>
                       Already invited — confirming will refresh their invite.
                     </Text>
                   </View>
                 ) : null}
 
                 {preview?.found && otherWorkspaces.length > 0 ? (
-                  <View style={{ marginBottom: 16 }}>
-                    <Text style={{ fontSize: 12, fontWeight: "700", color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 8 }}>
-                      Workspaces ({otherWorkspaces.length})
+                  <View>
+                    <Text
+                      style={{
+                        fontSize: 11,
+                        fontWeight: "700",
+                        color: "#94A3B8",
+                        textTransform: "uppercase",
+                        letterSpacing: 0.6,
+                        marginBottom: 8,
+                      }}
+                    >
+                      Other workspaces ({otherWorkspaces.length})
                     </Text>
                     {otherWorkspaces.map((ws) => (
                       <View
@@ -311,9 +343,9 @@ export function AddMemberModal({
                       >
                         <View
                           style={{
-                            width: 36,
-                            height: 36,
-                            borderRadius: 10,
+                            width: 32,
+                            height: 32,
+                            borderRadius: 8,
                             backgroundColor: "#EEF2FF",
                             alignItems: "center",
                             justifyContent: "center",
@@ -321,15 +353,15 @@ export function AddMemberModal({
                           }}
                         >
                           {ws.image ? (
-                            <Image source={{ uri: ws.image }} style={{ width: 36, height: 36 }} resizeMode="cover" />
+                            <Image source={{ uri: ws.image }} style={{ width: 32, height: 32 }} resizeMode="cover" />
                           ) : (
-                            <Text style={{ fontSize: 14, fontWeight: "700", color: "#4361EE" }}>
+                            <Text style={{ fontSize: 13, fontWeight: "700", color: COLORS.accent }}>
                               {ws.name[0]?.toUpperCase() ?? "?"}
                             </Text>
                           )}
                         </View>
                         <View style={{ flex: 1 }}>
-                          <Text style={{ fontSize: 14, fontWeight: "700", color: "#0F172A" }}>{ws.name}</Text>
+                          <Text style={{ fontSize: 14, fontWeight: "700", color: COLORS.text }}>{ws.name}</Text>
                           <Text style={{ fontSize: 12, color: "#94A3B8" }}>
                             {ws.role === "owner" ? "Owner" : ws.role === "team_leader" ? "Team Leader" : "Member"}
                           </Text>
@@ -342,40 +374,75 @@ export function AddMemberModal({
                 {error ? (
                   <View
                     style={{
-                      backgroundColor: "#FEF2F2",
-                      borderRadius: 12,
-                      padding: 12,
-                      marginBottom: 16,
+                      backgroundColor: COLORS.errorBg,
+                      borderRadius: 6,
+                      padding: 10,
                       borderWidth: 1,
-                      borderColor: "#FECACA",
+                      borderColor: COLORS.errorBorder,
                     }}
                   >
-                    <Text style={{ fontSize: 14, color: "#B91C1C", lineHeight: 20 }}>{error}</Text>
+                    <Text style={{ fontSize: 13, color: COLORS.errorText, lineHeight: 18 }}>{error}</Text>
                   </View>
                 ) : null}
-
-                <Pressable
-                  onPress={handleConfirm}
-                  disabled={confirming || preview?.alreadyMember}
-                  style={{
-                    backgroundColor: "#4361EE",
-                    borderRadius: 12,
-                    paddingVertical: 14,
-                    alignItems: "center",
-                    opacity: confirming || preview?.alreadyMember ? 0.6 : 1,
-                  }}
-                  testID="add-member-confirm"
-                >
-                  {confirming ? (
-                    <ActivityIndicator color="white" />
-                  ) : (
-                    <Text style={{ color: "white", fontWeight: "700", fontSize: 16 }}>
-                      {preview?.found ? `Add to ${teamName}` : `Send invite`}
-                    </Text>
-                  )}
-                </Pressable>
               </ScrollView>
             )}
+
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "flex-end",
+                flexWrap: "wrap",
+                gap: 8,
+                paddingHorizontal: 16,
+                paddingTop: 12,
+                paddingBottom: Math.max(insets.bottom, 12),
+                borderTopWidth: 1,
+                borderTopColor: "#EEF2F6",
+                backgroundColor: COLORS.footerBg,
+              }}
+            >
+              {step === "confirm" ? (
+                <Pressable
+                  onPress={goBackToEmail}
+                  style={{
+                    borderWidth: 1,
+                    borderColor: "#CBD5E1",
+                    borderRadius: 6,
+                    paddingHorizontal: 12,
+                    paddingVertical: 8,
+                    backgroundColor: "#FFF",
+                  }}
+                >
+                  <Text style={{ fontSize: 12, fontWeight: "600", color: "#334155" }}>Back</Text>
+                </Pressable>
+              ) : null}
+              <Pressable
+                onPress={step === "email" ? () => void handleContinue() : handleConfirm}
+                disabled={step === "email" ? previewLoading || !email.trim() : confirming || preview?.alreadyMember}
+                style={{
+                  backgroundColor: COLORS.accent,
+                  borderRadius: 6,
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                  opacity: (step === "email" ? previewLoading || !email.trim() : confirming || preview?.alreadyMember) ? 0.55 : 1,
+                }}
+                testID={step === "email" ? "add-member-continue" : "add-member-confirm"}
+              >
+                {step === "email" && previewLoading ? (
+                  <ActivityIndicator color="white" />
+                ) : (
+                  <Text style={{ color: "white", fontWeight: "600", fontSize: 12 }}>
+                    {step === "email"
+                      ? "Continue"
+                      : confirming
+                        ? "Adding…"
+                        : preview?.found
+                          ? `Add to ${teamName}`
+                          : "Send invite"}
+                  </Text>
+                )}
+              </Pressable>
+            </View>
           </View>
         </Pressable>
       </SafeKeyboardAvoidingView>

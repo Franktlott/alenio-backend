@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { AutoResizeTextarea } from "./AutoResizeTextarea";
 import {
@@ -21,6 +21,7 @@ import {
 } from "../lib/one-on-one-feedback";
 import { appendLeaderCommentsIfMissing } from "../lib/check-in-leader-comments";
 import {
+  countOverdueFollowUpTasks,
   getOneOnOneMeetingStatusFromMeeting,
   oneOnOneMeetingStatusClass,
   oneOnOneMeetingStatusLabel,
@@ -232,6 +233,11 @@ export function OneOnOneHistoryTab({
   const [prepAcknowledged, setPrepAcknowledged] = useState(false);
   const compactCheckInLayout = useCompactCheckInLayout();
   const checkInFullscreen = compactCheckInLayout || userExpandedFullscreen;
+  const todayStart = useMemo(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, []);
 
   const resolveLeaderUserId = (meeting?: OneOnOneMeeting | null) =>
     leaderUserId ?? meeting?.createdById ?? null;
@@ -1087,7 +1093,9 @@ export function OneOnOneHistoryTab({
             <span className="enterprise-oneone-history-table-actions-col">Actions</span>
           </div>
           <ul className="enterprise-oneone-history-list">
-            {meetings.map((meeting) => (
+            {meetings.map((meeting) => {
+              const overdueCount = countOverdueFollowUpTasks(meeting.followUpTasks, todayStart);
+              return (
               <li
                 key={meeting.id}
                 className={`enterprise-oneone-history-item${
@@ -1104,6 +1112,14 @@ export function OneOnOneHistoryTab({
                     }}
                   >
                     <span className="enterprise-oneone-history-item-title">{meeting.templateTitle}</span>
+                    {overdueCount > 0 ? (
+                      <span
+                        className="enterprise-team-roster-overdue enterprise-oneone-history-overdue"
+                        title={`${overdueCount} overdue task${overdueCount !== 1 ? "s" : ""}`}
+                      >
+                        {overdueCount} overdue
+                      </span>
+                    ) : null}
                     <span className="enterprise-oneone-history-item-date">{formatMeetingDate(meeting.createdAt)}</span>
                     <MeetingStatusBadge meeting={meeting} />
                   </button>
@@ -1164,7 +1180,8 @@ export function OneOnOneHistoryTab({
                   </div>
                 </div>
               </li>
-            ))}
+              );
+            })}
           </ul>
         </div>
       ) : null}

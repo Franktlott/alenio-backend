@@ -68,15 +68,21 @@ export function AddMemberModal({
     onConfirm(trimmed);
   };
 
+  const goBackToEmail = () => {
+    setStep("email");
+    setPreview(null);
+    setPreviewError(null);
+  };
+
   if (!open) return null;
 
   const displayName = preview?.user?.name ?? preview?.email ?? email;
   const otherWorkspaces = (preview?.workspaces ?? []).filter((ws) => !ws.isCurrentTeam);
 
   return (
-    <div className="enterprise-modal-backdrop" role="presentation" onClick={handleClose}>
+    <div className="enterprise-task-modal-backdrop" role="presentation" onClick={handleClose}>
       <div
-        className="enterprise-modal-sheet enterprise-add-member-modal"
+        className="enterprise-add-member-modal"
         role="dialog"
         aria-label="Add member"
         onClick={(e) => e.stopPropagation()}
@@ -85,130 +91,153 @@ export function AddMemberModal({
           ×
         </button>
 
-        <div className="enterprise-add-member-head">
-          {step === "confirm" ? (
-            <button
-              type="button"
-              className="enterprise-add-member-back"
-              onClick={() => {
-                setStep("email");
-                setPreview(null);
-                setPreviewError(null);
-              }}
-            >
-              ← Back
-            </button>
-          ) : null}
-          <div>
-            <h3 style={{ marginTop: 0, marginBottom: 4 }}>{step === "confirm" ? "Confirm add" : "Add member"}</h3>
-            <p className="enterprise-muted" style={{ margin: 0 }}>{teamName}</p>
+        <header className="enterprise-add-member-modal-head">
+          <div className="enterprise-add-member-modal-head-row">
+            {step === "confirm" ? (
+              <button type="button" className="enterprise-add-member-back" onClick={goBackToEmail}>
+                ← Back
+              </button>
+            ) : null}
+            <div className="enterprise-add-member-modal-head-copy">
+              <h3 className="enterprise-add-member-modal-title">
+                {step === "confirm" ? "Confirm add" : "Add member"}
+              </h3>
+              <p className="enterprise-add-member-modal-sub">{teamName}</p>
+            </div>
           </div>
+        </header>
+
+        <div className="enterprise-add-member-modal-body">
+          {step === "email" ? (
+            <>
+              <p className="enterprise-add-member-lead">
+                Enter their email. We&apos;ll look them up before adding them to this workspace.
+              </p>
+              {(error || previewError) ? (
+                <p className="enterprise-form-error" role="alert">
+                  {error ?? previewError}
+                </p>
+              ) : null}
+              <label className="enterprise-add-member-field-label" htmlFor="add-member-email">
+                Email address
+              </label>
+              <input
+                id="add-member-email"
+                type="email"
+                className="enterprise-team-list-search enterprise-add-member-input"
+                placeholder="name@company.com"
+                value={email}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  onClearError?.();
+                  setPreviewError(null);
+                }}
+                autoComplete="email"
+              />
+            </>
+          ) : (
+            <>
+              <div className="enterprise-add-member-preview">
+                <div className="enterprise-pending-invite-row-main">
+                  <span className="enterprise-pending-invite-avatar">
+                    {preview?.user?.image ? (
+                      <img src={preview.user.image} alt={displayName ?? "Member"} />
+                    ) : (
+                      (displayName?.[0] ?? "?").toUpperCase()
+                    )}
+                  </span>
+                  <div className="enterprise-pending-invite-copy">
+                    <div className="enterprise-pending-invite-line">
+                      <strong className="enterprise-pending-invite-email">{displayName}</strong>
+                      {preview?.found ? (
+                        <span className="enterprise-add-member-status-badge">On Alenio</span>
+                      ) : (
+                        <span className="enterprise-add-member-status-badge enterprise-add-member-status-badge--invite">
+                          New invite
+                        </span>
+                      )}
+                    </div>
+                    <p className="enterprise-pending-invite-meta">{preview?.email}</p>
+                  </div>
+                </div>
+
+                {preview?.alreadyMember ? (
+                  <p className="enterprise-form-error" role="alert">
+                    This person is already in {teamName}.
+                  </p>
+                ) : preview?.found ? (
+                  <p className="enterprise-add-member-message">
+                    Add <strong>{preview.user?.name ?? "this person"}</strong> to{" "}
+                    <strong>{teamName}</strong>? They&apos;ll join right away.
+                  </p>
+                ) : (
+                  <p className="enterprise-add-member-message">
+                    This email isn&apos;t on Alenio yet. We&apos;ll send an invite to join{" "}
+                    <strong>{teamName}</strong>.
+                  </p>
+                )}
+
+                {preview?.pendingInvite && !preview.alreadyMember ? (
+                  <p className="enterprise-add-member-note">Already invited — confirming will refresh their invite.</p>
+                ) : null}
+
+                {preview?.found && otherWorkspaces.length > 0 ? (
+                  <div className="enterprise-add-member-workspaces">
+                    <h4>Other workspaces ({otherWorkspaces.length})</h4>
+                    <ul>
+                      {otherWorkspaces.map((ws) => (
+                        <li key={ws.id}>
+                          <span className="enterprise-add-member-ws-avatar">
+                            {ws.image ? <img src={ws.image} alt={ws.name} /> : (ws.name[0] ?? "?").toUpperCase()}
+                          </span>
+                          <span>
+                            <strong>{ws.name}</strong>
+                            <span className="enterprise-muted">
+                              {ws.role === "owner" ? "Owner" : ws.role === "team_leader" ? "Team Leader" : "Member"}
+                            </span>
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+
+                {error ? (
+                  <p className="enterprise-form-error" role="alert">
+                    {error}
+                  </p>
+                ) : null}
+              </div>
+            </>
+          )}
         </div>
 
-        {step === "email" ? (
-          <>
-            <p className="enterprise-muted">
-              Enter their email. We&apos;ll look them up before adding them to this workspace.
-            </p>
-            {(error || previewError) ? (
-              <p className="enterprise-form-error" role="alert" style={{ marginBottom: 16 }}>
-                {error ?? previewError}
-              </p>
-            ) : null}
-            <label className="enterprise-muted" style={{ fontSize: 13, display: "block", marginBottom: 6 }}>
-              Email address
-            </label>
-            <input
-              type="email"
-              className="enterprise-team-list-search"
-              style={{ width: "100%", marginBottom: 16 }}
-              placeholder="name@company.com"
-              value={email}
-              onChange={(e) => {
-                setEmail(e.target.value);
-                onClearError?.();
-                setPreviewError(null);
-              }}
-              autoComplete="email"
-            />
+        <footer className="enterprise-add-member-modal-footer">
+          {step === "email" ? (
             <button
               type="button"
-              className="auth-submit"
+              className="enterprise-pending-invite-resend"
               disabled={previewLoading || !email.trim()}
               onClick={() => void handleContinue()}
             >
               {previewLoading ? "Looking up…" : "Continue"}
             </button>
-          </>
-        ) : (
-          <div className="enterprise-add-member-confirm">
-            <div className="enterprise-add-member-person">
-              <span className="enterprise-add-member-avatar">
-                {preview?.user?.image ? (
-                  <img src={preview.user.image} alt={displayName ?? "Member"} />
-                ) : (
-                  (displayName?.[0] ?? "?").toUpperCase()
-                )}
-              </span>
-              <strong className="enterprise-add-member-name">{displayName}</strong>
-              <span className="enterprise-muted">{preview?.email}</span>
-            </div>
-
-            {preview?.alreadyMember ? (
-              <p className="enterprise-form-error" role="alert">
-                This person is already in {teamName}.
-              </p>
-            ) : preview?.found ? (
-              <p className="enterprise-muted enterprise-add-member-copy">
-                Add <strong>{preview.user?.name ?? "this person"}</strong> to <strong>{teamName}</strong>? They&apos;ll join right away.
-              </p>
-            ) : (
-              <p className="enterprise-muted enterprise-add-member-copy">
-                This email isn&apos;t on Alenio yet. We&apos;ll send an invite to join <strong>{teamName}</strong>.
-              </p>
-            )}
-
-            {preview?.pendingInvite && !preview.alreadyMember ? (
-              <p className="enterprise-add-member-note">Already invited — confirming will refresh their invite.</p>
-            ) : null}
-
-            {preview?.found && otherWorkspaces.length > 0 ? (
-              <div className="enterprise-add-member-workspaces">
-                <h4>Workspaces ({otherWorkspaces.length})</h4>
-                <ul>
-                  {otherWorkspaces.map((ws) => (
-                    <li key={ws.id}>
-                      <span className="enterprise-add-member-ws-avatar">
-                        {ws.image ? <img src={ws.image} alt={ws.name} /> : (ws.name[0] ?? "?").toUpperCase()}
-                      </span>
-                      <span>
-                        <strong>{ws.name}</strong>
-                        <span className="enterprise-muted">
-                          {ws.role === "owner" ? "Owner" : ws.role === "team_leader" ? "Team Leader" : "Member"}
-                        </span>
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-
-            {error ? (
-              <p className="enterprise-form-error" role="alert">
-                {error}
-              </p>
-            ) : null}
-
-            <button
-              type="button"
-              className="auth-submit"
-              disabled={confirming || preview?.alreadyMember}
-              onClick={handleConfirm}
-            >
-              {confirming ? "Adding…" : preview?.found ? `Add to ${teamName}` : "Send invite"}
-            </button>
-          </div>
-        )}
+          ) : (
+            <>
+              <button type="button" className="enterprise-dashboard-btn-outline" onClick={goBackToEmail}>
+                Back
+              </button>
+              <button
+                type="button"
+                className="enterprise-pending-invite-resend"
+                disabled={confirming || preview?.alreadyMember}
+                onClick={handleConfirm}
+              >
+                {confirming ? "Adding…" : preview?.found ? `Add to ${teamName}` : "Send invite"}
+              </button>
+            </>
+          )}
+        </footer>
       </div>
     </div>
   );

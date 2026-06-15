@@ -35,3 +35,16 @@ export function oneOnOneMeetingStatusLabel(status: OneOnOneMeetingStatus): strin
 export function oneOnOneMeetingStatusClass(status: OneOnOneMeetingStatus): string {
   return `enterprise-oneone-status enterprise-oneone-status--${status.replace(/_/g, "-")}`;
 }
+
+function isFollowUpTaskOverdue(task: OneOnOneFollowUpTask, todayStart: Date): boolean {
+  if (task.status === "done") return false;
+  if (!task.dueDate) return false;
+  return new Date(task.dueDate) < todayStart;
+}
+
+export function countOverdueFollowUpTasks(
+  followUpTasks: OneOnOneFollowUpTask[] | undefined,
+  todayStart: Date,
+): number {
+  return (followUpTasks ?? []).filter((task) => isFollowUpTaskOverdue(task, todayStart)).length;
+}

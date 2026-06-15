@@ -1,7 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { queryKeys } from "../lib/query-keys";
-import { Link } from "react-router-dom";
 import QRCode from "qrcode";
 import { AddMemberModal } from "./AddMemberModal";
 import { PendingInvitesModal } from "./PendingInvitesModal";
@@ -99,16 +98,6 @@ function IconLogOut() {
       <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
       <polyline points="16 17 21 12 16 7" />
       <line x1="21" y1="12" x2="9" y2="12" />
-    </svg>
-  );
-}
-
-function IconAlertTriangle({ size = 18 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-      <line x1="12" y1="9" x2="12" y2="13" />
-      <line x1="12" y1="17" x2="12.01" y2="17" />
     </svg>
   );
 }
@@ -320,10 +309,6 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
     return d;
   }, []);
 
-  const overdueTaskCount = useMemo(
-    () => overviewTasks.filter((t) => isTaskOverdue(t, todayStart)).length,
-    [overviewTasks, todayStart],
-  );
 
   const sortedMembers = useMemo(() => [...(teamDetail?.members ?? [])].sort(memberSort), [teamDetail?.members]);
 
@@ -719,20 +704,6 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                 })}
               </ul>
             </section>
-          ) : null}
-
-          {overdueTaskCount > 0 ? (
-            <Link to="/dashboard" className="enterprise-team-attention enterprise-team-attention-banner enterprise-team-attention-compact">
-              <span className="enterprise-team-attention-icon" aria-hidden>
-                <IconAlertTriangle />
-              </span>
-              <span className="enterprise-team-attention-copy">
-                <strong>Needs attention</strong>
-                <span>
-                  {overdueTaskCount} overdue task{overdueTaskCount !== 1 ? "s" : ""}
-                </span>
-              </span>
-            </Link>
           ) : null}
 
           <div className="enterprise-team-roster-section">
