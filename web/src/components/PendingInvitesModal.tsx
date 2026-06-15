@@ -93,6 +93,13 @@ export function PendingInvitesModal({
                       className="enterprise-dashboard-btn-outline"
                       disabled={busy}
                       onClick={async () => {
+                        if (
+                          !window.confirm(
+                            `Cancel invite for ${invite.email}? They won't be able to join with this invitation.`,
+                          )
+                        ) {
+                          return;
+                        }
                         onInviteActionStart(invite.id);
                         try {
                           await cancelTeamInvite(teamId, invite.id);
@@ -111,6 +118,13 @@ export function PendingInvitesModal({
                       className="enterprise-pending-invite-resend"
                       disabled={busy}
                       onClick={async () => {
+                        if (
+                          !window.confirm(
+                            `Resend invite to ${invite.email}? They'll receive a new invitation email.`,
+                          )
+                        ) {
+                          return;
+                        }
                         onInviteActionStart(invite.id);
                         try {
                           await resendTeamInvite(teamId, invite.id);

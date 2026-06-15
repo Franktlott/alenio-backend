@@ -756,14 +756,36 @@ export default function TeamScreen() {
                 </View>
                 <View style={{ flexDirection: "row", gap: 8 }}>
                   <Pressable
-                    onPress={() => cancelInviteMutation.mutate(invite.id)}
+                    onPress={() => {
+                      Alert.alert(
+                        "Cancel invite?",
+                        `Cancel invite for ${invite.email}? They won't be able to join with this invitation.`,
+                        [
+                          { text: "Keep invite", style: "cancel" },
+                          {
+                            text: "Cancel invite",
+                            style: "destructive",
+                            onPress: () => cancelInviteMutation.mutate(invite.id),
+                          },
+                        ],
+                      );
+                    }}
                     style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 10, borderRadius: 10, borderWidth: 1.5, borderColor: "#E2E8F0" }}
                     testID={`cancel-invite-${invite.id}`}
                   >
                     <Text style={{ fontSize: 13, fontWeight: "600", color: "#64748B" }}>Cancel</Text>
                   </Pressable>
                   <Pressable
-                    onPress={() => resendInviteMutation.mutate(invite.id)}
+                    onPress={() => {
+                      Alert.alert(
+                        "Resend invite?",
+                        `Resend invite to ${invite.email}? They'll receive a new invitation email.`,
+                        [
+                          { text: "Not now", style: "cancel" },
+                          { text: "Resend", onPress: () => resendInviteMutation.mutate(invite.id) },
+                        ],
+                      );
+                    }}
                     disabled={resendInviteMutation.isPending}
                     style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 10, borderRadius: 10, backgroundColor: "#4361EE" }}
                     testID={`resend-invite-${invite.id}`}
