@@ -241,46 +241,27 @@ export function ProfileTeamsSection({ teams, selectedTeamId, onSelectWorkspace, 
                 aria-current={isCurrent ? "true" : undefined}
               >
                 <div className="enterprise-profile-ws-card-body">
-                  <div className="enterprise-profile-ws-card-icon" aria-hidden>
-                    {t.image ? (
-                      <img
-                        src={t.image}
-                        alt=""
-                        className="enterprise-profile-ws-card-icon-img"
-                      />
-                    ) : (
-                      <span className="enterprise-profile-ws-card-icon-initials">
-                        {t.name?.[0]?.toUpperCase() ?? "W"}
-                      </span>
-                    )}
-                  </div>
-                  <div className="enterprise-profile-ws-card-main">
-                    <h3 className="enterprise-profile-ws-card-name">{t.name}</h3>
-                    {isCurrent ? (
-                      <p className="enterprise-profile-ws-active-line">
-                        <IconCheckSmall />
-                        Active workspace
-                      </p>
-                    ) : null}
-                    <p className="enterprise-muted enterprise-profile-ws-card-meta">{memberLine}</p>
-                    {t.inviteCode ? (
-                      <div className="enterprise-profile-ws-invite-row">
-                        <span className="enterprise-profile-ws-invite-label">Invite code</span>
-                        <span className="enterprise-team-code-mono enterprise-profile-ws-invite-code">{t.inviteCode}</span>
-                        <button
-                          type="button"
-                          className="enterprise-profile-ws-copy-btn"
-                          onClick={() => void copyInviteCode(t.id, t.inviteCode!)}
-                        >
-                          {copiedTeamId === t.id ? "Copied" : "Copy"}
-                        </button>
+                  <div className="enterprise-profile-ws-card-head">
+                    <div className="enterprise-profile-ws-card-icon" aria-hidden>
+                      {t.image ? (
+                        <img src={t.image} alt="" className="enterprise-profile-ws-card-icon-img" />
+                      ) : (
+                        <span className="enterprise-profile-ws-card-icon-initials">
+                          {t.name?.[0]?.toUpperCase() ?? "W"}
+                        </span>
+                      )}
+                    </div>
+                    <div className="enterprise-profile-ws-card-head-copy">
+                      <div className="enterprise-profile-ws-card-title-row">
+                        <h3 className="enterprise-profile-ws-card-name" title={t.name}>
+                          {t.name}
+                        </h3>
+                        {isCurrent ? (
+                          <span className="enterprise-profile-ws-current-badge">Current</span>
+                        ) : null}
                       </div>
-                    ) : null}
-                  </div>
-                  <div className="enterprise-profile-ws-card-top-right">
-                    {isCurrent ? (
-                      <span className="enterprise-profile-ws-current-badge">Current</span>
-                    ) : null}
+                      <p className="enterprise-muted enterprise-profile-ws-card-meta">{memberLine}</p>
+                    </div>
                     <div className="enterprise-profile-workspace-menu-wrap">
                       <button
                         type="button"
@@ -340,11 +321,29 @@ export function ProfileTeamsSection({ teams, selectedTeamId, onSelectWorkspace, 
                       ) : null}
                     </div>
                   </div>
+
+                  {t.inviteCode ? (
+                    <div className="enterprise-profile-ws-invite-block">
+                      <span className="enterprise-profile-ws-invite-label">Invite code</span>
+                      <span className="enterprise-team-code-mono enterprise-profile-ws-invite-code">{t.inviteCode}</span>
+                      <button
+                        type="button"
+                        className="enterprise-profile-ws-copy-btn"
+                        onClick={() => void copyInviteCode(t.id, t.inviteCode!)}
+                      >
+                        {copiedTeamId === t.id ? "Copied" : "Copy"}
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
+
                 <footer className="enterprise-profile-ws-card-foot">
                   <span className={roleBadgeClass(t.role)}>{roleLabel(t.role)}</span>
                   {isCurrent ? (
-                    <span className="enterprise-profile-ws-card-foot-spacer" aria-hidden="true" />
+                    <span className="enterprise-profile-ws-active-foot">
+                      <IconCheckSmall />
+                      Active
+                    </span>
                   ) : (
                     <button
                       type="button"
@@ -352,7 +351,7 @@ export function ProfileTeamsSection({ teams, selectedTeamId, onSelectWorkspace, 
                       onClick={() => onSelectWorkspace(t.id)}
                       data-testid={`profile-workspace-switch-${t.id}`}
                     >
-                      Select
+                      Select workspace
                     </button>
                   )}
                 </footer>

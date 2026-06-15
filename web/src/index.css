@@ -9233,15 +9233,17 @@ button.enterprise-profile-legal-link {
 
 .enterprise-profile-ws-card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 1rem;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+  gap: 0.75rem;
+  align-items: stretch;
 }
 
 .enterprise-profile-ws-card {
   display: flex;
   flex-direction: column;
-  border: 1px solid var(--border);
-  border-radius: 14px;
+  min-height: 100%;
+  border: 1px solid #dce3eb;
+  border-radius: 8px;
   background: #fff;
   overflow: hidden;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
@@ -9249,28 +9251,36 @@ button.enterprise-profile-legal-link {
 
 .enterprise-profile-ws-card-current {
   border-color: #c7d2fe;
-  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.1);
+  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.12);
 }
 
 .enterprise-profile-ws-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.9rem 1rem;
+  flex: 1;
+}
+
+.enterprise-profile-ws-card-head {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 0.75rem;
   align-items: start;
-  padding: 1rem 1rem 0.85rem;
 }
 
 .enterprise-profile-ws-card-icon {
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
-  background: linear-gradient(135deg, #4361ee, #6366f1);
-  color: #fff;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  background: #eef2ff;
+  color: #6366f1;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
   overflow: hidden;
+  border: 1px solid #e0e7ff;
 }
 
 .enterprise-profile-ws-card-icon-img {
@@ -9280,104 +9290,104 @@ button.enterprise-profile-legal-link {
 }
 
 .enterprise-profile-ws-card-icon-initials {
-  font-size: 1.05rem;
-  font-weight: 800;
+  font-size: 0.9375rem;
+  font-weight: 700;
   line-height: 1;
 }
 
-.enterprise-profile-ws-card-main {
+.enterprise-profile-ws-card-head-copy {
   min-width: 0;
+}
+
+.enterprise-profile-ws-card-title-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.5rem;
 }
 
 .enterprise-profile-ws-card-name {
   margin: 0;
   font-size: 0.9375rem;
-  font-weight: 700;
-  color: var(--text);
-  line-height: 1.3;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.enterprise-profile-ws-active-line {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  margin: 0.35rem 0 0;
-  font-size: 0.8125rem;
   font-weight: 600;
-  color: #4338ca;
+  color: #0f172a;
   line-height: 1.35;
+  letter-spacing: -0.01em;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 
 .enterprise-profile-ws-card-meta {
-  margin: 0.35rem 0 0;
-  font-size: 0.8125rem;
-  line-height: 1.4;
+  margin: 0.2rem 0 0;
+  font-size: 0.75rem;
+  line-height: 1.45;
 }
 
-.enterprise-profile-ws-invite-row {
+.enterprise-profile-ws-invite-block {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 0.35rem 0.5rem;
-  margin-top: 0.55rem;
+  gap: 0.5rem;
+  padding: 0.55rem 0.65rem;
+  border-radius: 6px;
+  border: 1px solid #e8edf3;
+  background: #f8fafc;
+  min-width: 0;
 }
 
 .enterprise-profile-ws-invite-label {
-  font-size: 0.6875rem;
+  font-size: 0.625rem;
   font-weight: 700;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: #64748b;
+  color: #94a3b8;
+  flex-shrink: 0;
 }
 
 .enterprise-profile-ws-invite-code {
+  flex: 1;
+  min-width: 0;
   font-size: 0.8125rem;
-  margin-right: 0;
+  letter-spacing: 0.12em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .enterprise-profile-ws-copy-btn {
   font-family: inherit;
   font-size: 0.6875rem;
   font-weight: 600;
-  padding: 0.2rem 0.5rem;
+  padding: 0.28rem 0.55rem;
   border-radius: 6px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #dce3eb;
   background: #fff;
   color: #334155;
   cursor: pointer;
+  flex-shrink: 0;
 }
 
 .enterprise-profile-ws-copy-btn:hover {
   background: #f8fafc;
-}
-
-.enterprise-profile-ws-card-top-right {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 0.35rem;
-  flex-shrink: 0;
+  border-color: #94a3b8;
 }
 
 .enterprise-profile-ws-current-badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 4.75rem;
-  box-sizing: border-box;
   font-size: 0.625rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  padding: 0.22rem 0.5rem;
-  border-radius: 6px;
-  background: #f5f3ff;
-  color: #6d28d9;
-  border: 1px solid #ddd6fe;
+  padding: 0.18rem 0.45rem;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #4338ca;
+  border: 1px solid #c7d2fe;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .enterprise-profile-ws-card-foot {
@@ -9386,32 +9396,37 @@ button.enterprise-profile-legal-link {
   justify-content: space-between;
   gap: 0.75rem;
   margin-top: auto;
-  padding: 0.65rem 1rem;
-  border-top: 1px solid var(--border);
-  background: #fafbfc;
+  padding: 0.6rem 1rem;
+  border-top: 1px solid #eef2f6;
+  background: #fcfcfd;
 }
 
-.enterprise-profile-ws-card-foot-spacer {
-  display: block;
-  min-width: 3.5rem;
-  min-height: 1.25rem;
+.enterprise-profile-ws-active-foot {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #4338ca;
+  white-space: nowrap;
 }
 
 .enterprise-profile-ws-select-btn {
   font-family: inherit;
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
   font-weight: 600;
   color: #4338ca;
-  background: none;
-  border: none;
-  padding: 0;
+  background: #fff;
+  border: 1px solid #c7d2fe;
+  border-radius: 6px;
+  padding: 0.32rem 0.65rem;
   cursor: pointer;
   white-space: nowrap;
 }
 
 .enterprise-profile-ws-select-btn:hover {
-  text-decoration: underline;
-  text-underline-offset: 2px;
+  background: #eef2ff;
+  border-color: #a5b4fc;
 }
 
 .enterprise-profile-workspaces-actions {
