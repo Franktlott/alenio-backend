@@ -5,7 +5,7 @@ export const ENTERPRISE_NAV_TITLES: Record<EnterpriseNavId, string> = {
   chat: "Chat",
   execute: "Workspace",
   team: "Team",
-  plan: "Plan",
+  plan: "Billing",
   profile: "Profile",
 };
 

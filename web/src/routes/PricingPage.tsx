@@ -25,6 +25,10 @@ export function PricingPage() {
             <li>
               <strong>Team</strong> unlocks tasks, calendar, metrics, and the full workspace on web and mobile.
             </li>
+            <li>
+              <strong>Enterprise</strong> adds rollout support, SLAs, and security documentation for multi-location
+              operators — contact us for custom pricing.
+            </li>
             <li>Subscriptions are billed per workspace. Only the workspace owner can upgrade or manage billing.</li>
             <li>Team can also be purchased through the mobile app (App Store or Google Play) where available.</li>
           </ul>

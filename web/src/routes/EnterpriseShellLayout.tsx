@@ -118,7 +118,7 @@ export function EnterpriseShellLayout() {
   /** Once per navigation onto /billing — avoids refresh+setTeams thrashing layout redirects. */
   const lastBillingTeamsRefreshRef = useRef<string | null>(null);
 
-  /** Plan page reconciles Stripe into DB; refresh team rows so `hasTeamFeatures` matches the sidebar. */
+  /** Billing page reconciles Stripe into DB; refresh team rows so `hasTeamFeatures` matches the sidebar. */
   useEffect(() => {
     const path = location.pathname;
     if (!path.startsWith("/billing")) {

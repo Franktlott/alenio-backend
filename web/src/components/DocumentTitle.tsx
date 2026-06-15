@@ -6,6 +6,8 @@ import { enterpriseNavTitle } from "../lib/enterprise-nav";
 function pageTitleForPath(pathname: string): string | null {
   if (pathname === "/") return null;
   if (pathname.startsWith("/pricing")) return "Pricing";
+  if (pathname.startsWith("/enterprise")) return "Enterprise";
+  if (pathname.startsWith("/security")) return "Security";
   if (pathname.startsWith("/login")) return "Log in";
   if (pathname.startsWith("/sign-up")) return "Sign up";
   if (pathname.startsWith("/forgot-password")) return "Forgot password";

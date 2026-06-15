@@ -1,5 +1,17 @@
 import { Link } from "react-router-dom";
 import { MarketingFooter } from "../components/MarketingFooter";
+import {
+  MARKETING_CTA_REQUEST_DEMO,
+  MARKETING_CTA_START_FREE,
+  MARKETING_DEMO_HREF,
+  MARKETING_EXAMPLE_BADGE,
+  MARKETING_EXAMPLE_METRICS,
+  MARKETING_FINAL_CTA_HEADLINE,
+  MARKETING_FINAL_CTA_SUBCOPY,
+  MARKETING_HERO_HEADLINE,
+  MARKETING_HERO_HEADLINE_ACCENT,
+  MARKETING_HERO_SUBCOPY,
+} from "../lib/marketing-constants";
 
 const pillars = [
   {
@@ -221,13 +233,15 @@ export function WebsiteHomePage() {
           <nav className="site-v2-nav" aria-label="Primary">
             <a href="#how-alenio-works">How Alenio Works</a>
             <Link to="/pricing">Pricing</Link>
+            <Link to="/enterprise">Enterprise</Link>
+            <Link to="/security">Security</Link>
           </nav>
           <div className="site-v2-head-actions">
             <Link to="/login" className="site-v2-login">
               Log in
             </Link>
             <Link to="/sign-up" className="site-v2-head-cta">
-              Join Alenio
+              {MARKETING_CTA_START_FREE}
             </Link>
           </div>
         </header>
@@ -235,16 +249,16 @@ export function WebsiteHomePage() {
         <div className="site-v2-hero-main">
           <div className="site-v2-hero-copy">
             <h1>
-              Built for teams that <span className="site-v2-hero-headline-accent">move fast.</span>
+              {MARKETING_HERO_HEADLINE} <span className="site-v2-hero-headline-accent">{MARKETING_HERO_HEADLINE_ACCENT}</span>
             </h1>
-            <p>
-              Alenio helps retail, restaurant, and field teams communicate, execute, and stay accountable — all from
-              one place.
-            </p>
+            <p>{MARKETING_HERO_SUBCOPY}</p>
             <div className="site-v2-hero-cta">
               <Link to="/sign-up" className="site-v2-btn site-v2-btn-primary">
-                Join Alenio
+                {MARKETING_CTA_START_FREE}
               </Link>
+              <a href={MARKETING_DEMO_HREF} className="site-v2-btn site-v2-btn-outline">
+                {MARKETING_CTA_REQUEST_DEMO}
+              </a>
             </div>
           </div>
 
@@ -269,11 +283,11 @@ export function WebsiteHomePage() {
               <div className="site-v2-dash-grid">
                 <div className="site-v2-dash-card">
                   <span className="site-v2-dash-label">Shift completion</span>
-                  <span className="site-v2-dash-value">94%</span>
+                  <span className="site-v2-dash-value site-v2-dash-value-example">—</span>
                 </div>
                 <div className="site-v2-dash-card">
                   <span className="site-v2-dash-label">Tasks today</span>
-                  <span className="site-v2-dash-value">182</span>
+                  <span className="site-v2-dash-value site-v2-dash-value-example">—</span>
                 </div>
               </div>
             </div>
@@ -419,7 +433,10 @@ export function WebsiteHomePage() {
       <section id="resources" className="site-v2-section site-v2-insights">
         <div className="site-v2-insights-grid">
           <article className="site-v2-activity-card">
-            <h3>Live activity across your team</h3>
+            <div className="site-v2-example-head">
+              <h3>Live activity across your team</h3>
+              <span className="site-v2-example-badge">{MARKETING_EXAMPLE_BADGE}</span>
+            </div>
             <ul className="site-v2-activity-list">
               {activityItems.map((item) => (
                 <li key={`${item.name}-${item.time}`}>
@@ -434,40 +451,33 @@ export function WebsiteHomePage() {
             </ul>
           </article>
           <article className="site-v2-metrics-card">
-            <h3>See what drives results</h3>
-            <div className="site-v2-metric">
-              <div className="site-v2-metric-top">
-                <span className="site-v2-metric-label">Shift completion rate</span>
-                <span className="site-v2-metric-trend site-v2-metric-trend-up">+8%</span>
-              </div>
-              <span className="site-v2-metric-value">94%</span>
+            <div className="site-v2-example-head">
+              <h3>See what drives results</h3>
+              <span className="site-v2-example-badge">{MARKETING_EXAMPLE_BADGE}</span>
             </div>
-            <div className="site-v2-metric">
-              <div className="site-v2-metric-top">
-                <span className="site-v2-metric-label">Tasks completed today</span>
-                <span className="site-v2-metric-trend site-v2-metric-trend-up">+12%</span>
+            {MARKETING_EXAMPLE_METRICS.map((metric) => (
+              <div key={metric.label} className="site-v2-metric">
+                <div className="site-v2-metric-top">
+                  <span className="site-v2-metric-label">{metric.label}</span>
+                </div>
+                <span className="site-v2-metric-value site-v2-metric-value-example">{metric.value}</span>
               </div>
-              <span className="site-v2-metric-value">182</span>
-            </div>
-            <div className="site-v2-metric">
-              <div className="site-v2-metric-top">
-                <span className="site-v2-metric-label">Overdue tasks</span>
-                <span className="site-v2-metric-trend site-v2-metric-trend-down">−4%</span>
-              </div>
-              <span className="site-v2-metric-value">7</span>
-            </div>
+            ))}
           </article>
         </div>
       </section>
 
       <section className="site-v2-final-cta">
         <div className="site-v2-final-cta-inner">
-          <h2>Stop guessing. Start executing.</h2>
-          <p>Join thousands of teams that rely on Alenio to run better every day.</p>
+          <h2>{MARKETING_FINAL_CTA_HEADLINE}</h2>
+          <p>{MARKETING_FINAL_CTA_SUBCOPY}</p>
           <div className="site-v2-hero-cta site-v2-final-cta-actions">
             <Link to="/sign-up" className="site-v2-btn site-v2-btn-primary site-v2-btn-lg">
-              Join Alenio
+              {MARKETING_CTA_START_FREE}
             </Link>
+            <a href={MARKETING_DEMO_HREF} className="site-v2-btn site-v2-btn-outline site-v2-btn-lg">
+              {MARKETING_CTA_REQUEST_DEMO}
+            </a>
           </div>
         </div>
       </section>

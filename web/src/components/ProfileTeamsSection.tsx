@@ -145,7 +145,7 @@ export function ProfileTeamsSection({ teams, selectedTeamId, onSelectWorkspace, 
         <div>
           <h2 className="enterprise-card-title enterprise-profile-workspaces-title">Workspaces</h2>
           <p className="enterprise-muted enterprise-profile-workspaces-sub">
-            Manage the workspaces you belong to. Each workspace has its own plan on the Plan page.
+            Manage the workspaces you belong to. Each workspace has its own plan on the Billing page.
           </p>
         </div>
         <div className="enterprise-profile-workspaces-actions">

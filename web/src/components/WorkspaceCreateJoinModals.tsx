@@ -126,7 +126,7 @@ export function WorkspaceCreateJoinModals({
               Create workspace
             </h3>
             <p className="enterprise-muted enterprise-modal-sub">
-              You will be the workspace owner. Subscriptions are billed per workspace on the Plan page.
+              You will be the workspace owner. Subscriptions are billed per workspace on the Billing page.
             </p>
             <input
               className="auth-input enterprise-modal-input"

@@ -22,6 +22,10 @@ export function MarketingFooter() {
           <Link to="/account-deletion">Account deletion</Link>
           {" · "}
           <Link to="/pricing">Pricing</Link>
+          {" · "}
+          <Link to="/enterprise">Enterprise</Link>
+          {" · "}
+          <Link to="/security">Security</Link>
         </p>
         <p className="site-v2-footer-company">{LEGAL_COMPANY_NAME}</p>
         <p className="site-v2-footer-parent">Parent company: {LEGAL_PARENT_COMPANY_NAME}</p>

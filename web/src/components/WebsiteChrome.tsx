@@ -1,19 +1,20 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { MarketingFooter } from "./MarketingFooter";
-
-type NavId = "how-it-works" | "pricing";
+import {
+  MARKETING_CTA_START_FREE,
+  type MarketingNavId,
+} from "../lib/marketing-constants";
 
 type Props = {
   children: ReactNode;
-  /** Highlights Pricing in the nav when on /pricing */
-  activeNav?: NavId;
+  activeNav?: MarketingNavId;
   /** Use gradient hero header (home) vs compact bar (pricing, etc.) */
   variant?: "hero" | "bar";
 };
 
 export function WebsiteChrome({ children, activeNav, variant = "bar" }: Props) {
-  const navClass = (id: NavId) => (activeNav === id ? "site-v2-nav-active" : undefined);
+  const navClass = (id: MarketingNavId) => (activeNav === id ? "site-v2-nav-active" : undefined);
 
   const header = (
     <header className={variant === "hero" ? "site-v2-header" : "site-v2-header site-v2-header-bar"}>
@@ -33,13 +34,19 @@ export function WebsiteChrome({ children, activeNav, variant = "bar" }: Props) {
         <Link to="/pricing" className={navClass("pricing")}>
           Pricing
         </Link>
+        <Link to="/enterprise" className={navClass("enterprise")}>
+          Enterprise
+        </Link>
+        <Link to="/security" className={navClass("security")}>
+          Security
+        </Link>
       </nav>
       <div className="site-v2-head-actions">
         <Link to="/login" className={variant === "hero" ? "site-v2-login" : "site-v2-login site-v2-login-dark"}>
           Log in
         </Link>
         <Link to="/sign-up" className="site-v2-head-cta">
-          Join Alenio
+          {MARKETING_CTA_START_FREE}
         </Link>
       </div>
     </header>

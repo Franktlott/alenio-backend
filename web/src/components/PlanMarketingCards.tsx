@@ -1,5 +1,14 @@
 import { Link } from "react-router-dom";
 import {
+  ENTERPRISE_PLAN_FEATURES,
+  ENTERPRISE_PLAN_NAME,
+  ENTERPRISE_PLAN_PERIOD,
+  ENTERPRISE_PLAN_PRICE,
+  ENTERPRISE_PLAN_TAGLINE,
+  MARKETING_CTA_REQUEST_DEMO,
+  MARKETING_DEMO_HREF,
+} from "../lib/marketing-constants";
+import {
   FREE_INCLUDED,
   FREE_LOCKED,
   TEAM_FEATURES,
@@ -38,7 +47,7 @@ type Props = {
 
 export function PlanMarketingCards({ className = "" }: Props) {
   return (
-    <div className={`site-pricing-grid ${className}`.trim()} data-testid="pricing-plan-grid">
+    <div className={`site-pricing-grid site-pricing-grid-3 ${className}`.trim()} data-testid="pricing-plan-grid">
       <section className="site-pricing-card site-pricing-card-free" aria-labelledby="pricing-free-heading">
         <div className="site-pricing-card-head">
           <div>
@@ -107,6 +116,34 @@ export function PlanMarketingCards({ className = "" }: Props) {
           Start with Team
         </Link>
         <p className="site-pricing-cta-note">Cancel anytime · Secure checkout on web</p>
+      </section>
+
+      <section className="site-pricing-card site-pricing-card-enterprise" aria-labelledby="pricing-enterprise-heading">
+        <h2 id="pricing-enterprise-heading" className="site-pricing-card-title">
+          {ENTERPRISE_PLAN_NAME}
+        </h2>
+        <p className="site-pricing-card-tagline">{ENTERPRISE_PLAN_TAGLINE}</p>
+        <div className="site-pricing-price">
+          <span className="site-pricing-price-amount site-pricing-price-amount-enterprise">{ENTERPRISE_PLAN_PRICE}</span>
+          <span className="site-pricing-price-period">{ENTERPRISE_PLAN_PERIOD}</span>
+        </div>
+        <p className="site-pricing-section-label">Everything in Team, plus</p>
+        <ul className="site-pricing-feature-list">
+          {ENTERPRISE_PLAN_FEATURES.map((label) => (
+            <li key={label}>
+              <span className="site-pricing-icon site-pricing-icon-enterprise" aria-hidden>
+                <IconCheck />
+              </span>
+              <span>{label}</span>
+            </li>
+          ))}
+        </ul>
+        <a href={MARKETING_DEMO_HREF} className="site-v2-btn site-pricing-cta site-pricing-cta-enterprise">
+          {MARKETING_CTA_REQUEST_DEMO}
+        </a>
+        <p className="site-pricing-cta-note">
+          <Link to="/enterprise">Learn about Enterprise</Link>
+        </p>
       </section>
     </div>
   );

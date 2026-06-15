@@ -28,13 +28,13 @@ type Props = {
    * Only affects the overlay after the user changes workspace from the footer select (not when using nav links).
    */
   workspaceOverlayLoading?: boolean;
-  /** When false, the Plan (billing) sidebar item is hidden (non-owners in a workspace). */
+  /** When false, the Billing sidebar item is hidden (non-owners in a workspace). */
   showPlanNav: boolean;
   /** When false, Activity and Workspace are hidden (workspace on Free plan). */
   showActivityExecuteNav: boolean;
 };
 
-const WORKSPACE_OVERLAY_MIN_MS = 4000;
+const WORKSPACE_OVERLAY_MIN_MS = 800;
 
 function IconActivity() {
   return (
@@ -240,7 +240,7 @@ export function EnterpriseLayout({
           ) : null}
           <NavItem to="/team" navId="team" activeNav={activeNav} icon={<IconTeam />} label="Team" />
           {showPlanNav ? (
-            <NavItem to="/billing" navId="plan" activeNav={activeNav} icon={<IconPlan />} label="Plan" />
+            <NavItem to="/billing" navId="plan" activeNav={activeNav} icon={<IconPlan />} label="Billing" />
           ) : null}
           <NavItem to="/profile" navId="profile" activeNav={activeNav} icon={<IconProfile />} label="Profile" />
         </nav>

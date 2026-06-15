@@ -23,6 +23,8 @@ import { PrivacyPolicyPage } from "./routes/PrivacyPolicyPage";
 import { TermsOfServicePage } from "./routes/TermsOfServicePage";
 import { WebsiteHomePage } from "./routes/WebsiteHomePage";
 import { PricingPage } from "./routes/PricingPage";
+import { EnterprisePage } from "./routes/EnterprisePage";
+import { SecurityPage } from "./routes/SecurityPage";
 import { InvitePage } from "./routes/InvitePage";
 import { GetAppPage } from "./routes/GetAppPage";
 import { getActiveApiTarget, getWebEnvConfigError } from "./lib/env-config";
@@ -112,6 +114,8 @@ export default function App() {
         <Route path="/account-deletion" element={<AccountDeletionPage />} />
         <Route path="/" element={<WebsiteHomePage />} />
         <Route path="/pricing" element={<PricingPage />} />
+        <Route path="/enterprise" element={<EnterprisePage />} />
+        <Route path="/security" element={<SecurityPage />} />
         <Route
           element={
             <AuthGate>
