@@ -95,8 +95,11 @@ export function addCalendarDaysInTimeZone(date: Date, days: number, timeZone: st
   const y = Number(match[1]);
   const mo = Number(match[2]);
   const d = Number(match[3]);
-  const nextUtc = Date.UTC(y, mo - 1, d + days);
-  const nextDay = calendarDayFromInstant(new Date(nextUtc), tz);
+  // Pure calendar-day math on the wall date in tz — do not route through UTC midnight
+  // or US timezones will drift backward one day per step (Mon → Sun → Sat).
+  const next = new Date(Date.UTC(y, mo - 1, d));
+  next.setUTCDate(next.getUTCDate() + days);
+  const nextDay = `${next.getUTCFullYear()}-${String(next.getUTCMonth() + 1).padStart(2, "0")}-${String(next.getUTCDate()).padStart(2, "0")}`;
   return dueInstantFromCalendarDay(nextDay, tz);
 }
 
