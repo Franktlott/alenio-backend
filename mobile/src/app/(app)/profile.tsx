@@ -18,8 +18,9 @@ import {
 import * as Notifications from "expo-notifications";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { Camera, LogOut, Pencil, X, Trash2, Bell, Check, Crown, MessageSquare } from "lucide-react-native";
+import { Camera, LogOut, Pencil, X, Trash2, Bell, Check, Crown, MessageSquare, Globe } from "lucide-react-native";
 import { notificationPreferencesSummary } from "@/components/NotificationPreferencesPanel";
+import { COMMON_TIMEZONES, formatTimeZoneLabel, getBrowserTimeZone, resolveTimeZone } from "@/lib/timezone";
 import { authClient, clearAccessToken, getAuthHeaders } from "@/lib/auth/auth-client";
 import { SESSION_QUERY_KEY, markSessionSignedOut, useInvalidateSession, useSession } from "@/lib/auth/use-session";
 import { clearNotifDebugLog, getNotifDebugLog, getNotifStatus, registerForPushNotificationsAsync } from "@/lib/notifications";
@@ -106,6 +107,8 @@ export default function ProfileScreen() {
   const [deleteTeamPhrase, setDeleteTeamPhrase] = useState("");
   const [deleteTeamPassword, setDeleteTeamPassword] = useState("");
   const [leavingTeam, setLeavingTeam] = useState<Team | null>(null);
+  const [timezoneModalOpen, setTimezoneModalOpen] = useState(false);
+  const [timezoneSaving, setTimezoneSaving] = useState(false);
 
   const { data: teams = [], isLoading: teamsLoading } = useQuery({
     queryKey: ["teams"],
@@ -117,9 +120,18 @@ export default function ProfileScreen() {
   const { data: meProfile } = useQuery({
     queryKey: ME_QUERY_KEY,
     queryFn: () =>
-      api.get<{ id: string; name: string; email: string; image: string | null; isAdmin?: boolean }>("/api/me"),
+      api.get<{ id: string; name: string; email: string; image: string | null; isAdmin?: boolean; timezone?: string | null }>("/api/me"),
     enabled: !!user,
   });
+
+  useEffect(() => {
+    if (!meProfile?.id || meProfile.timezone) return;
+    const browserTz = getBrowserTimeZone();
+    if (!browserTz) return;
+    void api.patch("/api/profile", { timezone: browserTz }).then(() => {
+      queryClient.invalidateQueries({ queryKey: ME_QUERY_KEY });
+    });
+  }, [meProfile?.id, meProfile?.timezone, queryClient]);
 
   const { data: notifPrefs } = useQuery({
     queryKey: ["notification-preferences"],
@@ -734,6 +746,14 @@ export default function ProfileScreen() {
                 onPress={() => router.push("/notifications")}
                 testID="notifications-menu-row"
               />
+              <ProfileDivider inset />
+              <ProfileMenuRow
+                icon={Globe}
+                title="Time zone"
+                subtitle={formatTimeZoneLabel(resolveTimeZone(meProfile?.timezone))}
+                onPress={() => setTimezoneModalOpen(true)}
+                testID="timezone-menu-row"
+              />
             </ProfileCard>
           </ProfileSection>
 
@@ -1265,6 +1285,44 @@ export default function ProfileScreen() {
               </View>
             </Pressable>
           </SafeKeyboardAvoidingView>
+        </Pressable>
+      </Modal>
+
+      <Modal visible={timezoneModalOpen} transparent animationType="slide" onRequestClose={() => setTimezoneModalOpen(false)}>
+        <Pressable className="flex-1 bg-black/40 justify-end" onPress={() => setTimezoneModalOpen(false)}>
+          <Pressable className="bg-white dark:bg-slate-900 rounded-t-3xl max-h-[70%]" onPress={(e) => e.stopPropagation()}>
+            <View className="px-5 pt-5 pb-3 border-b border-slate-100 dark:border-slate-800">
+              <Text className="text-lg font-bold text-slate-900 dark:text-white">Time zone</Text>
+              <Text className="text-sm text-slate-500 mt-1">Used for due dates and recurring tasks.</Text>
+            </View>
+            <ScrollView className="px-5 py-3">
+              {COMMON_TIMEZONES.map((tz) => {
+                const selected = resolveTimeZone(meProfile?.timezone) === tz;
+                return (
+                  <TouchableOpacity
+                    key={tz}
+                    disabled={timezoneSaving}
+                    onPress={async () => {
+                      setTimezoneSaving(true);
+                      try {
+                        await api.patch("/api/profile", { timezone: tz });
+                        await queryClient.invalidateQueries({ queryKey: ME_QUERY_KEY });
+                        setTimezoneModalOpen(false);
+                      } finally {
+                        setTimezoneSaving(false);
+                      }
+                    }}
+                    className="py-3 border-b border-slate-100 dark:border-slate-800 flex-row items-center justify-between"
+                  >
+                    <Text className={`text-sm ${selected ? "font-bold text-indigo-600" : "text-slate-700 dark:text-slate-200"}`}>
+                      {formatTimeZoneLabel(tz)}
+                    </Text>
+                    {selected ? <Check size={18} color="#4361EE" /> : null}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </Pressable>
         </Pressable>
       </Modal>
     </SafeAreaView>

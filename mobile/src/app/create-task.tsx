@@ -24,6 +24,8 @@ import { uploadFile } from "@/lib/upload";
 import { useSession } from "@/lib/auth/use-session";
 import type { Task, TaskPriority, RecurrenceType, Team, TeamMember, TaskTemplate, TaskStatus } from "@/lib/types";
 import { recurrenceCountHint, recurrenceDurationUnit } from "@/lib/recurring-task";
+import { ME_QUERY_KEY } from "@/lib/auth/me-query";
+import { calendarDueIso, resolveTimeZone } from "@/lib/timezone";
 
 const PRIORITIES: { label: string; value: TaskPriority; color: string }[] = [
   { label: "Low", value: "low", color: "#94A3B8" },
@@ -44,17 +46,16 @@ const TASK_STATUS_OPTIONS: { key: "open" | "in_progress" | "completed"; label: s
   { key: "completed", label: "Completed", value: "done", color: "#10B981" },
 ];
 
-function calendarDueIso(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}T23:59:59.000Z`;
-}
-
 export default function CreateTaskScreen() {
   const { teamId, prefillTitle, initialDueDate } = useLocalSearchParams<{ teamId: string; prefillTitle?: string; initialDueDate?: string }>();
   const queryClient = useQueryClient();
   const { data: session } = useSession();
+
+  const { data: meProfile } = useQuery({
+    queryKey: ME_QUERY_KEY,
+    queryFn: () => api.get<{ timezone?: string | null }>("/api/me"),
+    enabled: !!teamId,
+  });
 
   const [title, setTitle] = useState(typeof prefillTitle === "string" ? prefillTitle : "");
   const [description, setDescription] = useState("");
@@ -225,7 +226,8 @@ export default function CreateTaskScreen() {
       description: description.trim() || undefined,
       status: statusValue,
       priority,
-      dueDate: dueDate ? calendarDueIso(dueDate) : undefined,
+      dueDate: dueDate ? calendarDueIso(dueDate, resolveTimeZone(meProfile?.timezone)) : undefined,
+      timeZone: resolveTimeZone(meProfile?.timezone),
       assigneeIds: selectedAssignees,
       isJoint: isJoint || undefined,
       recurrence: isRecurring

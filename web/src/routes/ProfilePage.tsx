@@ -13,6 +13,7 @@ import {
   type WebTeamRow,
 } from "../lib/api";
 import { pickEnterpriseTeamId, setPersistedEnterpriseTeamId, switchEnterpriseWorkspace } from "../lib/enterprise-selected-team";
+import { COMMON_TIMEZONES, formatTimeZoneLabel, getBrowserTimeZone, resolveTimeZone } from "../lib/timezone";
 
 function userInitials(user: WebMeUser | null): string {
   if (!user) return "?";
@@ -57,6 +58,8 @@ export function ProfilePage() {
   const [photoBusy, setPhotoBusy] = useState(false);
   const [formErr, setFormErr] = useState<string | null>(null);
   const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
+  const [timezone, setTimezone] = useState(getBrowserTimeZone());
+  const [timezoneSaving, setTimezoneSaving] = useState(false);
 
   const onAccountDeleted = async () => {
     try {
@@ -72,6 +75,24 @@ export function ProfilePage() {
   useEffect(() => {
     if (me) setNameEdit((prev) => (prev === "" || !isEditing ? me.name?.trim() ?? "" : prev));
   }, [me?.id, me?.name, isEditing]);
+
+  useEffect(() => {
+    setTimezone(resolveTimeZone(me?.timezone));
+  }, [me?.timezone]);
+
+  const onSaveTimezone = async (value: string) => {
+    setTimezone(value);
+    setTimezoneSaving(true);
+    setFormErr(null);
+    try {
+      const updated = await patchApiProfile({ timezone: value });
+      setMe((prev) => (prev ? { ...prev, timezone: updated.timezone } : prev));
+    } catch (e) {
+      setFormErr(e instanceof Error ? e.message : "Could not save timezone.");
+    } finally {
+      setTimezoneSaving(false);
+    }
+  };
 
   const onSaveProfile = async () => {
     if (!me || !nameEdit.trim()) return;
@@ -224,6 +245,28 @@ export function ProfilePage() {
                 </>
               )}
               <div className="enterprise-muted enterprise-profile-email">{me?.email ?? "—"}</div>
+              <label className="enterprise-muted enterprise-profile-label" htmlFor="profile-timezone">
+                Time zone
+              </label>
+              <select
+                id="profile-timezone"
+                className="auth-input enterprise-profile-timezone-select"
+                value={timezone}
+                disabled={!me || timezoneSaving}
+                onChange={(e) => void onSaveTimezone(e.target.value)}
+              >
+                {!COMMON_TIMEZONES.includes(timezone as (typeof COMMON_TIMEZONES)[number]) ? (
+                  <option value={timezone}>{formatTimeZoneLabel(timezone)}</option>
+                ) : null}
+                {COMMON_TIMEZONES.map((tz) => (
+                  <option key={tz} value={tz}>
+                    {formatTimeZoneLabel(tz)}
+                  </option>
+                ))}
+              </select>
+              <p className="enterprise-muted enterprise-profile-edit-hint">
+                Used for due dates, recurring tasks, and calendar days.
+              </p>
               {!isEditing ? (
                 <span className="enterprise-team-account-pill-badge enterprise-profile-account-type-badge">
                   {userAccountBadgeLabel(teams ?? [])}

@@ -43,15 +43,17 @@ import { ensureOneOnOneSchema } from "./lib/ensure-one-on-one-schema";
 import { ensureDevelopmentPlanSchema } from "./lib/ensure-development-plan-schema";
 import { ensureTeamInviteSchema } from "./lib/ensure-team-invite-schema";
 import { ensureRecurrenceSeriesSchema } from "./lib/ensure-recurrence-series-schema";
+import { ensureUserTimezoneSchema } from "./lib/ensure-user-timezone-schema";
 import { developmentGoalsRouter } from "./routes/development-goals";
 import { teamInvitesPublicRouter } from "./routes/team-invites";
-import { redeemPendingInvitesForUser } from "./lib/team-invites";
+import { isValidTimeZone } from "./lib/timezone";
 
 syncPrismaSchemaOnStartup();
 const oneOnOneSchemaReady = ensureOneOnOneSchema(prisma);
 const developmentPlanSchemaReady = ensureDevelopmentPlanSchema(prisma);
 const teamInviteSchemaReady = ensureTeamInviteSchema(prisma);
 const recurrenceSeriesSchemaReady = ensureRecurrenceSeriesSchema(prisma);
+const userTimezoneSchemaReady = ensureUserTimezoneSchema(prisma);
 
 type Variables = {
   user: AppUser | null;
@@ -108,6 +110,7 @@ app.use("*", async (_c, next) => {
   await developmentPlanSchemaReady;
   await teamInviteSchemaReady;
   await recurrenceSeriesSchemaReady;
+  await userTimezoneSchemaReady;
   await next();
 });
 
@@ -560,15 +563,18 @@ app.patch("/api/profile", async (c) => {
   if (!user) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
 
   const body = await c.req.json();
-  const { name, image } = body;
+  const { name, image, timezone } = body;
 
   const updated = await prisma.user.update({
     where: { id: user.id },
     data: {
       ...(name !== undefined ? { name: name.trim() } : {}),
       ...(image !== undefined ? { image } : {}),
+      ...(timezone !== undefined
+        ? { timezone: typeof timezone === "string" && isValidTimeZone(timezone) ? timezone : null }
+        : {}),
     },
-    select: { id: true, name: true, email: true, image: true },
+    select: { id: true, name: true, email: true, image: true, timezone: true },
   });
 
   return c.json({ data: updated });
@@ -580,7 +586,7 @@ app.get("/api/me", async (c) => {
   if (!user) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
   const fullUser = await prisma.user.findUnique({
     where: { id: user.id },
-    select: { id: true, name: true, email: true, image: true, isAdmin: true },
+    select: { id: true, name: true, email: true, image: true, isAdmin: true, timezone: true },
   });
   return c.json({ data: fullUser });
 });

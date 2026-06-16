@@ -9,6 +9,7 @@ import {
   type WebMeUser,
 } from "../../lib/api";
 import { recurrenceCountHint, recurrenceDurationUnit } from "../../lib/recurring-task";
+import { resolveTimeZone } from "../../lib/timezone";
 
 const PRIORITIES = [
   { label: "Low", value: "low" },
@@ -156,7 +157,8 @@ export function WorkspaceTaskCreateModal({
     setSaving(true);
     setError(null);
     try {
-      const dueIso = dueDate ? `${dueDate}T23:59:59.000Z` : null;
+      const userTimeZone = resolveTimeZone(me?.timezone);
+      const dueIso = dueDate ? dueDate : null;
       await createWebTask({
         teamId,
         title: title.trim(),
@@ -164,6 +166,7 @@ export function WorkspaceTaskCreateModal({
         priority,
         status,
         dueDate: dueIso,
+        timeZone: userTimeZone,
         assigneeIds,
         isJoint: forceJoint ?? isJoint,
         subtasks,

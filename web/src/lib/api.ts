@@ -118,6 +118,7 @@ export type WebMeUser = {
   email: string | null;
   image: string | null;
   createdAt: string;
+  timezone?: string | null;
 };
 
 export type WebTeamRow = {
@@ -196,8 +197,8 @@ export function fetchWebMe() {
   return apiGetJson<{ data: WebMeUser | null }>("/web/api/me").then((r) => r.data);
 }
 
-export function patchApiProfile(body: { name?: string; image?: string | null }) {
-  return apiPatchJson<{ data: { id: string; name: string | null; email: string | null; image: string | null } }>(
+export function patchApiProfile(body: { name?: string; image?: string | null; timezone?: string | null }) {
+  return apiPatchJson<{ data: { id: string; name: string | null; email: string | null; image: string | null; timezone: string | null } }>(
     "/api/profile",
     body,
   ).then((r) => r.data);
@@ -692,6 +693,7 @@ export function updateCoreTeamTask(
     status: string;
     attachmentUrl: string | null;
     scope: "task" | "series";
+    timeZone?: string;
   }>,
 ) {
   return apiPatchJson<{ data: ApiTask }>(`/api/teams/${encodeURIComponent(teamId)}/tasks/${encodeURIComponent(taskId)}`, patch).then(
@@ -1113,6 +1115,7 @@ export type CreateWebTaskInput = {
     daysOfWeek?: string | null;
     dayOfMonth?: number | null;
   };
+  timeZone?: string;
 };
 
 export function createTeamTask(input: CreateWebTaskInput) {
@@ -1130,6 +1133,7 @@ export function createTeamTask(input: CreateWebTaskInput) {
       incognito: input.incognito === true,
       attachmentUrl: input.attachmentUrl || undefined,
       recurrence: input.recurrence,
+      timeZone: input.timeZone,
       subtasks: input.subtasks?.filter((t) => t.trim()).map((title) => ({ title: title.trim() })),
     },
   ).then((r) => {

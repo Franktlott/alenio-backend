@@ -4,7 +4,8 @@ import { DashboardTopBar } from "../components/DashboardTopBar";
 import { EnterpriseLayout, type EnterpriseNavId } from "../components/EnterpriseLayout";
 import { NoTeamsEmptyState } from "../components/NoTeamsEmptyState";
 import { EnterpriseShellContext, type EnterpriseShellContextValue } from "../contexts/EnterpriseShellContext";
-import { fetchWebMe, fetchWebTeams, type WebMeUser, type WebTeamRow } from "../lib/api";
+import { fetchWebMe, fetchWebTeams, patchApiProfile, type WebMeUser, type WebTeamRow } from "../lib/api";
+import { getBrowserTimeZone } from "../lib/timezone";
 import { hasMobileWebPreferred } from "../lib/app-links";
 import { pickEnterpriseTeamId, teamsWorkspaceSelectionKey } from "../lib/enterprise-selected-team";
 import { isMobileBrowser } from "../lib/mobile-browser";
@@ -50,11 +51,26 @@ export function EnterpriseShellLayout() {
     setShellContentSuffix("");
   }, [location.pathname]);
 
+  const syncTimeZoneIfNeeded = useCallback(async (user: WebMeUser | null) => {
+    if (!user) return user;
+    const browserTz = getBrowserTimeZone();
+    if (!user.timezone && browserTz) {
+      try {
+        const updated = await patchApiProfile({ timezone: browserTz });
+        return { ...user, timezone: updated.timezone };
+      } catch {
+        return user;
+      }
+    }
+    return user;
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       try {
-        const [u, t] = await Promise.all([fetchWebMe(), fetchWebTeams()]);
+        const [rawMe, t] = await Promise.all([fetchWebMe(), fetchWebTeams()]);
+        const u = rawMe ? await syncTimeZoneIfNeeded(rawMe) : rawMe;
         if (cancelled) return;
         setMe(u);
         setTeams(t ?? []);
@@ -69,7 +85,7 @@ export function EnterpriseShellLayout() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [syncTimeZoneIfNeeded]);
 
   const teamsWorkspaceKeyRef = useRef("");
   useEffect(() => {
@@ -85,11 +101,12 @@ export function EnterpriseShellLayout() {
   }, [teams]);
 
   const refreshMeAndTeams = useCallback(async () => {
-    const [u, t] = await Promise.all([fetchWebMe(), fetchWebTeams()]);
+    const [rawMe, t] = await Promise.all([fetchWebMe(), fetchWebTeams()]);
+    const u = rawMe ? await syncTimeZoneIfNeeded(rawMe) : rawMe;
     setMe(u);
     setTeams(t ?? []);
     setShellLoadErr(null);
-  }, []);
+  }, [syncTimeZoneIfNeeded]);
 
   /** Refetch teams when the selected workspace id changes (not when the same id gets a new `teams` array). */
   const lastTeamRefreshForSelectedIdRef = useRef<string | null>(null);

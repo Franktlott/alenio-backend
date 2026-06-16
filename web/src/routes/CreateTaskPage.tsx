@@ -7,6 +7,7 @@ import {
   fetchWebTeam,
 } from "../lib/api";
 import { queryKeys } from "../lib/query-keys";
+import { resolveTimeZone } from "../lib/timezone";
 
 const PRIORITIES = [
   { label: "Low", value: "low" },
@@ -88,11 +89,8 @@ export function CreateTaskPage() {
     setSubtasks((s) => s.filter((_, i) => i !== index));
   };
 
-  const dueIso = useMemo(() => {
-    if (!dueDate) return null;
-    const d = new Date(dueDate + "T23:59:59");
-    return Number.isNaN(d.getTime()) ? null : d.toISOString();
-  }, [dueDate]);
+  const dueIso = useMemo(() => (dueDate ? dueDate : null), [dueDate]);
+  const userTimeZone = resolveTimeZone(me?.timezone);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -118,6 +116,7 @@ export function CreateTaskPage() {
         priority,
         status,
         dueDate: dueIso,
+        timeZone: userTimeZone,
         assigneeIds,
         isJoint: assigneeIds.length > 1 && isJoint,
         subtasks: subtasks.map((s) => s.trim()).filter(Boolean),

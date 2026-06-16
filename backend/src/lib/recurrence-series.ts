@@ -1,4 +1,12 @@
 import type { Prisma, PrismaClient, RecurrenceRule, RecurrenceSeries, Task } from "@prisma/client";
+import {
+  addCalendarDaysInTimeZone,
+  calendarDayFromInstant,
+  DEFAULT_TIMEZONE,
+  dueInstantFromCalendarDay,
+  getZonedDayOfWeek,
+  resolveTimeZone,
+} from "./timezone";
 
 export type RecurrenceScope = "task" | "series";
 
@@ -10,6 +18,7 @@ export type RecurrenceInput = {
   interval?: number;
   daysOfWeek?: string | null;
   dayOfMonth?: number | null;
+  timeZone?: string | null;
 };
 
 type TaskWithRule = Task & { recurrenceRule?: RecurrenceRule | null };
@@ -36,33 +45,21 @@ export function seriesOccurrenceCount(series: Pick<RecurrenceSeries, "occurrence
   return normalizeOccurrenceCount(series.interval);
 }
 
-/** End-of-day UTC so dedup keys match regardless of client timezone. */
-export function normalizeSeriesDueDate(date: Date): Date {
-  return new Date(
-    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), 23, 59, 59, 999),
-  );
+export function dueDayKey(date: Date, timeZone?: string | null): string {
+  return calendarDayFromInstant(date, resolveTimeZone(timeZone));
 }
 
-export function dueDayKey(date: Date): string {
-  const normalized = normalizeSeriesDueDate(date);
-  const y = normalized.getUTCFullYear();
-  const m = String(normalized.getUTCMonth() + 1).padStart(2, "0");
-  const d = String(normalized.getUTCDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}
-
-/** Parse a due date as the calendar day the user picked (UTC), not local midnight drift. */
-export function parseCalendarDueDate(input: string | Date): Date {
+/** Parse a calendar due date in the user's timezone. */
+export function parseCalendarDueDate(input: string | Date, timeZone: string = DEFAULT_TIMEZONE): Date {
   if (typeof input === "string") {
     const match = input.match(/^(\d{4})-(\d{2})-(\d{2})/);
     if (match) {
-      return normalizeSeriesDueDate(
-        new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]))),
-      );
+      return dueInstantFromCalendarDay(match[0], timeZone);
     }
   }
   const date = input instanceof Date ? input : new Date(input);
-  return normalizeSeriesDueDate(date);
+  const day = calendarDayFromInstant(date, timeZone);
+  return day ? dueInstantFromCalendarDay(day, timeZone) : date;
 }
 
 /** Snap the series start to the chosen weekday / day-of-month before spawning. */
@@ -71,20 +68,26 @@ export function alignRecurringAnchorDueDate(
   dueDate: Date,
   daysOfWeek?: string | null,
   dayOfMonth?: number | null,
+  timeZone: string = DEFAULT_TIMEZONE,
 ): Date {
-  const anchor = parseCalendarDueDate(dueDate);
+  const tz = resolveTimeZone(timeZone);
+  const anchor = parseCalendarDueDate(dueDate, tz);
   if (type === "weekly" && daysOfWeek != null && daysOfWeek !== "") {
     const targetDay = parseInt(daysOfWeek, 10);
-    const diff = (targetDay - anchor.getUTCDay() + 7) % 7;
-    anchor.setUTCDate(anchor.getUTCDate() + diff);
-    return normalizeSeriesDueDate(anchor);
+    const currentDay = getZonedDayOfWeek(anchor, tz);
+    const diff = (targetDay - currentDay + 7) % 7;
+    if (diff === 0) return anchor;
+    return addCalendarDaysInTimeZone(anchor, diff, tz);
   }
   if (type === "monthly" && dayOfMonth != null) {
-    const year = anchor.getUTCFullYear();
-    const month = anchor.getUTCMonth();
-    const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+    const parts = calendarDayFromInstant(anchor, tz).split("-").map(Number);
+    const [y, mo] = parts;
+    const daysInMonth = new Date(Date.UTC(y!, mo!, 0)).getUTCDate();
     const day = Math.min(dayOfMonth, daysInMonth);
-    return normalizeSeriesDueDate(new Date(Date.UTC(year, month, day)));
+    return dueInstantFromCalendarDay(
+      `${y}-${String(mo).padStart(2, "0")}-${String(day).padStart(2, "0")}`,
+      tz,
+    );
   }
   return anchor;
 }
@@ -95,33 +98,32 @@ export function getNextDueDate(
   fromDate: Date,
   daysOfWeek?: string | null,
   dayOfMonth?: number | null,
+  timeZone: string = DEFAULT_TIMEZONE,
 ): Date {
-  const next = new Date(fromDate);
+  const tz = resolveTimeZone(timeZone);
   switch (type) {
     case "daily":
-      next.setUTCDate(next.getUTCDate() + interval);
-      break;
+      return addCalendarDaysInTimeZone(fromDate, interval, tz);
     case "weekly":
-      // Anchor is already on the chosen weekday — step exactly 7 days (no re-snap).
-      next.setUTCDate(next.getUTCDate() + 7 * interval);
-      break;
+      return addCalendarDaysInTimeZone(fromDate, 7 * interval, tz);
     case "monthly": {
-      const rawMonth = next.getUTCMonth() + interval;
-      const targetYear = next.getUTCFullYear() + Math.floor(rawMonth / 12);
-      const targetMonth = ((rawMonth % 12) + 12) % 12;
-      const daysInTargetMonth = new Date(Date.UTC(targetYear, targetMonth + 1, 0)).getUTCDate();
+      const currentDay = calendarDayFromInstant(fromDate, tz);
+      const [y, mo, d] = currentDay.split("-").map(Number);
+      const rawMonth = (mo! - 1) + interval;
+      const targetYear = y! + Math.floor(rawMonth / 12);
+      const targetMonth = ((rawMonth % 12) + 12) % 12 + 1;
+      const daysInTargetMonth = new Date(Date.UTC(targetYear, targetMonth, 0)).getUTCDate();
       const targetDay =
-        dayOfMonth != null
-          ? Math.min(dayOfMonth, daysInTargetMonth)
-          : Math.min(next.getUTCDate(), daysInTargetMonth);
-      next.setUTCFullYear(targetYear, targetMonth, targetDay);
-      break;
+        dayOfMonth != null ? Math.min(dayOfMonth, daysInTargetMonth) : Math.min(d!, daysInTargetMonth);
+      return dueInstantFromCalendarDay(
+        `${targetYear}-${String(targetMonth).padStart(2, "0")}-${String(targetDay).padStart(2, "0")}`,
+        tz,
+      );
     }
     default:
-      next.setUTCDate(next.getUTCDate() + interval);
+      return addCalendarDaysInTimeZone(fromDate, interval, tz);
   }
   void daysOfWeek;
-  return normalizeSeriesDueDate(next);
 }
 
 export function isRecurringTask(task: Pick<Task, "recurrenceSeriesId"> & { recurrenceRule?: RecurrenceRule | null }) {
@@ -149,6 +151,7 @@ export async function createRecurrenceSeries(
       occurrenceCount,
       daysOfWeek: recurrence.daysOfWeek ?? null,
       dayOfMonth: recurrence.dayOfMonth ?? null,
+      timeZone: resolveTimeZone(recurrence.timeZone),
     },
   });
 }
@@ -182,15 +185,16 @@ export function listRecurrenceDueDatesForCount(
   occurrenceCount: number,
   daysOfWeek?: string | null,
   dayOfMonth?: number | null,
+  timeZone: string = DEFAULT_TIMEZONE,
 ): Date[] {
   const total = normalizeOccurrenceCount(occurrenceCount);
   const maxFuture = Math.max(0, total - 1);
-  const anchor = alignRecurringAnchorDueDate(type, anchorDue, daysOfWeek, dayOfMonth);
+  const anchor = alignRecurringAnchorDueDate(type, anchorDue, daysOfWeek, dayOfMonth, timeZone);
   const dates: Date[] = [];
   let current = anchor;
 
   while (dates.length < maxFuture) {
-    const next = getNextDueDate(type, RECURRENCE_STEP_INTERVAL, current, daysOfWeek, dayOfMonth);
+    const next = getNextDueDate(type, RECURRENCE_STEP_INTERVAL, current, daysOfWeek, dayOfMonth, timeZone);
     dates.push(next);
     current = next;
   }
@@ -207,6 +211,7 @@ export async function spawnAllRecurrenceTasks(
   if (!series) return 0;
 
   const seriesId = series.id;
+  const seriesTimeZone = resolveTimeZone(series.timeZone);
   const occurrenceCount = seriesOccurrenceCount(series);
   const existingTasks = await prisma.task.findMany({
     where: { recurrenceSeriesId: seriesId },
@@ -217,7 +222,7 @@ export async function spawnAllRecurrenceTasks(
 
   const existingDueDays = new Set(
     existingTasks
-      .map((row) => (row.dueDate ? dueDayKey(row.dueDate) : null))
+      .map((row) => (row.dueDate ? dueDayKey(row.dueDate, seriesTimeZone) : null))
       .filter((day): day is string => day != null),
   );
 
@@ -226,7 +231,7 @@ export async function spawnAllRecurrenceTasks(
     .filter((date): date is Date => date != null)
     .sort((a, b) => a.getTime() - b.getTime());
 
-  const anchorDue = normalizeSeriesDueDate(sortedDueDates[0] ?? task.dueDate ?? new Date());
+  const anchorDue = sortedDueDates[0] ?? task.dueDate ?? new Date();
 
   const futureDueDates = listRecurrenceDueDatesForCount(
     series.type,
@@ -234,7 +239,8 @@ export async function spawnAllRecurrenceTasks(
     occurrenceCount,
     series.daysOfWeek,
     series.dayOfMonth,
-  ).filter((dueDate) => !existingDueDays.has(dueDayKey(dueDate)));
+    seriesTimeZone,
+  ).filter((dueDate) => !existingDueDays.has(dueDayKey(dueDate, seriesTimeZone)));
 
   const remainingSlots = occurrenceCount - existingTasks.length;
   const toCreate = futureDueDates.slice(0, remainingSlots);

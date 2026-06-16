@@ -63,7 +63,7 @@ webRouter.get("/api/me", async (c) => {
   if (!userId) return c.json({ error: "Unauthorized" }, 401);
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true, name: true, email: true, image: true, createdAt: true },
+    select: { id: true, name: true, email: true, image: true, createdAt: true, timezone: true },
   });
   return c.json({ data: user });
 });

@@ -13,13 +13,13 @@ import {
   getNextDueDate,
   isRecurringTask,
   materializeRecurringTasksForTeam,
-  normalizeSeriesDueDate,
   parseCalendarDueDate,
   resolveRecurrenceOccurrenceCount,
   spawnAllRecurrenceTasks,
   updateTaskWithSeriesScope,
   type RecurrenceScope,
 } from "../lib/recurrence-series";
+import { isValidTimeZone, resolveTimeZone } from "../lib/timezone";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -52,7 +52,14 @@ type RecurrenceBody = {
   interval?: number;
   daysOfWeek?: string | null;
   dayOfMonth?: number | null;
+  timeZone?: string | null;
 };
+
+async function getUserTimeZone(userId: string, bodyTimeZone?: unknown): Promise<string> {
+  if (typeof bodyTimeZone === "string" && isValidTimeZone(bodyTimeZone)) return bodyTimeZone;
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { timezone: true } });
+  return resolveTimeZone(user?.timezone);
+}
 
 async function buildRecurrenceTaskFields(
   taskSeed: {
@@ -67,11 +74,22 @@ async function buildRecurrenceTaskFields(
   },
   recurrence: RecurrenceBody | undefined,
   dueDate: string | null | undefined,
+  timeZone: string,
 ) {
   if (!recurrence) return {};
 
   const occurrenceCount = resolveRecurrenceOccurrenceCount(recurrence);
-  const series = await createRecurrenceSeries(prisma, taskSeed, recurrence);
+  const series = await createRecurrenceSeries(prisma, taskSeed, { ...recurrence, timeZone });
+  const anchor =
+    dueDate != null
+      ? alignRecurringAnchorDueDate(
+          recurrence.type,
+          parseCalendarDueDate(dueDate, timeZone),
+          recurrence.daysOfWeek,
+          recurrence.dayOfMonth,
+          timeZone,
+        )
+      : null;
   return {
     recurrenceSeriesId: series.id,
     recurrenceRule: {
@@ -80,19 +98,8 @@ async function buildRecurrenceTaskFields(
         interval: occurrenceCount,
         daysOfWeek: recurrence.daysOfWeek,
         dayOfMonth: recurrence.dayOfMonth,
-        nextDueAt: dueDate
-          ? getNextDueDate(
-              recurrence.type,
-              1,
-              alignRecurringAnchorDueDate(
-                recurrence.type,
-                parseCalendarDueDate(dueDate),
-                recurrence.daysOfWeek,
-                recurrence.dayOfMonth,
-              ),
-              recurrence.daysOfWeek,
-              recurrence.dayOfMonth,
-            )
+        nextDueAt: anchor
+          ? getNextDueDate(recurrence.type, 1, anchor, recurrence.daysOfWeek, recurrence.dayOfMonth, timeZone)
           : null,
       },
     },
@@ -349,11 +356,13 @@ tasksRouter.post("/", async (c) => {
   }
 
   const body = await c.req.json();
-  const { title, description, priority, dueDate, status, assigneeIds, recurrence, attachmentUrl, incognito, isJoint, subtasks } = body;
+  const { title, description, priority, dueDate, status, assigneeIds, recurrence, attachmentUrl, incognito, isJoint, subtasks, timeZone: bodyTimeZone } = body;
 
   if (!title?.trim()) {
     return c.json({ error: { message: "Title is required", code: "VALIDATION_ERROR" } }, 400);
   }
+
+  const userTimeZone = await getUserTimeZone(user.id, bodyTimeZone);
 
   const taskInclude = {
     assignments: { include: { user: { select: { id: true, name: true, email: true, image: true } } } },
@@ -366,11 +375,12 @@ tasksRouter.post("/", async (c) => {
     ? recurrence
       ? alignRecurringAnchorDueDate(
           recurrence.type,
-          parseCalendarDueDate(dueDate),
+          parseCalendarDueDate(dueDate, userTimeZone),
           recurrence.daysOfWeek,
           recurrence.dayOfMonth,
+          userTimeZone,
         )
-      : new Date(dueDate)
+      : parseCalendarDueDate(dueDate, userTimeZone)
     : null;
   const normalizedStatus = status === "done" || status === "in_progress" || status === "todo" ? status : "todo";
 
@@ -409,7 +419,7 @@ tasksRouter.post("/", async (c) => {
 
   if (isJoint === true && ids.length > 1) {
     // Joint task: one task shared by all assignees
-    const recurrenceFields = await buildRecurrenceTaskFields(taskSeed, recurrence, dueDate);
+    const recurrenceFields = await buildRecurrenceTaskFields(taskSeed, recurrence, dueDate, userTimeZone);
     const task = await prisma.task.create({
       data: {
         ...baseTaskData,
@@ -423,7 +433,7 @@ tasksRouter.post("/", async (c) => {
     tasks = [task];
   } else if (ids.length <= 1) {
     // Single task (0 or 1 assignee)
-    const recurrenceFields = await buildRecurrenceTaskFields(taskSeed, recurrence, dueDate);
+    const recurrenceFields = await buildRecurrenceTaskFields(taskSeed, recurrence, dueDate, userTimeZone);
     const task = await prisma.task.create({
       data: {
         ...baseTaskData,
@@ -438,7 +448,7 @@ tasksRouter.post("/", async (c) => {
     // One task per assignee (existing behavior)
     tasks = await Promise.all(
       ids.map(async (assigneeId) => {
-        const recurrenceFields = await buildRecurrenceTaskFields(taskSeed, recurrence, dueDate);
+        const recurrenceFields = await buildRecurrenceTaskFields(taskSeed, recurrence, dueDate, userTimeZone);
         return prisma.task.create({
           data: {
             ...baseTaskData,
@@ -821,8 +831,9 @@ tasksRouter.patch("/:taskId", async (c) => {
   }
 
   const body = await c.req.json();
-  const { title, description, priority, dueDate, status, attachmentUrl, scope: scopeRaw } = body;
+  const { title, description, priority, dueDate, status, attachmentUrl, scope: scopeRaw, timeZone: bodyTimeZone } = body;
   const recurrenceScope = parseRecurrenceScope(scopeRaw);
+  const userTimeZone = await getUserTimeZone(user.id, bodyTimeZone);
 
   // Non-creators may only update status (complete / recall)
   if (!isCreator && (title !== undefined || description !== undefined || priority !== undefined || dueDate !== undefined || attachmentUrl !== undefined)) {
@@ -889,7 +900,7 @@ tasksRouter.patch("/:taskId", async (c) => {
       ...(title !== undefined ? { title: title.trim() } : {}),
       ...(description !== undefined ? { description: description?.trim() } : {}),
       ...(priority !== undefined ? { priority } : {}),
-      ...(dueDate !== undefined ? { dueDate: dueDate ? new Date(dueDate) : null } : {}),
+      ...(dueDate !== undefined ? { dueDate: dueDate ? parseCalendarDueDate(dueDate, userTimeZone) : null } : {}),
       ...(status !== undefined ? { status, completedAt: status === "done" ? new Date() : null } : {}),
       ...(attachmentUrl !== undefined ? { attachmentUrl } : {}),
     },

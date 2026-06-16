@@ -32,6 +32,7 @@ import {
   taskBadges,
 } from "../../lib/task-display";
 import { isRecurringTask, type RecurrenceScope } from "../../lib/recurring-task";
+import { calendarDayFromInstant, resolveTimeZone } from "../../lib/timezone";
 
 function isImageAttachment(url: string): boolean {
   const clean = url.split("?")[0]?.toLowerCase() ?? "";
@@ -84,6 +85,7 @@ export function WorkspaceTaskDetailModal({
   onUpdated,
   onDeleted,
 }: Props) {
+  const userTimeZone = resolveTimeZone(me?.timezone);
   const [task, setTask] = useState<ApiTask>(initialTask);
   const [editMode, setEditMode] = useState(false);
   const [editTitle, setEditTitle] = useState(initialTask.title);
@@ -122,10 +124,10 @@ export function WorkspaceTaskDetailModal({
     setEditTitle(initialTask.title);
     setEditDescription(initialTask.description ?? "");
     setEditPriority(initialTask.priority);
-    setEditDueDate(initialTask.dueDate ? new Date(initialTask.dueDate).toISOString().slice(0, 10) : "");
+    setEditDueDate(initialTask.dueDate ? calendarDayFromInstant(initialTask.dueDate, userTimeZone) : "");
     setEditMode(false);
     setError(null);
-  }, [initialTask.id]);
+  }, [initialTask.id, userTimeZone]);
 
   const refreshTask = async () => {
     const detail = await fetchWebTaskDetail(task.id, teamId);
@@ -133,7 +135,7 @@ export function WorkspaceTaskDetailModal({
     setEditTitle(detail.title);
     setEditDescription(detail.description ?? "");
     setEditPriority(detail.priority);
-    setEditDueDate(detail.dueDate ? new Date(detail.dueDate).toISOString().slice(0, 10) : "");
+    setEditDueDate(detail.dueDate ? calendarDayFromInstant(detail.dueDate, userTimeZone) : "");
     await onUpdated();
   };
 
@@ -146,12 +148,12 @@ export function WorkspaceTaskDetailModal({
     setBusy(true);
     setError(null);
     try {
-      const dueIso = editDueDate ? new Date(`${editDueDate}T23:59:59`).toISOString() : null;
       const updated = await updateCoreTeamTask(teamId, task.id, {
         title: editTitle.trim(),
         description: editDescription.trim() || null,
         priority: editPriority,
-        dueDate: dueIso,
+        dueDate: editDueDate || null,
+        timeZone: userTimeZone,
         ...(scope === "series" ? { scope: "series" } : {}),
       });
       setTask(updated);
