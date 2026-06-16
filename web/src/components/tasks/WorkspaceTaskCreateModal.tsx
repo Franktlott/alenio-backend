@@ -10,17 +10,13 @@ import {
 } from "../../lib/api";
 import { recurrenceCountHint, recurrenceDurationUnit } from "../../lib/recurring-task";
 import { resolveTimeZone } from "../../lib/timezone";
+import { AssigneeMultiSelect } from "./AssigneeMultiSelect";
 
 const PRIORITIES = [
   { label: "Low", value: "low" },
   { label: "Medium", value: "medium" },
   { label: "High", value: "high" },
   { label: "Urgent", value: "urgent" },
-] as const;
-
-const STATUSES = [
-  { label: "Open", value: "todo" },
-  { label: "Completed", value: "done" },
 ] as const;
 
 const RECURRENCE_TYPES = [
@@ -55,12 +51,12 @@ export function WorkspaceTaskCreateModal({
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState("medium");
-  const [status, setStatus] = useState("todo");
   const [dueDate, setDueDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
   const [isJoint, setIsJoint] = useState(false);
   const [subtasks, setSubtasks] = useState<string[]>([]);
   const [newSubtask, setNewSubtask] = useState("");
+  const [subtasksOpen, setSubtasksOpen] = useState(false);
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurrenceType, setRecurrenceType] = useState("weekly");
   const [recurrenceCount, setRecurrenceCount] = useState("3");
@@ -77,20 +73,20 @@ export function WorkspaceTaskCreateModal({
 
   const isRegularMember = myRole === "member" || !myRole;
   const today = new Date().toISOString().slice(0, 10);
-
   const members = teamDetail?.members ?? [];
+  const membersLoading = open && !teamDetail;
 
   useEffect(() => {
     if (!open) return;
     setTitle("");
     setDescription("");
     setPriority("medium");
-    setStatus("todo");
     setDueDate(initialDueDate ?? new Date().toISOString().slice(0, 10));
     setAssigneeIds(me?.id ? [me.id] : []);
     setIsJoint(false);
     setSubtasks([]);
     setNewSubtask("");
+    setSubtasksOpen(false);
     setIsRecurring(false);
     setRecurrenceType("weekly");
     setRecurrenceCount("3");
@@ -121,13 +117,9 @@ export function WorkspaceTaskCreateModal({
     };
   }, [open, teamId]);
 
-  const toggleAssignee = (userId: string) => {
-    setAssigneeIds((prev) => {
-      const next = prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId];
-      if (next.length < 2) setIsJoint(false);
-      return next;
-    });
-  };
+  useEffect(() => {
+    if (assigneeIds.length < 2) setIsJoint(false);
+  }, [assigneeIds.length]);
 
   const applyTemplate = (template: TaskTemplate) => {
     setTitle(template.title);
@@ -135,6 +127,7 @@ export function WorkspaceTaskCreateModal({
     setPriority(template.priority || "medium");
     setIsJoint(template.isJoint);
     setSubtasks(template.subtasks.map((s) => s.title));
+    setSubtasksOpen(template.subtasks.length > 0);
     setAttachmentUrl(template.attachmentUrl);
     setIsRecurring(template.isRecurring);
     if (template.recurrenceType) setRecurrenceType(template.recurrenceType);
@@ -157,14 +150,13 @@ export function WorkspaceTaskCreateModal({
     setError(null);
     try {
       const userTimeZone = resolveTimeZone(me?.timezone);
-      const dueIso = dueDate ? dueDate : null;
       await createWebTask({
         teamId,
         title: title.trim(),
         description: description.trim() || null,
         priority,
-        status,
-        dueDate: dueIso,
+        status: "todo",
+        dueDate: dueDate || null,
         timeZone: userTimeZone,
         assigneeIds,
         isJoint: forceJoint ?? isJoint,
@@ -219,6 +211,14 @@ export function WorkspaceTaskCreateModal({
     input.click();
   };
 
+  const addSubtask = () => {
+    const trimmed = newSubtask.trim();
+    if (!trimmed) return;
+    setSubtasks((s) => [...s, trimmed]);
+    setNewSubtask("");
+    setSubtasksOpen(true);
+  };
+
   const canSaveTemplate = useMemo(() => title.trim().length > 0, [title]);
 
   if (!open) return null;
@@ -226,264 +226,295 @@ export function WorkspaceTaskCreateModal({
   return (
     <>
       <div className="enterprise-task-modal-backdrop" role="presentation" onClick={onClose}>
-        <div className="enterprise-task-modal enterprise-task-create-modal enterprise-workspace-create-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="enterprise-task-modal enterprise-workspace-create-modal enterprise-workspace-create-modal--v2"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="create-task-heading"
+          onClick={(e) => e.stopPropagation()}
+        >
           <button type="button" className="enterprise-task-modal-close" onClick={onClose} aria-label="Close">
             ×
           </button>
-          <header className="enterprise-task-modal-head enterprise-workspace-create-head">
+
+          <header className="enterprise-workspace-create-head enterprise-workspace-create-head--v2">
             <div>
-              <h3 className="enterprise-task-modal-title">Create task</h3>
-              <p className="enterprise-muted">Assign work, set a due date, and optionally repeat it.</p>
+              <h3 id="create-task-heading" className="enterprise-workspace-create-heading">
+                New task
+              </h3>
+              <p className="enterprise-muted enterprise-workspace-create-sub">
+                Capture the work, assign teammates, and set when it is due.
+              </p>
             </div>
-            <div className="enterprise-workspace-create-head-actions">
-              <button type="button" className="enterprise-dashboard-btn-outline" onClick={() => setTemplatesOpen(true)}>
-                Templates
-              </button>
-            </div>
+            <button type="button" className="enterprise-inline-link-btn" onClick={() => setTemplatesOpen(true)}>
+              Use template
+            </button>
           </header>
 
-          <form className="create-task-form enterprise-workspace-create-form" onSubmit={handleSubmit}>
-            <div className="enterprise-workspace-create-body">
-            <label className="enterprise-muted enterprise-profile-label" htmlFor="create-task-title">
-              Title
-            </label>
-            <input id="create-task-title" className="auth-input" value={title} onChange={(e) => setTitle(e.target.value)} required />
-
-            <label className="enterprise-muted enterprise-profile-label" htmlFor="create-task-desc">
-              Description
-            </label>
-            <textarea
-              id="create-task-desc"
-              className="auth-input create-task-textarea"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={3}
-            />
-
-            <div className="create-task-row">
-              <div className="create-task-field">
-                <label className="enterprise-muted enterprise-profile-label" htmlFor="create-task-due">
-                  Due date
+          <form className="enterprise-workspace-create-form" onSubmit={handleSubmit}>
+            <div className="enterprise-workspace-create-layout">
+              <div className="enterprise-workspace-create-main">
+                <label className="sr-only" htmlFor="create-task-title">
+                  Task title
                 </label>
                 <input
-                  id="create-task-due"
-                  type="date"
-                  className="auth-input"
-                  value={dueDate}
-                  min={isRegularMember ? today : undefined}
-                  onChange={(e) => setDueDate(e.target.value)}
+                  id="create-task-title"
+                  className="enterprise-create-title-input"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="What needs to get done?"
+                  required
+                  autoFocus
                 />
-              </div>
-              <div className="create-task-field">
-                <label className="enterprise-muted enterprise-profile-label" htmlFor="create-task-priority">
-                  Priority
+
+                <label className="enterprise-create-field-label" htmlFor="create-task-desc">
+                  Description
                 </label>
-                <select id="create-task-priority" className="auth-input" value={priority} onChange={(e) => setPriority(e.target.value)}>
-                  {PRIORITIES.map((p) => (
-                    <option key={p.value} value={p.value}>
-                      {p.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="create-task-field">
-                <label className="enterprise-muted enterprise-profile-label" htmlFor="create-task-status">
-                  Status
-                </label>
-                <select id="create-task-status" className="auth-input" value={status} onChange={(e) => setStatus(e.target.value)}>
-                  {STATUSES.map((s) => (
-                    <option key={s.value} value={s.value}>
-                      {s.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
+                <textarea
+                  id="create-task-desc"
+                  className="auth-input enterprise-create-description"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Add context, links, or acceptance criteria…"
+                  rows={4}
+                />
 
-            <fieldset className="create-task-fieldset">
-              <legend className="enterprise-muted">Assignees</legend>
-              {members.length === 0 ? (
-                <p className="enterprise-muted">Loading team members…</p>
-              ) : (
-                <ul className="create-task-assignees">
-                  {members.map((m) => (
-                    <li key={m.userId}>
-                      <label className="create-task-assignee-label">
-                        <input type="checkbox" checked={assigneeIds.includes(m.userId)} onChange={() => toggleAssignee(m.userId)} />
-                        {m.user.name ?? m.user.email ?? m.userId}
-                      </label>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </fieldset>
-
-            {assigneeIds.length >= 2 ? (
-              <label className="create-task-checkbox-row">
-                <input type="checkbox" checked={isJoint} onChange={(e) => setIsJoint(e.target.checked)} />
-                Shared task for all assignees (joint subtasks)
-              </label>
-            ) : null}
-
-            <section className="enterprise-workspace-recurrence-panel">
-              <label className="create-task-checkbox-row">
-                <input type="checkbox" checked={isRecurring} onChange={(e) => setIsRecurring(e.target.checked)} />
-                Repeating task
-              </label>
-              {isRecurring ? (
-                <div className="enterprise-workspace-recurrence-fields">
-                  <div className="enterprise-workspace-recurrence-types">
-                    {RECURRENCE_TYPES.map((r) => (
-                      <button
-                        key={r.value}
-                        type="button"
-                        className={`enterprise-workspace-recurrence-type${recurrenceType === r.value ? " enterprise-workspace-recurrence-type--active" : ""}`}
-                        onClick={() => setRecurrenceType(r.value)}
-                      >
-                        {r.label}
-                      </button>
-                    ))}
-                  </div>
-                  <label className="enterprise-muted enterprise-profile-label">
-                    Repeat for
-                    <input
-                      className="auth-input enterprise-workspace-recurrence-interval"
-                      type="number"
-                      min={1}
-                      max={52}
-                      value={recurrenceCount}
-                      onChange={(e) => setRecurrenceCount(e.target.value)}
-                    />
-                    {recurrenceDurationUnit(recurrenceType)}
-                  </label>
-                  <p className="enterprise-muted enterprise-workspace-recurrence-hint">
-                    {recurrenceCountHint(recurrenceType)}
-                  </p>
-                  {recurrenceType === "weekly" ? (
-                    <p className="enterprise-muted enterprise-workspace-recurrence-hint">On</p>
-                  ) : null}
-                  {recurrenceType === "weekly" ? (
-                    <div className="enterprise-workspace-recurrence-weekdays">
-                      {WEEKDAYS.map((label, index) => (
-                        <button
-                          key={label}
-                          type="button"
-                          className={`enterprise-workspace-recurrence-weekday${recurrenceDayOfWeek === index ? " enterprise-workspace-recurrence-weekday--active" : ""}`}
-                          onClick={() => setRecurrenceDayOfWeek(index)}
-                        >
-                          {label}
+                <section className="enterprise-create-collapsible">
+                  <button
+                    type="button"
+                    className="enterprise-create-collapsible-trigger"
+                    aria-expanded={subtasksOpen}
+                    onClick={() => setSubtasksOpen((v) => !v)}
+                  >
+                    <span>Subtasks</span>
+                    {subtasks.length > 0 ? (
+                      <span className="enterprise-create-collapsible-badge">{subtasks.length}</span>
+                    ) : null}
+                    <span className="enterprise-create-collapsible-chevron" aria-hidden>
+                      {subtasksOpen ? "▴" : "▾"}
+                    </span>
+                  </button>
+                  {subtasksOpen ? (
+                    <div className="enterprise-create-collapsible-body">
+                      {subtasks.length > 0 ? (
+                        <ul className="enterprise-create-subtask-list">
+                          {subtasks.map((st, i) => (
+                            <li key={`${i}-${st}`}>
+                              <span>{st}</span>
+                              <button
+                                type="button"
+                                className="enterprise-create-subtask-remove"
+                                onClick={() => setSubtasks((s) => s.filter((_, idx) => idx !== i))}
+                              >
+                                Remove
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="enterprise-muted enterprise-create-subtask-empty">Break the work into smaller steps.</p>
+                      )}
+                      <div className="enterprise-create-subtask-add">
+                        <input
+                          className="auth-input"
+                          value={newSubtask}
+                          placeholder="Add a subtask"
+                          onChange={(e) => setNewSubtask(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              addSubtask();
+                            }
+                          }}
+                        />
+                        <button type="button" className="auth-btn-secondary" onClick={addSubtask}>
+                          Add
                         </button>
-                      ))}
+                      </div>
                     </div>
                   ) : null}
-                  {recurrenceType === "monthly" ? (
-                    <label className="enterprise-muted enterprise-profile-label">
-                      Day of month
+                </section>
+              </div>
+
+              <aside className="enterprise-workspace-create-sidebar">
+                <div className="enterprise-task-side-card enterprise-create-side-card">
+                  <h4>Assignment</h4>
+                  <div className="enterprise-create-card-body">
+                    <AssigneeMultiSelect
+                      members={members}
+                      selectedIds={assigneeIds}
+                      onChange={setAssigneeIds}
+                      loading={membersLoading}
+                      disabled={saving}
+                    />
+                    {assigneeIds.length >= 2 ? (
+                      <label className="enterprise-create-toggle-row">
+                        <input type="checkbox" checked={isJoint} onChange={(e) => setIsJoint(e.target.checked)} />
+                        <span>
+                          <strong>Shared joint task</strong>
+                          <span className="enterprise-muted">One task for everyone with shared subtasks</span>
+                        </span>
+                      </label>
+                    ) : null}
+                  </div>
+                </div>
+
+                <div className="enterprise-task-side-card enterprise-create-side-card">
+                  <h4>Details</h4>
+                  <div className="enterprise-create-side-rows">
+                    <label className="enterprise-create-side-row">
+                      <span>Due date</span>
                       <input
-                        className="auth-input enterprise-workspace-recurrence-interval"
-                        type="number"
-                        min={1}
-                        max={31}
-                        value={recurrenceDayOfMonth}
-                        onChange={(e) => setRecurrenceDayOfMonth(parseInt(e.target.value, 10) || 1)}
+                        type="date"
+                        className="auth-input enterprise-task-inline-select"
+                        value={dueDate}
+                        min={isRegularMember ? today : undefined}
+                        onChange={(e) => setDueDate(e.target.value)}
                       />
                     </label>
-                  ) : null}
+                    <label className="enterprise-create-side-row">
+                      <span>Priority</span>
+                      <select
+                        className="auth-input enterprise-task-inline-select"
+                        value={priority}
+                        onChange={(e) => setPriority(e.target.value)}
+                      >
+                        {PRIORITIES.map((p) => (
+                          <option key={p.value} value={p.value}>
+                            {p.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
                 </div>
-              ) : null}
-            </section>
 
-            <div className="create-task-subtasks">
-              <h4 className="enterprise-card-title enterprise-card-title-spaced">Subtasks</h4>
-              <ul className="create-task-subtask-list">
-                {subtasks.map((st, i) => (
-                  <li key={`${i}-${st}`} className="create-task-subtask-item">
-                    <span>{st}</span>
-                    <button type="button" className="create-task-subtask-remove" onClick={() => setSubtasks((s) => s.filter((_, idx) => idx !== i))}>
-                      Remove
+                <div className="enterprise-task-side-card enterprise-create-side-card">
+                  <h4>Schedule</h4>
+                  <div className="enterprise-create-card-body">
+                    <label className="enterprise-create-toggle-row enterprise-create-toggle-row--compact">
+                      <input type="checkbox" checked={isRecurring} onChange={(e) => setIsRecurring(e.target.checked)} />
+                      <span>
+                        <strong>Repeating task</strong>
+                      </span>
+                    </label>
+                    {isRecurring ? (
+                      <div className="enterprise-create-recurrence">
+                        <div className="enterprise-workspace-recurrence-types">
+                          {RECURRENCE_TYPES.map((r) => (
+                            <button
+                              key={r.value}
+                              type="button"
+                              className={`enterprise-workspace-recurrence-type${recurrenceType === r.value ? " enterprise-workspace-recurrence-type--active" : ""}`}
+                              onClick={() => setRecurrenceType(r.value)}
+                            >
+                              {r.label}
+                            </button>
+                          ))}
+                        </div>
+                        <label className="enterprise-create-recurrence-count">
+                          <span>Repeat for</span>
+                          <input
+                            className="auth-input enterprise-workspace-recurrence-interval"
+                            type="number"
+                            min={1}
+                            max={52}
+                            value={recurrenceCount}
+                            onChange={(e) => setRecurrenceCount(e.target.value)}
+                          />
+                          <span>{recurrenceDurationUnit(recurrenceType)}</span>
+                        </label>
+                        <p className="enterprise-muted enterprise-workspace-recurrence-hint">{recurrenceCountHint(recurrenceType)}</p>
+                        {recurrenceType === "weekly" ? (
+                          <div className="enterprise-workspace-recurrence-weekdays">
+                            {WEEKDAYS.map((label, index) => (
+                              <button
+                                key={label}
+                                type="button"
+                                className={`enterprise-workspace-recurrence-weekday${recurrenceDayOfWeek === index ? " enterprise-workspace-recurrence-weekday--active" : ""}`}
+                                onClick={() => setRecurrenceDayOfWeek(index)}
+                              >
+                                {label}
+                              </button>
+                            ))}
+                          </div>
+                        ) : null}
+                        {recurrenceType === "monthly" ? (
+                          <label className="enterprise-create-recurrence-count">
+                            <span>Day of month</span>
+                            <input
+                              className="auth-input enterprise-workspace-recurrence-interval"
+                              type="number"
+                              min={1}
+                              max={31}
+                              value={recurrenceDayOfMonth}
+                              onChange={(e) => setRecurrenceDayOfMonth(parseInt(e.target.value, 10) || 1)}
+                            />
+                          </label>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+
+                <div className="enterprise-task-side-card enterprise-create-side-card">
+                  <h4>Attachment</h4>
+                  <div className="enterprise-create-card-body enterprise-create-attachment-body">
+                    <button type="button" className="enterprise-dashboard-btn-outline" disabled={photoBusy} onClick={handlePickPhoto}>
+                      {photoBusy ? "Uploading…" : attachmentUrl ? "Change photo" : "Add photo"}
                     </button>
-                  </li>
-                ))}
-              </ul>
-              <div className="create-task-subtask-add">
-                <input
-                  className="auth-input"
-                  value={newSubtask}
-                  placeholder="Add subtask"
-                  onChange={(e) => setNewSubtask(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      const trimmed = newSubtask.trim();
-                      if (!trimmed) return;
-                      setSubtasks((s) => [...s, trimmed]);
-                      setNewSubtask("");
-                    }
-                  }}
-                />
-                <button
-                  type="button"
-                  className="auth-btn-secondary create-task-add-btn"
-                  onClick={() => {
-                    const trimmed = newSubtask.trim();
-                    if (!trimmed) return;
-                    setSubtasks((s) => [...s, trimmed]);
-                    setNewSubtask("");
-                  }}
-                >
-                  Add
-                </button>
-              </div>
-            </div>
-
-            <div className="enterprise-workspace-create-attachment">
-              <button type="button" className="enterprise-dashboard-btn-outline" disabled={photoBusy} onClick={handlePickPhoto}>
-                {photoBusy ? "Uploading…" : attachmentUrl ? "Change photo" : "Add photo"}
-              </button>
-              {attachmentUrl ? (
-                <img src={attachmentUrl} alt="Task attachment preview" className="enterprise-workspace-create-attachment-preview" />
-              ) : null}
+                    {attachmentUrl ? (
+                      <img src={attachmentUrl} alt="Task attachment preview" className="enterprise-workspace-create-attachment-preview" />
+                    ) : (
+                      <p className="enterprise-muted enterprise-create-attachment-hint">Optional reference image for assignees.</p>
+                    )}
+                  </div>
+                </div>
+              </aside>
             </div>
 
             {error ? (
-              <p className="enterprise-form-error" role="alert">
+              <p className="enterprise-form-error enterprise-workspace-create-error" role="alert">
                 {error}
               </p>
             ) : null}
-            </div>
 
-            <div className="enterprise-task-modal-footer enterprise-workspace-create-footer">
-              {canSaveTemplate ? (
-                <button
-                  type="button"
-                  className="enterprise-task-modal-btn enterprise-task-modal-btn-secondary"
-                  disabled={saving}
-                  onClick={() => {
-                    void saveTaskTemplate(teamId, {
-                      title: title.trim(),
-                      description: description.trim() || null,
-                      priority,
-                      attachmentUrl,
-                      subtasks: subtasks.map((st, order) => ({ title: st, order })),
-                      isRecurring,
-                      recurrenceType: isRecurring ? recurrenceType : null,
-                      recurrenceInterval: isRecurring ? parseInt(recurrenceCount, 10) || 1 : null,
-                      recurrenceDaysOfWeek: isRecurring && recurrenceType === "weekly" ? String(recurrenceDayOfWeek) : null,
-                      recurrenceDayOfMonth: isRecurring && recurrenceType === "monthly" ? recurrenceDayOfMonth : null,
-                      isJoint,
-                    }).catch(() => undefined);
-                  }}
-                >
-                  Save as template
+            <footer className="enterprise-task-modal-footer enterprise-workspace-create-footer enterprise-workspace-create-footer--v2">
+              <div className="enterprise-workspace-create-footer-left">
+                {canSaveTemplate ? (
+                  <button
+                    type="button"
+                    className="enterprise-inline-link-btn"
+                    disabled={saving}
+                    onClick={() => {
+                      void saveTaskTemplate(teamId, {
+                        title: title.trim(),
+                        description: description.trim() || null,
+                        priority,
+                        attachmentUrl,
+                        subtasks: subtasks.map((st, order) => ({ title: st, order })),
+                        isRecurring,
+                        recurrenceType: isRecurring ? recurrenceType : null,
+                        recurrenceInterval: isRecurring ? parseInt(recurrenceCount, 10) || 1 : null,
+                        recurrenceDaysOfWeek: isRecurring && recurrenceType === "weekly" ? String(recurrenceDayOfWeek) : null,
+                        recurrenceDayOfMonth: isRecurring && recurrenceType === "monthly" ? recurrenceDayOfMonth : null,
+                        isJoint,
+                      }).catch(() => undefined);
+                    }}
+                  >
+                    Save as template
+                  </button>
+                ) : null}
+              </div>
+              <div className="enterprise-workspace-create-footer-actions">
+                <button type="button" className="enterprise-task-modal-btn enterprise-task-modal-btn-secondary" onClick={onClose}>
+                  Cancel
                 </button>
-              ) : null}
-              <button type="button" className="enterprise-task-modal-btn enterprise-task-modal-btn-secondary" onClick={onClose}>
-                Cancel
-              </button>
-              <button type="submit" className="enterprise-task-modal-btn enterprise-task-modal-btn-primary" disabled={saving}>
-                {saving ? "Creating…" : "Create task"}
-              </button>
-            </div>
+                <button type="submit" className="enterprise-task-modal-btn enterprise-task-modal-btn-primary" disabled={saving}>
+                  {saving ? "Creating…" : "Create task"}
+                </button>
+              </div>
+            </footer>
           </form>
         </div>
       </div>
@@ -492,9 +523,7 @@ export function WorkspaceTaskCreateModal({
         <div className="enterprise-task-modal-backdrop enterprise-task-prompt-backdrop" role="presentation" onClick={() => setSplitConfirmOpen(false)}>
           <div className="enterprise-task-prompt-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
             <h3 className="enterprise-task-prompt-title">Multiple assignees</h3>
-            <p className="enterprise-task-prompt-copy">
-              Create one shared joint task for everyone, or separate tasks for each assignee?
-            </p>
+            <p className="enterprise-task-prompt-copy">Create one shared joint task for everyone, or separate tasks for each assignee?</p>
             <div className="enterprise-task-prompt-actions enterprise-task-prompt-actions--stack">
               <button type="button" className="enterprise-task-modal-btn enterprise-task-modal-btn-primary" disabled={saving} onClick={() => void submitCreate(true)}>
                 Enable joint task
