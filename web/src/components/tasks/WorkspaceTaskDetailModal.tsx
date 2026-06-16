@@ -124,23 +124,6 @@ export function WorkspaceTaskDetailModal({
     setError(null);
   }, [initialTask.id, userTimeZone]);
 
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const detail = await fetchWebTaskDetail(initialTask.id, teamId);
-        if (cancelled) return;
-        setTask(detail);
-        await onUpdated();
-      } catch {
-        /* keep list snapshot */
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [initialTask.id, teamId]);
-
   const refreshTask = async () => {
     const detail = await fetchWebTaskDetail(task.id, teamId);
     setTask(detail);
@@ -478,9 +461,6 @@ export function WorkspaceTaskDetailModal({
                   </select>
                   {isTaskOverdue(task, now) && task.status !== "done" ? (
                     <p className="enterprise-task-status-overdue-note">This task is overdue.</p>
-                  ) : null}
-                  {normalizeTaskStatus(task.status) === "reviewed" ? (
-                    <p className="enterprise-muted enterprise-task-status-hint">Someone opened this task.</p>
                   ) : null}
                 </div>
 

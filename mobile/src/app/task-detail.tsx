@@ -552,9 +552,6 @@ export default function TaskDetailScreen() {
               )}
             </Text>
           )}
-          {normalizeTaskStatus(task.status) === "reviewed" ? (
-            <Text className="text-xs text-slate-500 mt-1">Someone opened this task.</Text>
-          ) : null}
         </View>
         ) : null}
 

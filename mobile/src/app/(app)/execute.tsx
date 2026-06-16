@@ -440,14 +440,6 @@ function TaskRow({ task, onToggle, onPress, onLongPress }: { task: Task; onToggl
       };
     }
 
-    if (task.status === "reviewed" || task.status === "in_progress") {
-      return {
-        label: "Reviewed",
-        textColor: "#0F172A",
-        backgroundColor: "#DBEAFE",
-      };
-    }
-
     return {
       label: "Open",
       textColor: "#0F172A",

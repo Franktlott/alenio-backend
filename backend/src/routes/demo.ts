@@ -138,7 +138,7 @@ async function seedDemoData(ownerId: string) {
     {
       title: "Design new onboarding flow",
       description: "Redesign user onboarding based on Q1 user research. Focus on reducing time-to-value.",
-      status: "in_progress", priority: "high", dueDate: d(7), creatorId: sarah,
+      status: "todo", priority: "high", dueDate: d(7), creatorId: sarah,
       assignees: [sarah, jordan],
       subtasks: [
         { title: "Audit current onboarding", completed: true, order: 0 },
@@ -168,7 +168,7 @@ async function seedDemoData(ownerId: string) {
     {
       title: "Update API documentation",
       description: "Sync API docs with v2 endpoints released last sprint.",
-      status: "in_progress", priority: "low", dueDate: d(6),
+      status: "todo", priority: "low", dueDate: d(6),
       creatorId: ownerId, assignees: [tyler], subtasks: [],
     },
     {
@@ -202,7 +202,7 @@ async function seedDemoData(ownerId: string) {
     {
       title: "Revamp notification system",
       description: "Overhaul push notifications to support rich alerts, digest mode, and user preferences.",
-      status: "in_progress", priority: "medium", dueDate: d(9),
+      status: "todo", priority: "medium", dueDate: d(9),
       creatorId: ownerId, assignees: [elena],
       subtasks: [
         { title: "Audit current system", completed: true, order: 0 },
@@ -237,7 +237,7 @@ async function seedDemoData(ownerId: string) {
     {
       title: "Accessibility audit",
       description: "Run a full accessibility audit and fix all P0/P1 issues before the next major release.",
-      status: "in_progress", priority: "medium", dueDate: d(4),
+      status: "todo", priority: "medium", dueDate: d(4),
       creatorId: sarah, assignees: [sarah, tyler],
       subtasks: [
         { title: "Run automated a11y scan", completed: true, order: 0 },

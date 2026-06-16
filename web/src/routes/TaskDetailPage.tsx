@@ -43,7 +43,6 @@ function priorityLabel(p: string): string {
 function statusLabel(status: string): string {
   const normalized = normalizeTaskStatus(status);
   if (normalized === "done") return "Completed";
-  if (normalized === "reviewed") return "Reviewed";
   return "Open";
 }
 
@@ -57,7 +56,6 @@ function priorityClass(p: string): string {
 function statusClass(status: string): string {
   const normalized = normalizeTaskStatus(status);
   if (normalized === "done") return "enterprise-status enterprise-status-done";
-  if (normalized === "reviewed") return "enterprise-status enterprise-status-reviewed";
   return "enterprise-status enterprise-status-pending";
 }
 

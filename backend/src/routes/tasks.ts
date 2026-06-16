@@ -803,22 +803,6 @@ tasksRouter.get("/:taskId", async (c) => {
 
   if (!task) return c.json({ error: { message: "Task not found", code: "NOT_FOUND" } }, 404);
 
-  const isAssignee = task.assignments.some((a) => a.userId === user.id);
-  const isCreator = task.creatorId === user.id;
-  if (task.status === "todo" && (isAssignee || isCreator)) {
-    const reviewed = await prisma.task.update({
-      where: { id: taskId },
-      data: { status: "reviewed" },
-      include: {
-        assignments: { include: { user: { select: { id: true, name: true, email: true, image: true } } } },
-        subtasks: subtasksInclude,
-        recurrenceRule: true,
-        creator: { select: { id: true, name: true, email: true } },
-      },
-    });
-    return c.json({ data: reviewed });
-  }
-
   return c.json({ data: task });
 });
 

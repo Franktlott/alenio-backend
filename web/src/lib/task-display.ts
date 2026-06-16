@@ -37,7 +37,6 @@ export function isTaskOverdue(task: Pick<ApiTask, "status" | "dueDate">, now = n
 export function statusLabel(task: Pick<ApiTask, "status" | "dueDate">, now = new Date()): string {
   const status = normalizeTaskStatus(task.status);
   if (status === "done") return "Completed";
-  if (status === "reviewed") return "Reviewed";
   if (isTaskOverdue(task, now)) return "Overdue";
   return "Open";
 }
@@ -45,7 +44,6 @@ export function statusLabel(task: Pick<ApiTask, "status" | "dueDate">, now = new
 export function statusClass(task: Pick<ApiTask, "status" | "dueDate">, now = new Date()): string {
   const status = normalizeTaskStatus(task.status);
   if (status === "done") return "enterprise-status enterprise-status-done";
-  if (status === "reviewed") return "enterprise-status enterprise-status-reviewed";
   if (isTaskOverdue(task, now)) return "enterprise-status enterprise-status-overdue";
   return "enterprise-status enterprise-status-pending";
 }

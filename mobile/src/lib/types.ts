@@ -1,4 +1,4 @@
-export type TaskStatus = "todo" | "reviewed" | "done";
+export type TaskStatus = "todo" | "done";
 export type TaskPriority = "low" | "medium" | "high" | "urgent";
 export type RecurrenceType = "daily" | "weekly" | "monthly" | "custom";
 export type TeamRole = "owner" | "admin" | "member" | "team_leader";

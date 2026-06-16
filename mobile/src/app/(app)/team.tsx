@@ -414,11 +414,10 @@ export default function TeamScreen() {
 
   const totalCompleted = teamTasks.filter((t) => t.status === "done").length;
   const totalOverdue = teamTasks.filter((t) => isTaskOverdue(t)).length;
-  const totalReviewed = teamTasks.filter((t) => (t.status === "reviewed" || t.status === "in_progress") && !isTaskOverdue(t)).length;
-  const totalOpen = teamTasks.filter((t) => t.status === "todo" && !isTaskOverdue(t)).length;
+  const totalOpen = teamTasks.filter((t) => t.status !== "done" && !isTaskOverdue(t)).length;
 
-  const weekCompletionPct = (totalCompleted + totalOpen + totalReviewed + totalOverdue) > 0
-    ? Math.round((totalCompleted / (totalCompleted + totalOpen + totalReviewed + totalOverdue)) * 100)
+  const weekCompletionPct = (totalCompleted + totalOpen + totalOverdue) > 0
+    ? Math.round((totalCompleted / (totalCompleted + totalOpen + totalOverdue)) * 100)
     : 0;
 
   // Alphabetically sorted member list
@@ -829,7 +828,7 @@ export default function TeamScreen() {
                 const strokeWidth = 10;
                 const radius = (ringSize - strokeWidth) / 2;
                 const circumference = 2 * Math.PI * radius;
-                const hasAnyOverviewTasks = (totalOpen + totalReviewed + totalOverdue + totalCompleted) > 0;
+                const hasAnyOverviewTasks = (totalOpen + totalOverdue + totalCompleted) > 0;
                 const rawPct = hasAnyOverviewTasks ? (avgCompletionPct ?? weekCompletionPct) : 100;
                 const pct = Math.max(0, Math.min(100, rawPct));
                 const progress = circumference * (pct / 100);
@@ -864,14 +863,10 @@ export default function TeamScreen() {
                 );
               })()}
 
-              <View style={{ flex: 1, marginLeft: 2, paddingRight: 6, flexDirection: "row", justifyContent: "flex-start", gap: 8 }}>
+              <View style={{ flex: 1, marginLeft: 2, paddingRight: 6, flexDirection: "row", justifyContent: "flex-start", gap: 12 }}>
                 <View style={{ alignItems: "center", width: 62 }}>
                   <Text style={{ fontSize: 30, fontWeight: "900", color: "#10B981" }}>{totalOpen}</Text>
                   <Text numberOfLines={1} style={{ fontSize: 11, color: "#64748B", marginTop: -2 }}>Open</Text>
-                </View>
-                <View style={{ alignItems: "center", width: 70 }}>
-                  <Text style={{ fontSize: 30, fontWeight: "900", color: "#2563EB" }}>{totalReviewed}</Text>
-                  <Text numberOfLines={1} style={{ fontSize: 11, color: "#64748B", marginTop: -2 }}>Reviewed</Text>
                 </View>
                 <View style={{ alignItems: "center", width: 62 }}>
                   <Text style={{ fontSize: 30, fontWeight: "900", color: "#EF4444" }}>{totalOverdue}</Text>

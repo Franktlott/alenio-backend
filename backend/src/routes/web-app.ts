@@ -410,8 +410,7 @@ webRouter.post("/api/tasks", async (c) => {
     if (!m) return c.json({ error: { message: "One or more assignees are not on this team" } }, 400);
   }
 
-  const normalizedStatus =
-    status === "done" || status === "reviewed" || status === "in_progress" || status === "todo" ? (status === "in_progress" ? "reviewed" : status) : "todo";
+  const normalizedStatus = status === "done" ? "done" : "todo";
   const dueDateObj = dueDate && (typeof dueDate === "string" || typeof dueDate === "number") ? new Date(dueDate as string | number) : null;
   const pri = typeof priority === "string" && priority.trim() ? priority.trim() : "medium";
 
