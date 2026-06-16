@@ -176,7 +176,7 @@ export interface CreateTaskInput {
   assigneeIds?: string[];
   recurrence?: {
     type: RecurrenceType;
-    interval: number;
+    occurrenceCount: number;
     daysOfWeek?: string;
     dayOfMonth?: number;
   };

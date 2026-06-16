@@ -13,6 +13,7 @@ import {
   isRecurringTask,
   materializeRecurringTasksForTeam,
   normalizeSeriesDueDate,
+  resolveRecurrenceOccurrenceCount,
   spawnAllRecurrenceTasks,
   updateTaskWithSeriesScope,
   type RecurrenceScope,
@@ -44,6 +45,8 @@ async function getMembership(userId: string, teamId: string) {
 
 type RecurrenceBody = {
   type: string;
+  occurrenceCount?: number;
+  /** @deprecated Use occurrenceCount */
   interval?: number;
   daysOfWeek?: string | null;
   dayOfMonth?: number | null;
@@ -65,20 +68,21 @@ async function buildRecurrenceTaskFields(
 ) {
   if (!recurrence) return {};
 
+  const occurrenceCount = resolveRecurrenceOccurrenceCount(recurrence);
   const series = await createRecurrenceSeries(prisma, taskSeed, recurrence);
   return {
     recurrenceSeriesId: series.id,
     recurrenceRule: {
       create: {
         type: recurrence.type,
-        interval: recurrence.interval || 1,
+        interval: occurrenceCount,
         daysOfWeek: recurrence.daysOfWeek,
         dayOfMonth: recurrence.dayOfMonth,
         nextDueAt: dueDate
           ? getNextDueDate(
               recurrence.type,
-              recurrence.interval || 1,
-              new Date(dueDate),
+              1,
+              normalizeSeriesDueDate(new Date(dueDate)),
               recurrence.daysOfWeek,
               recurrence.dayOfMonth,
             )

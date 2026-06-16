@@ -15,6 +15,7 @@ export async function ensureRecurrenceSeriesSchema(prisma: PrismaClient): Promis
       "attachmentUrl" TEXT,
       "type" TEXT NOT NULL,
       "interval" INTEGER NOT NULL DEFAULT 1,
+      "occurrenceCount" INTEGER NOT NULL DEFAULT 1,
       "daysOfWeek" TEXT,
       "dayOfMonth" INTEGER,
       "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -45,6 +46,13 @@ export async function ensureRecurrenceSeriesSchema(prisma: PrismaClient): Promis
 
   await prisma.$executeRawUnsafe(`
     CREATE INDEX IF NOT EXISTS "Task_recurrenceSeriesId_idx" ON "Task"("recurrenceSeriesId");
+  `);
+
+  await prisma.$executeRawUnsafe(`
+    DO $$ BEGIN
+      ALTER TABLE "RecurrenceSeries" ADD COLUMN "occurrenceCount" INTEGER NOT NULL DEFAULT 1;
+    EXCEPTION WHEN duplicate_column THEN NULL;
+    END $$;
   `);
 
   await prisma.$executeRawUnsafe(`

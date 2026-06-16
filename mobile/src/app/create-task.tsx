@@ -23,6 +23,7 @@ import { api } from "@/lib/api/api";
 import { uploadFile } from "@/lib/upload";
 import { useSession } from "@/lib/auth/use-session";
 import type { Task, TaskPriority, RecurrenceType, Team, TeamMember, TaskTemplate, TaskStatus } from "@/lib/types";
+import { recurrenceCountHint, recurrenceDurationUnit } from "@/lib/recurring-task";
 
 const PRIORITIES: { label: string; value: TaskPriority; color: string }[] = [
   { label: "Low", value: "low", color: "#94A3B8" },
@@ -57,7 +58,7 @@ export default function CreateTaskScreen() {
   const [isJoint, setIsJoint] = useState(false);
   const [showSplitConfirm, setShowSplitConfirm] = useState(false);
   const [recurrenceType, setRecurrenceType] = useState<RecurrenceType>("weekly");
-  const [recurrenceInterval, setRecurrenceInterval] = useState("1");
+  const [recurrenceCount, setRecurrenceCount] = useState("3");
   const [selectedDayOfWeek, setSelectedDayOfWeek] = useState<number | null>(null);
   const [selectedDayOfMonth, setSelectedDayOfMonth] = useState<number | null>(null);
   const [dueDate, setDueDate] = useState<Date | null>(() => {
@@ -126,7 +127,7 @@ export default function CreateTaskScreen() {
     if (t.isRecurring) {
       setIsRecurring(true);
       if (t.recurrenceType) setRecurrenceType(t.recurrenceType);
-      if (t.recurrenceInterval) setRecurrenceInterval(String(t.recurrenceInterval));
+      if (t.recurrenceInterval) setRecurrenceCount(String(t.recurrenceInterval));
       if (t.recurrenceDaysOfWeek != null) setSelectedDayOfWeek(parseInt(t.recurrenceDaysOfWeek));
       if (t.recurrenceDayOfMonth != null) setSelectedDayOfMonth(t.recurrenceDayOfMonth);
     } else {
@@ -163,7 +164,7 @@ export default function CreateTaskScreen() {
         subtasks: subtaskTitles.map((s, i) => ({ title: s, order: i })),
         isRecurring,
         recurrenceType: isRecurring ? recurrenceType : undefined,
-        recurrenceInterval: isRecurring ? parseInt(recurrenceInterval) || 1 : undefined,
+        recurrenceInterval: isRecurring ? parseInt(recurrenceCount) || 1 : undefined,
         recurrenceDaysOfWeek: isRecurring && recurrenceType === "weekly" && selectedDayOfWeek !== null
           ? String(selectedDayOfWeek)
           : undefined,
@@ -223,7 +224,7 @@ export default function CreateTaskScreen() {
       recurrence: isRecurring
         ? {
             type: recurrenceType,
-            interval: parseInt(recurrenceInterval) || 1,
+            occurrenceCount: parseInt(recurrenceCount) || 1,
             daysOfWeek: recurrenceType === "weekly" && selectedDayOfWeek !== null
               ? String(selectedDayOfWeek)
               : undefined,
@@ -608,7 +609,9 @@ export default function CreateTaskScreen() {
                   Recurring task
                 </Text>
                 <Text className="text-xs text-slate-400 mt-0.5">
-                  Repeats on a schedule; upcoming dates are added for the next few months
+                  {isRecurring
+                    ? recurrenceCountHint(recurrenceType)
+                    : "Schedule the same task to repeat a set number of times"}
                 </Text>
               </View>
               <Switch
@@ -646,23 +649,19 @@ export default function CreateTaskScreen() {
                   ))}
                 </View>
                 <View className="flex-row items-center" style={{ gap: 8 }}>
-                  <Text className="text-sm text-slate-500">Every</Text>
+                  <Text className="text-sm text-slate-500">Repeat for</Text>
                   <TextInput
                     className="w-12 text-center bg-slate-100 dark:bg-slate-800 rounded-lg py-1.5 text-slate-900 dark:text-white font-semibold"
-                    value={recurrenceInterval}
+                    value={recurrenceCount}
                     onChangeText={(t) =>
-                      setRecurrenceInterval(t.replace(/[^0-9]/g, ""))
+                      setRecurrenceCount(t.replace(/[^0-9]/g, ""))
                     }
                     keyboardType="numeric"
                     maxLength={2}
                     testID="interval-input"
                   />
                   <Text className="text-sm text-slate-500">
-                    {recurrenceType === "daily"
-                      ? "day(s)"
-                      : recurrenceType === "weekly"
-                      ? "week(s)"
-                      : "month(s)"}
+                    {recurrenceDurationUnit(recurrenceType)}
                   </Text>
                 </View>
 

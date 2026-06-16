@@ -8,6 +8,7 @@ import {
   type WebTeamDetail,
   type WebMeUser,
 } from "../../lib/api";
+import { recurrenceCountHint, recurrenceDurationUnit } from "../../lib/recurring-task";
 
 const PRIORITIES = [
   { label: "Low", value: "low" },
@@ -62,7 +63,7 @@ export function WorkspaceTaskCreateModal({
   const [newSubtask, setNewSubtask] = useState("");
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurrenceType, setRecurrenceType] = useState("weekly");
-  const [recurrenceInterval, setRecurrenceInterval] = useState("1");
+  const [recurrenceCount, setRecurrenceCount] = useState("3");
   const [recurrenceDayOfWeek, setRecurrenceDayOfWeek] = useState(1);
   const [recurrenceDayOfMonth, setRecurrenceDayOfMonth] = useState(1);
   const [attachmentUrl, setAttachmentUrl] = useState<string | null>(null);
@@ -137,7 +138,7 @@ export function WorkspaceTaskCreateModal({
     setAttachmentUrl(template.attachmentUrl);
     setIsRecurring(template.isRecurring);
     if (template.recurrenceType) setRecurrenceType(template.recurrenceType);
-    if (template.recurrenceInterval) setRecurrenceInterval(String(template.recurrenceInterval));
+    if (template.recurrenceInterval) setRecurrenceCount(String(template.recurrenceInterval));
     if (template.recurrenceDaysOfWeek != null) setRecurrenceDayOfWeek(parseInt(template.recurrenceDaysOfWeek, 10) || 1);
     if (template.recurrenceDayOfMonth != null) setRecurrenceDayOfMonth(template.recurrenceDayOfMonth);
     setTemplatesOpen(false);
@@ -170,7 +171,7 @@ export function WorkspaceTaskCreateModal({
         recurrence: isRecurring
           ? {
               type: recurrenceType,
-              interval: parseInt(recurrenceInterval, 10) || 1,
+              occurrenceCount: parseInt(recurrenceCount, 10) || 1,
               daysOfWeek: recurrenceType === "weekly" ? String(recurrenceDayOfWeek) : undefined,
               dayOfMonth: recurrenceType === "monthly" ? recurrenceDayOfMonth : undefined,
             }
@@ -342,19 +343,23 @@ export function WorkspaceTaskCreateModal({
                     ))}
                   </div>
                   <label className="enterprise-muted enterprise-profile-label">
-                    Every
+                    Repeat for
                     <input
                       className="auth-input enterprise-workspace-recurrence-interval"
                       type="number"
                       min={1}
-                      value={recurrenceInterval}
-                      onChange={(e) => setRecurrenceInterval(e.target.value)}
+                      max={52}
+                      value={recurrenceCount}
+                      onChange={(e) => setRecurrenceCount(e.target.value)}
                     />
-                    {recurrenceType === "daily" ? "day(s)" : recurrenceType === "weekly" ? "week(s)" : "month(s)"}
+                    {recurrenceDurationUnit(recurrenceType)}
                   </label>
                   <p className="enterprise-muted enterprise-workspace-recurrence-hint">
-                    Repeats on that schedule. Upcoming occurrences are scheduled for the next few months—not a full year at once.
+                    {recurrenceCountHint(recurrenceType)}
                   </p>
+                  {recurrenceType === "weekly" ? (
+                    <p className="enterprise-muted enterprise-workspace-recurrence-hint">On</p>
+                  ) : null}
                   {recurrenceType === "weekly" ? (
                     <div className="enterprise-workspace-recurrence-weekdays">
                       {WEEKDAYS.map((label, index) => (
@@ -460,7 +465,7 @@ export function WorkspaceTaskCreateModal({
                       subtasks: subtasks.map((st, order) => ({ title: st, order })),
                       isRecurring,
                       recurrenceType: isRecurring ? recurrenceType : null,
-                      recurrenceInterval: isRecurring ? parseInt(recurrenceInterval, 10) || 1 : null,
+                      recurrenceInterval: isRecurring ? parseInt(recurrenceCount, 10) || 1 : null,
                       recurrenceDaysOfWeek: isRecurring && recurrenceType === "weekly" ? String(recurrenceDayOfWeek) : null,
                       recurrenceDayOfMonth: isRecurring && recurrenceType === "monthly" ? recurrenceDayOfMonth : null,
                       isJoint,

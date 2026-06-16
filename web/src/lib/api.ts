@@ -1107,6 +1107,8 @@ export type CreateWebTaskInput = {
   attachmentUrl?: string | null;
   recurrence?: {
     type: string;
+    occurrenceCount?: number;
+    /** @deprecated Use occurrenceCount */
     interval?: number;
     daysOfWeek?: string | null;
     dayOfMonth?: number | null;

@@ -240,6 +240,7 @@ model RecurrenceSeries {
   attachmentUrl String?
   type          String
   interval      Int      @default(1)
+  occurrenceCount Int    @default(1)
   daysOfWeek    String?
   dayOfMonth    Int?
   createdAt     DateTime @default(now())

@@ -4,12 +4,37 @@ export type RecurrenceScope = "task" | "series";
 
 export type RecurrenceInput = {
   type: string;
+  /** Total number of task instances in the series (including the first). */
+  occurrenceCount?: number;
+  /** @deprecated Use occurrenceCount — kept for older clients. */
   interval?: number;
   daysOfWeek?: string | null;
   dayOfMonth?: number | null;
 };
 
 type TaskWithRule = Task & { recurrenceRule?: RecurrenceRule | null };
+
+export const RECURRENCE_STEP_INTERVAL = 1;
+export const RECURRENCE_MAX_OCCURRENCES = 52;
+const RECURRENCE_SPAWN_CHUNK = 25;
+
+export function normalizeOccurrenceCount(raw?: number | null): number {
+  const n = Math.floor(raw ?? 1);
+  return Math.min(RECURRENCE_MAX_OCCURRENCES, Math.max(1, n));
+}
+
+export function resolveRecurrenceOccurrenceCount(
+  recurrence: Pick<RecurrenceInput, "occurrenceCount" | "interval">,
+): number {
+  return normalizeOccurrenceCount(recurrence.occurrenceCount ?? recurrence.interval);
+}
+
+export function seriesOccurrenceCount(series: Pick<RecurrenceSeries, "occurrenceCount" | "interval">): number {
+  if (series.occurrenceCount != null && series.occurrenceCount > 0) {
+    return normalizeOccurrenceCount(series.occurrenceCount);
+  }
+  return normalizeOccurrenceCount(series.interval);
+}
 
 /** End-of-day UTC so dedup keys match regardless of client timezone. */
 export function normalizeSeriesDueDate(date: Date): Date {
@@ -73,6 +98,7 @@ export async function createRecurrenceSeries(
   task: Pick<Task, "teamId" | "creatorId" | "title" | "description" | "priority" | "incognito" | "isJoint" | "attachmentUrl">,
   recurrence: RecurrenceInput,
 ): Promise<RecurrenceSeries> {
+  const occurrenceCount = resolveRecurrenceOccurrenceCount(recurrence);
   return prisma.recurrenceSeries.create({
     data: {
       teamId: task.teamId,
@@ -84,7 +110,8 @@ export async function createRecurrenceSeries(
       isJoint: task.isJoint,
       attachmentUrl: task.attachmentUrl,
       type: recurrence.type,
-      interval: recurrence.interval ?? 1,
+      interval: RECURRENCE_STEP_INTERVAL,
+      occurrenceCount,
       daysOfWeek: recurrence.daysOfWeek ?? null,
       dayOfMonth: recurrence.dayOfMonth ?? null,
     },
@@ -102,7 +129,7 @@ export async function resolveRecurrenceSeries(
 
   const series = await createRecurrenceSeries(prisma, task, {
     type: task.recurrenceRule.type,
-    interval: task.recurrenceRule.interval,
+    occurrenceCount: task.recurrenceRule.interval,
     daysOfWeek: task.recurrenceRule.daysOfWeek,
     dayOfMonth: task.recurrenceRule.dayOfMonth,
   });
@@ -113,81 +140,27 @@ export async function resolveRecurrenceSeries(
   return series;
 }
 
-/** How far ahead to schedule recurring task instances from the series start date. */
-export const RECURRENCE_LOOKAHEAD_DAYS = 84;
-const RECURRENCE_SPAWN_CHUNK = 25;
-const RECURRENCE_MAX_FUTURE_WEEKLY_MONTHLY = 12;
-const RECURRENCE_MAX_FUTURE_DAILY = 30;
-
-function recurrenceStepDays(type: string, interval: number): number {
-  switch (type) {
-    case "daily":
-      return Math.max(1, interval);
-    case "weekly":
-      return Math.max(7, 7 * interval);
-    case "monthly":
-      return Math.max(28, 30 * interval);
-    default:
-      return Math.max(1, interval);
-  }
-}
-
-export function recurrenceWindowEnd(anchorDue: Date, lookaheadDays: number = RECURRENCE_LOOKAHEAD_DAYS): Date {
-  const end = normalizeSeriesDueDate(anchorDue);
-  end.setUTCDate(end.getUTCDate() + lookaheadDays);
-  return end;
-}
-
-export function listRecurrenceDueDatesInWindow(
+/** Future due dates after the anchor for a fixed occurrence count (step = 1 unit of type). */
+export function listRecurrenceDueDatesForCount(
   type: string,
-  interval: number,
   anchorDue: Date,
-  windowEnd: Date,
+  occurrenceCount: number,
   daysOfWeek?: string | null,
   dayOfMonth?: number | null,
 ): Date[] {
+  const total = normalizeOccurrenceCount(occurrenceCount);
+  const maxFuture = Math.max(0, total - 1);
   const anchor = normalizeSeriesDueDate(anchorDue);
-  const end = normalizeSeriesDueDate(windowEnd);
-  const stepDays = recurrenceStepDays(type, interval);
-  const windowDays = Math.max(0, Math.floor((end.getTime() - anchor.getTime()) / 86_400_000));
-  const horizonCap = Math.max(1, Math.floor(windowDays / stepDays));
-  const maxFuture =
-    type === "daily"
-      ? Math.min(RECURRENCE_MAX_FUTURE_DAILY, horizonCap)
-      : Math.min(RECURRENCE_MAX_FUTURE_WEEKLY_MONTHLY, horizonCap);
-
   const dates: Date[] = [];
   let current = anchor;
 
   while (dates.length < maxFuture) {
-    const next = getNextDueDate(type, interval, current, daysOfWeek, dayOfMonth);
-    if (next.getTime() > end.getTime()) break;
-    if (next.getTime() > anchor.getTime()) {
-      dates.push(next);
-    }
+    const next = getNextDueDate(type, RECURRENCE_STEP_INTERVAL, current, daysOfWeek, dayOfMonth);
+    dates.push(next);
     current = next;
   }
 
   return dates;
-}
-
-/** @deprecated Use listRecurrenceDueDatesInWindow */
-export function listFutureRecurrenceDueDates(
-  type: string,
-  interval: number,
-  afterDate: Date,
-  daysOfWeek?: string | null,
-  dayOfMonth?: number | null,
-  lookaheadDays: number = RECURRENCE_LOOKAHEAD_DAYS,
-): Date[] {
-  return listRecurrenceDueDatesInWindow(
-    type,
-    interval,
-    afterDate,
-    recurrenceWindowEnd(afterDate, lookaheadDays),
-    daysOfWeek,
-    dayOfMonth,
-  );
 }
 
 export async function spawnAllRecurrenceTasks(
@@ -199,10 +172,13 @@ export async function spawnAllRecurrenceTasks(
   if (!series) return 0;
 
   const seriesId = series.id;
+  const occurrenceCount = seriesOccurrenceCount(series);
   const existingTasks = await prisma.task.findMany({
     where: { recurrenceSeriesId: seriesId },
     select: { dueDate: true },
   });
+
+  if (existingTasks.length >= occurrenceCount) return 0;
 
   const existingDueDays = new Set(
     existingTasks
@@ -216,21 +192,21 @@ export async function spawnAllRecurrenceTasks(
     .sort((a, b) => a.getTime() - b.getTime());
 
   const anchorDue = normalizeSeriesDueDate(sortedDueDates[0] ?? task.dueDate ?? new Date());
-  const windowEnd = recurrenceWindowEnd(anchorDue);
 
-  const futureDueDates = listRecurrenceDueDatesInWindow(
+  const futureDueDates = listRecurrenceDueDatesForCount(
     series.type,
-    series.interval,
     anchorDue,
-    windowEnd,
+    occurrenceCount,
     series.daysOfWeek,
     series.dayOfMonth,
   ).filter((dueDate) => !existingDueDays.has(dueDayKey(dueDate)));
 
-  if (futureDueDates.length === 0) return 0;
+  const remainingSlots = occurrenceCount - existingTasks.length;
+  const toCreate = futureDueDates.slice(0, remainingSlots);
+  if (toCreate.length === 0) return 0;
 
-  for (let i = 0; i < futureDueDates.length; i += RECURRENCE_SPAWN_CHUNK) {
-    const chunk = futureDueDates.slice(i, i + RECURRENCE_SPAWN_CHUNK);
+  for (let i = 0; i < toCreate.length; i += RECURRENCE_SPAWN_CHUNK) {
+    const chunk = toCreate.slice(i, i + RECURRENCE_SPAWN_CHUNK);
     await prisma.$transaction(
       chunk.map((dueDate) =>
         prisma.task.create({
@@ -260,10 +236,10 @@ export async function spawnAllRecurrenceTasks(
     data: { updatedAt: new Date() },
   });
 
-  return futureDueDates.length;
+  return toCreate.length;
 }
 
-/** Fill missing occurrences inside the fixed series window (does not extend beyond it). */
+/** Fill missing occurrences up to the series occurrence count. */
 export async function materializeRecurringTasksForTeam(prisma: PrismaClient, teamId: string): Promise<void> {
   const anchors = await prisma.task.findMany({
     where: {
