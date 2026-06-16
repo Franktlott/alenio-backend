@@ -240,6 +240,7 @@ export function WorkspaceTaskCreateModal({
           </header>
 
           <form className="create-task-form enterprise-workspace-create-form" onSubmit={handleSubmit}>
+            <div className="enterprise-workspace-create-body">
             <label className="enterprise-muted enterprise-profile-label" htmlFor="create-task-title">
               Title
             </label>
@@ -351,6 +352,9 @@ export function WorkspaceTaskCreateModal({
                     />
                     {recurrenceType === "daily" ? "day(s)" : recurrenceType === "weekly" ? "week(s)" : "month(s)"}
                   </label>
+                  <p className="enterprise-muted enterprise-workspace-recurrence-hint">
+                    Repeats on that schedule. Upcoming occurrences are scheduled for the next few months—not a full year at once.
+                  </p>
                   {recurrenceType === "weekly" ? (
                     <div className="enterprise-workspace-recurrence-weekdays">
                       {WEEKDAYS.map((label, index) => (
@@ -439,6 +443,7 @@ export function WorkspaceTaskCreateModal({
                 {error}
               </p>
             ) : null}
+            </div>
 
             <div className="enterprise-task-modal-footer enterprise-workspace-create-footer">
               {canSaveTemplate ? (

@@ -89,7 +89,6 @@ export function DashboardPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [createInitialDueDate, setCreateInitialDueDate] = useState<string | undefined>();
   const [teamDetail, setTeamDetail] = useState<WebTeamDetail | null>(null);
-  const [taskListLimit, setTaskListLimit] = useState(15);
   const [teamMemberFilter, setTeamMemberFilter] = useState("all");
   const [completePromptTask, setCompletePromptTask] = useState<ApiTask | null>(null);
   const [completeBusyId, setCompleteBusyId] = useState<string | null>(null);
@@ -232,7 +231,6 @@ export function DashboardPage() {
 
   useEffect(() => {
     setSelectedDate(new Date());
-    setTaskListLimit(15);
     setTeamMemberFilter("all");
   }, [selectedTeamId]);
 
@@ -468,10 +466,8 @@ export function DashboardPage() {
     } else {
       list.sort((a, b) => priorityRank(b.priority) - priorityRank(a.priority));
     }
-    return list.slice(0, taskListLimit);
-  }, [filteredTabTasks, sortBy, taskListLimit]);
-
-  const hasMoreTasks = filteredTabTasks.length > tableRows.length;
+    return list;
+  }, [filteredTabTasks, sortBy]);
 
   const calTitle = calendarView.toLocaleString(undefined, { month: "long", year: "numeric" });
   const weekdayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -1015,7 +1011,7 @@ export function DashboardPage() {
               </p>
             ) : null}
             <div className="enterprise-card-tasks-body">
-              <div className="enterprise-workspace-task-list">
+              <div className="enterprise-table-wrap enterprise-workspace-task-scroll">
                 {tableRows.length === 0 ? (
                   <div className="enterprise-dashboard-empty">
                     <svg className="enterprise-dashboard-empty-icon" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
@@ -1036,50 +1032,56 @@ export function DashboardPage() {
                     </p>
                   </div>
                 ) : (
-                  tableRows.map((t) => {
-                    const creatorId = taskCreatorId(t);
-                    const isAssignee = !!me?.id && t.assignments.some((a) => a.user.id === me.id);
-                    const canComplete =
-                      t.status !== "done" &&
-                      (isAssignee || creatorId === me?.id) &&
-                      !isFeedbackTaskDescription(t.description);
-                    const canEditRow = creatorId === me?.id || isOwnerOrLeader;
-                    return (
-                      <WorkspaceTaskRow
-                        key={t.id}
-                        task={t}
-                        now={now}
-                        menuOpen={taskMenuId === t.id}
-                        completeBusy={completeBusyId === t.id}
-                        deleteBusy={taskDeleteId === t.id}
-                        canDelete={canDeleteTask(t, me?.id, myRole)}
-                        canComplete={canComplete}
-                        canEdit={canEditRow && t.status !== "done"}
-                        onOpen={() => openTaskDetail(t.id)}
-                        onToggleComplete={(e) => {
-                          e.stopPropagation();
-                          requestCompleteTask(t);
-                        }}
-                        onEdit={() => openTaskDetail(t.id)}
-                        onDelete={() => requestDeleteTask(t)}
-                        onMenuToggle={(e) => {
-                          e.stopPropagation();
-                          setTaskMenuId((prev) => (prev === t.id ? null : t.id));
-                        }}
-                      />
-                    );
-                  })
+                  <table className="enterprise-table enterprise-workspace-task-table">
+                    <thead>
+                      <tr>
+                        <th className="enterprise-workspace-task-th-check" aria-label="Complete" />
+                        <th>Task</th>
+                        <th>Due</th>
+                        <th>Priority</th>
+                        <th>Status</th>
+                        <th>Assignee</th>
+                        <th className="enterprise-table-th-actions" aria-label="Actions" />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {tableRows.map((t) => {
+                        const creatorId = taskCreatorId(t);
+                        const isAssignee = !!me?.id && t.assignments.some((a) => a.user.id === me.id);
+                        const canComplete =
+                          t.status !== "done" &&
+                          (isAssignee || creatorId === me?.id) &&
+                          !isFeedbackTaskDescription(t.description);
+                        const canEditRow = creatorId === me?.id || isOwnerOrLeader;
+                        return (
+                          <WorkspaceTaskRow
+                            key={t.id}
+                            task={t}
+                            now={now}
+                            menuOpen={taskMenuId === t.id}
+                            completeBusy={completeBusyId === t.id}
+                            deleteBusy={taskDeleteId === t.id}
+                            canDelete={canDeleteTask(t, me?.id, myRole)}
+                            canComplete={canComplete}
+                            canEdit={canEditRow && t.status !== "done"}
+                            onOpen={() => openTaskDetail(t.id)}
+                            onToggleComplete={(e) => {
+                              e.stopPropagation();
+                              requestCompleteTask(t);
+                            }}
+                            onEdit={() => openTaskDetail(t.id)}
+                            onDelete={() => requestDeleteTask(t)}
+                            onMenuToggle={(e) => {
+                              e.stopPropagation();
+                              setTaskMenuId((prev) => (prev === t.id ? null : t.id));
+                            }}
+                          />
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 )}
               </div>
-              {hasMoreTasks ? (
-                <button
-                  type="button"
-                  className="enterprise-workspace-task-load-more"
-                  onClick={() => setTaskListLimit((limit) => limit + 15)}
-                >
-                  Show more tasks
-                </button>
-              ) : null}
             </div>
           </section>
         </div>

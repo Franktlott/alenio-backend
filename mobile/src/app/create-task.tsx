@@ -608,7 +608,7 @@ export default function CreateTaskScreen() {
                   Recurring task
                 </Text>
                 <Text className="text-xs text-slate-400 mt-0.5">
-                  Auto-create next occurrence when done
+                  Repeats on a schedule; upcoming dates are added for the next few months
                 </Text>
               </View>
               <Switch

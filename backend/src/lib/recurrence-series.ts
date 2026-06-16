@@ -98,8 +98,24 @@ export async function resolveRecurrenceSeries(
   return series;
 }
 
-export const RECURRENCE_LOOKAHEAD_DAYS = 365;
+/** How far ahead to schedule recurring task instances (rolling window). */
+export const RECURRENCE_LOOKAHEAD_DAYS = 84;
 const RECURRENCE_SPAWN_CHUNK = 25;
+const RECURRENCE_MAX_FUTURE_WEEKLY_MONTHLY = 12;
+const RECURRENCE_MAX_FUTURE_DAILY = 30;
+
+function recurrenceStepDays(type: string, interval: number): number {
+  switch (type) {
+    case "daily":
+      return Math.max(1, interval);
+    case "weekly":
+      return Math.max(7, 7 * interval);
+    case "monthly":
+      return Math.max(28, 30 * interval);
+    default:
+      return Math.max(1, interval);
+  }
+}
 
 function dueDayKey(date: Date): string {
   return date.toISOString().slice(0, 10);
@@ -108,18 +124,25 @@ function dueDayKey(date: Date): string {
 export function listFutureRecurrenceDueDates(
   type: string,
   interval: number,
-  anchorDue: Date,
+  afterDate: Date,
   daysOfWeek?: string | null,
   dayOfMonth?: number | null,
+  lookaheadDays: number = RECURRENCE_LOOKAHEAD_DAYS,
 ): Date[] {
-  const through = new Date(anchorDue);
-  through.setDate(through.getDate() + RECURRENCE_LOOKAHEAD_DAYS);
+  const through = new Date(afterDate);
+  through.setDate(through.getDate() + lookaheadDays);
 
-  const maxCount = type === "daily" ? 366 : type === "weekly" ? 53 : 13;
+  const stepDays = recurrenceStepDays(type, interval);
+  const horizonCap = Math.max(1, Math.floor(lookaheadDays / stepDays));
+  const maxFuture =
+    type === "daily"
+      ? Math.min(RECURRENCE_MAX_FUTURE_DAILY, horizonCap)
+      : Math.min(RECURRENCE_MAX_FUTURE_WEEKLY_MONTHLY, horizonCap);
+
   const dates: Date[] = [];
-  let current = anchorDue;
+  let current = afterDate;
 
-  while (dates.length < maxCount) {
+  while (dates.length < maxFuture) {
     const next = getNextDueDate(type, interval, current, daysOfWeek, dayOfMonth);
     if (next.getTime() > through.getTime()) break;
     dates.push(next);
@@ -149,18 +172,18 @@ export async function spawnAllRecurrenceTasks(
       .filter((day): day is string => day != null),
   );
 
-  const anchorDue =
-    existingTasks
-      .map((row) => row.dueDate)
-      .filter((date): date is Date => date != null)
-      .sort((a, b) => a.getTime() - b.getTime())[0] ??
-    task.dueDate ??
-    new Date();
+  const sortedDueDates = existingTasks
+    .map((row) => row.dueDate)
+    .filter((date): date is Date => date != null)
+    .sort((a, b) => a.getTime() - b.getTime());
+
+  const latestDue =
+    sortedDueDates[sortedDueDates.length - 1] ?? task.dueDate ?? new Date();
 
   const futureDueDates = listFutureRecurrenceDueDates(
     series.type,
     series.interval,
-    anchorDue,
+    latestDue,
     series.daysOfWeek,
     series.dayOfMonth,
   ).filter((dueDate) => !existingDueDays.has(dueDayKey(dueDate)));

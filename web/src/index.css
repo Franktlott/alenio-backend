@@ -10176,11 +10176,21 @@ button.enterprise-profile-legal-link {
   overflow: hidden;
 }
 
+.enterprise-card-tasks .enterprise-card-head,
+.enterprise-card-tasks .enterprise-task-toolbar {
+  flex-shrink: 0;
+}
+
 .enterprise-card-tasks .enterprise-table-wrap {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   margin-bottom: 0;
+}
+
+.enterprise-card-tasks .enterprise-workspace-task-scroll {
+  flex: 1;
+  min-height: 0;
 }
 
 .enterprise-dashboard-add-task {
@@ -11492,54 +11502,133 @@ button.enterprise-profile-legal-link {
   color: #dc2626;
 }
 
-/* Workspace task list (mobile parity) */
-.enterprise-workspace-task-list {
+/* Workspace task list — compact enterprise table */
+.enterprise-workspace-task-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+.enterprise-card-tasks .enterprise-table-wrap.enterprise-workspace-task-scroll {
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.enterprise-workspace-task-table {
+  table-layout: fixed;
+}
+
+.enterprise-workspace-task-th-check,
+.enterprise-workspace-task-td-check {
+  width: 2.25rem;
+  padding-left: 0.65rem !important;
+  padding-right: 0.25rem !important;
+}
+
+.enterprise-workspace-task-td-title {
+  min-width: 0;
+  width: 38%;
+}
+
+.enterprise-workspace-task-title-cell {
   display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.enterprise-workspace-task-repeat {
+  flex-shrink: 0;
+  color: #4361ee;
+  font-size: 0.75rem;
+  line-height: 1;
+}
+
+.enterprise-workspace-task-td-due {
+  width: 7.5rem;
+  white-space: nowrap;
+}
+
+.enterprise-workspace-task-due {
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.enterprise-workspace-task-due--overdue {
+  color: #dc2626;
+  font-weight: 600;
+}
+
+.enterprise-workspace-task-td-priority {
+  width: 5.75rem;
+}
+
+.enterprise-workspace-task-td-status {
+  width: 5.25rem;
+}
+
+.enterprise-workspace-task-td-assignee {
+  width: 4.75rem;
+}
+
+.enterprise-workspace-task-td-assignee .enterprise-assignees {
+  display: flex;
+  align-items: center;
+}
+
+.enterprise-workspace-task-td-assignee .enterprise-assignee-img,
+.enterprise-workspace-task-td-assignee .enterprise-assignee-initials {
+  width: 22px;
+  height: 22px;
+  font-size: 0.5625rem;
+  margin-left: -0.35rem;
+}
+
+.enterprise-workspace-task-td-assignee .enterprise-assignee-img:first-child,
+.enterprise-workspace-task-td-assignee .enterprise-assignee-initials:first-child {
+  margin-left: 0;
 }
 
 .enterprise-workspace-task-row {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  gap: 0.75rem;
-  align-items: flex-start;
-  padding: 0.85rem 1rem;
-  border-radius: 12px;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  background: #fff;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
-}
-
-.enterprise-workspace-task-row:hover {
-  border-color: rgba(67, 97, 238, 0.25);
-  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
+  cursor: pointer;
+  transition: background-color 0.12s ease;
 }
 
 .enterprise-workspace-task-row--done {
-  opacity: 0.72;
+  opacity: 0.65;
+}
+
+.enterprise-workspace-task-row--done .enterprise-task-title {
+  text-decoration: line-through;
+  color: #64748b;
 }
 
 .enterprise-workspace-task-row--overdue {
-  border-color: rgba(220, 38, 38, 0.2);
-  background: rgba(254, 242, 242, 0.35);
+  background: #fffafa;
+}
+
+.enterprise-workspace-task-row--overdue:hover {
+  background: #fef2f2;
 }
 
 .enterprise-workspace-task-check {
-  width: 1.35rem;
-  height: 1.35rem;
+  width: 1.125rem;
+  height: 1.125rem;
   border-radius: 999px;
-  border: 2px solid rgba(15, 23, 42, 0.18);
+  border: 1.5px solid #cbd5e1;
   background: #fff;
   color: #fff;
-  font-size: 0.75rem;
+  font-size: 0.625rem;
   font-weight: 700;
+  line-height: 1;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  margin-top: 0.15rem;
   flex-shrink: 0;
+  padding: 0;
 }
 
 .enterprise-workspace-task-check:disabled {
@@ -11552,112 +11641,34 @@ button.enterprise-profile-legal-link {
   background: #4361ee;
 }
 
-.enterprise-workspace-task-main {
-  border: none;
-  background: transparent;
-  padding: 0;
-  text-align: left;
-  cursor: pointer;
-  font: inherit;
-  color: inherit;
-  min-width: 0;
+.enterprise-card-tasks .enterprise-workspace-task-scroll {
+  border: 1px solid #dce3eb;
+  border-radius: 6px;
+  background: #fff;
 }
 
-.enterprise-workspace-task-title-row {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  flex-wrap: wrap;
+.enterprise-card-tasks .enterprise-workspace-task-scroll .enterprise-dashboard-empty {
+  padding: 1.5rem 1rem;
 }
 
-.enterprise-workspace-task-emoji {
-  font-size: 0.9rem;
-  line-height: 1;
+.enterprise-dashboard-pro .enterprise-workspace-task-table td {
+  padding: 0.45rem 0.85rem;
+  vertical-align: middle;
 }
 
-.enterprise-workspace-task-title {
-  font-weight: 600;
-  font-size: 0.9375rem;
-  color: #0f172a;
+.enterprise-dashboard-pro .enterprise-workspace-task-table .enterprise-task-title {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.enterprise-workspace-task-row--done .enterprise-workspace-task-title {
-  text-decoration: line-through;
-  color: var(--muted);
-}
-
-.enterprise-workspace-task-repeat {
-  font-size: 0.8125rem;
-  color: #4361ee;
-}
-
-.enterprise-workspace-task-assignee {
-  margin: 0.2rem 0 0;
-  font-size: 0.8125rem;
-  color: var(--muted);
-}
-
-.enterprise-workspace-task-meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.45rem;
-  margin-top: 0.45rem;
-}
-
-.enterprise-workspace-task-due {
-  font-size: 0.75rem;
-  color: var(--muted);
-}
-
-.enterprise-workspace-task-due--overdue {
-  color: #dc2626;
-  font-weight: 600;
-}
-
-.enterprise-workspace-task-badge {
-  display: inline-block;
-  padding: 0.15rem 0.45rem;
-  border-radius: 999px;
+.enterprise-dashboard-pro .enterprise-workspace-task-table .enterprise-priority,
+.enterprise-dashboard-pro .enterprise-workspace-task-table .enterprise-status {
   font-size: 0.625rem;
   font-weight: 700;
-  text-transform: uppercase;
   letter-spacing: 0.03em;
-  background: rgba(67, 97, 238, 0.1);
-  color: #4361ee;
-}
-
-.enterprise-workspace-task-side {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 0.35rem;
-}
-
-.enterprise-workspace-task-avatars .enterprise-assignee-img,
-.enterprise-workspace-task-avatars .enterprise-assignee-initials {
-  width: 28px;
-  height: 28px;
-  font-size: 0.65rem;
-}
-
-.enterprise-workspace-task-load-more {
-  display: block;
-  width: 100%;
-  margin-top: 0.75rem;
-  padding: 0.65rem;
-  border: 1px dashed rgba(15, 23, 42, 0.15);
-  border-radius: 10px;
-  background: transparent;
-  color: #4361ee;
-  font-size: 0.875rem;
-  font-weight: 600;
-  cursor: pointer;
-  font-family: inherit;
-}
-
-.enterprise-workspace-task-load-more:hover {
-  background: rgba(67, 97, 238, 0.05);
+  text-transform: uppercase;
 }
 
 /* Create / detail modals */
@@ -11665,6 +11676,25 @@ button.enterprise-profile-legal-link {
 .enterprise-workspace-detail-modal {
   max-width: 720px;
   width: min(720px, calc(100vw - 2rem));
+  display: flex;
+  flex-direction: column;
+  max-height: min(90vh, 820px);
+}
+
+.enterprise-workspace-create-form {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: visible;
+}
+
+.enterprise-workspace-create-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 1.25rem 0.75rem;
+  -webkit-overflow-scrolling: touch;
 }
 
 .enterprise-workspace-create-head,
@@ -11673,6 +11703,7 @@ button.enterprise-profile-legal-link {
   align-items: flex-start;
   justify-content: space-between;
   gap: 1rem;
+  flex-shrink: 0;
 }
 
 .enterprise-workspace-create-head-actions,
@@ -11680,11 +11711,6 @@ button.enterprise-profile-legal-link {
   display: flex;
   gap: 0.5rem;
   flex-shrink: 0;
-}
-
-.enterprise-workspace-create-form {
-  max-height: min(70vh, 640px);
-  overflow-y: auto;
 }
 
 .enterprise-workspace-recurrence-panel {
@@ -11729,6 +11755,12 @@ button.enterprise-profile-legal-link {
   max-width: 5rem;
 }
 
+.enterprise-workspace-recurrence-hint {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
 .enterprise-workspace-recurrence-weekdays {
   display: flex;
   flex-wrap: wrap;
@@ -11768,9 +11800,11 @@ button.enterprise-profile-legal-link {
 }
 
 .enterprise-workspace-create-footer {
-  position: sticky;
-  bottom: 0;
+  flex-shrink: 0;
+  border-top: 1px solid #e2e8f0;
   background: #fff;
+  padding: 0.85rem 1.25rem 1rem;
+  margin: 0;
 }
 
 .enterprise-workspace-detail-meta {
