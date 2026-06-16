@@ -93,7 +93,7 @@ export function WorkspaceTaskCreateModal({
     setNewSubtask("");
     setIsRecurring(false);
     setRecurrenceType("weekly");
-    setRecurrenceInterval("1");
+    setRecurrenceCount("3");
     setRecurrenceDayOfWeek(1);
     setRecurrenceDayOfMonth(1);
     setAttachmentUrl(null);
