@@ -25,7 +25,6 @@ import {
   parseFeedbackTaskDescription,
 } from "../../lib/one-on-one-feedback";
 import {
-  isTaskOverdue,
   priorityClass,
   priorityLabel,
   statusClass,
@@ -34,7 +33,6 @@ import {
 } from "../../lib/task-display";
 import { isRecurringTask, type RecurrenceScope } from "../../lib/recurring-task";
 import { calendarDayFromInstant, resolveTimeZone } from "../../lib/timezone";
-import { normalizeTaskStatus, STATUS_OPTIONS } from "../../lib/task-status";
 
 function isImageAttachment(url: string): boolean {
   const clean = url.split("?")[0]?.toLowerCase() ?? "";
@@ -432,38 +430,6 @@ export function WorkspaceTaskDetailModal({
 
             {!showFocusedFeedbackTask ? (
               <aside className="enterprise-task-modal-right">
-                <div className="enterprise-task-side-card">
-                  <h4>Status</h4>
-                  <select
-                    className="auth-input enterprise-task-status-select"
-                    value={normalizeTaskStatus(task.status)}
-                    disabled={busy || isCompleted || !canEdit}
-                    aria-label="Task status"
-                    onChange={(e) => {
-                      const next = e.target.value;
-                      if (next === normalizeTaskStatus(task.status)) return;
-                      if (next === "done") {
-                        setPrompt("complete");
-                        return;
-                      }
-                      if (task.status === "done" && next === "todo") {
-                        setPrompt("recall");
-                        return;
-                      }
-                      void performStatusUpdate(next);
-                    }}
-                  >
-                    {STATUS_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                  {isTaskOverdue(task, now) && task.status !== "done" ? (
-                    <p className="enterprise-task-status-overdue-note">This task is overdue.</p>
-                  ) : null}
-                </div>
-
                 <div className="enterprise-task-side-card">
                   <div className="enterprise-task-side-row">
                     <span>Priority</span>

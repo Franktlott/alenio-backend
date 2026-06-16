@@ -19,7 +19,7 @@ import { ArrowLeft, Trash2, RefreshCw, UserPlus, X, Check, Plus, Square, CheckSq
 import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
 import { toast } from "burnt";
-import type { Task, TaskStatus, Team, Subtask, SubtaskCompletion } from "@/lib/types";
+import type { Task, Team, Subtask, SubtaskCompletion } from "@/lib/types";
 import { useDemoMode } from "@/lib/useDemo";
 import { OneOnOneAssociateFeedbackForm } from "@/components/OneOnOneAssociateFeedbackForm";
 import type { OneOnOneAssociateFeedbackContext } from "@/lib/one-on-one-feedback-api";
@@ -31,8 +31,6 @@ import {
   parseFeedbackTaskDescription,
 } from "@/lib/one-on-one-feedback";
 import { isRecurringTask, type RecurrenceScope } from "@/lib/recurring-task";
-import { normalizeTaskStatus, STATUS_OPTIONS, statusLabel as taskStatusLabel } from "@/lib/task-status";
-import { Picker } from "@react-native-picker/picker";
 
 const PRIORITY_COLORS: Record<string, string> = {
   urgent: "#EF4444",
@@ -175,6 +173,7 @@ export default function TaskDetailScreen() {
   const isCreator = !!currentUserId && task?.creator?.id === currentUserId && !isDemo;
   const isOwnerOrLeader = team?.role === "owner" || team?.role === "team_leader" || team?.role === "admin";
   const canEdit = (isCreator || isOwnerOrLeader) && !isCompleted;
+  const canComplete = !isCompleted && (isSelfAssigned || canEdit || isCreator);
   const isEditable = canEdit && isEditMode;
 
   const taskIsRecurring = !!task && isRecurringTask(task);
@@ -184,6 +183,22 @@ export default function TaskDetailScreen() {
     (draftTitle.trim() !== task.title.trim() ||
       (draftDescription.trim() || "") !== (task.description?.trim() || "") ||
       draftPriority !== task.priority);
+
+  const handleMarkComplete = () => {
+    if (!task || isDemo) return;
+    const subtasks = task.subtasks ?? [];
+    const isJointTask = task.isJoint === true;
+    const incomplete = subtasks.filter((st) =>
+      isJointTask
+        ? !(st.completions ?? []).some((c: SubtaskCompletion) => c.userId === currentUserId)
+        : !st.completed,
+    );
+    if (incomplete.length > 0) {
+      setShowSubtaskBlock(true);
+      return;
+    }
+    setShowDoneConfirm(true);
+  };
 
   const saveTaskEdit = (scope: RecurrenceScope = "task") => {
     if (!task) return;
@@ -511,50 +526,6 @@ export default function TaskDetailScreen() {
           </View>
         ) : null}
 
-        {/* Status */}
-        {!isFeedbackTask ? (
-        <View className="mb-4">
-          <Text className="text-sm font-semibold text-slate-500 mb-2">Status</Text>
-          {canEdit && !isCompleted ? (
-            <View className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden bg-white dark:bg-slate-900">
-              <Picker
-                enabled={!updateMutation.isPending && !isDemo}
-                selectedValue={normalizeTaskStatus(task.status)}
-                onValueChange={(value) => {
-                  const next = value as TaskStatus;
-                  if (next === normalizeTaskStatus(task.status)) return;
-                  if (next === "done") {
-                    const incomplete = (task.subtasks ?? []).filter((st) =>
-                      task.isJoint
-                        ? !(st.completions ?? []).some((c: SubtaskCompletion) => c.userId === currentUserId)
-                        : !st.completed
-                    );
-                    if (incomplete.length > 0) {
-                      setShowSubtaskBlock(true);
-                    } else {
-                      setShowDoneConfirm(true);
-                    }
-                    return;
-                  }
-                  updateMutation.mutate({ status: next });
-                }}
-              >
-                {STATUS_OPTIONS.map((option) => (
-                  <Picker.Item key={option.value} label={option.label} value={option.value} />
-                ))}
-              </Picker>
-            </View>
-          ) : (
-            <Text className="text-base font-semibold text-slate-800 dark:text-slate-100">
-              {taskStatusLabel(
-                task.status,
-                !!task.dueDate && new Date(task.dueDate) < new Date() && task.status !== "done",
-              )}
-            </Text>
-          )}
-        </View>
-        ) : null}
-
         {/* Subtasks */}
         {!showFocusedFeedbackTask ? (() => {
           const subtasks = task.subtasks ?? [];
@@ -821,6 +792,37 @@ export default function TaskDetailScreen() {
 
         <View style={{ height: 32 }} />
       </ScrollView>
+
+      {!showFocusedFeedbackTask && canComplete ? (
+        <View
+          style={{
+            paddingHorizontal: 16,
+            paddingTop: 12,
+            paddingBottom: 16,
+            borderTopWidth: 1,
+            borderTopColor: "#E2E8F0",
+            backgroundColor: "#FFFFFF",
+          }}
+        >
+          <TouchableOpacity
+            onPress={handleMarkComplete}
+            disabled={updateMutation.isPending || isDemo}
+            style={{
+              backgroundColor: "#4361EE",
+              borderRadius: 12,
+              paddingVertical: 14,
+              alignItems: "center",
+            }}
+            testID="mark-complete-button"
+          >
+            {updateMutation.isPending ? (
+              <ActivityIndicator size="small" color="white" />
+            ) : (
+              <Text style={{ color: "white", fontSize: 16, fontWeight: "700" }}>Mark as complete</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      ) : null}
 
       {/* Assign members modal */}
       <Modal visible={showAssignModal} transparent animationType="slide" onRequestClose={() => setShowAssignModal(false)}>
