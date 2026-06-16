@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { OneOnOneAssociateFeedbackForm } from "../OneOnOneAssociateFeedbackForm";
 import { RecurringTaskScopeModal } from "../RecurringTaskScopeModal";
 import { TaskPromptModal } from "./TaskPromptModal";
+import { AssigneeMultiSelect } from "./AssigneeMultiSelect";
 import {
   assignTeamTaskMembers,
   createTeamTaskSubtask,
@@ -88,7 +89,6 @@ export function WorkspaceTaskDetailModal({
   const [editPriority, setEditPriority] = useState(initialTask.priority);
   const [editDueDate, setEditDueDate] = useState("");
   const [newSubtask, setNewSubtask] = useState("");
-  const [assignOpen, setAssignOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [recurringScopeMode, setRecurringScopeMode] = useState<"delete" | "edit" | null>(null);
@@ -256,12 +256,12 @@ export function WorkspaceTaskDetailModal({
     }
   };
 
-  const toggleAssignee = async (userId: string) => {
+  const toggleAssignee = async (userId: string, selected: boolean) => {
     if (!canEdit) return;
     setBusy(true);
     try {
-      if (assignedIds.has(userId)) await unassignTeamTaskMember(teamId, task.id, userId);
-      else await assignTeamTaskMembers(teamId, task.id, [userId]);
+      if (selected) await assignTeamTaskMembers(teamId, task.id, [userId]);
+      else await unassignTeamTaskMember(teamId, task.id, userId);
       await refreshTask();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not update assignees.");
@@ -518,35 +518,27 @@ export function WorkspaceTaskDetailModal({
                 </div>
 
                 <div className="enterprise-task-side-card">
-                  <div className="enterprise-workspace-detail-section-head">
-                    <h4>Assignees</h4>
-                    {canEdit ? (
-                      <button type="button" className="enterprise-inline-link-btn" onClick={() => setAssignOpen((open) => !open)}>
-                        {assignOpen ? "Done" : "Manage"}
+                  <h4>Assignees</h4>
+                  <div className="enterprise-create-card-body">
+                    <AssigneeMultiSelect
+                      members={members}
+                      selectedIds={[...assignedIds]}
+                      readOnly={!canEdit}
+                      disabled={busy}
+                      loading={!teamDetail}
+                      onToggle={canEdit ? toggleAssignee : undefined}
+                    />
+                    {!isAssignee && meId && canEdit ? (
+                      <button
+                        type="button"
+                        className="enterprise-dashboard-btn-outline enterprise-create-assign-me-btn"
+                        disabled={busy}
+                        onClick={() => void toggleAssignee(meId, true)}
+                      >
+                        Assign to me
                       </button>
                     ) : null}
                   </div>
-                  {assignOpen && canEdit ? (
-                    <ul className="create-task-assignees">
-                      {members.map((m) => (
-                        <li key={m.userId}>
-                          <label className="create-task-assignee-label">
-                            <input type="checkbox" checked={assignedIds.has(m.userId)} disabled={busy} onChange={() => void toggleAssignee(m.userId)} />
-                            {m.user.name ?? m.user.email ?? m.userId}
-                          </label>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="enterprise-workspace-assignee-list">
-                      {task.assignments.map((a) => a.user.name ?? a.user.email ?? a.user.id).join(", ") || "—"}
-                    </p>
-                  )}
-                  {!isAssignee && meId && canEdit ? (
-                    <button type="button" className="enterprise-dashboard-btn-outline" disabled={busy} onClick={() => void toggleAssignee(meId)}>
-                      Assign to me
-                    </button>
-                  ) : null}
                 </div>
 
                 <div className="enterprise-task-side-card">

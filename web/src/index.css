@@ -12205,6 +12205,30 @@ button.enterprise-profile-legal-link {
   padding: 0 0.1rem;
 }
 
+.assignee-multi-select-empty-readonly {
+  margin: 0;
+  font-size: 0.8125rem;
+}
+
+.assignee-multi-select-chips--compact {
+  max-height: 96px;
+  overflow-y: auto;
+}
+
+.assignee-multi-select-chips--compact:not(:first-child) {
+  margin-top: 0.55rem;
+}
+
+.assignee-multi-select--readonly .assignee-multi-select-chips--compact {
+  margin-top: 0;
+  padding-right: 0.15rem;
+}
+
+.enterprise-create-assign-me-btn {
+  margin-top: 0.65rem;
+  width: 100%;
+}
+
 .assignee-multi-select-menu {
   position: absolute;
   z-index: 20;

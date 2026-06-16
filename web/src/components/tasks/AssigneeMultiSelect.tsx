@@ -9,16 +9,26 @@ export type AssigneeMember = {
 type Props = {
   members: AssigneeMember[];
   selectedIds: string[];
-  onChange: (ids: string[]) => void;
+  onChange?: (ids: string[]) => void;
+  onToggle?: (userId: string, selected: boolean) => void | Promise<void>;
   disabled?: boolean;
   loading?: boolean;
+  readOnly?: boolean;
 };
 
 function memberLabel(member: AssigneeMember): string {
   return member.user.name?.trim() || member.user.email?.trim() || member.userId;
 }
 
-export function AssigneeMultiSelect({ members, selectedIds, onChange, disabled, loading }: Props) {
+export function AssigneeMultiSelect({
+  members,
+  selectedIds,
+  onChange,
+  onToggle,
+  disabled,
+  loading,
+  readOnly,
+}: Props) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const rootRef = useRef<HTMLDivElement>(null);
@@ -44,12 +54,50 @@ export function AssigneeMultiSelect({ members, selectedIds, onChange, disabled, 
   }, [open]);
 
   const toggleMember = (userId: string) => {
-    onChange(selectedIds.includes(userId) ? selectedIds.filter((id) => id !== userId) : [...selectedIds, userId]);
+    const willSelect = !selectedIds.includes(userId);
+    if (onToggle) {
+      void onToggle(userId, willSelect);
+      return;
+    }
+    onChange?.(willSelect ? [...selectedIds, userId] : selectedIds.filter((id) => id !== userId));
   };
 
   const removeMember = (userId: string) => {
-    onChange(selectedIds.filter((id) => id !== userId));
+    if (onToggle) {
+      void onToggle(userId, false);
+      return;
+    }
+    onChange?.(selectedIds.filter((id) => id !== userId));
   };
+
+  const chips = selectedMembers.length > 0 ? (
+    <ul className="assignee-multi-select-chips assignee-multi-select-chips--compact" aria-label="Selected assignees">
+      {selectedMembers.map((member) => (
+        <li key={member.userId} className="assignee-multi-select-chip">
+          <span className="assignee-multi-select-chip-avatar" aria-hidden>
+            {assigneeInitials(member.user.name, member.user.email)}
+          </span>
+          <span className="assignee-multi-select-chip-label">{memberLabel(member)}</span>
+          {!disabled && !readOnly ? (
+            <button
+              type="button"
+              className="assignee-multi-select-chip-remove"
+              aria-label={`Remove ${memberLabel(member)}`}
+              onClick={() => removeMember(member.userId)}
+            >
+              ×
+            </button>
+          ) : null}
+        </li>
+      ))}
+    </ul>
+  ) : readOnly ? (
+    <p className="enterprise-muted assignee-multi-select-empty-readonly">—</p>
+  ) : null;
+
+  if (readOnly) {
+    return <div className="assignee-multi-select assignee-multi-select--readonly">{chips}</div>;
+  }
 
   return (
     <div className="assignee-multi-select" ref={rootRef}>
@@ -73,28 +121,7 @@ export function AssigneeMultiSelect({ members, selectedIds, onChange, disabled, 
         </span>
       </button>
 
-      {selectedMembers.length > 0 ? (
-        <ul className="assignee-multi-select-chips" aria-label="Selected assignees">
-          {selectedMembers.map((member) => (
-            <li key={member.userId} className="assignee-multi-select-chip">
-              <span className="assignee-multi-select-chip-avatar" aria-hidden>
-                {assigneeInitials(member.user.name, member.user.email)}
-              </span>
-              <span className="assignee-multi-select-chip-label">{memberLabel(member)}</span>
-              {!disabled ? (
-                <button
-                  type="button"
-                  className="assignee-multi-select-chip-remove"
-                  aria-label={`Remove ${memberLabel(member)}`}
-                  onClick={() => removeMember(member.userId)}
-                >
-                  ×
-                </button>
-              ) : null}
-            </li>
-          ))}
-        </ul>
-      ) : null}
+      {chips}
 
       {open ? (
         <div className="assignee-multi-select-menu" role="listbox" aria-multiselectable="true">
