@@ -12,7 +12,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { ChevronLeft, ChevronRight, Plus, Calendar, UserRound, Video, Globe } from "lucide-react-native";
+import { ChevronLeft, ChevronRight, Plus, Calendar, Video, Globe } from "lucide-react-native";
 import { router } from "expo-router";
 import { api } from "@/lib/api/api";
 import { useTeamStore } from "@/lib/state/team-store";
@@ -190,7 +190,10 @@ export default function CalendarScreen() {
 
   const { data: tasks = [], isLoading: tasksLoading } = useQuery({
     queryKey: ["tasks", activeTeamId],
-    queryFn: () => api.get<Task[]>(`/api/teams/${activeTeamId}/tasks`),
+    queryFn: () =>
+      api.get<{ tasks: Task[]; nextCursor: string | null }>(
+        `/api/teams/${activeTeamId}/tasks?activeOnly=true&limit=200&myTasks=true`,
+      ).then((r) => r.tasks),
     enabled: !!activeTeamId,
   });
 
@@ -470,12 +473,6 @@ export default function CalendarScreen() {
             <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#EF4444" }} />
             <Text style={{ fontSize: 11, color: "#64748B" }}>Federal holidays</Text>
           </View>
-          {isOwnerOrLeader ? (
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-              <UserRound size={10} color="#94A3B8" />
-              <Text style={{ fontSize: 11, color: "#64748B" }}>Incognito</Text>
-            </View>
-          ) : null}
         </View>
 
         {/* Selected day panel */}

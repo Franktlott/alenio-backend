@@ -6,6 +6,16 @@ import { sendPushToUsers } from "../lib/push";
 import { getTeamSubscription } from "./subscription";
 import { logActivity } from "../lib/activity";
 import { isFeedbackTaskDescription } from "../lib/one-on-one-feedback";
+import {
+  createRecurrenceSeries,
+  deleteTaskWithScope,
+  getNextDueDate,
+  isRecurringTask,
+  materializeRecurringTasksForTeam,
+  spawnAllRecurrenceTasks,
+  updateTaskWithSeriesScope,
+  type RecurrenceScope,
+} from "../lib/recurrence-series";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -24,51 +34,61 @@ const subtasksInclude = {
   },
 };
 
-// Helper: compute next due date for recurrence
-function getNextDueDate(
-  type: string,
-  interval: number,
-  fromDate: Date,
-  daysOfWeek?: string | null,
-  dayOfMonth?: number | null
-): Date {
-  const next = new Date(fromDate);
-  switch (type) {
-    case "daily":
-      next.setDate(next.getDate() + interval);
-      break;
-    case "weekly":
-      next.setDate(next.getDate() + 7 * interval);
-      if (daysOfWeek != null && daysOfWeek !== "") {
-        const targetDay = parseInt(daysOfWeek);
-        const diff = (targetDay - next.getDay() + 7) % 7;
-        next.setDate(next.getDate() + diff);
-      }
-      break;
-    case "monthly": {
-      // Compute target year/month without letting JS overflow (e.g. Jan 31 + 1 month → Mar 2)
-      const rawMonth = next.getMonth() + interval;
-      const targetYear = next.getFullYear() + Math.floor(rawMonth / 12);
-      const targetMonth = ((rawMonth % 12) + 12) % 12;
-      const daysInTargetMonth = new Date(targetYear, targetMonth + 1, 0).getDate();
-      // If dayOfMonth is stored (user picked "repeat on day X"), honour it clamped to month length
-      const targetDay = dayOfMonth != null
-        ? Math.min(dayOfMonth, daysInTargetMonth)
-        : Math.min(next.getDate(), daysInTargetMonth);
-      next.setFullYear(targetYear, targetMonth, targetDay);
-      break;
-    }
-    default:
-      next.setDate(next.getDate() + interval);
-  }
-  return next;
-}
-
 // Check membership helper
 async function getMembership(userId: string, teamId: string) {
   return prisma.teamMember.findUnique({
     where: { userId_teamId: { userId, teamId } },
   });
+}
+
+type RecurrenceBody = {
+  type: string;
+  interval?: number;
+  daysOfWeek?: string | null;
+  dayOfMonth?: number | null;
+};
+
+async function buildRecurrenceTaskFields(
+  taskSeed: {
+    teamId: string;
+    creatorId: string;
+    title: string;
+    description?: string | null;
+    priority: string;
+    incognito: boolean;
+    isJoint: boolean;
+    attachmentUrl?: string | null;
+  },
+  recurrence: RecurrenceBody | undefined,
+  dueDate: string | null | undefined,
+) {
+  if (!recurrence) return {};
+
+  const series = await createRecurrenceSeries(prisma, taskSeed, recurrence);
+  return {
+    recurrenceSeriesId: series.id,
+    recurrenceRule: {
+      create: {
+        type: recurrence.type,
+        interval: recurrence.interval || 1,
+        daysOfWeek: recurrence.daysOfWeek,
+        dayOfMonth: recurrence.dayOfMonth,
+        nextDueAt: dueDate
+          ? getNextDueDate(
+              recurrence.type,
+              recurrence.interval || 1,
+              new Date(dueDate),
+              recurrence.daysOfWeek,
+              recurrence.dayOfMonth,
+            )
+          : null,
+      },
+    },
+  };
+}
+
+function parseRecurrenceScope(raw: unknown): RecurrenceScope {
+  return raw === "series" ? "series" : "task";
 }
 
 type CompletionMeta = {
@@ -262,10 +282,16 @@ tasksRouter.get("/", async (c) => {
     }
   }
 
+  const activeOnly = c.req.query("activeOnly") === "true";
+
+  if (!cursor || activeOnly) {
+    await materializeRecurringTasksForTeam(prisma, teamId);
+  }
+
   const tasks = await prisma.task.findMany({
     where: {
       teamId,
-      ...(status ? { status } : {}),
+      ...(status ? { status } : activeOnly ? { status: { not: "done" } } : {}),
       ...(priority ? { priority } : {}),
       ...(myTasks === "true" ? {
         OR: [
@@ -276,7 +302,7 @@ tasksRouter.get("/", async (c) => {
       ...(resolvedAssigneeId ? { assignments: { some: { userId: resolvedAssigneeId } } } : {}),
       // "me" is a shorthand that resolves to the authenticated user's ID
       ...(creatorId ? { creatorId: creatorId === "me" ? user.id : creatorId } : {}),
-      ...(monthFilters.length ? { AND: monthFilters } : {}),
+      ...(monthFilters.length && !activeOnly ? { AND: monthFilters } : {}),
     },
     include: {
       assignments: {
@@ -342,21 +368,17 @@ tasksRouter.post("/", async (c) => {
     teamId,
     creatorId: user.id,
     ...(attachmentUrl ? { attachmentUrl } : {}),
-    ...(recurrence
-      ? {
-          recurrenceRule: {
-            create: {
-              type: recurrence.type,
-              interval: recurrence.interval || 1,
-              daysOfWeek: recurrence.daysOfWeek,
-              dayOfMonth: recurrence.dayOfMonth,
-              nextDueAt: dueDate
-                ? getNextDueDate(recurrence.type, recurrence.interval || 1, new Date(dueDate), recurrence.daysOfWeek, recurrence.dayOfMonth)
-                : null,
-            },
-          },
-        }
-      : {}),
+  };
+
+  const taskSeed = {
+    teamId,
+    creatorId: user.id,
+    title: title.trim(),
+    description: description?.trim() ?? null,
+    priority: priority || "medium",
+    incognito: incognito === true,
+    isJoint: isJoint === true,
+    attachmentUrl: attachmentUrl ?? null,
   };
 
   // Reminders are always self-assigned to the creator
@@ -366,9 +388,11 @@ tasksRouter.post("/", async (c) => {
 
   if (isJoint === true && ids.length > 1) {
     // Joint task: one task shared by all assignees
+    const recurrenceFields = await buildRecurrenceTaskFields(taskSeed, recurrence, dueDate);
     const task = await prisma.task.create({
       data: {
         ...baseTaskData,
+        ...recurrenceFields,
         isJoint: true,
         assignments: { create: ids.map((uid: string) => ({ userId: uid })) },
         ...(subtaskList.length > 0 ? { subtasks: { create: subtaskList } } : {}),
@@ -378,9 +402,11 @@ tasksRouter.post("/", async (c) => {
     tasks = [task];
   } else if (ids.length <= 1) {
     // Single task (0 or 1 assignee)
+    const recurrenceFields = await buildRecurrenceTaskFields(taskSeed, recurrence, dueDate);
     const task = await prisma.task.create({
       data: {
         ...baseTaskData,
+        ...recurrenceFields,
         ...(ids.length === 1 ? { assignments: { create: [{ userId: ids[0]! }] } } : {}),
         ...(subtaskList.length > 0 ? { subtasks: { create: subtaskList } } : {}),
       },
@@ -390,16 +416,18 @@ tasksRouter.post("/", async (c) => {
   } else {
     // One task per assignee (existing behavior)
     tasks = await Promise.all(
-      ids.map((assigneeId) =>
-        prisma.task.create({
+      ids.map(async (assigneeId) => {
+        const recurrenceFields = await buildRecurrenceTaskFields(taskSeed, recurrence, dueDate);
+        return prisma.task.create({
           data: {
             ...baseTaskData,
+            ...recurrenceFields,
             assignments: { create: [{ userId: assigneeId }] },
             ...(subtaskList.length > 0 ? { subtasks: { create: subtaskList } } : {}),
           },
           include: taskInclude,
-        })
-      )
+        });
+      }),
     );
   }
 
@@ -429,6 +457,22 @@ tasksRouter.post("/", async (c) => {
       type: "task_assigned",
       metadata: { taskTitles: incognito ? [] : [title.trim()], taskCount: 1, assigneeName: userNameMapForLog[assigneeId] ?? "" },
     });
+  }
+
+  if (recurrence) {
+    for (const task of tasks) {
+      if (!isRecurringTask(task)) continue;
+      const taskAssigneeIds =
+        "assignments" in task && Array.isArray(task.assignments)
+          ? task.assignments.map((a: { userId: string }) => a.userId)
+          : ids;
+      try {
+        await spawnAllRecurrenceTasks(prisma, task, taskAssigneeIds);
+      } catch (err) {
+        console.error("[tasks] spawnAllRecurrenceTasks failed:", err);
+        throw err;
+      }
+    }
   }
 
   return c.json({ data: tasks }, 201);
@@ -739,7 +783,10 @@ tasksRouter.patch("/:taskId", async (c) => {
   const membership = await getMembership(user.id, teamId);
   if (!membership) return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
 
-  const task = await prisma.task.findFirst({ where: { id: taskId, teamId } });
+  const task = await prisma.task.findFirst({
+    where: { id: taskId, teamId },
+    include: { recurrenceRule: true },
+  });
   if (!task) return c.json({ error: { message: "Task not found", code: "NOT_FOUND" } }, 404);
 
   const isCreator = task.creatorId === user.id;
@@ -753,7 +800,8 @@ tasksRouter.patch("/:taskId", async (c) => {
   }
 
   const body = await c.req.json();
-  const { title, description, priority, dueDate, status, attachmentUrl } = body;
+  const { title, description, priority, dueDate, status, attachmentUrl, scope: scopeRaw } = body;
+  const recurrenceScope = parseRecurrenceScope(scopeRaw);
 
   // Non-creators may only update status (complete / recall)
   if (!isCreator && (title !== undefined || description !== undefined || priority !== undefined || dueDate !== undefined || attachmentUrl !== undefined)) {
@@ -804,6 +852,14 @@ tasksRouter.patch("/:taskId", async (c) => {
         return c.json({ error: { message: `Complete all subtasks first (${incompleteSubtasks} remaining)`, code: "SUBTASKS_INCOMPLETE" } }, 400);
       }
     }
+  }
+
+  if (isCreator && recurrenceScope === "series") {
+    await updateTaskWithSeriesScope(prisma, task, recurrenceScope, {
+      ...(title !== undefined ? { title } : {}),
+      ...(description !== undefined ? { description } : {}),
+      ...(priority !== undefined ? { priority } : {}),
+    });
   }
 
   const updated = await prisma.task.update({
@@ -886,37 +942,6 @@ tasksRouter.patch("/:taskId", async (c) => {
         );
       }
     }
-
-    const rule = await prisma.recurrenceRule.findUnique({ where: { taskId } });
-    if (rule) {
-      const baseDue = task.dueDate || new Date();
-      const nextDue = getNextDueDate(rule.type, rule.interval, baseDue, rule.daysOfWeek, rule.dayOfMonth);
-      const currentAssignees = await prisma.taskAssignment.findMany({ where: { taskId } });
-
-      await prisma.task.create({
-        data: {
-          title: task.title,
-          description: task.description,
-          priority: task.priority,
-          status: "todo",
-          dueDate: nextDue,
-          teamId: task.teamId,
-          creatorId: task.creatorId,
-          assignments: {
-            create: currentAssignees.map((a) => ({ userId: a.userId })),
-          },
-          recurrenceRule: {
-            create: {
-              type: rule.type,
-              interval: rule.interval,
-              daysOfWeek: rule.daysOfWeek,
-              dayOfMonth: rule.dayOfMonth,
-              nextDueAt: getNextDueDate(rule.type, rule.interval, nextDue, rule.daysOfWeek, rule.dayOfMonth),
-            },
-          },
-        },
-      });
-    }
   }
 
   // On recall (done → todo/in_progress): recalculate streaks for all assignees so stored value is accurate
@@ -935,18 +960,22 @@ tasksRouter.delete("/:taskId", async (c) => {
   const user = c.get("user")!;
   const teamId = c.req.param("teamId") as string;
   const { taskId } = c.req.param();
+  const scope = parseRecurrenceScope(c.req.query("scope"));
 
   const membership = await getMembership(user.id, teamId);
   if (!membership) return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
 
-  const task = await prisma.task.findFirst({ where: { id: taskId, teamId } });
+  const task = await prisma.task.findFirst({
+    where: { id: taskId, teamId },
+    include: { recurrenceRule: true },
+  });
   if (!task) return c.json({ error: { message: "Task not found", code: "NOT_FOUND" } }, 404);
 
   if (task.creatorId !== user.id) {
     return c.json({ error: { message: "Only the task creator can delete this task", code: "FORBIDDEN" } }, 403);
   }
 
-  await prisma.task.delete({ where: { id: taskId } });
+  await deleteTaskWithScope(prisma, task, scope);
   return c.body(null, 204);
 });
 

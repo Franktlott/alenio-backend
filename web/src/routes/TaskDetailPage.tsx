@@ -307,7 +307,6 @@ export function TaskDetailPage() {
             <div className="task-detail-meta-row">
               <span className={priorityClass(task.priority)}>{priorityLabel(task.priority)}</span>
               <span className={statusClass(task.status)}>{statusLabel(task.status)}</span>
-              {task.incognito ? <span className="task-detail-badge-incog">Incognito</span> : null}
               {task.isJoint ? <span className="task-detail-badge-joint">Shared</span> : null}
             </div>
             ) : null}

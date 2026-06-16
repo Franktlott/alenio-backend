@@ -42,7 +42,6 @@ export function CreateTaskPage() {
   const [dueDate, setDueDate] = useState(() => toDateInputValue(new Date()));
   const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
   const [isJoint, setIsJoint] = useState(false);
-  const [incognito, setIncognito] = useState(false);
   const [subtasks, setSubtasks] = useState<string[]>([]);
   const [newSubtask, setNewSubtask] = useState("");
 
@@ -121,7 +120,6 @@ export function CreateTaskPage() {
         dueDate: dueIso,
         assigneeIds,
         isJoint: assigneeIds.length > 1 && isJoint,
-        incognito,
         subtasks: subtasks.map((s) => s.trim()).filter(Boolean),
       });
       navigate("/dashboard");
@@ -246,13 +244,6 @@ export function CreateTaskPage() {
               </span>
             </label>
           ) : null}
-
-          <label className="create-task-checkbox-row">
-            <input type="checkbox" checked={incognito} onChange={(e) => setIncognito(e.target.checked)} />
-            <span>
-              <strong>Incognito</strong> — hidden from most of the team (same as app).
-            </span>
-          </label>
 
           <div className="create-task-subtasks">
             <span className="auth-label">Subtasks</span>

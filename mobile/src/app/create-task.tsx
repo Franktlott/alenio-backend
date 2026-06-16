@@ -54,7 +54,6 @@ export default function CreateTaskScreen() {
   const [priority, setPriority] = useState<TaskPriority>("medium");
   const [selectedAssignees, setSelectedAssignees] = useState<string[]>([]);
   const [isRecurring, setIsRecurring] = useState(false);
-  const [isIncognito, setIsIncognito] = useState(false);
   const [isJoint, setIsJoint] = useState(false);
   const [showSplitConfirm, setShowSplitConfirm] = useState(false);
   const [recurrenceType, setRecurrenceType] = useState<RecurrenceType>("weekly");
@@ -133,7 +132,6 @@ export default function CreateTaskScreen() {
     } else {
       setIsRecurring(false);
     }
-    setIsIncognito(t.incognito ?? false);
     setIsJoint(t.isJoint ?? false);
     setShowTemplatePicker(false);
   };
@@ -172,7 +170,6 @@ export default function CreateTaskScreen() {
         recurrenceDayOfMonth: isRecurring && recurrenceType === "monthly" && selectedDayOfMonth !== null
           ? selectedDayOfMonth
           : undefined,
-        incognito: isIncognito,
         isJoint,
       });
       queryClient.invalidateQueries({ queryKey: ["templates", teamId] });
@@ -222,7 +219,6 @@ export default function CreateTaskScreen() {
       priority,
       dueDate: dueDate ? dueDate.toISOString() : undefined,
       assigneeIds: selectedAssignees,
-      incognito: isIncognito,
       isJoint: isJoint || undefined,
       recurrence: isRecurring
         ? {
@@ -726,30 +722,6 @@ export default function CreateTaskScreen() {
               </View>
             ) : null}
           </View>
-
-          {/* Incognito — owners and team leaders only */}
-          {!isRegularMember ? (
-          <View className="py-4 border-b border-slate-100 dark:border-slate-800">
-            <View className="flex-row items-center justify-between">
-              <View style={{ flex: 1, marginRight: 12 }}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                  <Text style={{ fontSize: 16 }}>🕵️</Text>
-                  <Text className="text-sm font-semibold text-slate-500">Incognito task</Text>
-                </View>
-                <Text className="text-xs text-slate-400 mt-0.5">
-                  Counts toward your streak, but shows as anonymous on the team feed
-                </Text>
-              </View>
-              <Switch
-                value={isIncognito}
-                onValueChange={setIsIncognito}
-                trackColor={{ false: "#E2E8F0", true: "#6B8EF6" }}
-                thumbColor="white"
-                testID="incognito-switch"
-              />
-            </View>
-          </View>
-          ) : null}
 
           {/* Photo attachment */}
           <View className="py-4 border-b border-slate-100 dark:border-slate-800">

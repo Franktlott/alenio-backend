@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { queryKeys } from "../lib/query-keys";
 import QRCode from "qrcode";
 import { AddMemberModal } from "./AddMemberModal";
@@ -203,6 +204,7 @@ type Props = {
 };
 
 export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWorkspaceSwitchLoading }: Props) {
+  const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const teamContextQuery = useQuery({
     queryKey: queryKeys.teamContext(selectedTeamId),
@@ -326,6 +328,16 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
       return sortedMembers[0]?.userId ?? null;
     });
   }, [selectedTeamId, sortedMembers]);
+
+  useEffect(() => {
+    const member = searchParams.get("member")?.trim().toLowerCase();
+    if (member !== "me" || !myId) return;
+    if (!sortedMembers.some((m) => m.userId === myId)) return;
+    setSelectedMemberId(myId);
+    const next = new URLSearchParams(searchParams);
+    next.delete("member");
+    setSearchParams(next, { replace: true });
+  }, [myId, searchParams, setSearchParams, sortedMembers]);
 
   const filteredMembers = useMemo(() => {
     const q = memberSearch.trim().toLowerCase();

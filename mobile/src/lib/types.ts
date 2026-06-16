@@ -74,6 +74,7 @@ export interface Task {
   creator: User;
   assignments: { id: string; userId: string; user: User }[];
   subtasks: Subtask[];
+  recurrenceSeriesId?: string | null;
   recurrenceRule?: RecurrenceRule | null;
   team?: { id: string; name: string };
   isJoint?: boolean;

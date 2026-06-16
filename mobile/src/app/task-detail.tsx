@@ -30,6 +30,7 @@ import {
   isFeedbackTaskDescription,
   parseFeedbackTaskDescription,
 } from "@/lib/one-on-one-feedback";
+import { isRecurringTask, type RecurrenceScope } from "@/lib/recurring-task";
 
 const STATUS_OPTIONS: { key: "open" | "in_progress" | "completed" | "overdue"; label: string; value: TaskStatus; color: string }[] = [
   { key: "open", label: "Open", value: "todo", color: "#64748B" },
@@ -51,6 +52,7 @@ export default function TaskDetailScreen() {
   const isDemo = useDemoMode();
   const queryClient = useQueryClient();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [recurringScopeMode, setRecurringScopeMode] = useState<"delete" | "edit" | null>(null);
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [showRecallConfirm, setShowRecallConfirm] = useState(false);
   const [showDoneConfirm, setShowDoneConfirm] = useState(false);
@@ -79,7 +81,7 @@ export default function TaskDetailScreen() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: (updates: Partial<Task>) =>
+    mutationFn: (updates: Partial<Task> & { scope?: RecurrenceScope }) =>
       api.patch<Task>(`/api/teams/${teamId}/tasks/${taskId}`, updates),
     onSuccess: (updated) => {
       queryClient.setQueryData(["task", taskId, teamId], updated);
@@ -92,7 +94,8 @@ export default function TaskDetailScreen() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: () => api.delete(`/api/teams/${teamId}/tasks/${taskId}`),
+    mutationFn: (scope: RecurrenceScope) =>
+      api.delete(`/api/teams/${teamId}/tasks/${taskId}?scope=${scope}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tasks", teamId] });
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
@@ -178,6 +181,32 @@ export default function TaskDetailScreen() {
   const isOwnerOrLeader = team?.role === "owner" || team?.role === "team_leader" || team?.role === "admin";
   const canEdit = (isCreator || isOwnerOrLeader) && !isCompleted;
   const isEditable = canEdit && isEditMode;
+
+  const taskIsRecurring = !!task && isRecurringTask(task);
+
+  const seriesFieldsChanged = () =>
+    !!task &&
+    (draftTitle.trim() !== task.title.trim() ||
+      (draftDescription.trim() || "") !== (task.description?.trim() || "") ||
+      draftPriority !== task.priority);
+
+  const saveTaskEdit = (scope: RecurrenceScope = "task") => {
+    if (!task) return;
+    updateMutation.mutate(
+      {
+        title: draftTitle.trim() || task.title,
+        description: draftDescription.trim() || undefined,
+        priority: draftPriority as Task["priority"],
+        ...(scope === "series" ? { scope: "series" } : {}),
+      },
+      {
+        onSuccess: () => {
+          setIsEditMode(false);
+          setRecurringScopeMode(null);
+        },
+      },
+    );
+  };
 
   useEffect(() => {
     if (task && startEdit === "1" && canEdit) {
@@ -274,7 +303,7 @@ export default function TaskDetailScreen() {
             <ArrowLeft size={22} color="white" />
           </TouchableOpacity>
           <Text style={{ flex: 1, marginLeft: 12, color: "white", fontSize: 18, fontWeight: "700" }} numberOfLines={1}>
-            {task.incognito ? "🕵️ " : ""}{task.isJoint ? "🤝 " : ""}{task.title}
+            {task.isJoint ? "🤝 " : ""}{task.title}
           </Text>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
             {canEdit && isEditMode ? (
@@ -287,10 +316,11 @@ export default function TaskDetailScreen() {
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={() => {
-                    updateMutation.mutate(
-                      { title: draftTitle.trim() || task.title, description: draftDescription.trim() || undefined, priority: draftPriority as Task["priority"] },
-                      { onSuccess: () => setIsEditMode(false) }
-                    );
+                    if (taskIsRecurring && seriesFieldsChanged()) {
+                      setRecurringScopeMode("edit");
+                      return;
+                    }
+                    saveTaskEdit("task");
                   }}
                   disabled={updateMutation.isPending}
                   testID="save-edit-button"
@@ -314,7 +344,11 @@ export default function TaskDetailScreen() {
               </TouchableOpacity>
             ) : null}
             {isCreator && !isEditMode ? (
-              <TouchableOpacity onPress={() => setShowDeleteConfirm(true)} disabled={deleteMutation.isPending} testID="delete-button">
+              <TouchableOpacity
+                onPress={() => (taskIsRecurring ? setRecurringScopeMode("delete") : setShowDeleteConfirm(true))}
+                disabled={deleteMutation.isPending}
+                testID="delete-button"
+              >
                 {deleteMutation.isPending ? (
                   <ActivityIndicator size="small" color="white" />
                 ) : (
@@ -370,7 +404,6 @@ export default function TaskDetailScreen() {
 
         {/* Title */}
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: task.isJoint ? 8 : 12, marginTop: showFocusedFeedbackTask ? 16 : 0 }}>
-          {task.incognito ? <Text style={{ fontSize: 20 }}>🕵️</Text> : null}
           {isEditMode ? (
             <TextInput
               value={draftTitle}
@@ -875,11 +908,69 @@ export default function TaskDetailScreen() {
               </TouchableOpacity>
               <TouchableOpacity
                 testID="confirm-delete-button"
-                onPress={() => { setShowDeleteConfirm(false); deleteMutation.mutate(); }}
+                onPress={() => {
+                  setShowDeleteConfirm(false);
+                  deleteMutation.mutate("task");
+                }}
                 disabled={deleteMutation.isPending}
                 className="flex-1 py-3.5 items-center"
               >
                 <Text className="text-base font-semibold text-red-500">Delete</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Recurring task scope modal (delete / edit) */}
+      <Modal visible={recurringScopeMode !== null} transparent animationType="fade" onRequestClose={() => setRecurringScopeMode(null)}>
+        <TouchableOpacity className="flex-1 bg-black/40 items-center justify-center px-8" activeOpacity={1} onPress={() => setRecurringScopeMode(null)}>
+          <TouchableOpacity activeOpacity={1} className="w-full bg-white dark:bg-slate-800 rounded-2xl overflow-hidden">
+            <View className="px-5 pt-5 pb-4 items-center">
+              <Text className="text-lg font-bold text-slate-900 dark:text-white mb-1 text-center">
+                {recurringScopeMode === "delete" ? "Delete recurring task?" : "Update recurring task?"}
+              </Text>
+              <Text className="text-sm text-slate-500 dark:text-slate-400 text-center">
+                {recurringScopeMode === "delete"
+                  ? "Delete only this occurrence, or the entire series including future tasks."
+                  : "Apply changes to only this occurrence, or to this and all upcoming tasks in the series."}
+              </Text>
+            </View>
+            <View className="border-t border-slate-100 dark:border-slate-700">
+              <TouchableOpacity onPress={() => setRecurringScopeMode(null)} className="py-3.5 items-center border-b border-slate-100 dark:border-slate-700">
+                <Text className="text-base font-medium text-slate-600 dark:text-slate-300">Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                testID="recurring-scope-task-button"
+                onPress={() => {
+                  if (recurringScopeMode === "delete") {
+                    setRecurringScopeMode(null);
+                    deleteMutation.mutate("task");
+                    return;
+                  }
+                  saveTaskEdit("task");
+                }}
+                disabled={updateMutation.isPending || deleteMutation.isPending}
+                className="py-3.5 items-center border-b border-slate-100 dark:border-slate-700"
+              >
+                <Text className="text-base font-semibold text-indigo-500">This task only</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                testID="recurring-scope-series-button"
+                onPress={() => {
+                  if (recurringScopeMode === "delete") {
+                    setRecurringScopeMode(null);
+                    deleteMutation.mutate("series");
+                    return;
+                  }
+                  saveTaskEdit("series");
+                }}
+                disabled={updateMutation.isPending || deleteMutation.isPending}
+                className="py-3.5 items-center"
+              >
+                <Text className={`text-base font-semibold ${recurringScopeMode === "delete" ? "text-red-500" : "text-indigo-500"}`}>
+                  Entire series
+                </Text>
               </TouchableOpacity>
             </View>
           </TouchableOpacity>

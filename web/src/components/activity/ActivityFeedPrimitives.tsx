@@ -28,7 +28,7 @@ const EVENT_CONFIG: Record<
     getMessage: (e) =>
       e.metadata?.taskTitle
         ? `${e.user?.name ?? "Someone"} completed “${e.metadata.taskTitle}”`
-        : `${e.user?.name ?? "Someone"} completed an incognito task 🕵️`,
+        : `${e.user?.name ?? "Someone"} completed a task`,
   },
   member_joined: {
     label: "Joined",

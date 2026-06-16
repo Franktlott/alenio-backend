@@ -12,9 +12,7 @@ import {
 } from "../lib/calendar-mobile-parity";
 import { getUSHolidays } from "../lib/us-federal-holidays";
 import { canShowVideoJoin, isInVideoMeetingBannerWindow, isVideoMeetingLeaderRole } from "../lib/video-meeting-join";
-import { OneOnOneAssociateFeedbackForm } from "../components/OneOnOneAssociateFeedbackForm";
 import {
-  createWebTask,
   createWebTeamEvent,
   createVideoRoom,
   deleteWebTask,
@@ -28,7 +26,6 @@ import {
   updateWebTeamEvent,
   updateCoreTeamTask,
   type ApiCalendarEvent,
-  type ApiSubtask,
   type ApiTask,
   type OneOnOneAssociateFeedbackContext,
   type UpcomingVideoMeeting,
@@ -37,83 +34,21 @@ import {
   type WebTeamRow,
 } from "../lib/api";
 import {
-  ASSOCIATE_FEEDBACK_SECTION_TITLE,
   formatTaskDescriptionForDisplay,
   isFeedbackTaskDescription,
   parseFeedbackTaskDescription,
 } from "../lib/one-on-one-feedback";
 import addChoiceLogo from "../../icon.png";
-
-function priorityRank(p: string): number {
-  if (p === "high") return 3;
-  if (p === "medium") return 2;
-  if (p === "low") return 1;
-  return 0;
-}
-
-function dotClassForDayTasks(dayTasks: ApiTask[]): string {
-  if (!dayTasks.length) return "";
-  const max = Math.max(...dayTasks.map((t) => priorityRank(t.priority)));
-  if (max >= 3) return "enterprise-cal-dot enterprise-cal-dot-high";
-  if (max >= 2) return "enterprise-cal-dot enterprise-cal-dot-med";
-  return "enterprise-cal-dot enterprise-cal-dot-low";
-}
-
-function formatTaskDue(iso: string | null, now: Date): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
-  const today = startOfDay(now);
-  if (isSameDay(d, today)) return `${d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })} · Today`;
-  return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
-}
-
-function statusLabel(status: string): string {
-  if (status === "done") return "Completed";
-  if (status === "in_progress") return "In progress";
-  return "Pending";
-}
-
-function statusClass(status: string): string {
-  if (status === "done") return "enterprise-status enterprise-status-done";
-  if (status === "in_progress") return "enterprise-status enterprise-status-progress";
-  return "enterprise-status enterprise-status-pending";
-}
-
-function priorityLabel(p: string): string {
-  if (p === "high") return "High";
-  if (p === "medium") return "Medium";
-  if (p === "low") return "Low";
-  return "—";
-}
-
-function priorityClass(p: string): string {
-  if (p === "high") return "enterprise-priority enterprise-priority-high";
-  if (p === "medium") return "enterprise-priority enterprise-priority-medium";
-  if (p === "low") return "enterprise-priority enterprise-priority-low";
-  return "enterprise-priority enterprise-priority-none";
-}
-
-function isImageAttachment(url: string): boolean {
-  const clean = url.split("?")[0]?.toLowerCase() ?? "";
-  return [".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".svg", ".heic", ".heif"].some((ext) => clean.endsWith(ext));
-}
-
-function formatModalDate(iso: string | null | undefined): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric", weekday: "long" });
-}
-
-function assigneeInitials(name: string | null, email: string | null | undefined): string {
-  const n = name?.trim() || email?.trim() || "";
-  const parts = n.split(/\s+/).filter(Boolean);
-  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
-  if (parts.length === 1 && parts[0].length >= 2) return parts[0].slice(0, 2).toUpperCase();
-  if (parts.length === 1) return parts[0][0].toUpperCase();
-  return "?";
-}
+import { RecurringTaskScopeModal } from "../components/RecurringTaskScopeModal";
+import { TaskPromptModal } from "../components/tasks/TaskPromptModal";
+import { WorkspaceTaskCreateModal } from "../components/tasks/WorkspaceTaskCreateModal";
+import { WorkspaceTaskDetailModal } from "../components/tasks/WorkspaceTaskDetailModal";
+import { WorkspaceTaskRow } from "../components/tasks/WorkspaceTaskRow";
+import { isRecurringTask, type RecurrenceScope } from "../lib/recurring-task";
+import {
+  dotClassForDayTasks,
+  priorityRank,
+} from "../lib/task-display";
 
 function canDeleteTask(task: ApiTask, meId: string | undefined, role: string): boolean {
   if (!meId) return false;
@@ -140,17 +75,6 @@ function isDelegatedTeamTask(task: ApiTask, userId: string): boolean {
 }
 
 type TaskTab = "active" | "completed" | "team";
-const PRIORITIES = [
-  { label: "Low", value: "low" },
-  { label: "Medium", value: "medium" },
-  { label: "High", value: "high" },
-  { label: "Urgent", value: "urgent" },
-] as const;
-const STATUSES = [
-  { label: "Open", value: "todo" },
-  { label: "In progress", value: "in_progress" },
-  { label: "Completed", value: "done" },
-] as const;
 
 export function DashboardPage() {
   const queryClient = useQueryClient();
@@ -160,22 +84,15 @@ export function DashboardPage() {
   const [calendarView, setCalendarView] = useState(() => new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(() => new Date());
   const [taskTab, setTaskTab] = useState<TaskTab>("active");
-  const [sortBy, setSortBy] = useState<"due" | "priority">("due");
+  const [sortBy, setSortBy] = useState<"due" | "priority" | "completed">("due");
   const [selectedTaskModal, setSelectedTaskModal] = useState<ApiTask | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
-  const [createTeamDetail, setCreateTeamDetail] = useState<WebTeamDetail | null>(null);
-  const [ctTitle, setCtTitle] = useState("");
-  const [ctDescription, setCtDescription] = useState("");
-  const [ctPriority, setCtPriority] = useState("medium");
-  const [ctStatus, setCtStatus] = useState("todo");
-  const [ctDueDate, setCtDueDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [ctAssigneeIds, setCtAssigneeIds] = useState<string[]>([]);
-  const [ctIsJoint, setCtIsJoint] = useState(false);
-  const [ctIncognito, setCtIncognito] = useState(false);
-  const [ctSubtasks, setCtSubtasks] = useState<string[]>([]);
-  const [ctNewSubtask, setCtNewSubtask] = useState("");
-  const [ctSaving, setCtSaving] = useState(false);
-  const [ctError, setCtError] = useState<string | null>(null);
+  const [createInitialDueDate, setCreateInitialDueDate] = useState<string | undefined>();
+  const [teamDetail, setTeamDetail] = useState<WebTeamDetail | null>(null);
+  const [taskListLimit, setTaskListLimit] = useState(15);
+  const [teamMemberFilter, setTeamMemberFilter] = useState("all");
+  const [completePromptTask, setCompletePromptTask] = useState<ApiTask | null>(null);
+  const [completeBusyId, setCompleteBusyId] = useState<string | null>(null);
   const [eventOpen, setEventOpen] = useState(false);
   const [evTitle, setEvTitle] = useState("");
   const [evDescription, setEvDescription] = useState("");
@@ -196,16 +113,10 @@ export function DashboardPage() {
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [videoTitle, setVideoTitle] = useState("");
   const [videoLoading, setVideoLoading] = useState(false);
-  const [taskEditMode, setTaskEditMode] = useState(false);
-  const [taskSaving, setTaskSaving] = useState(false);
-  const [taskError, setTaskError] = useState<string | null>(null);
-  const [editTitle, setEditTitle] = useState("");
-  const [editDescription, setEditDescription] = useState("");
-  const [editPriority, setEditPriority] = useState("medium");
-  const [editDueDate, setEditDueDate] = useState("");
   const [taskMenuId, setTaskMenuId] = useState<string | null>(null);
   const [taskDeleteId, setTaskDeleteId] = useState<string | null>(null);
   const [taskActionError, setTaskActionError] = useState<string | null>(null);
+  const [recurringScopeModal, setRecurringScopeModal] = useState<ApiTask | null>(null);
   const [feedbackContext, setFeedbackContext] = useState<OneOnOneAssociateFeedbackContext | null>(null);
   const [feedbackContextLoading, setFeedbackContextLoading] = useState(false);
   const [feedbackCompletionActive, setFeedbackCompletionActive] = useState(false);
@@ -228,7 +139,6 @@ export function DashboardPage() {
     !feedbackCompletionActive &&
     feedbackContextLoading &&
     !feedbackContext;
-  const showFocusedFeedbackTask = isSelectedTaskFeedback && isSelectedTaskFeedbackAssignee;
 
   useEffect(() => {
     const id = location.hash.replace(/^#/, "");
@@ -278,30 +188,22 @@ export function DashboardPage() {
   }, [evMenuId]);
 
   useEffect(() => {
-    if (!createOpen || !selectedTeamId) return;
+    if (!selectedTeamId) {
+      setTeamDetail(null);
+      return;
+    }
     let cancelled = false;
-    (async () => {
-      try {
-        const d = await fetchWebTeam(selectedTeamId);
-        if (cancelled) return;
-        setCreateTeamDetail(d);
-      } catch {
-        if (cancelled) return;
-        setCreateTeamDetail(null);
-      }
-    })();
+    void fetchWebTeam(selectedTeamId)
+      .then((detail) => {
+        if (!cancelled) setTeamDetail(detail);
+      })
+      .catch(() => {
+        if (!cancelled) setTeamDetail(null);
+      });
     return () => {
       cancelled = true;
     };
-  }, [createOpen, selectedTeamId]);
-
-  useEffect(() => {
-    if (!createOpen || !me?.id || !createTeamDetail?.members?.length) return;
-    setCtAssigneeIds((prev) => {
-      if (prev.length > 0) return prev;
-      return [me.id];
-    });
-  }, [createOpen, me?.id, createTeamDetail?.members]);
+  }, [selectedTeamId]);
 
   useEffect(() => {
     const id = window.setInterval(() => setMeetingNow(Date.now()), 1000);
@@ -330,6 +232,8 @@ export function DashboardPage() {
 
   useEffect(() => {
     setSelectedDate(new Date());
+    setTaskListLimit(15);
+    setTeamMemberFilter("all");
   }, [selectedTeamId]);
 
   useEffect(() => {
@@ -352,15 +256,35 @@ export function DashboardPage() {
     const t = tasks.find((item) => item.id === taskId) ?? null;
     if (!t) return;
     setSelectedTaskModal(t);
-    setTaskEditMode(false);
-    setTaskError(null);
     setFeedbackContext(null);
     setFeedbackContextLoading(false);
     setFeedbackCompletionActive(false);
-    setEditTitle(t.title ?? "");
-    setEditDescription(t.description ?? "");
-    setEditPriority(t.priority ?? "medium");
-    setEditDueDate(t.dueDate ? new Date(t.dueDate).toISOString().slice(0, 10) : "");
+  };
+
+  const openCreateTask = (dueDate?: string) => {
+    setCreateInitialDueDate(dueDate);
+    setCreateOpen(true);
+  };
+
+  const requestCompleteTask = (task: ApiTask) => {
+    if (task.status === "done") return;
+    setCompletePromptTask(task);
+  };
+
+  const performCompleteTask = async (task: ApiTask) => {
+    if (!selectedTeamId) return;
+    setCompleteBusyId(task.id);
+    setTaskActionError(null);
+    try {
+      await updateCoreTeamTask(selectedTeamId, task.id, { status: "done" });
+      if (selectedTaskModal?.id === task.id) setSelectedTaskModal(null);
+      await refreshTeamData(selectedTeamId);
+    } catch (err) {
+      setTaskActionError(err instanceof Error ? err.message : "Could not complete task.");
+    } finally {
+      setCompleteBusyId(null);
+      setCompletePromptTask(null);
+    }
   };
 
   useEffect(() => {
@@ -408,24 +332,6 @@ export function DashboardPage() {
     feedbackCompletionActive,
   ]);
 
-  const resetCreateForm = () => {
-    setCtTitle("");
-    setCtDescription("");
-    setCtPriority("medium");
-    setCtStatus("todo");
-    setCtDueDate(new Date().toISOString().slice(0, 10));
-    setCtAssigneeIds(me?.id ? [me.id] : []);
-    setCtIsJoint(false);
-    setCtIncognito(false);
-    setCtSubtasks([]);
-    setCtNewSubtask("");
-    setCtError(null);
-  };
-
-  const toggleCreateAssignee = (userId: string) => {
-    setCtAssigneeIds((prev) => (prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]));
-  };
-
   const myRole = selectedTeam?.role ?? "";
   const isOwnerOrLeader = myRole === "owner" || myRole === "team_leader";
   const isOwnerOrAdmin = myRole === "owner" || myRole === "admin";
@@ -436,25 +342,34 @@ export function DashboardPage() {
     if (taskTab === "team" && !canViewTeamTab) setTaskTab("active");
   }, [taskTab, canViewTeamTab]);
 
-  const handleDeleteTask = async (task: ApiTask) => {
+  const handleDeleteTask = async (task: ApiTask, scope: RecurrenceScope = "task") => {
     if (!selectedTeamId || !canDeleteTask(task, me?.id, myRole)) return;
-    const ok = window.confirm(`Delete "${task.title}"? This cannot be undone.`);
-    if (!ok) return;
     setTaskDeleteId(task.id);
     setTaskActionError(null);
     setTaskMenuId(null);
     try {
-      await deleteWebTask(task.id, selectedTeamId);
+      await deleteWebTask(task.id, selectedTeamId, scope);
       if (selectedTaskModal?.id === task.id) {
         setSelectedTaskModal(null);
-        setTaskEditMode(false);
       }
       await refreshTeamData(selectedTeamId);
     } catch (err) {
       setTaskActionError(err instanceof Error ? err.message : "Could not delete task.");
     } finally {
       setTaskDeleteId(null);
+      setRecurringScopeModal(null);
     }
+  };
+
+  const requestDeleteTask = (task: ApiTask) => {
+    if (!selectedTeamId || !canDeleteTask(task, me?.id, myRole)) return;
+    setTaskMenuId(null);
+    if (isRecurringTask(task)) {
+      setRecurringScopeModal(task);
+      return;
+    }
+    if (!window.confirm(`Delete "${task.title}"? This cannot be undone.`)) return;
+    void handleDeleteTask(task, "task");
   };
 
   const visibleEvents = useMemo(() => {
@@ -530,8 +445,13 @@ export function DashboardPage() {
     return tabs;
   }, [canViewTeamTab]);
 
+  const filteredTabTasks = useMemo(() => {
+    if (taskTab !== "team" || teamMemberFilter === "all") return tabTasks;
+    return tabTasks.filter((t) => t.assignments.some((a) => a.user.id === teamMemberFilter));
+  }, [tabTasks, taskTab, teamMemberFilter]);
+
   const tableRows = useMemo(() => {
-    const list = [...tabTasks];
+    const list = [...filteredTabTasks];
     if (sortBy === "due") {
       list.sort((a, b) => {
         if (!a.dueDate && !b.dueDate) return 0;
@@ -539,11 +459,19 @@ export function DashboardPage() {
         if (!b.dueDate) return -1;
         return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
       });
+    } else if (sortBy === "completed") {
+      list.sort((a, b) => {
+        const aDone = a.completedAt ? new Date(a.completedAt).getTime() : 0;
+        const bDone = b.completedAt ? new Date(b.completedAt).getTime() : 0;
+        return bDone - aDone;
+      });
     } else {
       list.sort((a, b) => priorityRank(b.priority) - priorityRank(a.priority));
     }
-    return list.slice(0, 8);
-  }, [tabTasks, sortBy]);
+    return list.slice(0, taskListLimit);
+  }, [filteredTabTasks, sortBy, taskListLimit]);
+
+  const hasMoreTasks = filteredTabTasks.length > tableRows.length;
 
   const calTitle = calendarView.toLocaleString(undefined, { month: "long", year: "numeric" });
   const weekdayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -827,14 +755,6 @@ export function DashboardPage() {
                   <span className="enterprise-cal-legend-holiday" />
                   <span>Federal holidays</span>
                 </div>
-                {isOwnerOrLeader ? (
-                  <div className="enterprise-cal-legend-item">
-                    <span className="enterprise-cal-legend-incog" aria-hidden>
-                      ○
-                    </span>
-                    <span>Incognito</span>
-                  </div>
-                ) : null}
               </div>
               {selectedDate ? (
                 <div className={`enterprise-cal-day-panel${evMenuId ? " enterprise-cal-day-panel--menu-open" : ""}`}>
@@ -1033,7 +953,11 @@ export function DashboardPage() {
                 Tasks
               </h2>
               <div className="enterprise-task-head-actions">
-                <button type="button" className="enterprise-dashboard-add-task" onClick={() => setCreateOpen(true)}>
+                <button
+                  type="button"
+                  className="enterprise-dashboard-add-task"
+                  onClick={() => openCreateTask(selectedDate ? selectedDate.toISOString().slice(0, 10) : undefined)}
+                >
                   + Add task
                 </button>
                 <div className="enterprise-task-tabs" role="tablist">
@@ -1058,19 +982,32 @@ export function DashboardPage() {
                 <select
                   className="enterprise-select"
                   value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as "due" | "priority")}
+                  onChange={(e) => setSortBy(e.target.value as "due" | "priority" | "completed")}
                   aria-label="Sort tasks"
                 >
                   <option value="due">Due date</option>
                   <option value="priority">Priority</option>
+                  {taskTab === "completed" ? <option value="completed">Completion date</option> : null}
                 </select>
               </label>
-              <button type="button" className="enterprise-task-filters-btn" aria-label="Filters">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-                  <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
-                </svg>
-                <span>Filters</span>
-              </button>
+              {taskTab === "team" && teamDetail?.members?.length ? (
+                <label className="enterprise-select-label">
+                  Member
+                  <select
+                    className="enterprise-select"
+                    value={teamMemberFilter}
+                    onChange={(e) => setTeamMemberFilter(e.target.value)}
+                    aria-label="Filter by team member"
+                  >
+                    <option value="all">All members</option>
+                    {teamDetail.members.map((m) => (
+                      <option key={m.userId} value={m.userId}>
+                        {m.user.name ?? m.user.email ?? m.userId}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
             </div>
             {taskActionError ? (
               <p className="enterprise-form-error" role="alert" style={{ marginBottom: "0.75rem" }}>
@@ -1078,570 +1015,126 @@ export function DashboardPage() {
               </p>
             ) : null}
             <div className="enterprise-card-tasks-body">
-            <div className="enterprise-table-wrap">
-              <table className="enterprise-table">
-                <thead>
-                  <tr>
-                    <th>Task</th>
-                    <th>Due</th>
-                    <th>Priority</th>
-                    <th>Assignee</th>
-                    <th>Status</th>
-                    <th className="enterprise-table-th-actions" aria-label="Actions" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {tableRows.length === 0 ? (
-                    <tr>
-                      <td colSpan={6} className="enterprise-table-empty">
-                        <div className="enterprise-dashboard-empty">
-                          <svg className="enterprise-dashboard-empty-icon" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
-                            <path d="M9 11l3 3L22 4" />
-                            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
-                          </svg>
-                          <p className="enterprise-dashboard-empty-title">
-                            {taskTab === "completed"
-                              ? "No completed tasks"
-                              : taskTab === "team"
-                                ? "No tasks assigned to others"
-                                : "No active tasks"}
-                          </p>
-                          <p className="enterprise-dashboard-empty-sub">
-                            {taskTab === "team"
-                              ? "Tasks you assign to teammates appear here."
-                              : "Create a task to get started."}
-                          </p>
-                        </div>
-                      </td>
-                    </tr>
-                  ) : (
-                    tableRows.map((t) => {
-                      const assignees = t.assignments.map((a) => a.user).filter(Boolean);
-                      return (
-                        <tr
-                          key={t.id}
-                          className="enterprise-table-row-clickable"
-                          role="link"
-                          tabIndex={0}
-                          aria-label={`Open task: ${t.title}`}
-                          onClick={() => openTaskDetail(t.id)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter" || e.key === " ") {
-                              e.preventDefault();
-                              openTaskDetail(t.id);
-                            }
-                          }}
-                        >
-                          <td>
-                            <div className="enterprise-task-title">{t.title}</div>
-                            {t.description ? (
-                              <div className="enterprise-task-desc">{formatTaskDescriptionForDisplay(t.description)}</div>
-                            ) : null}
-                          </td>
-                          <td>{formatTaskDue(t.dueDate, now)}</td>
-                          <td>
-                            <span className={priorityClass(t.priority)}>{priorityLabel(t.priority)}</span>
-                          </td>
-                          <td>
-                            <div className="enterprise-assignees">
-                              {assignees.slice(0, 3).map((u) =>
-                                u.image ? (
-                                  <img key={u.id} src={u.image} alt={u.name ?? u.email ?? "Assignee"} className="enterprise-assignee-img" />
-                                ) : (
-                                  <span key={u.id} className="enterprise-assignee-initials" title={u.name ?? u.email ?? ""}>
-                                    {assigneeInitials(u.name, u.email)}
-                                  </span>
-                                ),
-                              )}
-                              {assignees.length === 0 ? <span className="enterprise-muted">—</span> : null}
-                            </div>
-                          </td>
-                          <td>
-                            <span className={statusClass(t.status)}>{statusLabel(t.status)}</span>
-                          </td>
-                          <td
-                            className="enterprise-table-td-actions"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <div className="enterprise-task-row-actions">
-                              <button
-                                type="button"
-                                className="enterprise-row-more"
-                                aria-label={`Actions for ${t.title}`}
-                                aria-expanded={taskMenuId === t.id}
-                                aria-haspopup="menu"
-                                data-testid={`task-menu-${t.id}`}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setTaskMenuId((prev) => (prev === t.id ? null : t.id));
-                                }}
-                              >
-                                ⋮
-                              </button>
-                              {taskMenuId === t.id ? (
-                                <div className="enterprise-task-row-menu" role="menu">
-                                  {canDeleteTask(t, me?.id, myRole) ? (
-                                    <button
-                                      type="button"
-                                      className="enterprise-task-row-menu-danger"
-                                      role="menuitem"
-                                      disabled={taskDeleteId === t.id}
-                                      data-testid={`task-delete-${t.id}`}
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        void handleDeleteTask(t);
-                                      }}
-                                    >
-                                      {taskDeleteId === t.id ? "Deleting…" : "Delete"}
-                                    </button>
-                                  ) : (
-                                    <p className="enterprise-task-row-menu-muted" role="presentation">
-                                      No actions available
-                                    </p>
-                                  )}
-                                </div>
-                              ) : null}
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
+              <div className="enterprise-workspace-task-list">
+                {tableRows.length === 0 ? (
+                  <div className="enterprise-dashboard-empty">
+                    <svg className="enterprise-dashboard-empty-icon" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
+                      <path d="M9 11l3 3L22 4" />
+                      <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+                    </svg>
+                    <p className="enterprise-dashboard-empty-title">
+                      {taskTab === "completed"
+                        ? "No completed tasks"
+                        : taskTab === "team"
+                          ? "No tasks assigned to others"
+                          : "No active tasks"}
+                    </p>
+                    <p className="enterprise-dashboard-empty-sub">
+                      {taskTab === "team"
+                        ? "Tasks you assign to teammates appear here."
+                        : "Create a task to get started."}
+                    </p>
+                  </div>
+                ) : (
+                  tableRows.map((t) => {
+                    const creatorId = taskCreatorId(t);
+                    const isAssignee = !!me?.id && t.assignments.some((a) => a.user.id === me.id);
+                    const canComplete =
+                      t.status !== "done" &&
+                      (isAssignee || creatorId === me?.id) &&
+                      !isFeedbackTaskDescription(t.description);
+                    const canEditRow = creatorId === me?.id || isOwnerOrLeader;
+                    return (
+                      <WorkspaceTaskRow
+                        key={t.id}
+                        task={t}
+                        now={now}
+                        menuOpen={taskMenuId === t.id}
+                        completeBusy={completeBusyId === t.id}
+                        deleteBusy={taskDeleteId === t.id}
+                        canDelete={canDeleteTask(t, me?.id, myRole)}
+                        canComplete={canComplete}
+                        canEdit={canEditRow && t.status !== "done"}
+                        onOpen={() => openTaskDetail(t.id)}
+                        onToggleComplete={(e) => {
+                          e.stopPropagation();
+                          requestCompleteTask(t);
+                        }}
+                        onEdit={() => openTaskDetail(t.id)}
+                        onDelete={() => requestDeleteTask(t)}
+                        onMenuToggle={(e) => {
+                          e.stopPropagation();
+                          setTaskMenuId((prev) => (prev === t.id ? null : t.id));
+                        }}
+                      />
+                    );
+                  })
+                )}
+              </div>
+              {hasMoreTasks ? (
+                <button
+                  type="button"
+                  className="enterprise-workspace-task-load-more"
+                  onClick={() => setTaskListLimit((limit) => limit + 15)}
+                >
+                  Show more tasks
+                </button>
+              ) : null}
             </div>
           </section>
         </div>
       </div>
-      {selectedTaskModal ? (
-        <div
-          className="enterprise-task-modal-backdrop"
-          role="presentation"
-          onClick={() => {
-            if (feedbackCompletionActive) return;
+      {selectedTaskModal && selectedTeamId ? (
+        <WorkspaceTaskDetailModal
+          task={selectedTaskModal}
+          teamId={selectedTeamId}
+          teamDetail={teamDetail}
+          me={me ?? null}
+          myRole={myRole}
+          feedbackContext={feedbackContext}
+          feedbackContextLoading={feedbackContextLoading}
+          feedbackCompletionActive={feedbackCompletionActive}
+          onFeedbackCompletionStarted={() => setFeedbackCompletionActive(true)}
+          onFeedbackCompletionFailed={() => setFeedbackCompletionActive(false)}
+          onFeedbackSubmitted={() => {
+            setFeedbackCompletionActive(false);
+            setSelectedTaskModal(null);
+            setFeedbackContext(null);
+            void refreshTeamData(selectedTeamId);
+          }}
+          onClose={() => {
             setSelectedTaskModal(null);
             setFeedbackContext(null);
             setFeedbackCompletionActive(false);
           }}
-        >
-          <div
-            className={`enterprise-task-modal${showFocusedFeedbackTask ? " enterprise-task-modal--feedback-focused" : ""}`}
-            role="dialog"
-            aria-modal="true"
-            aria-label="Task details"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              type="button"
-              className="enterprise-task-modal-close"
-              onClick={() => {
-                if (feedbackCompletionActive) return;
-                setSelectedTaskModal(null);
-                setTaskEditMode(false);
-                setTaskError(null);
-                setFeedbackContext(null);
-                setFeedbackCompletionActive(false);
-              }}
-              aria-label="Close"
-            >
-              ×
-            </button>
-            <header className="enterprise-task-modal-head">
-              {taskEditMode ? (
-                <input className="auth-input enterprise-task-modal-title-input" value={editTitle} onChange={(e) => setEditTitle(e.target.value)} />
-              ) : (
-                <h3 className="enterprise-task-modal-title">{selectedTaskModal.title}</h3>
-              )}
-              {!showFocusedFeedbackTask ? (
-              <div className="enterprise-task-modal-meta">
-                <span className={priorityClass(selectedTaskModal.priority)}>{priorityLabel(selectedTaskModal.priority)}</span>
-                <span className={statusClass(selectedTaskModal.status)}>{statusLabel(selectedTaskModal.status)}</span>
-              </div>
-              ) : null}
-            </header>
-
-            <div className={`enterprise-task-modal-body${showFocusedFeedbackTask ? " enterprise-task-modal-body--feedback-focused" : ""}`}>
-              <section className="enterprise-task-modal-left">
-                {selectedTaskModal.attachmentUrl ? (
-                  <section className="enterprise-task-modal-section">
-                    <h4>Attachment</h4>
-                    {isImageAttachment(selectedTaskModal.attachmentUrl) ? (
-                      <img src={selectedTaskModal.attachmentUrl} alt="Task attachment" className="enterprise-task-modal-image" />
-                    ) : (
-                      <a href={selectedTaskModal.attachmentUrl} target="_blank" rel="noopener noreferrer" className="enterprise-inline-link">
-                        Open attachment
-                      </a>
-                    )}
-                  </section>
-                ) : null}
-
-                {feedbackContext && selectedTaskFeedbackMeta ? (
-                  <section className="enterprise-task-modal-section enterprise-oneone-feedback-task-section">
-                    <h4>{ASSOCIATE_FEEDBACK_SECTION_TITLE}</h4>
-                    <OneOnOneAssociateFeedbackForm
-                      teamId={selectedTaskFeedbackMeta.teamId}
-                      memberUserId={selectedTaskFeedbackMeta.memberUserId}
-                      meetingId={selectedTaskFeedbackMeta.meetingId}
-                      context={feedbackContext}
-                      onCompletionStarted={() => setFeedbackCompletionActive(true)}
-                      onCompletionFailed={() => setFeedbackCompletionActive(false)}
-                      onSubmitted={() => {
-                        const teamId = selectedTeamId;
-                        setFeedbackCompletionActive(false);
-                        setSelectedTaskModal(null);
-                        setTaskEditMode(false);
-                        setFeedbackContext(null);
-                        if (teamId) void refreshTeamData(teamId);
-                      }}
-                    />
-                  </section>
-                ) : null}
-
-                {showFeedbackFormLoading ? (
-                  <section className="enterprise-task-modal-section enterprise-oneone-feedback-task-section">
-                    <h4>{ASSOCIATE_FEEDBACK_SECTION_TITLE}</h4>
-                    <p className="enterprise-muted" aria-live="polite">
-                      Loading your check-in…
-                    </p>
-                  </section>
-                ) : null}
-
-                {!feedbackContext && !showFeedbackFormLoading ? (
-                  <section className="enterprise-task-modal-section">
-                    <h4>Description</h4>
-                    {taskEditMode && !isSelectedTaskFeedback ? (
-                      <textarea className="auth-input create-task-textarea" value={editDescription} onChange={(e) => setEditDescription(e.target.value)} rows={3} />
-                    ) : (
-                      <div className="enterprise-task-modal-description-box">
-                        {formatTaskDescriptionForDisplay(selectedTaskModal.description) || "Add a description..."}
-                      </div>
-                    )}
-                  </section>
-                ) : null}
-
-                {!showFocusedFeedbackTask ? (
-                <section className="enterprise-task-modal-section">
-                  <h4>Subtasks</h4>
-                  {(selectedTaskModal.subtasks?.length ?? 0) > 0 ? (
-                    <ul className="enterprise-task-modal-subtasks">
-                      {(selectedTaskModal.subtasks as ApiSubtask[]).map((s) => (
-                        <li key={s.id} className={s.completed ? "done" : ""}>
-                          <span className="enterprise-task-modal-check">{s.completed ? "✓" : "○"}</span>
-                          {s.title}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="enterprise-muted">No subtasks</p>
-                  )}
-                </section>
-                ) : null}
-              </section>
-
-              {!showFocusedFeedbackTask ? (
-              <aside className="enterprise-task-modal-right">
-                <div className="enterprise-task-side-card">
-                  <div className="enterprise-task-side-row">
-                    <span>Status</span>
-                    <strong>{statusLabel(selectedTaskModal.status)}</strong>
-                  </div>
-                  <div className="enterprise-task-side-row">
-                    <span>Priority</span>
-                    <strong>
-                      {taskEditMode ? (
-                        <select className="auth-input enterprise-task-inline-select" value={editPriority} onChange={(e) => setEditPriority(e.target.value)}>
-                          {PRIORITIES.map((p) => (
-                            <option key={p.value} value={p.value}>
-                              {p.label}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        priorityLabel(selectedTaskModal.priority)
-                      )}
-                    </strong>
-                  </div>
-                  <div className="enterprise-task-side-row">
-                    <span>Due date</span>
-                    <strong>
-                      {taskEditMode ? (
-                        <input
-                          type="date"
-                          className="auth-input enterprise-task-inline-select"
-                          value={editDueDate}
-                          onChange={(e) => setEditDueDate(e.target.value)}
-                        />
-                      ) : (
-                        formatModalDate(selectedTaskModal.dueDate)
-                      )}
-                    </strong>
-                  </div>
-                  <div className="enterprise-task-side-row">
-                    <span>Assignees</span>
-                    <strong>{selectedTaskModal.assignments.map((a) => a.user.name ?? a.user.email ?? a.user.id).join(", ") || "—"}</strong>
-                  </div>
-                  <div className="enterprise-task-side-row">
-                    <span>Created by</span>
-                    <strong>{selectedTaskModal.creator?.name ?? "Unknown"}</strong>
-                  </div>
-                </div>
-
-                <div className="enterprise-task-side-card">
-                  <h4>Task details</h4>
-                  <dl className="enterprise-task-modal-dl">
-                    <dt>Created</dt>
-                    <dd>{formatModalDate(selectedTaskModal.createdAt)}</dd>
-                    <dt>Last updated</dt>
-                    <dd>{formatModalDate(selectedTaskModal.updatedAt)}</dd>
-                  </dl>
-                </div>
-              </aside>
-              ) : null}
-            </div>
-            {taskError ? <p className="auth-error">{taskError}</p> : null}
-            {!showFocusedFeedbackTask ? (
-            <footer className="enterprise-task-modal-footer">
-              {!isSelectedTaskFeedback ? (
-              <button
-                type="button"
-                className="enterprise-task-modal-btn enterprise-task-modal-btn-secondary"
-                disabled={taskSaving}
-                onClick={async () => {
-                  if (!selectedTaskModal) return;
-                  if (!taskEditMode) {
-                    setTaskEditMode(true);
-                    return;
-                  }
-                  setTaskSaving(true);
-                  setTaskError(null);
-                  try {
-                    const dueIso = editDueDate ? new Date(`${editDueDate}T23:59:59`).toISOString() : null;
-                    const updated = await updateCoreTeamTask(selectedTeamId, selectedTaskModal.id, {
-                      title: editTitle.trim(),
-                      description: editDescription.trim() || null,
-                      priority: editPriority,
-                      dueDate: dueIso,
-                    });
-                    setSelectedTaskModal(updated);
-                    await refreshTeamData(selectedTeamId);
-                    setTaskEditMode(false);
-                  } catch (err) {
-                    setTaskError(err instanceof Error ? err.message : "Could not save task.");
-                  } finally {
-                    setTaskSaving(false);
-                  }
-                }}
-              >
-                {taskSaving ? "Saving…" : taskEditMode ? "Save task" : "Edit task"}
-              </button>
-              ) : null}
-              {!isSelectedTaskFeedback ? (
-              <button
-                type="button"
-                className="enterprise-task-modal-btn enterprise-task-modal-btn-primary"
-                disabled={taskSaving}
-                onClick={async () => {
-                  if (!selectedTaskModal) return;
-                  const isReopen = selectedTaskModal.status === "done";
-                  const confirmed = window.confirm(
-                    isReopen
-                      ? "Reopen this task? This will move it back to pending."
-                      : "Mark this task as complete?",
-                  );
-                  if (!confirmed) return;
-                  setTaskSaving(true);
-                  setTaskError(null);
-                  try {
-                    const nextStatus = isReopen ? "todo" : "done";
-                    const updated = await updateCoreTeamTask(selectedTeamId, selectedTaskModal.id, { status: nextStatus });
-                    setSelectedTaskModal(updated);
-                    await refreshTeamData(selectedTeamId);
-                    if (!isReopen) {
-                      setSelectedTaskModal(null);
-                      setTaskEditMode(false);
-                    }
-                  } catch (err) {
-                    setTaskError(err instanceof Error ? err.message : "Could not update task status.");
-                  } finally {
-                    setTaskSaving(false);
-                  }
-                }}
-              >
-                {selectedTaskModal.status === "done" ? "Reopen task" : "Mark as complete"}
-              </button>
-              ) : null}
-            </footer>
-            ) : null}
-          </div>
-        </div>
+          onUpdated={async () => refreshTeamData(selectedTeamId)}
+          onDeleted={async () => refreshTeamData(selectedTeamId)}
+        />
       ) : null}
-      {createOpen ? (
-        <div className="enterprise-task-modal-backdrop" role="presentation" onClick={() => setCreateOpen(false)}>
-          <div className="enterprise-task-modal enterprise-task-create-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
-            <button type="button" className="enterprise-task-modal-close" onClick={() => setCreateOpen(false)} aria-label="Close">
-              ×
-            </button>
-            <header className="enterprise-task-modal-head">
-              <h3 className="enterprise-task-modal-title">Create task</h3>
-              <p className="enterprise-muted">Create in dashboard without leaving this page.</p>
-            </header>
-            <form
-              className="create-task-form"
-              onSubmit={async (e) => {
-                e.preventDefault();
-                setCtError(null);
-                if (!ctTitle.trim()) return setCtError("Please enter a task title.");
-                if (!selectedTeamId) return setCtError("Pick a workspace.");
-                if (ctAssigneeIds.length === 0) return setCtError("Assign at least one teammate.");
-                setCtSaving(true);
-                try {
-                  const dueIso = ctDueDate ? new Date(`${ctDueDate}T23:59:59`).toISOString() : null;
-                  await createWebTask({
-                    teamId: selectedTeamId,
-                    title: ctTitle.trim(),
-                    description: ctDescription.trim() || null,
-                    priority: ctPriority,
-                    status: ctStatus,
-                    dueDate: dueIso,
-                    assigneeIds: ctAssigneeIds,
-                    isJoint: ctAssigneeIds.length > 1 && ctIsJoint,
-                    incognito: ctIncognito,
-                    subtasks: ctSubtasks.map((s) => s.trim()).filter(Boolean),
-                  });
-                  await refreshTeamData(selectedTeamId);
-                  setCreateOpen(false);
-                  resetCreateForm();
-                } catch (err) {
-                  setCtError(err instanceof Error ? err.message : "Could not create task.");
-                } finally {
-                  setCtSaving(false);
-                }
-              }}
-            >
-              {ctError ? <p className="auth-error">{ctError}</p> : null}
-              <label className="auth-label" htmlFor="ct-title-inline">
-                Title
-              </label>
-              <input id="ct-title-inline" className="auth-input" value={ctTitle} onChange={(e) => setCtTitle(e.target.value)} />
-              <label className="auth-label" htmlFor="ct-desc-inline">
-                Description
-              </label>
-              <textarea
-                id="ct-desc-inline"
-                className="auth-input create-task-textarea"
-                value={ctDescription}
-                onChange={(e) => setCtDescription(e.target.value)}
-                rows={3}
-                placeholder="Optional details"
-              />
-              <div className="create-task-row">
-                <div className="create-task-field">
-                  <label className="auth-label">Priority</label>
-                  <select className="auth-input" value={ctPriority} onChange={(e) => setCtPriority(e.target.value)}>
-                    {PRIORITIES.map((p) => (
-                      <option key={p.value} value={p.value}>
-                        {p.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="create-task-field">
-                  <label className="auth-label">Status</label>
-                  <select className="auth-input" value={ctStatus} onChange={(e) => setCtStatus(e.target.value)}>
-                    {STATUSES.map((s) => (
-                      <option key={s.value} value={s.value}>
-                        {s.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="create-task-field">
-                  <label className="auth-label">Due date</label>
-                  <input className="auth-input" type="date" value={ctDueDate} onChange={(e) => setCtDueDate(e.target.value)} />
-                </div>
-              </div>
-              <fieldset className="create-task-fieldset">
-                <legend className="auth-label">Assign to</legend>
-                {!createTeamDetail?.members.length ? (
-                  <p className="enterprise-muted">Loading members…</p>
-                ) : (
-                  <ul className="create-task-assignees">
-                    {createTeamDetail.members.map((m) => (
-                      <li key={m.userId}>
-                        <label className="create-task-assignee-label">
-                          <input type="checkbox" checked={ctAssigneeIds.includes(m.user.id)} onChange={() => toggleCreateAssignee(m.user.id)} />
-                          <span>{m.user.name ?? m.user.email ?? m.user.id}</span>
-                        </label>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </fieldset>
-              {ctAssigneeIds.length > 1 ? (
-                <label className="create-task-checkbox-row">
-                  <input type="checkbox" checked={ctIsJoint} onChange={(e) => setCtIsJoint(e.target.checked)} />
-                  <span>Shared task for all assignees</span>
-                </label>
-              ) : null}
-              <label className="create-task-checkbox-row">
-                <input type="checkbox" checked={ctIncognito} onChange={(e) => setCtIncognito(e.target.checked)} />
-                <span>Incognito</span>
-              </label>
-              <div className="create-task-subtasks">
-                <span className="auth-label">Subtasks</span>
-                <ul className="create-task-subtask-list">
-                  {ctSubtasks.map((st, i) => (
-                    <li key={`${i}-${st}`} className="create-task-subtask-item">
-                      <span>{st}</span>
-                      <button type="button" className="create-task-subtask-remove" onClick={() => setCtSubtasks((s) => s.filter((_, idx) => idx !== i))}>
-                        ×
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-                <div className="create-task-subtask-add">
-                  <input
-                    className="auth-input"
-                    value={ctNewSubtask}
-                    onChange={(e) => setCtNewSubtask(e.target.value)}
-                    placeholder="Add a subtask"
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        const v = ctNewSubtask.trim();
-                        if (!v) return;
-                        setCtSubtasks((s) => [...s, v]);
-                        setCtNewSubtask("");
-                      }
-                    }}
-                  />
-                  <button
-                    type="button"
-                    className="auth-btn-secondary create-task-add-btn"
-                    onClick={() => {
-                      const v = ctNewSubtask.trim();
-                      if (!v) return;
-                      setCtSubtasks((s) => [...s, v]);
-                      setCtNewSubtask("");
-                    }}
-                  >
-                    Add
-                  </button>
-                </div>
-              </div>
-              <div className="enterprise-task-modal-footer">
-                <button type="button" className="enterprise-task-modal-btn enterprise-task-modal-btn-secondary" onClick={() => setCreateOpen(false)}>
-                  Cancel
-                </button>
-                <button type="submit" className="enterprise-task-modal-btn enterprise-task-modal-btn-primary" disabled={ctSaving}>
-                  {ctSaving ? "Creating…" : "Create task"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      ) : null}
+      <WorkspaceTaskCreateModal
+        open={createOpen}
+        teamId={selectedTeamId ?? ""}
+        teamDetail={teamDetail}
+        me={me ?? null}
+        myRole={myRole}
+        initialDueDate={createInitialDueDate}
+        onClose={() => setCreateOpen(false)}
+        onCreated={async () => {
+          if (selectedTeamId) await refreshTeamData(selectedTeamId);
+        }}
+      />
+      <TaskPromptModal
+        open={!!completePromptTask}
+        title="Mark as done?"
+        message="This will complete the task and lock it from further edits."
+        confirmLabel="Complete"
+        confirmTone="success"
+        busy={!!completeBusyId}
+        onClose={() => setCompletePromptTask(null)}
+        onConfirm={() => {
+          if (completePromptTask) void performCompleteTask(completePromptTask);
+        }}
+      />
       {eventAddChoiceOpen ? (
         <div
           className="enterprise-event-choice-backdrop"
@@ -1883,6 +1376,16 @@ export function DashboardPage() {
           </div>
         </div>
       ) : null}
+      <RecurringTaskScopeModal
+        open={!!recurringScopeModal}
+        mode="delete"
+        busy={!!taskDeleteId}
+        onClose={() => setRecurringScopeModal(null)}
+        onChoose={(scope) => {
+          if (!recurringScopeModal) return;
+          void handleDeleteTask(recurringScopeModal, scope);
+        }}
+      />
     </>
   );
 }

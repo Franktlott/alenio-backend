@@ -3,6 +3,7 @@ import { prisma } from "../prisma";
 import { getSessionFromHeaders } from "../auth";
 import { sendPushToUsers } from "../lib/push";
 import { logActivity } from "../lib/activity";
+import { materializeRecurringTasksForTeam } from "../lib/recurrence-series";
 import { mountWebStripeBilling } from "./web-stripe-billing";
 import { oneOnOneTemplatesRouter } from "./one-on-one-templates";
 import { checkInTemplateLibraryRouter } from "./check-in-template-library";
@@ -332,6 +333,7 @@ webRouter.get("/api/teams/:id/tasks", async (c) => {
   const { id } = c.req.param();
   const membership = await prisma.teamMember.findFirst({ where: { teamId: id, userId: userId } });
   if (!membership) return c.json({ error: "Not found" }, 404);
+  await materializeRecurringTasksForTeam(prisma, id);
   const tasks = await prisma.task.findMany({
     where: { teamId: id },
     include: {
@@ -340,7 +342,7 @@ webRouter.get("/api/teams/:id/tasks", async (c) => {
       subtasks: { orderBy: { order: "asc" }, select: { id: true, title: true, completed: true, order: true } },
     },
     orderBy: { createdAt: "desc" },
-    take: 100,
+    take: 250,
   });
   return c.json({ data: tasks });
 });
@@ -562,7 +564,11 @@ webRouter.delete("/api/tasks/:id", async (c) => {
   const userId = webPrismaUserIdFromContext(c);
   if (!userId) return c.json({ error: "Unauthorized" }, 401);
   const { id } = c.req.param();
-  const task = await prisma.task.findUnique({ where: { id } });
+  const scope = c.req.query("scope") === "series" ? "series" : "task";
+  const task = await prisma.task.findUnique({
+    where: { id },
+    include: { recurrenceRule: true },
+  });
   if (!task) return c.json({ error: "Not found" }, 404);
   // Must be creator or team admin/owner
   if (task.creatorId !== userId) {
@@ -573,8 +579,8 @@ webRouter.delete("/api/tasks/:id", async (c) => {
       return c.json({ error: { message: "Forbidden" } }, 403);
     }
   }
-  await prisma.taskAssignment.deleteMany({ where: { taskId: id } });
-  await prisma.task.delete({ where: { id } });
+  const { deleteTaskWithScope } = await import("../lib/recurrence-series");
+  await deleteTaskWithScope(prisma, task, scope);
   return c.json({ data: { ok: true } });
 });
 

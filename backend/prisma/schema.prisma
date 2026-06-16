@@ -113,6 +113,7 @@ model Team {
   oneOnOneTemplates OneOnOneTemplate[]
   oneOnOneMeetings OneOnOneMeeting[]
   developmentGoals DevelopmentGoal[]
+  recurrenceSeries RecurrenceSeries[]
 }
 
 model TeamSubscription {
@@ -169,7 +170,11 @@ model Task {
   oneOnOneMeetingId String?
   oneOnOneMeeting   OneOnOneMeeting? @relation(fields: [oneOnOneMeetingId], references: [id], onDelete: SetNull)
 
+  recurrenceSeriesId String?
+  recurrenceSeries   RecurrenceSeries? @relation(fields: [recurrenceSeriesId], references: [id], onDelete: Cascade)
+
   @@index([teamId])
+  @@index([recurrenceSeriesId])
   @@index([teamId, status])
   @@index([teamId, dueDate])
   @@index([teamId, completedAt])
@@ -220,6 +225,28 @@ model RecurrenceRule {
   daysOfWeek String?
   dayOfMonth Int?
   nextDueAt  DateTime?
+}
+
+model RecurrenceSeries {
+  id            String   @id @default(cuid())
+  teamId        String
+  team          Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  creatorId     String
+  title         String
+  description   String?
+  priority      String   @default("medium")
+  incognito     Boolean  @default(false)
+  isJoint       Boolean  @default(false)
+  attachmentUrl String?
+  type          String
+  interval      Int      @default(1)
+  daysOfWeek    String?
+  dayOfMonth    Int?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  tasks         Task[]
+
+  @@index([teamId])
 }
 
 model TaskTemplate {

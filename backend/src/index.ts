@@ -42,6 +42,7 @@ import { syncPrismaSchemaOnStartup } from "./lib/sync-prisma-schema";
 import { ensureOneOnOneSchema } from "./lib/ensure-one-on-one-schema";
 import { ensureDevelopmentPlanSchema } from "./lib/ensure-development-plan-schema";
 import { ensureTeamInviteSchema } from "./lib/ensure-team-invite-schema";
+import { ensureRecurrenceSeriesSchema } from "./lib/ensure-recurrence-series-schema";
 import { developmentGoalsRouter } from "./routes/development-goals";
 import { teamInvitesPublicRouter } from "./routes/team-invites";
 import { redeemPendingInvitesForUser } from "./lib/team-invites";
@@ -50,6 +51,7 @@ syncPrismaSchemaOnStartup();
 const oneOnOneSchemaReady = ensureOneOnOneSchema(prisma);
 const developmentPlanSchemaReady = ensureDevelopmentPlanSchema(prisma);
 const teamInviteSchemaReady = ensureTeamInviteSchema(prisma);
+const recurrenceSeriesSchemaReady = ensureRecurrenceSeriesSchema(prisma);
 
 type Variables = {
   user: AppUser | null;
@@ -105,6 +107,7 @@ app.use("*", async (_c, next) => {
   await oneOnOneSchemaReady;
   await developmentPlanSchemaReady;
   await teamInviteSchemaReady;
+  await recurrenceSeriesSchemaReady;
   await next();
 });
 

@@ -539,6 +539,15 @@ export type ApiTask = {
   isJoint?: boolean;
   createdAt?: string;
   updatedAt?: string;
+  recurrenceSeriesId?: string | null;
+  recurrenceRule?: {
+    id: string;
+    type: string;
+    interval: number;
+    daysOfWeek?: string | null;
+    dayOfMonth?: number | null;
+    nextDueAt?: string | null;
+  } | null;
   creator?: { id: string; name: string | null; email?: string | null; image?: string | null };
   subtasks?: ApiSubtask[];
   assignments: Array<{
@@ -551,6 +560,26 @@ export type ApiSubtask = {
   title: string;
   completed: boolean;
   order: number;
+  completions?: Array<{
+    userId: string;
+    user?: { id: string; name: string | null; image?: string | null };
+  }>;
+};
+
+export type TaskTemplate = {
+  id: string;
+  title: string;
+  description: string | null;
+  priority: string;
+  attachmentUrl: string | null;
+  subtasks: Array<{ title: string; order: number }>;
+  isRecurring: boolean;
+  recurrenceType: string | null;
+  recurrenceInterval: number | null;
+  recurrenceDaysOfWeek: string | null;
+  recurrenceDayOfMonth: number | null;
+  incognito: boolean;
+  isJoint: boolean;
 };
 
 export type ApiTaskDetail = ApiTask & {
@@ -640,7 +669,9 @@ export function fetchWebTeamTasks(teamId: string) {
 
 // Core app route fallback (often deployed earlier than /web routes)
 export function fetchCoreTeamTasks(teamId: string) {
-  return apiGetJson<{ data: ApiTask[] | { tasks?: ApiTask[] } }>(`/api/teams/${encodeURIComponent(teamId)}/tasks`).then(
+  return apiGetJson<{ data: ApiTask[] | { tasks?: ApiTask[] } }>(
+    `/api/teams/${encodeURIComponent(teamId)}/tasks?activeOnly=true&limit=200`,
+  ).then(
     (r) => {
       const data = r.data;
       if (Array.isArray(data)) return data;
@@ -660,6 +691,7 @@ export function updateCoreTeamTask(
     dueDate: string | null;
     status: string;
     attachmentUrl: string | null;
+    scope: "task" | "series";
   }>,
 ) {
   return apiPatchJson<{ data: ApiTask }>(`/api/teams/${encodeURIComponent(teamId)}/tasks/${encodeURIComponent(taskId)}`, patch).then(
@@ -709,13 +741,14 @@ export function deleteWebTeamEvent(teamId: string, eventId: string) {
   ).then((r) => r.data);
 }
 
-export async function deleteWebTask(taskId: string, teamId?: string) {
+export async function deleteWebTask(taskId: string, teamId?: string, scope?: "task" | "series") {
   const tid = encodeURIComponent(taskId);
+  const qs = scope === "series" ? "?scope=series" : "";
   try {
-    return await apiRequest<{ data: { ok: true } }>(`/web/api/tasks/${tid}`, { method: "DELETE" }).then((r) => r.data);
+    return await apiRequest<{ data: { ok: true } }>(`/web/api/tasks/${tid}${qs}`, { method: "DELETE" }).then((r) => r.data);
   } catch (e) {
     if (!teamId) throw e;
-    await apiRequest<unknown>(`/api/teams/${encodeURIComponent(teamId)}/tasks/${tid}`, { method: "DELETE" });
+    await apiRequest<unknown>(`/api/teams/${encodeURIComponent(teamId)}/tasks/${tid}${qs}`, { method: "DELETE" });
     return { ok: true as const };
   }
 }
@@ -1071,9 +1104,46 @@ export type CreateWebTaskInput = {
   isJoint?: boolean;
   incognito?: boolean;
   subtasks?: string[];
+  attachmentUrl?: string | null;
+  recurrence?: {
+    type: string;
+    interval?: number;
+    daysOfWeek?: string | null;
+    dayOfMonth?: number | null;
+  };
 };
 
+export function createTeamTask(input: CreateWebTaskInput) {
+  const teamId = encodeURIComponent(input.teamId);
+  return apiPostJson<{ data: ApiTask[] | { tasks?: ApiTask[] } }>(
+    `/api/teams/${teamId}/tasks`,
+    {
+      title: input.title,
+      description: input.description || undefined,
+      priority: input.priority ?? "medium",
+      status: input.status ?? "todo",
+      dueDate: input.dueDate || undefined,
+      assigneeIds: input.assigneeIds,
+      isJoint: input.isJoint === true,
+      incognito: input.incognito === true,
+      attachmentUrl: input.attachmentUrl || undefined,
+      recurrence: input.recurrence,
+      subtasks: input.subtasks?.filter((t) => t.trim()).map((title) => ({ title: title.trim() })),
+    },
+  ).then((r) => {
+    const data = r.data;
+    if (Array.isArray(data)) return data;
+    if (data && typeof data === "object" && Array.isArray((data as { tasks?: ApiTask[] }).tasks)) {
+      return (data as { tasks: ApiTask[] }).tasks;
+    }
+    return [];
+  });
+}
+
 export function createWebTask(input: CreateWebTaskInput) {
+  if (input.recurrence || input.attachmentUrl) {
+    return createTeamTask(input);
+  }
   return apiPostJson<{ data: { tasks: ApiTask[] } }>("/web/api/tasks", {
     teamId: input.teamId,
     title: input.title,
@@ -1086,6 +1156,82 @@ export function createWebTask(input: CreateWebTaskInput) {
     incognito: input.incognito === true,
     subtasks: input.subtasks?.filter((t) => t.trim()).length ? input.subtasks.filter((t) => t.trim()) : undefined,
   }).then((r) => r.data.tasks);
+}
+
+export function assignTeamTaskMembers(teamId: string, taskId: string, userIds: string[]) {
+  return apiPostJson<{ data: ApiTask }>(
+    `/api/teams/${encodeURIComponent(teamId)}/tasks/${encodeURIComponent(taskId)}/assign`,
+    { userIds },
+  ).then((r) => r.data);
+}
+
+export function unassignTeamTaskMember(teamId: string, taskId: string, userId: string) {
+  return apiRequest<unknown>(
+    `/api/teams/${encodeURIComponent(teamId)}/tasks/${encodeURIComponent(taskId)}/assign/${encodeURIComponent(userId)}`,
+    { method: "DELETE" },
+  );
+}
+
+export function createTeamTaskSubtask(teamId: string, taskId: string, title: string) {
+  return apiPostJson<{ data: ApiSubtask }>(
+    `/api/teams/${encodeURIComponent(teamId)}/tasks/${encodeURIComponent(taskId)}/subtasks`,
+    { title },
+  ).then((r) => r.data);
+}
+
+export function updateTeamTaskSubtask(
+  teamId: string,
+  taskId: string,
+  subtaskId: string,
+  completed: boolean,
+) {
+  return apiPatchJson<{ data: ApiSubtask }>(
+    `/api/teams/${encodeURIComponent(teamId)}/tasks/${encodeURIComponent(taskId)}/subtasks/${encodeURIComponent(subtaskId)}`,
+    { completed },
+  ).then((r) => r.data);
+}
+
+export function deleteTeamTaskSubtask(teamId: string, taskId: string, subtaskId: string) {
+  return apiRequest<unknown>(
+    `/api/teams/${encodeURIComponent(teamId)}/tasks/${encodeURIComponent(taskId)}/subtasks/${encodeURIComponent(subtaskId)}`,
+    { method: "DELETE" },
+  );
+}
+
+export function fetchTaskTemplates(teamId: string) {
+  return apiGetJson<{ data: TaskTemplate[] }>(
+    `/api/teams/${encodeURIComponent(teamId)}/templates`,
+  ).then((r) => r.data);
+}
+
+export function saveTaskTemplate(
+  teamId: string,
+  input: {
+    title: string;
+    description?: string | null;
+    priority?: string;
+    attachmentUrl?: string | null;
+    subtasks?: Array<{ title: string; order: number }>;
+    isRecurring?: boolean;
+    recurrenceType?: string | null;
+    recurrenceInterval?: number | null;
+    recurrenceDaysOfWeek?: string | null;
+    recurrenceDayOfMonth?: number | null;
+    incognito?: boolean;
+    isJoint?: boolean;
+  },
+) {
+  return apiPostJson<{ data: TaskTemplate }>(
+    `/api/teams/${encodeURIComponent(teamId)}/templates`,
+    input,
+  ).then((r) => r.data);
+}
+
+export function deleteTaskTemplate(teamId: string, templateId: string) {
+  return apiRequest<unknown>(
+    `/api/teams/${encodeURIComponent(teamId)}/templates/${encodeURIComponent(templateId)}`,
+    { method: "DELETE" },
+  );
 }
 
 export type OneOnOneTemplateFieldType =

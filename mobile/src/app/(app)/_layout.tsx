@@ -145,7 +145,10 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
     if (routeName === "execute" && isPaid) {
       void queryClient.prefetchQuery({
         queryKey: ["tasks", activeTeamId, "mine"],
-        queryFn: () => api.get<{ tasks: Task[]; nextCursor: string | null }>(`/api/teams/${activeTeamId}/tasks?myTasks=true`),
+        queryFn: () =>
+          api.get<{ tasks: Task[]; nextCursor: string | null }>(
+            `/api/teams/${activeTeamId}/tasks?myTasks=true&activeOnly=true&limit=200`,
+          ),
       });
       void queryClient.prefetchQuery({
         queryKey: ["calendar-events", activeTeamId],

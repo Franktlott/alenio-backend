@@ -381,7 +381,9 @@ export default function TeamScreen() {
   const { data: teamTasksData } = useQuery({
     queryKey: ["team-overview-tasks", activeTeamId],
     queryFn: () =>
-      api.get<{ tasks: Task[]; nextCursor: string | null }>(`/api/teams/${activeTeamId}/tasks?limit=500`),
+      api.get<{ tasks: Task[]; nextCursor: string | null }>(
+        `/api/teams/${activeTeamId}/tasks?activeOnly=true&limit=500`,
+      ),
     enabled: !!activeTeamId,
   });
 

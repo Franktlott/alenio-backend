@@ -52,7 +52,9 @@ export async function performWorkspaceSwitch(
       queryClient.fetchQuery({
         queryKey: ["tasks", teamId, "mine"],
         queryFn: () =>
-          api.get<{ tasks: Task[]; nextCursor: string | null }>(`/api/teams/${teamId}/tasks?myTasks=true`),
+          api.get<{ tasks: Task[]; nextCursor: string | null }>(
+            `/api/teams/${teamId}/tasks?myTasks=true&activeOnly=true&limit=200`,
+          ),
       }),
       queryClient.fetchQuery({
         queryKey: ["calendar-events", teamId],

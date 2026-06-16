@@ -229,6 +229,14 @@ export function ProfilePage() {
                   {userAccountBadgeLabel(teams ?? [])}
                 </span>
               ) : null}
+              {!isEditing && selectedTeamId ? (
+                <p className="enterprise-profile-development-link-wrap">
+                  <Link to="/team?member=me" className="enterprise-profile-development-link">
+                    View your growth and check-ins in Team
+                    <span aria-hidden> →</span>
+                  </Link>
+                </p>
+              ) : null}
             </div>
           </div>
           {formErr ? (

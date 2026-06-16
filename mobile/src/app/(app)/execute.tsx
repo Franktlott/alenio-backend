@@ -101,7 +101,7 @@ function buildWorkspaceTasksPath(
     creatorIdMe?: boolean;
   },
 ): string {
-  const params = new URLSearchParams({ limit: "50" });
+  const params = new URLSearchParams({ limit: "200" });
   if (opts.myTasks) params.set("myTasks", "true");
   if (opts.creatorIdMe) params.set("creatorId", "me");
   if (opts.filter === "completed") {
@@ -109,8 +109,7 @@ function buildWorkspaceTasksPath(
     params.set("completedMonth", String(opts.calendarMonth));
     params.set("status", "done");
   } else {
-    params.set("dueYear", String(opts.calendarYear));
-    params.set("dueMonth", String(opts.calendarMonth));
+    params.set("activeOnly", "true");
   }
   if (opts.cursor) params.set("cursor", opts.cursor);
   return `/api/teams/${teamId}/tasks?${params.toString()}`;
@@ -507,7 +506,6 @@ function TaskRow({ task, onToggle, onPress, onLongPress }: { task: Task; onToggl
             {/* Title + assignee */}
             <View style={{ flex: 1, marginRight: 6 }}>
               <View style={{ flexDirection: "row", alignItems: "center" }}>
-                {task.incognito ? <Text style={{ fontSize: 12, marginRight: 3 }}>🕵️</Text> : null}
                 {task.isJoint ? <Text style={{ fontSize: 12, marginRight: 3 }}>🤝</Text> : null}
                 <Text
                   numberOfLines={2}
@@ -563,7 +561,7 @@ function TaskRow({ task, onToggle, onPress, onLongPress }: { task: Task; onToggl
             ) : null}
 
             {/* Recurrence indicator */}
-            {task.recurrenceRule && !isDone ? (
+            {(task.recurrenceRule || task.recurrenceSeriesId) && !isDone ? (
               <Text style={{ fontSize: 11, color: "#818CF8" }}>{"↺"}</Text>
             ) : null}
           </View>
@@ -697,7 +695,7 @@ export default function TasksScreen() {
     const queryKey =
       filter === "completed"
         ? (["tasks", activeTeamId, "mine", calendarYear, calendarMonth, "completed"] as const)
-        : (["tasks", activeTeamId, "mine", calendarYear, calendarMonth, "active"] as const);
+        : (["tasks", activeTeamId, "mine", "active"] as const);
     try {
       const result = await api.get<{ tasks: Task[]; nextCursor: string | null }>(
         buildWorkspaceTasksPath(activeTeamId, {
@@ -753,7 +751,7 @@ export default function TasksScreen() {
 
   // Prefetch my active + completed tasks so tab switches use cache (no full reload).
   const { data: myActiveTasksData, isPending: myActivePending } = useQuery({
-    queryKey: ["tasks", activeTeamId, "mine", calendarYear, calendarMonth, "active"],
+    queryKey: ["tasks", activeTeamId, "mine", "active"],
     queryFn: async () =>
       api.get<{ tasks: Task[]; nextCursor: string | null }>(
         buildWorkspaceTasksPath(activeTeamId!, {
@@ -789,7 +787,7 @@ export default function TasksScreen() {
 
   // Tasks I created — Team tab (prefetched for leaders so switching tabs is instant)
   const { data: teamTasksData, isPending: teamTasksPending } = useQuery({
-    queryKey: ["tasks", activeTeamId, "team", calendarYear, calendarMonth],
+    queryKey: ["tasks", activeTeamId, "team"],
     queryFn: async () => {
       const result = await api.get<{ tasks: Task[]; nextCursor: string | null }>(
         buildWorkspaceTasksPath(activeTeamId!, {
