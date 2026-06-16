@@ -12,6 +12,7 @@ import {
   getNextDueDate,
   isRecurringTask,
   materializeRecurringTasksForTeam,
+  normalizeSeriesDueDate,
   spawnAllRecurrenceTasks,
   updateTaskWithSeriesScope,
   type RecurrenceScope,
@@ -350,7 +351,11 @@ tasksRouter.post("/", async (c) => {
     creator: { select: { id: true, name: true, email: true } },
   } as const;
 
-  const dueDateObj = dueDate ? new Date(dueDate) : null;
+  const dueDateObj = dueDate
+    ? recurrence
+      ? normalizeSeriesDueDate(new Date(dueDate))
+      : new Date(dueDate)
+    : null;
   const normalizedStatus = status === "done" || status === "in_progress" || status === "todo" ? status : "todo";
 
   const subtaskList: { title: string; order: number }[] = Array.isArray(subtasks)

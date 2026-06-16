@@ -11,6 +11,21 @@ export type RecurrenceInput = {
 
 type TaskWithRule = Task & { recurrenceRule?: RecurrenceRule | null };
 
+/** End-of-day UTC so dedup keys match regardless of client timezone. */
+export function normalizeSeriesDueDate(date: Date): Date {
+  return new Date(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), 23, 59, 59, 999),
+  );
+}
+
+export function dueDayKey(date: Date): string {
+  const normalized = normalizeSeriesDueDate(date);
+  const y = normalized.getUTCFullYear();
+  const m = String(normalized.getUTCMonth() + 1).padStart(2, "0");
+  const d = String(normalized.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
 export function getNextDueDate(
   type: string,
   interval: number,
@@ -21,32 +36,32 @@ export function getNextDueDate(
   const next = new Date(fromDate);
   switch (type) {
     case "daily":
-      next.setDate(next.getDate() + interval);
+      next.setUTCDate(next.getUTCDate() + interval);
       break;
     case "weekly":
-      next.setDate(next.getDate() + 7 * interval);
+      next.setUTCDate(next.getUTCDate() + 7 * interval);
       if (daysOfWeek != null && daysOfWeek !== "") {
         const targetDay = parseInt(daysOfWeek, 10);
-        const diff = (targetDay - next.getDay() + 7) % 7;
-        next.setDate(next.getDate() + diff);
+        const diff = (targetDay - next.getUTCDay() + 7) % 7;
+        next.setUTCDate(next.getUTCDate() + diff);
       }
       break;
     case "monthly": {
-      const rawMonth = next.getMonth() + interval;
-      const targetYear = next.getFullYear() + Math.floor(rawMonth / 12);
+      const rawMonth = next.getUTCMonth() + interval;
+      const targetYear = next.getUTCFullYear() + Math.floor(rawMonth / 12);
       const targetMonth = ((rawMonth % 12) + 12) % 12;
-      const daysInTargetMonth = new Date(targetYear, targetMonth + 1, 0).getDate();
+      const daysInTargetMonth = new Date(Date.UTC(targetYear, targetMonth + 1, 0)).getUTCDate();
       const targetDay =
         dayOfMonth != null
           ? Math.min(dayOfMonth, daysInTargetMonth)
-          : Math.min(next.getDate(), daysInTargetMonth);
-      next.setFullYear(targetYear, targetMonth, targetDay);
+          : Math.min(next.getUTCDate(), daysInTargetMonth);
+      next.setUTCFullYear(targetYear, targetMonth, targetDay);
       break;
     }
     default:
-      next.setDate(next.getDate() + interval);
+      next.setUTCDate(next.getUTCDate() + interval);
   }
-  return next;
+  return normalizeSeriesDueDate(next);
 }
 
 export function isRecurringTask(task: Pick<Task, "recurrenceSeriesId"> & { recurrenceRule?: RecurrenceRule | null }) {
@@ -98,7 +113,7 @@ export async function resolveRecurrenceSeries(
   return series;
 }
 
-/** How far ahead to schedule recurring task instances (rolling window). */
+/** How far ahead to schedule recurring task instances from the series start date. */
 export const RECURRENCE_LOOKAHEAD_DAYS = 84;
 const RECURRENCE_SPAWN_CHUNK = 25;
 const RECURRENCE_MAX_FUTURE_WEEKLY_MONTHLY = 12;
@@ -117,10 +132,46 @@ function recurrenceStepDays(type: string, interval: number): number {
   }
 }
 
-function dueDayKey(date: Date): string {
-  return date.toISOString().slice(0, 10);
+export function recurrenceWindowEnd(anchorDue: Date, lookaheadDays: number = RECURRENCE_LOOKAHEAD_DAYS): Date {
+  const end = normalizeSeriesDueDate(anchorDue);
+  end.setUTCDate(end.getUTCDate() + lookaheadDays);
+  return end;
 }
 
+export function listRecurrenceDueDatesInWindow(
+  type: string,
+  interval: number,
+  anchorDue: Date,
+  windowEnd: Date,
+  daysOfWeek?: string | null,
+  dayOfMonth?: number | null,
+): Date[] {
+  const anchor = normalizeSeriesDueDate(anchorDue);
+  const end = normalizeSeriesDueDate(windowEnd);
+  const stepDays = recurrenceStepDays(type, interval);
+  const windowDays = Math.max(0, Math.floor((end.getTime() - anchor.getTime()) / 86_400_000));
+  const horizonCap = Math.max(1, Math.floor(windowDays / stepDays));
+  const maxFuture =
+    type === "daily"
+      ? Math.min(RECURRENCE_MAX_FUTURE_DAILY, horizonCap)
+      : Math.min(RECURRENCE_MAX_FUTURE_WEEKLY_MONTHLY, horizonCap);
+
+  const dates: Date[] = [];
+  let current = anchor;
+
+  while (dates.length < maxFuture) {
+    const next = getNextDueDate(type, interval, current, daysOfWeek, dayOfMonth);
+    if (next.getTime() > end.getTime()) break;
+    if (next.getTime() > anchor.getTime()) {
+      dates.push(next);
+    }
+    current = next;
+  }
+
+  return dates;
+}
+
+/** @deprecated Use listRecurrenceDueDatesInWindow */
 export function listFutureRecurrenceDueDates(
   type: string,
   interval: number,
@@ -129,27 +180,14 @@ export function listFutureRecurrenceDueDates(
   dayOfMonth?: number | null,
   lookaheadDays: number = RECURRENCE_LOOKAHEAD_DAYS,
 ): Date[] {
-  const through = new Date(afterDate);
-  through.setDate(through.getDate() + lookaheadDays);
-
-  const stepDays = recurrenceStepDays(type, interval);
-  const horizonCap = Math.max(1, Math.floor(lookaheadDays / stepDays));
-  const maxFuture =
-    type === "daily"
-      ? Math.min(RECURRENCE_MAX_FUTURE_DAILY, horizonCap)
-      : Math.min(RECURRENCE_MAX_FUTURE_WEEKLY_MONTHLY, horizonCap);
-
-  const dates: Date[] = [];
-  let current = afterDate;
-
-  while (dates.length < maxFuture) {
-    const next = getNextDueDate(type, interval, current, daysOfWeek, dayOfMonth);
-    if (next.getTime() > through.getTime()) break;
-    dates.push(next);
-    current = next;
-  }
-
-  return dates;
+  return listRecurrenceDueDatesInWindow(
+    type,
+    interval,
+    afterDate,
+    recurrenceWindowEnd(afterDate, lookaheadDays),
+    daysOfWeek,
+    dayOfMonth,
+  );
 }
 
 export async function spawnAllRecurrenceTasks(
@@ -177,13 +215,14 @@ export async function spawnAllRecurrenceTasks(
     .filter((date): date is Date => date != null)
     .sort((a, b) => a.getTime() - b.getTime());
 
-  const latestDue =
-    sortedDueDates[sortedDueDates.length - 1] ?? task.dueDate ?? new Date();
+  const anchorDue = normalizeSeriesDueDate(sortedDueDates[0] ?? task.dueDate ?? new Date());
+  const windowEnd = recurrenceWindowEnd(anchorDue);
 
-  const futureDueDates = listFutureRecurrenceDueDates(
+  const futureDueDates = listRecurrenceDueDatesInWindow(
     series.type,
     series.interval,
-    latestDue,
+    anchorDue,
+    windowEnd,
     series.daysOfWeek,
     series.dayOfMonth,
   ).filter((dueDate) => !existingDueDays.has(dueDayKey(dueDate)));
@@ -224,7 +263,7 @@ export async function spawnAllRecurrenceTasks(
   return futureDueDates.length;
 }
 
-/** Materialize missing future occurrences for recurring series in a team (legacy backfill). */
+/** Fill missing occurrences inside the fixed series window (does not extend beyond it). */
 export async function materializeRecurringTasksForTeam(prisma: PrismaClient, teamId: string): Promise<void> {
   const anchors = await prisma.task.findMany({
     where: {
