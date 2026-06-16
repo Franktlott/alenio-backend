@@ -20,7 +20,6 @@ const PRIORITIES = [
 
 const STATUSES = [
   { label: "Open", value: "todo" },
-  { label: "In progress", value: "in_progress" },
   { label: "Completed", value: "done" },
 ] as const;
 

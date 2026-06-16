@@ -33,6 +33,7 @@ import {
 } from "../../lib/task-display";
 import { isRecurringTask, type RecurrenceScope } from "../../lib/recurring-task";
 import { calendarDayFromInstant, resolveTimeZone } from "../../lib/timezone";
+import { normalizeTaskStatus, STATUS_OPTIONS } from "../../lib/task-status";
 
 function isImageAttachment(url: string): boolean {
   const clean = url.split("?")[0]?.toLowerCase() ?? "";
@@ -44,12 +45,6 @@ const PRIORITIES = [
   { label: "Medium", value: "medium" },
   { label: "High", value: "high" },
   { label: "Urgent", value: "urgent" },
-] as const;
-
-const STATUS_OPTIONS = [
-  { label: "Open", value: "todo" },
-  { label: "In progress", value: "in_progress" },
-  { label: "Completed", value: "done" },
 ] as const;
 
 type Props = {
@@ -128,6 +123,23 @@ export function WorkspaceTaskDetailModal({
     setEditMode(false);
     setError(null);
   }, [initialTask.id, userTimeZone]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const detail = await fetchWebTaskDetail(initialTask.id, teamId);
+        if (cancelled) return;
+        setTask(detail);
+        await onUpdated();
+      } catch {
+        /* keep list snapshot */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [initialTask.id, teamId]);
 
   const refreshTask = async () => {
     const detail = await fetchWebTaskDetail(task.id, teamId);
@@ -440,41 +452,37 @@ export function WorkspaceTaskDetailModal({
               <aside className="enterprise-task-modal-right">
                 <div className="enterprise-task-side-card">
                   <h4>Status</h4>
-                  <div className="enterprise-workspace-status-pills">
-                    {STATUS_OPTIONS.map((option) => {
-                      const active = task.status === option.value;
-                      const disabled =
-                        busy ||
-                        (!canEdit && !isAssignee) ||
-                        (option.value !== "done" && !canEdit) ||
-                        (task.status === "in_progress" && option.value === "todo");
-                      return (
-                        <button
-                          key={option.value}
-                          type="button"
-                          className={`enterprise-workspace-status-pill${active ? " enterprise-workspace-status-pill--active" : ""}`}
-                          disabled={disabled}
-                          onClick={() => {
-                            if (option.value === task.status) return;
-                            if (option.value === "done") {
-                              setPrompt("complete");
-                              return;
-                            }
-                            if (task.status === "done" && option.value === "todo") {
-                              setPrompt("recall");
-                              return;
-                            }
-                            void performStatusUpdate(option.value);
-                          }}
-                        >
-                          {option.label}
-                        </button>
-                      );
-                    })}
-                    {isTaskOverdue(task, now) && task.status !== "done" ? (
-                      <span className="enterprise-workspace-status-pill enterprise-workspace-status-pill--readonly">Overdue</span>
-                    ) : null}
-                  </div>
+                  <select
+                    className="auth-input enterprise-task-status-select"
+                    value={normalizeTaskStatus(task.status)}
+                    disabled={busy || isCompleted || !canEdit}
+                    aria-label="Task status"
+                    onChange={(e) => {
+                      const next = e.target.value;
+                      if (next === normalizeTaskStatus(task.status)) return;
+                      if (next === "done") {
+                        setPrompt("complete");
+                        return;
+                      }
+                      if (task.status === "done" && next === "todo") {
+                        setPrompt("recall");
+                        return;
+                      }
+                      void performStatusUpdate(next);
+                    }}
+                  >
+                    {STATUS_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                  {isTaskOverdue(task, now) && task.status !== "done" ? (
+                    <p className="enterprise-task-status-overdue-note">This task is overdue.</p>
+                  ) : null}
+                  {normalizeTaskStatus(task.status) === "reviewed" ? (
+                    <p className="enterprise-muted enterprise-task-status-hint">Someone opened this task.</p>
+                  ) : null}
                 </div>
 
                 <div className="enterprise-task-side-card">

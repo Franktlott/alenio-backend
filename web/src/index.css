@@ -11485,6 +11485,10 @@ button.enterprise-profile-legal-link {
   color: #15803d;
 }
 
+.enterprise-status-reviewed {
+  color: #2563eb;
+}
+
 .enterprise-status-progress {
   color: #7c3aed;
 }
@@ -11879,6 +11883,23 @@ button.enterprise-profile-legal-link {
   cursor: pointer;
   font-size: 1rem;
   line-height: 1;
+}
+
+.enterprise-task-status-select {
+  width: 100%;
+  margin-top: 0.35rem;
+}
+
+.enterprise-task-status-overdue-note {
+  margin: 0.5rem 0 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #dc2626;
+}
+
+.enterprise-task-status-hint {
+  margin: 0.35rem 0 0;
+  font-size: 0.75rem;
 }
 
 .enterprise-workspace-status-pills {

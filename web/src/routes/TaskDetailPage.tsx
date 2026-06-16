@@ -18,6 +18,7 @@ import {
   type WebTeamRow,
 } from "../lib/api";
 import { ASSOCIATE_FEEDBACK_SECTION_TITLE, parseFeedbackTaskDescription } from "../lib/one-on-one-feedback";
+import { normalizeTaskStatus } from "../lib/task-status";
 
 function formatWhen(iso: string | null): string {
   if (!iso) return "—";
@@ -40,8 +41,9 @@ function priorityLabel(p: string): string {
 }
 
 function statusLabel(status: string): string {
-  if (status === "done") return "Completed";
-  if (status === "in_progress") return "In progress";
+  const normalized = normalizeTaskStatus(status);
+  if (normalized === "done") return "Completed";
+  if (normalized === "reviewed") return "Reviewed";
   return "Open";
 }
 
@@ -53,8 +55,9 @@ function priorityClass(p: string): string {
 }
 
 function statusClass(status: string): string {
-  if (status === "done") return "enterprise-status enterprise-status-done";
-  if (status === "in_progress") return "enterprise-status enterprise-status-progress";
+  const normalized = normalizeTaskStatus(status);
+  if (normalized === "done") return "enterprise-status enterprise-status-done";
+  if (normalized === "reviewed") return "enterprise-status enterprise-status-reviewed";
   return "enterprise-status enterprise-status-pending";
 }
 

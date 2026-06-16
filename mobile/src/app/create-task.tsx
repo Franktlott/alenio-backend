@@ -26,6 +26,7 @@ import type { Task, TaskPriority, RecurrenceType, Team, TeamMember, TaskTemplate
 import { recurrenceCountHint, recurrenceDurationUnit } from "@/lib/recurring-task";
 import { ME_QUERY_KEY } from "@/lib/auth/me-query";
 import { calendarDueIso, resolveTimeZone } from "@/lib/timezone";
+import { Picker } from "@react-native-picker/picker";
 
 const PRIORITIES: { label: string; value: TaskPriority; color: string }[] = [
   { label: "Low", value: "low", color: "#94A3B8" },
@@ -40,10 +41,9 @@ const RECURRENCE_TYPES: { label: string; value: RecurrenceType }[] = [
   { label: "Monthly", value: "monthly" },
 ];
 
-const TASK_STATUS_OPTIONS: { key: "open" | "in_progress" | "completed"; label: string; value: TaskStatus; color: string }[] = [
-  { key: "open", label: "Open", value: "todo", color: "#64748B" },
-  { key: "in_progress", label: "In progress", value: "in_progress", color: "#F97316" },
-  { key: "completed", label: "Completed", value: "done", color: "#10B981" },
+const TASK_STATUS_OPTIONS: { label: string; value: TaskStatus }[] = [
+  { label: "Open", value: "todo" },
+  { label: "Completed", value: "done" },
 ];
 
 export default function CreateTaskScreen() {
@@ -59,7 +59,7 @@ export default function CreateTaskScreen() {
 
   const [title, setTitle] = useState(typeof prefillTitle === "string" ? prefillTitle : "");
   const [description, setDescription] = useState("");
-  const [taskStatusOption, setTaskStatusOption] = useState<"open" | "in_progress" | "completed">("open");
+  const [taskStatus, setTaskStatus] = useState<TaskStatus>("todo");
   const [priority, setPriority] = useState<TaskPriority>("medium");
   const [selectedAssignees, setSelectedAssignees] = useState<string[]>([]);
   const [isRecurring, setIsRecurring] = useState(false);
@@ -218,13 +218,10 @@ export default function CreateTaskScreen() {
 
   const confirmCreate = () => {
     setShowSplitConfirm(false);
-    const selectedStatus = TASK_STATUS_OPTIONS.find((s) => s.key === taskStatusOption);
-    const statusValue: TaskStatus = selectedStatus?.value ?? "todo";
-
     createMutation.mutate({
       title: title.trim(),
       description: description.trim() || undefined,
-      status: statusValue,
+      status: taskStatus,
       priority,
       dueDate: dueDate ? calendarDueIso(dueDate, resolveTimeZone(meProfile?.timezone)) : undefined,
       timeZone: resolveTimeZone(meProfile?.timezone),
@@ -496,32 +493,12 @@ export default function CreateTaskScreen() {
             <Text className="text-sm font-semibold text-slate-500 mb-3">
               Status
             </Text>
-            <View className="flex-row flex-wrap" style={{ gap: 8 }}>
-              {TASK_STATUS_OPTIONS.map((s) => (
-                <TouchableOpacity
-                  key={s.key}
-                  onPress={() => setTaskStatusOption(s.key)}
-                  className="px-3 py-1.5 rounded-full border"
-                  style={
-                    taskStatusOption === s.key
-                      ? {
-                          backgroundColor: s.color + "20",
-                          borderColor: s.color,
-                        }
-                      : { borderColor: "#E2E8F0", backgroundColor: "transparent" }
-                  }
-                  testID={`status-${s.key}`}
-                >
-                  <Text
-                    className="text-xs font-semibold"
-                    style={{
-                      color: taskStatusOption === s.key ? s.color : "#94A3B8",
-                    }}
-                  >
-                    {s.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+            <View className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden bg-white dark:bg-slate-900">
+              <Picker selectedValue={taskStatus} onValueChange={(value) => setTaskStatus(value as TaskStatus)}>
+                {TASK_STATUS_OPTIONS.map((option) => (
+                  <Picker.Item key={option.value} label={option.label} value={option.value} />
+                ))}
+              </Picker>
             </View>
           </View>
 

@@ -20,6 +20,7 @@ import {
   type RecurrenceScope,
 } from "../lib/recurrence-series";
 import { isValidTimeZone, resolveTimeZone } from "../lib/timezone";
+import { normalizeTaskStatus } from "../lib/task-status";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -382,7 +383,7 @@ tasksRouter.post("/", async (c) => {
         )
       : parseCalendarDueDate(dueDate, userTimeZone)
     : null;
-  const normalizedStatus = status === "done" || status === "in_progress" || status === "todo" ? status : "todo";
+  const normalizedStatus = status ? normalizeTaskStatus(status) : "todo";
 
   const subtaskList: { title: string; order: number }[] = Array.isArray(subtasks)
     ? subtasks.map((s: { title: string }, i: number) => ({ title: s.title.trim(), order: i }))
@@ -802,6 +803,22 @@ tasksRouter.get("/:taskId", async (c) => {
 
   if (!task) return c.json({ error: { message: "Task not found", code: "NOT_FOUND" } }, 404);
 
+  const isAssignee = task.assignments.some((a) => a.userId === user.id);
+  const isCreator = task.creatorId === user.id;
+  if (task.status === "todo" && (isAssignee || isCreator)) {
+    const reviewed = await prisma.task.update({
+      where: { id: taskId },
+      data: { status: "reviewed" },
+      include: {
+        assignments: { include: { user: { select: { id: true, name: true, email: true, image: true } } } },
+        subtasks: subtasksInclude,
+        recurrenceRule: true,
+        creator: { select: { id: true, name: true, email: true } },
+      },
+    });
+    return c.json({ data: reviewed });
+  }
+
   return c.json({ data: task });
 });
 
@@ -831,7 +848,8 @@ tasksRouter.patch("/:taskId", async (c) => {
   }
 
   const body = await c.req.json();
-  const { title, description, priority, dueDate, status, attachmentUrl, scope: scopeRaw, timeZone: bodyTimeZone } = body;
+  const { title, description, priority, dueDate, status: rawStatus, attachmentUrl, scope: scopeRaw, timeZone: bodyTimeZone } = body;
+  const status = rawStatus !== undefined ? normalizeTaskStatus(rawStatus) : undefined;
   const recurrenceScope = parseRecurrenceScope(scopeRaw);
   const userTimeZone = await getUserTimeZone(user.id, bodyTimeZone);
 

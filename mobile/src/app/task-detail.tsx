@@ -31,13 +31,8 @@ import {
   parseFeedbackTaskDescription,
 } from "@/lib/one-on-one-feedback";
 import { isRecurringTask, type RecurrenceScope } from "@/lib/recurring-task";
-
-const STATUS_OPTIONS: { key: "open" | "in_progress" | "completed" | "overdue"; label: string; value: TaskStatus; color: string }[] = [
-  { key: "open", label: "Open", value: "todo", color: "#64748B" },
-  { key: "in_progress", label: "In progress", value: "in_progress", color: "#F97316" },
-  { key: "completed", label: "Completed", value: "done", color: "#10B981" },
-  { key: "overdue", label: "Overdue", value: "todo", color: "#EF4444" },
-];
+import { normalizeTaskStatus, STATUS_OPTIONS, statusLabel as taskStatusLabel } from "@/lib/task-status";
+import { Picker } from "@react-native-picker/picker";
 
 const PRIORITY_COLORS: Record<string, string> = {
   urgent: "#EF4444",
@@ -520,63 +515,46 @@ export default function TaskDetailScreen() {
         {!isFeedbackTask ? (
         <View className="mb-4">
           <Text className="text-sm font-semibold text-slate-500 mb-2">Status</Text>
-          <View className="flex-row flex-wrap" style={{ gap: 8 }}>
-            {STATUS_OPTIONS.map((s) => {
-              const isOverdueNow = !!task.dueDate && new Date(task.dueDate) < new Date() && task.status !== "done";
-              const openRevertBlocked = s.key === "open" && task.status === "in_progress";
-              const isActive =
-                s.key === "overdue"
-                  ? isOverdueNow
-                  : s.key === "open"
-                    ? task.status === "todo" && !isOverdueNow
-                    : s.key === "in_progress"
-                      ? task.status === "in_progress" && !isOverdueNow
-                      : task.status === "done";
-              return (
-                <TouchableOpacity
-                  key={s.key}
-                  onPress={() => {
-                    if (s.key === "overdue") {
-                      return;
+          {canEdit && !isCompleted ? (
+            <View className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden bg-white dark:bg-slate-900">
+              <Picker
+                enabled={!updateMutation.isPending && !isDemo}
+                selectedValue={normalizeTaskStatus(task.status)}
+                onValueChange={(value) => {
+                  const next = value as TaskStatus;
+                  if (next === normalizeTaskStatus(task.status)) return;
+                  if (next === "done") {
+                    const incomplete = (task.subtasks ?? []).filter((st) =>
+                      task.isJoint
+                        ? !(st.completions ?? []).some((c: SubtaskCompletion) => c.userId === currentUserId)
+                        : !st.completed
+                    );
+                    if (incomplete.length > 0) {
+                      setShowSubtaskBlock(true);
+                    } else {
+                      setShowDoneConfirm(true);
                     }
-                    if (openRevertBlocked) {
-                      return;
-                    }
-                    if (s.key === "completed" && !isCompleted) {
-                      const incomplete = (task.subtasks ?? []).filter((st) =>
-                        task.isJoint
-                          ? !(st.completions ?? []).some((c: SubtaskCompletion) => c.userId === currentUserId)
-                          : !st.completed
-                      );
-                      if (incomplete.length > 0) {
-                        setShowSubtaskBlock(true);
-                      } else {
-                        setShowDoneConfirm(true);
-                      }
-                    } else if (s.key !== "completed" && canEdit) {
-                      updateMutation.mutate({ status: s.value });
-                    }
-                  }}
-                  disabled={
-                    s.key === "overdue"
-                      ? true
-                      : openRevertBlocked
-                        ? true
-                      : s.key === "completed"
-                        ? (isCompleted || updateMutation.isPending || isDemo)
-                        : (!canEdit || updateMutation.isPending || isDemo)
+                    return;
                   }
-                  className="px-3 py-1.5 rounded-full border"
-                  style={isActive ? { backgroundColor: s.color + "20", borderColor: s.color } : { borderColor: "#E2E8F0" }}
-                  testID={`status-${s.key}`}
-                >
-                  <Text className="text-xs font-semibold" style={{ color: isActive ? s.color : "#94A3B8" }}>
-                    {s.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+                  updateMutation.mutate({ status: next });
+                }}
+              >
+                {STATUS_OPTIONS.map((option) => (
+                  <Picker.Item key={option.value} label={option.label} value={option.value} />
+                ))}
+              </Picker>
+            </View>
+          ) : (
+            <Text className="text-base font-semibold text-slate-800 dark:text-slate-100">
+              {taskStatusLabel(
+                task.status,
+                !!task.dueDate && new Date(task.dueDate) < new Date() && task.status !== "done",
+              )}
+            </Text>
+          )}
+          {normalizeTaskStatus(task.status) === "reviewed" ? (
+            <Text className="text-xs text-slate-500 mt-1">Someone opened this task.</Text>
+          ) : null}
         </View>
         ) : null}
 

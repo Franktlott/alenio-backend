@@ -411,7 +411,7 @@ webRouter.post("/api/tasks", async (c) => {
   }
 
   const normalizedStatus =
-    status === "done" || status === "in_progress" || status === "todo" ? status : "todo";
+    status === "done" || status === "reviewed" || status === "in_progress" || status === "todo" ? (status === "in_progress" ? "reviewed" : status) : "todo";
   const dueDateObj = dueDate && (typeof dueDate === "string" || typeof dueDate === "number") ? new Date(dueDate as string | number) : null;
   const pri = typeof priority === "string" && priority.trim() ? priority.trim() : "medium";
 
