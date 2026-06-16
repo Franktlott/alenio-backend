@@ -837,6 +837,24 @@ tasksRouter.patch("/:taskId", async (c) => {
   const recurrenceScope = parseRecurrenceScope(scopeRaw);
   const userTimeZone = await getUserTimeZone(user.id, bodyTimeZone);
 
+  const descriptionChanged =
+    description !== undefined &&
+    (description?.trim() ?? null) !== (task.description?.trim() ?? null);
+  const attachmentChanged =
+    attachmentUrl !== undefined && (attachmentUrl ?? null) !== (task.attachmentUrl ?? null);
+  if (descriptionChanged) {
+    return c.json(
+      { error: { message: "Task details can only be set when creating a task", code: "DESCRIPTION_LOCKED" } },
+      400,
+    );
+  }
+  if (attachmentChanged) {
+    return c.json(
+      { error: { message: "Task photos can only be added when creating a task", code: "ATTACHMENT_LOCKED" } },
+      400,
+    );
+  }
+
   // Non-creators may only update status (complete / recall)
   if (!isCreator && (title !== undefined || description !== undefined || priority !== undefined || dueDate !== undefined || attachmentUrl !== undefined)) {
     return c.json({ error: { message: "Only the task creator can edit task details", code: "FORBIDDEN" } }, 403);
@@ -891,7 +909,6 @@ tasksRouter.patch("/:taskId", async (c) => {
   if (isCreator && recurrenceScope === "series") {
     await updateTaskWithSeriesScope(prisma, task, recurrenceScope, {
       ...(title !== undefined ? { title } : {}),
-      ...(description !== undefined ? { description } : {}),
       ...(priority !== undefined ? { priority } : {}),
     });
   }
@@ -900,11 +917,9 @@ tasksRouter.patch("/:taskId", async (c) => {
     where: { id: taskId },
     data: {
       ...(title !== undefined ? { title: title.trim() } : {}),
-      ...(description !== undefined ? { description: description?.trim() } : {}),
       ...(priority !== undefined ? { priority } : {}),
       ...(dueDate !== undefined ? { dueDate: dueDate ? parseCalendarDueDate(dueDate, userTimeZone) : null } : {}),
       ...(status !== undefined ? { status, completedAt: status === "done" ? new Date() : null } : {}),
-      ...(attachmentUrl !== undefined ? { attachmentUrl } : {}),
     },
     include: {
       assignments: { include: { user: { select: { id: true, name: true, email: true, image: true } } } },

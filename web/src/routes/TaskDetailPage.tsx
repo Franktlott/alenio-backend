@@ -19,6 +19,7 @@ import {
 } from "../lib/api";
 import { ASSOCIATE_FEEDBACK_SECTION_TITLE, parseFeedbackTaskDescription } from "../lib/one-on-one-feedback";
 import { normalizeTaskStatus } from "../lib/task-status";
+import { isTaskPhotoUrl } from "../lib/task-attachment";
 
 function formatWhen(iso: string | null): string {
   if (!iso) return "—";
@@ -59,16 +60,6 @@ function statusClass(status: string): string {
   return "enterprise-status enterprise-status-pending";
 }
 
-function isImageAttachment(url: string): boolean {
-  try {
-    const clean = url.split("?")[0]?.toLowerCase() ?? "";
-    return [".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".svg", ".heic", ".heif"].some((ext) =>
-      clean.endsWith(ext),
-    );
-  } catch {
-    return false;
-  }
-}
 
 export function TaskDetailPage() {
   const { taskId = "" } = useParams<{ taskId: string }>();
@@ -366,18 +357,15 @@ export function TaskDetailPage() {
             </section>
           ) : null}
 
-          {task.attachmentUrl ? (
+          {task.attachmentUrl && isTaskPhotoUrl(task.attachmentUrl) ? (
             <section className="task-detail-section">
-              <h2 className="task-detail-section-title">Attachment</h2>
-              {isImageAttachment(task.attachmentUrl) ? (
-                <a href={task.attachmentUrl} target="_blank" rel="noopener noreferrer" className="task-detail-attachment-link">
-                  <img src={task.attachmentUrl} alt="Task attachment" className="task-detail-attachment-image" />
-                </a>
-              ) : (
-                <a href={task.attachmentUrl} target="_blank" rel="noopener noreferrer" className="enterprise-inline-link">
-                  Open attachment
-                </a>
-              )}
+              <img
+                src={task.attachmentUrl}
+                alt="Task reference photo"
+                className="task-detail-attachment-image"
+                loading="lazy"
+                referrerPolicy="no-referrer-when-downgrade"
+              />
             </section>
           ) : null}
 

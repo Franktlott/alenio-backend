@@ -14,6 +14,9 @@ type Props = {
   disabled?: boolean;
   loading?: boolean;
   readOnly?: boolean;
+  /** Detail modal: chips + link-style add control */
+  compact?: boolean;
+  addLabel?: string;
 };
 
 function memberLabel(member: AssigneeMember): string {
@@ -28,6 +31,8 @@ export function AssigneeMultiSelect({
   disabled,
   loading,
   readOnly,
+  compact,
+  addLabel = "+ Add assignee",
 }: Props) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -97,6 +102,66 @@ export function AssigneeMultiSelect({
 
   if (readOnly) {
     return <div className="assignee-multi-select assignee-multi-select--readonly">{chips}</div>;
+  }
+
+  if (compact) {
+    return (
+      <div className="assignee-multi-select assignee-multi-select--compact" ref={rootRef}>
+        {chips}
+        {!disabled && !loading ? (
+          <button
+            type="button"
+            className="assignee-multi-select-add-link"
+            aria-expanded={open}
+            aria-haspopup="listbox"
+            onClick={() => setOpen((v) => !v)}
+          >
+            {addLabel}
+          </button>
+        ) : null}
+        {open ? (
+          <div className="assignee-multi-select-menu" role="listbox" aria-multiselectable="true">
+            {members.length > 6 ? (
+              <div className="assignee-multi-select-search-wrap">
+                <input
+                  type="search"
+                  className="auth-input assignee-multi-select-search"
+                  placeholder="Search teammates…"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  autoFocus
+                />
+              </div>
+            ) : null}
+            <ul className="assignee-multi-select-options">
+              {filteredMembers.length === 0 ? (
+                <li className="assignee-multi-select-empty">No teammates match your search.</li>
+              ) : (
+                filteredMembers.map((member) => {
+                  const checked = selectedIds.includes(member.userId);
+                  return (
+                    <li key={member.userId}>
+                      <label className="assignee-multi-select-option">
+                        <input type="checkbox" checked={checked} onChange={() => toggleMember(member.userId)} />
+                        <span className="assignee-multi-select-option-avatar" aria-hidden>
+                          {assigneeInitials(member.user.name, member.user.email)}
+                        </span>
+                        <span className="assignee-multi-select-option-text">
+                          <strong>{memberLabel(member)}</strong>
+                          {member.user.email && member.user.name ? (
+                            <span className="assignee-multi-select-option-email">{member.user.email}</span>
+                          ) : null}
+                        </span>
+                      </label>
+                    </li>
+                  );
+                })
+              )}
+            </ul>
+          </div>
+        ) : null}
+      </div>
+    );
   }
 
   return (

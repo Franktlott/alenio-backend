@@ -336,12 +336,37 @@ export async function deleteTaskWithScope(
   scope: RecurrenceScope,
 ): Promise<void> {
   if (scope === "series" && isRecurringTask(task)) {
-    const series = await resolveRecurrenceSeries(prisma, task);
-    if (series) {
-      await prisma.recurrenceSeries.delete({ where: { id: series.id } });
+    const seriesId =
+      task.recurrenceSeriesId ??
+      (await resolveRecurrenceSeries(prisma, task))?.id ??
+      null;
+    if (seriesId) {
+      await prisma.recurrenceSeries.delete({ where: { id: seriesId } });
       return;
     }
   }
+
+  if (scope === "task" && task.recurrenceSeriesId) {
+    const series = await prisma.recurrenceSeries.findUnique({
+      where: { id: task.recurrenceSeriesId },
+    });
+    if (series) {
+      const nextOccurrenceCount = seriesOccurrenceCount(series) - 1;
+      if (nextOccurrenceCount <= 0) {
+        await prisma.recurrenceSeries.delete({ where: { id: series.id } });
+        return;
+      }
+      await prisma.$transaction([
+        prisma.recurrenceSeries.update({
+          where: { id: series.id },
+          data: { occurrenceCount: nextOccurrenceCount },
+        }),
+        prisma.task.delete({ where: { id: task.id } }),
+      ]);
+      return;
+    }
+  }
+
   await prisma.task.delete({ where: { id: task.id } });
 }
 

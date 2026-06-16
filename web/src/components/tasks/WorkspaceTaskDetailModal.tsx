@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { OneOnOneAssociateFeedbackForm } from "../OneOnOneAssociateFeedbackForm";
 import { RecurringTaskScopeModal } from "../RecurringTaskScopeModal";
 import { TaskPromptModal } from "./TaskPromptModal";
@@ -25,19 +25,15 @@ import {
   parseFeedbackTaskDescription,
 } from "../../lib/one-on-one-feedback";
 import {
-  priorityClass,
   priorityLabel,
   statusClass,
   statusLabel,
   taskBadges,
+  assigneeInitials,
 } from "../../lib/task-display";
 import { isRecurringTask, type RecurrenceScope } from "../../lib/recurring-task";
+import { isTaskPhotoUrl } from "../../lib/task-attachment";
 import { calendarDayFromInstant, resolveTimeZone } from "../../lib/timezone";
-
-function isImageAttachment(url: string): boolean {
-  const clean = url.split("?")[0]?.toLowerCase() ?? "";
-  return [".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".svg", ".heic", ".heif"].some((ext) => clean.endsWith(ext));
-}
 
 const PRIORITIES = [
   { label: "Low", value: "low" },
@@ -83,7 +79,6 @@ export function WorkspaceTaskDetailModal({
   const [task, setTask] = useState<ApiTask>(initialTask);
   const [editMode, setEditMode] = useState(false);
   const [editTitle, setEditTitle] = useState(initialTask.title);
-  const [editDescription, setEditDescription] = useState(initialTask.description ?? "");
   const [editPriority, setEditPriority] = useState(initialTask.priority);
   const [editDueDate, setEditDueDate] = useState("");
   const [newSubtask, setNewSubtask] = useState("");
@@ -91,6 +86,9 @@ export function WorkspaceTaskDetailModal({
   const [error, setError] = useState<string | null>(null);
   const [recurringScopeMode, setRecurringScopeMode] = useState<"delete" | "edit" | null>(null);
   const [prompt, setPrompt] = useState<"complete" | "recall" | "subtasks" | null>(null);
+  const [headMenuOpen, setHeadMenuOpen] = useState(false);
+  const [checklistAddOpen, setChecklistAddOpen] = useState(false);
+  const headMenuRef = useRef<HTMLDivElement>(null);
 
   const meId = me?.id;
   const creatorId = task.creatorId ?? task.creator?.id;
@@ -113,9 +111,18 @@ export function WorkspaceTaskDetailModal({
     !!feedbackMeta && isFeedbackAssignee && !isCompleted && !feedbackCompletionActive && feedbackContextLoading && !feedbackContext;
 
   useEffect(() => {
+    if (!headMenuOpen) return;
+    const onDoc = (e: MouseEvent) => {
+      if (headMenuRef.current?.contains(e.target as Node)) return;
+      setHeadMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [headMenuOpen]);
+
+  useEffect(() => {
     setTask(initialTask);
     setEditTitle(initialTask.title);
-    setEditDescription(initialTask.description ?? "");
     setEditPriority(initialTask.priority);
     setEditDueDate(initialTask.dueDate ? calendarDayFromInstant(initialTask.dueDate, userTimeZone) : "");
     setEditMode(false);
@@ -126,16 +133,13 @@ export function WorkspaceTaskDetailModal({
     const detail = await fetchWebTaskDetail(task.id, teamId);
     setTask(detail);
     setEditTitle(detail.title);
-    setEditDescription(detail.description ?? "");
     setEditPriority(detail.priority);
     setEditDueDate(detail.dueDate ? calendarDayFromInstant(detail.dueDate, userTimeZone) : "");
     await onUpdated();
   };
 
   const seriesFieldsChanged = () =>
-    editTitle.trim() !== task.title.trim() ||
-    (editDescription.trim() || "") !== (task.description?.trim() || "") ||
-    editPriority !== task.priority;
+    editTitle.trim() !== task.title.trim() || editPriority !== task.priority;
 
   const saveEdit = async (scope: RecurrenceScope = "task") => {
     setBusy(true);
@@ -143,7 +147,6 @@ export function WorkspaceTaskDetailModal({
     try {
       const updated = await updateCoreTeamTask(teamId, task.id, {
         title: editTitle.trim(),
-        description: editDescription.trim() || null,
         priority: editPriority,
         dueDate: editDueDate || null,
         timeZone: userTimeZone,
@@ -211,7 +214,7 @@ export function WorkspaceTaskDetailModal({
 
   const addSubtask = async () => {
     const trimmed = newSubtask.trim();
-    if (!trimmed || !canEdit) return;
+    if (!trimmed || !canEdit || !editMode) return;
     setBusy(true);
     try {
       await createTeamTaskSubtask(teamId, task.id, trimmed);
@@ -225,7 +228,7 @@ export function WorkspaceTaskDetailModal({
   };
 
   const removeSubtask = async (subtaskId: string) => {
-    if (!canEdit) return;
+    if (!canEdit || !editMode) return;
     setBusy(true);
     try {
       await deleteTeamTaskSubtask(teamId, task.id, subtaskId);
@@ -238,7 +241,7 @@ export function WorkspaceTaskDetailModal({
   };
 
   const toggleAssignee = async (userId: string, selected: boolean) => {
-    if (!canEdit) return;
+    if (!canEdit || !editMode) return;
     setBusy(true);
     try {
       if (selected) await assignTeamTaskMembers(teamId, task.id, [userId]);
@@ -254,6 +257,26 @@ export function WorkspaceTaskDetailModal({
   const members = teamDetail?.members ?? [];
   const badges = taskBadges(task);
   const now = new Date();
+  const subtasks = task.subtasks ?? [];
+  const completedSubtasks = subtasks.filter((s) => s.completed).length;
+  const recurrenceLabel = task.recurrenceRule?.type
+    ? task.recurrenceRule.type.charAt(0).toUpperCase() + task.recurrenceRule.type.slice(1)
+    : isRecurringTask(task)
+      ? "Repeating"
+      : null;
+  const creatorName = task.creator?.name ?? task.creator?.email ?? "Unknown";
+  const descriptionText =
+    task.description && !isFeedbackTask ? formatTaskDescriptionForDisplay(task.description) : null;
+  const photoUrl = task.attachmentUrl && isTaskPhotoUrl(task.attachmentUrl) ? task.attachmentUrl : null;
+
+  const cancelEdit = () => {
+    setEditMode(false);
+    setNewSubtask("");
+    setChecklistAddOpen(false);
+    setEditTitle(task.title);
+    setEditPriority(task.priority);
+    setEditDueDate(task.dueDate ? calendarDayFromInstant(task.dueDate, userTimeZone) : "");
+  };
 
   return (
     <>
@@ -266,79 +289,98 @@ export function WorkspaceTaskDetailModal({
         }}
       >
         <div
-          className={`enterprise-task-modal enterprise-workspace-detail-modal${showFocusedFeedbackTask ? " enterprise-task-modal--feedback-focused" : ""}`}
+          className={`enterprise-task-modal enterprise-workspace-detail-modal enterprise-workspace-detail-modal--v2${showFocusedFeedbackTask ? " enterprise-task-modal--feedback-focused" : ""}`}
           role="dialog"
           aria-modal="true"
           aria-label="Task details"
           onClick={(e) => e.stopPropagation()}
         >
-          <button type="button" className="enterprise-task-modal-close" onClick={onClose} aria-label="Close">
-            ×
-          </button>
-
-          <header className="enterprise-task-modal-head enterprise-workspace-detail-head">
-            <div className="enterprise-workspace-detail-head-main">
+          <header className="task-detail-v2-head">
+            <div className="task-detail-v2-head-main">
               {editMode ? (
-                <input className="auth-input enterprise-task-modal-title-input" value={editTitle} onChange={(e) => setEditTitle(e.target.value)} />
+                <input className="auth-input task-detail-v2-title-input" value={editTitle} onChange={(e) => setEditTitle(e.target.value)} />
               ) : (
-                <h3 className="enterprise-task-modal-title">
-                  {task.isJoint ? "🤝 " : ""}
+                <h2 className="task-detail-v2-title">
+                  {task.isJoint ? <span className="task-detail-v2-joint" aria-hidden>🤝 </span> : null}
                   {task.title}
-                </h3>
+                </h2>
               )}
               {!showFocusedFeedbackTask ? (
-                <div className="enterprise-task-modal-meta enterprise-workspace-detail-meta">
-                  <span className={priorityClass(task.priority)}>{priorityLabel(task.priority)}</span>
-                  <span className={statusClass(task, now)}>{statusLabel(task, now)}</span>
-                  {badges.map((badge) => (
-                    <span key={badge} className="enterprise-workspace-task-badge">
-                      {badge}
+                <>
+                  <div className="task-detail-v2-badges">
+                    <span className={`task-detail-v2-badge task-detail-v2-badge-priority task-detail-v2-badge-priority-${task.priority}`}>
+                      {priorityLabel(task.priority)}
                     </span>
-                  ))}
-                </div>
+                    <span className={`task-detail-v2-badge task-detail-v2-badge-status ${statusClass(task, now)}`}>
+                      {statusLabel(task, now)}
+                    </span>
+                    {badges.map((badge) => (
+                      <span key={badge} className="task-detail-v2-badge task-detail-v2-badge-repeat">
+                        ↻ {badge}
+                      </span>
+                    ))}
+                  </div>
+                  <div className="task-detail-v2-creator">
+                    <span className="task-detail-v2-avatar" aria-hidden>
+                      {assigneeInitials(task.creator?.name ?? null, task.creator?.email ?? null)}
+                    </span>
+                    <span className="task-detail-v2-creator-text">
+                      Created by {creatorName} · {formatShortDate(task.createdAt)}
+                    </span>
+                  </div>
+                </>
               ) : null}
             </div>
             {!showFocusedFeedbackTask ? (
-              <div className="enterprise-workspace-detail-head-actions">
+              <div className="task-detail-v2-head-actions">
                 {canEdit && !editMode ? (
-                  <button type="button" className="enterprise-dashboard-btn-outline" onClick={() => setEditMode(true)}>
+                  <button type="button" className="task-detail-v2-icon-btn" onClick={() => setEditMode(true)}>
+                    <span className="task-detail-v2-icon" aria-hidden>✎</span>
                     Edit
                   </button>
                 ) : null}
-                {canDelete ? (
-                  <button
-                    type="button"
-                    className="enterprise-dashboard-btn-outline enterprise-workspace-detail-delete"
-                    disabled={busy}
-                    onClick={() =>
-                      isRecurringTask(task) ? setRecurringScopeMode("delete") : void handleDelete("task")
-                    }
-                  >
-                    Delete
-                  </button>
+                {canDelete && editMode ? (
+                  <div className="task-detail-v2-menu-wrap" ref={headMenuRef}>
+                    <button
+                      type="button"
+                      className="task-detail-v2-icon-btn task-detail-v2-icon-btn--icon"
+                      aria-label="More actions"
+                      aria-expanded={headMenuOpen}
+                      onClick={() => setHeadMenuOpen((v) => !v)}
+                    >
+                      ⋯
+                    </button>
+                    {headMenuOpen ? (
+                      <div className="task-detail-v2-menu" role="menu">
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="task-detail-v2-menu-item task-detail-v2-menu-item--danger"
+                          disabled={busy}
+                          onClick={() => {
+                            setHeadMenuOpen(false);
+                            if (isRecurringTask(task)) setRecurringScopeMode("delete");
+                            else void handleDelete("task");
+                          }}
+                        >
+                          Delete task
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
                 ) : null}
+                <button type="button" className="task-detail-v2-icon-btn task-detail-v2-icon-btn--icon" onClick={onClose} aria-label="Close">
+                  ×
+                </button>
               </div>
             ) : null}
           </header>
 
-          <div className={`enterprise-task-modal-body${showFocusedFeedbackTask ? " enterprise-task-modal-body--feedback-focused" : ""}`}>
-            <section className="enterprise-task-modal-left">
-              {task.attachmentUrl ? (
-                <section className="enterprise-task-modal-section">
-                  <h4>Attachment</h4>
-                  {isImageAttachment(task.attachmentUrl) ? (
-                    <img src={task.attachmentUrl} alt="Task attachment" className="enterprise-task-modal-image" />
-                  ) : (
-                    <a href={task.attachmentUrl} target="_blank" rel="noopener noreferrer" className="enterprise-inline-link">
-                      Open attachment
-                    </a>
-                  )}
-                </section>
-              ) : null}
-
+          <div className={`task-detail-v2-body${showFocusedFeedbackTask ? " task-detail-v2-body--focused" : ""}`}>
+            <section className="task-detail-v2-main">
               {feedbackContext && feedbackMeta ? (
-                <section className="enterprise-task-modal-section enterprise-oneone-feedback-task-section">
-                  <h4>{ASSOCIATE_FEEDBACK_SECTION_TITLE}</h4>
+                <section className="task-detail-v2-block enterprise-oneone-feedback-task-section">
+                  <h3 className="task-detail-v2-block-title">{ASSOCIATE_FEEDBACK_SECTION_TITLE}</h3>
                   <OneOnOneAssociateFeedbackForm
                     teamId={feedbackMeta.teamId}
                     memberUserId={feedbackMeta.memberUserId}
@@ -352,50 +394,55 @@ export function WorkspaceTaskDetailModal({
               ) : null}
 
               {showFeedbackFormLoading ? (
-                <section className="enterprise-task-modal-section enterprise-oneone-feedback-task-section">
-                  <h4>{ASSOCIATE_FEEDBACK_SECTION_TITLE}</h4>
+                <section className="task-detail-v2-block enterprise-oneone-feedback-task-section">
+                  <h3 className="task-detail-v2-block-title">{ASSOCIATE_FEEDBACK_SECTION_TITLE}</h3>
                   <p className="enterprise-muted" aria-live="polite">
                     Loading your check-in…
                   </p>
                 </section>
               ) : null}
 
-              {!feedbackContext && !showFeedbackFormLoading ? (
-                <section className="enterprise-task-modal-section">
-                  <h4>Description</h4>
-                  {editMode && !isFeedbackTask ? (
-                    <textarea className="auth-input create-task-textarea" value={editDescription} onChange={(e) => setEditDescription(e.target.value)} rows={4} />
-                  ) : (
-                    <div className="enterprise-task-modal-description-box">
-                      {formatTaskDescriptionForDisplay(task.description) || "Add a description..."}
-                    </div>
-                  )}
+              {!feedbackContext && !showFeedbackFormLoading && descriptionText ? (
+                <section className="task-detail-v2-block">
+                  <h3 className="task-detail-v2-block-title">Description</h3>
+                  <div className="task-detail-v2-description">{descriptionText}</div>
                 </section>
               ) : null}
 
               {!showFocusedFeedbackTask ? (
-                <section className="enterprise-task-modal-section">
-                  <div className="enterprise-workspace-detail-section-head">
-                    <h4>Subtasks</h4>
-                    {(task.subtasks?.length ?? 0) > 0 ? (
-                      <span className="enterprise-workspace-detail-count">{task.subtasks!.length}</span>
+                <section className="task-detail-v2-block">
+                  <div className="task-detail-v2-block-head">
+                    <h3 className="task-detail-v2-block-title">Checklist</h3>
+                    {subtasks.length > 0 ? (
+                      <span className="task-detail-v2-checklist-count">
+                        {completedSubtasks} / {subtasks.length} completed
+                      </span>
                     ) : null}
                   </div>
-                  {(task.subtasks?.length ?? 0) > 0 ? (
-                    <ul className="enterprise-task-modal-subtasks enterprise-workspace-subtasks">
-                      {task.subtasks!.map((s) => (
-                        <li key={s.id} className={s.completed ? "done" : ""}>
+                  {subtasks.length > 0 ? (
+                    <ul className="task-detail-v2-checklist">
+                      {subtasks.map((s) => (
+                        <li key={s.id} className={s.completed ? "task-detail-v2-checklist-item--done" : ""}>
+                          <span className="task-detail-v2-checklist-drag" aria-hidden>
+                            ⋮⋮
+                          </span>
                           <button
                             type="button"
-                            className={`enterprise-workspace-subtask-toggle${s.completed ? " enterprise-workspace-subtask-toggle--done" : ""}`}
-                            disabled={busy || isCompleted || !isAssignee}
+                            className={`task-detail-v2-checklist-check${s.completed ? " task-detail-v2-checklist-check--done" : ""}`}
+                            disabled={busy || isCompleted || (!isAssignee && !canEdit)}
+                            aria-label={s.completed ? `Mark "${s.title}" incomplete` : `Mark "${s.title}" complete`}
                             onClick={() => void toggleSubtask(s)}
                           >
                             {s.completed ? "✓" : ""}
                           </button>
-                          <span>{s.title}</span>
+                          <span className="task-detail-v2-checklist-label">{s.title}</span>
                           {editMode ? (
-                            <button type="button" className="enterprise-workspace-subtask-remove" disabled={busy} onClick={() => void removeSubtask(s.id)}>
+                            <button
+                              type="button"
+                              className="task-detail-v2-checklist-remove"
+                              disabled={busy}
+                              onClick={() => void removeSubtask(s.id)}
+                            >
                               Remove
                             </button>
                           ) : null}
@@ -403,102 +450,156 @@ export function WorkspaceTaskDetailModal({
                       ))}
                     </ul>
                   ) : (
-                    <p className="enterprise-muted">No subtasks</p>
+                    <p className="enterprise-muted task-detail-v2-checklist-empty">No checklist items yet.</p>
                   )}
-                  {editMode ? (
-                    <div className="create-task-subtask-add">
-                      <input
-                        className="auth-input"
-                        value={newSubtask}
-                        placeholder="Add subtask"
-                        onChange={(e) => setNewSubtask(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            void addSubtask();
-                          }
-                        }}
-                      />
-                      <button type="button" className="auth-btn-secondary create-task-add-btn" disabled={busy} onClick={() => void addSubtask()}>
-                        Add
+                  {canEdit && editMode && !isCompleted ? (
+                    checklistAddOpen || newSubtask ? (
+                      <div className="task-detail-v2-checklist-add">
+                        <input
+                          className="auth-input task-detail-v2-checklist-input"
+                          value={newSubtask}
+                          placeholder="New item"
+                          disabled={busy}
+                          autoFocus
+                          onChange={(e) => setNewSubtask(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              void addSubtask().then(() => setChecklistAddOpen(false));
+                            }
+                            if (e.key === "Escape") {
+                              setNewSubtask("");
+                              setChecklistAddOpen(false);
+                            }
+                          }}
+                          onBlur={() => {
+                            if (!newSubtask.trim()) setChecklistAddOpen(false);
+                          }}
+                        />
+                      </div>
+                    ) : (
+                      <button type="button" className="task-detail-v2-add-link task-detail-v2-checklist-add-btn" disabled={busy} onClick={() => setChecklistAddOpen(true)}>
+                        + Add item
                       </button>
-                    </div>
+                    )
                   ) : null}
+                </section>
+              ) : null}
+
+              {!showFocusedFeedbackTask && photoUrl ? (
+                <section className="task-detail-v2-block task-detail-v2-photo-block">
+                  <img
+                    src={photoUrl}
+                    alt="Task reference photo"
+                    className="task-detail-v2-photo"
+                    loading="lazy"
+                    referrerPolicy="no-referrer-when-downgrade"
+                  />
                 </section>
               ) : null}
             </section>
 
             {!showFocusedFeedbackTask ? (
-              <aside className="enterprise-task-modal-right">
-                <div className="enterprise-task-side-card">
-                  <div className="enterprise-task-side-row">
-                    <span>Priority</span>
-                    <strong>
-                      {editMode ? (
-                        <select className="auth-input enterprise-task-inline-select" value={editPriority} onChange={(e) => setEditPriority(e.target.value)}>
-                          {PRIORITIES.map((p) => (
-                            <option key={p.value} value={p.value}>
-                              {p.label}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        priorityLabel(task.priority)
-                      )}
-                    </strong>
-                  </div>
-                  <div className="enterprise-task-side-row">
-                    <span>Due date</span>
-                    <strong>
-                      {editMode ? (
-                        <input type="date" className="auth-input enterprise-task-inline-select" value={editDueDate} onChange={(e) => setEditDueDate(e.target.value)} />
-                      ) : (
-                        formatModalDate(task.dueDate)
-                      )}
-                    </strong>
-                  </div>
-                  <div className="enterprise-task-side-row">
-                    <span>Created by</span>
-                    <strong>{task.creator?.name ?? "Unknown"}</strong>
-                  </div>
-                </div>
-
-                <div className="enterprise-task-side-card">
-                  <h4>Assignees</h4>
-                  <div className="enterprise-create-card-body">
-                    <AssigneeMultiSelect
-                      members={members}
-                      selectedIds={[...assignedIds]}
-                      readOnly={!canEdit}
-                      disabled={busy}
-                      loading={!teamDetail}
-                      onToggle={canEdit ? toggleAssignee : undefined}
-                    />
-                    {!isAssignee && meId && canEdit ? (
-                      <button
-                        type="button"
-                        className="enterprise-dashboard-btn-outline enterprise-create-assign-me-btn"
-                        disabled={busy}
-                        onClick={() => void toggleAssignee(meId, true)}
-                      >
-                        Assign to me
-                      </button>
+              <aside className="task-detail-v2-sidebar">
+                <div className="task-detail-v2-side-card">
+                  <h3 className="task-detail-v2-side-title">Task info</h3>
+                  <dl className="task-detail-v2-info-rows">
+                    <div className="task-detail-v2-info-row">
+                      <dt>
+                        <span className="task-detail-v2-info-icon" aria-hidden>●</span> Priority
+                      </dt>
+                      <dd>
+                        {editMode ? (
+                          <select className="auth-input task-detail-v2-inline-input" value={editPriority} onChange={(e) => setEditPriority(e.target.value)}>
+                            {PRIORITIES.map((p) => (
+                              <option key={p.value} value={p.value}>
+                                {p.label}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <>
+                            <span className={`task-detail-v2-priority-dot task-detail-v2-priority-dot--${task.priority}`} aria-hidden />
+                            {priorityLabel(task.priority)}
+                          </>
+                        )}
+                      </dd>
+                    </div>
+                    <div className="task-detail-v2-info-row">
+                      <dt>
+                        <span className="task-detail-v2-info-icon" aria-hidden>📅</span> Due date
+                      </dt>
+                      <dd>
+                        {editMode ? (
+                          <input type="date" className="auth-input task-detail-v2-inline-input" value={editDueDate} onChange={(e) => setEditDueDate(e.target.value)} />
+                        ) : (
+                          formatModalDate(task.dueDate)
+                        )}
+                      </dd>
+                    </div>
+                    {recurrenceLabel ? (
+                      <div className="task-detail-v2-info-row">
+                        <dt>
+                          <span className="task-detail-v2-info-icon" aria-hidden>↻</span> Repeats
+                        </dt>
+                        <dd>{recurrenceLabel}</dd>
+                      </div>
                     ) : null}
-                  </div>
-                </div>
+                    <div className="task-detail-v2-info-row">
+                      <dt>
+                        <span className="task-detail-v2-info-icon" aria-hidden>👤</span> Owner
+                      </dt>
+                      <dd className="task-detail-v2-owner">
+                        <span className="task-detail-v2-avatar task-detail-v2-avatar--sm" aria-hidden>
+                          {assigneeInitials(task.creator?.name ?? null, task.creator?.email ?? null)}
+                        </span>
+                        {creatorName}
+                      </dd>
+                    </div>
+                  </dl>
 
-                <div className="enterprise-task-side-card">
-                  <h4>Task details</h4>
-                  <dl className="enterprise-task-modal-dl">
-                    <dt>Created</dt>
-                    <dd>{formatModalDate(task.createdAt)}</dd>
-                    <dt>Last updated</dt>
-                    <dd>{formatModalDate(task.updatedAt)}</dd>
+                  <h3 className="task-detail-v2-side-title task-detail-v2-side-title--spaced">Assignees</h3>
+                  <AssigneeMultiSelect
+                    members={members}
+                    selectedIds={[...assignedIds]}
+                    readOnly={!canEdit || !editMode}
+                    disabled={busy}
+                    loading={!teamDetail}
+                    compact
+                    onToggle={canEdit && editMode ? toggleAssignee : undefined}
+                  />
+                  {!isAssignee && meId && canEdit && editMode ? (
+                    <button
+                      type="button"
+                      className="task-detail-v2-add-link task-detail-v2-assign-me"
+                      disabled={busy}
+                      onClick={() => void toggleAssignee(meId, true)}
+                    >
+                      Assign to me
+                    </button>
+                  ) : null}
+
+                  <h3 className="task-detail-v2-side-title task-detail-v2-side-title--spaced">Activity</h3>
+                  <dl className="task-detail-v2-info-rows task-detail-v2-activity">
+                    <div className="task-detail-v2-info-row">
+                      <dt>
+                        <span className="task-detail-v2-info-icon" aria-hidden>📅</span> Created
+                      </dt>
+                      <dd>{formatModalDate(task.createdAt)}</dd>
+                    </div>
+                    <div className="task-detail-v2-info-row">
+                      <dt>
+                        <span className="task-detail-v2-info-icon" aria-hidden>✎</span> Last updated
+                      </dt>
+                      <dd>{formatModalDate(task.updatedAt)}</dd>
+                    </div>
                     {task.completedAt ? (
-                      <>
-                        <dt>Completed</dt>
+                      <div className="task-detail-v2-info-row">
+                        <dt>
+                          <span className="task-detail-v2-info-icon" aria-hidden>✓</span> Completed
+                        </dt>
                         <dd>{formatModalDate(task.completedAt)}</dd>
-                      </>
+                      </div>
                     ) : null}
                   </dl>
                 </div>
@@ -506,18 +607,18 @@ export function WorkspaceTaskDetailModal({
             ) : null}
           </div>
 
-          {error ? <p className="auth-error enterprise-workspace-detail-error">{error}</p> : null}
+          {error ? <p className="auth-error task-detail-v2-error">{error}</p> : null}
 
           {!showFocusedFeedbackTask ? (
-            <footer className="enterprise-task-modal-footer">
+            <footer className="task-detail-v2-footer">
               {editMode ? (
                 <>
-                  <button type="button" className="enterprise-task-modal-btn enterprise-task-modal-btn-secondary" disabled={busy} onClick={() => setEditMode(false)}>
+                  <button type="button" className="task-detail-v2-btn task-detail-v2-btn--ghost" disabled={busy} onClick={cancelEdit}>
                     Cancel
                   </button>
                   <button
                     type="button"
-                    className="enterprise-task-modal-btn enterprise-task-modal-btn-primary"
+                    className="task-detail-v2-btn task-detail-v2-btn--primary"
                     disabled={busy}
                     onClick={() => {
                       if (isRecurringTask(task) && seriesFieldsChanged()) {
@@ -530,17 +631,24 @@ export function WorkspaceTaskDetailModal({
                     {busy ? "Saving…" : "Save changes"}
                   </button>
                 </>
-              ) : isCompleted ? (
-                canEdit || isAssignee ? (
-                  <button type="button" className="enterprise-task-modal-btn enterprise-task-modal-btn-secondary" disabled={busy} onClick={() => setPrompt("recall")}>
-                    Recall task
+              ) : (
+                <>
+                  <button type="button" className="task-detail-v2-btn task-detail-v2-btn--ghost" onClick={onClose}>
+                    Cancel
                   </button>
-                ) : null
-              ) : isAssignee || canEdit ? (
-                <button type="button" className="enterprise-task-modal-btn enterprise-task-modal-btn-primary" disabled={busy} onClick={() => setPrompt("complete")}>
-                  Mark as complete
-                </button>
-              ) : null}
+                  {isCompleted ? (
+                    canEdit || isAssignee ? (
+                      <button type="button" className="task-detail-v2-btn task-detail-v2-btn--ghost" disabled={busy} onClick={() => setPrompt("recall")}>
+                        Recall task
+                      </button>
+                    ) : null
+                  ) : isAssignee || canEdit ? (
+                    <button type="button" className="task-detail-v2-btn task-detail-v2-btn--primary" disabled={busy} onClick={() => setPrompt("complete")}>
+                      <span aria-hidden>✓</span> Complete task
+                    </button>
+                  ) : null}
+                </>
+              )}
             </footer>
           ) : null}
         </div>
@@ -593,6 +701,13 @@ export function WorkspaceTaskDetailModal({
       />
     </>
   );
+}
+
+function formatShortDate(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
 
 function formatModalDate(iso: string | null | undefined): string {

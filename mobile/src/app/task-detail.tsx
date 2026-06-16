@@ -53,7 +53,6 @@ export default function TaskDetailScreen() {
   const [newSubtaskTitle, setNewSubtaskTitle] = useState<string>("");
   const [isEditMode, setIsEditMode] = useState(false);
   const [draftTitle, setDraftTitle] = useState<string>("");
-  const [draftDescription, setDraftDescription] = useState<string>("");
   const [draftPriority, setDraftPriority] = useState<string>("");
   const [feedbackContext, setFeedbackContext] = useState<OneOnOneAssociateFeedbackContext | null>(null);
   const [feedbackContextLoading, setFeedbackContextLoading] = useState(false);
@@ -179,10 +178,7 @@ export default function TaskDetailScreen() {
   const taskIsRecurring = !!task && isRecurringTask(task);
 
   const seriesFieldsChanged = () =>
-    !!task &&
-    (draftTitle.trim() !== task.title.trim() ||
-      (draftDescription.trim() || "") !== (task.description?.trim() || "") ||
-      draftPriority !== task.priority);
+    !!task && (draftTitle.trim() !== task.title.trim() || draftPriority !== task.priority);
 
   const handleMarkComplete = () => {
     if (!task || isDemo) return;
@@ -205,7 +201,6 @@ export default function TaskDetailScreen() {
     updateMutation.mutate(
       {
         title: draftTitle.trim() || task.title,
-        description: draftDescription.trim() || undefined,
         priority: draftPriority as Task["priority"],
         ...(scope === "series" ? { scope: "series" } : {}),
       },
@@ -221,7 +216,6 @@ export default function TaskDetailScreen() {
   useEffect(() => {
     if (task && startEdit === "1" && canEdit) {
       setDraftTitle(task.title);
-      setDraftDescription(task.description ?? "");
       setDraftPriority(task.priority);
       setIsEditMode(true);
     }
@@ -230,7 +224,6 @@ export default function TaskDetailScreen() {
   useEffect(() => {
     if (isEditMode && task) {
       setDraftTitle(task.title);
-      setDraftDescription(task.description ?? "");
       setDraftPriority(task.priority);
     }
   }, [isEditMode]);
@@ -346,14 +339,13 @@ export default function TaskDetailScreen() {
             {canEdit && !isEditMode ? (
               <TouchableOpacity onPress={() => {
                 setDraftTitle(task.title);
-                setDraftDescription(task.description ?? "");
                 setDraftPriority(task.priority);
                 setIsEditMode(true);
               }} testID="enter-edit-button">
                 <Pencil size={18} color="white" />
               </TouchableOpacity>
             ) : null}
-            {isCreator && !isEditMode ? (
+            {isCreator && isEditMode ? (
               <TouchableOpacity
                 onPress={() => (taskIsRecurring ? setRecurringScopeMode("delete") : setShowDeleteConfirm(true))}
                 disabled={deleteMutation.isPending}
@@ -475,18 +467,7 @@ export default function TaskDetailScreen() {
           </View>
         ) : null}
 
-        {/* Description */}
-        {isEditMode && !isFeedbackTask ? (
-          <TextInput
-            value={draftDescription}
-            onChangeText={setDraftDescription}
-            multiline
-            style={{ fontSize: 15, color: "#475569", marginBottom: 16, borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 10, padding: 10, minHeight: 80 }}
-            placeholder="Add a description..."
-            placeholderTextColor="#94A3B8"
-            testID="edit-description-input"
-          />
-        ) : task.description && !feedbackContext && !showFeedbackFormLoading ? (
+        {task.description && !feedbackContext && !showFeedbackFormLoading && !isFeedbackTask ? (
           <Text className="text-base text-slate-600 dark:text-slate-400 mb-4 leading-relaxed">
             {formatTaskDescriptionForDisplay(task.description)}
           </Text>
