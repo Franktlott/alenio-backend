@@ -246,6 +246,19 @@ export async function spawnAllRecurrenceTasks(
   const toCreate = futureDueDates.slice(0, remainingSlots);
   if (toCreate.length === 0) return 0;
 
+  const anchorTask = await prisma.task.findFirst({
+    where: { recurrenceSeriesId: seriesId },
+    orderBy: [{ dueDate: "asc" }, { createdAt: "asc" }],
+    select: {
+      subtasks: {
+        orderBy: { order: "asc" },
+        select: { title: true, order: true },
+      },
+    },
+  });
+  const subtaskSeed =
+    anchorTask?.subtasks.map((subtask) => ({ title: subtask.title, order: subtask.order })) ?? [];
+
   for (let i = 0; i < toCreate.length; i += RECURRENCE_SPAWN_CHUNK) {
     const chunk = toCreate.slice(i, i + RECURRENCE_SPAWN_CHUNK);
     await prisma.$transaction(
@@ -266,6 +279,7 @@ export async function spawnAllRecurrenceTasks(
             ...(assigneeIds.length > 0
               ? { assignments: { create: assigneeIds.map((userId) => ({ userId })) } }
               : {}),
+            ...(subtaskSeed.length > 0 ? { subtasks: { create: subtaskSeed } } : {}),
           },
         }),
       ),
