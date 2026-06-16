@@ -44,6 +44,13 @@ const TASK_STATUS_OPTIONS: { key: "open" | "in_progress" | "completed"; label: s
   { key: "completed", label: "Completed", value: "done", color: "#10B981" },
 ];
 
+function calendarDueIso(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}T23:59:59.000Z`;
+}
+
 export default function CreateTaskScreen() {
   const { teamId, prefillTitle, initialDueDate } = useLocalSearchParams<{ teamId: string; prefillTitle?: string; initialDueDate?: string }>();
   const queryClient = useQueryClient();
@@ -218,7 +225,7 @@ export default function CreateTaskScreen() {
       description: description.trim() || undefined,
       status: statusValue,
       priority,
-      dueDate: dueDate ? dueDate.toISOString() : undefined,
+      dueDate: dueDate ? calendarDueIso(dueDate) : undefined,
       assigneeIds: selectedAssignees,
       isJoint: isJoint || undefined,
       recurrence: isRecurring

@@ -156,7 +156,7 @@ export function WorkspaceTaskCreateModal({
     setSaving(true);
     setError(null);
     try {
-      const dueIso = dueDate ? new Date(`${dueDate}T23:59:59`).toISOString() : null;
+      const dueIso = dueDate ? `${dueDate}T23:59:59.000Z` : null;
       await createWebTask({
         teamId,
         title: title.trim(),

@@ -51,6 +51,44 @@ export function dueDayKey(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
+/** Parse a due date as the calendar day the user picked (UTC), not local midnight drift. */
+export function parseCalendarDueDate(input: string | Date): Date {
+  if (typeof input === "string") {
+    const match = input.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (match) {
+      return normalizeSeriesDueDate(
+        new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]))),
+      );
+    }
+  }
+  const date = input instanceof Date ? input : new Date(input);
+  return normalizeSeriesDueDate(date);
+}
+
+/** Snap the series start to the chosen weekday / day-of-month before spawning. */
+export function alignRecurringAnchorDueDate(
+  type: string,
+  dueDate: Date,
+  daysOfWeek?: string | null,
+  dayOfMonth?: number | null,
+): Date {
+  const anchor = parseCalendarDueDate(dueDate);
+  if (type === "weekly" && daysOfWeek != null && daysOfWeek !== "") {
+    const targetDay = parseInt(daysOfWeek, 10);
+    const diff = (targetDay - anchor.getUTCDay() + 7) % 7;
+    anchor.setUTCDate(anchor.getUTCDate() + diff);
+    return normalizeSeriesDueDate(anchor);
+  }
+  if (type === "monthly" && dayOfMonth != null) {
+    const year = anchor.getUTCFullYear();
+    const month = anchor.getUTCMonth();
+    const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+    const day = Math.min(dayOfMonth, daysInMonth);
+    return normalizeSeriesDueDate(new Date(Date.UTC(year, month, day)));
+  }
+  return anchor;
+}
+
 export function getNextDueDate(
   type: string,
   interval: number,
@@ -64,12 +102,8 @@ export function getNextDueDate(
       next.setUTCDate(next.getUTCDate() + interval);
       break;
     case "weekly":
+      // Anchor is already on the chosen weekday — step exactly 7 days (no re-snap).
       next.setUTCDate(next.getUTCDate() + 7 * interval);
-      if (daysOfWeek != null && daysOfWeek !== "") {
-        const targetDay = parseInt(daysOfWeek, 10);
-        const diff = (targetDay - next.getUTCDay() + 7) % 7;
-        next.setUTCDate(next.getUTCDate() + diff);
-      }
       break;
     case "monthly": {
       const rawMonth = next.getUTCMonth() + interval;
@@ -86,6 +120,7 @@ export function getNextDueDate(
     default:
       next.setUTCDate(next.getUTCDate() + interval);
   }
+  void daysOfWeek;
   return normalizeSeriesDueDate(next);
 }
 
@@ -150,7 +185,7 @@ export function listRecurrenceDueDatesForCount(
 ): Date[] {
   const total = normalizeOccurrenceCount(occurrenceCount);
   const maxFuture = Math.max(0, total - 1);
-  const anchor = normalizeSeriesDueDate(anchorDue);
+  const anchor = alignRecurringAnchorDueDate(type, anchorDue, daysOfWeek, dayOfMonth);
   const dates: Date[] = [];
   let current = anchor;
 

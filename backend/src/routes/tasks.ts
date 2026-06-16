@@ -7,12 +7,14 @@ import { getTeamSubscription } from "./subscription";
 import { logActivity } from "../lib/activity";
 import { isFeedbackTaskDescription } from "../lib/one-on-one-feedback";
 import {
+  alignRecurringAnchorDueDate,
   createRecurrenceSeries,
   deleteTaskWithScope,
   getNextDueDate,
   isRecurringTask,
   materializeRecurringTasksForTeam,
   normalizeSeriesDueDate,
+  parseCalendarDueDate,
   resolveRecurrenceOccurrenceCount,
   spawnAllRecurrenceTasks,
   updateTaskWithSeriesScope,
@@ -82,7 +84,12 @@ async function buildRecurrenceTaskFields(
           ? getNextDueDate(
               recurrence.type,
               1,
-              normalizeSeriesDueDate(new Date(dueDate)),
+              alignRecurringAnchorDueDate(
+                recurrence.type,
+                parseCalendarDueDate(dueDate),
+                recurrence.daysOfWeek,
+                recurrence.dayOfMonth,
+              ),
               recurrence.daysOfWeek,
               recurrence.dayOfMonth,
             )
@@ -357,7 +364,12 @@ tasksRouter.post("/", async (c) => {
 
   const dueDateObj = dueDate
     ? recurrence
-      ? normalizeSeriesDueDate(new Date(dueDate))
+      ? alignRecurringAnchorDueDate(
+          recurrence.type,
+          parseCalendarDueDate(dueDate),
+          recurrence.daysOfWeek,
+          recurrence.dayOfMonth,
+        )
       : new Date(dueDate)
     : null;
   const normalizedStatus = status === "done" || status === "in_progress" || status === "todo" ? status : "todo";
