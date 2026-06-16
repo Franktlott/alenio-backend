@@ -309,7 +309,6 @@ export function WorkspaceTaskDetailModal({
                 <div className="enterprise-task-modal-meta enterprise-workspace-detail-meta">
                   <span className={priorityClass(task.priority)}>{priorityLabel(task.priority)}</span>
                   <span className={statusClass(task, now)}>{statusLabel(task, now)}</span>
-                  {isRecurringTask(task) ? <span className="enterprise-workspace-task-badge">Repeating ↺</span> : null}
                   {badges.map((badge) => (
                     <span key={badge} className="enterprise-workspace-task-badge">
                       {badge}

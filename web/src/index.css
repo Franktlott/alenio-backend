@@ -11701,13 +11701,25 @@ button.enterprise-profile-legal-link {
   -webkit-overflow-scrolling: touch;
 }
 
-.enterprise-workspace-create-head,
+.enterprise-workspace-create-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-shrink: 0;
+}
+
 .enterprise-workspace-detail-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 1rem;
   flex-shrink: 0;
+  padding: 0 2.75rem 0 0;
+}
+
+.enterprise-workspace-detail-modal .enterprise-workspace-detail-head-actions {
+  margin-right: 0;
 }
 
 .enterprise-workspace-create-head-actions,
