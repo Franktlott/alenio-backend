@@ -138,6 +138,32 @@ export async function initMeetingReminders() {
   }
 }
 
+// GET /api/teams/:teamId/events/pending — owner/leader approval queue
+calendarRouter.get("/:teamId/events/pending", async (c) => {
+  const user = c.get("user")!;
+  const { teamId } = c.req.param();
+
+  const membership = await prisma.teamMember.findUnique({
+    where: { userId_teamId: { userId: user.id, teamId } },
+  });
+  if (!membership) {
+    return c.json({ error: { message: "Team not found or not a member", code: "NOT_FOUND" } }, 404);
+  }
+  if (!canApproveCalendarEvent(membership.role)) {
+    return c.json({ error: { message: "Only workspace owners and team leaders can view calendar requests.", code: "FORBIDDEN" } }, 403);
+  }
+
+  const events = await prisma.calendarEvent.findMany({
+    where: { teamId, approvalStatus: "pending", isHidden: false },
+    orderBy: { createdAt: "desc" },
+    include: {
+      createdBy: { select: { id: true, name: true, image: true } },
+    },
+  });
+
+  return c.json({ data: events });
+});
+
 // GET /api/teams/:teamId/events — all team members can view
 calendarRouter.get("/:teamId/events", async (c) => {
   const user = c.get("user")!;

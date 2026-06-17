@@ -30,6 +30,7 @@ import {
   fetchOneOnOneAssociateFeedbackContext,
   fetchWebTeam,
   fetchWebTeamEvents,
+  fetchPendingCalendarEvents,
   fetchWebTeamTasks,
   updateWebTeamEvent,
   updateCoreTeamTask,
@@ -324,6 +325,20 @@ export function DashboardPage() {
   const isRegularMember = myRole === "member" || !myRole;
   const canViewTeamTab = !isRegularMember;
 
+  const pendingCalendarQuery = useQuery({
+    queryKey: queryKeys.pendingCalendarEvents(selectedTeamId ?? ""),
+    queryFn: () => fetchPendingCalendarEvents(selectedTeamId!),
+    enabled: !!selectedTeamId && isOwnerOrLeader,
+    refetchInterval: 15_000,
+    refetchIntervalInBackground: false,
+  });
+  const pendingCalendarEvents = pendingCalendarQuery.data ?? [];
+
+  const refreshCalendarApprovals = async (teamId: string) => {
+    await queryClient.invalidateQueries({ queryKey: queryKeys.pendingCalendarEvents(teamId) });
+    await refreshTeamData(teamId);
+  };
+
   useEffect(() => {
     if (taskTab === "team" && !canViewTeamTab) setTaskTab("active");
   }, [taskTab, canViewTeamTab]);
@@ -591,6 +606,96 @@ export function DashboardPage() {
                 </div>
               </div>
             </div>
+            {isOwnerOrLeader && pendingCalendarEvents.length > 0 ? (
+              <section className="enterprise-team-pending-panel enterprise-cal-pending-panel" aria-label="Pending calendar events">
+                <header className="enterprise-team-pending-head">
+                  <span className="enterprise-team-pending-head-icon enterprise-team-pending-head-icon--request" aria-hidden>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                      <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                      <line x1="16" y1="2" x2="16" y2="6" />
+                      <line x1="8" y1="2" x2="8" y2="6" />
+                      <line x1="3" y1="10" x2="21" y2="10" />
+                    </svg>
+                  </span>
+                  <div className="enterprise-team-pending-head-copy">
+                    <h3 className="enterprise-team-pending-title">Calendar requests</h3>
+                    <p className="enterprise-team-pending-sub">
+                      {pendingCalendarEvents.length} public {pendingCalendarEvents.length === 1 ? "event needs" : "events need"} your approval
+                    </p>
+                  </div>
+                </header>
+                <ul className="enterprise-team-pending-list">
+                  {pendingCalendarEvents.map((event) => {
+                    const submitter = event.createdBy?.name ?? "A team member";
+                    const when = new Date(event.startDate).toLocaleDateString("en-US", {
+                      weekday: "short",
+                      month: "short",
+                      day: "numeric",
+                    });
+                    return (
+                      <li key={event.id} className="enterprise-team-pending-row">
+                        <span className="enterprise-team-pending-avatar enterprise-team-pending-avatar--person">
+                          {(submitter[0] ?? "?").toUpperCase()}
+                        </span>
+                        <div className="enterprise-team-pending-main">
+                          <div className="enterprise-team-pending-topline">
+                            <strong className="enterprise-team-pending-email">{event.title}</strong>
+                            <span className="enterprise-team-pending-badge enterprise-team-pending-badge--request">Calendar event</span>
+                          </div>
+                          <p className="enterprise-team-pending-meta">
+                            Requested by {submitter}
+                            <span className="enterprise-team-pending-dot" aria-hidden>·</span>
+                            {when}
+                          </p>
+                        </div>
+                        <div className="enterprise-team-pending-actions">
+                          <button
+                            type="button"
+                            className="enterprise-team-pending-btn enterprise-team-pending-btn-ghost"
+                            disabled={evApprovalId === event.id}
+                            onClick={async () => {
+                              if (!selectedTeamId) return;
+                              setEvApprovalId(event.id);
+                              setEvActionError(null);
+                              try {
+                                await rejectWebTeamEvent(selectedTeamId, event.id);
+                                await refreshCalendarApprovals(selectedTeamId);
+                              } catch (err) {
+                                setEvActionError(err instanceof Error ? err.message : "Could not decline event.");
+                              } finally {
+                                setEvApprovalId(null);
+                              }
+                            }}
+                          >
+                            Decline
+                          </button>
+                          <button
+                            type="button"
+                            className="enterprise-team-pending-btn enterprise-team-pending-btn-primary"
+                            disabled={evApprovalId === event.id}
+                            onClick={async () => {
+                              if (!selectedTeamId) return;
+                              setEvApprovalId(event.id);
+                              setEvActionError(null);
+                              try {
+                                await approveWebTeamEvent(selectedTeamId, event.id);
+                                await refreshCalendarApprovals(selectedTeamId);
+                              } catch (err) {
+                                setEvActionError(err instanceof Error ? err.message : "Could not approve event.");
+                              } finally {
+                                setEvApprovalId(null);
+                              }
+                            }}
+                          >
+                            {evApprovalId === event.id ? "Approving…" : "Approve"}
+                          </button>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            ) : null}
             <div className={`enterprise-cal-mobile-wrap${evMenuId ? " enterprise-cal-mobile-wrap--menu-open" : ""}`}>
               <div className="enterprise-cal-weekdays enterprise-cal-weekdays-mobile">
                 {weekdayLabels.map((w) => (

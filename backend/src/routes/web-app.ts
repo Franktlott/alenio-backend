@@ -618,6 +618,28 @@ webRouter.get("/api/calendar/events", async (c) => {
   return c.json({ data: visible });
 });
 
+// ── API: pending calendar events (owner/leader) ───────────────────────────────
+webRouter.get("/api/teams/:id/events/pending", async (c) => {
+  if (!(await getWebSession(c))) return c.json({ error: "Unauthorized" }, 401);
+  const userId = webPrismaUserIdFromContext(c);
+  if (!userId) return c.json({ error: "Unauthorized" }, 401);
+  const { id } = c.req.param();
+  const membership = await prisma.teamMember.findFirst({ where: { teamId: id, userId } });
+  if (!membership) return c.json({ error: "Not found" }, 404);
+  if (!canApproveCalendarEvent(membership.role)) {
+    return c.json({ error: { message: "Only workspace owners and team leaders can view calendar requests." } }, 403);
+  }
+  const events = await prisma.calendarEvent.findMany({
+    where: { teamId: id, approvalStatus: "pending", isHidden: false },
+    orderBy: { createdAt: "desc" },
+    include: {
+      team: { select: { id: true, name: true } },
+      createdBy: { select: { id: true, name: true, image: true } },
+    },
+  });
+  return c.json({ data: events });
+});
+
 // ── API: team events ──────────────────────────────────────────────────────────
 webRouter.get("/api/teams/:id/events", async (c) => {
   if (!(await getWebSession(c))) return c.json({ error: "Unauthorized" }, 401);

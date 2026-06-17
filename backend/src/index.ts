@@ -44,6 +44,7 @@ import { ensureDevelopmentPlanSchema } from "./lib/ensure-development-plan-schem
 import { ensureTeamInviteSchema } from "./lib/ensure-team-invite-schema";
 import { ensureRecurrenceSeriesSchema } from "./lib/ensure-recurrence-series-schema";
 import { ensureUserTimezoneSchema } from "./lib/ensure-user-timezone-schema";
+import { ensureCalendarApprovalSchema } from "./lib/ensure-calendar-approval-schema";
 import { developmentGoalsRouter } from "./routes/development-goals";
 import { teamInvitesPublicRouter } from "./routes/team-invites";
 import { isValidTimeZone } from "./lib/timezone";
@@ -54,6 +55,7 @@ const developmentPlanSchemaReady = ensureDevelopmentPlanSchema(prisma);
 const teamInviteSchemaReady = ensureTeamInviteSchema(prisma);
 const recurrenceSeriesSchemaReady = ensureRecurrenceSeriesSchema(prisma);
 const userTimezoneSchemaReady = ensureUserTimezoneSchema(prisma);
+const calendarApprovalSchemaReady = ensureCalendarApprovalSchema(prisma);
 
 type Variables = {
   user: AppUser | null;

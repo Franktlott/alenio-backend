@@ -36,6 +36,7 @@ type CalendarEvent = {
   isHidden?: boolean;
   isVideoMeeting?: boolean;
   approvalStatus?: "pending" | "approved" | "rejected";
+  createdBy?: { id: string; name: string; image?: string | null };
 };
 
 type WeekBar = {
@@ -182,12 +183,25 @@ export default function CalendarScreen() {
 
   const approveMutation = useMutation({
     mutationFn: (eventId: string) => api.post(`/api/teams/${activeTeamId}/events/${eventId}/approve`, {}),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["calendar-events", activeTeamId] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["calendar-events", activeTeamId] });
+      queryClient.invalidateQueries({ queryKey: ["calendar-events-pending", activeTeamId] });
+    },
   });
 
   const rejectMutation = useMutation({
     mutationFn: (eventId: string) => api.post(`/api/teams/${activeTeamId}/events/${eventId}/reject`, {}),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["calendar-events", activeTeamId] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["calendar-events", activeTeamId] });
+      queryClient.invalidateQueries({ queryKey: ["calendar-events-pending", activeTeamId] });
+    },
+  });
+
+  const { data: pendingEvents = [] } = useQuery({
+    queryKey: ["calendar-events-pending", activeTeamId],
+    queryFn: () => api.get<CalendarEvent[]>(`/api/teams/${activeTeamId}/events/pending`),
+    enabled: !!activeTeamId && isOwnerOrLeader,
+    refetchInterval: 15_000,
   });
 
   const { data: events = [], isLoading: eventsLoading } = useQuery({
@@ -267,6 +281,7 @@ export default function CalendarScreen() {
   const onRefresh = async () => {
     setRefreshing(true);
     await queryClient.invalidateQueries({ queryKey: ["calendar-events", activeTeamId] });
+    await queryClient.invalidateQueries({ queryKey: ["calendar-events-pending", activeTeamId] });
     await queryClient.invalidateQueries({ queryKey: ["upcoming-video-meetings"] });
     await queryClient.invalidateQueries({ queryKey: ["tasks", activeTeamId] });
     await queryClient.invalidateQueries({ queryKey: ["teams"] });
@@ -313,6 +328,39 @@ export default function CalendarScreen() {
           </View>
         </View>
       </LinearGradient>
+
+      {isOwnerOrLeader && pendingEvents.length > 0 ? (
+        <View style={{ marginHorizontal: 12, marginTop: 12, backgroundColor: "white", borderRadius: 16, padding: 14, shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 2 }}>
+          <Text style={{ fontSize: 15, fontWeight: "800", color: "#0F172A", marginBottom: 4 }}>Calendar requests</Text>
+          <Text style={{ fontSize: 12, color: "#64748B", marginBottom: 12 }}>
+            {pendingEvents.length} public {pendingEvents.length === 1 ? "event needs" : "events need"} your approval
+          </Text>
+          {pendingEvents.map((event) => (
+            <View key={event.id} style={{ borderTopWidth: 1, borderTopColor: "#F1F5F9", paddingTop: 12, marginTop: 12 }}>
+              <Text style={{ fontSize: 14, fontWeight: "700", color: "#0F172A" }}>{event.title}</Text>
+              <Text style={{ fontSize: 12, color: "#64748B", marginTop: 4 }}>
+                {event.createdBy?.name ?? "A team member"} · {new Date(event.startDate).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+              </Text>
+              <View style={{ flexDirection: "row", gap: 8, marginTop: 10 }}>
+                <Pressable
+                  onPress={() => rejectMutation.mutate(event.id)}
+                  disabled={approveMutation.isPending || rejectMutation.isPending}
+                  style={{ flex: 1, backgroundColor: "#FEE2E2", borderRadius: 10, paddingVertical: 8, alignItems: "center" }}
+                >
+                  <Text style={{ fontSize: 12, fontWeight: "700", color: "#B91C1C" }}>Decline</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => approveMutation.mutate(event.id)}
+                  disabled={approveMutation.isPending || rejectMutation.isPending}
+                  style={{ flex: 1, backgroundColor: "#DCFCE7", borderRadius: 10, paddingVertical: 8, alignItems: "center" }}
+                >
+                  <Text style={{ fontSize: 12, fontWeight: "700", color: "#15803D" }}>Approve</Text>
+                </Pressable>
+              </View>
+            </View>
+          ))}
+        </View>
+      ) : null}
 
       <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" colors={["#4361EE"]} />}>
         {/* Calendar grid */}

@@ -619,7 +619,7 @@ export type ApiCalendarEvent = {
   isVideoMeeting?: boolean | null;
   approvalStatus?: "pending" | "approved" | "rejected" | null;
   createdById?: string;
-  createdBy?: { id: string; name: string };
+  createdBy?: { id: string; name: string; image?: string | null };
 };
 
 export type ActivityMetadata = {
@@ -706,6 +706,12 @@ export function updateCoreTeamTask(
 export function fetchWebTeamEvents(teamId: string) {
   return apiGetJson<{ data: ApiCalendarEvent[] }>(
     `/web/api/teams/${encodeURIComponent(teamId)}/events`,
+  ).then((r) => r.data);
+}
+
+export function fetchPendingCalendarEvents(teamId: string) {
+  return apiGetJson<{ data: ApiCalendarEvent[] }>(
+    `/web/api/teams/${encodeURIComponent(teamId)}/events/pending`,
   ).then((r) => r.data);
 }
 

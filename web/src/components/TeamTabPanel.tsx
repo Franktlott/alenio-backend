@@ -9,6 +9,8 @@ import { TeamMemberProfilePanel } from "./TeamMemberProfilePanel";
 import { OneOnOneTemplatesModal } from "./OneOnOneTemplatesModal";
 import {
   approveTeamJoinRequest,
+  approveWebTeamEvent,
+  fetchPendingCalendarEvents,
   fetchTeamInvites,
   fetchTeamJoinRequests,
   fetchTeamMemberStats,
@@ -19,10 +21,12 @@ import {
   leaveTeam,
   patchApiTeam,
   rejectTeamJoinRequest,
+  rejectWebTeamEvent,
   removeTeamMemberApi,
   setTeamMemberRole,
   transferTeamOwnership,
   uploadTeamPhoto,
+  type ApiCalendarEvent,
   type ApiTask,
   type TeamMemberStatsMap,
   type WebMeUser,
@@ -160,12 +164,13 @@ function IconTemplateOneOne() {
 async function fetchTeamContext(teamId: string) {
   const detail = await fetchWebTeam(teamId);
   const manageJoin = canManageJoinRequests(detail.myRole);
-  const [stats, tasks, sub, joinList, inviteList] = await Promise.all([
+  const [stats, tasks, sub, joinList, inviteList, calendarPending] = await Promise.all([
     fetchTeamMemberStats(teamId).catch(() => null),
     fetchWebTeamTasks(teamId).catch(() => []),
     fetchWebTeamSubscription(teamId).catch(() => null),
     manageJoin ? fetchTeamJoinRequests(teamId).catch(() => []) : Promise.resolve([]),
     manageJoin ? fetchTeamInvites(teamId).catch(() => []) : Promise.resolve([]),
+    manageJoin ? fetchPendingCalendarEvents(teamId).catch(() => []) : Promise.resolve([]),
   ]);
   const plan = sub?.plan ?? "free";
   return {
@@ -175,6 +180,7 @@ async function fetchTeamContext(teamId: string) {
     isPaid: plan === "team" || plan === "pro",
     incoming: manageJoin ? joinList : [],
     pendingInvites: manageJoin ? inviteList : [],
+    pendingCalendarEvents: manageJoin ? calendarPending : [],
   };
 }
 
@@ -234,6 +240,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
   const isPaid = teamContextQuery.data?.isPaid ?? false;
   const incoming = teamContextQuery.data?.incoming ?? [];
   const pendingInvites = teamContextQuery.data?.pendingInvites ?? [];
+  const pendingCalendarEvents = teamContextQuery.data?.pendingCalendarEvents ?? [];
   const tabErr =
     teamContextQuery.error instanceof Error
       ? teamContextQuery.error.message
@@ -252,6 +259,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
   const [addMemberBusy, setAddMemberBusy] = useState(false);
   const [addMemberError, setAddMemberError] = useState<string | null>(null);
   const [inviteActionId, setInviteActionId] = useState<string | null>(null);
+  const [calendarActionId, setCalendarActionId] = useState<string | null>(null);
 
   const [nameEdit, setNameEdit] = useState("");
   const [nameSaving, setNameSaving] = useState(false);
@@ -722,6 +730,92 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                           }}
                         >
                           Approve
+                        </button>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          ) : null}
+
+          {manageJoin && pendingCalendarEvents.length > 0 ? (
+            <section className="enterprise-team-pending-panel" aria-label="Pending calendar events">
+              <header className="enterprise-team-pending-head">
+                <span className="enterprise-team-pending-head-icon enterprise-team-pending-head-icon--request" aria-hidden>
+                  <IconTemplateOneOne />
+                </span>
+                <div className="enterprise-team-pending-head-copy">
+                  <h3 className="enterprise-team-pending-title">Calendar requests</h3>
+                  <p className="enterprise-team-pending-sub">
+                    {pendingCalendarEvents.length} public {pendingCalendarEvents.length === 1 ? "event needs" : "events need"} approval
+                  </p>
+                </div>
+              </header>
+              <ul className="enterprise-team-pending-list">
+                {pendingCalendarEvents.map((event: ApiCalendarEvent) => {
+                  const submitter = event.createdBy?.name ?? "A team member";
+                  const when = new Date(event.startDate).toLocaleDateString("en-US", {
+                    weekday: "short",
+                    month: "short",
+                    day: "numeric",
+                  });
+                  return (
+                    <li key={event.id} className="enterprise-team-pending-row">
+                      <span className="enterprise-team-pending-avatar enterprise-team-pending-avatar--person">
+                        {(submitter[0] ?? "?").toUpperCase()}
+                      </span>
+                      <div className="enterprise-team-pending-main">
+                        <div className="enterprise-team-pending-topline">
+                          <strong className="enterprise-team-pending-email">{event.title}</strong>
+                          <span className="enterprise-team-pending-badge enterprise-team-pending-badge--request">Calendar event</span>
+                        </div>
+                        <p className="enterprise-team-pending-meta">
+                          Requested by {submitter}
+                          <span className="enterprise-team-pending-dot" aria-hidden>·</span>
+                          {when}
+                        </p>
+                      </div>
+                      <div className="enterprise-team-pending-actions">
+                        <button
+                          type="button"
+                          className="enterprise-team-pending-btn enterprise-team-pending-btn-ghost"
+                          disabled={calendarActionId === event.id}
+                          onClick={async () => {
+                            if (!selectedTeamId) return;
+                            setCalendarActionId(event.id);
+                            try {
+                              await rejectWebTeamEvent(selectedTeamId, event.id);
+                              await reloadTeamContext();
+                              await queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(selectedTeamId) });
+                            } catch (e) {
+                              setTabErr(e instanceof Error ? e.message : "Decline failed.");
+                            } finally {
+                              setCalendarActionId(null);
+                            }
+                          }}
+                        >
+                          Decline
+                        </button>
+                        <button
+                          type="button"
+                          className="enterprise-team-pending-btn enterprise-team-pending-btn-primary"
+                          disabled={calendarActionId === event.id}
+                          onClick={async () => {
+                            if (!selectedTeamId) return;
+                            setCalendarActionId(event.id);
+                            try {
+                              await approveWebTeamEvent(selectedTeamId, event.id);
+                              await reloadTeamContext();
+                              await queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(selectedTeamId) });
+                            } catch (e) {
+                              setTabErr(e instanceof Error ? e.message : "Approve failed.");
+                            } finally {
+                              setCalendarActionId(null);
+                            }
+                          }}
+                        >
+                          {calendarActionId === event.id ? "Approving…" : "Approve"}
                         </button>
                       </div>
                     </li>

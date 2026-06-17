@@ -11310,6 +11310,10 @@ button.enterprise-profile-legal-link {
   color: #b45309;
 }
 
+.enterprise-cal-pending-panel {
+  margin: 0 0 16px;
+}
+
 .enterprise-cal-badge-range {
   padding: 2px 8px;
   border-radius: 10px;
