@@ -7,12 +7,13 @@ import {
   ActivityIndicator,
   Image,
   RefreshControl,
+  Modal,
 } from "react-native";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { ChevronLeft, ChevronRight, Plus, Calendar, Video, Globe } from "lucide-react-native";
+import { ChevronLeft, ChevronRight, Plus, Calendar, Video, Globe, X } from "lucide-react-native";
 import { router } from "expo-router";
 import { api } from "@/lib/api/api";
 import { useTeamStore } from "@/lib/state/team-store";
@@ -277,6 +278,7 @@ export default function CalendarScreen() {
   }, [selectedHasVideoMeeting]);
 
   const [refreshing, setRefreshing] = useState(false);
+  const [pendingCalendarOpen, setPendingCalendarOpen] = useState(false);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -303,6 +305,15 @@ export default function CalendarScreen() {
             <Pressable onPress={prevMonth} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(255,255,255,0.2)", alignItems: "center", justifyContent: "center" }} testID="prev-month-button">
               <ChevronLeft size={20} color="white" />
             </Pressable>
+            {isOwnerOrLeader && pendingEvents.length > 0 ? (
+              <Pressable
+                onPress={() => setPendingCalendarOpen(true)}
+                style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "rgba(255,255,255,0.22)", paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20 }}
+                testID="header-pending-calendar-button"
+              >
+                <Text style={{ color: "white", fontSize: 13, fontWeight: "700" }}>{pendingEvents.length} pending</Text>
+              </Pressable>
+            ) : null}
             {activeTeamId && !isDemo ? (
               <Pressable
                 onPress={() =>
@@ -328,39 +339,6 @@ export default function CalendarScreen() {
           </View>
         </View>
       </LinearGradient>
-
-      {isOwnerOrLeader && pendingEvents.length > 0 ? (
-        <View style={{ marginHorizontal: 12, marginTop: 12, backgroundColor: "white", borderRadius: 16, padding: 14, shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 2 }}>
-          <Text style={{ fontSize: 15, fontWeight: "800", color: "#0F172A", marginBottom: 4 }}>Calendar requests</Text>
-          <Text style={{ fontSize: 12, color: "#64748B", marginBottom: 12 }}>
-            {pendingEvents.length} public {pendingEvents.length === 1 ? "event needs" : "events need"} your approval
-          </Text>
-          {pendingEvents.map((event) => (
-            <View key={event.id} style={{ borderTopWidth: 1, borderTopColor: "#F1F5F9", paddingTop: 12, marginTop: 12 }}>
-              <Text style={{ fontSize: 14, fontWeight: "700", color: "#0F172A" }}>{event.title}</Text>
-              <Text style={{ fontSize: 12, color: "#64748B", marginTop: 4 }}>
-                {event.createdBy?.name ?? "A team member"} · {new Date(event.startDate).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
-              </Text>
-              <View style={{ flexDirection: "row", gap: 8, marginTop: 10 }}>
-                <Pressable
-                  onPress={() => rejectMutation.mutate(event.id)}
-                  disabled={approveMutation.isPending || rejectMutation.isPending}
-                  style={{ flex: 1, backgroundColor: "#FEE2E2", borderRadius: 10, paddingVertical: 8, alignItems: "center" }}
-                >
-                  <Text style={{ fontSize: 12, fontWeight: "700", color: "#B91C1C" }}>Decline</Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => approveMutation.mutate(event.id)}
-                  disabled={approveMutation.isPending || rejectMutation.isPending}
-                  style={{ flex: 1, backgroundColor: "#DCFCE7", borderRadius: 10, paddingVertical: 8, alignItems: "center" }}
-                >
-                  <Text style={{ fontSize: 12, fontWeight: "700", color: "#15803D" }}>Approve</Text>
-                </Pressable>
-              </View>
-            </View>
-          ))}
-        </View>
-      ) : null}
 
       <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" colors={["#4361EE"]} />}>
         {/* Calendar grid */}
@@ -726,24 +704,6 @@ export default function CalendarScreen() {
                           {formatEventTimeRange(event.startDate, event.endDate)}
                         </Text>
                       ) : null}
-                      {isOwnerOrLeader && event.approvalStatus === "pending" && !event.isHidden ? (
-                        <View style={{ flexDirection: "row", gap: 8, marginTop: 10 }}>
-                          <Pressable
-                            onPress={() => approveMutation.mutate(event.id)}
-                            disabled={approveMutation.isPending || rejectMutation.isPending}
-                            style={{ flex: 1, backgroundColor: "#DCFCE7", borderRadius: 10, paddingVertical: 8, alignItems: "center" }}
-                          >
-                            <Text style={{ fontSize: 12, fontWeight: "700", color: "#15803D" }}>Approve</Text>
-                          </Pressable>
-                          <Pressable
-                            onPress={() => rejectMutation.mutate(event.id)}
-                            disabled={approveMutation.isPending || rejectMutation.isPending}
-                            style={{ flex: 1, backgroundColor: "#FEE2E2", borderRadius: 10, paddingVertical: 8, alignItems: "center" }}
-                          >
-                            <Text style={{ fontSize: 12, fontWeight: "700", color: "#B91C1C" }}>Decline</Text>
-                          </Pressable>
-                        </View>
-                      ) : null}
                       {event.description ? (
                         <Text style={{ fontSize: 12, color: "#64748B", marginTop: 4 }} numberOfLines={2}>
                           {event.description}
@@ -772,6 +732,66 @@ export default function CalendarScreen() {
           </View>
         ) : null}
       </ScrollView>
+
+      <Modal visible={pendingCalendarOpen} transparent animationType="fade" onRequestClose={() => setPendingCalendarOpen(false)}>
+        <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }} onPress={() => setPendingCalendarOpen(false)}>
+          <Pressable onPress={(e) => e.stopPropagation()} style={{ backgroundColor: "white", borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: "80%" }}>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 18, fontWeight: "800", color: "#0F172A" }}>Calendar requests</Text>
+                <Text style={{ fontSize: 13, color: "#64748B", marginTop: 4 }}>
+                  {pendingEvents.length} public {pendingEvents.length === 1 ? "event needs" : "events need"} your approval
+                </Text>
+              </View>
+              <Pressable onPress={() => setPendingCalendarOpen(false)} style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "#F1F5F9", alignItems: "center", justifyContent: "center" }}>
+                <X size={16} color="#64748B" />
+              </Pressable>
+            </View>
+            <ScrollView style={{ marginTop: 8 }} showsVerticalScrollIndicator={false}>
+              {pendingEvents.length === 0 ? (
+                <Text style={{ fontSize: 14, color: "#64748B", paddingVertical: 24, textAlign: "center" }}>No pending calendar requests.</Text>
+              ) : (
+                pendingEvents.map((event) => (
+                  <View key={event.id} style={{ borderTopWidth: 1, borderTopColor: "#F1F5F9", paddingVertical: 14 }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                      <Text style={{ fontSize: 15, fontWeight: "700", color: "#0F172A", flex: 1 }}>{event.title}</Text>
+                      <View style={{ backgroundColor: "#FEF3C7", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 }}>
+                        <Text style={{ fontSize: 10, fontWeight: "700", color: "#B45309" }}>Pending</Text>
+                      </View>
+                    </View>
+                    <Text style={{ fontSize: 12, color: "#64748B", marginTop: 4 }}>
+                      Requested by {event.createdBy?.name ?? "A team member"} · {new Date(event.startDate).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+                    </Text>
+                    {event.description ? (
+                      <Text style={{ fontSize: 12, color: "#64748B", marginTop: 6 }} numberOfLines={3}>{event.description}</Text>
+                    ) : null}
+                    <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
+                      <Pressable
+                        onPress={() => rejectMutation.mutate(event.id, { onSuccess: () => { if (pendingEvents.length <= 1) setPendingCalendarOpen(false); } })}
+                        disabled={approveMutation.isPending || rejectMutation.isPending}
+                        style={{ flex: 1, borderWidth: 1.5, borderColor: "#E2E8F0", borderRadius: 10, paddingVertical: 10, alignItems: "center" }}
+                      >
+                        <Text style={{ fontSize: 13, fontWeight: "600", color: "#64748B" }}>Decline</Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={() => approveMutation.mutate(event.id, { onSuccess: () => { if (pendingEvents.length <= 1) setPendingCalendarOpen(false); } })}
+                        disabled={approveMutation.isPending || rejectMutation.isPending}
+                        style={{ flex: 1, backgroundColor: "#4361EE", borderRadius: 10, paddingVertical: 10, alignItems: "center" }}
+                      >
+                        {approveMutation.isPending ? (
+                          <ActivityIndicator color="white" size="small" />
+                        ) : (
+                          <Text style={{ fontSize: 13, fontWeight: "700", color: "white" }}>Approve</Text>
+                        )}
+                      </Pressable>
+                    </View>
+                  </View>
+                ))
+              )}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
