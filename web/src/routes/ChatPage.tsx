@@ -1101,34 +1101,43 @@ export function ChatPage() {
                         const m = block.message;
                         const grouped = block.grouped;
                         const senderName = m.sender.name ?? m.sender.email ?? "Member";
+                        const isMine = me?.id === m.senderId || me?.id === m.sender.id;
                         return (
                           <article
                             key={m.id}
-                            className={`chat-message-row${grouped ? " chat-message-row--grouped" : ""}`}
+                            className={`chat-message-row ${isMine ? "chat-message-row--mine" : "chat-message-row--other"}${grouped ? " chat-message-row--grouped" : ""}`}
                           >
-                            {grouped ? (
-                              <div className="chat-message-avatar-spacer" aria-hidden />
-                            ) : (
-                              <ChatAvatar user={m.sender} size="md" />
-                            )}
+                            {!isMine ? (
+                              grouped ? (
+                                <div className="chat-message-avatar-spacer" aria-hidden />
+                              ) : (
+                                <ChatAvatar user={m.sender} size="md" />
+                              )
+                            ) : null}
                             <div className="chat-message-body">
                               {grouped ? (
-                                <time className="chat-message-time chat-message-time--hover" dateTime={m.createdAt}>
+                                <time
+                                  className={`chat-message-time chat-message-time--hover${isMine ? " chat-message-time--hover-mine" : ""}`}
+                                  dateTime={m.createdAt}
+                                >
                                   {formatMessageTime(m.createdAt)}
                                 </time>
                               ) : (
-                                <div className="chat-message-head">
-                                  <strong className="chat-message-author">{senderName}</strong>
+                                <div className={`chat-message-head${isMine ? " chat-message-head--mine" : ""}`}>
+                                  {!isMine ? <strong className="chat-message-author">{senderName}</strong> : null}
                                   <time className="chat-message-time" dateTime={m.createdAt}>
                                     {formatMessageTime(m.createdAt)}
                                   </time>
                                 </div>
                               )}
-                              <div className="chat-message-content">
+                              <div className={`chat-message-content${isMine ? " chat-message-content--mine" : ""}`}>
                                 {m.content ? <div className="chat-text">{renderMessageText(m.content)}</div> : null}
                                 {m.mediaUrl ? <ChatMessageMedia url={m.mediaUrl} mediaType={m.mediaType} /> : null}
                               </div>
-                              <div className="chat-message-actions" aria-label="Message actions">
+                              <div
+                                className={`chat-message-actions${isMine ? " chat-message-actions--mine" : ""}`}
+                                aria-label="Message actions"
+                              >
                                 <button type="button" className="chat-reaction-add" aria-label="Add reaction" title="Add reaction">
                                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
                                     <circle cx="12" cy="12" r="10" />
@@ -1139,6 +1148,7 @@ export function ChatPage() {
                                 </button>
                               </div>
                             </div>
+                            {isMine && grouped ? <div className="chat-message-avatar-spacer" aria-hidden /> : null}
                           </article>
                         );
                       })
