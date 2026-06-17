@@ -18,7 +18,7 @@ async function getMembership(userId: string, teamId: string) {
   });
 }
 
-// GET /api/teams/:teamId/messages - fetch last 100 messages, oldest first
+// GET /api/teams/:teamId/messages - fetch last N messages, oldest first
 messagesRouter.get("/", async (c) => {
   const user = c.get("user")!;
   const teamId = c.req.param("teamId") as string;
@@ -58,11 +58,11 @@ messagesRouter.get("/", async (c) => {
         },
       },
     },
-    orderBy: { createdAt: "asc" },
+    orderBy: { createdAt: "desc" },
     take,
   });
 
-  return c.json({ data: messages });
+  return c.json({ data: messages.reverse() });
 });
 
 // POST /api/teams/:teamId/messages - send a message

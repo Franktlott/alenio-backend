@@ -245,7 +245,7 @@ dmsRouter.get("/:conversationId/messages", async (c) => {
         },
       },
     },
-    orderBy: { createdAt: "asc" },
+    orderBy: { createdAt: "desc" },
     take: 100,
   });
 
@@ -255,7 +255,7 @@ dmsRouter.get("/:conversationId/messages", async (c) => {
     data: { updatedAt: new Date() },
   });
 
-  return c.json({ data: messages });
+  return c.json({ data: messages.reverse() });
 });
 
 // POST /api/dms/:conversationId/messages

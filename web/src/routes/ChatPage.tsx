@@ -309,7 +309,13 @@ export function ChatPage() {
   const conversations = conversationsQuery.data ?? [];
   const topics = topicsQuery.data ?? [];
   const teamDetail = teamDetailQuery.data ?? null;
-  const messages = threadQuery.data?.messages ?? [];
+  const messages = useMemo(() => {
+    const raw = threadQuery.data?.messages ?? [];
+    return [...raw].sort((a, b) => {
+      const diff = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      return diff !== 0 ? diff : a.id.localeCompare(b.id);
+    });
+  }, [threadQuery.data?.messages]);
   const polls = threadQuery.data?.polls ?? [];
   const loadErr =
     conversationsQuery.error instanceof Error
