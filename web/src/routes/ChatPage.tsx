@@ -1108,12 +1108,16 @@ export function ChatPage() {
                             className={`chat-message-row ${isMine ? "chat-message-row--mine" : "chat-message-row--other"}${grouped ? " chat-message-row--grouped" : ""}`}
                           >
                             {!isMine ? (
-                              grouped ? (
-                                <div className="chat-message-avatar-spacer" aria-hidden />
-                              ) : (
-                                <ChatAvatar user={m.sender} size="md" />
-                              )
-                            ) : null}
+                              <div className="chat-message-gutter">
+                                {grouped ? (
+                                  <div className="chat-message-avatar-spacer" aria-hidden />
+                                ) : (
+                                  <ChatAvatar user={m.sender} size="md" />
+                                )}
+                              </div>
+                            ) : (
+                              <div className="chat-message-gutter chat-message-gutter--mirror" aria-hidden />
+                            )}
                             <div className="chat-message-body">
                               {grouped ? (
                                 <time
@@ -1124,13 +1128,17 @@ export function ChatPage() {
                                 </time>
                               ) : (
                                 <div className={`chat-message-head${isMine ? " chat-message-head--mine" : ""}`}>
-                                  {!isMine ? <strong className="chat-message-author">{senderName}</strong> : null}
+                                  {!isMine ? (
+                                    <strong className="chat-message-author">{senderName}</strong>
+                                  ) : (
+                                    <strong className="chat-message-author chat-message-author--mine">You</strong>
+                                  )}
                                   <time className="chat-message-time" dateTime={m.createdAt}>
                                     {formatMessageTime(m.createdAt)}
                                   </time>
                                 </div>
                               )}
-                              <div className={`chat-message-content${isMine ? " chat-message-content--mine" : ""}`}>
+                              <div className="chat-message-content">
                                 {m.content ? <div className="chat-text">{renderMessageText(m.content)}</div> : null}
                                 {m.mediaUrl ? <ChatMessageMedia url={m.mediaUrl} mediaType={m.mediaType} /> : null}
                               </div>
@@ -1148,7 +1156,13 @@ export function ChatPage() {
                                 </button>
                               </div>
                             </div>
-                            {isMine && grouped ? <div className="chat-message-avatar-spacer" aria-hidden /> : null}
+                            {isMine ? (
+                              <div className="chat-message-gutter">
+                                <div className="chat-message-avatar-spacer" aria-hidden />
+                              </div>
+                            ) : (
+                              <div className="chat-message-gutter chat-message-gutter--mirror" aria-hidden />
+                            )}
                           </article>
                         );
                       })
