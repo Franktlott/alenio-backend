@@ -766,7 +766,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                           <span className="enterprise-team-roster-name">
                             {displayName}
                             {isSelf ? " (you)" : ""}
-                            {overdue > 0 ? (
+                            {canView && overdue > 0 ? (
                               <span className="enterprise-team-roster-overdue" title={`${overdue} overdue task${overdue !== 1 ? "s" : ""}`}>
                                 {overdue} overdue
                               </span>

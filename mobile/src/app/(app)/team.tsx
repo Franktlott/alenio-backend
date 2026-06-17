@@ -1029,7 +1029,7 @@ export default function TeamScreen() {
                         <Text style={{ fontSize: 12, fontWeight: "700", color: "#0F172A" }}>{streak}</Text>
                       </>
                     ) : null}
-                    {overdue > 0 ? (
+                    {canView && overdue > 0 ? (
                       <>
                         <AlertCircle size={12} color="#EF4444" />
                         <Text style={{ fontSize: 12, fontWeight: "700", color: "#EF4444" }}>{overdue}</Text>
