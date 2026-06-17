@@ -13,6 +13,13 @@ import {
 import { getUSHolidays } from "../lib/us-federal-holidays";
 import { canShowVideoJoin, isInVideoMeetingBannerWindow, isVideoMeetingLeaderRole } from "../lib/video-meeting-join";
 import {
+  VIDEO_MEETING_DURATION_OPTIONS,
+  durationMinutesFromRange,
+  formatVideoMeetingDuration,
+  formatVideoMeetingEndPreview,
+  videoMeetingEndFromDuration,
+} from "../lib/video-meeting-duration";
+import {
   createWebTeamEvent,
   createVideoRoom,
   deleteWebTask,
@@ -38,7 +45,6 @@ import {
   isFeedbackTaskDescription,
   parseFeedbackTaskDescription,
 } from "../lib/one-on-one-feedback";
-import addChoiceLogo from "../../icon.png";
 import { RecurringTaskScopeModal } from "../components/RecurringTaskScopeModal";
 import { TaskPromptModal } from "../components/tasks/TaskPromptModal";
 import { WorkspaceTaskCreateModal } from "../components/tasks/WorkspaceTaskCreateModal";
@@ -107,6 +113,7 @@ export function DashboardPage() {
   const [evMenuId, setEvMenuId] = useState<string | null>(null);
   const [eventAddChoiceOpen, setEventAddChoiceOpen] = useState(false);
   const [newEventIsVideoMeeting, setNewEventIsVideoMeeting] = useState(false);
+  const [evMeetingDurationMinutes, setEvMeetingDurationMinutes] = useState(60);
   const [upcomingMeetings, setUpcomingMeetings] = useState<UpcomingVideoMeeting[]>([]);
   const [meetingNow, setMeetingNow] = useState(() => Date.now());
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
@@ -498,6 +505,7 @@ export function DashboardPage() {
     setEvDescription("");
     setEvColor("#4361EE");
     setNewEventIsVideoMeeting(false);
+    setEvMeetingDurationMinutes(60);
     setEvAllDay(true);
     setEvStart(new Date().toISOString().slice(0, 10));
     setEvEnd("");
@@ -512,13 +520,13 @@ export function DashboardPage() {
     setEvDescription("");
     setEvColor("#4361EE");
     setNewEventIsVideoMeeting(true);
+    setEvMeetingDurationMinutes(60);
     setEvAllDay(false);
     const start = new Date();
     start.setMinutes(0, 0, 0);
     start.setHours(start.getHours() + 1);
-    const end = new Date(start.getTime() + 60 * 60 * 1000);
     setEvStart(toDatetimeLocalInput(start.toISOString()));
-    setEvEnd(toDatetimeLocalInput(end.toISOString()));
+    setEvEnd("");
     setEventAddChoiceOpen(false);
     setEventOpen(true);
   };
@@ -828,13 +836,21 @@ export function DashboardPage() {
                                     setEvColor(event.color?.trim() || "#4361EE");
                                     setNewEventIsVideoMeeting(!!event.isVideoMeeting);
                                     setEvStart(allDay ? toDateInput(event.startDate) : toDatetimeLocalInput(event.startDate));
-                                    setEvEnd(
-                                      event.endDate
-                                        ? allDay
-                                          ? toDateInput(event.endDate)
-                                          : toDatetimeLocalInput(event.endDate)
-                                        : "",
-                                    );
+                                    if (event.isVideoMeeting && event.endDate) {
+                                      setEvMeetingDurationMinutes(
+                                        durationMinutesFromRange(new Date(event.startDate), new Date(event.endDate)),
+                                      );
+                                      setEvEnd("");
+                                    } else {
+                                      setEvMeetingDurationMinutes(60);
+                                      setEvEnd(
+                                        event.endDate
+                                          ? allDay
+                                            ? toDateInput(event.endDate)
+                                            : toDatetimeLocalInput(event.endDate)
+                                          : "",
+                                      );
+                                    }
                                     setEventOpen(true);
                                   }}
                                 >
@@ -1139,58 +1155,63 @@ export function DashboardPage() {
       />
       {eventAddChoiceOpen ? (
         <div
-          className="enterprise-event-choice-backdrop"
+          className="enterprise-task-modal-backdrop"
           role="presentation"
           onClick={() => setEventAddChoiceOpen(false)}
         >
           <div
-            className="enterprise-event-choice-sheet"
+            className="enterprise-task-modal enterprise-event-modal--v3 enterprise-event-choice-modal"
             role="dialog"
             aria-modal="true"
             aria-labelledby="dashboard-event-choice-title"
             onClick={(e) => e.stopPropagation()}
           >
-            <button
-              type="button"
-              className="enterprise-task-modal-close"
-              onClick={() => setEventAddChoiceOpen(false)}
-              aria-label="Close"
-            >
-              ×
-            </button>
-            <div className="enterprise-event-choice-handle" aria-hidden />
-            <div className="enterprise-event-choice-head">
-              <img src={addChoiceLogo} alt="Alenio" className="enterprise-event-choice-logo" width={32} height={32} />
-              <h3 id="dashboard-event-choice-title" className="enterprise-event-choice-title">
-                What would you like to add?
-              </h3>
+            <header className="create-v3-head">
+              <div className="create-v3-head-main">
+                <h2 id="dashboard-event-choice-title" className="create-v3-heading">
+                  What would you like to add?
+                </h2>
+                <p className="create-v3-sub">Choose an item for the team calendar.</p>
+              </div>
+              <div className="create-v3-head-actions">
+                <button
+                  type="button"
+                  className="create-v3-icon-btn"
+                  onClick={() => setEventAddChoiceOpen(false)}
+                  aria-label="Close"
+                >
+                  ×
+                </button>
+              </div>
+            </header>
+            <div className="create-v3-body create-v3-body--choice">
+              <button type="button" className="enterprise-event-choice-row-v3" onClick={beginNewCalendarEvent}>
+                <span className="enterprise-event-choice-icon-wrap enterprise-event-choice-icon-calendar" aria-hidden>
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                    <line x1="16" y1="2" x2="16" y2="6" />
+                    <line x1="8" y1="2" x2="8" y2="6" />
+                    <line x1="3" y1="10" x2="21" y2="10" />
+                  </svg>
+                </span>
+                <span className="enterprise-event-choice-row-text">
+                  <span className="enterprise-event-choice-row-title">Add calendar event</span>
+                  <span className="enterprise-event-choice-row-sub">Add to the team calendar</span>
+                </span>
+              </button>
+              <button type="button" className="enterprise-event-choice-row-v3" onClick={beginNewVirtualMeeting}>
+                <span className="enterprise-event-choice-icon-wrap enterprise-event-choice-icon-meeting" aria-hidden>
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polygon points="23 7 16 12 23 17 23 7" fill="currentColor" stroke="none" />
+                    <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+                  </svg>
+                </span>
+                <span className="enterprise-event-choice-row-text">
+                  <span className="enterprise-event-choice-row-title">Add virtual meeting</span>
+                  <span className="enterprise-event-choice-row-sub">Create a meeting with a video call link</span>
+                </span>
+              </button>
             </div>
-            <button type="button" className="enterprise-event-choice-row enterprise-event-choice-row-calendar" onClick={beginNewCalendarEvent}>
-              <span className="enterprise-event-choice-icon-wrap enterprise-event-choice-icon-calendar" aria-hidden>
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                  <line x1="16" y1="2" x2="16" y2="6" />
-                  <line x1="8" y1="2" x2="8" y2="6" />
-                  <line x1="3" y1="10" x2="21" y2="10" />
-                </svg>
-              </span>
-              <span className="enterprise-event-choice-row-text">
-                <span className="enterprise-event-choice-row-title">Add calendar event</span>
-                <span className="enterprise-event-choice-row-sub">Add to the team calendar</span>
-              </span>
-            </button>
-            <button type="button" className="enterprise-event-choice-row enterprise-event-choice-row-meeting" onClick={beginNewVirtualMeeting}>
-              <span className="enterprise-event-choice-icon-wrap enterprise-event-choice-icon-meeting" aria-hidden>
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polygon points="23 7 16 12 23 17 23 7" fill="currentColor" stroke="none" />
-                  <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
-                </svg>
-              </span>
-              <span className="enterprise-event-choice-row-text">
-                <span className="enterprise-event-choice-row-title">Add virtual meeting</span>
-                <span className="enterprise-event-choice-row-sub">Create a meeting with a video call link</span>
-              </span>
-            </button>
           </div>
         </div>
       ) : null}
@@ -1204,39 +1225,49 @@ export function DashboardPage() {
             setNewEventIsVideoMeeting(false);
           }}
         >
-          <div className="enterprise-task-modal enterprise-task-create-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
-            <button
-              type="button"
-              className="enterprise-task-modal-close"
-              onClick={() => {
-                setEventOpen(false);
-                setEvEditId(null);
-                setNewEventIsVideoMeeting(false);
-              }}
-              aria-label="Close"
-            >
-              ×
-            </button>
-            <header className="enterprise-task-modal-head">
-              <h3 className="enterprise-task-modal-title">
-                {evEditId
-                  ? newEventIsVideoMeeting
-                    ? "Edit virtual meeting"
-                    : "Edit calendar event"
-                  : newEventIsVideoMeeting
-                    ? "Add virtual meeting"
-                    : "Add calendar event"}
-              </h3>
-              <p className="enterprise-muted">
-                {evEditId
-                  ? "Update this team event from the web dashboard."
-                  : newEventIsVideoMeeting
-                    ? "Schedule a timed meeting your team can join from the dashboard."
-                    : "Create an all-day or multi-day entry on the team calendar."}
-              </p>
+          <div
+            className="enterprise-task-modal enterprise-event-modal--v3"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="dashboard-event-form-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <header className="create-v3-head">
+              <div className="create-v3-head-main">
+                <h2 id="dashboard-event-form-title" className="create-v3-heading">
+                  {evEditId
+                    ? newEventIsVideoMeeting
+                      ? "Edit virtual meeting"
+                      : "Edit calendar event"
+                    : newEventIsVideoMeeting
+                      ? "Add virtual meeting"
+                      : "Add calendar event"}
+                </h2>
+                <p className="create-v3-sub">
+                  {evEditId
+                    ? "Update this team event from the web dashboard."
+                    : newEventIsVideoMeeting
+                      ? "Schedule a timed meeting your team can join from the dashboard."
+                      : "Create an all-day or multi-day entry on the team calendar."}
+                </p>
+              </div>
+              <div className="create-v3-head-actions">
+                <button
+                  type="button"
+                  className="create-v3-icon-btn"
+                  onClick={() => {
+                    setEventOpen(false);
+                    setEvEditId(null);
+                    setNewEventIsVideoMeeting(false);
+                  }}
+                  aria-label="Close"
+                >
+                  ×
+                </button>
+              </div>
             </header>
             <form
-              className="create-task-form"
+              className="enterprise-workspace-create-form"
               onSubmit={async (e) => {
                 e.preventDefault();
                 setEvError(null);
@@ -1250,12 +1281,17 @@ export function DashboardPage() {
                   const startIso = useAllDay
                     ? new Date(`${evStart}T00:00:00`).toISOString()
                     : new Date(evStart).toISOString();
-                  const endIso =
-                    evEnd && evEnd.trim()
-                      ? useAllDay
-                        ? new Date(`${evEnd}T23:59:59`).toISOString()
-                        : new Date(evEnd).toISOString()
-                      : null;
+                  let endIso: string | null;
+                  if (isVideoMeeting) {
+                    endIso = videoMeetingEndFromDuration(new Date(evStart), evMeetingDurationMinutes).toISOString();
+                  } else {
+                    endIso =
+                      evEnd && evEnd.trim()
+                        ? useAllDay
+                          ? new Date(`${evEnd}T23:59:59`).toISOString()
+                          : new Date(evEnd).toISOString()
+                        : null;
+                  }
                   if (evEditId) {
                     await updateWebTeamEvent(selectedTeamId, evEditId, {
                       title: evTitle.trim(),
@@ -1283,6 +1319,7 @@ export function DashboardPage() {
                   setEventOpen(false);
                   setEvEditId(null);
                   setNewEventIsVideoMeeting(false);
+                  setEvMeetingDurationMinutes(60);
                   setEvTitle("");
                   setEvDescription("");
                   setEvAllDay(true);
@@ -1296,46 +1333,133 @@ export function DashboardPage() {
                 }
               }}
             >
-              <input type="hidden" name="eventIsVideoMeeting" value={newEventIsVideoMeeting ? "1" : "0"} />
-              {evError ? <p className="auth-error">{evError}</p> : null}
-              <label className="auth-label">Title</label>
-              <input className="auth-input" value={evTitle} onChange={(e) => setEvTitle(e.target.value)} />
-              <label className="auth-label">Description</label>
-              <textarea className="auth-input create-task-textarea" value={evDescription} onChange={(e) => setEvDescription(e.target.value)} rows={3} />
-              {!newEventIsVideoMeeting ? (
-                <label className="create-task-checkbox-row">
-                  <input type="checkbox" checked={evAllDay} onChange={(e) => setEvAllDay(e.target.checked)} />
-                  <span>All day</span>
-                </label>
-              ) : null}
-              <div className="create-task-row">
-                <div className="create-task-field">
-                  <label className="auth-label">{newEventIsVideoMeeting || !evAllDay ? "Starts" : "Start date"}</label>
-                  <input
-                    type={newEventIsVideoMeeting || !evAllDay ? "datetime-local" : "date"}
-                    className="auth-input"
-                    value={evStart}
-                    onChange={(e) => setEvStart(e.target.value)}
-                  />
-                </div>
-                <div className="create-task-field">
-                  <label className="auth-label">{newEventIsVideoMeeting || !evAllDay ? "Ends (optional)" : "End date (optional)"}</label>
-                  <input
-                    type={newEventIsVideoMeeting || !evAllDay ? "datetime-local" : "date"}
-                    className="auth-input"
-                    value={evEnd}
-                    onChange={(e) => setEvEnd(e.target.value)}
-                  />
-                </div>
-                <div className="create-task-field">
-                  <label className="auth-label">Color</label>
-                  <input type="color" className="auth-input" value={evColor} onChange={(e) => setEvColor(e.target.value)} />
+              <div className="create-v3-body">
+                <div className="create-v3-event-form">
+                  <input type="hidden" name="eventIsVideoMeeting" value={newEventIsVideoMeeting ? "1" : "0"} />
+                  <div className="create-v3-title-wrap">
+                    <span className="create-v3-title-accent" aria-hidden />
+                    <label className="sr-only" htmlFor="dashboard-event-title">
+                      Event title
+                    </label>
+                    <input
+                      id="dashboard-event-title"
+                      className="create-v3-title-input"
+                      value={evTitle}
+                      onChange={(e) => setEvTitle(e.target.value)}
+                      placeholder="Event title"
+                      required
+                      autoFocus
+                    />
+                  </div>
+
+                  <section className="create-v3-block">
+                    <h3 className="create-v3-block-title">Description</h3>
+                    <textarea
+                      className="create-v3-event-textarea"
+                      value={evDescription}
+                      onChange={(e) => setEvDescription(e.target.value)}
+                      placeholder="Add details for your team…"
+                      rows={3}
+                    />
+                  </section>
+
+                  {!newEventIsVideoMeeting ? (
+                    <label className="create-v3-repeat-row create-v3-event-all-day">
+                      <input type="checkbox" checked={evAllDay} onChange={(e) => setEvAllDay(e.target.checked)} />
+                      <span>All day</span>
+                    </label>
+                  ) : null}
+
+                  <section className="create-v3-block create-v3-block--event-details">
+                    <h3 className="create-v3-block-title">When</h3>
+                    <div className="create-v3-detail-rows">
+                      <label className="create-v3-detail-row">
+                        <span className="create-v3-detail-key">
+                          <span className="create-v3-detail-icon" aria-hidden>
+                            📅
+                          </span>
+                          {newEventIsVideoMeeting || !evAllDay ? "Starts" : "Start date"}
+                        </span>
+                        <input
+                          type={newEventIsVideoMeeting || !evAllDay ? "datetime-local" : "date"}
+                          className="auth-input create-v3-detail-input"
+                          value={evStart}
+                          onChange={(e) => setEvStart(e.target.value)}
+                        />
+                      </label>
+                      {newEventIsVideoMeeting ? (
+                        <>
+                          <label className="create-v3-detail-row">
+                            <span className="create-v3-detail-key">
+                              <span className="create-v3-detail-icon" aria-hidden>
+                                ⏱
+                              </span>
+                              Duration
+                            </span>
+                            <select
+                              className="auth-input create-v3-detail-input"
+                              value={evMeetingDurationMinutes}
+                              onChange={(e) => setEvMeetingDurationMinutes(Number(e.target.value))}
+                            >
+                              {VIDEO_MEETING_DURATION_OPTIONS.map((minutes) => (
+                                <option key={minutes} value={minutes}>
+                                  {formatVideoMeetingDuration(minutes)}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <div className="create-v3-detail-row create-v3-detail-row--preview">
+                            <span className="create-v3-detail-key">
+                              <span className="create-v3-detail-icon" aria-hidden>
+                                🕐
+                              </span>
+                              Ends at
+                            </span>
+                            <span className="create-v3-meeting-end-preview">
+                              {formatVideoMeetingEndPreview(evStart, evMeetingDurationMinutes)}
+                            </span>
+                          </div>
+                        </>
+                      ) : (
+                        <label className="create-v3-detail-row">
+                          <span className="create-v3-detail-key">
+                            <span className="create-v3-detail-icon" aria-hidden>
+                              📅
+                            </span>
+                            {evAllDay ? "End date (optional)" : "Ends (optional)"}
+                          </span>
+                          <input
+                            type={evAllDay ? "date" : "datetime-local"}
+                            className="auth-input create-v3-detail-input"
+                            value={evEnd}
+                            onChange={(e) => setEvEnd(e.target.value)}
+                          />
+                        </label>
+                      )}
+                      <label className="create-v3-detail-row">
+                        <span className="create-v3-detail-key">
+                          <span className="create-v3-detail-icon" aria-hidden>
+                            ●
+                          </span>
+                          Color
+                        </span>
+                        <input type="color" className="auth-input create-v3-detail-input create-v3-event-color" value={evColor} onChange={(e) => setEvColor(e.target.value)} />
+                      </label>
+                    </div>
+                  </section>
                 </div>
               </div>
-              <div className="enterprise-task-modal-footer">
+
+              {evError ? (
+                <p className="auth-error create-v3-error" role="alert">
+                  {evError}
+                </p>
+              ) : null}
+
+              <footer className="create-v3-footer">
                 <button
                   type="button"
-                  className="enterprise-task-modal-btn enterprise-task-modal-btn-secondary"
+                  className="task-detail-v2-btn task-detail-v2-btn--ghost"
                   onClick={() => {
                     setEventOpen(false);
                     setEvEditId(null);
@@ -1344,7 +1468,7 @@ export function DashboardPage() {
                 >
                   Cancel
                 </button>
-                <button type="submit" className="enterprise-task-modal-btn enterprise-task-modal-btn-primary" disabled={evSaving}>
+                <button type="submit" className="task-detail-v2-btn task-detail-v2-btn--primary" disabled={evSaving}>
                   {evSaving
                     ? evEditId
                       ? "Saving…"
@@ -1357,7 +1481,7 @@ export function DashboardPage() {
                         ? "Create meeting"
                         : "Create event"}
                 </button>
-              </div>
+              </footer>
             </form>
           </div>
         </div>

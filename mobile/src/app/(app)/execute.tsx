@@ -36,6 +36,13 @@ import { isFeedbackTaskDescription } from "@/lib/one-on-one-feedback";
 import { SafeKeyboardAvoidingView } from "@/lib/safe-keyboard-controller";
 import { getUSHolidays, type USFederalHoliday } from "@/lib/us-federal-holidays";
 import { formatEventTimeRange } from "@/lib/format-event-time";
+import {
+  VIDEO_MEETING_DURATION_OPTIONS,
+  durationMinutesFromRange,
+  formatVideoMeetingDuration,
+  formatVideoMeetingEndPreview,
+  videoMeetingEndFromDuration,
+} from "@/lib/video-meeting-duration";
 
 type FilterTab = "all" | "assigned" | "completed";
 type SortMode = "due" | "priority" | "completed";
@@ -616,7 +623,8 @@ export default function TasksScreen() {
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
   const [showStartTimePicker, setShowStartTimePicker] = useState(false);
-  const [showEndTimePicker, setShowEndTimePicker] = useState(false);
+  const [showDurationPicker, setShowDurationPicker] = useState(false);
+  const [meetingDurationMinutes, setMeetingDurationMinutes] = useState(60);
   const [formError, setFormError] = useState<string | null>(null);
   const [visibleCount, setVisibleCount] = useState<number>(5);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -924,7 +932,8 @@ export default function TasksScreen() {
     setEventColor("#4361EE"); setEventIsHidden(true); setFormError(null); setConfirmDeleteEvent(false);
     setMeetingAssigneeIds([]);
     setShowMeetingAssigneeDropdown(false);
-    setShowStartPicker(false); setShowEndPicker(false); setShowStartTimePicker(false); setShowEndTimePicker(false);
+    setShowStartPicker(false); setShowEndPicker(false); setShowStartTimePicker(false); setShowDurationPicker(false);
+    setMeetingDurationMinutes(60);
     setShowEventModal(true);
   };
 
@@ -938,14 +947,13 @@ export default function TasksScreen() {
           return new Date(y, m - 1, day, now.getHours(), now.getMinutes(), 0, 0);
         })()
       : now;
-    const end = new Date(d);
-    end.setHours(end.getHours() + 1);
     setEventTitle(""); setEventDescription("");
-    setEventStart(d); setEventEnd(end);
+    setEventStart(d); setEventEnd(d);
+    setMeetingDurationMinutes(60);
     setEventColor("#4361EE"); setEventIsHidden(true); setFormError(null); setConfirmDeleteEvent(false);
     setMeetingAssigneeIds([]);
     setShowMeetingAssigneeDropdown(false);
-    setShowStartPicker(false); setShowEndPicker(false); setShowStartTimePicker(false); setShowEndTimePicker(false);
+    setShowStartPicker(false); setShowEndPicker(false); setShowStartTimePicker(false); setShowDurationPicker(false);
     setShowEventModal(true);
   };
 
@@ -956,22 +964,31 @@ export default function TasksScreen() {
     setEventDescription(ev.description ?? "");
     setEventStart(new Date(ev.startDate));
     setEventEnd(ev.endDate ? new Date(ev.endDate) : new Date(ev.startDate));
+    if (ev.isVideoMeeting && ev.endDate) {
+      setMeetingDurationMinutes(durationMinutesFromRange(new Date(ev.startDate), new Date(ev.endDate)));
+    } else {
+      setMeetingDurationMinutes(60);
+    }
     setEventColor(ev.color);
     setEventIsHidden(ev.isHidden ?? false);
     setMeetingAssigneeIds(ev.assigneeIds ?? []);
     setFormError(null);
     setConfirmDeleteEvent(false);
     setShowMeetingAssigneeDropdown(false);
-    setShowStartPicker(false); setShowEndPicker(false); setShowStartTimePicker(false); setShowEndTimePicker(false);
+    setShowStartPicker(false); setShowEndPicker(false); setShowStartTimePicker(false); setShowDurationPicker(false);
     setShowEventModal(true);
   };
 
   const handleSaveEvent = () => {
     if (!eventTitle.trim()) { setFormError("Please enter a title"); return; }
-    const end = eventEnd < eventStart ? eventStart : eventEnd;
+    const isMeeting = eventModalType === "meeting";
+    const end = isMeeting
+      ? videoMeetingEndFromDuration(eventStart, meetingDurationMinutes)
+      : eventEnd < eventStart
+        ? eventStart
+        : eventEnd;
     // Keep the calendar focused on the saved event's day so past-dated meetings remain visible immediately.
     setSelectedDay(toLocalIso(eventStart));
-    const isMeeting = eventModalType === "meeting";
     if (isMeeting) {
       const currentEventId = editingEvent?.id;
       const hasOverlap = calendarEvents
@@ -1958,7 +1975,7 @@ export default function TasksScreen() {
                   <View style={{ flexDirection: "row", gap: 10 }}>
                     <View style={{ flex: 1 }}>
                       <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748B", marginBottom: 6 }}>Start Time</Text>
-                      <Pressable onPress={() => { setShowStartTimePicker(!showStartTimePicker); setShowEndTimePicker(false); }} style={{ borderWidth: 1.5, borderColor: showStartTimePicker ? "#4361EE" : "#4361EE", borderRadius: 12, paddingHorizontal: 10, paddingVertical: 10, flexDirection: "row", alignItems: "center", backgroundColor: showStartTimePicker ? "#4361EE22" : "#4361EE0D" }}>
+                      <Pressable onPress={() => { setShowStartTimePicker(!showStartTimePicker); setShowDurationPicker(false); }} style={{ borderWidth: 1.5, borderColor: showStartTimePicker ? "#4361EE" : "#4361EE", borderRadius: 12, paddingHorizontal: 10, paddingVertical: 10, flexDirection: "row", alignItems: "center", backgroundColor: showStartTimePicker ? "#4361EE22" : "#4361EE0D" }}>
                         <Clock size={13} color="#4361EE" />
                         <Text style={{ fontSize: 12, fontWeight: "500", color: "#4361EE", marginLeft: 6 }}>
                           {eventStart.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}
@@ -1966,15 +1983,18 @@ export default function TasksScreen() {
                       </Pressable>
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748B", marginBottom: 6 }}>End Time</Text>
-                      <Pressable onPress={() => { setShowEndTimePicker(!showEndTimePicker); setShowStartTimePicker(false); }} style={{ borderWidth: 1.5, borderColor: "#7C3AED", borderRadius: 12, paddingHorizontal: 10, paddingVertical: 10, flexDirection: "row", alignItems: "center", backgroundColor: showEndTimePicker ? "#7C3AED22" : "#7C3AED0D" }}>
+                      <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748B", marginBottom: 6 }}>Duration</Text>
+                      <Pressable onPress={() => { setShowDurationPicker(!showDurationPicker); setShowStartTimePicker(false); }} style={{ borderWidth: 1.5, borderColor: "#7C3AED", borderRadius: 12, paddingHorizontal: 10, paddingVertical: 10, flexDirection: "row", alignItems: "center", backgroundColor: showDurationPicker ? "#7C3AED22" : "#7C3AED0D" }}>
                         <Clock size={13} color="#7C3AED" />
                         <Text style={{ fontSize: 12, fontWeight: "500", color: "#7C3AED", marginLeft: 6 }}>
-                          {eventEnd.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}
+                          {formatVideoMeetingDuration(meetingDurationMinutes)}
                         </Text>
                       </Pressable>
                     </View>
                   </View>
+                  <Text style={{ fontSize: 12, color: "#64748B", marginTop: 8 }}>
+                    Ends at {formatVideoMeetingEndPreview(eventStart, meetingDurationMinutes)}
+                  </Text>
                   {showStartTimePicker ? (
                     <View style={{ backgroundColor: "#F8FAFC", borderRadius: 14, marginTop: 8, borderWidth: 1, borderColor: "#E2E8F0" }}>
                       <View style={{ flexDirection: "row", justifyContent: "space-between", paddingHorizontal: 16, paddingTop: 10, paddingBottom: 4 }}>
@@ -2000,29 +2020,33 @@ export default function TasksScreen() {
                       />
                     </View>
                   ) : null}
-                  {showEndTimePicker ? (
-                    <View style={{ backgroundColor: "#F8FAFC", borderRadius: 14, marginTop: 8, borderWidth: 1, borderColor: "#E2E8F0" }}>
+                  {showDurationPicker ? (
+                    <View style={{ backgroundColor: "#F8FAFC", borderRadius: 14, marginTop: 8, borderWidth: 1, borderColor: "#E2E8F0", maxHeight: 240 }}>
                       <View style={{ flexDirection: "row", justifyContent: "space-between", paddingHorizontal: 16, paddingTop: 10, paddingBottom: 4 }}>
-                        <Text style={{ fontSize: 13, fontWeight: "600", color: "#64748B" }}>End Time</Text>
-                        <Pressable onPress={() => setShowEndTimePicker(false)}><Text style={{ fontSize: 13, fontWeight: "700", color: "#7C3AED" }}>Done</Text></Pressable>
+                        <Text style={{ fontSize: 13, fontWeight: "600", color: "#64748B" }}>Duration</Text>
+                        <Pressable onPress={() => setShowDurationPicker(false)}><Text style={{ fontSize: 13, fontWeight: "700", color: "#7C3AED" }}>Done</Text></Pressable>
                       </View>
-                      <DateTimePicker
-                        value={eventEnd}
-                        mode="time"
-                        display="spinner"
-                        onChange={(e, d) => {
-                          if (Platform.OS === "android") setShowEndTimePicker(false);
-                          if (e.type === "dismissed") return;
-                          if (d) {
-                            setEventEnd((prev) => {
-                              const n = new Date(prev);
-                              n.setHours(d.getHours(), d.getMinutes());
-                              return n;
-                            });
-                          }
-                        }}
-                        style={{ height: 216 }}
-                      />
+                      <ScrollView style={{ paddingHorizontal: 8, paddingBottom: 8 }}>
+                        {VIDEO_MEETING_DURATION_OPTIONS.map((minutes) => (
+                          <Pressable
+                            key={minutes}
+                            onPress={() => {
+                              setMeetingDurationMinutes(minutes);
+                              setShowDurationPicker(false);
+                            }}
+                            style={{
+                              paddingVertical: 12,
+                              paddingHorizontal: 12,
+                              borderRadius: 10,
+                              backgroundColor: meetingDurationMinutes === minutes ? "#EEF2FF" : "transparent",
+                            }}
+                          >
+                            <Text style={{ fontSize: 14, fontWeight: meetingDurationMinutes === minutes ? "700" : "500", color: meetingDurationMinutes === minutes ? "#4361EE" : "#0F172A" }}>
+                              {formatVideoMeetingDuration(minutes)}
+                            </Text>
+                          </Pressable>
+                        ))}
+                      </ScrollView>
                     </View>
                   ) : null}
 

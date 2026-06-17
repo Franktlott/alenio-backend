@@ -13,6 +13,7 @@ import { reconcileStripeForSubscriptionRead } from "../lib/stripe-billing";
 import { getTeamSubscription, teamSubscriptionRowHasTeamFeatures } from "./subscription";
 import { webPrismaUserIdFromContext } from "../lib/web-prisma-user";
 import { isPrismaUniqueOnName, isTeamDisplayNameTaken, normalizeTeamName } from "../lib/team-name";
+import { validateVideoMeetingSchedule } from "../lib/video-meeting-duration";
 
 const webRouter = new Hono();
 
@@ -651,13 +652,19 @@ webRouter.post("/api/teams/:id/events", async (c) => {
   const reminderMinutesStr = JSON.stringify({ reminderMinutes: reminderMins, assigneeIds });
   if (!title || !title.trim()) return c.json({ error: { message: "Title is required" } }, 400);
   if (!startDate) return c.json({ error: { message: "Start date is required" } }, 400);
+  const start = new Date(startDate);
+  const end = endDate ? new Date(endDate) : null;
+  if (isVideoMeeting) {
+    const scheduleError = validateVideoMeetingSchedule(start, end);
+    if (scheduleError) return c.json({ error: { message: scheduleError } }, 400);
+  }
   const event = await prisma.calendarEvent.create({
     data: {
       title: title.trim(),
       description: description || null,
-      startDate: new Date(startDate),
-      endDate: endDate ? new Date(endDate) : null,
-      allDay: allDay !== undefined ? allDay : true,
+      startDate: start,
+      endDate: end,
+      allDay: isVideoMeeting ? false : allDay !== undefined ? allDay : true,
       color: color || "#4361EE",
       isHidden,
       isVideoMeeting,
@@ -718,6 +725,15 @@ webRouter.patch("/api/teams/:id/events/:eid", async (c) => {
   const bodyRec = body as Record<string, unknown>;
   if (bodyRec.isVideoMeeting !== undefined || bodyRec.videoMeeting !== undefined) {
     updateData.isVideoMeeting = readBodyVideoMeetingFlag(bodyRec);
+  }
+  const nextIsVideoMeeting =
+    updateData.isVideoMeeting !== undefined ? updateData.isVideoMeeting : existing.isVideoMeeting;
+  if (nextIsVideoMeeting) {
+    const nextStart = updateData.startDate ?? existing.startDate;
+    const nextEnd = updateData.endDate !== undefined ? updateData.endDate : existing.endDate;
+    const scheduleError = validateVideoMeetingSchedule(nextStart, nextEnd);
+    if (scheduleError) return c.json({ error: { message: scheduleError } }, 400);
+    updateData.allDay = false;
   }
   const event = await prisma.calendarEvent.update({
     where: { id: eid },

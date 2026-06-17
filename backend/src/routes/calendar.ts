@@ -6,6 +6,7 @@ import { auth } from "../auth";
 import { authGuard } from "../middleware/auth-guard";
 import { logActivity } from "../lib/activity";
 import { sendPushToUsers } from "../lib/push";
+import { validateVideoMeetingSchedule } from "../lib/video-meeting-duration";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -218,16 +219,26 @@ calendarRouter.post(
       new Set([...(body.assigneeIds ?? []).filter((id) => teamMemberIds.has(id)), user.id])
     );
 
+    const start = new Date(body.startDate);
+    const end = body.endDate ? new Date(body.endDate) : null;
+    const isVideoMeeting = body.isVideoMeeting ?? false;
+    if (isVideoMeeting) {
+      const scheduleError = validateVideoMeetingSchedule(start, end);
+      if (scheduleError) {
+        return c.json({ error: { message: scheduleError, code: "BAD_REQUEST" } }, 400);
+      }
+    }
+
     const event = await prisma.calendarEvent.create({
       data: {
         title: body.title,
         description: body.description,
-        startDate: new Date(body.startDate),
-        endDate: body.endDate ? new Date(body.endDate) : null,
-        allDay: body.allDay ?? true,
+        startDate: start,
+        endDate: end,
+        allDay: isVideoMeeting ? false : (body.allDay ?? true),
         color: body.color ?? "#4361EE",
         isHidden: forcePrivate ? true : (body.isHidden ?? false),
-        isVideoMeeting: body.isVideoMeeting ?? false,
+        isVideoMeeting,
         reminderMinutes: JSON.stringify({ reminderMinutes: reminderMins, assigneeIds }),
         teamId,
         createdById: user.id,
@@ -299,14 +310,26 @@ calendarRouter.patch(
       : existingSettings.assigneeIds;
     const nextReminderMinutes = body.reminderMinutes ?? existingSettings.reminderMinutes;
 
+    const nextStart = body.startDate !== undefined ? new Date(body.startDate) : existing.startDate;
+    const nextEnd =
+      body.endDate !== undefined ? (body.endDate ? new Date(body.endDate) : null) : existing.endDate;
+    const nextIsVideoMeeting =
+      body.isVideoMeeting !== undefined ? body.isVideoMeeting : existing.isVideoMeeting;
+    if (nextIsVideoMeeting) {
+      const scheduleError = validateVideoMeetingSchedule(nextStart, nextEnd);
+      if (scheduleError) {
+        return c.json({ error: { message: scheduleError, code: "BAD_REQUEST" } }, 400);
+      }
+    }
+
     const updated = await prisma.calendarEvent.update({
       where: { id: eventId },
       data: {
         ...(body.title !== undefined ? { title: body.title } : {}),
         ...(body.description !== undefined ? { description: body.description } : {}),
-        ...(body.startDate !== undefined ? { startDate: new Date(body.startDate) } : {}),
-        ...(body.endDate !== undefined ? { endDate: body.endDate ? new Date(body.endDate) : null } : {}),
-        ...(body.allDay !== undefined ? { allDay: body.allDay } : {}),
+        ...(body.startDate !== undefined ? { startDate: nextStart } : {}),
+        ...(body.endDate !== undefined ? { endDate: nextEnd } : {}),
+        ...(body.allDay !== undefined ? { allDay: nextIsVideoMeeting ? false : body.allDay } : nextIsVideoMeeting ? { allDay: false } : {}),
         ...(body.color !== undefined ? { color: body.color } : {}),
         ...(body.isHidden !== undefined ? { isHidden: body.isHidden } : {}),
         ...(body.isVideoMeeting !== undefined ? { isVideoMeeting: body.isVideoMeeting } : {}),
