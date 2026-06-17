@@ -33,6 +33,7 @@ import {
 } from "../../lib/task-display";
 import { isRecurringTask, type RecurrenceScope } from "../../lib/recurring-task";
 import { isTaskPhotoUrl } from "../../lib/task-attachment";
+import { TaskDescriptionContent } from "./TaskDescriptionField";
 import { calendarDayFromInstant, resolveTimeZone } from "../../lib/timezone";
 
 const PRIORITIES = [
@@ -87,7 +88,6 @@ export function WorkspaceTaskDetailModal({
   const [recurringScopeMode, setRecurringScopeMode] = useState<"delete" | "edit" | null>(null);
   const [prompt, setPrompt] = useState<"complete" | "recall" | "subtasks" | null>(null);
   const [headMenuOpen, setHeadMenuOpen] = useState(false);
-  const [checklistAddOpen, setChecklistAddOpen] = useState(false);
   const headMenuRef = useRef<HTMLDivElement>(null);
 
   const meId = me?.id;
@@ -272,7 +272,6 @@ export function WorkspaceTaskDetailModal({
   const cancelEdit = () => {
     setEditMode(false);
     setNewSubtask("");
-    setChecklistAddOpen(false);
     setEditTitle(task.title);
     setEditPriority(task.priority);
     setEditDueDate(task.dueDate ? calendarDayFromInstant(task.dueDate, userTimeZone) : "");
@@ -405,14 +404,16 @@ export function WorkspaceTaskDetailModal({
               {!feedbackContext && !showFeedbackFormLoading && descriptionText ? (
                 <section className="task-detail-v2-block">
                   <h3 className="task-detail-v2-block-title">Description</h3>
-                  <div className="task-detail-v2-description">{descriptionText}</div>
+                  <div className="task-detail-v2-description">
+                    <TaskDescriptionContent text={descriptionText} />
+                  </div>
                 </section>
               ) : null}
 
               {!showFocusedFeedbackTask ? (
                 <section className="task-detail-v2-block">
                   <div className="task-detail-v2-block-head">
-                    <h3 className="task-detail-v2-block-title">Checklist</h3>
+                    <h3 className="task-detail-v2-block-title">Subtasks</h3>
                     {subtasks.length > 0 ? (
                       <span className="task-detail-v2-checklist-count">
                         {completedSubtasks} / {subtasks.length} completed
@@ -450,51 +451,33 @@ export function WorkspaceTaskDetailModal({
                       ))}
                     </ul>
                   ) : (
-                    <p className="enterprise-muted task-detail-v2-checklist-empty">No checklist items yet.</p>
+                    <p className="enterprise-muted task-detail-v2-checklist-empty">No subtasks yet.</p>
                   )}
                   {canEdit && editMode && !isCompleted ? (
-                    checklistAddOpen || newSubtask ? (
-                      <div className="task-detail-v2-checklist-add">
-                        <input
-                          className="auth-input task-detail-v2-checklist-input"
-                          value={newSubtask}
-                          placeholder="New item"
-                          disabled={busy}
-                          autoFocus
-                          onChange={(e) => setNewSubtask(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              e.preventDefault();
-                              void addSubtask().then(() => setChecklistAddOpen(false));
-                            }
-                            if (e.key === "Escape") {
-                              setNewSubtask("");
-                              setChecklistAddOpen(false);
-                            }
-                          }}
-                          onBlur={() => {
-                            if (!newSubtask.trim()) setChecklistAddOpen(false);
-                          }}
-                        />
-                      </div>
-                    ) : (
-                      <button type="button" className="task-detail-v2-add-link task-detail-v2-checklist-add-btn" disabled={busy} onClick={() => setChecklistAddOpen(true)}>
-                        + Add item
+                    <div className="task-detail-v2-subtask-add">
+                      <input
+                        className="auth-input task-detail-v2-checklist-input"
+                        value={newSubtask}
+                        placeholder="Add a subtask"
+                        disabled={busy}
+                        onChange={(e) => setNewSubtask(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            void addSubtask();
+                          }
+                        }}
+                      />
+                      <button
+                        type="button"
+                        className="create-v3-subtask-add-btn"
+                        disabled={busy || !newSubtask.trim()}
+                        onClick={() => void addSubtask()}
+                      >
+                        Add
                       </button>
-                    )
+                    </div>
                   ) : null}
-                </section>
-              ) : null}
-
-              {!showFocusedFeedbackTask && photoUrl ? (
-                <section className="task-detail-v2-block task-detail-v2-photo-block">
-                  <img
-                    src={photoUrl}
-                    alt="Task reference photo"
-                    className="task-detail-v2-photo"
-                    loading="lazy"
-                    referrerPolicy="no-referrer-when-downgrade"
-                  />
                 </section>
               ) : null}
             </section>
@@ -602,6 +585,18 @@ export function WorkspaceTaskDetailModal({
                       </div>
                     ) : null}
                   </dl>
+
+                  {photoUrl ? (
+                    <div className="task-detail-v2-photo-block task-detail-v2-photo-block--sidebar">
+                      <img
+                        src={photoUrl}
+                        alt="Task reference photo"
+                        className="task-detail-v2-photo"
+                        loading="lazy"
+                        referrerPolicy="no-referrer-when-downgrade"
+                      />
+                    </div>
+                  ) : null}
                 </div>
               </aside>
             ) : null}

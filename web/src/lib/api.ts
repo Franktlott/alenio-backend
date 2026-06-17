@@ -1147,7 +1147,8 @@ export function createTeamTask(input: CreateWebTaskInput) {
 }
 
 export function createWebTask(input: CreateWebTaskInput) {
-  if (input.recurrence || input.attachmentUrl) {
+  const hasSubtasks = (input.subtasks?.filter((t) => t.trim()).length ?? 0) > 0;
+  if (input.recurrence || input.attachmentUrl || hasSubtasks) {
     return createTeamTask(input);
   }
   return apiPostJson<{ data: { tasks: ApiTask[] } }>("/web/api/tasks", {

@@ -75,34 +75,92 @@ export function AssigneeMultiSelect({
     onChange?.(selectedIds.filter((id) => id !== userId));
   };
 
-  const chips = selectedMembers.length > 0 ? (
-    <ul className="assignee-multi-select-chips assignee-multi-select-chips--compact" aria-label="Selected assignees">
-      {selectedMembers.map((member) => (
-        <li key={member.userId} className="assignee-multi-select-chip">
-          <span className="assignee-multi-select-chip-avatar" aria-hidden>
-            {assigneeInitials(member.user.name, member.user.email)}
-          </span>
-          <span className="assignee-multi-select-chip-label">{memberLabel(member)}</span>
-          {!disabled && !readOnly ? (
-            <button
-              type="button"
-              className="assignee-multi-select-chip-remove"
-              aria-label={`Remove ${memberLabel(member)}`}
-              onClick={() => removeMember(member.userId)}
-            >
-              ×
-            </button>
-          ) : null}
-        </li>
-      ))}
-    </ul>
-  ) : readOnly ? (
-    <p className="enterprise-muted assignee-multi-select-empty-readonly">—</p>
-  ) : null;
+  const renderMemberChip = (member: AssigneeMember, removable: boolean) => (
+    <li key={member.userId} className="assignee-multi-select-chip">
+      <span className="assignee-multi-select-chip-avatar" aria-hidden>
+        {assigneeInitials(member.user.name, member.user.email)}
+      </span>
+      <span className="assignee-multi-select-chip-label">{memberLabel(member)}</span>
+      {removable ? (
+        <button
+          type="button"
+          className="assignee-multi-select-chip-remove"
+          aria-label={`Remove ${memberLabel(member)}`}
+          onClick={() => removeMember(member.userId)}
+        >
+          ×
+        </button>
+      ) : null}
+    </li>
+  );
+
+  const renderReadOnlyListMenu = () =>
+    open ? (
+      <div className="assignee-multi-select-menu assignee-multi-select-menu--readonly" role="dialog" aria-label="Assignees">
+        <ul className="assignee-multi-select-options assignee-multi-select-options--readonly">
+          {selectedMembers.map((member) => (
+            <li key={member.userId} className="assignee-multi-select-readonly-row">
+              <span className="assignee-multi-select-chip-avatar" aria-hidden>
+                {assigneeInitials(member.user.name, member.user.email)}
+              </span>
+              <span className="assignee-multi-select-readonly-name">{memberLabel(member)}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    ) : null;
 
   if (readOnly) {
-    return <div className="assignee-multi-select assignee-multi-select--readonly">{chips}</div>;
+    if (selectedMembers.length === 0) {
+      return (
+        <div className="assignee-multi-select assignee-multi-select--readonly">
+          <p className="enterprise-muted assignee-multi-select-empty-readonly">—</p>
+        </div>
+      );
+    }
+
+    if (selectedMembers.length === 1) {
+      return (
+        <div className="assignee-multi-select assignee-multi-select--readonly">
+          <ul className="assignee-multi-select-chips assignee-multi-select-chips--compact" aria-label="Selected assignees">
+            {renderMemberChip(selectedMembers[0]!, false)}
+          </ul>
+        </div>
+      );
+    }
+
+    const assigneeCountLabel = `${selectedMembers.length} Assignees`;
+    return (
+      <div className="assignee-multi-select assignee-multi-select--readonly" ref={rootRef}>
+        <button
+          type="button"
+          className="assignee-multi-select-summary"
+          aria-expanded={open}
+          aria-haspopup="dialog"
+          onClick={() => setOpen((v) => !v)}
+        >
+          <span className="assignee-multi-select-summary-avatars" aria-hidden>
+            {selectedMembers.slice(0, 3).map((member) => (
+              <span key={member.userId} className="assignee-multi-select-chip-avatar">
+                {assigneeInitials(member.user.name, member.user.email)}
+              </span>
+            ))}
+          </span>
+          <span className="assignee-multi-select-summary-label">{assigneeCountLabel}</span>
+          <span className="assignee-multi-select-chevron" aria-hidden>
+            ▾
+          </span>
+        </button>
+        {renderReadOnlyListMenu()}
+      </div>
+    );
   }
+
+  const chips = selectedMembers.length > 0 ? (
+    <ul className="assignee-multi-select-chips assignee-multi-select-chips--compact" aria-label="Selected assignees">
+      {selectedMembers.map((member) => renderMemberChip(member, !disabled))}
+    </ul>
+  ) : null;
 
   if (compact) {
     return (
