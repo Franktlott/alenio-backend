@@ -146,14 +146,23 @@ export type WebTeamSubscription = {
   billingProvider?: "stripe" | "mobile_store" | "none";
 };
 
+export type ChatMessageReaction = {
+  id: string;
+  emoji: string;
+  userId: string;
+  user: { id: string; name: string | null };
+};
+
 export type TeamChatMessage = {
   id: string;
   content: string | null;
   mediaUrl: string | null;
   mediaType: string | null;
   createdAt: string;
+  editedAt?: string | null;
   senderId: string;
   teamId: string;
+  reactions?: ChatMessageReaction[];
   sender: { id: string; name: string | null; email: string | null; image: string | null };
 };
 
@@ -188,8 +197,10 @@ export type DirectChatMessage = {
   mediaUrl: string | null;
   mediaType: string | null;
   createdAt: string;
+  editedAt?: string | null;
   senderId: string;
   conversationId: string;
+  reactions?: ChatMessageReaction[];
   sender: { id: string; name: string | null; email: string | null; image: string | null };
 };
 
@@ -400,6 +411,24 @@ export function postTeamMessage(
   }).then((r) => r.data);
 }
 
+export function toggleTeamMessageReaction(teamId: string, messageId: string, emoji: string) {
+  return apiPostJson<{ data: TeamChatMessage }>(
+    `/api/teams/${encodeURIComponent(teamId)}/messages/${encodeURIComponent(messageId)}/reactions`,
+    { emoji },
+  ).then((r) => r.data);
+}
+
+export function patchTeamMessage(teamId: string, messageId: string, content: string) {
+  return apiPatchJson<{ data: TeamChatMessage }>(
+    `/api/teams/${encodeURIComponent(teamId)}/messages/${encodeURIComponent(messageId)}`,
+    { content: content.trim() },
+  ).then((r) => r.data);
+}
+
+export function deleteTeamMessage(teamId: string, messageId: string) {
+  return apiDeleteJson<void>(`/api/teams/${encodeURIComponent(teamId)}/messages/${encodeURIComponent(messageId)}`);
+}
+
 export function fetchTeamTopics(teamId: string) {
   return apiGetJson<{ data: TeamTopic[] }>(`/api/teams/${encodeURIComponent(teamId)}/topics`).then((r) => r.data);
 }
@@ -462,6 +491,17 @@ export function postDmMessage(
     content: content.trim() || null,
     ...(media ? { mediaUrl: media.mediaUrl, mediaType: media.mediaType } : {}),
   }).then((r) => r.data);
+}
+
+export function toggleDmMessageReaction(conversationId: string, messageId: string, emoji: string) {
+  return apiPostJson<{ data: DirectChatMessage }>(
+    `/api/dms/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}/reactions`,
+    { emoji },
+  ).then((r) => r.data);
+}
+
+export function deleteDmMessage(conversationId: string, messageId: string) {
+  return apiDeleteJson<void>(`/api/dms/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}`);
 }
 
 export type ChatUploadResult = {

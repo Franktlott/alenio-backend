@@ -14,6 +14,14 @@ import { useSearchParams } from "react-router-dom";
 import { queryKeys } from "../lib/query-keys";
 import { useEnterpriseShell } from "../contexts/EnterpriseShellContext";
 import { CreateChannelModal, CreateGroupModal, NewDmModal } from "../components/ChatCreateModals";
+import {
+  ChatMessageActionSheet,
+  ChatMessageBodyInteractive,
+  ChatMessageDeleteConfirm,
+  ChatMessageEditModal,
+  ChatMessageReactionPills,
+  type ChatMessageLike,
+} from "../components/ChatMessageActions";
 import { ChatMessageMedia } from "../components/ChatMessageMedia";
 import { linkifyText } from "../lib/linkify";
 import { isRecentFooterEnterpriseWorkspaceSelect } from "../lib/enterprise-selected-team";
@@ -23,6 +31,8 @@ import {
   createTeamTopic,
   deleteTeamTopic,
   createVideoRoom,
+  deleteDmMessage,
+  deleteTeamMessage,
   fetchDmConversations,
   fetchDmMessages,
   fetchTeamMessages,
@@ -30,8 +40,11 @@ import {
   fetchTeamTopics,
   fetchWebTeam,
   findOrCreateDm,
+  patchTeamMessage,
   postDmMessage,
   postTeamMessage,
+  toggleDmMessageReaction,
+  toggleTeamMessageReaction,
   uploadChatMedia,
   voteTeamPoll,
   type ApiPoll,
@@ -256,6 +269,11 @@ export function ChatPage() {
   const [createErr, setCreateErr] = useState<string | null>(null);
   const [deleteChannelTopic, setDeleteChannelTopic] = useState<TeamTopic | null>(null);
   const [deleteChannelSaving, setDeleteChannelSaving] = useState(false);
+  const [actionMessage, setActionMessage] = useState<ChatMessageLike | null>(null);
+  const [editMessage, setEditMessage] = useState<ChatMessageLike | null>(null);
+  const [editDraft, setEditDraft] = useState("");
+  const [deleteMessageTarget, setDeleteMessageTarget] = useState<ChatMessageLike | null>(null);
+  const [messageActionSaving, setMessageActionSaving] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -357,6 +375,98 @@ export function ChatPage() {
   }, [teams, selectedTeamId, teamIdFromUrl, topicIdFromUrl, selectedTopicId, isDmMode, setParams]);
 
   const canCreateChannel = teamDetail?.myRole === "owner" || teamDetail?.myRole === "admin";
+
+  const canEditMessage = useCallback(
+    (m: ChatMessageLike) => {
+      if (!me?.id || m.senderId !== me.id || isDmMode) return false;
+      if (!m.content?.trim()) return false;
+      return Date.now() - new Date(m.createdAt).getTime() < 15 * 60 * 1000;
+    },
+    [me?.id, isDmMode],
+  );
+
+  const canDeleteMessage = useCallback(
+    (m: ChatMessageLike) => {
+      if (me?.id && m.senderId === me.id) return true;
+      if (isDmMode) return false;
+      return teamDetail?.myRole === "owner" || teamDetail?.myRole === "admin";
+    },
+    [me?.id, isDmMode, teamDetail?.myRole],
+  );
+
+  const myReactionForMessage = useCallback(
+    (m: ChatMessageLike) => (me?.id ? m.reactions?.find((r) => r.userId === me.id)?.emoji : undefined),
+    [me?.id],
+  );
+
+  const openMessageActions = useCallback((m: ChatMessageLike) => {
+    setActionMessage(m);
+    setActionErr(null);
+  }, []);
+
+  const onMessageReact = async (emoji: string) => {
+    if (!actionMessage) return;
+    setMessageActionSaving(true);
+    setActionErr(null);
+    try {
+      if (isDmMode) {
+        if (!selectedConversationId) return;
+        await toggleDmMessageReaction(selectedConversationId, actionMessage.id, emoji);
+      } else if (selectedTeamId) {
+        await toggleTeamMessageReaction(selectedTeamId, actionMessage.id, emoji);
+      }
+      setActionMessage(null);
+      await refreshChat();
+    } catch (e) {
+      setActionErr(e instanceof Error ? e.message : "Could not update reaction.");
+    } finally {
+      setMessageActionSaving(false);
+    }
+  };
+
+  const onRemoveMessageReaction = async () => {
+    const emoji = actionMessage ? myReactionForMessage(actionMessage) : undefined;
+    if (!emoji) return;
+    await onMessageReact(emoji);
+  };
+
+  const onConfirmEditMessage = async () => {
+    if (!editMessage || !selectedTeamId || isDmMode) return;
+    const content = editDraft.trim();
+    if (!content) return;
+    setMessageActionSaving(true);
+    setActionErr(null);
+    try {
+      await patchTeamMessage(selectedTeamId, editMessage.id, content);
+      setEditMessage(null);
+      setEditDraft("");
+      await refreshChat();
+    } catch (e) {
+      setActionErr(e instanceof Error ? e.message : "Could not edit message.");
+    } finally {
+      setMessageActionSaving(false);
+    }
+  };
+
+  const onConfirmDeleteMessage = async () => {
+    if (!deleteMessageTarget) return;
+    setMessageActionSaving(true);
+    setActionErr(null);
+    try {
+      if (isDmMode) {
+        if (!selectedConversationId) return;
+        await deleteDmMessage(selectedConversationId, deleteMessageTarget.id);
+      } else if (selectedTeamId) {
+        await deleteTeamMessage(selectedTeamId, deleteMessageTarget.id);
+      }
+      setDeleteMessageTarget(null);
+      await refreshChat();
+    } catch (e) {
+      setActionErr(e instanceof Error ? e.message : "Could not delete message.");
+    } finally {
+      setMessageActionSaving(false);
+    }
+  };
 
   const discardPendingAttachment = useCallback(() => {
     setPendingAttachment((prev) => {
@@ -1130,33 +1240,26 @@ export function ChatPage() {
                             ) : (
                               <div className="chat-message-gutter chat-message-gutter--mirror" aria-hidden />
                             )}
-                            <div className="chat-message-body">
+                            <ChatMessageBodyInteractive onLongPress={() => openMessageActions(m)}>
                               {!grouped ? (
                                 <div className={`chat-message-head${isMine ? " chat-message-head--mine" : ""}`}>
                                   <strong className="chat-message-author">{displayName}</strong>
                                   <time className="chat-message-time" dateTime={m.createdAt}>
                                     {formatMessageTime(m.createdAt)}
                                   </time>
+                                  {m.editedAt ? <span className="chat-message-edited">edited</span> : null}
                                 </div>
                               ) : null}
                               <div className="chat-message-content">
                                 {m.content ? <div className="chat-text">{renderMessageText(m.content)}</div> : null}
                                 {m.mediaUrl ? <ChatMessageMedia url={m.mediaUrl} mediaType={m.mediaType} /> : null}
                               </div>
-                              <div
-                                className={`chat-message-actions${isMine ? " chat-message-actions--mine" : ""}`}
-                                aria-label="Message actions"
-                              >
-                                <button type="button" className="chat-reaction-add" aria-label="Add reaction" title="Add reaction">
-                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-                                    <circle cx="12" cy="12" r="10" />
-                                    <path d="M8 14s1.5 2 4 2 4-2 4-2" strokeLinecap="round" />
-                                    <line x1="9" y1="9" x2="9.01" y2="9" strokeLinecap="round" />
-                                    <line x1="15" y1="9" x2="15.01" y2="9" strokeLinecap="round" />
-                                  </svg>
-                                </button>
-                              </div>
-                            </div>
+                              <ChatMessageReactionPills
+                                reactions={m.reactions}
+                                currentUserId={me?.id}
+                                onOpen={() => openMessageActions(m)}
+                              />
+                            </ChatMessageBodyInteractive>
                             {isMine ? (
                               <div className="chat-message-gutter">
                                 {grouped ? (
@@ -1309,6 +1412,50 @@ export function ChatPage() {
         myUserId={me?.id ?? ""}
         onClose={closeCreateModals}
         onSubmit={(input) => void onCreateGroup(input)}
+      />
+
+      <ChatMessageActionSheet
+        open={!!actionMessage}
+        message={actionMessage}
+        myReaction={actionMessage ? myReactionForMessage(actionMessage) : undefined}
+        canEdit={actionMessage ? canEditMessage(actionMessage) : false}
+        canDelete={actionMessage ? canDeleteMessage(actionMessage) : false}
+        saving={messageActionSaving}
+        onClose={() => setActionMessage(null)}
+        onReact={(emoji) => void onMessageReact(emoji)}
+        onRemoveReaction={() => void onRemoveMessageReaction()}
+        onEdit={() => {
+          if (!actionMessage) return;
+          setEditDraft(actionMessage.content ?? "");
+          setEditMessage(actionMessage);
+          setActionMessage(null);
+        }}
+        onDelete={() => {
+          if (!actionMessage) return;
+          setDeleteMessageTarget(actionMessage);
+          setActionMessage(null);
+        }}
+      />
+      <ChatMessageEditModal
+        open={!!editMessage}
+        draft={editDraft}
+        saving={messageActionSaving}
+        onDraftChange={setEditDraft}
+        onClose={() => {
+          if (messageActionSaving) return;
+          setEditMessage(null);
+          setEditDraft("");
+        }}
+        onSave={() => void onConfirmEditMessage()}
+      />
+      <ChatMessageDeleteConfirm
+        open={!!deleteMessageTarget}
+        saving={messageActionSaving}
+        onClose={() => {
+          if (messageActionSaving) return;
+          setDeleteMessageTarget(null);
+        }}
+        onConfirm={() => void onConfirmDeleteMessage()}
       />
 
       {deleteChannelTopic ? (
