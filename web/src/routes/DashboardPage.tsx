@@ -24,6 +24,8 @@ import {
   createVideoRoom,
   deleteWebTask,
   deleteWebTeamEvent,
+  approveWebTeamEvent,
+  rejectWebTeamEvent,
   fetchCoreTeamTasks,
   fetchOneOnOneAssociateFeedbackContext,
   fetchWebTeam,
@@ -106,6 +108,7 @@ export function DashboardPage() {
   const [evSaving, setEvSaving] = useState(false);
   const [evError, setEvError] = useState<string | null>(null);
   const [evDeleteId, setEvDeleteId] = useState<string | null>(null);
+  const [evApprovalId, setEvApprovalId] = useState<string | null>(null);
   const [evActionError, setEvActionError] = useState<string | null>(null);
   const [evEditId, setEvEditId] = useState<string | null>(null);
   const [evMenuId, setEvMenuId] = useState<string | null>(null);
@@ -319,8 +322,6 @@ export function DashboardPage() {
   const isOwnerOrLeader = myRole === "owner" || myRole === "team_leader";
   const isOwnerOrAdmin = myRole === "owner" || myRole === "admin";
   const isRegularMember = myRole === "member" || !myRole;
-  const hasTeamFeatures = selectedTeam?.hasTeamFeatures !== false;
-  const canAddPersonalEvent = isOwnerOrLeader || hasTeamFeatures;
   const canViewTeamTab = !isRegularMember;
 
   useEffect(() => {
@@ -469,7 +470,7 @@ export function DashboardPage() {
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
   };
 
-  const beginNewCalendarEvent = () => {
+  const beginNewEvent = (defaultHidden: boolean) => {
     setEvEditId(null);
     setEvError(null);
     setEvTitle("");
@@ -477,7 +478,7 @@ export function DashboardPage() {
     setEvColor("#4361EE");
     setNewEventIsVideoMeeting(false);
     setEvMeetingDurationMinutes(60);
-    setEvIsHidden(false);
+    setEvIsHidden(defaultHidden);
     setEvAllDay(true);
     setEvStart(new Date().toISOString().slice(0, 10));
     setEvEnd("");
@@ -485,21 +486,9 @@ export function DashboardPage() {
     setEventOpen(true);
   };
 
-  const beginNewPersonalEvent = () => {
-    setEvEditId(null);
-    setEvError(null);
-    setEvTitle("");
-    setEvDescription("");
-    setEvColor("#4361EE");
-    setNewEventIsVideoMeeting(false);
-    setEvMeetingDurationMinutes(60);
-    setEvIsHidden(true);
-    setEvAllDay(true);
-    setEvStart(new Date().toISOString().slice(0, 10));
-    setEvEnd("");
-    setEventAddChoiceOpen(false);
-    setEventOpen(true);
-  };
+  const beginNewCalendarEvent = () => beginNewEvent(false);
+
+  const beginNewPersonalEvent = () => beginNewEvent(true);
 
   const beginNewVirtualMeeting = () => {
     setEvEditId(null);
@@ -568,7 +557,7 @@ export function DashboardPage() {
                 Calendar
               </h2>
               <div className="enterprise-cal-head-actions">
-                {canAddPersonalEvent ? (
+                {selectedTeamId ? (
                 <button
                   type="button"
                   className="enterprise-task-modal-btn enterprise-task-modal-btn-secondary"
@@ -578,7 +567,7 @@ export function DashboardPage() {
                     else beginNewPersonalEvent();
                   }}
                 >
-                  {isOwnerOrLeader ? "+ Add event" : "+ Add personal event"}
+                  + Add event
                 </button>
                 ) : null}
                 <div className="enterprise-cal-nav">
@@ -755,6 +744,8 @@ export function DashboardPage() {
                           <>
                             {!event.isHidden ? <span className="enterprise-cal-badge-public">Public</span> : null}
                             {event.isHidden ? <span className="enterprise-cal-badge-private">Private</span> : null}
+                            {event.approvalStatus === "pending" ? <span className="enterprise-cal-badge-pending">Pending approval</span> : null}
+                            {event.approvalStatus === "rejected" ? <span className="enterprise-cal-badge-rejected">Declined</span> : null}
                             <span
                               className="enterprise-cal-badge-range"
                               style={{ color: event.color?.trim() || "#4361EE", background: `${event.color?.trim() || "#4361EE"}20` }}
@@ -816,6 +807,50 @@ export function DashboardPage() {
                                 >
                                   Edit
                                 </button>
+                                {isOwnerOrLeader && event.approvalStatus === "pending" && !event.isHidden ? (
+                                  <>
+                                    <button
+                                      type="button"
+                                      role="menuitem"
+                                      disabled={evApprovalId === event.id}
+                                      onClick={async () => {
+                                        setEvApprovalId(event.id);
+                                        setEvActionError(null);
+                                        setEvMenuId(null);
+                                        try {
+                                          await approveWebTeamEvent(selectedTeamId, event.id);
+                                          await refreshTeamData(selectedTeamId);
+                                        } catch (err) {
+                                          setEvActionError(err instanceof Error ? err.message : "Could not approve event.");
+                                        } finally {
+                                          setEvApprovalId(null);
+                                        }
+                                      }}
+                                    >
+                                      {evApprovalId === event.id ? "Approving…" : "Approve"}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      role="menuitem"
+                                      disabled={evApprovalId === event.id}
+                                      onClick={async () => {
+                                        setEvApprovalId(event.id);
+                                        setEvActionError(null);
+                                        setEvMenuId(null);
+                                        try {
+                                          await rejectWebTeamEvent(selectedTeamId, event.id);
+                                          await refreshTeamData(selectedTeamId);
+                                        } catch (err) {
+                                          setEvActionError(err instanceof Error ? err.message : "Could not decline event.");
+                                        } finally {
+                                          setEvApprovalId(null);
+                                        }
+                                      }}
+                                    >
+                                      {evApprovalId === event.id ? "Declining…" : "Decline"}
+                                    </button>
+                                  </>
+                                ) : null}
                                 <button
                                   type="button"
                                   role="menuitem"
@@ -1267,7 +1302,7 @@ export function DashboardPage() {
                       allDay: useAllDay,
                       color: evColor,
                       isVideoMeeting,
-                      isHidden: isOwnerOrLeader ? evIsHidden : true,
+                      isHidden: evIsHidden,
                     });
                   } else {
                     await createWebTeamEvent(selectedTeamId, {
@@ -1278,7 +1313,7 @@ export function DashboardPage() {
                       allDay: useAllDay,
                       color: evColor,
                       isVideoMeeting,
-                      isHidden: isOwnerOrLeader ? evIsHidden : true,
+                      isHidden: evIsHidden,
                     });
                   }
                   await refreshTeamData(selectedTeamId);
@@ -1338,15 +1373,22 @@ export function DashboardPage() {
                     </label>
                   ) : null}
 
-                  {isOwnerOrLeader && !newEventIsVideoMeeting ? (
-                    <label className="create-v3-repeat-row create-v3-event-all-day">
-                      <input
-                        type="checkbox"
-                        checked={!evIsHidden}
-                        onChange={(e) => setEvIsHidden(!e.target.checked)}
-                      />
-                      <span>Visible to the whole team</span>
-                    </label>
+                  {!newEventIsVideoMeeting ? (
+                    <>
+                      <label className="create-v3-repeat-row create-v3-event-all-day">
+                        <input
+                          type="checkbox"
+                          checked={!evIsHidden}
+                          onChange={(e) => setEvIsHidden(!e.target.checked)}
+                        />
+                        <span>Visible to the whole team</span>
+                      </label>
+                      {!isOwnerOrLeader && !evIsHidden ? (
+                        <p className="enterprise-cal-approval-hint">
+                          Public events are sent to your team leader or owner for approval before they appear on the team calendar.
+                        </p>
+                      ) : null}
+                    </>
                   ) : null}
 
                   <section className="create-v3-block create-v3-block--event-details">

@@ -491,6 +491,7 @@ model CalendarEvent {
   color       String    @default("#4361EE")
   isHidden    Boolean   @default(false)
   isVideoMeeting Boolean @default(false)
+  approvalStatus String @default("approved")
   reminderMinutes String  @default("[]")
   teamId      String
   createdById String

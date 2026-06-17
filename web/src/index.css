@@ -11281,6 +11281,35 @@ button.enterprise-profile-legal-link {
   font-weight: 700;
 }
 
+.enterprise-cal-badge-pending {
+  display: inline-flex;
+  align-items: center;
+  background: #fef3c7;
+  color: #b45309;
+  padding: 2px 7px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.enterprise-cal-badge-rejected {
+  display: inline-flex;
+  align-items: center;
+  background: #fee2e2;
+  color: #b91c1c;
+  padding: 2px 7px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.enterprise-cal-approval-hint {
+  margin: 0 0 12px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #b45309;
+}
+
 .enterprise-cal-badge-range {
   padding: 2px 8px;
   border-radius: 10px;

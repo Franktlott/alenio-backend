@@ -1033,7 +1033,7 @@ export default function TasksScreen() {
           endDate: end.toISOString(),
           color: eventColor,
           allDay: !isMeeting,
-          isHidden: isOwnerOrLeader ? eventIsHidden : true,
+          isHidden: eventIsHidden,
           isVideoMeeting: isOwnerOrLeader && isMeeting,
           assigneeIds: isMeeting && eventIsHidden ? meetingAssigneeIds : undefined,
         },
@@ -1046,7 +1046,7 @@ export default function TasksScreen() {
         endDate: end.toISOString(),
         color: eventColor,
         allDay: !isMeeting,
-        isHidden: isOwnerOrLeader ? eventIsHidden : true,
+        isHidden: eventIsHidden,
         isVideoMeeting: isOwnerOrLeader && isMeeting,
         assigneeIds: isMeeting && eventIsHidden ? meetingAssigneeIds : undefined,
       });
@@ -1245,7 +1245,7 @@ export default function TasksScreen() {
             <Image source={require("@/assets/alenio-logo-white.png")} style={{ height: 30, width: 104, resizeMode: "contain" }} />
           </View>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            {activeTeamId && !isDemo && (isOwnerOrLeader || isPro) ? (
+            {activeTeamId && !isDemo ? (
               <Pressable
                 onPress={() => setShowAddModal(true)}
                 style={{ flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "rgba(255,255,255,0.22)", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 }}
@@ -1800,8 +1800,7 @@ export default function TasksScreen() {
                   <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 2 }}>Add a public event for the whole team</Text>
                 </View>
               </Pressable>
-            ) : null}
-            {!isOwnerOrLeader && isPro ? (
+            ) : (
               <Pressable
                 onPress={() => { setShowAddModal(false); openPersonalEventModal(); }}
                 style={{ flexDirection: "row", alignItems: "center", gap: 14, backgroundColor: "#F8FAFC", borderRadius: 16, padding: 16 }}
@@ -1810,11 +1809,11 @@ export default function TasksScreen() {
                   <CalendarDays size={22} color="white" />
                 </View>
                 <View>
-                  <Text style={{ fontSize: 15, fontWeight: "700", color: "#0F172A" }}>Personal calendar entry</Text>
-                  <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 2 }}>Only visible on your calendar</Text>
+                  <Text style={{ fontSize: 15, fontWeight: "700", color: "#0F172A" }}>Calendar event</Text>
+                  <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 2 }}>Add a private or public event</Text>
                 </View>
               </Pressable>
-            ) : null}
+            )}
             {isOwnerOrLeader ? (
               <Pressable
                 onPress={() => { setShowAddModal(false); openMeetingModal(); }}
@@ -1859,8 +1858,8 @@ export default function TasksScreen() {
                 <Image source={require("@/assets/alenio-icon.png")} style={{ width: 28, height: 28, borderRadius: 7 }} />
                 <Text style={{ fontSize: 17, fontWeight: "700", color: "#0F172A" }}>
                   {editingEvent
-                    ? eventModalType === "meeting" ? "Edit Virtual Meeting" : isOwnerOrLeader ? "Edit Event" : "Edit Personal Entry"
-                    : eventModalType === "meeting" ? "New Virtual Meeting" : isOwnerOrLeader ? "New Event" : "New Personal Entry"}
+                    ? eventModalType === "meeting" ? "Edit Virtual Meeting" : "Edit Event"
+                    : eventModalType === "meeting" ? "New Virtual Meeting" : "New Event"}
                 </Text>
               </View>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
@@ -2158,21 +2157,15 @@ export default function TasksScreen() {
 
               {formError ? <Text style={{ color: "#EF4444", fontSize: 13, marginBottom: 12 }}>{formError}</Text> : null}
 
-              {/* Visibility toggle — leaders only */}
-              {isOwnerOrLeader ? (
+              {/* Visibility toggle */}
+              {eventModalType !== "meeting" ? (
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: "#F8FAFC", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 20, borderWidth: 1.5, borderColor: !eventIsHidden ? "#4361EE" : "#E2E8F0" }}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
                   <Users size={18} color={!eventIsHidden ? "#4361EE" : "#CBD5E1"} />
                   <View>
-                    <Text style={{ fontSize: 14, fontWeight: "600", color: "#0F172A" }}>
-                      {eventModalType === "meeting" ? (!eventIsHidden ? "Public" : "Private") : "Public"}
-                    </Text>
+                    <Text style={{ fontSize: 14, fontWeight: "600", color: "#0F172A" }}>Public</Text>
                     <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 1 }}>
-                      {eventModalType === "meeting"
-                        ? (!eventIsHidden
-                            ? "Public meeting. Toggle off for private."
-                            : "Private meeting. Toggle on for public.")
-                        : (!eventIsHidden ? "Visible to the whole team" : "Only visible to you")}
+                      {!eventIsHidden ? "Visible to the whole team" : "Only visible to you"}
                     </Text>
                   </View>
                 </View>
@@ -2191,6 +2184,11 @@ export default function TasksScreen() {
                   testID="hidden-toggle"
                 />
               </View>
+              ) : null}
+              {!isOwnerOrLeader && eventModalType !== "meeting" && !eventIsHidden ? (
+                <Text style={{ fontSize: 12, color: "#B45309", marginBottom: 16, marginTop: -12 }}>
+                  Public events are sent to your team leader or owner for approval.
+                </Text>
               ) : null}
 
               <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748B", marginBottom: 10 }}>Color</Text>

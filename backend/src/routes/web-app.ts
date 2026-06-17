@@ -15,8 +15,9 @@ import { webPrismaUserIdFromContext } from "../lib/web-prisma-user";
 import { isPrismaUniqueOnName, isTeamDisplayNameTaken, normalizeTeamName } from "../lib/team-name";
 import { validateVideoMeetingSchedule } from "../lib/video-meeting-duration";
 import {
+  canApproveCalendarEvent,
   canManageCalendarEvent,
-  isPaidTeamPlan,
+  canViewCalendarEvent,
   resolveCalendarCreate,
   resolveCalendarUpdate,
 } from "../lib/calendar-permissions";
@@ -597,7 +598,7 @@ webRouter.get("/api/calendar/events", async (c) => {
   if (!userId) return c.json({ error: "Unauthorized" }, 401);
   const memberships = await prisma.teamMember.findMany({
     where: { userId: userId },
-    select: { teamId: true },
+    select: { teamId: true, role: true },
   });
   const teamIds = memberships.map((m) => m.teamId);
   if (!teamIds.length) return c.json({ data: [] });
@@ -609,7 +610,12 @@ webRouter.get("/api/calendar/events", async (c) => {
     },
     orderBy: { startDate: "asc" },
   });
-  return c.json({ data: events });
+  const visible = events.filter((event) => {
+    const membership = memberships.find((m) => m.teamId === event.teamId);
+    const settings = parseWebMeetingSettings(event.reminderMinutes);
+    return canViewCalendarEvent(event, userId, membership?.role ?? "member", settings.assigneeIds);
+  });
+  return c.json({ data: visible });
 });
 
 // ── API: team events ──────────────────────────────────────────────────────────
@@ -628,7 +634,11 @@ webRouter.get("/api/teams/:id/events", async (c) => {
     },
     orderBy: { startDate: "asc" },
   });
-  return c.json({ data: events });
+  const visible = events.filter((event) => {
+    const settings = parseWebMeetingSettings(event.reminderMinutes);
+    return canViewCalendarEvent(event, userId, membership.role, settings.assigneeIds);
+  });
+  return c.json({ data: visible });
 });
 
 // ── API: create team event ────────────────────────────────────────────────────
@@ -639,8 +649,6 @@ webRouter.post("/api/teams/:id/events", async (c) => {
   const { id } = c.req.param();
   const membership = await prisma.teamMember.findFirst({ where: { teamId: id, userId: userId } });
   if (!membership) return c.json({ error: { message: "Not a member of this team" } }, 403);
-  const subscription = await prisma.teamSubscription.findUnique({ where: { teamId: id } });
-  const isPaid = isPaidTeamPlan(subscription?.plan);
   const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
   const { title, description, startDate, endDate, allDay, color } = body as {
     title?: string;
@@ -651,7 +659,7 @@ webRouter.post("/api/teams/:id/events", async (c) => {
     color?: string;
   };
   const isVideoMeeting = readBodyVideoMeetingFlag(body);
-  const createPolicy = resolveCalendarCreate(membership.role, isPaid, {
+  const createPolicy = resolveCalendarCreate(membership.role, {
     isVideoMeeting,
     isHidden: typeof body.isHidden === "boolean" ? (body.isHidden as boolean) : undefined,
   });
@@ -680,6 +688,7 @@ webRouter.post("/api/teams/:id/events", async (c) => {
       color: color || "#4361EE",
       isHidden: createPolicy.isHidden,
       isVideoMeeting: createPolicy.isVideoMeeting,
+      approvalStatus: createPolicy.approvalStatus,
       reminderMinutes: reminderMinutesStr,
       teamId: id,
       createdById: userId,
@@ -689,6 +698,24 @@ webRouter.post("/api/teams/:id/events", async (c) => {
       createdBy: { select: { id: true, name: true } },
     },
   });
+  if (createPolicy.approvalStatus === "pending") {
+    const actor = await prisma.user.findUnique({ where: { id: userId }, select: { name: true } });
+    const managers = await prisma.teamMember.findMany({
+      where: { teamId: id, role: { in: ["owner", "team_leader"] } },
+      select: { userId: true },
+    });
+    const managerIds = managers.map((m) => m.userId).filter((uid) => uid !== userId);
+    if (managerIds.length > 0) {
+      await sendPushToUsers(
+        managerIds,
+        "Calendar approval needed",
+        `${actor?.name ?? "A team member"} submitted "${event.title}" for the team calendar.`,
+        { eventId: event.id, teamId: id, type: "calendar_event_pending" },
+        "notifMeetings",
+        id,
+      );
+    }
+  }
   return c.json({ data: event });
 });
 
@@ -737,9 +764,8 @@ webRouter.patch("/api/teams/:id/events/:eid", async (c) => {
   if (endDate !== undefined) updateData.endDate = endDate ? new Date(endDate) : null;
   if (allDay !== undefined) updateData.allDay = allDay;
   if (color !== undefined) updateData.color = color;
-  if (body.isHidden !== undefined || updatePolicy.enforceHidden) {
-    updateData.isHidden = updatePolicy.enforceHidden ? true : body.isHidden;
-  }
+  if (body.isHidden !== undefined) updateData.isHidden = body.isHidden;
+  if (updatePolicy.resetApproval) updateData.approvalStatus = updatePolicy.resetApproval;
   if (bodyRec.isVideoMeeting !== undefined || bodyRec.videoMeeting !== undefined || updatePolicy.forbidVideo) {
     updateData.isVideoMeeting = updatePolicy.forbidVideo ? false : readBodyVideoMeetingFlag(bodyRec);
   }
@@ -778,6 +804,70 @@ webRouter.delete("/api/teams/:id/events/:eid", async (c) => {
   }
   await prisma.calendarEvent.delete({ where: { id: eid } });
   return c.json({ data: { ok: true } });
+});
+
+async function applyWebCalendarApproval(
+  teamId: string,
+  eventId: string,
+  actorId: string,
+  actorRole: string,
+  status: "approved" | "rejected",
+) {
+  if (!canApproveCalendarEvent(actorRole)) {
+    return { error: { message: "Only workspace owners and team leaders can approve calendar events." }, status: 403 as const };
+  }
+  const existing = await prisma.calendarEvent.findFirst({ where: { id: eventId, teamId } });
+  if (!existing) return { error: { message: "Not found" }, status: 404 as const };
+  if (existing.isHidden) return { error: { message: "Private events do not require approval." }, status: 400 as const };
+  if (existing.approvalStatus !== "pending") return { error: { message: "This event is not awaiting approval." }, status: 400 as const };
+
+  const updated = await prisma.calendarEvent.update({
+    where: { id: eventId },
+    data: { approvalStatus: status },
+    include: {
+      team: { select: { id: true, name: true } },
+      createdBy: { select: { id: true, name: true } },
+    },
+  });
+
+  if (existing.createdById !== actorId) {
+    await sendPushToUsers(
+      [existing.createdById],
+      status === "approved" ? "Calendar event approved" : "Calendar event declined",
+      status === "approved"
+        ? `"${existing.title}" was approved and is now on the team calendar.`
+        : `"${existing.title}" was not approved for the team calendar.`,
+      { eventId: existing.id, teamId, type: status === "approved" ? "calendar_event_approved" : "calendar_event_rejected" },
+      "notifMeetings",
+      teamId,
+    );
+  }
+
+  return { data: updated, status: 200 as const };
+}
+
+webRouter.post("/api/teams/:id/events/:eid/approve", async (c) => {
+  if (!(await getWebSession(c))) return c.json({ error: "Unauthorized" }, 401);
+  const userId = webPrismaUserIdFromContext(c);
+  if (!userId) return c.json({ error: "Unauthorized" }, 401);
+  const { id, eid } = c.req.param();
+  const membership = await prisma.teamMember.findFirst({ where: { teamId: id, userId } });
+  if (!membership) return c.json({ error: { message: "Not a member of this team" } }, 403);
+  const result = await applyWebCalendarApproval(id, eid, userId, membership.role, "approved");
+  if ("error" in result) return c.json({ error: result.error }, result.status);
+  return c.json({ data: result.data });
+});
+
+webRouter.post("/api/teams/:id/events/:eid/reject", async (c) => {
+  if (!(await getWebSession(c))) return c.json({ error: "Unauthorized" }, 401);
+  const userId = webPrismaUserIdFromContext(c);
+  if (!userId) return c.json({ error: "Unauthorized" }, 401);
+  const { id, eid } = c.req.param();
+  const membership = await prisma.teamMember.findFirst({ where: { teamId: id, userId } });
+  if (!membership) return c.json({ error: { message: "Not a member of this team" } }, 403);
+  const result = await applyWebCalendarApproval(id, eid, userId, membership.role, "rejected");
+  if ("error" in result) return c.json({ error: result.error }, result.status);
+  return c.json({ data: result.data });
 });
 
 // ── Logo asset ────────────────────────────────────────────────────────────────

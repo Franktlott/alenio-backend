@@ -617,7 +617,9 @@ export type ApiCalendarEvent = {
   color?: string | null;
   isHidden?: boolean | null;
   isVideoMeeting?: boolean | null;
+  approvalStatus?: "pending" | "approved" | "rejected" | null;
   createdById?: string;
+  createdBy?: { id: string; name: string };
 };
 
 export type ActivityMetadata = {
@@ -783,6 +785,20 @@ export function updateWebTeamEvent(
     ...(input.assigneeIds !== undefined ? { assigneeIds: input.assigneeIds } : {}),
     ...(input.reminderMinutes !== undefined ? { reminderMinutes: input.reminderMinutes } : {}),
   }).then((r) => r.data);
+}
+
+export function approveWebTeamEvent(teamId: string, eventId: string) {
+  return apiPostJson<{ data: ApiCalendarEvent }>(
+    `/web/api/teams/${encodeURIComponent(teamId)}/events/${encodeURIComponent(eventId)}/approve`,
+    {},
+  ).then((r) => r.data);
+}
+
+export function rejectWebTeamEvent(teamId: string, eventId: string) {
+  return apiPostJson<{ data: ApiCalendarEvent }>(
+    `/web/api/teams/${encodeURIComponent(teamId)}/events/${encodeURIComponent(eventId)}/reject`,
+    {},
+  ).then((r) => r.data);
 }
 
 export function fetchTeamActivity(teamId: string) {

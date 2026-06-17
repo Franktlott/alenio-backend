@@ -8,8 +8,9 @@ import { logActivity } from "../lib/activity";
 import { sendPushToUsers } from "../lib/push";
 import { validateVideoMeetingSchedule } from "../lib/video-meeting-duration";
 import {
+  canApproveCalendarEvent,
   canManageCalendarEvent,
-  isPaidTeamPlan,
+  canViewCalendarEvent,
   resolveCalendarCreate,
   resolveCalendarUpdate,
 } from "../lib/calendar-permissions";
@@ -159,11 +160,8 @@ calendarRouter.get("/:teamId/events", async (c) => {
   });
   const events = allEvents
     .filter((event) => {
-      if (!event.isHidden) return true;
-      if (event.createdById === user.id) return true;
-      if (!event.isVideoMeeting) return false;
       const settings = parseMeetingSettings(event.reminderMinutes);
-      return settings.assigneeIds.includes(user.id);
+      return canViewCalendarEvent(event, user.id, membership.role, settings.assigneeIds);
     })
     .map((event) => {
       const settings = parseMeetingSettings(event.reminderMinutes);
@@ -203,9 +201,7 @@ calendarRouter.post(
       return c.json({ error: { message: "You are not a member of this team", code: "FORBIDDEN" } }, 403);
     }
 
-    const subscription = await prisma.teamSubscription.findUnique({ where: { teamId } });
-    const isPaid = isPaidTeamPlan(subscription?.plan);
-    const createPolicy = resolveCalendarCreate(membership.role, isPaid, {
+    const createPolicy = resolveCalendarCreate(membership.role, {
       isVideoMeeting: body.isVideoMeeting,
       isHidden: body.isHidden,
     });
@@ -243,6 +239,7 @@ calendarRouter.post(
         color: body.color ?? "#4361EE",
         isHidden: createPolicy.isHidden,
         isVideoMeeting,
+        approvalStatus: createPolicy.approvalStatus,
         reminderMinutes: JSON.stringify({ reminderMinutes: reminderMins, assigneeIds }),
         teamId,
         createdById: user.id,
@@ -262,6 +259,24 @@ calendarRouter.post(
       type: "calendar_event_added",
       metadata: { eventTitles: [event.title], eventCount: 1, isVideoMeeting: event.isVideoMeeting, startDate: event.startDate.toISOString(), allDay: event.allDay },
     });
+
+    if (createPolicy.approvalStatus === "pending") {
+      const managers = await prisma.teamMember.findMany({
+        where: { teamId, role: { in: ["owner", "team_leader"] } },
+        select: { userId: true },
+      });
+      const managerIds = managers.map((m) => m.userId).filter((id) => id !== user.id);
+      if (managerIds.length > 0) {
+        await sendPushToUsers(
+          managerIds,
+          "Calendar approval needed",
+          `${user.name ?? "A team member"} submitted "${event.title}" for the team calendar.`,
+          { eventId: event.id, teamId, type: "calendar_event_pending" },
+          "notifMeetings",
+          teamId,
+        );
+      }
+    }
 
     return c.json({ data: { ...event, assigneeIds } }, 201);
   }
@@ -346,9 +361,8 @@ calendarRouter.patch(
         ...(body.endDate !== undefined ? { endDate: nextEnd } : {}),
         ...(body.allDay !== undefined ? { allDay: nextIsVideoMeeting ? false : body.allDay } : nextIsVideoMeeting ? { allDay: false } : {}),
         ...(body.color !== undefined ? { color: body.color } : {}),
-        ...(body.isHidden !== undefined || updatePolicy.enforceHidden
-          ? { isHidden: updatePolicy.enforceHidden ? true : body.isHidden }
-          : {}),
+        ...(body.isHidden !== undefined ? { isHidden: body.isHidden } : {}),
+        ...(updatePolicy.resetApproval ? { approvalStatus: updatePolicy.resetApproval } : {}),
         ...(body.isVideoMeeting !== undefined || updatePolicy.forbidVideo
           ? { isVideoMeeting: nextIsVideoMeeting }
           : {}),
@@ -411,6 +425,81 @@ calendarRouter.delete("/:teamId/events/:eventId", async (c) => {
   await prisma.calendarEvent.delete({ where: { id: eventId } });
 
   return c.body(null, 204);
+});
+
+async function applyCalendarApproval(
+  teamId: string,
+  eventId: string,
+  actorId: string,
+  actorRole: string,
+  status: "approved" | "rejected",
+) {
+  if (!canApproveCalendarEvent(actorRole)) {
+    return { error: { message: "Only workspace owners and team leaders can approve calendar events.", code: "FORBIDDEN" as const }, status: 403 as const };
+  }
+
+  const existing = await prisma.calendarEvent.findUnique({ where: { id: eventId } });
+  if (!existing || existing.teamId !== teamId) {
+    return { error: { message: "Event not found", code: "NOT_FOUND" as const }, status: 404 as const };
+  }
+  if (existing.isHidden) {
+    return { error: { message: "Private events do not require approval.", code: "BAD_REQUEST" as const }, status: 400 as const };
+  }
+  if (existing.approvalStatus !== "pending") {
+    return { error: { message: "This event is not awaiting approval.", code: "BAD_REQUEST" as const }, status: 400 as const };
+  }
+
+  const updated = await prisma.calendarEvent.update({
+    where: { id: eventId },
+    data: { approvalStatus: status },
+    include: {
+      createdBy: { select: { id: true, name: true, image: true } },
+    },
+  });
+
+  if (existing.createdById !== actorId) {
+    await sendPushToUsers(
+      [existing.createdById],
+      status === "approved" ? "Calendar event approved" : "Calendar event declined",
+      status === "approved"
+        ? `"${existing.title}" was approved and is now on the team calendar.`
+        : `"${existing.title}" was not approved for the team calendar.`,
+      { eventId: existing.id, teamId, type: status === "approved" ? "calendar_event_approved" : "calendar_event_rejected" },
+      "notifMeetings",
+      teamId,
+    );
+  }
+
+  const settings = parseMeetingSettings(updated.reminderMinutes);
+  return { data: { ...updated, assigneeIds: settings.assigneeIds }, status: 200 as const };
+}
+
+calendarRouter.post("/:teamId/events/:eventId/approve", async (c) => {
+  const user = c.get("user")!;
+  const { teamId, eventId } = c.req.param();
+  const membership = await prisma.teamMember.findUnique({
+    where: { userId_teamId: { userId: user.id, teamId } },
+  });
+  if (!membership) {
+    return c.json({ error: { message: "You are not a member of this team", code: "FORBIDDEN" } }, 403);
+  }
+  const result = await applyCalendarApproval(teamId, eventId, user.id, membership.role, "approved");
+  if ("error" in result) return c.json({ error: result.error }, result.status);
+  return c.json({ data: result.data });
+});
+
+calendarRouter.post("/:teamId/events/:eventId/reject", async (c) => {
+  const user = c.get("user")!;
+  const { teamId, eventId } = c.req.param();
+  const membership = await prisma.teamMember.findUnique({
+    where: { userId_teamId: { userId: user.id, teamId } },
+  });
+  if (!membership) {
+    return c.json({ error: { message: "You are not a member of this team", code: "FORBIDDEN" } }, 403);
+  }
+  const result = await applyCalendarApproval(teamId, eventId, user.id, membership.role, "rejected");
+  if ("error" in result) return c.json({ error: result.error }, result.status);
+  return c.json({ data: result.data });
 });
 
 export { calendarRouter };

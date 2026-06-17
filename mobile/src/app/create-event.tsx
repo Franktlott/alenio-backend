@@ -40,7 +40,7 @@ type CalendarEvent = {
   createdAt: string;
   isHidden?: boolean;
   isVideoMeeting?: boolean;
-  reminderMinutes?: number[];
+  approvalStatus?: "pending" | "approved" | "rejected";
 };
 
 const EVENT_COLORS = ["#4361EE", "#7C3AED", "#10B981", "#F59E0B", "#EF4444", "#EC4899"];
@@ -104,7 +104,18 @@ export default function CreateEventScreen() {
   const createMutation = useMutation({
     mutationFn: (data: object) =>
       api.post<CalendarEvent>(`/api/teams/${teamId}/events`, data),
-    onSuccess,
+    onSuccess: (created) => {
+      queryClient.invalidateQueries({ queryKey: ["calendar-events", teamId] });
+      if (!isOwnerOrLeader && !created.isHidden && created.approvalStatus === "pending") {
+        Alert.alert(
+          "Submitted for approval",
+          "Your public event was sent to your team leader or owner for approval.",
+          [{ text: "OK", onPress: () => router.back() }],
+        );
+        return;
+      }
+      router.back();
+    },
   });
 
   const updateMutation = useMutation({
@@ -153,7 +164,7 @@ export default function CreateEventScreen() {
       endDate: end.toISOString(),
       color: eventColor,
       allDay: !isVideoMeeting,
-      isHidden: isOwnerOrLeader ? isHidden : true,
+      isHidden,
       isVideoMeeting: isOwnerOrLeader && isVideoMeeting,
       reminderMinutes: isVideoMeeting ? [0, 5, 15] : [],
     };
@@ -180,9 +191,7 @@ export default function CreateEventScreen() {
           </Pressable>
 
           <Text style={{ color: "white", fontSize: 17, fontWeight: "700" }}>
-            {isEditing
-              ? isOwnerOrLeader ? "Edit Event" : "Edit Personal Entry"
-              : isOwnerOrLeader ? "New Event" : "New Personal Entry"}
+            {isEditing ? "Edit Event" : "New Event"}
           </Text>
 
           <Pressable
@@ -493,7 +502,8 @@ export default function CreateEventScreen() {
         ) : null}
 
         {/* Visibility toggle */}
-        {isOwnerOrLeader ? (
+        {!isVideoMeeting ? (
+          <>
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: "white", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 14, borderWidth: 1.5, borderColor: !isHidden ? "#4361EE" : "#E2E8F0" }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
               <Users size={18} color={!isHidden ? "#4361EE" : "#CBD5E1"} />
@@ -510,6 +520,12 @@ export default function CreateEventScreen() {
               testID="hidden-toggle"
             />
           </View>
+          {!isOwnerOrLeader && !isHidden ? (
+            <Text style={{ fontSize: 12, color: "#B45309", marginBottom: 14, marginTop: -6 }}>
+              Public events are sent to your team leader or owner for approval.
+            </Text>
+          ) : null}
+          </>
         ) : null}
 
         {/* Color picker */}

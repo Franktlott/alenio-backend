@@ -8,7 +8,7 @@ import {
   Image,
   RefreshControl,
 } from "react-native";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -19,7 +19,6 @@ import { useTeamStore } from "@/lib/state/team-store";
 import { useSession } from "@/lib/auth/use-session";
 import type { Task, Team } from "@/lib/types";
 import { useDemoMode } from "@/lib/useDemo";
-import { useSubscriptionStore } from "@/lib/state/subscription-store";
 import { getUSHolidays, type USFederalHoliday } from "@/lib/us-federal-holidays";
 import { eventShowsScheduledTime, formatEventTimeRange } from "@/lib/format-event-time";
 
@@ -36,6 +35,7 @@ type CalendarEvent = {
   createdAt: string;
   isHidden?: boolean;
   isVideoMeeting?: boolean;
+  approvalStatus?: "pending" | "approved" | "rejected";
 };
 
 type WeekBar = {
@@ -177,12 +177,18 @@ export default function CalendarScreen() {
   const activeTeam = teams?.find((t) => t.id === activeTeamId);
   const myRole = (activeTeam as (Team & { role?: string }) | undefined)?.role ?? "";
   const isOwnerOrLeader = myRole === "owner" || myRole === "team_leader";
-
-  const plan = useSubscriptionStore((s) => s.plan);
-  const isPaid = plan === "team";
-  const canAddPersonalEvent = isOwnerOrLeader || isPaid;
   const canManageEvent = (event: CalendarEvent) =>
     isOwnerOrLeader || (!!currentUserId && event.createdById === currentUserId);
+
+  const approveMutation = useMutation({
+    mutationFn: (eventId: string) => api.post(`/api/teams/${activeTeamId}/events/${eventId}/approve`, {}),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["calendar-events", activeTeamId] }),
+  });
+
+  const rejectMutation = useMutation({
+    mutationFn: (eventId: string) => api.post(`/api/teams/${activeTeamId}/events/${eventId}/reject`, {}),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["calendar-events", activeTeamId] }),
+  });
 
   const { data: events = [], isLoading: eventsLoading } = useQuery({
     queryKey: ["calendar-events", activeTeamId],
@@ -282,7 +288,7 @@ export default function CalendarScreen() {
             <Pressable onPress={prevMonth} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(255,255,255,0.2)", alignItems: "center", justifyContent: "center" }} testID="prev-month-button">
               <ChevronLeft size={20} color="white" />
             </Pressable>
-            {canAddPersonalEvent && activeTeamId && !isDemo ? (
+            {activeTeamId && !isDemo ? (
               <Pressable
                 onPress={() =>
                   router.push({
@@ -291,7 +297,6 @@ export default function CalendarScreen() {
                       teamId: activeTeamId!,
                       startDate: (selectedDate ?? new Date()).toISOString(),
                       myRole,
-                      ...(isOwnerOrLeader ? {} : { eventIsHidden: "true" }),
                     },
                   })
                 }
@@ -299,9 +304,7 @@ export default function CalendarScreen() {
                 testID="header-add-event-button"
               >
                 <Plus size={15} color="white" />
-                <Text style={{ color: "white", fontSize: 13, fontWeight: "600" }}>
-                  {isOwnerOrLeader ? "Add Event" : "Add Personal"}
-                </Text>
+                <Text style={{ color: "white", fontSize: 13, fontWeight: "600" }}>Add Event</Text>
               </Pressable>
             ) : null}
             <Pressable onPress={nextMonth} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(255,255,255,0.2)", alignItems: "center", justifyContent: "center" }} testID="next-month-button">
@@ -508,7 +511,7 @@ export default function CalendarScreen() {
               <Text style={{ fontSize: 14, fontWeight: "700", color: "#0F172A" }}>
                 {selectedDate.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
               </Text>
-              {canAddPersonalEvent && !isDemo ? (
+              {activeTeamId && !isDemo ? (
                 <Pressable
                   onPress={() =>
                     router.push({
@@ -517,7 +520,6 @@ export default function CalendarScreen() {
                         teamId: activeTeamId!,
                         startDate: selectedDate.toISOString(),
                         myRole,
-                        ...(isOwnerOrLeader ? {} : { eventIsHidden: "true" }),
                       },
                     })
                   }
@@ -525,9 +527,7 @@ export default function CalendarScreen() {
                   testID="add-event-button"
                 >
                   <Plus size={14} color="white" />
-                  <Text style={{ color: "white", fontSize: 12, fontWeight: "600" }}>
-                    {isOwnerOrLeader ? "Add Event" : "Add Personal"}
-                  </Text>
+                  <Text style={{ color: "white", fontSize: 12, fontWeight: "600" }}>Add Event</Text>
                 </Pressable>
               ) : null}
             </View>
@@ -647,6 +647,16 @@ export default function CalendarScreen() {
                               <Text style={{ fontSize: 10, fontWeight: "700", color: "#16A34A" }}>Public</Text>
                             </View>
                           ) : null}
+                          {event.approvalStatus === "pending" ? (
+                            <View style={{ backgroundColor: "#FEF3C7", paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10 }}>
+                              <Text style={{ fontSize: 10, fontWeight: "700", color: "#B45309" }}>Pending</Text>
+                            </View>
+                          ) : null}
+                          {event.approvalStatus === "rejected" ? (
+                            <View style={{ backgroundColor: "#FEE2E2", paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10 }}>
+                              <Text style={{ fontSize: 10, fontWeight: "700", color: "#B91C1C" }}>Declined</Text>
+                            </View>
+                          ) : null}
                           <View style={{ backgroundColor: event.color + "20", paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 }}>
                             <Text style={{ fontSize: 10, fontWeight: "600", color: event.color }}>
                               {event.endDate && !isSameDay(new Date(event.startDate), new Date(event.endDate))
@@ -667,6 +677,24 @@ export default function CalendarScreen() {
                         >
                           {formatEventTimeRange(event.startDate, event.endDate)}
                         </Text>
+                      ) : null}
+                      {isOwnerOrLeader && event.approvalStatus === "pending" && !event.isHidden ? (
+                        <View style={{ flexDirection: "row", gap: 8, marginTop: 10 }}>
+                          <Pressable
+                            onPress={() => approveMutation.mutate(event.id)}
+                            disabled={approveMutation.isPending || rejectMutation.isPending}
+                            style={{ flex: 1, backgroundColor: "#DCFCE7", borderRadius: 10, paddingVertical: 8, alignItems: "center" }}
+                          >
+                            <Text style={{ fontSize: 12, fontWeight: "700", color: "#15803D" }}>Approve</Text>
+                          </Pressable>
+                          <Pressable
+                            onPress={() => rejectMutation.mutate(event.id)}
+                            disabled={approveMutation.isPending || rejectMutation.isPending}
+                            style={{ flex: 1, backgroundColor: "#FEE2E2", borderRadius: 10, paddingVertical: 8, alignItems: "center" }}
+                          >
+                            <Text style={{ fontSize: 12, fontWeight: "700", color: "#B91C1C" }}>Decline</Text>
+                          </Pressable>
+                        </View>
                       ) : null}
                       {event.description ? (
                         <Text style={{ fontSize: 12, color: "#64748B", marginTop: 4 }} numberOfLines={2}>
