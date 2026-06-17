@@ -1102,6 +1102,10 @@ export function ChatPage() {
                         const grouped = block.grouped;
                         const senderName = m.sender.name ?? m.sender.email ?? "Member";
                         const isMine = me?.id === m.senderId || me?.id === m.sender.id;
+                        const displayUser = isMine && me ? me : m.sender;
+                        const displayName = isMine
+                          ? me?.name ?? me?.email ?? "You"
+                          : senderName;
                         return (
                           <article
                             key={m.id}
@@ -1110,7 +1114,9 @@ export function ChatPage() {
                             {!isMine ? (
                               <div className="chat-message-gutter">
                                 {grouped ? (
-                                  <div className="chat-message-avatar-spacer" aria-hidden />
+                                  <time className="chat-message-gutter-time" dateTime={m.createdAt}>
+                                    {formatMessageTime(m.createdAt)}
+                                  </time>
                                 ) : (
                                   <ChatAvatar user={m.sender} size="md" />
                                 )}
@@ -1119,25 +1125,14 @@ export function ChatPage() {
                               <div className="chat-message-gutter chat-message-gutter--mirror" aria-hidden />
                             )}
                             <div className="chat-message-body">
-                              {grouped ? (
-                                <time
-                                  className={`chat-message-time chat-message-time--hover${isMine ? " chat-message-time--hover-mine" : ""}`}
-                                  dateTime={m.createdAt}
-                                >
-                                  {formatMessageTime(m.createdAt)}
-                                </time>
-                              ) : (
+                              {!grouped ? (
                                 <div className={`chat-message-head${isMine ? " chat-message-head--mine" : ""}`}>
-                                  {!isMine ? (
-                                    <strong className="chat-message-author">{senderName}</strong>
-                                  ) : (
-                                    <strong className="chat-message-author chat-message-author--mine">You</strong>
-                                  )}
+                                  <strong className="chat-message-author">{displayName}</strong>
                                   <time className="chat-message-time" dateTime={m.createdAt}>
                                     {formatMessageTime(m.createdAt)}
                                   </time>
                                 </div>
-                              )}
+                              ) : null}
                               <div className="chat-message-content">
                                 {m.content ? <div className="chat-text">{renderMessageText(m.content)}</div> : null}
                                 {m.mediaUrl ? <ChatMessageMedia url={m.mediaUrl} mediaType={m.mediaType} /> : null}
@@ -1158,7 +1153,13 @@ export function ChatPage() {
                             </div>
                             {isMine ? (
                               <div className="chat-message-gutter">
-                                <div className="chat-message-avatar-spacer" aria-hidden />
+                                {grouped ? (
+                                  <time className="chat-message-gutter-time chat-message-gutter-time--mine" dateTime={m.createdAt}>
+                                    {formatMessageTime(m.createdAt)}
+                                  </time>
+                                ) : (
+                                  <ChatAvatar user={displayUser} size="md" />
+                                )}
                               </div>
                             ) : (
                               <div className="chat-message-gutter chat-message-gutter--mirror" aria-hidden />

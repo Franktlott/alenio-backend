@@ -956,15 +956,15 @@ input {
 
 .chat-message-row {
   display: grid;
-  grid-template-columns: 36px minmax(0, 1fr) 36px;
-  column-gap: 0.65rem;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  column-gap: 0.55rem;
   align-items: start;
   padding: 0.12rem 0;
   position: relative;
 }
 
 .chat-message-gutter {
-  width: 36px;
+  width: 44px;
   flex-shrink: 0;
 }
 
@@ -993,25 +993,55 @@ input {
 .chat-message-row--other .chat-message-body {
   grid-column: 2;
   justify-self: start;
-  width: 100%;
-  max-width: min(100%, 720px);
+  width: auto;
+  max-width: min(calc(100% - 0.5rem), 720px);
   position: relative;
 }
 
 .chat-message-row--mine .chat-message-body {
   grid-column: 2;
   justify-self: end;
-  width: 100%;
-  max-width: min(100%, 720px);
+  width: auto;
+  max-width: min(calc(100% - 0.5rem), 720px);
   position: relative;
   text-align: right;
+}
+
+.chat-message-gutter-time {
+  display: flex;
+  align-items: flex-start;
+  width: 44px;
+  min-height: 36px;
+  padding-top: 0.2rem;
+  font-size: 0.625rem;
+  line-height: 1.15;
+  color: #616061;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+}
+
+.chat-message-row--other .chat-message-gutter-time {
+  justify-content: flex-end;
+  text-align: right;
+  padding-right: 0.15rem;
+}
+
+.chat-message-gutter-time--mine {
+  justify-content: flex-start;
+  text-align: left;
+  padding-left: 0.15rem;
+}
+
+.chat-message-row--grouped:hover .chat-message-gutter-time {
+  opacity: 1;
 }
 
 .chat-message-head {
   display: flex;
   align-items: baseline;
   gap: 0.5rem;
-  margin-bottom: 0.08rem;
+  margin-bottom: 0.12rem;
   line-height: 1.25;
 }
 
@@ -1020,38 +1050,10 @@ input {
   flex-direction: row-reverse;
 }
 
-.chat-message-time--hover {
-  position: absolute;
-  top: 0.1rem;
-  font-size: 0.625rem;
-  color: #616061;
-  opacity: 0;
-  pointer-events: none;
-  line-height: 1.4;
-  white-space: nowrap;
-}
-
-.chat-message-row--other .chat-message-time--hover {
-  left: -3rem;
-}
-
-.chat-message-time--hover-mine {
-  right: 0;
-}
-
-.chat-message-row--grouped:hover .chat-message-time--hover {
-  opacity: 1;
-}
-
 .chat-message-author {
   font-size: 0.8125rem;
   font-weight: 700;
   color: #1a1d21;
-}
-
-.chat-message-author--mine {
-  color: #616061;
-  font-weight: 600;
 }
 
 .chat-message-time {
