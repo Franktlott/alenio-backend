@@ -29,6 +29,7 @@ import {
   ChevronRight,
   QrCode,
   AlertTriangle,
+  Lock,
 } from "lucide-react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -1035,6 +1036,22 @@ export default function TeamScreen() {
                       </>
                     ) : null}
                   </View>
+                  {!canView ? (
+                    <View
+                      style={{
+                        marginTop: 4,
+                        width: 28,
+                        height: 28,
+                        borderRadius: 14,
+                        backgroundColor: "#F1F5F9",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                      accessibilityLabel="Profile locked"
+                    >
+                      <Lock size={14} color="#94A3B8" />
+                    </View>
+                  ) : null}
                 </View>
               </>
             );

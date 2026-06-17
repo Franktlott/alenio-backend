@@ -3001,6 +3001,19 @@ input {
   color: #6366f1;
 }
 
+.enterprise-team-roster-lock {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #94a3b8;
+  flex-shrink: 0;
+  align-self: center;
+}
+
 .enterprise-team-health-card {
   margin-top: 0.25rem;
 }

@@ -66,11 +66,24 @@ function formatStreakLabel(streak: number, paid: boolean): string {
   return `${streak}d`;
 }
 
-function formatDaysSinceOneOnOne(days: number | null | undefined): string {
-  if (days == null) return "Never";
-  if (days === 0) return "Today";
-  if (days === 1) return "1 day";
-  return `${days} days`;
+function IconLock({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      aria-hidden
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+    </svg>
+  );
 }
 
 function IconUserPlus({ size = 22 }: { size?: number }) {
@@ -736,8 +749,6 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                 const displayName = m.user.name ?? m.user.email ?? "Member";
                 const stats = memberStats?.[m.userId];
                 const statsReady = memberStats !== null;
-                const activeDevGoals = stats?.activeDevGoals ?? 0;
-                const daysSinceOneOnOne = stats?.daysSinceLastOneOnOne;
                 const streak = stats?.streak ?? 0;
                 const overdue = stats?.overdueTasks ?? 0;
                 const cardClass = `enterprise-team-roster-card${isSelected ? " enterprise-team-roster-card--selected" : ""}${isSelf ? " enterprise-team-roster-card--self" : ""}${!canView ? " enterprise-team-roster-card--static" : ""}`;
@@ -777,25 +788,17 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                               )}
                             </span>
                           </span>
-                          <span className="enterprise-team-roster-kpi">
-                            <span className="enterprise-team-roster-kpi-label">Goals</span>
-                            <span className="enterprise-team-roster-kpi-value">
-                              {statsReady ? activeDevGoals : "…"}
-                            </span>
-                          </span>
-                          <span className="enterprise-team-roster-kpi">
-                            <span className="enterprise-team-roster-kpi-label">Last check-in</span>
-                            <span className="enterprise-team-roster-kpi-value">
-                              {statsReady ? formatDaysSinceOneOnOne(daysSinceOneOnOne) : "…"}
-                            </span>
-                          </span>
                         </span>
                       </span>
                       {canView ? (
                         <span className="enterprise-team-roster-chevron" aria-hidden>
                           ›
                         </span>
-                      ) : null}
+                      ) : (
+                        <span className="enterprise-team-roster-lock" title="You don't have access to this member's profile" aria-label="Profile locked">
+                          <IconLock />
+                        </span>
+                      )}
                   </>
                 );
                 return (
