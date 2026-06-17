@@ -7,6 +7,12 @@ import { authGuard } from "../middleware/auth-guard";
 import { logActivity } from "../lib/activity";
 import { sendPushToUsers } from "../lib/push";
 import { validateVideoMeetingSchedule } from "../lib/video-meeting-duration";
+import {
+  canManageCalendarEvent,
+  isPaidTeamPlan,
+  resolveCalendarCreate,
+  resolveCalendarUpdate,
+} from "../lib/calendar-permissions";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -197,16 +203,14 @@ calendarRouter.post(
       return c.json({ error: { message: "You are not a member of this team", code: "FORBIDDEN" } }, 403);
     }
 
-    const isOwnerOrLeader = ["owner", "team_leader"].includes(membership.role);
-    let forcePrivate = false;
-
-    if (!isOwnerOrLeader) {
-      const subscription = await prisma.teamSubscription.findUnique({ where: { teamId } });
-      const isPaid = subscription && ["team", "pro"].includes(subscription.plan);
-      if (!isPaid) {
-        return c.json({ error: { message: "Only team owners can create events on the free plan", code: "FORBIDDEN" } }, 403);
-      }
-      forcePrivate = true;
+    const subscription = await prisma.teamSubscription.findUnique({ where: { teamId } });
+    const isPaid = isPaidTeamPlan(subscription?.plan);
+    const createPolicy = resolveCalendarCreate(membership.role, isPaid, {
+      isVideoMeeting: body.isVideoMeeting,
+      isHidden: body.isHidden,
+    });
+    if (!createPolicy.ok) {
+      return c.json({ error: { message: createPolicy.message, code: "FORBIDDEN" } }, 403);
     }
 
     const reminderMins = body.reminderMinutes ?? [];
@@ -221,7 +225,7 @@ calendarRouter.post(
 
     const start = new Date(body.startDate);
     const end = body.endDate ? new Date(body.endDate) : null;
-    const isVideoMeeting = body.isVideoMeeting ?? false;
+    const isVideoMeeting = createPolicy.isVideoMeeting;
     if (isVideoMeeting) {
       const scheduleError = validateVideoMeetingSchedule(start, end);
       if (scheduleError) {
@@ -237,7 +241,7 @@ calendarRouter.post(
         endDate: end,
         allDay: isVideoMeeting ? false : (body.allDay ?? true),
         color: body.color ?? "#4361EE",
-        isHidden: forcePrivate ? true : (body.isHidden ?? false),
+        isHidden: createPolicy.isHidden,
         isVideoMeeting,
         reminderMinutes: JSON.stringify({ reminderMinutes: reminderMins, assigneeIds }),
         teamId,
@@ -276,7 +280,7 @@ const updateEventSchema = z.object({
   assigneeIds: z.array(z.string()).optional(),
 });
 
-// PATCH /api/teams/:teamId/events/:eventId — owner only
+// PATCH /api/teams/:teamId/events/:eventId — creator or owner/leader
 calendarRouter.patch(
   "/:teamId/events/:eventId",
   zValidator("json", updateEventSchema),
@@ -288,8 +292,8 @@ calendarRouter.patch(
     const membership = await prisma.teamMember.findUnique({
       where: { userId_teamId: { userId: user.id, teamId } },
     });
-    if (!membership || !["owner","team_leader"].includes(membership.role)) {
-      return c.json({ error: { message: "Only team owners can update events", code: "FORBIDDEN" } }, 403);
+    if (!membership) {
+      return c.json({ error: { message: "You are not a member of this team", code: "FORBIDDEN" } }, 403);
     }
 
     const existing = await prisma.calendarEvent.findUnique({
@@ -297,6 +301,14 @@ calendarRouter.patch(
     });
     if (!existing || existing.teamId !== teamId) {
       return c.json({ error: { message: "Event not found", code: "NOT_FOUND" } }, 404);
+    }
+
+    const updatePolicy = resolveCalendarUpdate(membership.role, user.id, existing, {
+      isVideoMeeting: body.isVideoMeeting,
+      isHidden: body.isHidden,
+    });
+    if (!updatePolicy.ok) {
+      return c.json({ error: { message: updatePolicy.message, code: "FORBIDDEN" } }, 403);
     }
 
     const existingSettings = parseMeetingSettings(existing.reminderMinutes);
@@ -313,8 +325,11 @@ calendarRouter.patch(
     const nextStart = body.startDate !== undefined ? new Date(body.startDate) : existing.startDate;
     const nextEnd =
       body.endDate !== undefined ? (body.endDate ? new Date(body.endDate) : null) : existing.endDate;
-    const nextIsVideoMeeting =
-      body.isVideoMeeting !== undefined ? body.isVideoMeeting : existing.isVideoMeeting;
+    const nextIsVideoMeeting = updatePolicy.forbidVideo
+      ? false
+      : body.isVideoMeeting !== undefined
+        ? body.isVideoMeeting
+        : existing.isVideoMeeting;
     if (nextIsVideoMeeting) {
       const scheduleError = validateVideoMeetingSchedule(nextStart, nextEnd);
       if (scheduleError) {
@@ -331,8 +346,12 @@ calendarRouter.patch(
         ...(body.endDate !== undefined ? { endDate: nextEnd } : {}),
         ...(body.allDay !== undefined ? { allDay: nextIsVideoMeeting ? false : body.allDay } : nextIsVideoMeeting ? { allDay: false } : {}),
         ...(body.color !== undefined ? { color: body.color } : {}),
-        ...(body.isHidden !== undefined ? { isHidden: body.isHidden } : {}),
-        ...(body.isVideoMeeting !== undefined ? { isVideoMeeting: body.isVideoMeeting } : {}),
+        ...(body.isHidden !== undefined || updatePolicy.enforceHidden
+          ? { isHidden: updatePolicy.enforceHidden ? true : body.isHidden }
+          : {}),
+        ...(body.isVideoMeeting !== undefined || updatePolicy.forbidVideo
+          ? { isVideoMeeting: nextIsVideoMeeting }
+          : {}),
         reminderMinutes: JSON.stringify({
           reminderMinutes: nextReminderMinutes,
           assigneeIds: nextAssigneeIds,
@@ -360,7 +379,7 @@ calendarRouter.patch(
   }
 );
 
-// DELETE /api/teams/:teamId/events/:eventId — owner only
+// DELETE /api/teams/:teamId/events/:eventId — creator or owner/leader
 calendarRouter.delete("/:teamId/events/:eventId", async (c) => {
   const user = c.get("user")!;
   const { teamId, eventId } = c.req.param();
@@ -368,8 +387,8 @@ calendarRouter.delete("/:teamId/events/:eventId", async (c) => {
   const membership = await prisma.teamMember.findUnique({
     where: { userId_teamId: { userId: user.id, teamId } },
   });
-  if (!membership || !["owner","team_leader"].includes(membership.role)) {
-    return c.json({ error: { message: "Only team owners can delete events", code: "FORBIDDEN" } }, 403);
+  if (!membership) {
+    return c.json({ error: { message: "You are not a member of this team", code: "FORBIDDEN" } }, 403);
   }
 
   const existing = await prisma.calendarEvent.findUnique({
@@ -377,6 +396,9 @@ calendarRouter.delete("/:teamId/events/:eventId", async (c) => {
   });
   if (!existing || existing.teamId !== teamId) {
     return c.json({ error: { message: "Event not found", code: "NOT_FOUND" } }, 404);
+  }
+  if (!canManageCalendarEvent(membership.role, user.id, existing)) {
+    return c.json({ error: { message: "You can only delete your own calendar entries.", code: "FORBIDDEN" } }, 403);
   }
 
   // Cancel any pending reminders

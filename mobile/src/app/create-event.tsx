@@ -79,7 +79,10 @@ export default function CreateEventScreen() {
   const [eventStart, setEventStart] = useState<Date>(defaultStart);
   const [eventEnd, setEventEnd] = useState<Date>(defaultEnd);
   const [eventColor, setEventColor] = useState(initialColor ?? "#4361EE");
-  const [isHidden, setIsHidden] = useState(eventIsHidden !== undefined ? eventIsHidden === "true" : true);
+  const [isHidden, setIsHidden] = useState(() => {
+    if (eventIsHidden !== undefined) return eventIsHidden === "true";
+    return !isOwnerOrLeader;
+  });
   const [isVideoMeeting, setIsVideoMeeting] = useState(eventIsVideoMeeting === "true");
   const [meetingDurationMinutes, setMeetingDurationMinutes] = useState(() => {
     if (eventIsVideoMeeting === "true" && eventEndDate && startDate) {
@@ -125,6 +128,10 @@ export default function CreateEventScreen() {
       : eventEnd < eventStart
         ? eventStart
         : eventEnd;
+    if (isVideoMeeting && !isOwnerOrLeader) {
+      setFormError("Only workspace owners and team leaders can schedule virtual meetings.");
+      return;
+    }
     if (isVideoMeeting) {
       const existingEvents = queryClient.getQueryData<CalendarEvent[]>(["calendar-events", teamId]) ?? [];
       const hasOverlap = existingEvents
@@ -146,8 +153,8 @@ export default function CreateEventScreen() {
       endDate: end.toISOString(),
       color: eventColor,
       allDay: !isVideoMeeting,
-      isHidden: isHidden,
-      isVideoMeeting: isVideoMeeting,
+      isHidden: isOwnerOrLeader ? isHidden : true,
+      isVideoMeeting: isOwnerOrLeader && isVideoMeeting,
       reminderMinutes: isVideoMeeting ? [0, 5, 15] : [],
     };
     if (isEditing && eventId) {
@@ -173,7 +180,9 @@ export default function CreateEventScreen() {
           </Pressable>
 
           <Text style={{ color: "white", fontSize: 17, fontWeight: "700" }}>
-            {isEditing ? "Edit Event" : "New Event"}
+            {isEditing
+              ? isOwnerOrLeader ? "Edit Event" : "Edit Personal Entry"
+              : isOwnerOrLeader ? "New Event" : "New Personal Entry"}
           </Text>
 
           <Pressable
@@ -421,7 +430,8 @@ export default function CreateEventScreen() {
           </View>
         </Modal>
 
-        {/* Video Meeting toggle */}
+        {/* Video Meeting toggle — leaders only */}
+        {isOwnerOrLeader ? (
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: "white", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 14, borderWidth: 1.5, borderColor: isVideoMeeting ? "#4361EE" : "#E2E8F0" }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
             <Video size={18} color={isVideoMeeting ? "#4361EE" : "#CBD5E1"} />
@@ -443,6 +453,7 @@ export default function CreateEventScreen() {
             testID="video-meeting-toggle"
           />
         </View>
+        ) : null}
 
         {/* Reminder picker — only for video meetings */}
         {isVideoMeeting ? (

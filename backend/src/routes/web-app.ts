@@ -14,6 +14,12 @@ import { getTeamSubscription, teamSubscriptionRowHasTeamFeatures } from "./subsc
 import { webPrismaUserIdFromContext } from "../lib/web-prisma-user";
 import { isPrismaUniqueOnName, isTeamDisplayNameTaken, normalizeTeamName } from "../lib/team-name";
 import { validateVideoMeetingSchedule } from "../lib/video-meeting-duration";
+import {
+  canManageCalendarEvent,
+  isPaidTeamPlan,
+  resolveCalendarCreate,
+  resolveCalendarUpdate,
+} from "../lib/calendar-permissions";
 
 const webRouter = new Hono();
 
@@ -633,6 +639,8 @@ webRouter.post("/api/teams/:id/events", async (c) => {
   const { id } = c.req.param();
   const membership = await prisma.teamMember.findFirst({ where: { teamId: id, userId: userId } });
   if (!membership) return c.json({ error: { message: "Not a member of this team" } }, 403);
+  const subscription = await prisma.teamSubscription.findUnique({ where: { teamId: id } });
+  const isPaid = isPaidTeamPlan(subscription?.plan);
   const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
   const { title, description, startDate, endDate, allDay, color } = body as {
     title?: string;
@@ -643,7 +651,11 @@ webRouter.post("/api/teams/:id/events", async (c) => {
     color?: string;
   };
   const isVideoMeeting = readBodyVideoMeetingFlag(body);
-  const isHidden = body.isHidden === true;
+  const createPolicy = resolveCalendarCreate(membership.role, isPaid, {
+    isVideoMeeting,
+    isHidden: typeof body.isHidden === "boolean" ? (body.isHidden as boolean) : undefined,
+  });
+  if (!createPolicy.ok) return c.json({ error: { message: createPolicy.message } }, 403);
   const reminderMins = Array.isArray(body.reminderMinutes) ? body.reminderMinutes.filter((n: unknown) => typeof n === "number") : [];
   const teamMembers = await prisma.teamMember.findMany({ where: { teamId: id }, select: { userId: true } });
   const teamMemberIds = new Set(teamMembers.map((m) => m.userId));
@@ -654,7 +666,7 @@ webRouter.post("/api/teams/:id/events", async (c) => {
   if (!startDate) return c.json({ error: { message: "Start date is required" } }, 400);
   const start = new Date(startDate);
   const end = endDate ? new Date(endDate) : null;
-  if (isVideoMeeting) {
+  if (createPolicy.isVideoMeeting) {
     const scheduleError = validateVideoMeetingSchedule(start, end);
     if (scheduleError) return c.json({ error: { message: scheduleError } }, 400);
   }
@@ -664,10 +676,10 @@ webRouter.post("/api/teams/:id/events", async (c) => {
       description: description || null,
       startDate: start,
       endDate: end,
-      allDay: isVideoMeeting ? false : allDay !== undefined ? allDay : true,
+      allDay: createPolicy.isVideoMeeting ? false : allDay !== undefined ? allDay : true,
       color: color || "#4361EE",
-      isHidden,
-      isVideoMeeting,
+      isHidden: createPolicy.isHidden,
+      isVideoMeeting: createPolicy.isVideoMeeting,
       reminderMinutes: reminderMinutesStr,
       teamId: id,
       createdById: userId,
@@ -690,11 +702,15 @@ webRouter.patch("/api/teams/:id/events/:eid", async (c) => {
   if (!membership) return c.json({ error: { message: "Not a member of this team" } }, 403);
   const existing = await prisma.calendarEvent.findFirst({ where: { id: eid, teamId: id } });
   if (!existing) return c.json({ error: "Not found" }, 404);
-  // Creator or owner/admin can update
-  if (existing.createdById !== userId && !["owner", "admin"].includes(membership.role)) {
-    return c.json({ error: { message: "Forbidden" } }, 403);
-  }
   const body = await c.req.json().catch(() => ({}));
+  const bodyRec = body as Record<string, unknown>;
+  const updatePolicy = resolveCalendarUpdate(membership.role, userId, existing, {
+    isVideoMeeting: bodyRec.isVideoMeeting !== undefined || bodyRec.videoMeeting !== undefined
+      ? readBodyVideoMeetingFlag(bodyRec)
+      : undefined,
+    isHidden: typeof body.isHidden === "boolean" ? body.isHidden : undefined,
+  });
+  if (!updatePolicy.ok) return c.json({ error: { message: updatePolicy.message } }, 403);
   const { title, description, startDate, endDate, allDay, color } = body;
   const existingSettings = parseWebMeetingSettings(existing.reminderMinutes);
   const teamMembers = await prisma.teamMember.findMany({ where: { teamId: id }, select: { userId: true } });
@@ -721,10 +737,11 @@ webRouter.patch("/api/teams/:id/events/:eid", async (c) => {
   if (endDate !== undefined) updateData.endDate = endDate ? new Date(endDate) : null;
   if (allDay !== undefined) updateData.allDay = allDay;
   if (color !== undefined) updateData.color = color;
-  if (body.isHidden !== undefined) updateData.isHidden = body.isHidden;
-  const bodyRec = body as Record<string, unknown>;
-  if (bodyRec.isVideoMeeting !== undefined || bodyRec.videoMeeting !== undefined) {
-    updateData.isVideoMeeting = readBodyVideoMeetingFlag(bodyRec);
+  if (body.isHidden !== undefined || updatePolicy.enforceHidden) {
+    updateData.isHidden = updatePolicy.enforceHidden ? true : body.isHidden;
+  }
+  if (bodyRec.isVideoMeeting !== undefined || bodyRec.videoMeeting !== undefined || updatePolicy.forbidVideo) {
+    updateData.isVideoMeeting = updatePolicy.forbidVideo ? false : readBodyVideoMeetingFlag(bodyRec);
   }
   const nextIsVideoMeeting =
     updateData.isVideoMeeting !== undefined ? updateData.isVideoMeeting : existing.isVideoMeeting;
@@ -756,9 +773,8 @@ webRouter.delete("/api/teams/:id/events/:eid", async (c) => {
   if (!membership) return c.json({ error: { message: "Not a member of this team" } }, 403);
   const existing = await prisma.calendarEvent.findFirst({ where: { id: eid, teamId: id } });
   if (!existing) return c.json({ error: "Not found" }, 404);
-  // Creator or owner/admin can delete
-  if (existing.createdById !== userId && !["owner", "admin"].includes(membership.role)) {
-    return c.json({ error: { message: "Forbidden" } }, 403);
+  if (!canManageCalendarEvent(membership.role, userId, existing)) {
+    return c.json({ error: { message: "You can only delete your own calendar entries." } }, 403);
   }
   await prisma.calendarEvent.delete({ where: { id: eid } });
   return c.json({ data: { ok: true } });

@@ -180,7 +180,9 @@ export default function CalendarScreen() {
 
   const plan = useSubscriptionStore((s) => s.plan);
   const isPaid = plan === "team";
-  const canAddEvent = isOwnerOrLeader || isPaid;
+  const canAddPersonalEvent = isOwnerOrLeader || isPaid;
+  const canManageEvent = (event: CalendarEvent) =>
+    isOwnerOrLeader || (!!currentUserId && event.createdById === currentUserId);
 
   const { data: events = [], isLoading: eventsLoading } = useQuery({
     queryKey: ["calendar-events", activeTeamId],
@@ -280,14 +282,26 @@ export default function CalendarScreen() {
             <Pressable onPress={prevMonth} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(255,255,255,0.2)", alignItems: "center", justifyContent: "center" }} testID="prev-month-button">
               <ChevronLeft size={20} color="white" />
             </Pressable>
-            {canAddEvent && activeTeamId && !isDemo ? (
+            {canAddPersonalEvent && activeTeamId && !isDemo ? (
               <Pressable
-                onPress={() => router.push({ pathname: "/create-event", params: { teamId: activeTeamId!, startDate: (selectedDate ?? new Date()).toISOString(), myRole: myRole } })}
+                onPress={() =>
+                  router.push({
+                    pathname: "/create-event",
+                    params: {
+                      teamId: activeTeamId!,
+                      startDate: (selectedDate ?? new Date()).toISOString(),
+                      myRole,
+                      ...(isOwnerOrLeader ? {} : { eventIsHidden: "true" }),
+                    },
+                  })
+                }
                 style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "rgba(255,255,255,0.22)", paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20 }}
                 testID="header-add-event-button"
               >
                 <Plus size={15} color="white" />
-                <Text style={{ color: "white", fontSize: 13, fontWeight: "600" }}>Add Event</Text>
+                <Text style={{ color: "white", fontSize: 13, fontWeight: "600" }}>
+                  {isOwnerOrLeader ? "Add Event" : "Add Personal"}
+                </Text>
               </Pressable>
             ) : null}
             <Pressable onPress={nextMonth} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(255,255,255,0.2)", alignItems: "center", justifyContent: "center" }} testID="next-month-button">
@@ -399,11 +413,23 @@ export default function CalendarScreen() {
                         <Pressable
                           key={colIndex}
                           onPress={() => {
-                            if (isOwnerOrLeader) {
-                              const event = events.find((e) => e.id === bar.id);
-                              if (event) {
-                                router.push({ pathname: "/create-event", params: { teamId: activeTeamId!, eventId: event.id, eventTitle: event.title, eventDescription: event.description ?? "", eventColor: event.color, startDate: event.startDate, eventEndDate: event.endDate ?? event.startDate, eventIsHidden: String(event.isHidden ?? false), eventIsVideoMeeting: String(event.isVideoMeeting ?? false) } });
-                              }
+                            const event = events.find((e) => e.id === bar.id);
+                            if (event && canManageEvent(event)) {
+                              router.push({
+                                pathname: "/create-event",
+                                params: {
+                                  teamId: activeTeamId!,
+                                  eventId: event.id,
+                                  eventTitle: event.title,
+                                  eventDescription: event.description ?? "",
+                                  eventColor: event.color,
+                                  startDate: event.startDate,
+                                  eventEndDate: event.endDate ?? event.startDate,
+                                  eventIsHidden: String(event.isHidden ?? false),
+                                  eventIsVideoMeeting: String(event.isVideoMeeting ?? false),
+                                  myRole,
+                                },
+                              });
                             }
                           }}
                           style={{
@@ -482,14 +508,26 @@ export default function CalendarScreen() {
               <Text style={{ fontSize: 14, fontWeight: "700", color: "#0F172A" }}>
                 {selectedDate.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
               </Text>
-              {canAddEvent && !isDemo ? (
+              {canAddPersonalEvent && !isDemo ? (
                 <Pressable
-                  onPress={() => router.push({ pathname: "/create-event", params: { teamId: activeTeamId!, startDate: selectedDate.toISOString(), myRole: myRole } })}
+                  onPress={() =>
+                    router.push({
+                      pathname: "/create-event",
+                      params: {
+                        teamId: activeTeamId!,
+                        startDate: selectedDate.toISOString(),
+                        myRole,
+                        ...(isOwnerOrLeader ? {} : { eventIsHidden: "true" }),
+                      },
+                    })
+                  }
                   style={{ flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "#4361EE", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 }}
                   testID="add-event-button"
                 >
                   <Plus size={14} color="white" />
-                  <Text style={{ color: "white", fontSize: 12, fontWeight: "600" }}>Add Event</Text>
+                  <Text style={{ color: "white", fontSize: 12, fontWeight: "600" }}>
+                    {isOwnerOrLeader ? "Add Event" : "Add Personal"}
+                  </Text>
                 </Pressable>
               ) : null}
             </View>
@@ -546,8 +584,10 @@ export default function CalendarScreen() {
                         eventEndDate: event.endDate ?? event.startDate,
                         eventIsHidden: String(event.isHidden ?? false),
                         eventIsVideoMeeting: String(event.isVideoMeeting ?? false),
+                        myRole,
                       },
                     });
+                  const canEdit = canManageEvent(event);
                   const titleBlock = (
                     <View style={{ flexDirection: "row", alignItems: "center", flex: 1, gap: 6, minWidth: 0 }}>
                       <Text style={{ fontSize: 14, fontWeight: "700", color: "#0F172A", flex: 1 }} numberOfLines={1}>
@@ -559,7 +599,7 @@ export default function CalendarScreen() {
                   return (
                     <View key={event.id} style={cardStyle} testID={`event-item-${event.id}`}>
                       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                        {isOwnerOrLeader ? (
+                        {canEdit ? (
                           <Pressable
                             onPress={openEventEdit}
                             style={{ flex: 1, minWidth: 0 }}
@@ -633,7 +673,7 @@ export default function CalendarScreen() {
                           {event.description}
                         </Text>
                       ) : null}
-                      {isOwnerOrLeader ? (
+                      {canEdit ? (
                         <Text style={{ fontSize: 11, color: "#CBD5E1", marginTop: 6 }}>Tap title row to edit</Text>
                       ) : null}
                     </View>

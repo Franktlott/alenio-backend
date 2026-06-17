@@ -929,6 +929,22 @@ export default function TasksScreen() {
       : new Date();
     setEventTitle(""); setEventDescription("");
     setEventStart(d); setEventEnd(d);
+    setEventColor("#4361EE"); setEventIsHidden(false); setFormError(null); setConfirmDeleteEvent(false);
+    setMeetingAssigneeIds([]);
+    setShowMeetingAssigneeDropdown(false);
+    setShowStartPicker(false); setShowEndPicker(false); setShowStartTimePicker(false); setShowDurationPicker(false);
+    setMeetingDurationMinutes(60);
+    setShowEventModal(true);
+  };
+
+  const openPersonalEventModal = () => {
+    setEditingEvent(null);
+    setEventModalType("event");
+    const d = selectedDay
+      ? (() => { const [y, m, day] = selectedDay.split("-").map(Number); return new Date(y, m - 1, day); })()
+      : new Date();
+    setEventTitle(""); setEventDescription("");
+    setEventStart(d); setEventEnd(d);
     setEventColor("#4361EE"); setEventIsHidden(true); setFormError(null); setConfirmDeleteEvent(false);
     setMeetingAssigneeIds([]);
     setShowMeetingAssigneeDropdown(false);
@@ -982,6 +998,10 @@ export default function TasksScreen() {
   const handleSaveEvent = () => {
     if (!eventTitle.trim()) { setFormError("Please enter a title"); return; }
     const isMeeting = eventModalType === "meeting";
+    if (isMeeting && !isOwnerOrLeader) {
+      setFormError("Only workspace owners and team leaders can schedule virtual meetings.");
+      return;
+    }
     const end = isMeeting
       ? videoMeetingEndFromDuration(eventStart, meetingDurationMinutes)
       : eventEnd < eventStart
@@ -1013,8 +1033,8 @@ export default function TasksScreen() {
           endDate: end.toISOString(),
           color: eventColor,
           allDay: !isMeeting,
-          isHidden: eventIsHidden,
-          isVideoMeeting: isMeeting,
+          isHidden: isOwnerOrLeader ? eventIsHidden : true,
+          isVideoMeeting: isOwnerOrLeader && isMeeting,
           assigneeIds: isMeeting && eventIsHidden ? meetingAssigneeIds : undefined,
         },
       });
@@ -1026,8 +1046,8 @@ export default function TasksScreen() {
         endDate: end.toISOString(),
         color: eventColor,
         allDay: !isMeeting,
-        isHidden: eventIsHidden,
-        isVideoMeeting: isMeeting,
+        isHidden: isOwnerOrLeader ? eventIsHidden : true,
+        isVideoMeeting: isOwnerOrLeader && isMeeting,
         assigneeIds: isMeeting && eventIsHidden ? meetingAssigneeIds : undefined,
       });
     }
@@ -1225,7 +1245,7 @@ export default function TasksScreen() {
             <Image source={require("@/assets/alenio-logo-white.png")} style={{ height: 30, width: 104, resizeMode: "contain" }} />
           </View>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            {activeTeamId && !isDemo ? (
+            {activeTeamId && !isDemo && (isOwnerOrLeader || isPro) ? (
               <Pressable
                 onPress={() => setShowAddModal(true)}
                 style={{ flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "rgba(255,255,255,0.22)", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 }}
@@ -1286,7 +1306,7 @@ export default function TasksScreen() {
                 return (
                   <Pressable
                     key={ev.id}
-                    onLongPress={isOwnerOrLeader && !isDemo ? () => openEditEventModal(ev) : undefined}
+                    onLongPress={!isDemo && (isOwnerOrLeader || ev.createdById === currentUserId) ? () => openEditEventModal(ev) : undefined}
                     delayLongPress={400}
                     style={{ backgroundColor: ev.isHidden ? "#F8FAFC" : `${ev.color}18`, borderRadius: 12, padding: 12, minWidth: 180, flexDirection: "row", alignItems: "center", gap: 8 }}
                   >
@@ -1776,8 +1796,22 @@ export default function TasksScreen() {
                   <CalendarDays size={22} color="white" />
                 </View>
                 <View>
-                  <Text style={{ fontSize: 15, fontWeight: "700", color: "#0F172A" }}>Calendar Event</Text>
-                  <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 2 }}>Add to the team calendar</Text>
+                  <Text style={{ fontSize: 15, fontWeight: "700", color: "#0F172A" }}>Team calendar event</Text>
+                  <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 2 }}>Add a public event for the whole team</Text>
+                </View>
+              </Pressable>
+            ) : null}
+            {!isOwnerOrLeader && isPro ? (
+              <Pressable
+                onPress={() => { setShowAddModal(false); openPersonalEventModal(); }}
+                style={{ flexDirection: "row", alignItems: "center", gap: 14, backgroundColor: "#F8FAFC", borderRadius: 16, padding: 16 }}
+              >
+                <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: "#64748B", alignItems: "center", justifyContent: "center" }}>
+                  <CalendarDays size={22} color="white" />
+                </View>
+                <View>
+                  <Text style={{ fontSize: 15, fontWeight: "700", color: "#0F172A" }}>Personal calendar entry</Text>
+                  <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 2 }}>Only visible on your calendar</Text>
                 </View>
               </Pressable>
             ) : null}
@@ -1825,8 +1859,8 @@ export default function TasksScreen() {
                 <Image source={require("@/assets/alenio-icon.png")} style={{ width: 28, height: 28, borderRadius: 7 }} />
                 <Text style={{ fontSize: 17, fontWeight: "700", color: "#0F172A" }}>
                   {editingEvent
-                    ? eventModalType === "meeting" ? "Edit Virtual Meeting" : "Edit Event"
-                    : eventModalType === "meeting" ? "New Virtual Meeting" : "New Event"}
+                    ? eventModalType === "meeting" ? "Edit Virtual Meeting" : isOwnerOrLeader ? "Edit Event" : "Edit Personal Entry"
+                    : eventModalType === "meeting" ? "New Virtual Meeting" : isOwnerOrLeader ? "New Event" : "New Personal Entry"}
                 </Text>
               </View>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
@@ -2124,7 +2158,8 @@ export default function TasksScreen() {
 
               {formError ? <Text style={{ color: "#EF4444", fontSize: 13, marginBottom: 12 }}>{formError}</Text> : null}
 
-              {/* Visibility toggle */}
+              {/* Visibility toggle — leaders only */}
+              {isOwnerOrLeader ? (
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: "#F8FAFC", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 20, borderWidth: 1.5, borderColor: !eventIsHidden ? "#4361EE" : "#E2E8F0" }}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
                   <Users size={18} color={!eventIsHidden ? "#4361EE" : "#CBD5E1"} />
@@ -2156,6 +2191,7 @@ export default function TasksScreen() {
                   testID="hidden-toggle"
                 />
               </View>
+              ) : null}
 
               <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748B", marginBottom: 10 }}>Color</Text>
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 20 }}>

@@ -161,6 +161,7 @@ export interface CalendarEvent {
   color: string;
   teamId: string;
   createdAt: string;
+  createdById?: string;
   createdBy?: { id: string; name: string; image?: string | null };
   isHidden?: boolean;
   isVideoMeeting?: boolean;

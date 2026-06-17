@@ -111,6 +111,7 @@ export function DashboardPage() {
   const [evMenuId, setEvMenuId] = useState<string | null>(null);
   const [eventAddChoiceOpen, setEventAddChoiceOpen] = useState(false);
   const [newEventIsVideoMeeting, setNewEventIsVideoMeeting] = useState(false);
+  const [evIsHidden, setEvIsHidden] = useState(false);
   const [evMeetingDurationMinutes, setEvMeetingDurationMinutes] = useState(60);
   const [meetingNow, setMeetingNow] = useState(() => Date.now());
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
@@ -318,6 +319,8 @@ export function DashboardPage() {
   const isOwnerOrLeader = myRole === "owner" || myRole === "team_leader";
   const isOwnerOrAdmin = myRole === "owner" || myRole === "admin";
   const isRegularMember = myRole === "member" || !myRole;
+  const hasTeamFeatures = selectedTeam?.hasTeamFeatures !== false;
+  const canAddPersonalEvent = isOwnerOrLeader || hasTeamFeatures;
   const canViewTeamTab = !isRegularMember;
 
   useEffect(() => {
@@ -474,6 +477,23 @@ export function DashboardPage() {
     setEvColor("#4361EE");
     setNewEventIsVideoMeeting(false);
     setEvMeetingDurationMinutes(60);
+    setEvIsHidden(false);
+    setEvAllDay(true);
+    setEvStart(new Date().toISOString().slice(0, 10));
+    setEvEnd("");
+    setEventAddChoiceOpen(false);
+    setEventOpen(true);
+  };
+
+  const beginNewPersonalEvent = () => {
+    setEvEditId(null);
+    setEvError(null);
+    setEvTitle("");
+    setEvDescription("");
+    setEvColor("#4361EE");
+    setNewEventIsVideoMeeting(false);
+    setEvMeetingDurationMinutes(60);
+    setEvIsHidden(true);
     setEvAllDay(true);
     setEvStart(new Date().toISOString().slice(0, 10));
     setEvEnd("");
@@ -489,6 +509,7 @@ export function DashboardPage() {
     setEvColor("#4361EE");
     setNewEventIsVideoMeeting(true);
     setEvMeetingDurationMinutes(60);
+    setEvIsHidden(false);
     setEvAllDay(false);
     const start = new Date();
     start.setMinutes(0, 0, 0);
@@ -547,17 +568,19 @@ export function DashboardPage() {
                 Calendar
               </h2>
               <div className="enterprise-cal-head-actions">
+                {canAddPersonalEvent ? (
                 <button
                   type="button"
                   className="enterprise-task-modal-btn enterprise-task-modal-btn-secondary"
                   onClick={() => {
                     if (!selectedTeamId) return;
                     if (isOwnerOrLeader) setEventAddChoiceOpen(true);
-                    else beginNewCalendarEvent();
+                    else beginNewPersonalEvent();
                   }}
                 >
-                  + Add event
+                  {isOwnerOrLeader ? "+ Add event" : "+ Add personal event"}
                 </button>
+                ) : null}
                 <div className="enterprise-cal-nav">
                 <button
                   type="button"
@@ -727,10 +750,11 @@ export function DashboardPage() {
                       ))}
                       {selectedEvents.map((event) => {
                         const canManageEvent =
-                          (isOwnerOrAdmin || (!!me?.id && event.createdById === me.id)) && !!selectedTeamId;
+                          (isOwnerOrLeader || (!!me?.id && event.createdById === me.id)) && !!selectedTeamId;
                         const badgesContent = (
                           <>
                             {!event.isHidden ? <span className="enterprise-cal-badge-public">Public</span> : null}
+                            {event.isHidden ? <span className="enterprise-cal-badge-private">Private</span> : null}
                             <span
                               className="enterprise-cal-badge-range"
                               style={{ color: event.color?.trim() || "#4361EE", background: `${event.color?.trim() || "#4361EE"}20` }}
@@ -770,6 +794,7 @@ export function DashboardPage() {
                                     setEvDescription(event.description ?? "");
                                     setEvColor(event.color?.trim() || "#4361EE");
                                     setNewEventIsVideoMeeting(!!event.isVideoMeeting);
+                                    setEvIsHidden(event.isHidden ?? false);
                                     setEvStart(allDay ? toDateInput(event.startDate) : toDatetimeLocalInput(event.startDate));
                                     if (event.isVideoMeeting && event.endDate) {
                                       setEvMeetingDurationMinutes(
@@ -1173,17 +1198,23 @@ export function DashboardPage() {
                   {evEditId
                     ? newEventIsVideoMeeting
                       ? "Edit virtual meeting"
-                      : "Edit calendar event"
+                      : evIsHidden
+                        ? "Edit personal event"
+                        : "Edit calendar event"
                     : newEventIsVideoMeeting
                       ? "Add virtual meeting"
-                      : "Add calendar event"}
+                      : evIsHidden
+                        ? "Add personal event"
+                        : "Add calendar event"}
                 </h2>
                 <p className="create-v3-sub">
                   {evEditId
-                    ? "Update this team event from the web dashboard."
+                    ? "Update this calendar entry."
                     : newEventIsVideoMeeting
                       ? "Schedule a timed meeting your team can join from the dashboard."
-                      : "Create an all-day or multi-day entry on the team calendar."}
+                      : evIsHidden
+                        ? "Only you will see this on your calendar."
+                        : "Create an all-day or multi-day entry on the team calendar."}
                 </p>
               </div>
               <div className="create-v3-head-actions">
@@ -1236,6 +1267,7 @@ export function DashboardPage() {
                       allDay: useAllDay,
                       color: evColor,
                       isVideoMeeting,
+                      isHidden: isOwnerOrLeader ? evIsHidden : true,
                     });
                   } else {
                     await createWebTeamEvent(selectedTeamId, {
@@ -1246,7 +1278,7 @@ export function DashboardPage() {
                       allDay: useAllDay,
                       color: evColor,
                       isVideoMeeting,
-                      isHidden: false,
+                      isHidden: isOwnerOrLeader ? evIsHidden : true,
                     });
                   }
                   await refreshTeamData(selectedTeamId);
@@ -1254,6 +1286,7 @@ export function DashboardPage() {
                   setEventOpen(false);
                   setEvEditId(null);
                   setNewEventIsVideoMeeting(false);
+                  setEvIsHidden(false);
                   setEvMeetingDurationMinutes(60);
                   setEvTitle("");
                   setEvDescription("");
@@ -1302,6 +1335,17 @@ export function DashboardPage() {
                     <label className="create-v3-repeat-row create-v3-event-all-day">
                       <input type="checkbox" checked={evAllDay} onChange={(e) => setEvAllDay(e.target.checked)} />
                       <span>All day</span>
+                    </label>
+                  ) : null}
+
+                  {isOwnerOrLeader && !newEventIsVideoMeeting ? (
+                    <label className="create-v3-repeat-row create-v3-event-all-day">
+                      <input
+                        type="checkbox"
+                        checked={!evIsHidden}
+                        onChange={(e) => setEvIsHidden(!e.target.checked)}
+                      />
+                      <span>Visible to the whole team</span>
                     </label>
                   ) : null}
 
