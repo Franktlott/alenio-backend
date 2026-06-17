@@ -1,5 +1,6 @@
 import type { WebMeUser } from "../lib/api";
 import { JoinRequestBell } from "./JoinRequestBell";
+import { VideoMeetingTopBarJoin } from "./VideoMeetingTopBarJoin";
 
 function initials(user: WebMeUser | null): string {
   if (!user) return "?";
@@ -14,11 +15,12 @@ function initials(user: WebMeUser | null): string {
 type Props = {
   user: WebMeUser | null;
   pageTitle: string;
+  selectedTeamId?: string;
   /** Optional extra count shown on the bell badge (join requests are included automatically). */
   notificationCount?: number;
 };
 
-export function DashboardTopBar({ user, pageTitle, notificationCount = 0 }: Props) {
+export function DashboardTopBar({ user, pageTitle, selectedTeamId = "", notificationCount = 0 }: Props) {
   return (
     <header className="enterprise-topbar" data-testid="dashboard-topbar">
       <div className="enterprise-topbar-context" data-testid="topbar-context">
@@ -26,6 +28,7 @@ export function DashboardTopBar({ user, pageTitle, notificationCount = 0 }: Prop
       </div>
 
       <div className="enterprise-topbar-actions">
+        <VideoMeetingTopBarJoin selectedTeamId={selectedTeamId} user={user} />
         <JoinRequestBell extraNotificationCount={notificationCount} />
         <div className="enterprise-topbar-profile" data-testid="topbar-profile">
           {user?.image ? (

@@ -11,7 +11,7 @@ import {
   startOfDay,
 } from "../lib/calendar-mobile-parity";
 import { getUSHolidays } from "../lib/us-federal-holidays";
-import { canShowVideoJoin, isInVideoMeetingBannerWindow, isVideoMeetingLeaderRole } from "../lib/video-meeting-join";
+import { canShowVideoJoin } from "../lib/video-meeting-join";
 import {
   VIDEO_MEETING_DURATION_OPTIONS,
   durationMinutesFromRange,
@@ -29,13 +29,11 @@ import {
   fetchWebTeam,
   fetchWebTeamEvents,
   fetchWebTeamTasks,
-  fetchUpcomingVideoMeetings,
   updateWebTeamEvent,
   updateCoreTeamTask,
   type ApiCalendarEvent,
   type ApiTask,
   type OneOnOneAssociateFeedbackContext,
-  type UpcomingVideoMeeting,
   type WebTeamDetail,
   type WebMeUser,
   type WebTeamRow,
@@ -114,7 +112,6 @@ export function DashboardPage() {
   const [eventAddChoiceOpen, setEventAddChoiceOpen] = useState(false);
   const [newEventIsVideoMeeting, setNewEventIsVideoMeeting] = useState(false);
   const [evMeetingDurationMinutes, setEvMeetingDurationMinutes] = useState(60);
-  const [upcomingMeetings, setUpcomingMeetings] = useState<UpcomingVideoMeeting[]>([]);
   const [meetingNow, setMeetingNow] = useState(() => Date.now());
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [videoTitle, setVideoTitle] = useState("");
@@ -214,26 +211,6 @@ export function DashboardPage() {
   useEffect(() => {
     const id = window.setInterval(() => setMeetingNow(Date.now()), 1000);
     return () => window.clearInterval(id);
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    const loadUpcoming = async () => {
-      try {
-        const data = await fetchUpcomingVideoMeetings();
-        if (cancelled) return;
-        setUpcomingMeetings(data ?? []);
-      } catch {
-        if (cancelled) return;
-        setUpcomingMeetings([]);
-      }
-    };
-    void loadUpcoming();
-    const id = window.setInterval(loadUpcoming, 30000);
-    return () => {
-      cancelled = true;
-      window.clearInterval(id);
-    };
   }, []);
 
   useEffect(() => {
@@ -489,15 +466,6 @@ export function DashboardPage() {
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
   };
 
-  const refreshUpcomingMeetings = async () => {
-    try {
-      const data = await fetchUpcomingVideoMeetings();
-      setUpcomingMeetings(data ?? []);
-    } catch {
-      setUpcomingMeetings([]);
-    }
-  };
-
   const beginNewCalendarEvent = () => {
     setEvEditId(null);
     setEvError(null);
@@ -530,17 +498,6 @@ export function DashboardPage() {
     setEventAddChoiceOpen(false);
     setEventOpen(true);
   };
-
-  const activeUpcomingMeeting = useMemo(() => {
-    if (!selectedTeamId) return null;
-    return (
-      upcomingMeetings
-        .filter((m) => m.event.teamId === selectedTeamId)
-        .find((m) =>
-          isInVideoMeetingBannerWindow(m.event.startDate, m.event.endDate, meetingNow),
-        ) ?? null
-    );
-  }, [upcomingMeetings, selectedTeamId, meetingNow]);
 
   const openVideoCall = async (roomId: string, title: string) => {
     setVideoLoading(true);
@@ -578,28 +535,6 @@ export function DashboardPage() {
           <p className="enterprise-banner-warn" role="status">
             {evActionError}
           </p>
-        ) : null}
-        {activeUpcomingMeeting ? (
-          <div className="enterprise-video-banner" role="status">
-            <div>
-              <strong>Upcoming video meeting:</strong> {activeUpcomingMeeting.event.title}
-            </div>
-            {canShowVideoJoin(
-              activeUpcomingMeeting.event.startDate,
-              activeUpcomingMeeting.event.endDate,
-              meetingNow,
-              isVideoMeetingLeaderRole(activeUpcomingMeeting.userRole),
-            ) ? (
-              <button
-                type="button"
-                className="enterprise-task-modal-btn enterprise-task-modal-btn-primary"
-                onClick={() => void openVideoCall(activeUpcomingMeeting.event.id, activeUpcomingMeeting.event.title)}
-                disabled={videoLoading}
-              >
-                {videoLoading ? "Joining…" : "Join call"}
-              </button>
-            ) : null}
-          </div>
         ) : null}
 
         <div className="enterprise-dashboard-top">
@@ -1315,7 +1250,7 @@ export function DashboardPage() {
                     });
                   }
                   await refreshTeamData(selectedTeamId);
-                  await refreshUpcomingMeetings();
+                  await queryClient.invalidateQueries({ queryKey: queryKeys.upcomingVideoMeetings });
                   setEventOpen(false);
                   setEvEditId(null);
                   setNewEventIsVideoMeeting(false);

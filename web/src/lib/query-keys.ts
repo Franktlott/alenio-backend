@@ -7,4 +7,5 @@ export const queryKeys = {
   chatTopics: (teamId: string) => ["chat", "topics", teamId] as const,
   chatConversations: ["chat", "conversations"] as const,
   chatThread: (mode: "dm" | "team", threadId: string) => ["chat", "thread", mode, threadId] as const,
+  upcomingVideoMeetings: ["upcoming-video-meetings"] as const,
 };

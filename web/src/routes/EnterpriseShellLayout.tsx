@@ -254,7 +254,11 @@ export function EnterpriseShellLayout() {
         user={me ?? null}
         onSignOutNavigate={(path) => navigate(path)}
         topBar={
-          <DashboardTopBar user={me ?? null} pageTitle={topBarPageTitle} />
+          <DashboardTopBar
+            user={me ?? null}
+            pageTitle={topBarPageTitle}
+            selectedTeamId={teams?.some((t) => t.id === selectedTeamId) ? selectedTeamId : effectiveTeamId}
+          />
         }
         mainClassName={mainClassName}
         contentClassName={contentClassName}
