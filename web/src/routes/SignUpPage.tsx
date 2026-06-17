@@ -17,7 +17,11 @@ export function SignUpPage() {
   const [params] = useSearchParams();
   const inviteToken = useMemo(() => (params.get("invite") ?? "").trim(), [params]);
   const emailFromInvite = useMemo(() => (params.get("email") ?? "").trim().toLowerCase(), [params]);
-  const existing = getAccessToken();
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState(emailFromInvite);
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const t = getAccessToken();
@@ -30,19 +34,14 @@ export function SignUpPage() {
     if (inviteToken) setPendingInviteToken(inviteToken);
   }, [inviteToken]);
 
-  if (existing && looksLikeJwt(existing) && !isJwtExpiredSkew(existing)) {
-    return <Navigate to={isMobileBrowser() ? "/get-app" : "/chat"} replace />;
-  }
-
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState(emailFromInvite);
-  const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
   useEffect(() => {
     if (emailFromInvite) setEmail(emailFromInvite);
   }, [emailFromInvite]);
+
+  const existing = getAccessToken();
+  if (existing && looksLikeJwt(existing) && !isJwtExpiredSkew(existing)) {
+    return <Navigate to={isMobileBrowser() ? "/get-app" : "/chat"} replace />;
+  }
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();

@@ -187,6 +187,23 @@ function IconMore() {
   );
 }
 
+function IconAttach() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function IconAt() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <circle cx="12" cy="12" r="4" />
+      <path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-3.92 7.94" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 function IconGroup() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
@@ -243,7 +260,6 @@ export function ChatPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const imageInputRef = useRef<HTMLInputElement>(null);
   const moreMenuRef = useRef<HTMLDivElement>(null);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
 
@@ -636,19 +652,37 @@ export function ChatPage() {
 
   const messageBlocks = useMemo(() => {
     const blocks: Array<
-      { kind: "date"; label: string; key: string } | { kind: "message"; message: TeamChatMessage | DirectChatMessage }
+      | { kind: "date"; label: string; key: string }
+      | { kind: "message"; message: TeamChatMessage | DirectChatMessage; grouped: boolean }
     > = [];
     let lastDate = "";
+    let prevSenderId: string | null = null;
+    let prevCreatedAt: string | null = null;
     for (const m of messages) {
       const key = dateKey(m.createdAt);
       if (key !== lastDate) {
         blocks.push({ kind: "date", label: formatDateSeparator(m.createdAt), key: `d-${key}` });
         lastDate = key;
+        prevSenderId = null;
+        prevCreatedAt = null;
       }
-      blocks.push({ kind: "message", message: m });
+      const senderId = m.senderId ?? m.sender.id;
+      const grouped =
+        prevSenderId === senderId &&
+        prevCreatedAt !== null &&
+        new Date(m.createdAt).getTime() - new Date(prevCreatedAt).getTime() < 5 * 60 * 1000;
+      blocks.push({ kind: "message", message: m, grouped });
+      prevSenderId = senderId;
+      prevCreatedAt = m.createdAt;
     }
     return blocks;
   }, [messages]);
+
+  const composerPlaceholder = isDmMode
+    ? `Message ${conversationLabel ?? "…"}`
+    : selectedTopicId === "general"
+      ? "Message #team-chat"
+      : `Message #${(activeTopic?.name ?? "channel").replace(/\s+/g, "-").toLowerCase()}`;
 
   const chatVideoRoomId = selectedTeamId && !isDmMode ? `chat-${selectedTeamId}-${selectedTopicId}` : "";
 
@@ -1065,35 +1099,43 @@ export function ChatPage() {
                           );
                         }
                         const m = block.message;
+                        const grouped = block.grouped;
                         const senderName = m.sender.name ?? m.sender.email ?? "Member";
-                        const isMine = me?.id === m.senderId || me?.id === m.sender.id;
                         return (
                           <article
                             key={m.id}
-                            className={`chat-message-row ${isMine ? "chat-message-row--mine" : "chat-message-row--other"}`}
+                            className={`chat-message-row${grouped ? " chat-message-row--grouped" : ""}`}
                           >
-                            {!isMine ? <ChatAvatar user={m.sender} size="md" /> : null}
-                            <div className={`chat-bubble ${isMine ? "chat-bubble-mine" : "chat-bubble-other"}`}>
-                              {!isMine ? (
+                            {grouped ? (
+                              <div className="chat-message-avatar-spacer" aria-hidden />
+                            ) : (
+                              <ChatAvatar user={m.sender} size="md" />
+                            )}
+                            <div className="chat-message-body">
+                              {grouped ? (
+                                <time className="chat-message-time chat-message-time--hover" dateTime={m.createdAt}>
+                                  {formatMessageTime(m.createdAt)}
+                                </time>
+                              ) : (
                                 <div className="chat-message-head">
                                   <strong className="chat-message-author">{senderName}</strong>
                                   <time className="chat-message-time" dateTime={m.createdAt}>
                                     {formatMessageTime(m.createdAt)}
                                   </time>
                                 </div>
-                              ) : (
-                                <time className="chat-message-time chat-message-time--mine" dateTime={m.createdAt}>
-                                  {formatMessageTime(m.createdAt)}
-                                </time>
                               )}
-                              <div className="chat-bubble-content">
+                              <div className="chat-message-content">
                                 {m.content ? <div className="chat-text">{renderMessageText(m.content)}</div> : null}
                                 {m.mediaUrl ? <ChatMessageMedia url={m.mediaUrl} mediaType={m.mediaType} /> : null}
                               </div>
-                              <div className="chat-message-reactions" aria-label="Reactions">
+                              <div className="chat-message-actions" aria-label="Message actions">
                                 <button type="button" className="chat-reaction-add" aria-label="Add reaction" title="Add reaction">
-                                  <span aria-hidden>😊</span>
-                                  <span className="chat-reaction-add-plus">+</span>
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                                    <circle cx="12" cy="12" r="10" />
+                                    <path d="M8 14s1.5 2 4 2 4-2 4-2" strokeLinecap="round" />
+                                    <line x1="9" y1="9" x2="9.01" y2="9" strokeLinecap="round" />
+                                    <line x1="15" y1="9" x2="15.01" y2="9" strokeLinecap="round" />
+                                  </svg>
                                 </button>
                               </div>
                             </div>
@@ -1108,17 +1150,6 @@ export function ChatPage() {
                       ref={fileInputRef}
                       type="file"
                       accept="image/*,video/*"
-                      className="chat-composer-file-input"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) attachFile(file);
-                        e.target.value = "";
-                      }}
-                    />
-                    <input
-                      ref={imageInputRef}
-                      type="file"
-                      accept="image/*"
                       className="chat-composer-file-input"
                       onChange={(e) => {
                         const file = e.target.files?.[0];
@@ -1162,8 +1193,8 @@ export function ChatPage() {
                         onChange={(e) => setDraft(e.target.value)}
                         onKeyDown={onKeyDown}
                         onPaste={onPaste}
-                        placeholder="Type a message…"
-                        rows={3}
+                        placeholder={composerPlaceholder}
+                        rows={1}
                         disabled={(!selectedTeamId && !isDmMode) || sending || mediaUploading}
                         data-testid="chat-input"
                       />
@@ -1176,19 +1207,7 @@ export function ChatPage() {
                             title="Attach image or video"
                             onClick={() => fileInputRef.current?.click()}
                           >
-                            📎
-                          </button>
-                          <button
-                            type="button"
-                            className="chat-composer-tool"
-                            aria-label="Add image"
-                            title="Add image"
-                            onClick={() => imageInputRef.current?.click()}
-                          >
-                            🖼
-                          </button>
-                          <button type="button" className="chat-composer-tool" aria-label="Add emoji" title="Coming soon">
-                            😊
+                            <IconAttach />
                           </button>
                           <button
                             type="button"
@@ -1197,14 +1216,11 @@ export function ChatPage() {
                             title="Mention someone"
                             onClick={() => setDraft((d) => (d.endsWith("@") || d.endsWith(" @") ? d : `${d}${d.length ? " " : ""}@`))}
                           >
-                            @
-                          </button>
-                          <button type="button" className="chat-composer-tool" aria-label="Add GIF" title="Coming soon">
-                            GIF
+                            <IconAt />
                           </button>
                         </div>
                         <div className="chat-composer-send-row">
-                          <span className="chat-composer-hint">Shift + Enter for new line</span>
+                          <span className="chat-composer-hint">Enter to send · Shift+Enter for new line</span>
                           <button
                             type="button"
                             className="chat-send chat-send-v2"
@@ -1218,9 +1234,6 @@ export function ChatPage() {
                             data-testid="chat-send"
                           >
                             {mediaUploading ? "Sending…" : sending ? "…" : "Send"}
-                            <span className="chat-send-chevron" aria-hidden>
-                              ▾
-                            </span>
                           </button>
                         </div>
                       </div>

@@ -17,7 +17,12 @@ export function LoginPage() {
   const reason = params.get("reason");
   const inviteToken = (params.get("invite") ?? "").trim();
   const emailFromInvite = (params.get("email") ?? "").trim().toLowerCase();
-  const existing = getAccessToken();
+  const [email, setEmail] = useState(emailFromInvite);
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(
+    reason === "session" ? "Your session expired. Sign in again." : null,
+  );
 
   useEffect(() => {
     if (inviteToken) setPendingInviteToken(inviteToken);
@@ -30,16 +35,10 @@ export function LoginPage() {
     }
   }, []);
 
+  const existing = getAccessToken();
   if (existing && looksLikeJwt(existing) && !isJwtExpiredSkew(existing)) {
     return <Navigate to={isMobileBrowser() ? "/get-app" : "/chat"} replace />;
   }
-
-  const [email, setEmail] = useState(emailFromInvite);
-  const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(
-    reason === "session" ? "Your session expired. Sign in again." : null,
-  );
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
