@@ -11396,154 +11396,163 @@ button.enterprise-profile-legal-link {
   overflow-y: auto;
 }
 
-.kiosk-app-task-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 0.85rem;
-}
-
-.kiosk-task-card {
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 18px;
-  padding: 1rem 1.05rem 1.1rem;
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.07);
+.kiosk-task-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.06);
 }
 
-.kiosk-task-card--complete {
-  border-color: #86efac;
-  background: linear-gradient(180deg, #fff 0%, #f0fdf4 100%);
-}
-
-.kiosk-task-card__top {
-  display: flex;
-  justify-content: space-between;
+.kiosk-task-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto;
   align-items: center;
+  gap: 0.35rem 0.75rem;
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid #f1f5f9;
+  background: #fff;
+  transition: background 0.2s ease, opacity 0.2s ease;
 }
 
-.kiosk-task-card__index {
+.kiosk-task-row:last-child {
+  border-bottom: none;
+}
+
+.kiosk-task-row--complete {
+  background: #f8fafc;
+  opacity: 0.72;
+}
+
+.kiosk-task-row__main {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  min-width: 0;
+}
+
+.kiosk-task-row__index {
+  flex-shrink: 0;
   font-size: 0.75rem;
   font-weight: 800;
   color: #6366f1;
   letter-spacing: 0.04em;
+  padding-top: 0.15rem;
 }
 
-.kiosk-task-card__badge {
-  font-size: 0.6875rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  padding: 0.25rem 0.5rem;
-  border-radius: 999px;
-  background: #fef3c7;
-  color: #b45309;
+.kiosk-task-row--complete .kiosk-task-row__index {
+  color: #94a3b8;
 }
 
-.kiosk-task-card__badge--complete {
-  background: #d1fae5;
-  color: #047857;
+.kiosk-task-row__text {
+  min-width: 0;
 }
 
-.kiosk-task-card__area {
+.kiosk-task-row__title {
   margin: 0;
-  font-size: 0.75rem;
+  font-size: 1rem;
   font-weight: 600;
-  color: #64748b;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.kiosk-task-card__title {
-  margin: 0;
-  font-size: 1.125rem;
-  font-weight: 700;
-  line-height: 1.3;
+  line-height: 1.35;
   color: #0f172a;
 }
 
-.kiosk-task-card__label {
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: #475569;
+.kiosk-task-row--complete .kiosk-task-row__title {
+  color: #64748b;
+  text-decoration: line-through;
+  text-decoration-color: #cbd5e1;
 }
 
-.kiosk-task-card__input {
-  width: 100%;
-  box-sizing: border-box;
-  padding: 0.85rem 0.9rem;
-  border-radius: 12px;
-  border: 1px solid #cbd5e1;
-  font-size: 1.0625rem;
-  font-family: inherit;
-  min-height: 48px;
-}
-
-.kiosk-task-card__sign-btn {
-  margin-top: 0.25rem;
-  min-height: 52px;
-  padding: 0.85rem 1rem;
-  border: none;
-  border-radius: 14px;
-  background: linear-gradient(135deg, #4338ca, #6366f1);
-  color: #fff;
-  font-size: 1rem;
-  font-weight: 700;
-  cursor: pointer;
-  box-shadow: 0 6px 16px rgba(67, 56, 202, 0.35);
-}
-
-.kiosk-task-card__done {
-  display: flex;
-  align-items: center;
-  gap: 0.65rem;
-  margin-top: 0.25rem;
-  padding: 0.65rem 0.7rem;
-  border-radius: 12px;
-  background: rgba(16, 185, 129, 0.08);
-}
-
-.kiosk-task-card__avatar {
-  width: 2.25rem;
-  height: 2.25rem;
-  border-radius: 999px;
-  background: #10b981;
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.kiosk-task-row__meta {
+  margin: 0.2rem 0 0;
   font-size: 0.75rem;
-  font-weight: 800;
+  color: #94a3b8;
+}
+
+.kiosk-task-row__signoff {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
   flex-shrink: 0;
 }
 
-.kiosk-task-card__signed-by {
-  margin: 0;
+.kiosk-task-row__input {
+  width: 4.5rem;
+  box-sizing: border-box;
+  padding: 0.55rem 0.6rem;
+  border-radius: 10px;
+  border: 1px solid #cbd5e1;
+  font-size: 0.9375rem;
+  font-family: inherit;
+  text-align: center;
+  text-transform: uppercase;
+  min-height: 44px;
+}
+
+.kiosk-task-row__input:focus {
+  outline: none;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+}
+
+.kiosk-task-row__input--error {
+  border-color: #dc2626;
+}
+
+.kiosk-task-row__complete-btn {
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #4338ca, #6366f1);
+  color: #fff;
+  font-size: 1.1rem;
+  font-weight: 700;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.kiosk-task-row__done {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 10px;
+  background: #e2e8f0;
+}
+
+.kiosk-task-row__initials {
+  font-size: 0.8125rem;
+  font-weight: 800;
+  color: #64748b;
+  letter-spacing: 0.04em;
+}
+
+.kiosk-task-row__check {
   font-size: 0.875rem;
-  color: #065f46;
+  color: #64748b;
+  font-weight: 700;
 }
 
-.kiosk-task-card__signed-at {
-  margin: 0.15rem 0 0;
-  font-size: 0.75rem;
-  color: #047857;
+.kiosk-task-row__preview {
+  font-size: 0.8125rem;
+  color: #94a3b8;
+  padding: 0.55rem 0.75rem;
+  border-radius: 10px;
+  background: #f1f5f9;
 }
 
-.kiosk-task-card__error {
+.kiosk-task-row__error {
+  grid-column: 1 / -1;
   margin: 0;
   font-size: 0.8125rem;
   color: #dc2626;
-}
-
-.kiosk-task-card__preview-note {
-  margin: 0.25rem 0 0;
-  padding: 0.65rem 0.75rem;
-  border-radius: 10px;
-  background: #f1f5f9;
-  font-size: 0.8125rem;
-  color: #64748b;
 }
 
 .kiosk-app-nav {
@@ -11766,19 +11775,9 @@ button.enterprise-profile-legal-link {
     grid-template-columns: 1fr;
   }
 
-  .kiosk-app-task-grid {
-    grid-template-columns: 1fr;
-  }
-
   .kiosk-app-main {
     padding-left: 0.65rem;
     padding-right: 0.65rem;
-  }
-}
-
-@media (min-width: 768px) and (max-width: 1024px) {
-  .kiosk-app-task-grid {
-    grid-template-columns: repeat(2, 1fr);
   }
 }
 

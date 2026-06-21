@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ChecklistKioskTaskCard } from "./ChecklistKioskTaskCard";
+import { ChecklistKioskTaskRow } from "./ChecklistKioskTaskRow";
 import type { KioskTab, KioskTaskItem, KioskTaskState } from "./checklist-kiosk-types";
 
 type Props = {
@@ -55,16 +55,15 @@ export function ChecklistKioskApp({
       return <p className="kiosk-app-empty">{emptyMessage}</p>;
     }
     return (
-      <div className="kiosk-app-task-grid">
+      <ul className="kiosk-task-list">
         {list.map((item) => {
           const idx = items.findIndex((i) => i.id === item.id);
           const state = tasks[item.id] ?? { signed: false, signerName: "", signedAt: null };
           return (
-            <ChecklistKioskTaskCard
+            <ChecklistKioskTaskRow
               key={item.id}
               item={item}
               index={idx}
-              locationName={locationName}
               state={state}
               readOnly={readOnly}
               onSignerChange={(name) => onSignerChange?.(item.id, name)}
@@ -73,7 +72,7 @@ export function ChecklistKioskApp({
             />
           );
         })}
-      </div>
+      </ul>
     );
   };
 
@@ -101,14 +100,18 @@ export function ChecklistKioskApp({
           <div>
             <p className="kiosk-app-header__checklist-label">Today&apos;s Checklist</p>
             <p className="kiosk-app-header__checklist-count">
-              {items.length === 0
-                ? "No tasks yet"
-                : `${signedCount} of ${items.length} complete`}
+              {items.length === 0 ? "No tasks yet" : `${signedCount} of ${items.length} complete`}
             </p>
           </div>
           <div className="kiosk-app-header__pct">{progressPct}%</div>
         </div>
-        <div className="kiosk-app-header__progress" role="progressbar" aria-valuenow={progressPct} aria-valuemin={0} aria-valuemax={100}>
+        <div
+          className="kiosk-app-header__progress"
+          role="progressbar"
+          aria-valuenow={progressPct}
+          aria-valuemin={0}
+          aria-valuemax={100}
+        >
           <div className="kiosk-app-header__progress-fill" style={{ width: `${progressPct}%` }} />
         </div>
       </header>
@@ -144,27 +147,27 @@ export function ChecklistKioskApp({
               </p>
             ) : null}
             {renderTaskList(
-              pendingItems,
+              items,
               items.length === 0
                 ? "No tasks have been added to this checklist yet. Your manager can add them anytime."
                 : "All tasks are complete for today.",
             )}
           </>
         ) : tab === "completed" ? (
-          renderTaskList(completedItems, "No completed tasks yet. Sign off tasks on the Today tab.")
+          renderTaskList(completedItems, "No completed tasks yet. Enter initials and mark tasks complete on the Today tab.")
         ) : (
           <div className="kiosk-app-info">
             <section className="kiosk-app-info-card">
               <h2>How it works</h2>
               <ol>
-                <li>Open a task on the Today tab.</li>
-                <li>Enter your initials or name.</li>
-                <li>Tap Sign Off when the task is done.</li>
-                <li>The checklist saves automatically when every task is complete.</li>
+                <li>Enter your initials in the box to the right of each task.</li>
+                <li>Tap ✓ or press Enter to mark the task complete.</li>
+                <li>Completed tasks turn gray and save automatically.</li>
+                <li>The full checklist submits when every task is done.</li>
               </ol>
             </section>
             <section className="kiosk-app-info-card">
-              <h2>Location</h2>
+              <h2>Checklist</h2>
               <p>
                 <strong>{locationName}</strong>
                 <br />
@@ -212,7 +215,9 @@ export function ChecklistKioskApp({
               ✓
             </span>
             Completed
-            {completedItems.length > 0 ? <span className="kiosk-app-nav__badge kiosk-app-nav__badge--green">{completedItems.length}</span> : null}
+            {completedItems.length > 0 ? (
+              <span className="kiosk-app-nav__badge kiosk-app-nav__badge--green">{completedItems.length}</span>
+            ) : null}
           </button>
           <button
             type="button"

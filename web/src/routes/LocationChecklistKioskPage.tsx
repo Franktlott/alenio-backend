@@ -88,6 +88,7 @@ export function LocationChecklistKioskPage({ legacyToken: legacyTokenProp }: Pro
   const allSigned = items.length > 0 && signedCount === items.length;
 
   const signOffTask = (itemId: string) => {
+    if (tasks[itemId]?.signed) return;
     const name = tasks[itemId]?.signerName.trim() ?? "";
     if (!name) {
       setTaskError("Enter your initials or name before signing off.");
