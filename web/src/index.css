@@ -9828,6 +9828,15 @@ body:has(.seneca-checkin-header-wrap) .seneca-floating-launcher {
   margin-top: 0.5rem;
 }
 
+.enterprise-modal-actions .enterprise-modal-cancel-btn,
+.enterprise-modal-actions .auth-btn-secondary {
+  width: auto;
+  margin-top: 0;
+  padding: 0.45rem 1rem;
+  font-size: 0.8125rem;
+  border-radius: 8px;
+}
+
 .enterprise-modal-primary-btn {
   font-family: inherit;
   font-size: 0.8125rem;
@@ -11221,6 +11230,26 @@ button.enterprise-profile-legal-link {
 
 .chat-create-modal {
   max-width: 440px;
+}
+
+.workspace-form-modal .enterprise-task-modal-head {
+  padding: 0 2.25rem 0 0.35rem;
+}
+
+.workspace-form-modal .enterprise-task-modal-title {
+  font-size: 1.5rem;
+  line-height: 1.15;
+}
+
+.workspace-form-modal .enterprise-task-modal-head .enterprise-muted {
+  margin: 0.35rem 0 0;
+  font-size: 0.875rem;
+  line-height: 1.45;
+}
+
+.workspace-form-modal .enterprise-task-modal-footer {
+  padding-left: 1rem;
+  padding-right: 1rem;
 }
 
 .chat-create-modal-body {
