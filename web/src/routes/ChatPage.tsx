@@ -33,6 +33,8 @@ import {
   deleteTeamTopic,
   createVideoRoom,
   deleteDmMessage,
+  deleteDmConversation,
+  leaveDmConversation,
   deleteTeamMessage,
   fetchDmConversations,
   fetchDmMessages,
@@ -270,6 +272,8 @@ export function ChatPage() {
   const [createErr, setCreateErr] = useState<string | null>(null);
   const [deleteChannelTopic, setDeleteChannelTopic] = useState<TeamTopic | null>(null);
   const [deleteChannelSaving, setDeleteChannelSaving] = useState(false);
+  const [conversationDeleteOpen, setConversationDeleteOpen] = useState(false);
+  const [conversationDeleteSaving, setConversationDeleteSaving] = useState(false);
   const [actionMessage, setActionMessage] = useState<ChatMessageLike | null>(null);
   const [editMessage, setEditMessage] = useState<ChatMessageLike | null>(null);
   const [editDraft, setEditDraft] = useState("");
@@ -751,6 +755,49 @@ export function ChatPage() {
     }
   };
 
+  const exitConversation = () => {
+    if (selectedTeamId) {
+      setParams({ teamId: selectedTeamId, topicId: selectedTopicId || "general" });
+    } else {
+      setParams({});
+    }
+    setSendErr(null);
+  };
+
+  const closeDeleteConversation = () => {
+    if (conversationDeleteSaving) return;
+    setConversationDeleteOpen(false);
+    setActionErr(null);
+  };
+
+  const onDeleteConversation = async () => {
+    if (!selectedConversationId) return;
+    setConversationDeleteSaving(true);
+    setActionErr(null);
+    try {
+      await deleteDmConversation(selectedConversationId);
+      setConversationDeleteOpen(false);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.chatConversations });
+      exitConversation();
+    } catch (e) {
+      setActionErr(e instanceof Error ? e.message : "Could not delete conversation.");
+    } finally {
+      setConversationDeleteSaving(false);
+    }
+  };
+
+  const onLeaveConversation = async () => {
+    if (!selectedConversationId) return;
+    setActionErr(null);
+    try {
+      await leaveDmConversation(selectedConversationId);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.chatConversations });
+      exitConversation();
+    } catch (e) {
+      setActionErr(e instanceof Error ? e.message : "Could not leave group.");
+    }
+  };
+
   const channelHeaderTitle = isDmMode
     ? conversationLabel ?? "Direct message"
     : selectedTopicId === "general"
@@ -1143,6 +1190,36 @@ export function ChatPage() {
                                 </button>
                               ) : null}
                             </>
+                          ) : activeConversation ? (
+                            <>
+                              <button
+                                type="button"
+                                role="menuitem"
+                                className="chat-header-more-item chat-header-more-item--danger"
+                                onClick={() => {
+                                  setMoreMenuOpen(false);
+                                  setActionErr(null);
+                                  setConversationDeleteOpen(true);
+                                }}
+                                data-testid="chat-delete-conversation"
+                              >
+                                {activeConversation.isGroup ? "Delete group" : "Delete conversation"}
+                              </button>
+                              {activeConversation.isGroup ? (
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  className="chat-header-more-item"
+                                  onClick={() => {
+                                    setMoreMenuOpen(false);
+                                    void onLeaveConversation();
+                                  }}
+                                  data-testid="chat-leave-group"
+                                >
+                                  Leave group
+                                </button>
+                              ) : null}
+                            </>
                           ) : (
                             <span className="chat-header-more-muted">No extra actions</span>
                           )}
@@ -1494,6 +1571,52 @@ export function ChatPage() {
                 data-testid="confirm-delete-channel"
               >
                 {deleteChannelSaving ? "Deleting…" : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {conversationDeleteOpen && activeConversation ? (
+        <div className="enterprise-modal-backdrop" role="presentation" onClick={closeDeleteConversation}>
+          <div
+            className="enterprise-modal-panel chat-delete-channel-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="chat-delete-conversation-title"
+            onClick={(e) => e.stopPropagation()}
+            data-testid="chat-delete-conversation-modal"
+          >
+            <h3 id="chat-delete-conversation-title" className="enterprise-modal-title">
+              {activeConversation.isGroup ? "Delete group?" : "Delete conversation?"}
+            </h3>
+            <p className="enterprise-muted enterprise-modal-sub">
+              {activeConversation.isGroup
+                ? "This will permanently delete the group and all messages for everyone."
+                : "This will permanently delete this conversation for both you and the other person."}
+            </p>
+            {actionErr ? (
+              <p className="auth-error" role="alert">
+                {actionErr}
+              </p>
+            ) : null}
+            <div className="enterprise-modal-actions">
+              <button
+                type="button"
+                className="auth-btn-secondary"
+                onClick={closeDeleteConversation}
+                disabled={conversationDeleteSaving}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="enterprise-team-btn-destructive"
+                disabled={conversationDeleteSaving}
+                onClick={() => void onDeleteConversation()}
+                data-testid="confirm-delete-conversation"
+              >
+                {conversationDeleteSaving ? "Deleting…" : "Delete"}
               </button>
             </div>
           </div>

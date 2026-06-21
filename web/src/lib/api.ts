@@ -504,6 +504,14 @@ export function deleteDmMessage(conversationId: string, messageId: string) {
   return apiDeleteJson<void>(`/api/dms/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}`);
 }
 
+export function deleteDmConversation(conversationId: string) {
+  return apiDeleteJson<void>(`/api/dms/${encodeURIComponent(conversationId)}`);
+}
+
+export function leaveDmConversation(conversationId: string) {
+  return apiPostJson<void>(`/api/dms/${encodeURIComponent(conversationId)}/leave`, {});
+}
+
 export type ChatUploadResult = {
   id: string;
   url: string;
