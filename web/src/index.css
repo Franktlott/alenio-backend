@@ -22105,3 +22105,276 @@ button.enterprise-profile-legal-link {
 .enterprise-oneone-fill-body .seneca-checkin-layout {
   min-height: 0;
 }
+
+/* Seneca floating launcher + coming soon modal */
+.seneca-floating-launcher {
+  position: fixed;
+  right: 1.25rem;
+  bottom: 1.25rem;
+  z-index: 150;
+  width: 3.75rem;
+  height: 3.75rem;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s ease, filter 0.2s ease;
+}
+
+.seneca-floating-launcher:hover {
+  transform: scale(1.06);
+  filter: brightness(1.08);
+}
+
+.seneca-floating-launcher:focus-visible {
+  outline: 2px solid #6366f1;
+  outline-offset: 3px;
+}
+
+.seneca-floating-launcher__ring {
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  background: conic-gradient(from 180deg, #22d3ee, #6366f1, #a855f7, #22d3ee);
+  opacity: 0.55;
+  animation: seneca-float-ring 3s linear infinite;
+  z-index: 0;
+}
+
+.seneca-floating-launcher__icon {
+  position: relative;
+  z-index: 1;
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: 50%;
+  object-fit: cover;
+  box-shadow: 0 8px 28px rgba(99, 102, 241, 0.45);
+}
+
+@keyframes seneca-float-ring {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.seneca-soon-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 210;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+  background: rgba(2, 6, 23, 0.72);
+  backdrop-filter: blur(6px);
+}
+
+.seneca-soon-modal {
+  position: relative;
+  width: min(22rem, 100%);
+  padding: 2rem 1.75rem 1.75rem;
+  border-radius: 1.25rem;
+  border: 1px solid rgba(99, 102, 241, 0.35);
+  background: linear-gradient(165deg, #0f172a 0%, #1e1b4b 52%, #0f172a 100%);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.04) inset,
+    0 24px 64px rgba(15, 23, 42, 0.55),
+    0 0 48px rgba(99, 102, 241, 0.18);
+  text-align: center;
+  color: #e2e8f0;
+  overflow: hidden;
+}
+
+.seneca-soon-glow {
+  position: absolute;
+  top: -30%;
+  left: 50%;
+  width: 14rem;
+  height: 14rem;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(99, 102, 241, 0.35) 0%, rgba(99, 102, 241, 0) 70%);
+  pointer-events: none;
+}
+
+.seneca-soon-close {
+  position: absolute;
+  top: 0.65rem;
+  right: 0.75rem;
+  z-index: 2;
+  width: 2rem;
+  height: 2rem;
+  border: none;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #cbd5e1;
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.seneca-soon-close:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+}
+
+.seneca-soon-icon-wrap {
+  position: relative;
+  z-index: 1;
+  width: 6rem;
+  height: 6rem;
+  margin: 0 auto 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.seneca-soon-icon-wrap--loading .seneca-soon-icon {
+  animation: seneca-soon-pulse 1.2s ease-in-out infinite;
+}
+
+.seneca-soon-icon {
+  width: 5.5rem;
+  height: 5.5rem;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.seneca-soon-spinner {
+  position: absolute;
+  inset: -0.35rem;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  border-top-color: #22d3ee;
+  border-right-color: #a855f7;
+  animation: seneca-float-ring 0.9s linear infinite;
+}
+
+@keyframes seneca-soon-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(0.96);
+    opacity: 0.88;
+  }
+}
+
+.seneca-soon-loading {
+  position: relative;
+  z-index: 1;
+  min-height: 3.5rem;
+}
+
+.seneca-soon-loading-text {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #cbd5e1;
+}
+
+.seneca-soon-dots {
+  display: inline-flex;
+  gap: 0.35rem;
+  margin-top: 0.65rem;
+}
+
+.seneca-soon-dots span {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: #818cf8;
+  animation: seneca-soon-dot 1.2s ease-in-out infinite;
+}
+
+.seneca-soon-dots span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.seneca-soon-dots span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes seneca-soon-dot {
+  0%,
+  80%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.45;
+  }
+  40% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+
+.seneca-soon-body {
+  position: relative;
+  z-index: 1;
+  animation: seneca-soon-fade-in 0.35s ease;
+}
+
+@keyframes seneca-soon-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.seneca-soon-kicker {
+  margin: 0 0 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #818cf8;
+}
+
+.seneca-soon-title {
+  margin: 0 0 0.75rem;
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: #f8fafc;
+}
+
+.seneca-soon-sub {
+  margin: 0 0 1.25rem;
+  font-size: 0.9375rem;
+  line-height: 1.55;
+  color: #94a3b8;
+}
+
+.seneca-soon-dismiss {
+  width: 100%;
+  padding: 0.7rem 1rem;
+  border: none;
+  border-radius: 0.65rem;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: #fff;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgba(99, 102, 241, 0.35);
+}
+
+.seneca-soon-dismiss:hover {
+  filter: brightness(1.06);
+}
+
+@media (max-width: 640px) {
+  .seneca-floating-launcher {
+    right: 1rem;
+    bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+  }
+}

@@ -10,6 +10,7 @@ import { hasMobileWebPreferred } from "../lib/app-links";
 import { getPersistedEnterpriseTeamId, pickEnterpriseTeamId, setPersistedEnterpriseTeamId, teamsWorkspaceSelectionKey } from "../lib/enterprise-selected-team";
 import { isMobileBrowser } from "../lib/mobile-browser";
 import { enterpriseNavTitle } from "../lib/enterprise-nav";
+import { SenecaFloatingLauncher } from "../components/seneca/SenecaFloatingLauncher";
 
 export type EnterpriseRouteHandle = {
   enterpriseContentClassName?: string;
@@ -285,6 +286,7 @@ export function EnterpriseShellLayout() {
         ) : (
           <Outlet />
         )}
+        {teams !== null ? <SenecaFloatingLauncher /> : null}
       </EnterpriseLayout>
     </EnterpriseShellContext.Provider>
   );
