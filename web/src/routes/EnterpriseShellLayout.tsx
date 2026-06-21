@@ -26,6 +26,7 @@ function routeLayoutHandleFromPath(_pathname: string): EnterpriseRouteHandle {
 function activeNavFromPath(pathname: string): EnterpriseNavId {
   if (pathname.startsWith("/activity")) return "activity";
   if (pathname.startsWith("/chat")) return "chat";
+  if (pathname.startsWith("/go")) return "go";
   if (pathname.startsWith("/billing")) return "plan";
   if (pathname.startsWith("/team")) return "team";
   if (pathname.startsWith("/profile")) return "profile";
@@ -204,7 +205,10 @@ export function EnterpriseShellLayout() {
       return;
     }
     const isTeamGatedShellRoute =
-      path.startsWith("/activity") || path.startsWith("/dashboard") || path.startsWith("/tasks/new");
+      path.startsWith("/activity") ||
+      path.startsWith("/dashboard") ||
+      path.startsWith("/go") ||
+      path.startsWith("/tasks/new");
     if (isTeamGatedShellRoute && !showActivityExecuteNav && path !== "/chat") {
       navigate("/chat", { replace: true });
     }

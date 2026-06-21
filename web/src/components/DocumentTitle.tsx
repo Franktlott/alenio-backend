@@ -20,6 +20,7 @@ function pageTitleForPath(pathname: string): string | null {
   if (pathname.startsWith("/activity")) return enterpriseNavTitle("activity");
   if (pathname.startsWith("/chat")) return enterpriseNavTitle("chat");
   if (pathname.startsWith("/dashboard")) return enterpriseNavTitle("execute");
+  if (pathname.startsWith("/go")) return enterpriseNavTitle("go");
   if (pathname.startsWith("/tasks/new")) return "New task";
   if (pathname.startsWith("/tasks/")) return "Task";
   if (pathname.startsWith("/billing")) return enterpriseNavTitle("plan");

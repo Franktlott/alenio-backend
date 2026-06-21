@@ -50,7 +50,6 @@ import { TaskPromptModal } from "../components/tasks/TaskPromptModal";
 import { WorkspaceTaskCreateModal } from "../components/tasks/WorkspaceTaskCreateModal";
 import { WorkspaceTaskDetailModal } from "../components/tasks/WorkspaceTaskDetailModal";
 import { WorkspaceTaskRow } from "../components/tasks/WorkspaceTaskRow";
-import { LocationChecklistsSection } from "../components/checklists/LocationChecklistsSection";
 import { isRecurringTask, type RecurrenceScope } from "../lib/recurring-task";
 import {
   dotClassForDayTasks,
@@ -1078,9 +1077,6 @@ export function DashboardPage() {
               </div>
             </div>
           </section>
-          {selectedTeamId ? (
-            <LocationChecklistsSection teamId={selectedTeamId} myRole={myRole} teamName={selectedTeam?.name} />
-          ) : null}
           </div>
         </div>
       </div>

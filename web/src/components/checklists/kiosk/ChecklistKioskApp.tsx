@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { AlenioGoLogo } from "../../AlenioGoLogo";
 import { ChecklistKioskTaskRow } from "./ChecklistKioskTaskRow";
 import type { KioskTab, KioskTaskItem, KioskTaskState } from "./checklist-kiosk-types";
 
@@ -90,7 +91,7 @@ export function ChecklistKioskApp({
     <div className={`kiosk-app${mode === "preview" ? " kiosk-app--preview" : ""}`} data-testid="checklist-kiosk-app">
       <header className="kiosk-app-header">
         <div className="kiosk-app-header__top">
-          <img src="/alenio-logo-white.png" alt="Alenio" className="kiosk-app-header__logo" width={108} height={26} />
+          <AlenioGoLogo variant="header" className="kiosk-app-header__go-logo" />
           <div className="kiosk-app-header__workspace-pill">
             {teamImage ? <img src={teamImage} alt="" className="kiosk-app-header__pill-avatar" /> : null}
             <span>{loading ? "…" : teamName}</span>
@@ -209,7 +210,7 @@ export function ChecklistKioskApp({
                     <span className="kiosk-app-stat-label">Total</span>
                   </div>
                 </section>
-                <p className="kiosk-app-info-foot">No login required · Alenio Enterprise</p>
+                <p className="kiosk-app-info-foot">No login required · Alenio Go</p>
               </div>
             )}
           </>

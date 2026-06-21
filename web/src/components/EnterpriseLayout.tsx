@@ -10,7 +10,7 @@ import {
 } from "../lib/enterprise-selected-team";
 import type { WebMeUser, WebTeamRow } from "../lib/api";
 
-export type EnterpriseNavId = "activity" | "chat" | "execute" | "team" | "plan" | "profile";
+export type EnterpriseNavId = "activity" | "chat" | "execute" | "go" | "team" | "plan" | "profile";
 
 type Props = {
   activeNav: EnterpriseNavId;
@@ -108,6 +108,20 @@ function NavItem({
     >
       <span className="enterprise-nav-icon">{icon}</span>
       <span>{label}</span>
+    </Link>
+  );
+}
+
+function AlenioGoNavItem({ activeNav }: { activeNav: EnterpriseNavId }) {
+  const active = activeNav === "go";
+  return (
+    <Link
+      to="/go"
+      className={`enterprise-nav-item${active ? " enterprise-nav-item-active" : ""}`}
+      data-testid="nav-go"
+      aria-current={active ? "page" : undefined}
+    >
+      Alenio Go
     </Link>
   );
 }
@@ -231,20 +245,27 @@ export function EnterpriseLayout({
         <Link to="/dashboard" className="enterprise-sidebar-brand">
           <img src="/alenio-logo-white.png" alt="Alenio home" className="enterprise-sidebar-logo" />
         </Link>
-        <nav className="enterprise-nav" aria-label="Product">
+        <div className="enterprise-sidebar-nav-stack">
+          <nav className="enterprise-nav" aria-label="Product">
+            {showActivityExecuteNav ? (
+              <NavItem to="/activity" navId="activity" activeNav={activeNav} icon={<IconActivity />} label="Activity" />
+            ) : null}
+            <NavItem to="/chat" navId="chat" activeNav={activeNav} icon={<IconChat />} label="Chat" />
+            {showActivityExecuteNav ? (
+              <NavItem to="/dashboard" navId="execute" activeNav={activeNav} icon={<IconWorkspace />} label="Workspace" />
+            ) : null}
+            <NavItem to="/team" navId="team" activeNav={activeNav} icon={<IconTeam />} label="Team" />
+            {showPlanNav ? (
+              <NavItem to="/billing" navId="plan" activeNav={activeNav} icon={<IconPlan />} label="Billing" />
+            ) : null}
+            <NavItem to="/profile" navId="profile" activeNav={activeNav} icon={<IconProfile />} label="Profile" />
+          </nav>
           {showActivityExecuteNav ? (
-            <NavItem to="/activity" navId="activity" activeNav={activeNav} icon={<IconActivity />} label="Activity" />
+            <div className="enterprise-nav-go">
+              <AlenioGoNavItem activeNav={activeNav} />
+            </div>
           ) : null}
-          <NavItem to="/chat" navId="chat" activeNav={activeNav} icon={<IconChat />} label="Chat" />
-          {showActivityExecuteNav ? (
-            <NavItem to="/dashboard" navId="execute" activeNav={activeNav} icon={<IconWorkspace />} label="Workspace" />
-          ) : null}
-          <NavItem to="/team" navId="team" activeNav={activeNav} icon={<IconTeam />} label="Team" />
-          {showPlanNav ? (
-            <NavItem to="/billing" navId="plan" activeNav={activeNav} icon={<IconPlan />} label="Billing" />
-          ) : null}
-          <NavItem to="/profile" navId="profile" activeNav={activeNav} icon={<IconProfile />} label="Profile" />
-        </nav>
+        </div>
         <div className="enterprise-sidebar-footer">
           <div className="enterprise-sidebar-ws-wrap">
             <label className="enterprise-workspace-label" htmlFor="enterprise-workspace">

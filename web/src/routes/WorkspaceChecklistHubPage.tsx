@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { AlenioGoLogo } from "../components/AlenioGoLogo";
 import { KioskInstallBar } from "../components/checklists/kiosk/KioskInstallBar";
 import { fetchPublicChecklistByToken, fetchPublicChecklistHub } from "../lib/api";
 import { LocationChecklistKioskPage } from "./LocationChecklistKioskPage";
@@ -69,7 +70,7 @@ export function WorkspaceChecklistHubPage() {
       <div className="kiosk-app kiosk-app--hub">
         <header className="kiosk-app-header kiosk-hub-header">
           <div className="kiosk-app-header__top">
-            <img src="/alenio-logo-white.png" alt="Alenio" className="kiosk-app-header__logo" width={108} height={26} />
+            <AlenioGoLogo variant="header" className="kiosk-app-header__go-logo" />
             <div className="kiosk-app-header__workspace-pill">
               {teamImage ? (
                 <img src={teamImage} alt="" className="kiosk-app-header__pill-avatar" />
@@ -135,7 +136,7 @@ export function WorkspaceChecklistHubPage() {
           )}
         </main>
 
-        <footer className="kiosk-hub-foot">Powered by Alenio Enterprise · No account needed</footer>
+        <footer className="kiosk-hub-foot">Powered by Alenio Go · No account needed</footer>
       </div>
     </div>
   );
