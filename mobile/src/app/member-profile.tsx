@@ -10,12 +10,10 @@ import {
   Modal,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
-  MessageCircle,
   MoreVertical,
   UserMinus,
   Crown,
@@ -33,6 +31,10 @@ import { DevelopmentPlanTab } from "@/components/DevelopmentPlanTab";
 import { OneOnOneHistoryTab } from "@/components/OneOnOneHistoryTab";
 
 const PROFILE_TABS = ["Overview", "Growth", "Check-In"] as const;
+const PAGE_BG = "#F3F5FC";
+const PAGE_HEADER_BG = "#FAFBFF";
+const PAGE_BORDER = "#E0E7FF";
+const TAB_TRACK_BG = "#E8ECFA";
 type ProfileTab = (typeof PROFILE_TABS)[number];
 
 function roleLabel(role: TeamRole): string {
@@ -127,26 +129,10 @@ export default function MemberProfileScreen() {
   const canCreateDevGoal =
     isSelf || myRole === "owner" || myRole === "team_leader" || myRole === "admin";
   const canAddDevNotes = canCreateDevGoal;
+  const canCreateOneOne = myRole === "owner" || myRole === "team_leader";
 
   const stats = memberStats?.[memberUserId];
   const displayName = member?.user.name ?? member?.user.email ?? "Member";
-
-  const dmMutation = useMutation({
-    mutationFn: (recipientId: string) =>
-      api.post<{ id: string; recipient: { name: string } | null }>("/api/dms/find-or-create", {
-        recipientId,
-      }),
-    onSuccess: (conv) => {
-      queryClient.invalidateQueries({ queryKey: ["conversations"] });
-      router.push({
-        pathname: "/dm-chat",
-        params: {
-          conversationId: conv.id,
-          recipientName: conv.recipient?.name ?? "Direct Message",
-        },
-      });
-    },
-  });
 
   const removeMutation = useMutation({
     mutationFn: (userId: string) => api.delete(`/api/teams/${teamId}/members/${userId}`),
@@ -194,7 +180,7 @@ export default function MemberProfileScreen() {
 
   if (!teamId || !memberUserId) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: "#F8FAFC", alignItems: "center", justifyContent: "center" }}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: PAGE_BG, alignItems: "center", justifyContent: "center" }}>
         <Text style={{ color: "#64748B" }}>Missing member information.</Text>
         <Pressable onPress={() => router.back()} style={{ marginTop: 12 }}>
           <Text style={{ color: "#4361EE", fontWeight: "700" }}>Go back</Text>
@@ -205,7 +191,7 @@ export default function MemberProfileScreen() {
 
   if (isLoading || !member) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: "#F8FAFC", alignItems: "center", justifyContent: "center" }}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: PAGE_BG, alignItems: "center", justifyContent: "center" }}>
         <ActivityIndicator color="#4361EE" />
       </SafeAreaView>
     );
@@ -214,7 +200,7 @@ export default function MemberProfileScreen() {
   const canViewProfile = isSelf || myRole === "owner" || myRole === "team_leader";
   if (!canViewProfile) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: "#F8FAFC", alignItems: "center", justifyContent: "center", paddingHorizontal: 24 }}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: PAGE_BG, alignItems: "center", justifyContent: "center", paddingHorizontal: 24 }}>
         <Text style={{ color: "#64748B", textAlign: "center", lineHeight: 22 }}>
           You can only view your own profile. Owners and team leaders can view other members.
         </Text>
@@ -226,140 +212,193 @@ export default function MemberProfileScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#F8FAFC" }} edges={["top", "bottom"]}>
-      <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingVertical: 8, gap: 8 }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: PAGE_BG }} edges={["top", "bottom"]}>
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          paddingHorizontal: 12,
+          paddingVertical: 10,
+          gap: 8,
+          backgroundColor: PAGE_HEADER_BG,
+          borderBottomWidth: 1,
+          borderBottomColor: PAGE_BORDER,
+        }}
+      >
         <Pressable
           onPress={() => router.back()}
-          style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "white", alignItems: "center", justifyContent: "center" }}
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: 10,
+            backgroundColor: "white",
+            alignItems: "center",
+            justifyContent: "center",
+            borderWidth: 1,
+            borderColor: PAGE_BORDER,
+          }}
           testID="member-profile-back"
         >
-          <ArrowLeft size={20} color="#0F172A" />
+          <ArrowLeft size={18} color="#4361EE" />
         </Pressable>
-        <Text style={{ flex: 1, fontSize: 16, fontWeight: "700", color: "#0F172A" }}>Team member</Text>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={{ fontSize: 11, fontWeight: "600", color: "#64748B", textTransform: "uppercase", letterSpacing: 0.6 }}>
+            Team member
+          </Text>
+          <Text style={{ fontSize: 16, fontWeight: "700", color: "#0F172A" }} numberOfLines={1}>
+            {displayName}
+            {isSelf ? " (you)" : ""}
+          </Text>
+        </View>
         {canManage && !isDemo ? (
           <Pressable
             onPress={() => setManageOpen(true)}
-            style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "white", alignItems: "center", justifyContent: "center" }}
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 10,
+              backgroundColor: "white",
+              alignItems: "center",
+              justifyContent: "center",
+              borderWidth: 1,
+              borderColor: PAGE_BORDER,
+            }}
             testID="member-profile-manage"
           >
-            <MoreVertical size={20} color="#64748B" />
+            <MoreVertical size={18} color="#64748B" />
           </Pressable>
         ) : null}
       </View>
 
-      <ScrollView contentContainerStyle={{ paddingBottom: Math.max(24, insets.bottom) }} stickyHeaderIndices={[1]}>
-        <View style={{ paddingHorizontal: 16, paddingBottom: 12 }}>
-          <LinearGradient
-            colors={["#4361EE", "#7C3AED"]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={{ borderRadius: 18, padding: 18 }}
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingBottom: Math.max(24, insets.bottom), paddingTop: 12 }}
+        stickyHeaderIndices={[1]}
+      >
+        <View style={{ paddingHorizontal: 12, paddingBottom: 10 }}>
+          <View
+            style={{
+              backgroundColor: "white",
+              borderRadius: 14,
+              borderWidth: 1,
+              borderColor: PAGE_BORDER,
+              padding: 14,
+              shadowColor: "#0F172A",
+              shadowOpacity: 0.05,
+              shadowRadius: 10,
+              shadowOffset: { width: 0, height: 2 },
+              elevation: 2,
+            }}
           >
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
               <View
                 style={{
-                  width: 56,
-                  height: 56,
-                  borderRadius: 28,
-                  backgroundColor: "rgba(255,255,255,0.25)",
+                  width: 48,
+                  height: 48,
+                  borderRadius: 24,
+                  backgroundColor: "#EEF2FF",
                   alignItems: "center",
                   justifyContent: "center",
                   overflow: "hidden",
+                  borderWidth: 2,
+                  borderColor: "#E0E7FF",
                 }}
               >
                 {member.user.image ? (
-                  <Image source={{ uri: member.user.image }} style={{ width: 56, height: 56 }} resizeMode="cover" />
+                  <Image source={{ uri: member.user.image }} style={{ width: 48, height: 48 }} resizeMode="cover" />
                 ) : (
-                  <Text style={{ fontSize: 22, fontWeight: "800", color: "white" }}>
+                  <Text style={{ fontSize: 18, fontWeight: "800", color: "#4361EE" }}>
                     {member.user.name?.[0]?.toUpperCase() ?? "?"}
                   </Text>
                 )}
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 18, fontWeight: "800", color: "white" }}>
-                  {displayName}
-                  {isSelf ? " (you)" : ""}
-                </Text>
-                <View
-                  style={{
-                    marginTop: 6,
-                    alignSelf: "flex-start",
-                    backgroundColor: "rgba(255,255,255,0.2)",
-                    borderRadius: 20,
-                    paddingHorizontal: 10,
-                    paddingVertical: 3,
-                  }}
-                >
-                  <Text style={{ fontSize: 11, fontWeight: "700", color: "white" }}>
-                    {roleLabel(member.role)}
-                  </Text>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                  <View
+                    style={{
+                      backgroundColor: "#EEF2FF",
+                      borderRadius: 6,
+                      paddingHorizontal: 8,
+                      paddingVertical: 3,
+                      borderWidth: 1,
+                      borderColor: "#C7D2FE",
+                    }}
+                  >
+                    <Text style={{ fontSize: 10, fontWeight: "700", color: "#4338CA" }}>
+                      {roleLabel(member.role)}
+                    </Text>
+                  </View>
+                  <View
+                    style={{
+                      backgroundColor: "#ECFDF5",
+                      borderRadius: 6,
+                      paddingHorizontal: 8,
+                      paddingVertical: 3,
+                      borderWidth: 1,
+                      borderColor: "#BBF7D0",
+                    }}
+                  >
+                    <Text style={{ fontSize: 10, fontWeight: "700", color: "#15803D" }}>Active</Text>
+                  </View>
                 </View>
                 {member.user.email ? (
-                  <Text style={{ fontSize: 12, color: "rgba(255,255,255,0.8)", marginTop: 6 }}>
+                  <Text style={{ fontSize: 12, color: "#64748B", marginTop: 6 }} numberOfLines={1}>
                     {member.user.email}
                   </Text>
                 ) : null}
                 {managerName && member.role !== "owner" ? (
-                  <Text style={{ fontSize: 12, color: "rgba(255,255,255,0.8)", marginTop: 2 }}>
+                  <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 3 }} numberOfLines={1}>
                     Reports to {managerName}
                   </Text>
                 ) : null}
               </View>
             </View>
-          </LinearGradient>
-
-          {!isSelf ? (
-            <Pressable
-              onPress={() => dmMutation.mutate(member.userId)}
-              style={{
-                marginTop: 12,
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 8,
-                backgroundColor: "#4361EE",
-                paddingVertical: 12,
-                borderRadius: 12,
-              }}
-              testID="member-profile-message"
-            >
-              <MessageCircle size={16} color="white" />
-              <Text style={{ color: "white", fontWeight: "700", fontSize: 15 }}>Message</Text>
-            </Pressable>
-          ) : null}
+          </View>
         </View>
 
-        <View style={{ backgroundColor: "#F8FAFC", paddingHorizontal: 12, paddingBottom: 8 }}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+        <View style={{ paddingHorizontal: 12, paddingBottom: 10 }}>
+          <View
+            style={{
+              flexDirection: "row",
+              backgroundColor: TAB_TRACK_BG,
+              borderRadius: 12,
+              padding: 3,
+              gap: 3,
+            }}
+          >
             {PROFILE_TABS.map((tab) => (
               <Pressable
                 key={tab}
                 onPress={() => setActiveTab(tab)}
                 style={{
-                  paddingHorizontal: 14,
+                  flex: 1,
                   paddingVertical: 8,
-                  borderRadius: 20,
-                  backgroundColor: activeTab === tab ? "#4361EE" : "white",
-                  borderWidth: 1,
-                  borderColor: activeTab === tab ? "#4361EE" : "#E2E8F0",
+                  borderRadius: 10,
+                  backgroundColor: activeTab === tab ? "white" : "transparent",
+                  alignItems: "center",
+                  shadowColor: activeTab === tab ? "#0F172A" : "transparent",
+                  shadowOpacity: activeTab === tab ? 0.06 : 0,
+                  shadowRadius: 4,
+                  shadowOffset: { width: 0, height: 1 },
+                  elevation: activeTab === tab ? 1 : 0,
                 }}
                 testID={`member-profile-tab-${tab}`}
               >
                 <Text
                   style={{
-                    fontSize: 13,
+                    fontSize: 12,
                     fontWeight: "700",
-                    color: activeTab === tab ? "white" : "#64748B",
+                    color: activeTab === tab ? "#0F172A" : "#64748B",
                   }}
                 >
                   {tab}
                 </Text>
               </Pressable>
             ))}
-          </ScrollView>
+          </View>
         </View>
 
-        <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>
+        <View style={{ paddingHorizontal: 12, paddingTop: 2 }}>
           {activeTab === "Overview" ? (
             <ProfileOverviewTab
               teamId={teamId}
@@ -383,8 +422,8 @@ export default function MemberProfileScreen() {
               memberName={displayName}
               managerName={managerName}
               leaderUserId={leaderUserId}
-              canCreate={false}
-              canModify={false}
+              canCreate={canCreateOneOne}
+              canModify={canCreateOneOne}
             />
           )}
         </View>

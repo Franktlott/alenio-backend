@@ -11,7 +11,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams } from "expo-router";
@@ -44,6 +44,7 @@ export default function TaskDetailScreen() {
   const { data: session } = useSession();
   const isDemo = useDemoMode();
   const queryClient = useQueryClient();
+  const insets = useSafeAreaInsets();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [recurringScopeMode, setRecurringScopeMode] = useState<"delete" | "edit" | null>(null);
   const [showAssignModal, setShowAssignModal] = useState(false);
@@ -779,7 +780,7 @@ export default function TaskDetailScreen() {
           style={{
             paddingHorizontal: 16,
             paddingTop: 12,
-            paddingBottom: 16,
+            paddingBottom: Math.max(insets.bottom, 16),
             borderTopWidth: 1,
             borderTopColor: "#E2E8F0",
             backgroundColor: "#FFFFFF",

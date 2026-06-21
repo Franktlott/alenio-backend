@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -36,6 +36,8 @@ import {
 import {
   checkInEditActionLabel,
   checkInEditMenuLabel,
+  canPrintCheckIn,
+  countOverdueFollowUpTasks,
   getOneOnOneMeetingStatusFromMeeting,
   oneOnOneMeetingStatusColors,
   oneOnOneMeetingStatusLabel,
@@ -147,6 +149,12 @@ export function OneOnOneHistoryTab({
   const [followUpDrafts, setFollowUpDrafts] = useState<FollowUpDraft[]>([]);
   const [feedbackPromptOpen, setFeedbackPromptOpen] = useState(false);
   const [prepAcknowledged, setPrepAcknowledged] = useState(false);
+
+  const todayStart = useMemo(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, []);
 
   const resolveLeaderUserId = (meeting?: OneOnOneMeeting | null) =>
     leaderUserId ?? meeting?.createdById ?? null;
@@ -328,6 +336,10 @@ export function OneOnOneHistoryTab({
   };
 
   const onPrint = async (meeting: OneOnOneMeeting) => {
+    if (!canPrintCheckIn(meeting)) {
+      toast({ title: "Publish this check-in before printing.", preset: "error" });
+      return;
+    }
     setPrintingPdf(true);
     setMenuMeetingId(null);
     try {
@@ -835,6 +847,7 @@ export function OneOnOneHistoryTab({
             .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
             .map((meeting) => {
               const isDraft = meeting.status === "draft";
+              const overdueCount = countOverdueFollowUpTasks(meeting.followUpTasks, todayStart);
               const status = getOneOnOneMeetingStatusFromMeeting(meeting);
               const colors = isDraft
                 ? { bg: "#EEF2FF", text: "#4338CA" }
@@ -854,9 +867,27 @@ export function OneOnOneHistoryTab({
                 >
                   <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" }}>
                     <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 15, fontWeight: "700", color: "#0F172A" }}>
-                        {meeting.templateTitle}
-                      </Text>
+                      <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 6 }}>
+                        <Text style={{ fontSize: 15, fontWeight: "700", color: "#0F172A", flexShrink: 1 }}>
+                          {meeting.templateTitle}
+                        </Text>
+                        {overdueCount > 0 ? (
+                          <View
+                            style={{
+                              backgroundColor: "#FEE2E2",
+                              borderRadius: 6,
+                              paddingHorizontal: 8,
+                              paddingVertical: 3,
+                              borderWidth: 1,
+                              borderColor: "#FECACA",
+                            }}
+                          >
+                            <Text style={{ fontSize: 10, fontWeight: "700", color: "#DC2626" }}>
+                              {overdueCount} overdue
+                            </Text>
+                          </View>
+                        ) : null}
+                      </View>
                       <Text style={{ fontSize: 12, color: "#64748B", marginTop: 2 }}>
                         {formatMeetingDate(meeting.createdAt)}
                       </Text>
@@ -889,15 +920,17 @@ export function OneOnOneHistoryTab({
                   </View>
                   {menuMeetingId === meeting.id ? (
                     <View style={{ marginTop: 10, backgroundColor: "#F8FAFC", borderRadius: 10, overflow: "hidden" }}>
-                      <Pressable
-                        onPress={() => void onPrint(meeting)}
-                        disabled={printingPdf}
-                        style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: "#E2E8F0" }}
-                      >
-                        <Text style={{ fontSize: 14, fontWeight: "600", color: "#334155" }}>
-                          {printingPdf ? "Printing…" : "Print"}
-                        </Text>
-                      </Pressable>
+                      {canPrintCheckIn(meeting) ? (
+                        <Pressable
+                          onPress={() => void onPrint(meeting)}
+                          disabled={printingPdf}
+                          style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: "#E2E8F0" }}
+                        >
+                          <Text style={{ fontSize: 14, fontWeight: "600", color: "#334155" }}>
+                            {printingPdf ? "Printing…" : "Print"}
+                          </Text>
+                        </Pressable>
+                      ) : null}
                       <Pressable
                         onPress={() => startEdit(meeting)}
                         style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: "#E2E8F0" }}
@@ -952,22 +985,24 @@ export function OneOnOneHistoryTab({
                 </Text>
               </View>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                <Pressable
-                  onPress={() => previewMeeting && void onPrint(previewMeeting)}
-                  disabled={!previewMeeting || printingPdf}
-                  style={{
-                    borderWidth: 1,
-                    borderColor: "#D8DEE8",
-                    borderRadius: 10,
-                    paddingHorizontal: 12,
-                    paddingVertical: 8,
-                    opacity: !previewMeeting || printingPdf ? 0.55 : 1,
-                  }}
-                >
-                  <Text style={{ fontSize: 13, fontWeight: "700", color: "#334155" }}>
-                    {printingPdf ? "Printing…" : "Print"}
-                  </Text>
-                </Pressable>
+                {previewMeeting && canPrintCheckIn(previewMeeting) ? (
+                  <Pressable
+                    onPress={() => void onPrint(previewMeeting)}
+                    disabled={printingPdf}
+                    style={{
+                      borderWidth: 1,
+                      borderColor: "#D8DEE8",
+                      borderRadius: 10,
+                      paddingHorizontal: 12,
+                      paddingVertical: 8,
+                      opacity: printingPdf ? 0.55 : 1,
+                    }}
+                  >
+                    <Text style={{ fontSize: 13, fontWeight: "700", color: "#334155" }}>
+                      {printingPdf ? "Printing…" : "Print"}
+                    </Text>
+                  </Pressable>
+                ) : null}
                 <Pressable onPress={() => setPreviewMeeting(null)} hitSlop={12}>
                   <X size={22} color="#64748B" />
                 </Pressable>

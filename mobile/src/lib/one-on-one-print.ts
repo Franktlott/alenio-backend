@@ -458,6 +458,9 @@ function buildPrintHtml(options: OneOnOnePrintOptions, logoUrl: string): string 
 
 /** Opens the native print dialog for a check-in. */
 export async function printOneOnOneMeeting(options: OneOnOnePrintOptions): Promise<void> {
+  if (options.meeting.status === "draft") {
+    throw new Error("Draft check-ins cannot be printed. Publish the check-in first.");
+  }
   const html = buildPrintHtml(options, ALENIO_LOGO_URL);
   await printHtml(html);
 }

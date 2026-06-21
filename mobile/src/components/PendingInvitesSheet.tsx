@@ -37,6 +37,10 @@ function formatInviteExpiry(iso: string): string {
   return `${days}d left`;
 }
 
+const MAX_VISIBLE_INVITES = 3;
+/** Approximate row height (avatar + two text lines + vertical padding). */
+const INVITE_ROW_HEIGHT = 58;
+
 export function PendingInvitesSheet({
   visible,
   invites,
@@ -46,6 +50,8 @@ export function PendingInvitesSheet({
   onResend,
 }: Props) {
   const insets = useSafeAreaInsets();
+  const listMaxHeight = Math.min(invites.length, MAX_VISIBLE_INVITES) * INVITE_ROW_HEIGHT;
+  const hasMoreInvites = invites.length > MAX_VISIBLE_INVITES;
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -77,9 +83,11 @@ export function PendingInvitesSheet({
               </Text>
             ) : (
               <ScrollView
-                style={{ maxHeight: 420 }}
+                style={{ maxHeight: listMaxHeight }}
                 contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 8 }}
                 keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={hasMoreInvites}
+                nestedScrollEnabled
               >
                 {invites.map((invite) => {
                   const busy = busyInviteId === invite.id;

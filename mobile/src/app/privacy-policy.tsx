@@ -205,6 +205,8 @@ export default function PrivacyPolicy() {
             <Text className="text-sm text-indigo-600 mt-2">{CONTACT_EMAIL}</Text>
           </View>
         </Section>
+
+        <Text className="text-[10px] text-slate-400 text-center mt-10 mb-2">John 3:16</Text>
       </ScrollView>
     </SafeAreaView>
   );

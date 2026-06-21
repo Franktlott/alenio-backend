@@ -223,6 +223,7 @@ export function EnterpriseLayout({
   };
 
   const roleLabel = teams.find((t) => t.id === selectedTeamId)?.role ?? "member";
+  const activeTeam = teams.find((t) => t.id === selectedTeamId) ?? teams[0] ?? null;
 
   return (
     <div className={`enterprise-app ${mainClassName}`.trim()} data-testid="enterprise-layout">
@@ -245,26 +246,50 @@ export function EnterpriseLayout({
           <NavItem to="/profile" navId="profile" activeNav={activeNav} icon={<IconProfile />} label="Profile" />
         </nav>
         <div className="enterprise-sidebar-footer">
-          <label className="enterprise-workspace-label" htmlFor="enterprise-workspace">
-            Workspace
-          </label>
-          <select
-            id="enterprise-workspace"
-            className="enterprise-workspace-select"
-            value={teams.some((t) => t.id === selectedTeamId) ? selectedTeamId : ""}
-            onChange={(e) => handleWorkspaceSelectChange(e.target.value)}
-            data-testid="enterprise-workspace-select"
-          >
-            {teams.length === 0 ? (
-              <option value="">No teams</option>
-            ) : (
-              teams.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))
-            )}
-          </select>
+          <div className="enterprise-sidebar-ws-wrap">
+            <label className="enterprise-workspace-label" htmlFor="enterprise-workspace">
+              Current workspace
+            </label>
+            <div className="enterprise-sidebar-ws-card">
+              {activeTeam ? (
+                <div className="enterprise-sidebar-ws-card-main">
+                  <div className="enterprise-sidebar-ws-icon" aria-hidden>
+                    {activeTeam.image ? (
+                      <img src={activeTeam.image} alt="" className="enterprise-sidebar-ws-icon-img" />
+                    ) : (
+                      <span>{activeTeam.name?.[0]?.toUpperCase() ?? "W"}</span>
+                    )}
+                  </div>
+                  <div className="enterprise-sidebar-ws-copy">
+                    <div className="enterprise-sidebar-ws-name" title={activeTeam.name}>
+                      {activeTeam.name}
+                    </div>
+                    <span className="enterprise-sidebar-ws-badge">Current</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="enterprise-sidebar-ws-empty">No workspace</div>
+              )}
+              <select
+                id="enterprise-workspace"
+                className="enterprise-sidebar-ws-select"
+                value={teams.some((t) => t.id === selectedTeamId) ? selectedTeamId : ""}
+                onChange={(e) => handleWorkspaceSelectChange(e.target.value)}
+                data-testid="enterprise-workspace-select"
+                aria-label="Switch workspace"
+              >
+                {teams.length === 0 ? (
+                  <option value="">No teams</option>
+                ) : (
+                  teams.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))
+                )}
+              </select>
+            </div>
+          </div>
           <div className="enterprise-sidebar-user">
             {user?.image ? (
               <img src={user.image} alt={user?.name ?? user?.email ?? "Account"} className="enterprise-user-avatar enterprise-user-avatar-img" />

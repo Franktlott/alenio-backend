@@ -47,6 +47,8 @@ import { ensureUserTimezoneSchema } from "./lib/ensure-user-timezone-schema";
 import { ensureCalendarApprovalSchema } from "./lib/ensure-calendar-approval-schema";
 import { developmentGoalsRouter } from "./routes/development-goals";
 import { teamInvitesPublicRouter } from "./routes/team-invites";
+import { publicChecklistLocationsRouter } from "./routes/public-checklist-locations";
+import { checklistLocationsRouter } from "./routes/checklist-locations";
 import { isValidTimeZone } from "./lib/timezone";
 
 syncPrismaSchemaOnStartup();
@@ -774,7 +776,9 @@ app.route("/api/teams/:teamId/tasks", tasksRouter);
 app.route("/api/teams/:teamId/messages", messagesRouter);
 app.route("/api/teams/:teamId/templates", templatesRouter);
 app.route("/api/teams/:teamId/subscription", subscriptionRouter);
+app.route("/api/teams/:teamId/checklist-locations", checklistLocationsRouter);
 app.route("/api/teams", teamsRouter);
+app.route("/api/public/checklist-locations", publicChecklistLocationsRouter);
 app.route("/api/team-invites", teamInvitesPublicRouter);
 app.route("/api/tasks/mine", myTasksRouter);
 app.route("/api/dms", dmsRouter);

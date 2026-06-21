@@ -115,6 +115,7 @@ model Team {
   oneOnOneMeetings OneOnOneMeeting[]
   developmentGoals DevelopmentGoal[]
   recurrenceSeries RecurrenceSeries[]
+  checklistLocations ChecklistLocation[]
 }
 
 model TeamSubscription {
@@ -565,4 +566,43 @@ model PollVote {
   user      User       @relation("PollVoteUser", fields: [userId], references: [id])
 
   @@unique([pollId, userId])
+}
+
+model ChecklistLocation {
+  id          String   @id @default(cuid())
+  teamId      String
+  name        String
+  publicToken String   @unique
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  team        Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  items       ChecklistLocationItem[]
+  submissions ChecklistLocationSubmission[]
+
+  @@index([teamId])
+}
+
+model ChecklistLocationItem {
+  id         String            @id @default(cuid())
+  locationId String
+  title      String
+  sortOrder  Int               @default(0)
+  location   ChecklistLocation @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  @@index([locationId])
+}
+
+model ChecklistLocationSubmission {
+  id            String            @id @default(cuid())
+  locationId    String
+  submittedAt   DateTime          @default(now())
+  submitterName String?
+  responses     Json
+  checkedCount  Int
+  totalCount    Int
+  isComplete    Boolean
+  location      ChecklistLocation @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  @@index([locationId, submittedAt])
 }

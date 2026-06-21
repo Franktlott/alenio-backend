@@ -26,6 +26,7 @@ import { PricingPage } from "./routes/PricingPage";
 import { EnterprisePage } from "./routes/EnterprisePage";
 import { SecurityPage } from "./routes/SecurityPage";
 import { InvitePage } from "./routes/InvitePage";
+import { LocationChecklistKioskPage } from "./routes/LocationChecklistKioskPage";
 import { GetAppPage } from "./routes/GetAppPage";
 import { getActiveApiTarget, getWebEnvConfigError } from "./lib/env-config";
 
@@ -108,6 +109,7 @@ export default function App() {
         <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/verify" element={<VerifyPage />} />
         <Route path="/invite/:token" element={<InvitePage />} />
+        <Route path="/checklist/:token" element={<LocationChecklistKioskPage />} />
         <Route path="/get-app" element={<GetAppPage />} />
         <Route path="/privacy" element={<PrivacyPolicyPage />} />
         <Route path="/terms" element={<TermsOfServicePage />} />

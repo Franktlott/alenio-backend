@@ -55,3 +55,21 @@ export function checkInEditActionLabel(meeting: Pick<OneOnOneMeeting, "status">)
 export function checkInEditMenuLabel(meeting: Pick<OneOnOneMeeting, "status">): string {
   return meeting.status === "draft" ? "Resume editing" : "Edit";
 }
+
+/** Only published check-ins may be printed. */
+export function canPrintCheckIn(meeting: Pick<OneOnOneMeeting, "status">): boolean {
+  return meeting.status !== "draft";
+}
+
+function isFollowUpTaskOverdue(task: OneOnOneFollowUpTask, todayStart: Date): boolean {
+  if (task.status === "done") return false;
+  if (!task.dueDate) return false;
+  return new Date(task.dueDate) < todayStart;
+}
+
+export function countOverdueFollowUpTasks(
+  followUpTasks: OneOnOneFollowUpTask[] | undefined,
+  todayStart: Date,
+): number {
+  return (followUpTasks ?? []).filter((task) => isFollowUpTaskOverdue(task, todayStart)).length;
+}

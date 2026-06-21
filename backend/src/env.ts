@@ -1,4 +1,8 @@
 import { z } from "zod";
+import { applyEnvFromWeb } from "./lib/web-env";
+
+/** Pull NEON_AUTH_URL / DATABASE_URL from web/.env when present (same URLs as the web app). */
+applyEnvFromWeb();
 
 /**
  * Environment variable schema using Zod

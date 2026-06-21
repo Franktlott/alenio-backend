@@ -458,6 +458,9 @@ function buildPrintHtml(options: OneOnOnePrintOptions, logoUrl: string): string 
 
 /** Opens the browser print dialog; choose Save as PDF to download. */
 export function printOneOnOneMeeting(options: OneOnOnePrintOptions): void {
+  if (options.meeting.status === "draft") {
+    throw new Error("Draft check-ins cannot be printed. Publish the check-in first.");
+  }
   const html = buildPrintHtml(options, alenioLogoUrl());
   printHtmlInHiddenFrame(html, "Check-in print preview");
 }

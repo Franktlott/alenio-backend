@@ -1710,3 +1710,126 @@ export function deleteDevelopmentGoal(teamId: string, memberUserId: string, goal
     method: "DELETE",
   });
 }
+
+export type ChecklistLocationItemRow = {
+  id: string;
+  title: string;
+  sortOrder: number;
+};
+
+export type ChecklistLocationRow = {
+  id: string;
+  name: string;
+  publicToken: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  items: ChecklistLocationItemRow[];
+  stats: {
+    lastSubmittedAt: string | null;
+    todayCount: number;
+    recentPartialCount: number;
+  };
+};
+
+export type ChecklistSubmissionRow = {
+  id: string;
+  locationId: string;
+  locationName?: string;
+  submittedAt: string;
+  submitterName: string | null;
+  checkedCount: number;
+  totalCount: number;
+  isComplete: boolean;
+};
+
+export type ChecklistLocationsPayload = {
+  planRequired: boolean;
+  locations: ChecklistLocationRow[];
+  recentSubmissions: ChecklistSubmissionRow[];
+};
+
+export function fetchChecklistLocations(teamId: string) {
+  return apiGetJson<{ data: ChecklistLocationsPayload }>(
+    `/web/api/teams/${encodeURIComponent(teamId)}/checklist-locations`,
+  ).then((r) => r.data);
+}
+
+export function createChecklistLocation(teamId: string, body: { name: string; items: { title: string }[] }) {
+  return apiPostJson<{ data: ChecklistLocationRow }>(
+    `/web/api/teams/${encodeURIComponent(teamId)}/checklist-locations`,
+    body,
+  ).then((r) => r.data);
+}
+
+export function updateChecklistLocation(
+  teamId: string,
+  locationId: string,
+  body: { name?: string; isActive?: boolean },
+) {
+  return apiPatchJson<{ data: ChecklistLocationRow }>(
+    `/web/api/teams/${encodeURIComponent(teamId)}/checklist-locations/${encodeURIComponent(locationId)}`,
+    body,
+  ).then((r) => r.data);
+}
+
+export function replaceChecklistLocationItems(
+  teamId: string,
+  locationId: string,
+  items: { title: string }[],
+) {
+  return apiRequest<{ data: ChecklistLocationRow }>(
+    `/web/api/teams/${encodeURIComponent(teamId)}/checklist-locations/${encodeURIComponent(locationId)}/items`,
+    { method: "PUT", body: JSON.stringify({ items }) },
+  ).then((r) => r.data);
+}
+
+export function deleteChecklistLocation(teamId: string, locationId: string) {
+  return apiRequest<{ data: { deleted?: boolean; deactivated?: boolean } }>(
+    `/web/api/teams/${encodeURIComponent(teamId)}/checklist-locations/${encodeURIComponent(locationId)}`,
+    { method: "DELETE" },
+  ).then((r) => r.data);
+}
+
+export function fetchChecklistLocationSubmissions(
+  teamId: string,
+  locationId: string,
+  params?: { since?: string; limit?: number; cursor?: string },
+) {
+  const q = new URLSearchParams();
+  if (params?.since) q.set("since", params.since);
+  if (params?.limit) q.set("limit", String(params.limit));
+  if (params?.cursor) q.set("cursor", params.cursor);
+  const qs = q.toString();
+  return apiGetJson<{ data: ChecklistSubmissionRow[]; nextCursor: string | null }>(
+    `/web/api/teams/${encodeURIComponent(teamId)}/checklist-locations/${encodeURIComponent(locationId)}/submissions${qs ? `?${qs}` : ""}`,
+  );
+}
+
+export type PublicChecklistPayload = {
+  location: { name: string };
+  items: ChecklistLocationItemRow[];
+};
+
+export function fetchPublicChecklistByToken(token: string) {
+  return apiGetJson<{ data: PublicChecklistPayload }>(
+    `/api/public/checklist-locations/${encodeURIComponent(token)}`,
+  ).then((r) => r.data);
+}
+
+export function submitPublicChecklist(
+  token: string,
+  body: { submitterName?: string; responses: { itemId: string; checked: boolean }[] },
+) {
+  return apiPostJson<{ data: { id: string; submittedAt: string; isComplete: boolean } }>(
+    `/api/public/checklist-locations/${encodeURIComponent(token)}/submissions`,
+    body,
+  ).then((r) => r.data);
+}
+
+export function checklistPublicUrl(publicToken: string): string {
+  if (typeof window !== "undefined") {
+    return `${window.location.origin}/checklist/${publicToken}`;
+  }
+  return `/checklist/${publicToken}`;
+}

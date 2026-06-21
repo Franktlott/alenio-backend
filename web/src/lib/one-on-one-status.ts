@@ -46,6 +46,11 @@ export function checkInEditMenuLabel(meeting: Pick<OneOnOneMeeting, "status">): 
   return meeting.status === "draft" ? "Resume editing" : "Edit";
 }
 
+/** Only published check-ins may be printed. */
+export function canPrintCheckIn(meeting: Pick<OneOnOneMeeting, "status">): boolean {
+  return meeting.status !== "draft";
+}
+
 function isFollowUpTaskOverdue(task: OneOnOneFollowUpTask, todayStart: Date): boolean {
   if (task.status === "done") return false;
   if (!task.dueDate) return false;

@@ -61,6 +61,7 @@ export function WorkspaceTeamAvatar({
         overflow: "hidden",
         borderWidth: active ? 2 : 0,
         borderColor: "#4361EE",
+        flexShrink: 0,
       }}
     >
       {team.image ? (

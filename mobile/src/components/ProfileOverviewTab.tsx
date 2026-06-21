@@ -54,7 +54,7 @@ function formatUpdatedWithDays(iso: string): string {
   return `${formatDateOnly(iso)} · ${daysSinceText(days)}`;
 }
 
-function KpiCard({
+function KpiCell({
   label,
   value,
   warning,
@@ -67,24 +67,32 @@ function KpiCard({
     <View
       style={{
         flex: 1,
-        minWidth: "45%",
-        backgroundColor: warning ? "#FEF2F2" : "#F8FAFC",
-        borderRadius: 12,
-        padding: 12,
-        borderWidth: 1,
-        borderColor: warning ? "#FECACA" : "#E2E8F0",
+        minWidth: "30%",
+        paddingVertical: 8,
+        paddingHorizontal: 10,
+        backgroundColor: warning ? "#FEF2F2" : "white",
       }}
     >
-      <Text style={{ fontSize: 10, fontWeight: "700", color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.5 }}>
+      <Text
+        style={{
+          fontSize: 9,
+          fontWeight: "700",
+          color: "#94A3B8",
+          textTransform: "uppercase",
+          letterSpacing: 0.6,
+        }}
+        numberOfLines={1}
+      >
         {label}
       </Text>
       <Text
         style={{
-          fontSize: 18,
-          fontWeight: "800",
-          color: warning ? "#DC2626" : "#0F172A",
-          marginTop: 4,
+          fontSize: 13,
+          fontWeight: "700",
+          color: warning ? "#B91C1C" : "#0F172A",
+          marginTop: 2,
         }}
+        numberOfLines={1}
       >
         {value}
       </Text>
@@ -139,86 +147,134 @@ export function ProfileOverviewTab({ teamId, memberUserId, streak, overdueTasks 
     [lastOneOnOneDate],
   );
 
-  if (loading) {
+  const kpis = [
+    { label: "Active goals", value: loading ? "—" : String(activeGoals.length) },
+    {
+      label: "Last check-in",
+      value: loading ? "—" : lastOneOnOneDate ? formatDateOnly(lastOneOnOneDate) : "None",
+    },
+    {
+      label: "Days since",
+      value: loading ? "—" : lastOneOnOneDate ? daysSinceText(daysSinceOneOnOne ?? 0) : "—",
+    },
+    { label: "Check-ins", value: loading ? "—" : String(oneOnOneCount) },
+    ...(streak != null && streak > 0 ? [{ label: "Streak", value: `${streak}d` }] : []),
+    ...(overdueTasks != null && overdueTasks > 0
+      ? [{ label: "Overdue", value: String(overdueTasks), warning: true as const }]
+      : []),
+  ];
+
+  if (loading && activeGoals.length === 0 && !err) {
     return (
-      <View style={{ paddingVertical: 32, alignItems: "center" }}>
+      <View
+        style={{
+          backgroundColor: "white",
+          borderRadius: 14,
+          borderWidth: 1,
+          borderColor: "#E0E7FF",
+          paddingVertical: 28,
+          alignItems: "center",
+        }}
+      >
         <ActivityIndicator color="#4361EE" />
       </View>
     );
   }
 
   return (
-    <View style={{ gap: 16 }}>
-      <View>
-        <Text style={{ fontSize: 11, fontWeight: "700", color: "#94A3B8", letterSpacing: 1, textTransform: "uppercase" }}>
+    <View
+      style={{
+        backgroundColor: "white",
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: "#E0E7FF",
+        overflow: "hidden",
+        shadowColor: "#0F172A",
+        shadowOpacity: 0.04,
+        shadowRadius: 8,
+        shadowOffset: { width: 0, height: 2 },
+        elevation: 2,
+      }}
+    >
+      <View
+        style={{
+          paddingHorizontal: 14,
+          paddingVertical: 10,
+          borderBottomWidth: 1,
+          borderBottomColor: "#E8ECFA",
+          backgroundColor: "#FAFBFF",
+        }}
+      >
+        <Text style={{ fontSize: 9, fontWeight: "700", color: "#64748B", letterSpacing: 1.2, textTransform: "uppercase" }}>
           Overview
         </Text>
-        <Text style={{ fontSize: 18, fontWeight: "800", color: "#0F172A", marginTop: 2 }}>
+        <Text style={{ fontSize: 14, fontWeight: "700", color: "#0F172A", marginTop: 2 }}>
           Member snapshot
         </Text>
       </View>
 
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-        <KpiCard label="Active goals" value={String(activeGoals.length)} />
-        <KpiCard
-          label="Last check-in"
-          value={lastOneOnOneDate ? formatDateOnly(lastOneOnOneDate) : "None"}
-        />
-        <KpiCard
-          label="Days since check-in"
-          value={lastOneOnOneDate ? daysSinceText(daysSinceOneOnOne ?? 0) : "—"}
-        />
-        <KpiCard label="Total check-ins" value={String(oneOnOneCount)} />
-        {streak != null && streak > 0 ? <KpiCard label="Streak" value={`${streak}d`} /> : null}
-        {overdueTasks != null && overdueTasks > 0 ? (
-          <KpiCard label="Overdue" value={String(overdueTasks)} warning />
-        ) : null}
+      <View
+        style={{
+          flexDirection: "row",
+          flexWrap: "wrap",
+          backgroundColor: "#E8ECFA",
+          gap: 1,
+        }}
+      >
+        {kpis.map((kpi) => (
+          <KpiCell key={kpi.label} label={kpi.label} value={kpi.value} warning={"warning" in kpi ? kpi.warning : false} />
+        ))}
       </View>
 
       {err ? (
-        <Text style={{ fontSize: 13, color: "#DC2626" }}>{err}</Text>
+        <Text style={{ fontSize: 12, color: "#DC2626", paddingHorizontal: 14, paddingTop: 10 }}>{err}</Text>
       ) : null}
 
-      <View>
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-          <Text style={{ fontSize: 14, fontWeight: "700", color: "#0F172A" }}>Active development goals</Text>
+      <View style={{ paddingHorizontal: 14, paddingVertical: 10 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 }}>
+          <Text style={{ fontSize: 11, fontWeight: "700", color: "#64748B", letterSpacing: 0.6, textTransform: "uppercase" }}>
+            Active development goals
+          </Text>
           {activeGoals.length > 0 ? (
-            <View style={{ backgroundColor: "#EEF2FF", borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2 }}>
-              <Text style={{ fontSize: 12, fontWeight: "700", color: "#4361EE" }}>{activeGoals.length}</Text>
+            <View style={{ backgroundColor: "#EEF2FF", borderRadius: 999, minWidth: 18, height: 18, alignItems: "center", justifyContent: "center", paddingHorizontal: 5 }}>
+              <Text style={{ fontSize: 10, fontWeight: "700", color: "#4361EE" }}>{activeGoals.length}</Text>
             </View>
           ) : null}
         </View>
 
         {activeGoals.length === 0 ? (
-          <Text style={{ fontSize: 13, color: "#94A3B8" }}>No active development goals.</Text>
+          <Text style={{ fontSize: 12, color: "#94A3B8" }}>No active development goals.</Text>
         ) : (
-          <View style={{ gap: 8 }}>
-            {activeGoals.map((goal) => (
+          <View style={{ gap: 0 }}>
+            {activeGoals.map((goal, index) => (
               <View
                 key={goal.id}
                 style={{
-                  backgroundColor: "white",
-                  borderRadius: 12,
-                  padding: 14,
-                  borderWidth: 1,
-                  borderColor: "#E2E8F0",
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 8,
+                  paddingVertical: 8,
+                  borderTopWidth: index === 0 ? 0 : 1,
+                  borderTopColor: "#F1F5F9",
                 }}
               >
-                <Text style={{ fontSize: 14, fontWeight: "700", color: "#0F172A" }}>{goal.skill}</Text>
-                <Text style={{ fontSize: 12, color: "#64748B", marginTop: 4 }}>
-                  {formatUpdatedWithDays(lastUpdatedAt(goal))}
-                </Text>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={{ fontSize: 13, fontWeight: "600", color: "#0F172A" }} numberOfLines={1}>
+                    {goal.skill}
+                  </Text>
+                  <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 1 }} numberOfLines={1}>
+                    {formatUpdatedWithDays(lastUpdatedAt(goal))}
+                  </Text>
+                </View>
                 <View
                   style={{
-                    alignSelf: "flex-start",
-                    marginTop: 8,
                     backgroundColor: "#DCFCE7",
-                    borderRadius: 8,
-                    paddingHorizontal: 8,
-                    paddingVertical: 3,
+                    borderRadius: 6,
+                    paddingHorizontal: 7,
+                    paddingVertical: 2,
                   }}
                 >
-                  <Text style={{ fontSize: 11, fontWeight: "700", color: "#166534" }}>Active</Text>
+                  <Text style={{ fontSize: 10, fontWeight: "700", color: "#166534" }}>Active</Text>
                 </View>
               </View>
             ))}

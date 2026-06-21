@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "bun run --hot src/index.ts",
     "start": "bun run src/index.ts",
+    "sync-env": "bun run scripts/sync-env-from-web.ts",
+    "db:push": "bun run sync-env && bunx prisma db push",
     "studio": "bunx prisma studio",
     "typecheck": "tsc --noEmit"
   },

@@ -23,6 +23,7 @@ import { appendLeaderCommentsIfMissing } from "../lib/check-in-leader-comments";
 import {
   countOverdueFollowUpTasks,
   checkInEditMenuLabel,
+  canPrintCheckIn,
   getOneOnOneMeetingStatusFromMeeting,
   oneOnOneMeetingStatusClass,
   oneOnOneMeetingStatusLabel,
@@ -589,6 +590,10 @@ export function OneOnOneHistoryTab({
   };
 
   const onPrint = (meeting: OneOnOneMeeting) => {
+    if (!canPrintCheckIn(meeting)) {
+      setErr("Publish this check-in before printing.");
+      return;
+    }
     try {
       printOneOnOneMeeting({
         meeting,
@@ -800,13 +805,15 @@ export function OneOnOneHistoryTab({
               </div>
             </div>
             <div className="enterprise-oneone-preview-header-actions">
-              <button
-                type="button"
-                className="enterprise-dev-plan-print-btn"
-                onClick={() => onPrint(previewMeeting)}
-              >
-                Print
-              </button>
+              {canPrintCheckIn(previewMeeting) ? (
+                <button
+                  type="button"
+                  className="enterprise-dev-plan-print-btn"
+                  onClick={() => onPrint(previewMeeting)}
+                >
+                  Print
+                </button>
+              ) : null}
               <button
                 type="button"
                 className="enterprise-oneone-templates-close"
@@ -1139,17 +1146,19 @@ export function OneOnOneHistoryTab({
                     </button>
                     {menuMeetingId === meeting.id ? (
                       <div className="enterprise-oneone-history-row-menu" role="menu">
-                        <button
-                          type="button"
-                          role="menuitem"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setMenuMeetingId(null);
-                            onPrint(meeting);
-                          }}
-                        >
-                          Print
-                        </button>
+                        {canPrintCheckIn(meeting) ? (
+                          <button
+                            type="button"
+                            role="menuitem"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setMenuMeetingId(null);
+                              onPrint(meeting);
+                            }}
+                          >
+                            Print
+                          </button>
+                        ) : null}
                         {canModify ? (
                           <>
                             <button

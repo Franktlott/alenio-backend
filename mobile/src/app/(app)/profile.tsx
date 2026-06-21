@@ -16,6 +16,7 @@ import {
   Linking,
 } from "react-native";
 import * as Notifications from "expo-notifications";
+import Constants from "expo-constants";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Camera, LogOut, Pencil, X, Trash2, Bell, Check, Crown, MessageSquare, Globe } from "lucide-react-native";
@@ -37,7 +38,6 @@ import { useSwitchWorkspace } from "@/hooks/use-switch-workspace";
 import { toast } from "burnt";
 import type { Team } from "@/lib/types";
 import { SafeKeyboardAvoidingView } from "@/lib/safe-keyboard-controller";
-import { WORKSPACE_SWITCH_HINT } from "@/components/WorkspaceTeamUI";
 import {
   ProfileCard,
   ProfileContent,
@@ -562,18 +562,6 @@ export default function ProfileScreen() {
     setRefreshing(false);
   };
 
-  const naturePhotos = [
-    "photo-1506905925346-21bda4d32df4", // Sun — misty mountain lake
-    "photo-1448375240586-882707db888b", // Mon — golden forest path
-    "photo-1500534314209-a25ddb2bd429", // Tue — ocean cliffs at sunrise
-    "photo-1418985991508-e47386d96a71", // Wed — snowy pine forest
-    "photo-1469854523086-cc02fe5d8800", // Thu — desert dunes at dusk
-    "photo-1432405972618-c60b0225b8f9", // Fri — waterfall in jungle
-    "photo-1531366936337-7c912a4589a7", // Sat — aurora over mountains
-  ];
-  const dayIndex = new Date().getDay();
-  const natureImageUrl = `https://images.unsplash.com/${naturePhotos[dayIndex]}?w=800&h=320&fit=crop&auto=format&q=80`;
-
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#F1F5F9" }} edges={[]} testID="profile-screen">
       {/* Header */}
@@ -599,9 +587,13 @@ export default function ProfileScreen() {
       </LinearGradient>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 88 }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" colors={["#4361EE"]} />}>
-        {/* Nature photo banner — full bleed */}
+        {/* Brand header — bundled, always available offline */}
         <View style={{ height: 160, overflow: "hidden" }}>
-          <Image source={{ uri: natureImageUrl }} style={{ width: "100%", height: 160, resizeMode: "cover" }} />
+          <Image
+            source={require("@/assets/profile-header.png")}
+            style={{ width: "100%", height: 160 }}
+            resizeMode="cover"
+          />
           <LinearGradient
             colors={["transparent", "rgba(241,245,249,0.95)"]}
             style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 70 }}
@@ -680,12 +672,10 @@ export default function ProfileScreen() {
             subtitle={
               teamsLoading
                 ? undefined
-                : canManageActiveTeam
-                  ? teams.length > 1
-                    ? "Tap another workspace to switch. Press and hold current workspace to edit."
-                    : "Press and hold your workspace to edit settings."
-                  : teams.length > 1
-                    ? WORKSPACE_SWITCH_HINT
+                : teams.length > 1
+                  ? "Tap your workspace to switch."
+                  : canManageActiveTeam
+                    ? "Edit your workspace settings below."
                     : undefined
             }
           >
@@ -704,9 +694,6 @@ export default function ProfileScreen() {
                   pathname: "/onboarding",
                   params: { intent: "add", mode: "create" },
                 })
-              }
-              onViewAll={
-                teams.length > 4 ? () => router.push("/switch-workspace" as never) : undefined
               }
             />
             {canLeaveActiveTeam && activeTeam ? (
@@ -862,7 +849,9 @@ export default function ProfileScreen() {
               ) : null}
             </ProfileCard>
             {!isDemo ? (
-              <Text style={{ fontSize: 11, color: "#94A3B8", textAlign: "center", marginTop: 10 }}>John 3:16</Text>
+              <Text style={{ fontSize: 11, color: "#94A3B8", textAlign: "center", marginTop: 10 }}>
+                v{Constants.expoConfig?.version ?? "—"}
+              </Text>
             ) : null}
           </ProfileSection>
 

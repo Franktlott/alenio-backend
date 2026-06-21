@@ -9,4 +9,7 @@ export const queryKeys = {
   chatThread: (mode: "dm" | "team", threadId: string) => ["chat", "thread", mode, threadId] as const,
   upcomingVideoMeetings: ["upcoming-video-meetings"] as const,
   pendingCalendarEvents: (teamId: string) => ["calendar", "pending", teamId] as const,
+  checklistLocations: (teamId: string) => ["checklist-locations", teamId] as const,
+  checklistSubmissions: (teamId: string, locationId: string, since?: string) =>
+    ["checklist-submissions", teamId, locationId, since ?? "all"] as const,
 };

@@ -9,6 +9,8 @@ import {
   type WebTeamRow,
 } from "../lib/api";
 import { WorkspaceCreateJoinModals } from "./WorkspaceCreateJoinModals";
+import { EditWorkspaceModal } from "./EditWorkspaceModal";
+import { WorkspaceProfileCard } from "./WorkspaceProfileCard";
 type Props = {
   teams: WebTeamRow[];
   selectedTeamId: string;
@@ -16,24 +18,6 @@ type Props = {
   onRefresh: () => Promise<void>;
   onWorkspaceDeleted?: (deletedId: string) => Promise<void>;
 };
-
-function isWorkspaceOwner(role: string): boolean {
-  return role === "owner";
-}
-
-function roleLabel(role: string): string {
-  if (role === "owner") return "Owner";
-  if (role === "team_leader") return "Team Leader";
-  if (role === "admin") return "Admin";
-  return "Member";
-}
-
-function roleBadgeClass(role: string): string {
-  if (role === "owner") return "enterprise-team-role-badge enterprise-team-role-badge-owner";
-  if (role === "team_leader") return "enterprise-team-role-badge enterprise-team-role-badge-leader";
-  if (role === "admin") return "enterprise-team-role-badge enterprise-team-role-badge-admin";
-  return "enterprise-team-role-badge";
-}
 
 function IconUserPlus({ size = 16 }: { size?: number }) {
   return (
@@ -55,19 +39,12 @@ function IconPlus({ size = 16 }: { size?: number }) {
   );
 }
 
-function IconCheckSmall() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden>
-      <path d="M20 6 9 17l-5-5" />
-    </svg>
-  );
-}
-
 export function ProfileTeamsSection({ teams, selectedTeamId, onSelectWorkspace, onRefresh, onWorkspaceDeleted }: Props) {
   const [pending, setPending] = useState<MyJoinRequestRow[]>([]);
   const [cancelId, setCancelId] = useState<string | null>(null);
   const [leaveId, setLeaveId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<WebTeamRow | null>(null);
+  const [editTarget, setEditTarget] = useState<WebTeamRow | null>(null);
   const [deletePassword, setDeletePassword] = useState("");
   const [deleteShowPassword, setDeleteShowPassword] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
@@ -188,179 +165,118 @@ export function ProfileTeamsSection({ teams, selectedTeamId, onSelectWorkspace, 
         }}
       />
 
-      <div className="enterprise-profile-teams-scroll">
-      {pending.length > 0 ? (
-        <div className="enterprise-profile-pending-block">
-          <div className="enterprise-muted enterprise-profile-subhead">Pending join requests</div>
-          <ul className="enterprise-profile-pending-list">
-            {pending.map((r) => (
-              <li key={r.id} className="enterprise-profile-pending-row">
-                <span>
-                  <strong>{r.team.name}</strong>
-                  <span className="enterprise-muted"> — waiting for approval</span>
-                </span>
-                <button
-                  type="button"
-                  className="enterprise-team-btn-destructive"
-                  disabled={cancelId === r.id}
-                  onClick={async () => {
-                    setSectionErr(null);
-                    setCancelId(r.id);
-                    try {
-                      await cancelMyJoinRequest(r.id);
-                      await loadPending();
-                      await onRefresh();
-                    } catch (e) {
-                      setSectionErr(e instanceof Error ? e.message : "Could not cancel request.");
-                    } finally {
-                      setCancelId(null);
-                    }
-                  }}
-                >
-                  {cancelId === r.id ? "Canceling…" : "Withdraw"}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-
       {teams.length === 0 ? (
         <p className="enterprise-muted">You are not in any workspace yet.</p>
       ) : (
-        <div className="enterprise-profile-ws-card-grid">
-          {teams.map((t) => {
-            const members = t._count?.members ?? 0;
-            const isCurrent = t.id === selectedTeamId;
-            const memberLine = `${members} member${members === 1 ? "" : "s"} · Team access enabled`;
-            return (
-              <article
-                key={t.id}
-                className={`enterprise-profile-ws-card${isCurrent ? " enterprise-profile-ws-card-current" : ""}`}
-                data-testid={`profile-workspace-card-${t.id}`}
-                aria-current={isCurrent ? "true" : undefined}
-              >
-                <div className="enterprise-profile-ws-card-body">
-                  <div className="enterprise-profile-ws-card-head">
-                    <div className="enterprise-profile-ws-card-icon" aria-hidden>
-                      {t.image ? (
-                        <img src={t.image} alt="" className="enterprise-profile-ws-card-icon-img" />
-                      ) : (
-                        <span className="enterprise-profile-ws-card-icon-initials">
-                          {t.name?.[0]?.toUpperCase() ?? "W"}
+        (() => {
+          const currentTeam = teams.find((t) => t.id === selectedTeamId) ?? teams[0]!;
+          const otherTeams = teams.filter((t) => t.id !== currentTeam.id);
+          const cardProps = {
+            copiedTeamId,
+            workspaceMenuId,
+            leaveId,
+            onCopyInvite: (teamId: string, code: string) => void copyInviteCode(teamId, code),
+            onToggleMenu: (teamId: string) => setWorkspaceMenuId((prev) => (prev === teamId ? null : teamId)),
+            onCloseMenu: () => setWorkspaceMenuId(null),
+            onDelete: (team: WebTeamRow) => {
+              setDeleteErr(null);
+              setDeletePassword("");
+              setDeleteTarget(team);
+            },
+            onEdit: (team: WebTeamRow) => {
+              setSectionErr(null);
+              setEditTarget(team);
+            },
+            onLeave: async (team: WebTeamRow) => {
+              setSectionErr(null);
+              setLeaveId(team.id);
+              try {
+                await leaveTeam(team.id);
+                await onRefresh();
+                await loadPending();
+              } catch (err) {
+                setSectionErr(err instanceof Error ? err.message : "Could not leave workspace.");
+              } finally {
+                setLeaveId(null);
+              }
+            },
+          };
+
+          return (
+            <div className="enterprise-profile-ws-panel">
+              <div className="enterprise-profile-ws-panel-section">
+                <h3 className="enterprise-profile-ws-section-title">Current workspace</h3>
+                <WorkspaceProfileCard team={currentTeam} isCurrent variant="compact" {...cardProps} />
+              </div>
+
+              {pending.length > 0 ? (
+                <div className="enterprise-profile-pending-block enterprise-profile-ws-panel-pending">
+                  <div className="enterprise-muted enterprise-profile-subhead">Pending join requests</div>
+                  <ul className="enterprise-profile-pending-list">
+                    {pending.map((r) => (
+                      <li key={r.id} className="enterprise-profile-pending-row">
+                        <span>
+                          <strong>{r.team.name}</strong>
+                          <span className="enterprise-muted"> — waiting for approval</span>
                         </span>
-                      )}
-                    </div>
-                    <div className="enterprise-profile-ws-card-head-copy">
-                      <div className="enterprise-profile-ws-card-title-row">
-                        <h3 className="enterprise-profile-ws-card-name" title={t.name}>
-                          {t.name}
-                        </h3>
-                        {isCurrent ? (
-                          <span className="enterprise-profile-ws-current-badge">Current</span>
-                        ) : null}
+                        <button
+                          type="button"
+                          className="enterprise-team-btn-destructive"
+                          disabled={cancelId === r.id}
+                          onClick={async () => {
+                            setSectionErr(null);
+                            setCancelId(r.id);
+                            try {
+                              await cancelMyJoinRequest(r.id);
+                              await loadPending();
+                              await onRefresh();
+                            } catch (e) {
+                              setSectionErr(e instanceof Error ? e.message : "Could not cancel request.");
+                            } finally {
+                              setCancelId(null);
+                            }
+                          }}
+                        >
+                          {cancelId === r.id ? "Canceling…" : "Withdraw"}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+
+              {otherTeams.length > 0 ? (
+                <>
+                  <div className="enterprise-profile-ws-panel-divider" role="separator" />
+                  <div className="enterprise-profile-ws-panel-section enterprise-profile-ws-other-section">
+                    <h3 className="enterprise-profile-ws-section-title">Other workspaces</h3>
+                    <div className="enterprise-profile-ws-others-scroll">
+                      <div className="enterprise-profile-ws-list">
+                        {otherTeams.map((t) => (
+                          <WorkspaceProfileCard
+                            key={t.id}
+                            team={t}
+                            isCurrent={false}
+                            variant="list"
+                            onSelect={() => onSelectWorkspace(t.id)}
+                            {...cardProps}
+                          />
+                        ))}
                       </div>
-                      <p className="enterprise-muted enterprise-profile-ws-card-meta">{memberLine}</p>
-                    </div>
-                    <div className="enterprise-profile-workspace-menu-wrap">
-                      <button
-                        type="button"
-                        className="enterprise-profile-workspace-more"
-                        aria-label={`Actions for ${t.name}`}
-                        aria-expanded={workspaceMenuId === t.id}
-                        data-testid={`workspace-menu-${t.id}`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setWorkspaceMenuId((prev) => (prev === t.id ? null : t.id));
-                        }}
-                      >
-                        ⋯
-                      </button>
-                      {workspaceMenuId === t.id ? (
-                        <div className="enterprise-profile-workspace-menu" role="menu">
-                          {isWorkspaceOwner(t.role) ? (
-                            <button
-                              type="button"
-                              role="menuitem"
-                              className="enterprise-profile-workspace-menu-danger"
-                              data-testid={`delete-workspace-${t.id}`}
-                              onClick={() => {
-                                setWorkspaceMenuId(null);
-                                setDeleteErr(null);
-                                setDeletePassword("");
-                                setDeleteTarget(t);
-                              }}
-                            >
-                              Delete workspace
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              role="menuitem"
-                              disabled={leaveId === t.id}
-                              onClick={async () => {
-                                if (!window.confirm(`Leave “${t.name}”? You will lose access until invited again.`)) return;
-                                setWorkspaceMenuId(null);
-                                setSectionErr(null);
-                                setLeaveId(t.id);
-                                try {
-                                  await leaveTeam(t.id);
-                                  await onRefresh();
-                                  await loadPending();
-                                } catch (err) {
-                                  setSectionErr(err instanceof Error ? err.message : "Could not leave workspace.");
-                                } finally {
-                                  setLeaveId(null);
-                                }
-                              }}
-                            >
-                              {leaveId === t.id ? "Leaving…" : "Leave workspace"}
-                            </button>
-                          )}
-                        </div>
-                      ) : null}
                     </div>
                   </div>
-
-                  {t.inviteCode ? (
-                    <div className="enterprise-profile-ws-invite-block">
-                      <span className="enterprise-profile-ws-invite-label">Invite code</span>
-                      <span className="enterprise-team-code-mono enterprise-profile-ws-invite-code">{t.inviteCode}</span>
-                      <button
-                        type="button"
-                        className="enterprise-profile-ws-copy-btn"
-                        onClick={() => void copyInviteCode(t.id, t.inviteCode!)}
-                      >
-                        {copiedTeamId === t.id ? "Copied" : "Copy"}
-                      </button>
-                    </div>
-                  ) : null}
-                </div>
-
-                <footer className="enterprise-profile-ws-card-foot">
-                  <span className={roleBadgeClass(t.role)}>{roleLabel(t.role)}</span>
-                  {isCurrent ? (
-                    <span className="enterprise-profile-ws-active-foot">
-                      <IconCheckSmall />
-                      Active
-                    </span>
-                  ) : (
-                    <button
-                      type="button"
-                      className="enterprise-profile-ws-select-btn"
-                      onClick={() => onSelectWorkspace(t.id)}
-                      data-testid={`profile-workspace-switch-${t.id}`}
-                    >
-                      Select workspace
-                    </button>
-                  )}
-                </footer>
-              </article>
-            );
-          })}
-        </div>
+                </>
+              ) : null}
+            </div>
+          );
+        })()
       )}
-      </div>
+
+      <EditWorkspaceModal
+        team={editTarget}
+        onClose={() => setEditTarget(null)}
+        onSaved={onRefresh}
+      />
 
       {deleteTarget ? (
         <div

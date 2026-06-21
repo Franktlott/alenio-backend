@@ -25,9 +25,7 @@ import {
   Camera,
   Trash2,
   ChevronLeft,
-  ChevronRight,
   QrCode,
-  AlertTriangle,
   Lock,
 } from "lucide-react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -45,6 +43,7 @@ import { NoTeamPlaceholder } from "@/components/NoTeamPlaceholder";
 import { AddMemberModal } from "@/components/AddMemberModal";
 import { PendingInvitesChip, PendingInvitesSheet } from "@/components/PendingInvitesSheet";
 import { PendingJoinRequestsChip, PendingJoinRequestsSheet } from "@/components/PendingJoinRequestsSheet";
+import { TeamOverviewTasksSheet, type TeamOverviewTaskFilter } from "@/components/TeamOverviewTasksSheet";
 import {
   cancelTeamInvite,
   fetchTeamInvites,
@@ -232,15 +231,6 @@ export default function TeamScreen() {
     enabled: !!activeTeamId,
   });
 
-  const { data: monthlyStats } = useQuery({
-    queryKey: ["monthly-completion", activeTeamId],
-    queryFn: () =>
-      api.get<Array<{ label: string; year: number; month: number; completionPct: number | null; done: number; total: number }>>(
-        `/api/teams/${activeTeamId}/tasks/monthly-completion`
-      ),
-    enabled: !!activeTeamId,
-  });
-
   const currentMembership = team?.members?.find((m) => m.userId === session?.user?.id);
   const myRole = currentMembership?.role;
   const myId = session?.user?.id ?? "";
@@ -337,6 +327,7 @@ export default function TeamScreen() {
   const [addMemberOpen, setAddMemberOpen] = useState(false);
   const [addMemberError, setAddMemberError] = useState<string | null>(null);
   const [pendingInvitesOpen, setPendingInvitesOpen] = useState(false);
+  const [overviewTasksSheet, setOverviewTasksSheet] = useState<TeamOverviewTaskFilter | null>(null);
   const [joinRequestsOpen, setJoinRequestsOpen] = useState(false);
   const [inviteActionId, setInviteActionId] = useState<string | null>(null);
   const [joinRequestActionId, setJoinRequestActionId] = useState<string | null>(null);
@@ -405,7 +396,7 @@ export default function TeamScreen() {
     setRefreshing(true);
     await queryClient.invalidateQueries({ queryKey: ["team", activeTeamId] });
     await queryClient.invalidateQueries({ queryKey: ["member-stats", activeTeamId] });
-    await queryClient.invalidateQueries({ queryKey: ["monthly-completion", activeTeamId] });
+    await queryClient.invalidateQueries({ queryKey: ["team-overview-tasks", activeTeamId] });
     await queryClient.invalidateQueries({ queryKey: ["team-invites", activeTeamId] });
     setRefreshing(false);
   };
@@ -424,15 +415,42 @@ export default function TeamScreen() {
   const teamTasks = teamTasksData?.tasks ?? [];
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
-  const isTaskOverdue = (t: Task) => t.status !== "done" && !!t.dueDate && new Date(t.dueDate) < todayStart;
+  const todayEnd = new Date(todayStart);
+  todayEnd.setHours(23, 59, 59, 999);
+  const isTaskDone = (t: Task) => t.status === "done";
+  const isTaskOverdue = (t: Task) => !isTaskDone(t) && !!t.dueDate && new Date(t.dueDate) < todayStart;
+  const isTaskDueToday = (t: Task) => {
+    if (isTaskDone(t) || !t.dueDate) return false;
+    const due = new Date(t.dueDate);
+    return due >= todayStart && due <= todayEnd;
+  };
 
-  const totalCompleted = teamTasks.filter((t) => t.status === "done").length;
-  const totalOverdue = teamTasks.filter((t) => isTaskOverdue(t)).length;
-  const totalOpen = teamTasks.filter((t) => t.status !== "done" && !isTaskOverdue(t)).length;
+  const totalOpen = teamTasks.filter((t) => !isTaskDone(t)).length;
+  const openTasks = teamTasks
+    .filter((t) => !isTaskDone(t))
+    .sort((a, b) => {
+      if (!a.dueDate && !b.dueDate) return a.title.localeCompare(b.title);
+      if (!a.dueDate) return 1;
+      if (!b.dueDate) return -1;
+      return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+    });
+  const dueTodayTasks = teamTasks
+    .filter((t) => isTaskDueToday(t))
+    .sort((a, b) => a.title.localeCompare(b.title));
+  const totalDueToday = dueTodayTasks.length;
+  const overdueTasks = teamTasks
+    .filter((t) => isTaskOverdue(t))
+    .sort((a, b) => new Date(a.dueDate!).getTime() - new Date(b.dueDate!).getTime());
+  const totalOverdue = overdueTasks.length;
 
-  const weekCompletionPct = (totalCompleted + totalOpen + totalOverdue) > 0
-    ? Math.round((totalCompleted / (totalCompleted + totalOpen + totalOverdue)) * 100)
-    : 0;
+  const overviewSheetTasks =
+    overviewTasksSheet === "open"
+      ? openTasks
+      : overviewTasksSheet === "dueToday"
+        ? dueTodayTasks
+        : overviewTasksSheet === "overdue"
+          ? overdueTasks
+          : [];
 
   // Alphabetically sorted member list
   const members = team?.members ?? [];
@@ -540,14 +558,6 @@ export default function TeamScreen() {
       </SafeAreaView>
     );
   }
-
-  // ------------------------------------------------------------------
-  // Derived: avg completion pct across all months
-  // ------------------------------------------------------------------
-  const nonNullPcts = (monthlyStats ?? []).map((m) => m.completionPct).filter((p): p is number => p !== null);
-  const avgCompletionPct = nonNullPcts.length > 0
-    ? Math.round(nonNullPcts.reduce((a, b) => a + b, 0) / nonNullPcts.length)
-    : null;
 
   // ------------------------------------------------------------------
   // Main render
@@ -691,92 +701,55 @@ export default function TeamScreen() {
               Team Overview
             </Text>
 
-            <View style={{ flexDirection: "row", alignItems: "center" }}>
-              {(() => {
-                const ringSize = 116;
-                const strokeWidth = 10;
-                const radius = (ringSize - strokeWidth) / 2;
-                const circumference = 2 * Math.PI * radius;
-                const hasAnyOverviewTasks = (totalOpen + totalOverdue + totalCompleted) > 0;
-                const rawPct = hasAnyOverviewTasks ? (avgCompletionPct ?? weekCompletionPct) : 100;
-                const pct = Math.max(0, Math.min(100, rawPct));
-                const progress = circumference * (pct / 100);
+            <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 8 }}>
+              {(
+                [
+                  { key: "open" as const, value: totalOpen, label: "Open", color: "#10B981" },
+                  { key: "dueToday" as const, value: totalDueToday, label: "Due today", color: "#F59E0B" },
+                  { key: "overdue" as const, value: totalOverdue, label: "Overdue", color: "#EF4444" },
+                ] as const
+              ).map(({ key, value, label, color }) => {
+                const statContent = (
+                  <>
+                    <Text style={{ fontSize: 30, fontWeight: "900", color }}>{value}</Text>
+                    <Text numberOfLines={1} style={{ fontSize: 11, color: "#64748B", marginTop: 2, textAlign: "center" }}>
+                      {label}
+                    </Text>
+                  </>
+                );
+
+                if (isOwner && value > 0) {
+                  return (
+                    <Pressable
+                      key={key}
+                      style={{ flex: 1, alignItems: "center", paddingVertical: 8 }}
+                      onPress={() => setOverviewTasksSheet(key)}
+                      testID={`team-overview-${key}`}
+                    >
+                      {statContent}
+                    </Pressable>
+                  );
+                }
+
                 return (
-                  <View style={{ width: ringSize, height: ringSize, marginRight: 16 }}>
-                    <Svg width={ringSize} height={ringSize}>
-                      <Circle
-                        cx={ringSize / 2}
-                        cy={ringSize / 2}
-                        r={radius}
-                        stroke="#E5E7EB"
-                        strokeWidth={strokeWidth}
-                        fill="none"
-                      />
-                      <Circle
-                        cx={ringSize / 2}
-                        cy={ringSize / 2}
-                        r={radius}
-                        stroke="#4F46E5"
-                        strokeWidth={strokeWidth}
-                        fill="none"
-                        strokeLinecap="round"
-                        strokeDasharray={`${progress} ${circumference - progress}`}
-                        transform={`rotate(-90 ${ringSize / 2} ${ringSize / 2})`}
-                      />
-                    </Svg>
-                    <View style={{ position: "absolute", inset: 0, alignItems: "center", justifyContent: "center" }}>
-                      <Text style={{ fontSize: 26, fontWeight: "900", color: "#0F172A" }}>{pct}%</Text>
-                      <Text style={{ fontSize: 11, color: "#64748B", marginTop: -2 }}>6-month</Text>
-                    </View>
+                  <View key={key} style={{ flex: 1, alignItems: "center", paddingVertical: 8 }}>
+                    {statContent}
                   </View>
                 );
-              })()}
-
-              <View style={{ flex: 1, marginLeft: 2, paddingRight: 6, flexDirection: "row", justifyContent: "flex-start", gap: 12 }}>
-                <View style={{ alignItems: "center", width: 62 }}>
-                  <Text style={{ fontSize: 30, fontWeight: "900", color: "#10B981" }}>{totalOpen}</Text>
-                  <Text numberOfLines={1} style={{ fontSize: 11, color: "#64748B", marginTop: -2 }}>Open</Text>
-                </View>
-                <View style={{ alignItems: "center", width: 62 }}>
-                  <Text style={{ fontSize: 30, fontWeight: "900", color: "#EF4444" }}>{totalOverdue}</Text>
-                  <Text numberOfLines={1} style={{ fontSize: 11, color: "#64748B", marginTop: -2 }}>Overdue</Text>
-                </View>
-              </View>
+              })}
             </View>
+
+            {isOwner ? (
+              <Text
+                numberOfLines={1}
+                style={{ fontSize: 10, color: "#94A3B8", marginTop: 8 }}
+              >
+                Tap a number to view tasks
+              </Text>
+            ) : null}
           </View>
         ) : null}
 
-        {/* ── 3. NEEDS ATTENTION BANNER ─────────────────────────────── */}
-        {totalOverdue > 0 ? (
-          <Pressable
-            style={{
-              marginHorizontal: 12,
-              marginTop: 8,
-              borderRadius: 14,
-              backgroundColor: "#FFF7ED",
-              flexDirection: "row",
-              alignItems: "center",
-              padding: 12,
-              gap: 10,
-              borderWidth: 1,
-              borderColor: "#FED7AA",
-            }}
-            testID="needs-attention-banner"
-          >
-            <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#FFEDD5", alignItems: "center", justifyContent: "center" }}>
-              <AlertTriangle size={18} color="#F97316" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 10, fontWeight: "800", color: "#C2410C", textTransform: "uppercase", letterSpacing: 1 }}>
-                Needs Attention
-              </Text>
-              <Text style={{ fontSize: 12, color: "#9A3412", marginTop: 2 }}>
-                {totalOverdue} overdue task{totalOverdue !== 1 ? "s" : ""} across the team
-              </Text>
-            </View>
-            <ChevronRight size={18} color="#F97316" />
-          </Pressable>
-        ) : null}
 
         {/* ── 4. TEAM MEMBERS CARD ──────────────────────────────────── */}
         <View
@@ -1117,6 +1090,17 @@ export default function TeamScreen() {
         onClose={() => setPendingInvitesOpen(false)}
         onCancel={(invite) => cancelInviteMutation.mutate(invite.id)}
         onResend={(invite) => resendInviteMutation.mutate(invite.id)}
+      />
+
+      <TeamOverviewTasksSheet
+        visible={overviewTasksSheet !== null}
+        filter={overviewTasksSheet ?? "open"}
+        tasks={overviewSheetTasks}
+        onClose={() => setOverviewTasksSheet(null)}
+        onTaskPress={(task) => {
+          setOverviewTasksSheet(null);
+          router.push({ pathname: "/task-detail", params: { taskId: task.id, teamId: activeTeamId! } });
+        }}
       />
 
     </SafeAreaView>
