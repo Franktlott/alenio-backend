@@ -55,7 +55,7 @@ export function SenecaPrepCard({ teamId, memberUserId, memberName, managerName, 
       <header className="seneca-prep-head">
         <div className="seneca-prep-head-row">
           <SenecaBrandMark />
-          <span className="seneca-prep-kicker">Prep</span>
+          <span className="seneca-kicker">Prep</span>
         </div>
         {compact ? (
           <button type="button" className="seneca-prep-toggle" onClick={() => setExpanded((v) => !v)}>

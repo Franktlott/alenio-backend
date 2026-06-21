@@ -124,7 +124,7 @@ export function SenecaCheckInPanel({
     <aside className="seneca-checkin-panel" aria-label="Seneca coaching assistant">
       <header className="seneca-checkin-head">
         <SenecaBrandMark />
-        <p className="seneca-checkin-tagline">Coach the manager</p>
+        <p className="seneca-kicker">Coach the manager</p>
       </header>
       <SenecaDisclaimer />
 

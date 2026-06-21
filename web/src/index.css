@@ -21805,6 +21805,44 @@ button.enterprise-profile-legal-link {
 }
 
 /* ── Seneca coaching assistant ─────────────────────────────────── */
+:root {
+  --seneca-accent: #6366f1;
+  --seneca-accent-deep: #4338ca;
+  --seneca-accent-soft: #818cf8;
+  --seneca-accent-cyan: #22d3ee;
+  --seneca-accent-violet: #a855f7;
+  --seneca-surface: #f8f9ff;
+  --seneca-surface-border: rgba(99, 102, 241, 0.2);
+  --seneca-ring: conic-gradient(
+    from 180deg,
+    var(--seneca-accent-cyan),
+    var(--seneca-accent),
+    var(--seneca-accent-violet),
+    var(--seneca-accent-cyan)
+  );
+  --seneca-bar: linear-gradient(
+    90deg,
+    var(--seneca-accent-cyan),
+    var(--seneca-accent),
+    var(--seneca-accent-violet)
+  );
+}
+
+.seneca-icon {
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.seneca-kicker {
+  margin: 0;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--seneca-accent-soft);
+}
+
 .seneca-disclaimer {
   margin: 0 0 0.65rem;
   font-size: 0.6875rem;
@@ -21818,14 +21856,14 @@ button.enterprise-profile-legal-link {
   gap: 0.35rem;
   font-size: 0.8125rem;
   font-weight: 700;
-  color: #4338ca;
+  color: var(--seneca-accent-deep);
 }
 
 .seneca-prep-card,
 .seneca-checkin-panel {
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--seneca-surface-border);
   border-radius: 8px;
-  background: #fafbff;
+  background: var(--seneca-surface);
   padding: 0.85rem;
 }
 
@@ -21844,21 +21882,13 @@ button.enterprise-profile-legal-link {
   gap: 0.5rem;
 }
 
-.seneca-prep-kicker {
-  font-size: 0.6875rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: #64748b;
-}
-
 .seneca-prep-toggle {
   border: none;
   background: transparent;
   font-family: inherit;
   font-size: 0.75rem;
   font-weight: 600;
-  color: #4338ca;
+  color: var(--seneca-accent-deep);
   cursor: pointer;
 }
 
@@ -21866,8 +21896,9 @@ button.enterprise-profile-legal-link {
   margin-top: 0.65rem;
 }
 
-.seneca-prep-section-title {
-  margin: 0 0 0.25rem;
+.seneca-prep-section-title,
+.seneca-summary-section-title {
+  margin: 0 0 0.35rem;
   font-size: 0.6875rem;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -21917,32 +21948,37 @@ button.enterprise-profile-legal-link {
   min-width: 0;
 }
 
-.seneca-checkin-tagline {
-  margin: 0;
-  font-size: 0.6875rem;
-  color: #64748b;
-}
-
 .seneca-checkin-actions {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
 }
 
-.seneca-checkin-action-btn {
+.seneca-checkin-action-btn,
+.seneca-dev-plan-trigger {
   font-family: inherit;
   font-size: 0.75rem;
   font-weight: 600;
   text-align: left;
   padding: 0.45rem 0.65rem;
   border-radius: 6px;
-  border: 1px solid #c7d2fe;
+  border: 1px solid rgba(99, 102, 241, 0.28);
   background: #fff;
-  color: #3730a3;
+  color: var(--seneca-accent-deep);
   cursor: pointer;
 }
 
-.seneca-checkin-action-btn:hover:not(:disabled) {
+.seneca-dev-plan-trigger {
+  font-size: 0.8125rem;
+  text-align: center;
+  padding: 0.45rem 0.85rem;
+  border-radius: 8px;
+  background: var(--seneca-surface);
+  white-space: nowrap;
+}
+
+.seneca-checkin-action-btn:hover:not(:disabled),
+.seneca-dev-plan-trigger:hover {
   background: #eef2ff;
 }
 
@@ -21954,7 +21990,7 @@ button.enterprise-profile-legal-link {
 .seneca-checkin-result {
   margin-top: 0.65rem;
   padding-top: 0.65rem;
-  border-top: 1px solid #e2e8f0;
+  border-top: 1px solid var(--seneca-surface-border);
 }
 
 .seneca-checkin-result-text {
@@ -21977,14 +22013,15 @@ button.enterprise-profile-legal-link {
   font-weight: 600;
   padding: 0.35rem 0.65rem;
   border-radius: 6px;
-  border: 1px solid #4338ca;
-  background: #4338ca;
+  border: 1px solid var(--seneca-accent);
+  background: var(--seneca-accent);
   color: #fff;
   cursor: pointer;
 }
 
 .seneca-checkin-apply-btn:hover {
-  background: #3730a3;
+  background: var(--seneca-accent-deep);
+  border-color: var(--seneca-accent-deep);
 }
 
 .seneca-checkin-error {
@@ -22003,10 +22040,22 @@ button.enterprise-profile-legal-link {
   max-height: 88vh;
   overflow: auto;
   background: #fff;
-  border: 1px solid #dce3eb;
+  border: 1px solid var(--seneca-surface-border);
   border-radius: 10px;
   padding: 1.125rem;
-  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.2);
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.12);
+}
+
+.seneca-summary-modal::before,
+.seneca-dev-plan-modal::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  border-radius: 10px 10px 0 0;
+  background: var(--seneca-bar);
 }
 
 .seneca-summary-head {
@@ -22030,15 +22079,6 @@ button.enterprise-profile-legal-link {
   margin-top: 0.85rem;
 }
 
-.seneca-summary-section-title {
-  margin: 0 0 0.35rem;
-  font-size: 0.6875rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: #64748b;
-}
-
 .seneca-summary-text {
   margin: 0;
   font-size: 0.8125rem;
@@ -22052,7 +22092,7 @@ button.enterprise-profile-legal-link {
   gap: 0.75rem;
   margin-top: 1rem;
   padding-top: 0.75rem;
-  border-top: 1px solid #e2e8f0;
+  border-top: 1px solid var(--seneca-surface-border);
 }
 
 .seneca-dev-plan-form {
@@ -22073,23 +22113,6 @@ button.enterprise-profile-legal-link {
 .seneca-dev-plan-textarea {
   width: 100%;
   box-sizing: border-box;
-}
-
-.seneca-dev-plan-trigger {
-  font-family: inherit;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  padding: 0.45rem 0.85rem;
-  border-radius: 8px;
-  border: 1px solid #c7d2fe;
-  background: #eef2ff;
-  color: #3730a3;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.seneca-dev-plan-trigger:hover {
-  background: #e0e7ff;
 }
 
 @media (max-width: 899px) {
@@ -22131,7 +22154,7 @@ button.enterprise-profile-legal-link {
 }
 
 .seneca-floating-launcher:focus-visible {
-  outline: 2px solid #6366f1;
+  outline: 2px solid var(--seneca-accent);
   outline-offset: 3px;
 }
 
@@ -22139,7 +22162,7 @@ button.enterprise-profile-legal-link {
   position: absolute;
   inset: -4px;
   border-radius: 50%;
-  background: conic-gradient(from 180deg, #22d3ee, #6366f1, #a855f7, #22d3ee);
+  background: var(--seneca-ring);
   opacity: 0.55;
   animation: seneca-float-ring 3s linear infinite;
   z-index: 0;
@@ -22148,11 +22171,17 @@ button.enterprise-profile-legal-link {
 .seneca-floating-launcher__icon {
   position: relative;
   z-index: 1;
+}
+
+.seneca-floating-launcher__icon.seneca-icon {
   width: 3.5rem;
   height: 3.5rem;
-  border-radius: 50%;
-  object-fit: cover;
   box-shadow: 0 8px 28px rgba(99, 102, 241, 0.45);
+}
+
+.seneca-soon-icon.seneca-icon {
+  width: 5.5rem;
+  height: 5.5rem;
 }
 
 @keyframes seneca-float-ring {
@@ -22187,6 +22216,16 @@ button.enterprise-profile-legal-link {
   text-align: center;
   color: #e2e8f0;
   overflow: hidden;
+}
+
+.seneca-soon-modal::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--seneca-bar);
 }
 
 .seneca-soon-glow {
@@ -22238,10 +22277,8 @@ button.enterprise-profile-legal-link {
 }
 
 .seneca-soon-icon {
-  width: 5.5rem;
-  height: 5.5rem;
-  border-radius: 50%;
-  object-fit: cover;
+  display: block;
+  margin: 0 auto;
 }
 
 .seneca-soon-spinner {
@@ -22249,8 +22286,8 @@ button.enterprise-profile-legal-link {
   inset: -0.35rem;
   border-radius: 50%;
   border: 2px solid transparent;
-  border-top-color: #22d3ee;
-  border-right-color: #a855f7;
+  border-top-color: var(--seneca-accent-cyan);
+  border-right-color: var(--seneca-accent-violet);
   animation: seneca-float-ring 0.9s linear infinite;
 }
 
@@ -22289,7 +22326,7 @@ button.enterprise-profile-legal-link {
   width: 0.45rem;
   height: 0.45rem;
   border-radius: 50%;
-  background: #818cf8;
+  background: var(--seneca-accent-soft);
   animation: seneca-soon-dot 1.2s ease-in-out infinite;
 }
 
@@ -22334,10 +22371,7 @@ button.enterprise-profile-legal-link {
 .seneca-soon-kicker {
   margin: 0 0 0.35rem;
   font-size: 0.75rem;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: #818cf8;
+  color: var(--seneca-accent-soft);
 }
 
 .seneca-soon-title {
@@ -22360,7 +22394,7 @@ button.enterprise-profile-legal-link {
   padding: 0.7rem 1rem;
   border: none;
   border-radius: 0.65rem;
-  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  background: linear-gradient(135deg, var(--seneca-accent), var(--seneca-accent-violet));
   color: #fff;
   font-size: 0.9375rem;
   font-weight: 600;

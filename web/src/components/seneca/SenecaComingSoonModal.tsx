@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { SenecaIcon } from "./SenecaShared";
 
 type Props = {
   open: boolean;
@@ -36,7 +37,7 @@ export function SenecaComingSoonModal({ open, onClose }: Props) {
         <div className="seneca-soon-glow" aria-hidden />
 
         <div className={`seneca-soon-icon-wrap${loading ? " seneca-soon-icon-wrap--loading" : ""}`}>
-          <img src="/seneca-icon.png" alt="" className="seneca-soon-icon" width={96} height={96} />
+          <SenecaIcon size={88} className="seneca-soon-icon" />
           {loading ? <span className="seneca-soon-spinner" aria-hidden /> : null}
         </div>
 
@@ -51,7 +52,7 @@ export function SenecaComingSoonModal({ open, onClose }: Props) {
           </div>
         ) : (
           <div className="seneca-soon-body">
-            <p className="seneca-soon-kicker">AI coaching assistant</p>
+            <p className="seneca-kicker seneca-soon-kicker">AI coaching assistant</p>
             <h2 id="seneca-soon-title" className="seneca-soon-title">
               Seneca — coming soon
             </h2>
