@@ -22,7 +22,7 @@ import {
   type DevelopmentGoalStatus,
 } from "../lib/api";
 import { printDevelopmentPlan } from "../lib/development-plan-print";
-import { DevelopmentPlanGenerator } from "./seneca/DevelopmentPlanGenerator";
+import { SenecaGoalModal } from "./seneca/SenecaGoalModal";
 
 type Props = {
   teamId: string;
@@ -794,7 +794,7 @@ export function DevelopmentPlanTab({
   const [menuGoalId, setMenuGoalId] = useState<string | null>(null);
   const [statusSavingId, setStatusSavingId] = useState<string | null>(null);
   const [closedSectionOpen, setClosedSectionOpen] = useState(false);
-  const [senecaPlanOpen, setSenecaPlanOpen] = useState(false);
+  const [senecaGoalOpen, setSenecaGoalOpen] = useState(false);
   const canUpdate = canCreate || canAddNotes;
 
   const activeGoals = goals.filter((g) => g.status !== "closed");
@@ -1030,7 +1030,11 @@ export function DevelopmentPlanTab({
           </button>
           {canCreate ? (
             <>
-              <button type="button" className="seneca-dev-plan-trigger" onClick={() => setSenecaPlanOpen(true)}>
+              <button
+                type="button"
+                className="seneca-dev-plan-trigger"
+                onClick={() => setSenecaGoalOpen(true)}
+              >
                 Generate with Seneca
               </button>
               <button type="button" className="enterprise-dev-plan-new-btn" onClick={openCreate}>
@@ -1171,16 +1175,12 @@ export function DevelopmentPlanTab({
         </DevPlanGoalModal>
       ) : null}
 
-      {senecaPlanOpen ? (
-        <DevelopmentPlanGenerator
-          teamId={teamId}
-          memberUserId={memberUserId}
-          memberName={memberName}
-          managerName={managerName}
-          onCreated={() => void loadGoals()}
-          onClose={() => setSenecaPlanOpen(false)}
-        />
-      ) : null}
+      <SenecaGoalModal
+        open={senecaGoalOpen}
+        onClose={() => setSenecaGoalOpen(false)}
+        memberContext={{ teamId, memberUserId, memberName, managerName }}
+        onSaved={() => void loadGoals()}
+      />
     </div>
   );
 }

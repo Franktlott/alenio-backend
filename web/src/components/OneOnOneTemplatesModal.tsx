@@ -12,6 +12,7 @@ import {
   type OneOnOneTemplateFieldType,
 } from "../lib/api";
 import { appendLeaderCommentsIfMissing, stripLeaderCommentsFields } from "../lib/check-in-leader-comments";
+import { SenecaCheckInTemplateModal } from "./seneca/SenecaCheckInTemplateModal";
 
 const QUESTION_TYPE_OPTIONS: {
   value: OneOnOneTemplateFieldType;
@@ -161,6 +162,7 @@ export function OneOnOneTemplatesModal({ teamId, open, onClose }: Props) {
   const [fieldMenuId, setFieldMenuId] = useState<string | null>(null);
   const [dragFieldId, setDragFieldId] = useState<string | null>(null);
   const [dragSectionId, setDragSectionId] = useState<string | null>(null);
+  const [senecaOpen, setSenecaOpen] = useState(false);
 
   const sectionGroups = useMemo(
     () => parseSections(editorView === "preview" ? appendLeaderCommentsIfMissing(fields) : fields),
@@ -589,6 +591,7 @@ export function OneOnOneTemplatesModal({ teamId, open, onClose }: Props) {
   const isDraft = !editingId;
 
   return (
+    <>
     <div className="enterprise-modal-backdrop enterprise-oneone-templates-backdrop" role="presentation" onClick={onClose}>
       <div
         className={`enterprise-modal-sheet enterprise-oneone-templates-modal${view === "editor" ? " enterprise-oneone-templates-modal--editor" : " enterprise-oneone-templates-modal--list"}`}
@@ -616,6 +619,13 @@ export function OneOnOneTemplatesModal({ teamId, open, onClose }: Props) {
                     Search check-in library
                   </button>
                 ) : null}
+                <button
+                  type="button"
+                  className="seneca-dev-plan-trigger seneca-template-trigger"
+                  onClick={() => setSenecaOpen(true)}
+                >
+                  Generate with Seneca
+                </button>
                 <button type="button" className="enterprise-oneone-templates-primary-btn" onClick={openCreate}>
                   + New Template
                 </button>
@@ -1285,5 +1295,12 @@ export function OneOnOneTemplatesModal({ teamId, open, onClose }: Props) {
         )}
       </div>
     </div>
+    <SenecaCheckInTemplateModal
+      open={senecaOpen}
+      teamId={teamId}
+      onClose={() => setSenecaOpen(false)}
+      onSaved={() => void loadTemplates()}
+    />
+    </>
   );
 }

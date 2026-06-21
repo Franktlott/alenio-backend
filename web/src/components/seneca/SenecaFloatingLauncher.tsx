@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { SenecaGoalModal } from "./SenecaGoalModal";
+import { SenecaComingSoonModal } from "./SenecaComingSoonModal";
 import { SenecaIcon } from "./SenecaShared";
 
 export function SenecaFloatingLauncher() {
@@ -17,7 +17,7 @@ export function SenecaFloatingLauncher() {
         <span className="seneca-floating-launcher__ring" aria-hidden />
         <SenecaIcon size={56} className="seneca-floating-launcher__icon" />
       </button>
-      <SenecaGoalModal open={open} onClose={() => setOpen(false)} />
+      <SenecaComingSoonModal open={open} onClose={() => setOpen(false)} />
     </>
   );
 }

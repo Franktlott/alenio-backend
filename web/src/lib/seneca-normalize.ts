@@ -85,3 +85,108 @@ export function normalizeQuickDevelopmentGoal(raw: unknown): SenecaQuickDevelopm
   if (steps.length === 0) return null;
   return { skill, steps };
 }
+
+export type SenecaCheckInQuestionType = "short_text" | "long_text" | "rating" | "yes_no";
+
+export type SenecaCheckInTemplateQuestion = {
+  label: string;
+  type: SenecaCheckInQuestionType;
+  helpText: string | null;
+  required: boolean;
+  ratingMax?: number;
+};
+
+export type SenecaCheckInTemplateSection = {
+  title: string;
+  questions: SenecaCheckInTemplateQuestion[];
+};
+
+export type SenecaCheckInTemplateDraft = {
+  title: string;
+  description: string | null;
+  sections: SenecaCheckInTemplateSection[];
+  leaderPrep: string[];
+};
+
+const CHECK_IN_QUESTION_TYPES = new Set<SenecaCheckInQuestionType>([
+  "short_text",
+  "long_text",
+  "rating",
+  "yes_no",
+]);
+
+const MAX_CHECK_IN_SECTIONS = 3;
+const MAX_CHECK_IN_QUESTIONS = 10;
+const MAX_LEADER_PREP = 8;
+
+function normalizeCheckInQuestion(raw: unknown): SenecaCheckInTemplateQuestion | null {
+  if (!raw || typeof raw !== "object") return null;
+  const o = raw as Record<string, unknown>;
+  const label = typeof o.label === "string" ? o.label.trim() : "";
+  if (!label) return null;
+  const typeRaw = typeof o.type === "string" ? o.type.trim() : "long_text";
+  const type = CHECK_IN_QUESTION_TYPES.has(typeRaw as SenecaCheckInQuestionType)
+    ? (typeRaw as SenecaCheckInQuestionType)
+    : "long_text";
+  const helpText =
+    typeof o.helpText === "string" && o.helpText.trim() ? o.helpText.trim() : null;
+  const required = o.required === true;
+  const ratingMax =
+    type === "rating" && typeof o.ratingMax === "number" && o.ratingMax >= 2 && o.ratingMax <= 10
+      ? Math.round(o.ratingMax)
+      : type === "rating"
+        ? 5
+        : undefined;
+  return { label, type, helpText, required, ...(ratingMax ? { ratingMax } : {}) };
+}
+
+export function normalizeCheckInTemplateDraft(raw: unknown): SenecaCheckInTemplateDraft | null {
+  if (!raw || typeof raw !== "object") return null;
+  const o = raw as Record<string, unknown>;
+  const title = typeof o.title === "string" ? o.title.trim() : "";
+  if (!title) return null;
+
+  const description =
+    typeof o.description === "string" && o.description.trim() ? o.description.trim() : null;
+  const leaderPrep = normalizeStringArray(o.leaderPrep).slice(0, MAX_LEADER_PREP);
+
+  const sectionsRaw = Array.isArray(o.sections) ? o.sections : [];
+  const sections: SenecaCheckInTemplateSection[] = [];
+  let questionCount = 0;
+
+  for (const sectionRaw of sectionsRaw.slice(0, MAX_CHECK_IN_SECTIONS)) {
+    if (!sectionRaw || typeof sectionRaw !== "object") continue;
+    const section = sectionRaw as Record<string, unknown>;
+    const sectionTitle =
+      (typeof section.title === "string" ? section.title.trim() : "") ||
+      (typeof section.label === "string" ? section.label.trim() : "") ||
+      "Check-in";
+    const questionsRaw = Array.isArray(section.questions) ? section.questions : [];
+    const questions: SenecaCheckInTemplateQuestion[] = [];
+    for (const questionRaw of questionsRaw) {
+      if (questionCount >= MAX_CHECK_IN_QUESTIONS) break;
+      const question = normalizeCheckInQuestion(questionRaw);
+      if (!question) continue;
+      questions.push(question);
+      questionCount += 1;
+    }
+    if (questions.length === 0) continue;
+    sections.push({ title: sectionTitle, questions });
+  }
+
+  if (sections.length === 0) {
+    const flatQuestions = normalizeStringArray(o.questions ?? o.fields).slice(0, MAX_CHECK_IN_QUESTIONS);
+    if (flatQuestions.length === 0) return null;
+    sections.push({
+      title: "Check-in",
+      questions: flatQuestions.map((label) => ({
+        label,
+        type: "long_text" as const,
+        helpText: null,
+        required: false,
+      })),
+    });
+  }
+
+  return { title, description, sections, leaderPrep };
+}

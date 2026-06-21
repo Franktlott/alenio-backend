@@ -1,5 +1,5 @@
 import { apiPostJson } from "./api";
-import { normalizeDevelopmentGoalDraft, normalizeQuickDevelopmentGoal, normalizeStringArray } from "./seneca-normalize";
+import { normalizeDevelopmentGoalDraft, normalizeQuickDevelopmentGoal, normalizeCheckInTemplateDraft, normalizeStringArray } from "./seneca-normalize";
 
 export type SenecaPrep = {
   lastCheckInNotes: string | null;
@@ -46,6 +46,12 @@ export type SenecaQuickDevelopmentGoal = {
   skill: string;
   steps: string[];
 };
+
+export type {
+  SenecaCheckInTemplateDraft,
+  SenecaCheckInTemplateQuestion,
+  SenecaCheckInTemplateSection,
+} from "./seneca-normalize";
 
 export type SenecaSummary = {
   conversationSummary: string;
@@ -165,4 +171,15 @@ export function fetchSenecaQuickGoal(
       return normalized;
     },
   );
+}
+
+export function fetchSenecaCheckInTemplate(teamId: string, body: { brief: string }) {
+  return apiPostJson<{ data: unknown }>(
+    `/api/teams/${encodeURIComponent(teamId)}/seneca/check-in-template`,
+    body,
+  ).then((r) => {
+    const normalized = normalizeCheckInTemplateDraft(r.data);
+    if (!normalized) throw new Error("Seneca returned an invalid check-in template.");
+    return normalized;
+  });
 }

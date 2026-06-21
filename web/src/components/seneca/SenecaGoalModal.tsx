@@ -1,18 +1,34 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createDevelopmentGoal, fetchWebTeam, type WebTeamMemberRow } from "../../lib/api";
 import { getWebApiBase } from "../../lib/api-base";
 import { useEnterpriseShell } from "../../contexts/EnterpriseShellContext";
 import { fetchSenecaQuickGoal } from "../../lib/seneca-api";
 import { SenecaBrandMark, SenecaDisclaimer, SenecaIcon } from "./SenecaShared";
 
+type PinnedMemberContext = {
+  teamId: string;
+  memberUserId: string;
+  memberName: string;
+  managerName: string | null;
+};
+
 type Props = {
   open: boolean;
   onClose: () => void;
+  /** When viewing a specific member's development plan */
+  memberContext?: PinnedMemberContext;
+  onSaved?: () => void;
 };
 
 type Phase = "prompt" | "generating" | "review";
 
 const MAX_STEPS = 5;
+
+function autoResizeTextarea(el: HTMLTextAreaElement | null) {
+  if (!el) return;
+  el.style.height = "0px";
+  el.style.height = `${Math.max(el.scrollHeight, 34)}px`;
+}
 
 function memberLabel(member: WebTeamMemberRow): string {
   return member.user.name ?? member.user.email ?? "Team member";
@@ -27,33 +43,46 @@ function eligibleMembers(members: WebTeamMemberRow[], myId: string, myRole: stri
   return members.filter((m) => m.userId === myId);
 }
 
-export function SenecaGoalModal({ open, onClose }: Props) {
+export function SenecaGoalModal({ open, onClose, memberContext, onSaved }: Props) {
   const { me, selectedTeamId } = useEnterpriseShell();
+  const pinned = memberContext ?? null;
+  const teamId = pinned?.teamId ?? selectedTeamId ?? "";
   const [phase, setPhase] = useState<Phase>("prompt");
   const [skillOrGoal, setSkillOrGoal] = useState("");
   const [members, setMembers] = useState<WebTeamMemberRow[]>([]);
   const [myRole, setMyRole] = useState("");
   const [memberUserId, setMemberUserId] = useState("");
   const [skill, setSkill] = useState("");
-  const [stepsText, setStepsText] = useState("");
+  const [steps, setSteps] = useState<string[]>([""]);
   const [loadingMembers, setLoadingMembers] = useState(false);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [senecaReady, setSenecaReady] = useState(true);
+  const stepInputRefs = useRef<(HTMLTextAreaElement | null)[]>([]);
+
+  useEffect(() => {
+    if (phase !== "review") return;
+    for (const el of stepInputRefs.current) autoResizeTextarea(el);
+  }, [phase, steps]);
 
   const memberOptions = useMemo(
-    () => eligibleMembers(members, me?.id ?? "", myRole),
-    [members, me?.id, myRole],
+    () => (pinned ? [] : eligibleMembers(members, me?.id ?? "", myRole)),
+    [pinned, members, me?.id, myRole],
   );
 
   const selectedMember = memberOptions.find((m) => m.userId === memberUserId) ?? null;
+  const activeMemberUserId = pinned?.memberUserId ?? memberUserId;
+  const activeMemberName =
+    pinned?.memberName ?? (selectedMember ? memberLabel(selectedMember) : "");
+  const activeManagerName = pinned?.managerName ?? me?.name ?? me?.email ?? null;
+  const showMemberPicker = !pinned && memberOptions.length > 1;
 
   useEffect(() => {
     if (!open) {
       setPhase("prompt");
       setSkillOrGoal("");
       setSkill("");
-      setStepsText("");
+      setSteps([""]);
       setErr(null);
       setSaving(false);
       return;
@@ -63,6 +92,8 @@ export function SenecaGoalModal({ open, onClose }: Props) {
       .then((r) => r.json())
       .then((health: { senecaConfigured?: boolean }) => setSenecaReady(Boolean(health.senecaConfigured)))
       .catch(() => setSenecaReady(false));
+
+    if (pinned) return;
 
     if (!selectedTeamId) return;
     setLoadingMembers(true);
@@ -75,11 +106,11 @@ export function SenecaGoalModal({ open, onClose }: Props) {
       })
       .catch((e) => setErr(e instanceof Error ? e.message : "Could not load team members."))
       .finally(() => setLoadingMembers(false));
-  }, [open, selectedTeamId, me?.id]);
+  }, [open, pinned, selectedTeamId, me?.id]);
 
   const generate = async () => {
     const prompt = skillOrGoal.trim();
-    if (!prompt || !selectedTeamId || !memberUserId || !selectedMember) return;
+    if (!prompt || !teamId || !activeMemberUserId || !activeMemberName) return;
     if (!senecaReady) {
       setErr("Seneca is not configured on this server yet.");
       return;
@@ -88,13 +119,13 @@ export function SenecaGoalModal({ open, onClose }: Props) {
     setPhase("generating");
     setErr(null);
     try {
-      const goal = await fetchSenecaQuickGoal(selectedTeamId, memberUserId, {
+      const goal = await fetchSenecaQuickGoal(teamId, activeMemberUserId, {
         skillOrGoal: prompt,
-        memberName: memberLabel(selectedMember),
-        managerName: me?.name ?? me?.email ?? null,
+        memberName: activeMemberName,
+        managerName: activeManagerName,
       });
       setSkill(goal.skill);
-      setStepsText(goal.steps.join("\n"));
+      setSteps(goal.steps.length > 0 ? goal.steps.slice(0, MAX_STEPS) : [""]);
       setPhase("review");
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Seneca could not create that goal.");
@@ -103,13 +134,9 @@ export function SenecaGoalModal({ open, onClose }: Props) {
   };
 
   const save = async () => {
-    if (!selectedTeamId || !memberUserId) return;
-    const steps = stepsText
-      .split("\n")
-      .map((s) => s.trim())
-      .filter(Boolean)
-      .slice(0, MAX_STEPS);
-    if (!skill.trim() || steps.length === 0) {
+    if (!teamId || !activeMemberUserId) return;
+    const trimmedSteps = steps.map((s) => s.trim()).filter(Boolean).slice(0, MAX_STEPS);
+    if (!skill.trim() || trimmedSteps.length === 0) {
       setErr("Add a goal title and at least one step.");
       return;
     }
@@ -117,10 +144,11 @@ export function SenecaGoalModal({ open, onClose }: Props) {
     setSaving(true);
     setErr(null);
     try {
-      await createDevelopmentGoal(selectedTeamId, memberUserId, {
+      await createDevelopmentGoal(teamId, activeMemberUserId, {
         skill: skill.trim(),
-        steps,
+        steps: trimmedSteps,
       });
+      onSaved?.();
       onClose();
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Could not save development goal.");
@@ -134,7 +162,7 @@ export function SenecaGoalModal({ open, onClose }: Props) {
   return (
     <div className="seneca-soon-backdrop" role="presentation" onClick={() => !saving && onClose()}>
       <div
-        className="seneca-soon-modal seneca-goal-modal"
+        className={`seneca-soon-modal seneca-goal-modal${phase === "review" ? " seneca-goal-modal--review" : ""}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby="seneca-goal-title"
@@ -157,7 +185,7 @@ export function SenecaGoalModal({ open, onClose }: Props) {
           </div>
         </header>
 
-        <SenecaDisclaimer />
+        {phase !== "review" ? <SenecaDisclaimer /> : null}
 
         {!senecaReady ? (
           <p className="enterprise-form-error seneca-goal-error" role="alert">
@@ -182,7 +210,7 @@ export function SenecaGoalModal({ open, onClose }: Props) {
               autoFocus
             />
 
-            {memberOptions.length > 1 ? (
+            {showMemberPicker ? (
               <>
                 <label className="seneca-dev-plan-label" htmlFor="seneca-goal-member">
                   For team member
@@ -201,17 +229,17 @@ export function SenecaGoalModal({ open, onClose }: Props) {
                   ))}
                 </select>
               </>
-            ) : selectedMember ? (
-              <p className="enterprise-muted seneca-goal-member-hint">For {memberLabel(selectedMember)}</p>
+            ) : activeMemberName ? (
+              <p className="enterprise-muted seneca-goal-member-hint">For {activeMemberName}</p>
             ) : null}
 
             <button
               type="button"
               className="seneca-soon-dismiss seneca-goal-primary"
-              disabled={!skillOrGoal.trim() || !memberUserId || loadingMembers || !senecaReady}
+              disabled={!skillOrGoal.trim() || !activeMemberUserId || loadingMembers || !senecaReady}
               onClick={() => void generate()}
             >
-              Create with Seneca
+              {pinned ? "Generate with Seneca" : "Create with Seneca"}
             </button>
           </div>
         ) : null}
@@ -229,30 +257,74 @@ export function SenecaGoalModal({ open, onClose }: Props) {
         ) : null}
 
         {phase === "review" ? (
-          <div className="seneca-goal-body">
-            {selectedMember ? (
-              <p className="enterprise-muted seneca-goal-member-hint">For {memberLabel(selectedMember)}</p>
+          <div className="seneca-goal-body seneca-goal-body--review">
+            {activeMemberName ? (
+              <p className="enterprise-muted seneca-goal-member-hint seneca-goal-member-hint--compact">
+                For {activeMemberName}
+              </p>
             ) : null}
             <label className="seneca-dev-plan-label" htmlFor="seneca-goal-skill">
               Goal / skill
             </label>
             <input
               id="seneca-goal-skill"
-              className="auth-input seneca-dev-plan-input"
+              className="auth-input seneca-dev-plan-input seneca-goal-skill-input"
               value={skill}
               onChange={(e) => setSkill(e.target.value)}
             />
-            <label className="seneca-dev-plan-label">
-              Steps <span className="seneca-goal-step-cap">(max {MAX_STEPS})</span>
-            </label>
-            <textarea
-              className="auth-input seneca-dev-plan-textarea"
-              rows={MAX_STEPS + 1}
-              value={stepsText}
-              onChange={(e) => setStepsText(e.target.value.split("\n").slice(0, MAX_STEPS).join("\n"))}
-              placeholder="One step per line"
-            />
-            <div className="seneca-goal-actions">
+            <div className="seneca-goal-steps-head">
+              <label className="seneca-dev-plan-label">
+                Steps <span className="seneca-goal-step-cap">(max {MAX_STEPS})</span>
+              </label>
+              {steps.length < MAX_STEPS ? (
+                <button
+                  type="button"
+                  className="enterprise-inline-link seneca-goal-add-step"
+                  disabled={saving}
+                  onClick={() => setSteps((current) => [...current, ""])}
+                >
+                  Add step
+                </button>
+              ) : null}
+            </div>
+            <div className="seneca-goal-steps-scroll">
+              <ul className="seneca-goal-steps">
+                {steps.map((step, index) => (
+                  <li key={`seneca-step-${index}`} className="seneca-goal-step-row">
+                    <div className="seneca-goal-step-head">
+                      <span className="seneca-goal-step-label">Step {index + 1}</span>
+                      {steps.length > 1 ? (
+                        <button
+                          type="button"
+                          className="seneca-goal-remove-step"
+                          disabled={saving}
+                          aria-label={`Remove step ${index + 1}`}
+                          onClick={() => setSteps((current) => current.filter((_, i) => i !== index))}
+                        >
+                          Remove
+                        </button>
+                      ) : null}
+                    </div>
+                    <textarea
+                      ref={(el) => {
+                        stepInputRefs.current[index] = el;
+                        autoResizeTextarea(el);
+                      }}
+                      className="auth-input seneca-goal-step-input"
+                      rows={1}
+                      value={step}
+                      placeholder={`Action step ${index + 1}`}
+                      aria-label={`Step ${index + 1}`}
+                      onChange={(e) => {
+                        setSteps((current) => current.map((s, i) => (i === index ? e.target.value : s)));
+                        autoResizeTextarea(e.target);
+                      }}
+                    />
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="seneca-goal-actions seneca-goal-actions--review">
               <button type="button" className="enterprise-inline-link" disabled={saving} onClick={() => setPhase("prompt")}>
                 Back
               </button>
