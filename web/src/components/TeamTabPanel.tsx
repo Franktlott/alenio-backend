@@ -6,6 +6,7 @@ import QRCode from "qrcode";
 import { AddMemberModal } from "./AddMemberModal";
 import { PendingInvitesModal } from "./PendingInvitesModal";
 import { PendingCalendarEventsModal } from "./PendingCalendarEventsModal";
+import { TeamMemberManageModal } from "./TeamMemberManageModal";
 import { TeamMemberProfilePanel } from "./TeamMemberProfilePanel";
 import { OneOnOneTemplatesModal } from "./OneOnOneTemplatesModal";
 import {
@@ -239,12 +240,14 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
   const incoming = teamContextQuery.data?.incoming ?? [];
   const pendingInvites = teamContextQuery.data?.pendingInvites ?? [];
   const pendingCalendarEvents = teamContextQuery.data?.pendingCalendarEvents ?? [];
-  const tabErr =
+  const loadErr =
     teamContextQuery.error instanceof Error
       ? teamContextQuery.error.message
       : teamContextQuery.isError
         ? "Could not load team."
         : null;
+  const [actionErr, setActionErr] = useState<string | null>(null);
+  const displayErr = actionErr ?? loadErr;
   const showInitialLoading = teamContextQuery.isPending && !teamContextQuery.data;
 
   const reloadTeamContext = useCallback(async () => {
@@ -269,6 +272,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
 
   const [memberModal, setMemberModal] = useState<WebTeamMemberRow | null>(null);
+  const [memberModalErr, setMemberModalErr] = useState<string | null>(null);
   const [rolePick, setRolePick] = useState<"member" | "team_leader">("member");
   const [modalBusy, setModalBusy] = useState(false);
 
@@ -384,14 +388,14 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
   const onSaveTeamName = async () => {
     if (!selectedTeamId || !nameEdit.trim()) return;
     setNameSaving(true);
-    setTabErr(null);
+    setActionErr(null);
     try {
       await patchApiTeam(selectedTeamId, { name: nameEdit.trim() });
       setIsEditingWorkspace(false);
       await reloadTeamContext();
       await onTeamsRefresh();
     } catch (e) {
-      setTabErr(e instanceof Error ? e.message : "Could not update name.");
+      setActionErr(e instanceof Error ? e.message : "Could not update name.");
     } finally {
       setNameSaving(false);
     }
@@ -405,14 +409,14 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
       const file = input.files?.[0];
       if (!file || !selectedTeamId) return;
       setPhotoBusy(true);
-      setTabErr(null);
+      setActionErr(null);
       try {
         const up = await uploadTeamPhoto(file, selectedTeamId);
         await patchApiTeam(selectedTeamId, { image: up.url });
         await reloadTeamContext();
         await onTeamsRefresh();
       } catch (e) {
-        setTabErr(e instanceof Error ? e.message : "Photo upload failed.");
+        setActionErr(e instanceof Error ? e.message : "Photo upload failed.");
       } finally {
         setPhotoBusy(false);
       }
@@ -425,7 +429,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
     try {
       await navigator.clipboard.writeText(teamDetail.inviteCode);
     } catch {
-      setTabErr("Could not copy to clipboard.");
+      setActionErr("Could not copy to clipboard.");
     }
   };
 
@@ -466,21 +470,34 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
 
   const openMemberModal = (m: WebTeamMemberRow) => {
     setMemberModal(m);
+    setMemberModalErr(null);
     setRolePick(m.role === "team_leader" ? "team_leader" : "member");
+  };
+
+  const closeMemberModal = () => {
+    if (modalBusy) return;
+    setMemberModal(null);
+    setMemberModalErr(null);
   };
 
   const onSaveRole = async () => {
     if (!selectedTeamId || !memberModal || teamDetail?.myRole !== "owner") return;
     if (memberModal.role === "owner") return;
+    const currentRole = memberModal.role === "team_leader" ? "team_leader" : "member";
+    if (rolePick === currentRole) {
+      closeMemberModal();
+      return;
+    }
     setModalBusy(true);
-    setTabErr(null);
+    setMemberModalErr(null);
     try {
       await setTeamMemberRole(selectedTeamId, memberModal.userId, rolePick);
       setMemberModal(null);
-      void reloadTeamContext();
-      void onTeamsRefresh();
+      setMemberModalErr(null);
+      await reloadTeamContext();
+      await onTeamsRefresh();
     } catch (e) {
-      setTabErr(e instanceof Error ? e.message : "Could not update role.");
+      setMemberModalErr(e instanceof Error ? e.message : "Could not update role.");
     } finally {
       setModalBusy(false);
     }
@@ -490,14 +507,15 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
     if (!selectedTeamId || !memberModal || teamDetail?.myRole !== "owner" || memberModal.userId === myId) return;
     if (!window.confirm(`Make ${memberModal.user.name ?? "this member"} the team owner? You will become a member.`)) return;
     setModalBusy(true);
-    setTabErr(null);
+    setMemberModalErr(null);
     try {
       await transferTeamOwnership(selectedTeamId, memberModal.userId);
       setMemberModal(null);
+      setMemberModalErr(null);
       await reloadTeamContext();
       await onTeamsRefresh();
     } catch (e) {
-      setTabErr(e instanceof Error ? e.message : "Transfer failed.");
+      setMemberModalErr(e instanceof Error ? e.message : "Transfer failed.");
     } finally {
       setModalBusy(false);
     }
@@ -507,14 +525,15 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
     if (!selectedTeamId || !memberModal) return;
     if (!window.confirm(`Remove ${memberModal.user.name ?? "this member"} from the team?`)) return;
     setModalBusy(true);
-    setTabErr(null);
+    setMemberModalErr(null);
     try {
       await removeTeamMemberApi(selectedTeamId, memberModal.userId);
       setMemberModal(null);
+      setMemberModalErr(null);
       await reloadTeamContext();
       await onTeamsRefresh();
     } catch (e) {
-      setTabErr(e instanceof Error ? e.message : "Could not remove member.");
+      setMemberModalErr(e instanceof Error ? e.message : "Could not remove member.");
     } finally {
       setModalBusy(false);
     }
@@ -524,13 +543,13 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
     if (!selectedTeamId) return;
     if (!window.confirm("Leave this team? You will lose access until invited again.")) return;
     setLeaveBusy(true);
-    setTabErr(null);
+    setActionErr(null);
     try {
       await leaveTeam(selectedTeamId);
       setMemberModal(null);
       await onTeamsRefresh();
     } catch (e) {
-      setTabErr(e instanceof Error ? e.message : "Could not leave team.");
+      setActionErr(e instanceof Error ? e.message : "Could not leave team.");
     } finally {
       setLeaveBusy(false);
     }
@@ -555,7 +574,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
   if (!teamDetail) {
     return (
       <div className="enterprise-team-tab">
-        <p className="enterprise-muted">{tabErr ?? "Team not found."}</p>
+        <p className="enterprise-muted">{loadErr ?? "Team not found."}</p>
       </div>
     );
   }
@@ -565,9 +584,9 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
 
   return (
     <div className="enterprise-team-tab enterprise-team-page">
-      {tabErr ? (
+      {displayErr ? (
         <p className="enterprise-form-error enterprise-team-page-error" role="alert">
-          {tabErr}
+          {displayErr}
         </p>
       ) : null}
 
@@ -719,7 +738,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                               await rejectTeamJoinRequest(selectedTeamId, req.id);
                               await reloadTeamContext();
                             } catch (e) {
-                              setTabErr(e instanceof Error ? e.message : "Decline failed.");
+                              setActionErr(e instanceof Error ? e.message : "Decline failed.");
                             }
                           }}
                         >
@@ -734,7 +753,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                               await reloadTeamContext();
                               await onTeamsRefresh();
                             } catch (e) {
-                              setTabErr(e instanceof Error ? e.message : "Approve failed.");
+                              setActionErr(e instanceof Error ? e.message : "Approve failed.");
                             }
                           }}
                         >
@@ -904,7 +923,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                 type="button"
                 className="enterprise-profile-edit-btn enterprise-profile-edit-btn-with-icon"
                 onClick={() => {
-                  setTabErr(null);
+                  setActionErr(null);
                   setIsEditingWorkspace(true);
                   setNameEdit(teamDetail.name);
                 }}
@@ -997,7 +1016,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
         inviteActionId={inviteActionId}
         onClose={() => setPendingInvitesOpen(false)}
         onReload={reloadTeamContext}
-        onError={(message) => setTabErr(message)}
+        onError={(message) => setActionErr(message)}
         onInviteActionStart={setInviteActionId}
         onInviteActionEnd={() => setInviteActionId(null)}
       />
@@ -1013,7 +1032,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
           await queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(selectedTeamId) });
           await queryClient.invalidateQueries({ queryKey: queryKeys.pendingCalendarEvents(selectedTeamId) });
         }}
-        onError={(message) => setTabErr(message)}
+        onError={(message) => setActionErr(message)}
         onActionStart={setCalendarActionId}
         onActionEnd={() => setCalendarActionId(null)}
       />
@@ -1030,54 +1049,21 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
         </div>
       ) : null}
 
-      {memberModal ? (
-        <div className="enterprise-modal-backdrop" role="presentation" onClick={() => setMemberModal(null)}>
-          <div className="enterprise-modal-sheet" role="dialog" aria-label="Member" onClick={(e) => e.stopPropagation()}>
-            <button type="button" className="enterprise-task-modal-close" aria-label="Close" onClick={() => setMemberModal(null)}>
-              ×
-            </button>
-            <h3 style={{ marginTop: 0 }}>{memberModal.user.name ?? memberModal.user.email}</h3>
-            <p className="enterprise-muted">{roleLabel(memberModal.role)}</p>
-            {teamDetail.myRole === "owner" && memberModal.role !== "owner" && memberModal.userId !== myId ? (
-              <>
-                <label className="enterprise-muted" style={{ fontSize: 13 }}>
-                  Role
-                </label>
-                <select
-                  className="auth-input"
-                  value={rolePick}
-                  onChange={(e) => setRolePick(e.target.value as "member" | "team_leader")}
-                >
-                  <option value="member">Member</option>
-                  <option value="team_leader">Team Leader</option>
-                </select>
-                <button type="button" className="auth-submit" style={{ marginTop: 12 }} disabled={modalBusy} onClick={() => void onSaveRole()}>
-                  {modalBusy ? "Saving…" : "Save role"}
-                </button>
-                <button
-                  type="button"
-                  className="enterprise-team-btn-outline"
-                  style={{ marginTop: 12 }}
-                  disabled={modalBusy}
-                  onClick={() => void onTransferOwnership()}
-                >
-                  Transfer ownership
-                </button>
-              </>
-            ) : null}
-            {manageMembers && memberModal.role !== "owner" && memberModal.role !== "team_leader" ? (
-              <button
-                type="button"
-                className="enterprise-team-btn-destructive"
-                style={{ marginTop: 16 }}
-                disabled={modalBusy}
-                onClick={() => void onRemoveMember()}
-              >
-                Remove from team
-              </button>
-            ) : null}
-          </div>
-        </div>
+      {memberModal && teamDetail ? (
+        <TeamMemberManageModal
+          member={memberModal}
+          myRole={teamDetail.myRole}
+          myId={myId}
+          manageMembers={manageMembers}
+          rolePick={rolePick}
+          busy={modalBusy}
+          error={memberModalErr}
+          onRolePickChange={setRolePick}
+          onClose={closeMemberModal}
+          onSaveRole={() => void onSaveRole()}
+          onTransferOwnership={() => void onTransferOwnership()}
+          onRemoveMember={() => void onRemoveMember()}
+        />
       ) : null}
 
       <OneOnOneTemplatesModal
