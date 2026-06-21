@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { createOneOnOneTemplate } from "../../lib/api";
 import { checkInTemplateDraftToFields } from "../../lib/check-in-template-draft";
 import { getWebApiBase } from "../../lib/api-base";
@@ -147,8 +148,12 @@ export function SenecaCheckInTemplateModal({ open, teamId, onClose, onSaved }: P
 
   if (!open) return null;
 
-  return (
-    <div className="seneca-soon-backdrop" role="presentation" onClick={() => !saving && onClose()}>
+  return createPortal(
+    <div
+      className="seneca-soon-backdrop seneca-soon-backdrop--stacked"
+      role="presentation"
+      onClick={() => !saving && onClose()}
+    >
       <div
         className={`seneca-soon-modal seneca-goal-modal${phase === "review" ? " seneca-goal-modal--review seneca-template-modal--review" : ""}`}
         role="dialog"
@@ -163,12 +168,14 @@ export function SenecaCheckInTemplateModal({ open, teamId, onClose, onSaved }: P
 
         <div className="seneca-soon-glow" aria-hidden />
 
-        <header className="seneca-goal-head">
-          <SenecaIcon size={phase === "review" ? 40 : 52} className="seneca-goal-head-icon" />
+        <header className={`seneca-goal-head${phase === "review" ? " seneca-goal-head--compact" : ""}`}>
+          {phase === "review" ? null : (
+            <SenecaIcon size={52} className="seneca-goal-head-icon" />
+          )}
           <div>
-            <p className="seneca-kicker seneca-soon-kicker">Check-in template</p>
+            {phase !== "review" ? <p className="seneca-kicker seneca-soon-kicker">Check-in template</p> : null}
             <h2 id="seneca-template-title" className="seneca-soon-title seneca-goal-title">
-              {phase === "review" ? "Review before saving" : "What check-in do you want?"}
+              {phase === "review" ? "Review template" : "What check-in do you want?"}
             </h2>
           </div>
         </header>
@@ -221,93 +228,92 @@ export function SenecaCheckInTemplateModal({ open, teamId, onClose, onSaved }: P
         ) : null}
 
         {phase === "review" && draft ? (
-          <div className="seneca-goal-body seneca-goal-body--review">
-            <label className="seneca-dev-plan-label" htmlFor="seneca-template-name">
-              Template name
-            </label>
-            <input
-              id="seneca-template-name"
-              className="auth-input seneca-dev-plan-input seneca-goal-skill-input"
-              value={draft.title}
-              onChange={(e) => setDraft({ ...draft, title: e.target.value })}
-            />
-            <label className="seneca-dev-plan-label" htmlFor="seneca-template-description">
-              Description
-            </label>
-            <textarea
-              id="seneca-template-description"
-              className="auth-input seneca-dev-plan-textarea seneca-template-description"
-              rows={2}
-              value={draft.description ?? ""}
-              onChange={(e) => setDraft({ ...draft, description: e.target.value || null })}
-            />
-            <div className="seneca-goal-steps-head">
-              <label className="seneca-dev-plan-label">Questions</label>
-            </div>
-            <div className="seneca-goal-steps-scroll seneca-template-sections-scroll">
+          <div className="seneca-template-review">
+            <div className="seneca-template-review-scroll">
+              <label className="seneca-dev-plan-label" htmlFor="seneca-template-name">
+                Template name
+              </label>
+              <input
+                id="seneca-template-name"
+                className="auth-input seneca-dev-plan-input seneca-goal-skill-input"
+                value={draft.title}
+                onChange={(e) => setDraft({ ...draft, title: e.target.value })}
+              />
+              <label className="seneca-dev-plan-label" htmlFor="seneca-template-description">
+                Description <span className="seneca-goal-step-cap">(optional)</span>
+              </label>
+              <input
+                id="seneca-template-description"
+                className="auth-input seneca-dev-plan-input seneca-goal-skill-input"
+                value={draft.description ?? ""}
+                placeholder="Short summary for your team"
+                onChange={(e) => setDraft({ ...draft, description: e.target.value || null })}
+              />
+              <p className="seneca-template-questions-heading">
+                Questions ({draft.sections.reduce((sum, section) => sum + section.questions.length, 0)})
+              </p>
               {draft.sections.map((section, sectionIndex) => {
                 const priorQuestions = draft.sections
                   .slice(0, sectionIndex)
                   .reduce((sum, item) => sum + item.questions.length, 0);
                 return (
-                <section key={`section-${sectionIndex}`} className="seneca-template-section">
-                  <label className="seneca-dev-plan-label" htmlFor={`seneca-section-${sectionIndex}`}>
-                    Section
-                  </label>
-                  <input
-                    id={`seneca-section-${sectionIndex}`}
-                    className="auth-input seneca-dev-plan-input seneca-template-section-title"
-                    value={section.title}
-                    onChange={(e) => updateSectionTitle(sectionIndex, e.target.value)}
-                  />
-                  <ul className="seneca-goal-steps">
-                    {section.questions.map((question, qIndex) => {
-                      const flatIndex = priorQuestions + qIndex;
-                      return (
-                        <li key={`question-${sectionIndex}-${qIndex}`} className="seneca-goal-step-row">
-                          <div className="seneca-goal-step-head">
-                            <span className="seneca-goal-step-label">Question {flatIndex + 1}</span>
-                            <span className="seneca-template-question-type">{questionTypeLabel(question.type)}</span>
-                          </div>
-                          <textarea
-                            ref={(el) => {
-                              questionInputRefs.current[flatIndex] = el;
-                              autoResizeTextarea(el);
-                            }}
-                            className="auth-input seneca-goal-step-input"
-                            rows={1}
-                            value={question.label}
-                            aria-label={`Question ${flatIndex + 1}`}
-                            onChange={(e) => {
-                              updateQuestionLabel(sectionIndex, qIndex, e.target.value);
-                              autoResizeTextarea(e.target);
-                            }}
-                          />
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </section>
+                  <section key={`section-${sectionIndex}`} className="seneca-template-section">
+                    <input
+                      id={`seneca-section-${sectionIndex}`}
+                      className="auth-input seneca-dev-plan-input seneca-template-section-title"
+                      value={section.title}
+                      aria-label={`Section ${sectionIndex + 1} title`}
+                      placeholder="Section name"
+                      onChange={(e) => updateSectionTitle(sectionIndex, e.target.value)}
+                    />
+                    <ul className="seneca-goal-steps">
+                      {section.questions.map((question, qIndex) => {
+                        const flatIndex = priorQuestions + qIndex;
+                        return (
+                          <li key={`question-${sectionIndex}-${qIndex}`} className="seneca-goal-step-row">
+                            <div className="seneca-goal-step-head">
+                              <span className="seneca-goal-step-label">Q{flatIndex + 1}</span>
+                              <span className="seneca-template-question-type">{questionTypeLabel(question.type)}</span>
+                            </div>
+                            <textarea
+                              ref={(el) => {
+                                questionInputRefs.current[flatIndex] = el;
+                                autoResizeTextarea(el);
+                              }}
+                              className="auth-input seneca-goal-step-input"
+                              rows={1}
+                              value={question.label}
+                              aria-label={`Question ${flatIndex + 1}`}
+                              onChange={(e) => {
+                                updateQuestionLabel(sectionIndex, qIndex, e.target.value);
+                                autoResizeTextarea(e.target);
+                              }}
+                            />
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </section>
                 );
               })}
+              {draft.leaderPrep.length > 0 ? (
+                <div className="seneca-template-prep-block">
+                  <p className="seneca-template-questions-heading">Leader prep</p>
+                  <ul className="seneca-goal-steps seneca-template-prep-list">
+                    {draft.leaderPrep.map((item, index) => (
+                      <li key={`prep-${index}`} className="seneca-template-prep-row">
+                        <input
+                          className="auth-input seneca-dev-plan-input seneca-goal-skill-input"
+                          value={item}
+                          aria-label={`Leader prep ${index + 1}`}
+                          onChange={(e) => updateLeaderPrepItem(index, e.target.value)}
+                        />
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
             </div>
-            {draft.leaderPrep.length > 0 ? (
-              <>
-                <label className="seneca-dev-plan-label">Leader prep</label>
-                <ul className="seneca-goal-steps seneca-template-prep-list">
-                  {draft.leaderPrep.map((item, index) => (
-                    <li key={`prep-${index}`} className="seneca-template-prep-row">
-                      <input
-                        className="auth-input seneca-dev-plan-input"
-                        value={item}
-                        aria-label={`Leader prep ${index + 1}`}
-                        onChange={(e) => updateLeaderPrepItem(index, e.target.value)}
-                      />
-                    </li>
-                  ))}
-                </ul>
-              </>
-            ) : null}
             <div className="seneca-goal-actions seneca-goal-actions--review">
               <button type="button" className="enterprise-inline-link" disabled={saving} onClick={() => setPhase("prompt")}>
                 Back
@@ -319,6 +325,7 @@ export function SenecaCheckInTemplateModal({ open, teamId, onClose, onSaved }: P
           </div>
         ) : null}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

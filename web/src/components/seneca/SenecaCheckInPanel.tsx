@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { OneOnOneTemplate } from "../../lib/api";
 import { getWebApiBase } from "../../lib/api-base";
 import {
@@ -8,6 +8,7 @@ import {
   type SenecaDevelopmentGoalDraft,
 } from "../../lib/seneca-api";
 import { SenecaBrandMark, SenecaDisclaimer } from "./SenecaShared";
+import { findLeaderCommitmentsFieldId } from "../../lib/check-in-leader-comments";
 
 export type SenecaFollowUpSuggestion = {
   title: string;
@@ -23,6 +24,7 @@ type Props = {
   template: OneOnOneTemplate;
   responses: Record<string, string | number>;
   focusFieldId?: string | null;
+  placement?: "sidebar" | "header";
   onApplyText: (fieldId: string, text: string) => void;
   onAddFollowUpTasks: (tasks: SenecaFollowUpSuggestion[]) => void;
   onSuggestDevelopmentGoal: (draft: SenecaDevelopmentGoalDraft) => void;
@@ -30,12 +32,28 @@ type Props = {
 
 const ACTIONS: { action: SenecaAssistAction; label: string }[] = [
   { action: "suggest_next_question", label: "Suggest next question" },
-  { action: "rewrite_feedback", label: "Rewrite feedback" },
+  { action: "rewrite_feedback", label: "Leadership review" },
   { action: "notes_to_action_items", label: "Turn notes into action items" },
-  { action: "create_follow_up_task", label: "Create follow-up task" },
-  { action: "create_development_goal", label: "Create development goal" },
   { action: "summarize_conversation", label: "Summarize conversation" },
 ];
+
+function buildLeaderCommitmentsText(result: SenecaAssistResult): string {
+  const parts: string[] = [];
+  const main = result.result?.trim();
+  if (main) parts.push(main);
+  const suggestions = result.suggestions?.map((item) => item.trim()).filter(Boolean) ?? [];
+  if (suggestions.length > 0) {
+    parts.push(suggestions.map((item) => `• ${item}`).join("\n"));
+  }
+  return parts.join("\n\n");
+}
+
+function mergeLeaderCommitments(existing: string | number | undefined, next: string): string {
+  const current = typeof existing === "string" ? existing.trim() : "";
+  if (!current) return next;
+  if (!next.trim()) return current;
+  return `${current}\n\n${next}`;
+}
 
 function focusTextFromResponses(
   fields: OneOnOneTemplate["fields"],
@@ -70,6 +88,7 @@ export function SenecaCheckInPanel({
   template,
   responses,
   focusFieldId,
+  placement = "sidebar",
   onApplyText,
   onAddFollowUpTasks,
   onSuggestDevelopmentGoal,
@@ -77,6 +96,10 @@ export function SenecaCheckInPanel({
   const [busy, setBusy] = useState<SenecaAssistAction | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [result, setResult] = useState<SenecaAssistResult | null>(null);
+  const [lastAction, setLastAction] = useState<SenecaAssistAction | null>(null);
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const isHeader = placement === "header";
 
   useEffect(() => {
     const apiBase = getWebApiBase();
@@ -90,10 +113,25 @@ export function SenecaCheckInPanel({
       .catch(() => {});
   }, []);
 
+  useEffect(() => {
+    if (!isHeader || !open) return;
+    const close = (event: MouseEvent) => {
+      if (!wrapRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener("click", close);
+    return () => document.removeEventListener("click", close);
+  }, [isHeader, open]);
+
+  useEffect(() => {
+    if (isHeader && result) setOpen(true);
+  }, [isHeader, result]);
+
   const runAction = async (action: SenecaAssistAction) => {
     setBusy(action);
     setErr(null);
     setResult(null);
+    setLastAction(null);
+    if (isHeader) setOpen(true);
     try {
       const focusText = focusTextFromResponses(template.fields, responses, focusFieldId);
       const out = await senecaAssist(teamId, memberUserId, {
@@ -108,6 +146,7 @@ export function SenecaCheckInPanel({
         managerName,
       });
       setResult(out);
+      setLastAction(action);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Seneca could not complete that action.");
     } finally {
@@ -115,20 +154,20 @@ export function SenecaCheckInPanel({
     }
   };
 
-  const textFieldId =
-    focusFieldId ??
-    template.fields.find((f) => f.type === "manager_notes" || f.type === "long_text")?.id ??
-    null;
+  const leaderCommitmentsFieldId = findLeaderCommitmentsFieldId(template.fields);
+  const leaderCommitmentsText = result ? buildLeaderCommitmentsText(result) : "";
 
-  return (
-    <aside className="seneca-checkin-panel" aria-label="Seneca coaching assistant">
-      <header className="seneca-checkin-head">
-        <SenecaBrandMark />
-        <p className="seneca-kicker">Coach the manager</p>
-      </header>
-      <SenecaDisclaimer />
+  const panelBody = (
+    <>
+      {!isHeader ? (
+        <header className="seneca-checkin-head">
+          <SenecaBrandMark />
+          <p className="seneca-kicker">Coach the manager</p>
+        </header>
+      ) : null}
+      <SenecaDisclaimer compact={isHeader} />
 
-      <div className="seneca-checkin-actions">
+      <div className={`seneca-checkin-actions${isHeader ? " seneca-checkin-actions--header" : ""}`}>
         {ACTIONS.map(({ action, label }) => (
           <button
             key={action}
@@ -156,13 +195,18 @@ export function SenecaCheckInPanel({
           ) : null}
 
           <div className="seneca-checkin-result-actions">
-            {textFieldId && result.result ? (
+            {lastAction === "rewrite_feedback" && leaderCommitmentsFieldId && leaderCommitmentsText ? (
               <button
                 type="button"
                 className="seneca-checkin-apply-btn"
-                onClick={() => onApplyText(textFieldId, result.result)}
+                onClick={() =>
+                  onApplyText(
+                    leaderCommitmentsFieldId,
+                    mergeLeaderCommitments(responses[leaderCommitmentsFieldId], leaderCommitmentsText),
+                  )
+                }
               >
-                Apply to notes
+                Apply to leader commitments
               </button>
             ) : null}
             {result.followUpTasks && result.followUpTasks.length > 0 ? (
@@ -194,6 +238,43 @@ export function SenecaCheckInPanel({
           </div>
         </div>
       ) : null}
+    </>
+  );
+
+  if (isHeader) {
+    return (
+      <div ref={wrapRef} className="seneca-checkin-header-wrap">
+        <button
+          type="button"
+          className={`seneca-checkin-header-trigger${open ? " seneca-checkin-header-trigger--open" : ""}${result ? " seneca-checkin-header-trigger--active" : ""}`}
+          aria-expanded={open}
+          aria-controls="seneca-checkin-header-popover"
+          aria-label="Open Seneca coaching assistant"
+          onClick={() => setOpen((current) => !current)}
+        >
+          <SenecaBrandMark compact />
+          <span className="seneca-checkin-header-trigger-text">
+            <span className="seneca-checkin-header-trigger-title">Seneca</span>
+            <span className="seneca-checkin-header-trigger-sub">Coach the manager</span>
+          </span>
+        </button>
+        {open ? (
+          <aside
+            id="seneca-checkin-header-popover"
+            className="seneca-checkin-panel seneca-checkin-panel--header-popover"
+            aria-label="Seneca coaching assistant"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {panelBody}
+          </aside>
+        ) : null}
+      </div>
+    );
+  }
+
+  return (
+    <aside className="seneca-checkin-panel" aria-label="Seneca coaching assistant">
+      {panelBody}
     </aside>
   );
 }

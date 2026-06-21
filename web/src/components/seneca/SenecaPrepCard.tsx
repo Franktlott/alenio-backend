@@ -9,6 +9,12 @@ type Props = {
   managerName: string | null;
   templateId?: string;
   compact?: boolean;
+  /** When provided, prep is loaded by the parent once for the whole check-in session. */
+  prep?: SenecaPrep | null;
+  loading?: boolean;
+  err?: string | null;
+  /** Template leader prep shown until prep response includes leaderPrepSteps. */
+  templateLeaderPrep?: string[];
 };
 
 function PrepSection({ title, items }: { title: string; items: string[] }) {
@@ -25,30 +31,50 @@ function PrepSection({ title, items }: { title: string; items: string[] }) {
   );
 }
 
-export function SenecaPrepCard({ teamId, memberUserId, memberName, managerName, templateId, compact }: Props) {
-  const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState<string | null>(null);
-  const [prep, setPrep] = useState<SenecaPrep | null>(null);
+export function SenecaPrepCard({
+  teamId,
+  memberUserId,
+  memberName,
+  managerName,
+  templateId,
+  compact,
+  prep: prepProp,
+  loading: loadingProp,
+  err: errProp,
+  templateLeaderPrep = [],
+}: Props) {
+  const controlled = prepProp !== undefined || loadingProp !== undefined || errProp !== undefined;
+  const [localPrep, setLocalPrep] = useState<SenecaPrep | null>(null);
+  const [localLoading, setLocalLoading] = useState(!controlled);
+  const [localErr, setLocalErr] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(!compact);
 
+  const prep = controlled ? (prepProp ?? null) : localPrep;
+  const loading = controlled ? Boolean(loadingProp) : localLoading;
+  const err = controlled ? (errProp ?? null) : localErr;
+  const leaderPrepSteps =
+    prep?.leaderPrepSteps?.length ? prep.leaderPrepSteps : templateLeaderPrep;
+
   useEffect(() => {
+    if (controlled) return;
+
     let cancelled = false;
-    setLoading(true);
-    setErr(null);
+    setLocalLoading(true);
+    setLocalErr(null);
     void fetchSenecaPrep(teamId, memberUserId, { templateId, memberName, managerName })
       .then((res) => {
-        if (!cancelled) setPrep(res.prep);
+        if (!cancelled) setLocalPrep(res.prep);
       })
       .catch((e) => {
-        if (!cancelled) setErr(e instanceof Error ? e.message : "Could not load Seneca prep.");
+        if (!cancelled) setLocalErr(e instanceof Error ? e.message : "Could not load Seneca prep.");
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) setLocalLoading(false);
       });
     return () => {
       cancelled = true;
     };
-  }, [teamId, memberUserId, memberName, managerName, templateId]);
+  }, [controlled, teamId, memberUserId, memberName, managerName, templateId]);
 
   return (
     <aside className="seneca-prep-card" aria-label="Seneca prep">
@@ -69,6 +95,7 @@ export function SenecaPrepCard({ teamId, memberUserId, memberName, managerName, 
           <SenecaDisclaimer />
           {loading ? <p className="enterprise-muted seneca-prep-loading">Building your prep brief…</p> : null}
           {err ? <p className="enterprise-form-error" role="alert">{err}</p> : null}
+          <PrepSection title="Leader prep" items={leaderPrepSteps} />
           {prep && !loading ? (
             <>
               {prep.lastCheckInNotes ? (

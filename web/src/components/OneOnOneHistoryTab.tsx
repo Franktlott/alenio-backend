@@ -32,7 +32,7 @@ import { SenecaPrepCard } from "./seneca/SenecaPrepCard";
 import { SenecaCheckInPanel, type SenecaFollowUpSuggestion } from "./seneca/SenecaCheckInPanel";
 import { SenecaSummaryModal } from "./seneca/SenecaSummaryModal";
 import { DevelopmentPlanGenerator } from "./seneca/DevelopmentPlanGenerator";
-import type { SenecaDevelopmentGoalDraft } from "../lib/seneca-api";
+import { fetchSenecaPrep, type SenecaDevelopmentGoalDraft, type SenecaPrep } from "../lib/seneca-api";
 
 const FIELD_TYPE_LABELS: Record<string, string> = {
   section: "Section",
@@ -302,6 +302,9 @@ export function OneOnOneHistoryTab({
   const [senecaDevPlanOpen, setSenecaDevPlanOpen] = useState(false);
   const [senecaDevPlanDraft, setSenecaDevPlanDraft] = useState<SenecaDevelopmentGoalDraft | null>(null);
   const [senecaFocusedFieldId, setSenecaFocusedFieldId] = useState<string | null>(null);
+  const [senecaPrep, setSenecaPrep] = useState<SenecaPrep | null>(null);
+  const [senecaPrepLoading, setSenecaPrepLoading] = useState(false);
+  const [senecaPrepErr, setSenecaPrepErr] = useState<string | null>(null);
   const compactCheckInLayout = useCompactCheckInLayout();
   const checkInFullscreen = compactCheckInLayout || userExpandedFullscreen;
   const todayStart = useMemo(() => {
@@ -397,9 +400,41 @@ export function OneOnOneHistoryTab({
     setResponses(initial);
     setFollowUpDrafts([newFollowUpDraft()]);
     setPrepAcknowledged(false);
+    setSenecaPrep(null);
+    setSenecaPrepErr(null);
+    setSenecaPrepLoading(false);
     setErr(null);
     setView("fill");
   };
+
+  useEffect(() => {
+    if (view !== "fill" || !selectedTemplate || !canCreate || editingMeeting) return;
+
+    let cancelled = false;
+    setSenecaPrepLoading(true);
+    setSenecaPrepErr(null);
+    void fetchSenecaPrep(teamId, memberUserId, {
+      templateId: selectedTemplate.id,
+      memberName,
+      managerName,
+    })
+      .then((res) => {
+        if (!cancelled) setSenecaPrep(res.prep);
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          setSenecaPrepErr(e instanceof Error ? e.message : "Could not load Seneca prep.");
+          setSenecaPrep(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setSenecaPrepLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [view, selectedTemplate?.id, teamId, memberUserId, memberName, managerName, canCreate, editingMeeting]);
 
   useEffect(() => {
     if (!menuMeetingId) return;
@@ -427,19 +462,12 @@ export function OneOnOneHistoryTab({
     onBack: () => void;
     backLabel: string;
     footer?: ReactNode;
-    /** Match footer action width to the main check-in column when Seneca panel is beside it. */
-    alignFooterWithSeneca?: boolean;
+    headerAside?: ReactNode;
   };
 
-  const wrapCheckInFooter = (footer: ReactNode) => (
-    <div className="enterprise-oneone-fill-footer-grid">
-      <div className="enterprise-oneone-fill-footer-main">{footer}</div>
-    </div>
-  );
-
   const renderCheckInShell = (content: ReactNode, config: CheckInShellConfig) => {
-    const { title, subtitle, onBack, backLabel, footer, alignFooterWithSeneca } = config;
-    const footerNode = footer ? (alignFooterWithSeneca ? wrapCheckInFooter(footer) : footer) : null;
+    const { title, subtitle, onBack, backLabel, footer, headerAside } = config;
+    const footerNode = footer ?? null;
 
     if (checkInFullscreen) {
       return createPortal(
@@ -459,9 +487,12 @@ export function OneOnOneHistoryTab({
                 </button>
               ) : null}
             </div>
-            <div className="enterprise-oneone-fill-header-text">
-              <h2 className="enterprise-oneone-fill-header-title">{title}</h2>
-              {subtitle ? <p className="enterprise-muted enterprise-oneone-fill-header-sub">{subtitle}</p> : null}
+            <div className="enterprise-oneone-fill-header-main">
+              <div className="enterprise-oneone-fill-header-text">
+                <h2 className="enterprise-oneone-fill-header-title">{title}</h2>
+                {subtitle ? <p className="enterprise-muted enterprise-oneone-fill-header-sub">{subtitle}</p> : null}
+              </div>
+              {headerAside ? <div className="enterprise-oneone-fill-header-aside">{headerAside}</div> : null}
             </div>
           </header>
           <div className="enterprise-oneone-fill-body">{content}</div>
@@ -482,13 +513,16 @@ export function OneOnOneHistoryTab({
               <h3 className="enterprise-oneone-history-heading">{title}</h3>
               {subtitle ? <p className="enterprise-muted enterprise-oneone-history-sub">{subtitle}</p> : null}
             </div>
-            <button
-              type="button"
-              className="enterprise-oneone-fill-expand-btn"
-              onClick={() => setUserExpandedFullscreen(true)}
-            >
-              Full screen
-            </button>
+            <div className="enterprise-oneone-fill-inline-head-actions">
+              {headerAside}
+              <button
+                type="button"
+                className="enterprise-oneone-fill-expand-btn"
+                onClick={() => setUserExpandedFullscreen(true)}
+              >
+                Full screen
+              </button>
+            </div>
           </div>
         </div>
         {content}
@@ -774,6 +808,9 @@ export function OneOnOneHistoryTab({
     }
     setFollowUpDrafts([]);
     setPrepAcknowledged(false);
+    setSenecaPrep(null);
+    setSenecaPrepErr(null);
+    setSenecaPrepLoading(false);
     setErr(null);
   };
 
@@ -1011,36 +1048,26 @@ export function OneOnOneHistoryTab({
     const existingFollowUps = editingMeeting?.followUpTasks ?? [];
     const leaderLabel = managerName ?? "Leader";
     const leaderPrepItems = (selectedTemplate.leaderPrep ?? []).map((item) => item.trim()).filter(Boolean);
-    const showLeaderPrepGate = !editingMeeting && leaderPrepItems.length > 0 && !prepAcknowledged;
+    const showPrepGate = !editingMeeting && !prepAcknowledged && canCreate && leaderPrepItems.length > 0;
 
-    if (showLeaderPrepGate) {
+    if (showPrepGate) {
       return renderCheckInShell(
         <div className="seneca-checkin-layout seneca-checkin-layout--prep">
-          {canCreate ? (
-            <SenecaPrepCard
-              teamId={teamId}
-              memberUserId={memberUserId}
-              memberName={memberName}
-              managerName={managerName}
-              templateId={selectedTemplate.id}
-            />
-          ) : null}
-          <div className="enterprise-oneone-leader-prep-gate">
-            <p className="enterprise-oneone-leader-prep-kicker">Before you begin</p>
-            <h3 className="enterprise-oneone-leader-prep-title">Leader prep</h3>
-            <p className="enterprise-muted enterprise-oneone-leader-prep-copy">
-              Quick reminders before this check-in with {memberName}. Only you see this list.
-            </p>
-            <ul className="enterprise-oneone-leader-prep-list">
-              {leaderPrepItems.map((item, index) => (
-                <li key={`${index}-${item}`}>{item}</li>
-              ))}
-            </ul>
-          </div>
+          <SenecaPrepCard
+            teamId={teamId}
+            memberUserId={memberUserId}
+            memberName={memberName}
+            managerName={managerName}
+            templateId={selectedTemplate.id}
+            templateLeaderPrep={leaderPrepItems}
+            prep={senecaPrep}
+            loading={senecaPrepLoading}
+            err={senecaPrepErr}
+          />
         </div>,
         {
           title: selectedTemplate.title,
-          subtitle: `Prep for ${memberName}`,
+          subtitle: `Before your check-in with ${memberName}${leaderPrepItems.length ? " · review Seneca prep below" : ""}`,
           backLabel: "Choose another template",
           onBack: exitFill,
           footer: (
@@ -1049,6 +1076,7 @@ export function OneOnOneHistoryTab({
                 type="button"
                 className="enterprise-oneone-templates-primary-btn enterprise-oneone-fill-save"
                 onClick={() => setPrepAcknowledged(true)}
+                disabled={senecaPrepLoading}
               >
                 Start check-in
               </button>
@@ -1069,29 +1097,54 @@ export function OneOnOneHistoryTab({
     const showSaveDraft = !editingMeeting || editingMeeting.status === "draft";
     const publishLabel = editingMeeting?.status === "draft" ? "Publish check-in" : editingMeeting ? "Save changes" : "Save check-in";
 
+    const senecaPanel = canCreate ? (
+      <SenecaCheckInPanel
+        teamId={teamId}
+        memberUserId={memberUserId}
+        memberName={memberName}
+        managerName={managerName}
+        template={selectedTemplate}
+        responses={responses}
+        focusFieldId={senecaFocusedFieldId}
+        placement="header"
+        onApplyText={(fieldId, text) => {
+          setFieldValue(fieldId, text);
+          setSenecaFocusedFieldId(fieldId);
+          requestAnimationFrame(() => {
+            document.getElementById(`check-in-field-${fieldId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+          });
+        }}
+        onAddFollowUpTasks={addSenecaFollowUpTasks}
+        onSuggestDevelopmentGoal={openSenecaDevPlan}
+      />
+    ) : null;
+
     return renderCheckInShell(
       <>
         {err ? <p className="enterprise-form-error" role="alert">{err}</p> : null}
-        <div className="seneca-checkin-layout">
-          <div className="seneca-checkin-main">
-            {canCreate && !editingMeeting ? (
-              <SenecaPrepCard
-                teamId={teamId}
-                memberUserId={memberUserId}
-                memberName={memberName}
-                managerName={managerName}
-                templateId={selectedTemplate.id}
-                compact
-              />
-            ) : null}
-            <ul className="enterprise-oneone-fill-fields">
+        <div className="seneca-checkin-layout seneca-checkin-layout--wide">
+          {canCreate && !editingMeeting ? (
+            <SenecaPrepCard
+              teamId={teamId}
+              memberUserId={memberUserId}
+              memberName={memberName}
+              managerName={managerName}
+              templateId={selectedTemplate.id}
+              templateLeaderPrep={leaderPrepItems}
+              prep={senecaPrep}
+              loading={senecaPrepLoading}
+              err={senecaPrepErr}
+              compact
+            />
+          ) : null}
+          <ul className="enterprise-oneone-fill-fields">
               {sortedFields.map((field) =>
                 field.type === "associate_notes" ? null : field.type === "section" ? (
                   <li key={field.id} className="enterprise-oneone-fill-section">
                     <h4>{field.label}</h4>
                   </li>
                 ) : (
-                  <li key={field.id} className="enterprise-oneone-fill-field">
+                  <li key={field.id} id={`check-in-field-${field.id}`} className="enterprise-oneone-fill-field">
                     <label className="enterprise-oneone-fill-label">
                       {field.label}
                       {field.required ? <span className="enterprise-oneone-fill-required">Required</span> : null}
@@ -1162,21 +1215,6 @@ export function OneOnOneHistoryTab({
                 <p className="enterprise-muted enterprise-oneone-followup-empty">No follow-up tasks yet.</p>
               ) : null}
             </section>
-          </div>
-          {canCreate ? (
-            <SenecaCheckInPanel
-              teamId={teamId}
-              memberUserId={memberUserId}
-              memberName={memberName}
-              managerName={managerName}
-              template={selectedTemplate}
-              responses={responses}
-              focusFieldId={senecaFocusedFieldId}
-              onApplyText={(fieldId, text) => setFieldValue(fieldId, text)}
-              onAddFollowUpTasks={addSenecaFollowUpTasks}
-              onSuggestDevelopmentGoal={openSenecaDevPlan}
-            />
-          ) : null}
         </div>
         {renderFeedbackPromptModal()}
       </>,
@@ -1185,7 +1223,7 @@ export function OneOnOneHistoryTab({
         subtitle: fillSubtitle,
         backLabel: editingMeeting ? "Back to history" : "Choose another template",
         onBack: exitFill,
-        alignFooterWithSeneca: canCreate,
+        headerAside: senecaPanel,
         footer: (
           <div className="enterprise-oneone-fill-actions enterprise-oneone-fill-actions--multi">
             <button type="button" className="enterprise-profile-cancel-btn" disabled={saving} onClick={() => setView("list")}>

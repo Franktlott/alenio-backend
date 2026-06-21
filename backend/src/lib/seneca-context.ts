@@ -1,4 +1,5 @@
 import { prisma } from "../prisma";
+import { parseLeaderPrep } from "./leader-prep";
 
 function parseJsonRecord(raw: string): Record<string, string | number> {
   try {
@@ -56,6 +57,7 @@ export type SenecaRawContext = {
   completionPatterns: string | null;
   templateTitle: string | null;
   templateFields: Array<{ label: string; type: string }>;
+  templateLeaderPrep: string[];
 };
 
 export async function buildSenecaRawContext(
@@ -104,7 +106,7 @@ export async function buildSenecaRawContext(
     options?.templateId
       ? prisma.oneOnOneTemplate.findFirst({
           where: { id: options.templateId, teamId },
-          select: { title: true, fields: true },
+          select: { title: true, fields: true, leaderPrep: true },
         })
       : Promise.resolve(null),
   ]);
@@ -227,6 +229,7 @@ export async function buildSenecaRawContext(
     completionPatterns,
     templateTitle: template?.title ?? null,
     templateFields: templateFields.filter((f) => f.type !== "section"),
+    templateLeaderPrep: parseLeaderPrep(template?.leaderPrep),
   };
 }
 

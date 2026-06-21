@@ -18,19 +18,19 @@ export function SenecaIcon({ size = 20, className }: IconProps) {
   );
 }
 
-export function SenecaDisclaimer() {
+export function SenecaDisclaimer({ compact = false }: { compact?: boolean }) {
   return (
-    <p className="seneca-disclaimer">
-      Seneca can suggest coaching language. Review before saving.
+    <p className={`seneca-disclaimer${compact ? " seneca-disclaimer--compact" : ""}`}>
+      {compact ? "Review before saving." : "Seneca can suggest coaching language. Review before saving."}
     </p>
   );
 }
 
-export function SenecaBrandMark() {
+export function SenecaBrandMark({ compact = false }: { compact?: boolean }) {
   return (
-    <span className="seneca-brand">
-      <SenecaIcon size={20} />
-      Seneca
+    <span className={`seneca-brand${compact ? " seneca-brand--compact" : ""}`}>
+      <SenecaIcon size={compact ? 18 : 20} />
+      {!compact ? "Seneca" : null}
     </span>
   );
 }

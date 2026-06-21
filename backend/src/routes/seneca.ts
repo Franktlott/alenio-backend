@@ -98,7 +98,15 @@ type SenecaPrepAi = {
   completionPatterns: string | null;
   suggestedTalkingPoints: string[];
   suggestedCoachingQuestions: string[];
+  leaderPrepSteps: string[];
 };
+
+function attachLeaderPrepSteps(
+  prep: Omit<SenecaPrepAi, "leaderPrepSteps">,
+  leaderPrepSteps: string[],
+): SenecaPrepAi {
+  return { ...prep, leaderPrepSteps };
+}
 
 type SenecaAssistAi = {
   result: string;
@@ -155,15 +163,18 @@ function ruleBasedPrep(ctx: Awaited<ReturnType<typeof buildSenecaRawContext>>): 
     "Are there any obstacles getting in the way of your goals?",
   ];
 
-  return {
-    lastCheckInNotes: ctx.lastCheckIn?.notesSummary ?? null,
-    openDevelopmentGoals: ctx.activeDevelopmentGoals.map((g) => g.skill),
-    openFollowUpTasks: ctx.lastCheckIn?.openFollowUps.map((t) => t.title) ?? [],
-    recentWins: ctx.recentWins,
-    completionPatterns: ctx.completionPatterns,
-    suggestedTalkingPoints: talkingPoints.length ? talkingPoints : ["Open with how they're doing and what's on their mind."],
-    suggestedCoachingQuestions: questions,
-  };
+  return attachLeaderPrepSteps(
+    {
+      lastCheckInNotes: ctx.lastCheckIn?.notesSummary ?? null,
+      openDevelopmentGoals: ctx.activeDevelopmentGoals.map((g) => g.skill),
+      openFollowUpTasks: ctx.lastCheckIn?.openFollowUps.map((t) => t.title) ?? [],
+      recentWins: ctx.recentWins,
+      completionPatterns: ctx.completionPatterns,
+      suggestedTalkingPoints: talkingPoints.length ? talkingPoints : ["Open with how they're doing and what's on their mind."],
+      suggestedCoachingQuestions: questions,
+    },
+    ctx.templateLeaderPrep,
+  );
 }
 
 // GET prep context (raw + AI suggestions)
@@ -196,7 +207,7 @@ senecaRouter.post("/:memberUserId/seneca/prep", zValidator("json", prepBodySchem
   }
 
   try {
-    const prep = await senecaJson<SenecaPrepAi>(
+    const prep = await senecaJson<Omit<SenecaPrepAi, "leaderPrepSteps">>(
       `Generate a pre-check-in prep summary for a manager about to meet with ${raw.memberName}.
 Return JSON with keys:
 - lastCheckInNotes (string|null): brief summary of last check-in notes
@@ -205,21 +216,24 @@ Return JSON with keys:
 - recentWins (string[])
 - completionPatterns (string|null)
 - suggestedTalkingPoints (string[]): 3-5 practical talking points
-- suggestedCoachingQuestions (string[]): 3-5 open-ended coaching questions`,
+- suggestedCoachingQuestions (string[]): 3-5 open-ended coaching questions
+
+When templateLeaderPrep items appear in the context JSON, reflect them in suggestedCoachingQuestions and weave them into other sections where helpful. Do not omit them.`,
       senecaContextToPrompt(raw),
     );
+    const normalized = {
+      ...prep,
+      openDevelopmentGoals: normalizeStringArray(prep.openDevelopmentGoals),
+      openFollowUpTasks: normalizeStringArray(prep.openFollowUpTasks),
+      recentWins: normalizeStringArray(prep.recentWins),
+      suggestedTalkingPoints: normalizeStringArray(prep.suggestedTalkingPoints),
+      suggestedCoachingQuestions: normalizeStringArray(prep.suggestedCoachingQuestions),
+    };
     return c.json({
       data: {
         available: true,
         raw,
-        prep: {
-          ...prep,
-          openDevelopmentGoals: normalizeStringArray(prep.openDevelopmentGoals),
-          openFollowUpTasks: normalizeStringArray(prep.openFollowUpTasks),
-          recentWins: normalizeStringArray(prep.recentWins),
-          suggestedTalkingPoints: normalizeStringArray(prep.suggestedTalkingPoints),
-          suggestedCoachingQuestions: normalizeStringArray(prep.suggestedCoachingQuestions),
-        },
+        prep: attachLeaderPrepSteps(normalized, raw.templateLeaderPrep),
       },
     });
   } catch (e) {

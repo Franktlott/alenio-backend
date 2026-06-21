@@ -9,6 +9,17 @@ export function templateHasLeaderComments(fields: Pick<OneOnOneTemplateField, "t
   return fields.some((field) => field.type === "manager_notes");
 }
 
+export function findLeaderCommitmentsFieldId(fields: OneOnOneTemplateField[]): string | null {
+  const managerNotes = fields.filter((field) => field.type === "manager_notes");
+  if (managerNotes.length === 0) return null;
+  const preferred = managerNotes.find(
+    (field) =>
+      field.label === LEADER_COMMENTS_FIELD_LABEL ||
+      /summary|commitment/i.test(field.label),
+  );
+  return (preferred ?? managerNotes[0]).id;
+}
+
 export function appendLeaderCommentsIfMissing(fields: OneOnOneTemplateField[]): OneOnOneTemplateField[] {
   if (templateHasLeaderComments(fields)) return fields;
   const maxOrder = fields.reduce((max, field) => Math.max(max, field.order), -1);

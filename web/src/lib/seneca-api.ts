@@ -9,6 +9,7 @@ export type SenecaPrep = {
   completionPatterns: string | null;
   suggestedTalkingPoints: string[];
   suggestedCoachingQuestions: string[];
+  leaderPrepSteps: string[];
 };
 
 export type SenecaPrepResponse = {
@@ -82,6 +83,7 @@ export function fetchSenecaPrep(
         recentWins: normalizeStringArray(r.data.prep.recentWins),
         suggestedTalkingPoints: normalizeStringArray(r.data.prep.suggestedTalkingPoints),
         suggestedCoachingQuestions: normalizeStringArray(r.data.prep.suggestedCoachingQuestions),
+        leaderPrepSteps: normalizeStringArray(r.data.prep.leaderPrepSteps),
       },
     }),
   );
