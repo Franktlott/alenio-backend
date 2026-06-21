@@ -1808,6 +1808,7 @@ export function fetchChecklistLocationSubmissions(
 
 export type PublicChecklistPayload = {
   location: { name: string };
+  team?: { name: string; image: string | null };
   items: ChecklistLocationItemRow[];
 };
 
@@ -1819,7 +1820,7 @@ export function fetchPublicChecklistByToken(token: string) {
 
 export function submitPublicChecklist(
   token: string,
-  body: { submitterName?: string; responses: { itemId: string; checked: boolean }[] },
+  body: { submitterName?: string; responses: { itemId: string; checked: boolean; signerName?: string }[] },
 ) {
   return apiPostJson<{ data: { id: string; submittedAt: string; isComplete: boolean } }>(
     `/api/public/checklist-locations/${encodeURIComponent(token)}/submissions`,

@@ -1,16 +1,28 @@
 import { describe, expect, test } from "bun:test";
-import { buildSubmissionStats, checkPublicSubmissionRateLimit } from "./checklist-locations";
+import {
+  buildSubmissionStats,
+  checkPublicSubmissionRateLimit,
+  validateSignedResponses,
+} from "./checklist-locations";
 
 describe("checklist-locations lib", () => {
-  test("buildSubmissionStats marks complete when all items checked", () => {
+  test("buildSubmissionStats marks complete when all items checked with signers", () => {
     const items = [{ id: "a" }, { id: "b" }];
     const result = buildSubmissionStats(items, [
-      { itemId: "a", checked: true },
-      { itemId: "b", checked: true },
+      { itemId: "a", checked: true, signerName: "Alex" },
+      { itemId: "b", checked: true, signerName: "Jordan" },
     ]);
     expect(result.isComplete).toBe(true);
     expect(result.checkedCount).toBe(2);
-    expect(result.totalCount).toBe(2);
+    expect(result.submitterNames).toEqual(["Alex", "Jordan"]);
+  });
+
+  test("validateSignedResponses requires signer name on checked items", () => {
+    const items = [{ id: "a" }];
+    expect(
+      validateSignedResponses(items, [{ itemId: "a", checked: true, signerName: null }]),
+    ).toContain("sign off");
+    expect(validateSignedResponses(items, [{ itemId: "a", checked: true, signerName: "Sam" }])).toBeNull();
   });
 
   test("buildSubmissionStats ignores unknown item ids", () => {

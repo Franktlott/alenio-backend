@@ -15,7 +15,7 @@ export function LocationChecklistLinkQrModal({ location, onClose }: Props) {
 
   useEffect(() => {
     let cancelled = false;
-    void QRCode.toDataURL(url, { margin: 1, width: 220, color: { dark: "#1e293b", light: "#ffffff" } }).then(
+    void QRCode.toDataURL(url, { margin: 1, width: 240, color: { dark: "#312e81", light: "#ffffff" } }).then(
       (data) => {
         if (!cancelled) setQrDataUrl(data);
       },
@@ -44,9 +44,11 @@ export function LocationChecklistLinkQrModal({ location, onClose }: Props) {
         onClick={(e) => e.stopPropagation()}
       >
         <h3 id="checklist-link-title" className="enterprise-modal-title">
-          Share checklist
+          Share checklist page
         </h3>
-        <p className="enterprise-muted enterprise-modal-sub">{location.name}</p>
+        <p className="enterprise-muted enterprise-modal-sub">
+          {location.name} — Alenio enterprise checklist with QR for on-site sign-off.
+        </p>
         <p className="enterprise-checklist-link-url">{url}</p>
         <div className="enterprise-modal-actions enterprise-checklist-link-actions">
           <button type="button" className="enterprise-inline-link" onClick={onClose}>
@@ -59,7 +61,7 @@ export function LocationChecklistLinkQrModal({ location, onClose }: Props) {
         {qrDataUrl ? (
           <div className="enterprise-checklist-qr-wrap">
             <img src={qrDataUrl} alt={`QR code for ${location.name} checklist`} className="enterprise-checklist-qr" />
-            <p className="enterprise-muted enterprise-checklist-qr-hint">Scan on a shared device at this location.</p>
+            <p className="enterprise-muted enterprise-checklist-qr-hint">Scan to open the branded checklist page at this location.</p>
           </div>
         ) : (
           <p className="enterprise-muted">Generating QR code…</p>

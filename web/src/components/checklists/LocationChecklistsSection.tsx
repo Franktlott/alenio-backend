@@ -173,7 +173,7 @@ export function LocationChecklistsSection({ teamId, myRole }: Props) {
                     >
                       <strong>{loc.name}</strong>
                       <span className="enterprise-muted enterprise-checklist-location-meta">
-                        {loc.items.length} items · Last {formatRelative(loc.stats.lastSubmittedAt)} · Today {loc.stats.todayCount}
+                        {loc.items.length} tasks · Last {formatRelative(loc.stats.lastSubmittedAt)} · Today {loc.stats.todayCount}
                       </span>
                     </button>
                     {manager ? (

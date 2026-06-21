@@ -4,6 +4,8 @@ import {
   buildSubmissionStats,
   checkPublicSubmissionRateLimit,
   findActiveLocationByToken,
+  normalizeSignerName,
+  validateSignedResponses,
   type ChecklistResponseItem,
 } from "../lib/checklist-locations";
 
@@ -19,6 +21,10 @@ publicChecklistLocationsRouter.get("/:token", async (c) => {
   return c.json({
     data: {
       location: { name: location.name },
+      team: {
+        name: location.team.name,
+        image: location.team.image,
+      },
       items: location.items.map((i) => ({ id: i.id, title: i.title, sortOrder: i.sortOrder })),
     },
   });
@@ -46,16 +52,27 @@ publicChecklistLocationsRouter.post("/:token/submissions", async (c) => {
 
   const rawResponses = Array.isArray(body.responses) ? body.responses : [];
   const responses: ChecklistResponseItem[] = rawResponses
-    .filter((r): r is { itemId: unknown; checked: unknown } => !!r && typeof r === "object")
-    .map((r) => ({ itemId: String(r.itemId), checked: !!r.checked }));
+    .filter((r): r is { itemId: unknown; checked: unknown; signerName?: unknown } => !!r && typeof r === "object")
+    .map((r) => ({
+      itemId: String(r.itemId),
+      checked: !!r.checked,
+      signerName: normalizeSignerName(r.signerName),
+    }));
 
-  const stats = buildSubmissionStats(location.items, responses);
-  if (!stats.isComplete) {
-    return c.json({ error: { message: "Complete every checklist item before submitting." } }, 400);
+  const validationError = validateSignedResponses(location.items, responses);
+  if (validationError) {
+    return c.json({ error: { message: validationError } }, 400);
   }
 
-  const submitterName =
+  const stats = buildSubmissionStats(location.items, responses);
+  const legacyName =
     typeof body.submitterName === "string" && body.submitterName.trim() ? body.submitterName.trim().slice(0, 120) : null;
+  const submitterName =
+    stats.submitterNames.length === 0
+      ? legacyName
+      : stats.submitterNames.length === 1
+        ? stats.submitterNames[0]
+        : stats.submitterNames.join(", ");
 
   const submission = await prisma.checklistLocationSubmission.create({
     data: {
