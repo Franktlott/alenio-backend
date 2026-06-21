@@ -1,4 +1,5 @@
 import { apiPostJson } from "./api";
+import { normalizeDevelopmentGoalDraft, normalizeStringArray } from "./seneca-normalize";
 
 export type SenecaPrep = {
   lastCheckInNotes: string | null;
@@ -61,7 +62,17 @@ export function fetchSenecaPrep(
   body: { templateId?: string; memberName?: string; managerName?: string | null },
 ) {
   return apiPostJson<{ data: SenecaPrepResponse }>(senecaPath(teamId, memberUserId, "prep"), body).then(
-    (r) => r.data,
+    (r) => ({
+      ...r.data,
+      prep: {
+        ...r.data.prep,
+        openDevelopmentGoals: normalizeStringArray(r.data.prep.openDevelopmentGoals),
+        openFollowUpTasks: normalizeStringArray(r.data.prep.openFollowUpTasks),
+        recentWins: normalizeStringArray(r.data.prep.recentWins),
+        suggestedTalkingPoints: normalizeStringArray(r.data.prep.suggestedTalkingPoints),
+        suggestedCoachingQuestions: normalizeStringArray(r.data.prep.suggestedCoachingQuestions),
+      },
+    }),
   );
 }
 
@@ -81,7 +92,13 @@ export function senecaAssist(
   },
 ) {
   return apiPostJson<{ data: SenecaAssistResult }>(senecaPath(teamId, memberUserId, "assist"), body).then(
-    (r) => r.data,
+    (r) => ({
+      ...r.data,
+      suggestions: r.data.suggestions ? normalizeStringArray(r.data.suggestions) : undefined,
+      developmentGoal: r.data.developmentGoal
+        ? normalizeDevelopmentGoalDraft(r.data.developmentGoal) ?? undefined
+        : undefined,
+    }),
   );
 }
 
@@ -97,7 +114,14 @@ export function fetchSenecaSummary(
     managerName?: string | null;
   },
 ) {
-  return apiPostJson<{ data: SenecaSummary }>(senecaPath(teamId, memberUserId, "summary"), body).then((r) => r.data);
+  return apiPostJson<{ data: SenecaSummary }>(senecaPath(teamId, memberUserId, "summary"), body).then((r) => ({
+    ...r.data,
+    winsDiscussed: normalizeStringArray(r.data.winsDiscussed),
+    opportunitiesDiscussed: normalizeStringArray(r.data.opportunitiesDiscussed),
+    actionItems: normalizeStringArray(r.data.actionItems),
+    followUpTasks: Array.isArray(r.data.followUpTasks) ? r.data.followUpTasks : [],
+    draftDevelopmentGoal: normalizeDevelopmentGoalDraft(r.data.draftDevelopmentGoal),
+  }));
 }
 
 export function fetchSenecaDevelopmentPlan(
@@ -113,5 +137,9 @@ export function fetchSenecaDevelopmentPlan(
   return apiPostJson<{ data: SenecaDevelopmentGoalDraft & { status: "active" } }>(
     senecaPath(teamId, memberUserId, "development-plan"),
     body,
-  ).then((r) => r.data);
+  ).then((r) => {
+    const normalized = normalizeDevelopmentGoalDraft(r.data);
+    if (!normalized) throw new Error("Seneca returned an invalid development plan.");
+    return { ...normalized, status: "active" as const };
+  });
 }

@@ -6,6 +6,10 @@ import { authGuard } from "../middleware/auth-guard";
 import { prisma } from "../prisma";
 import { buildSenecaRawContext, senecaContextToPrompt } from "../lib/seneca-context";
 import { senecaAvailable, senecaJson, senecaText, senecaUnavailableMessage } from "../lib/seneca-openai";
+import {
+  normalizeDevelopmentGoalDraft,
+  normalizeStringArray,
+} from "../lib/seneca-normalize";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -188,7 +192,20 @@ Return JSON with keys:
 - suggestedCoachingQuestions (string[]): 3-5 open-ended coaching questions`,
       senecaContextToPrompt(raw),
     );
-    return c.json({ data: { available: true, raw, prep } });
+    return c.json({
+      data: {
+        available: true,
+        raw,
+        prep: {
+          ...prep,
+          openDevelopmentGoals: normalizeStringArray(prep.openDevelopmentGoals),
+          openFollowUpTasks: normalizeStringArray(prep.openFollowUpTasks),
+          recentWins: normalizeStringArray(prep.recentWins),
+          suggestedTalkingPoints: normalizeStringArray(prep.suggestedTalkingPoints),
+          suggestedCoachingQuestions: normalizeStringArray(prep.suggestedCoachingQuestions),
+        },
+      },
+    });
   } catch (e) {
     return c.json({
       data: {
@@ -254,7 +271,15 @@ senecaRouter.post("/:memberUserId/seneca/assist", zValidator("json", assistBodyS
 
   try {
     const out = await senecaJson<SenecaAssistAi>(actionInstructions[body.action]!, liveContext);
-    return c.json({ data: out });
+    return c.json({
+      data: {
+        ...out,
+        suggestions: out.suggestions ? normalizeStringArray(out.suggestions) : undefined,
+        developmentGoal: out.developmentGoal
+          ? normalizeDevelopmentGoalDraft(out.developmentGoal) ?? undefined
+          : undefined,
+      },
+    });
   } catch (e) {
     return c.json({ error: { message: e instanceof Error ? e.message : "Seneca assist failed" } }, 500);
   }
@@ -295,7 +320,16 @@ Return JSON with:
 - draftDevelopmentGoal (object or null): { goalTitle, focusArea, actionSteps30Day, managerSupportNeeded, successMeasures, targetDate }`,
       payload,
     );
-    return c.json({ data: summary });
+    return c.json({
+      data: {
+        ...summary,
+        winsDiscussed: normalizeStringArray(summary.winsDiscussed),
+        opportunitiesDiscussed: normalizeStringArray(summary.opportunitiesDiscussed),
+        actionItems: normalizeStringArray(summary.actionItems),
+        followUpTasks: Array.isArray(summary.followUpTasks) ? summary.followUpTasks : [],
+        draftDevelopmentGoal: normalizeDevelopmentGoalDraft(summary.draftDevelopmentGoal),
+      },
+    });
   } catch (e) {
     return c.json({ error: { message: e instanceof Error ? e.message : "Seneca summary failed" } }, 500);
   }
@@ -340,7 +374,11 @@ Return JSON with:
 - status: "active"`,
       payload,
     );
-    return c.json({ data: plan });
+    const normalized = normalizeDevelopmentGoalDraft(plan);
+    if (!normalized) {
+      return c.json({ error: { message: "Seneca returned an invalid development plan." } }, 500);
+    }
+    return c.json({ data: { ...normalized, status: "active" as const } });
   } catch (e) {
     return c.json({ error: { message: e instanceof Error ? e.message : "Seneca development plan failed" } }, 500);
   }

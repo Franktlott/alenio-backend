@@ -1,0 +1,54 @@
+/** OpenAI sometimes returns a string instead of string[] — coerce safely. */
+export function normalizeStringArray(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.map(String).map((s) => s.trim()).filter(Boolean);
+  }
+  if (typeof value === "string" && value.trim()) {
+    if (value.includes("\n")) {
+      return value.split("\n").map((s) => s.trim()).filter(Boolean);
+    }
+    if (value.includes(";")) {
+      return value.split(";").map((s) => s.trim()).filter(Boolean);
+    }
+    return [value.trim()];
+  }
+  return [];
+}
+
+/** ISO timestamps from AI → YYYY-MM-DD. */
+export function normalizeTargetDate(value: unknown): string | null {
+  if (typeof value !== "string" || !value.trim()) return null;
+  const trimmed = value.trim();
+  const dateOnly = trimmed.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (dateOnly && trimmed.length <= 10) return dateOnly[1]!;
+  const d = new Date(trimmed);
+  if (Number.isNaN(d.getTime())) return dateOnly?.[1] ?? null;
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+export type SenecaDevelopmentGoalDraftNormalized = {
+  goalTitle: string;
+  focusArea: string;
+  actionSteps30Day: string[];
+  managerSupportNeeded: string[];
+  successMeasures: string[];
+  targetDate: string | null;
+};
+
+export function normalizeDevelopmentGoalDraft(raw: unknown): SenecaDevelopmentGoalDraftNormalized | null {
+  if (!raw || typeof raw !== "object") return null;
+  const o = raw as Record<string, unknown>;
+  const goalTitle = typeof o.goalTitle === "string" ? o.goalTitle.trim() : "";
+  if (!goalTitle) return null;
+  return {
+    goalTitle,
+    focusArea: typeof o.focusArea === "string" ? o.focusArea.trim() : "",
+    actionSteps30Day: normalizeStringArray(o.actionSteps30Day),
+    managerSupportNeeded: normalizeStringArray(o.managerSupportNeeded),
+    successMeasures: normalizeStringArray(o.successMeasures),
+    targetDate: normalizeTargetDate(o.targetDate),
+  };
+}

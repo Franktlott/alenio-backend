@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { createDevelopmentGoal } from "../../lib/api";
 import { fetchSenecaDevelopmentPlan, type SenecaDevelopmentGoalDraft } from "../../lib/seneca-api";
+import { normalizeDevelopmentGoalDraft, formatSenecaTargetDate } from "../../lib/seneca-normalize";
 import { SenecaBrandMark, SenecaDisclaimer } from "./SenecaShared";
 
 type Props = {
@@ -29,11 +30,13 @@ export function DevelopmentPlanGenerator({
   const [generating, setGenerating] = useState(!initialDraft);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [draft, setDraft] = useState<SenecaDevelopmentGoalDraft | null>(initialDraft ?? null);
+  const [draft, setDraft] = useState<SenecaDevelopmentGoalDraft | null>(
+    initialDraft ? normalizeDevelopmentGoalDraft(initialDraft) : null,
+  );
 
   useEffect(() => {
     if (initialDraft) {
-      setDraft(initialDraft);
+      setDraft(normalizeDevelopmentGoalDraft(initialDraft));
       setGenerating(false);
     }
   }, [initialDraft]);
@@ -48,14 +51,7 @@ export function DevelopmentPlanGenerator({
         contextNotes,
         checkInSummary,
       });
-      setDraft({
-        goalTitle: plan.goalTitle,
-        focusArea: plan.focusArea,
-        actionSteps30Day: plan.actionSteps30Day,
-        managerSupportNeeded: plan.managerSupportNeeded,
-        successMeasures: plan.successMeasures,
-        targetDate: plan.targetDate,
-      });
+      setDraft(plan);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Could not generate plan.");
     } finally {
@@ -74,7 +70,7 @@ export function DevelopmentPlanGenerator({
           ? [`Manager support: ${draft.managerSupportNeeded.join("; ")}`]
           : []),
         ...(draft.successMeasures.length ? [`Success measures: ${draft.successMeasures.join("; ")}`] : []),
-        ...(draft.targetDate ? [`Target date: ${draft.targetDate}`] : []),
+        ...(draft.targetDate ? [`Target date: ${formatSenecaTargetDate(draft.targetDate)}`] : []),
       ].filter(Boolean);
       await createDevelopmentGoal(teamId, memberUserId, {
         skill: draft.goalTitle.trim(),
@@ -177,7 +173,7 @@ export function DevelopmentPlanGenerator({
               id="seneca-target-date"
               type="date"
               className="auth-input seneca-dev-plan-input"
-              value={draft.targetDate?.slice(0, 10) ?? ""}
+              value={draft.targetDate ?? ""}
               onChange={(e) => setDraft({ ...draft, targetDate: e.target.value || null })}
             />
           </div>
