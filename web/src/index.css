@@ -8929,8 +8929,8 @@ input {
   }
 }
 
-/* Hide global Seneca FAB when inline check-in assistant or full-screen check-in is open */
-body:has(.enterprise-oneone-fill-overlay) .seneca-floating-launcher,
+/* Hide global Seneca FAB during check-in (inline or full-screen) */
+body:has(.enterprise-oneone-checkin-open) .seneca-floating-launcher,
 body:has(.seneca-checkin-header-wrap) .seneca-floating-launcher {
   display: none;
 }

@@ -471,7 +471,7 @@ export function OneOnOneHistoryTab({
 
     if (checkInFullscreen) {
       return createPortal(
-        <div className="enterprise-oneone-fill-overlay" role="dialog" aria-modal="true" aria-label={title}>
+        <div className="enterprise-oneone-fill-overlay enterprise-oneone-checkin-open" role="dialog" aria-modal="true" aria-label={title}>
           <header className="enterprise-oneone-fill-header">
             <div className="enterprise-oneone-fill-header-toolbar">
               <button type="button" className="enterprise-oneone-fill-header-back" onClick={onBack}>
@@ -503,7 +503,7 @@ export function OneOnOneHistoryTab({
     }
 
     return (
-      <div className="enterprise-oneone-history">
+      <div className="enterprise-oneone-history enterprise-oneone-checkin-open">
         <div className="enterprise-oneone-fill-inline-head">
           <button type="button" className="enterprise-oneone-history-back" onClick={onBack}>
             ← {backLabel}
