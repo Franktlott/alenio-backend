@@ -3,7 +3,7 @@ builder = "dockerfile"
 dockerfilePath = "Dockerfile"
 
 [deploy]
-preDeployCommand = "bun install && bunx prisma generate && bunx prisma db push --accept-data-loss"
+preDeployCommand = "if [ -n \"$OPENAI_API_KEY\" ]; then echo 'Seneca: OPENAI_API_KEY is set (length' ${#OPENAI_API_KEY} ')'; else echo 'Seneca: OPENAI_API_KEY is NOT set — add it in Railway Variables for this service'; fi && bun install && bunx prisma generate && bunx prisma db push --accept-data-loss"
 startCommand = "bun src/index.ts"
 healthcheckPath = "/health"
 healthcheckTimeout = 300

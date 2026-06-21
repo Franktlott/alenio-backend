@@ -83,4 +83,10 @@ export function applyEnvFromWeb(): void {
   if (dbUrl) {
     process.env.DATABASE_URL = dbUrl;
   }
+
+  // Optional: allow OPENAI_API_KEY in web/.env for local dev (never commit web/.env).
+  if (!process.env.OPENAI_API_KEY?.trim()) {
+    const openAi = web.OPENAI_API_KEY?.trim();
+    if (openAi) process.env.OPENAI_API_KEY = openAi;
+  }
 }

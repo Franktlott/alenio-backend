@@ -12,10 +12,20 @@ Guidelines:
 - Output valid JSON only when asked for JSON.`;
 
 function resolveOpenAiKey(): string {
-  const raw = env.OPENAI_API_KEY?.trim() ?? "";
+  const raw = (process.env.OPENAI_API_KEY ?? env.OPENAI_API_KEY)?.trim() ?? "";
   if (!raw) return "";
   // Railway paste sometimes includes wrapping quotes or accidental line breaks.
   return raw.replace(/^["']|["']$/g, "").replace(/\s+/g, "");
+}
+
+export function senecaDiagnostics() {
+  const raw = process.env.OPENAI_API_KEY ?? env.OPENAI_API_KEY ?? "";
+  const normalized = resolveOpenAiKey();
+  return {
+    present: Boolean(raw),
+    length: raw.length,
+    validFormat: normalized.startsWith("sk-") && normalized.length > 20,
+  };
 }
 
 export function senecaAvailable(): boolean {
