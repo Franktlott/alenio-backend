@@ -427,10 +427,19 @@ export function OneOnOneHistoryTab({
     onBack: () => void;
     backLabel: string;
     footer?: ReactNode;
+    /** Match footer action width to the main check-in column when Seneca panel is beside it. */
+    alignFooterWithSeneca?: boolean;
   };
 
+  const wrapCheckInFooter = (footer: ReactNode) => (
+    <div className="enterprise-oneone-fill-footer-grid">
+      <div className="enterprise-oneone-fill-footer-main">{footer}</div>
+    </div>
+  );
+
   const renderCheckInShell = (content: ReactNode, config: CheckInShellConfig) => {
-    const { title, subtitle, onBack, backLabel, footer } = config;
+    const { title, subtitle, onBack, backLabel, footer, alignFooterWithSeneca } = config;
+    const footerNode = footer ? (alignFooterWithSeneca ? wrapCheckInFooter(footer) : footer) : null;
 
     if (checkInFullscreen) {
       return createPortal(
@@ -456,7 +465,7 @@ export function OneOnOneHistoryTab({
             </div>
           </header>
           <div className="enterprise-oneone-fill-body">{content}</div>
-          {footer ? <footer className="enterprise-oneone-fill-footer">{footer}</footer> : null}
+          {footerNode ? <footer className="enterprise-oneone-fill-footer">{footerNode}</footer> : null}
         </div>,
         document.body,
       );
@@ -483,7 +492,7 @@ export function OneOnOneHistoryTab({
           </div>
         </div>
         {content}
-        {footer}
+        {footerNode}
       </div>
     );
   };
@@ -1176,6 +1185,7 @@ export function OneOnOneHistoryTab({
         subtitle: fillSubtitle,
         backLabel: editingMeeting ? "Back to history" : "Choose another template",
         onBack: exitFill,
+        alignFooterWithSeneca: canCreate,
         footer: (
           <div className="enterprise-oneone-fill-actions enterprise-oneone-fill-actions--multi">
             <button type="button" className="enterprise-profile-cancel-btn" disabled={saving} onClick={() => setView("list")}>
