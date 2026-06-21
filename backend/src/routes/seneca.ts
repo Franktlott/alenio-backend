@@ -8,6 +8,7 @@ import { buildSenecaRawContext, senecaContextToPrompt } from "../lib/seneca-cont
 import { senecaAvailable, senecaJson, senecaText, senecaUnavailableMessage } from "../lib/seneca-openai";
 import {
   normalizeDevelopmentGoalDraft,
+  normalizeQuickDevelopmentGoal,
   normalizeStringArray,
 } from "../lib/seneca-normalize";
 
@@ -27,6 +28,15 @@ async function getMembership(userId: string, teamId: string) {
 
 function canUseSeneca(role: string): boolean {
   return role === "owner" || role === "team_leader";
+}
+
+function canManageDevelopmentGoal(
+  membership: { role: string; userId: string },
+  memberUserId: string,
+): boolean {
+  const isLeaderRole =
+    membership.role === "owner" || membership.role === "team_leader" || membership.role === "admin";
+  return isLeaderRole || membership.userId === memberUserId;
 }
 
 const prepBodySchema = z.object({
@@ -72,6 +82,12 @@ const devPlanBodySchema = z.object({
   managerName: z.string().nullable().optional(),
   contextNotes: z.string().optional(),
   checkInSummary: z.string().optional(),
+});
+
+const quickGoalBodySchema = z.object({
+  skillOrGoal: z.string().trim().min(1, "Describe a goal or skill").max(500),
+  memberName: z.string().optional(),
+  managerName: z.string().nullable().optional(),
 });
 
 type SenecaPrepAi = {
@@ -381,6 +397,50 @@ Return JSON with:
     return c.json({ data: { ...normalized, status: "active" as const } });
   } catch (e) {
     return c.json({ error: { message: e instanceof Error ? e.message : "Seneca development plan failed" } }, 500);
+  }
+});
+
+senecaRouter.post("/:memberUserId/seneca/quick-goal", zValidator("json", quickGoalBodySchema), async (c) => {
+  const user = c.get("user")!;
+  const teamId = c.req.param("teamId") as string;
+  const memberUserId = c.req.param("memberUserId") as string;
+  const body = c.req.valid("json");
+
+  const membership = await getMembership(user.id, teamId);
+  if (!membership || !canManageDevelopmentGoal(membership, memberUserId)) {
+    return c.json({ error: { message: "Not allowed to create development goals for this member" } }, 403);
+  }
+
+  if (!senecaAvailable()) {
+    return c.json({ error: { message: senecaUnavailableMessage() } }, 503);
+  }
+
+  const raw = await buildSenecaRawContext(teamId, memberUserId, {
+    memberName: body.memberName,
+    managerName: body.managerName,
+  });
+
+  const payload = JSON.stringify(
+    { member: raw, skillOrGoalRequest: body.skillOrGoal },
+    null,
+    2,
+  );
+
+  try {
+    const goal = await senecaJson<{ skill: string; steps: string[] }>(
+      `Create a development goal for ${raw.memberName} based on this request: "${body.skillOrGoal}".
+Return JSON with:
+- skill (string): concise goal or skill title
+- steps (string[]): 2 to 5 concrete, actionable steps (maximum 5)`,
+      payload,
+    );
+    const normalized = normalizeQuickDevelopmentGoal(goal);
+    if (!normalized) {
+      return c.json({ error: { message: "Seneca returned an invalid development goal." } }, 500);
+    }
+    return c.json({ data: normalized });
+  } catch (e) {
+    return c.json({ error: { message: e instanceof Error ? e.message : "Seneca goal creation failed" } }, 500);
   }
 });
 

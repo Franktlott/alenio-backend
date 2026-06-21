@@ -22439,3 +22439,98 @@ button.enterprise-profile-legal-link {
     bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
   }
 }
+
+.seneca-goal-modal {
+  width: min(26rem, 100%);
+  text-align: left;
+}
+
+.seneca-goal-head {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  margin-bottom: 0.75rem;
+}
+
+.seneca-goal-head-icon {
+  width: 3.25rem;
+  height: 3.25rem;
+  flex-shrink: 0;
+}
+
+.seneca-goal-title {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.seneca-goal-body {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.seneca-goal-prompt {
+  min-height: 4.5rem;
+}
+
+.seneca-goal-member-hint {
+  margin: 0 0 0.35rem;
+  font-size: 0.8125rem;
+}
+
+.seneca-goal-step-cap {
+  font-weight: 500;
+  color: #94a3b8;
+}
+
+.seneca-goal-error {
+  position: relative;
+  z-index: 1;
+  margin: 0 0 0.65rem;
+}
+
+.seneca-goal-loading {
+  position: relative;
+  z-index: 1;
+  min-height: 5rem;
+  text-align: center;
+}
+
+.seneca-goal-loading .seneca-brand {
+  justify-content: center;
+  margin-bottom: 0.65rem;
+  color: #e2e8f0;
+}
+
+.seneca-goal-primary {
+  margin-top: 0.65rem;
+  width: 100%;
+}
+
+.seneca-goal-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 0.65rem;
+}
+
+.seneca-goal-actions .seneca-goal-primary {
+  margin-top: 0;
+  width: auto;
+  flex: 1;
+}
+
+.seneca-goal-modal .seneca-disclaimer {
+  position: relative;
+  z-index: 1;
+  color: #94a3b8;
+}
+
+.seneca-goal-modal .seneca-dev-plan-label {
+  color: #cbd5e1;
+}

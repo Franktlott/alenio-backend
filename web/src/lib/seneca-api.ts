@@ -1,5 +1,5 @@
 import { apiPostJson } from "./api";
-import { normalizeDevelopmentGoalDraft, normalizeStringArray } from "./seneca-normalize";
+import { normalizeDevelopmentGoalDraft, normalizeQuickDevelopmentGoal, normalizeStringArray } from "./seneca-normalize";
 
 export type SenecaPrep = {
   lastCheckInNotes: string | null;
@@ -40,6 +40,11 @@ export type SenecaAssistResult = {
   suggestions?: string[];
   followUpTasks?: Array<{ title: string; assigneeRole: "associate" | "leader"; dueDate?: string }>;
   developmentGoal?: SenecaDevelopmentGoalDraft;
+};
+
+export type SenecaQuickDevelopmentGoal = {
+  skill: string;
+  steps: string[];
 };
 
 export type SenecaSummary = {
@@ -142,4 +147,22 @@ export function fetchSenecaDevelopmentPlan(
     if (!normalized) throw new Error("Seneca returned an invalid development plan.");
     return { ...normalized, status: "active" as const };
   });
+}
+
+export function fetchSenecaQuickGoal(
+  teamId: string,
+  memberUserId: string,
+  body: {
+    skillOrGoal: string;
+    memberName?: string;
+    managerName?: string | null;
+  },
+) {
+  return apiPostJson<{ data: SenecaQuickDevelopmentGoal }>(senecaPath(teamId, memberUserId, "quick-goal"), body).then(
+    (r) => {
+      const normalized = normalizeQuickDevelopmentGoal(r.data);
+      if (!normalized) throw new Error("Seneca returned an invalid development goal.");
+      return normalized;
+    },
+  );
 }

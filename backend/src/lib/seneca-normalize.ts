@@ -52,3 +52,22 @@ export function normalizeDevelopmentGoalDraft(raw: unknown): SenecaDevelopmentGo
     targetDate: normalizeTargetDate(o.targetDate),
   };
 }
+
+export type SenecaQuickDevelopmentGoal = {
+  skill: string;
+  steps: string[];
+};
+
+const MAX_QUICK_GOAL_STEPS = 5;
+
+export function normalizeQuickDevelopmentGoal(raw: unknown): SenecaQuickDevelopmentGoal | null {
+  if (!raw || typeof raw !== "object") return null;
+  const o = raw as Record<string, unknown>;
+  const skill =
+    (typeof o.skill === "string" ? o.skill.trim() : "") ||
+    (typeof o.goalTitle === "string" ? o.goalTitle.trim() : "");
+  if (!skill) return null;
+  const steps = normalizeStringArray(o.steps ?? o.actionSteps30Day).slice(0, MAX_QUICK_GOAL_STEPS);
+  if (steps.length === 0) return null;
+  return { skill, steps };
+}
