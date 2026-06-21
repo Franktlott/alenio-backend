@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { OneOnOneTemplate } from "../../lib/api";
+import { getWebApiBase } from "../../lib/api-base";
 import {
   senecaAssist,
   type SenecaAssistAction,
@@ -77,6 +78,42 @@ export function SenecaCheckInPanel({
   const [err, setErr] = useState<string | null>(null);
   const [result, setResult] = useState<SenecaAssistResult | null>(null);
 
+  useEffect(() => {
+    const apiBase = getWebApiBase();
+    void fetch(`${apiBase}/health`)
+      .then((r) => r.json())
+      .then((health: { senecaConfigured?: boolean; senecaDiagnostics?: { present: boolean; length: number; validFormat: boolean }; buildMarker?: string }) => {
+        // #region agent log
+        fetch("http://127.0.0.1:7364/ingest/e507813d-15c1-41eb-aedc-9cfd7576ce45", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "e38d9e" },
+          body: JSON.stringify({
+            sessionId: "e38d9e",
+            hypothesisId: "A-C",
+            location: "SenecaCheckInPanel.tsx:mount",
+            message: "Seneca panel health probe",
+            data: {
+              apiBase: apiBase || "(dev proxy)",
+              buildMarker: health.buildMarker,
+              senecaConfigured: health.senecaConfigured,
+              senecaDiagnostics: health.senecaDiagnostics,
+            },
+            timestamp: Date.now(),
+          }),
+        }).catch(() => {});
+        // #endregion
+        if (!health.senecaConfigured) {
+          const d = health.senecaDiagnostics;
+          setErr(
+            d?.present
+              ? "OpenAI key is present but invalid on the server. Re-paste OPENAI_API_KEY in Railway as one line starting with sk-."
+              : "Backend is missing OPENAI_API_KEY. Add it in Railway → Alenio Backend - Prod → Variables, then redeploy that service.",
+          );
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   const runAction = async (action: SenecaAssistAction) => {
     setBusy(action);
     setErr(null);
@@ -96,7 +133,22 @@ export function SenecaCheckInPanel({
       });
       setResult(out);
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "Seneca could not complete that action.");
+      const msg = e instanceof Error ? e.message : "Seneca could not complete that action.";
+      // #region agent log
+      fetch("http://127.0.0.1:7364/ingest/e507813d-15c1-41eb-aedc-9cfd7576ce45", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "e38d9e" },
+        body: JSON.stringify({
+          sessionId: "e38d9e",
+          hypothesisId: "E",
+          location: "SenecaCheckInPanel.tsx:runAction",
+          message: "Seneca assist failed",
+          data: { action, apiBase: getWebApiBase() || "(dev proxy)", error: msg },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
+      setErr(msg);
     } finally {
       setBusy(null);
     }
