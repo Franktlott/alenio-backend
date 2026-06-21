@@ -1,34 +1,23 @@
 type Props = {
-  /** Sidebar nav, manager dashboard header, or kiosk/checklist page hero. */
-  variant?: "nav" | "page" | "header" | "dashboard";
+  /** Nav tab icon or larger coming-soon page mark. */
+  variant?: "nav" | "page";
   className?: string;
 };
 
-const SIZES = {
-  nav: { width: 28, height: 22 },
-  header: { width: 190, height: 56 },
-  dashboard: { width: 220, height: 64 },
-  page: { width: 280, height: 83 },
+const CONFIG = {
+  nav: { src: "/alenio-go-nav-logo.png", width: 28, height: 22, className: "alenio-go-logo--nav" },
+  page: { src: "/alenio-go-dashboard-logo.png", width: 220, height: 64, className: "alenio-go-logo--dashboard" },
 } as const;
 
-const SOURCES = {
-  nav: "/alenio-go-nav-logo.png",
-  header: "/alenio-go-logo.png",
-  /** Manager Alenio Go dashboard top bar (dark Alenio + script Go). */
-  dashboard: "/alenio-go-dashboard-logo.png",
-  /** White Alenio wordmark — dark checklist / kiosk headers. */
-  page: "/alenio-go-page-logo.png",
-} as const;
-
-export function AlenioGoLogo({ variant = "page", className = "" }: Props) {
-  const size = SIZES[variant];
+export function AlenioGoLogo({ variant = "nav", className = "" }: Props) {
+  const { src, width, height, className: variantClass } = CONFIG[variant];
   return (
     <img
-      src={SOURCES[variant]}
+      src={src}
       alt="Alenio Go"
-      className={`alenio-go-logo alenio-go-logo--${variant}${className ? ` ${className}` : ""}`}
-      width={size.width}
-      height={size.height}
+      className={`alenio-go-logo ${variantClass}${className ? ` ${className}` : ""}`}
+      width={width}
+      height={height}
     />
   );
 }

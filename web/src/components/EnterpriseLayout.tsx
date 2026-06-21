@@ -289,7 +289,7 @@ export function EnterpriseLayout({
               to="/go"
               navId="go"
               activeNav={activeNav}
-              icon={<AlenioGoLogo variant="nav" />}
+              icon={<AlenioGoLogo />}
               label="Alenio Go"
             />
           ) : null}

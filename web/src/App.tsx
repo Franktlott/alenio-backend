@@ -3,7 +3,6 @@ import { AuthGate } from "./components/AuthGate";
 import { DocumentTitle } from "./components/DocumentTitle";
 import { SessionIdleGuard } from "./components/SessionIdleGuard";
 import { AlenioGoPage } from "./routes/AlenioGoPage";
-import { ChecklistBuilderPage } from "./routes/ChecklistBuilderPage";
 import { ActivityPage } from "./routes/ActivityPage";
 import { BillingPage } from "./routes/BillingPage";
 import { ChatPage } from "./routes/ChatPage";
@@ -30,10 +29,6 @@ import { SecurityPage } from "./routes/SecurityPage";
 import { InvitePage } from "./routes/InvitePage";
 import { WorkspaceChecklistHubPage } from "./routes/WorkspaceChecklistHubPage";
 import { LocationChecklistKioskPage } from "./routes/LocationChecklistKioskPage";
-import { AlenioGoLandingPage } from "./routes/aleniogo/AlenioGoLandingPage";
-import { AlenioGoWelcomePage } from "./routes/aleniogo/AlenioGoWelcomePage";
-import { AlenioGoHomePage } from "./routes/aleniogo/AlenioGoHomePage";
-import { AlenioGoChecklistPage } from "./routes/aleniogo/AlenioGoChecklistPage";
 import { GetAppPage } from "./routes/GetAppPage";
 import { getActiveApiTarget, getWebEnvConfigError } from "./lib/env-config";
 
@@ -118,10 +113,6 @@ export default function App() {
         <Route path="/invite/:token" element={<InvitePage />} />
         <Route path="/checklist/:hubToken/:checklistId" element={<LocationChecklistKioskPage />} />
         <Route path="/checklist/:hubToken" element={<WorkspaceChecklistHubPage />} />
-        <Route path="/aleniogo" element={<AlenioGoLandingPage />} />
-        <Route path="/aleniogo/welcome" element={<AlenioGoWelcomePage />} />
-        <Route path="/aleniogo/app" element={<AlenioGoHomePage />} />
-        <Route path="/aleniogo/app/checklists/:checklistId" element={<AlenioGoChecklistPage />} />
         <Route path="/get-app" element={<GetAppPage />} />
         <Route path="/privacy" element={<PrivacyPolicyPage />} />
         <Route path="/terms" element={<TermsOfServicePage />} />
@@ -139,8 +130,7 @@ export default function App() {
         >
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/go" element={<AlenioGoPage />} />
-          <Route path="/go/checklists/new" element={<ChecklistBuilderPage />} />
-          <Route path="/go/checklists/:checklistId/edit" element={<ChecklistBuilderPage />} />
+          <Route path="/go/*" element={<Navigate to="/go" replace />} />
           <Route path="/activity" element={<ActivityPage />} />
           <Route path="/chat" element={<ChatPage />} />
           <Route path="/billing" element={<BillingPage />} />

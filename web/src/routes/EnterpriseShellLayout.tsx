@@ -1,15 +1,10 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { DashboardTopBar } from "../components/DashboardTopBar";
-import { AlenioGoLogo } from "../components/AlenioGoLogo";
-import { GoWorkspaceHeaderInfo } from "../components/checklists/GoWorkspaceHeaderInfo";
 import { EnterpriseLayout, type EnterpriseNavId } from "../components/EnterpriseLayout";
 import { NoTeamsEmptyState } from "../components/NoTeamsEmptyState";
 import { EnterpriseShellContext, type EnterpriseShellContextValue } from "../contexts/EnterpriseShellContext";
-import { fetchChecklistLocations, fetchWebMe, fetchWebTeams, patchApiProfile, type WebMeUser, type WebTeamRow } from "../lib/api";
-import { isIpadRecentlyActive, latestSubmissionAt } from "../lib/go-dashboard-utils";
-import { queryKeys } from "../lib/query-keys";
+import { fetchWebMe, fetchWebTeams, patchApiProfile, type WebMeUser, type WebTeamRow } from "../lib/api";
 import { getBrowserTimeZone } from "../lib/timezone";
 import { hasMobileWebPreferred } from "../lib/app-links";
 import { getPersistedEnterpriseTeamId, pickEnterpriseTeamId, setPersistedEnterpriseTeamId, teamsWorkspaceSelectionKey } from "../lib/enterprise-selected-team";
@@ -187,35 +182,6 @@ export function EnterpriseShellLayout() {
   }, [teams, selectedTeamId]);
 
   const topBarPageTitle = enterpriseNavTitle(activeNav);
-  const selectedTeam = teams?.find((t) => t.id === effectiveTeamId) ?? null;
-  const goRoleLabel =
-    selectedTeam?.role === "owner"
-      ? "Owner"
-      : selectedTeam?.role === "team_leader"
-        ? "Manager"
-        : selectedTeam?.role === "admin"
-          ? "Admin"
-          : selectedTeam
-            ? "Member"
-            : undefined;
-
-  const goListQuery = useQuery({
-    queryKey: queryKeys.checklistLocations(effectiveTeamId),
-    queryFn: () => fetchChecklistLocations(effectiveTeamId),
-    enabled: activeNav === "go" && !!effectiveTeamId,
-    refetchInterval: 8000,
-  });
-  const goHubToken = goListQuery.data?.hubToken ?? null;
-  const primaryGoCode = goListQuery.data?.goCode ?? null;
-  const goActiveChecklists = useMemo(
-    () => (goListQuery.data?.locations ?? []).filter((l) => l.isActive),
-    [goListQuery.data?.locations],
-  );
-  const goLastDeviceActivity = useMemo(
-    () => latestSubmissionAt(goListQuery.data?.recentSubmissions ?? []),
-    [goListQuery.data?.recentSubmissions],
-  );
-  const goIpadConnected = isIpadRecentlyActive(goLastDeviceActivity);
   const hasNoTeams = teams !== null && teams.length === 0;
   const isProfileRoute = location.pathname.startsWith("/profile");
   const showNoTeamsEmptyState = hasNoTeams && !isProfileRoute;
@@ -302,32 +268,6 @@ export function EnterpriseShellLayout() {
             user={me ?? null}
             pageTitle={topBarPageTitle}
             selectedTeamId={teams?.some((t) => t.id === selectedTeamId) ? selectedTeamId : effectiveTeamId}
-            variant={activeNav === "go" ? "go" : "default"}
-            roleLabel={activeNav === "go" ? goRoleLabel : undefined}
-            actionsPrefix={
-              activeNav === "go" && effectiveTeamId ? (
-                <GoWorkspaceHeaderInfo
-                  teamName={selectedTeam?.name}
-                  teamImage={selectedTeam?.image}
-                  goCode={primaryGoCode}
-                  hubToken={goHubToken}
-                  ipadConnected={goIpadConnected}
-                  checklistCount={goActiveChecklists.length}
-                  lastSeen={goLastDeviceActivity}
-                />
-              ) : undefined
-            }
-            brandHeader={
-              activeNav === "go" ? (
-                <div className="enterprise-topbar-go-brand">
-                  <AlenioGoLogo variant="dashboard" className="enterprise-topbar-go-logo" />
-                  <div className="enterprise-topbar-go-copy">
-                    <p className="enterprise-topbar-go-headline">Frontline execution, made simple.</p>
-                    <p className="enterprise-topbar-go-sub">Create, assign, and track checklists across all your locations.</p>
-                  </div>
-                </div>
-              ) : undefined
-            }
           />
         }
         mainClassName={mainClassName}
