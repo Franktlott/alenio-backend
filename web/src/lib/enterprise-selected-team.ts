@@ -3,7 +3,15 @@ const STORAGE_KEY = "alenio.enterpriseSelectedTeamId";
 
 export function getPersistedEnterpriseTeamId(): string {
   try {
-    return sessionStorage.getItem(STORAGE_KEY)?.trim() ?? "";
+    const fromLocal = localStorage.getItem(STORAGE_KEY)?.trim() ?? "";
+    if (fromLocal) return fromLocal;
+    const fromSession = sessionStorage.getItem(STORAGE_KEY)?.trim() ?? "";
+    if (fromSession) {
+      localStorage.setItem(STORAGE_KEY, fromSession);
+      sessionStorage.removeItem(STORAGE_KEY);
+      return fromSession;
+    }
+    return "";
   } catch {
     return "";
   }
@@ -11,8 +19,9 @@ export function getPersistedEnterpriseTeamId(): string {
 
 export function setPersistedEnterpriseTeamId(teamId: string): void {
   try {
-    if (!teamId) sessionStorage.removeItem(STORAGE_KEY);
-    else sessionStorage.setItem(STORAGE_KEY, teamId);
+    if (!teamId) localStorage.removeItem(STORAGE_KEY);
+    else localStorage.setItem(STORAGE_KEY, teamId);
+    sessionStorage.removeItem(STORAGE_KEY);
   } catch {
     /* ignore quota / private mode */
   }

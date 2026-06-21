@@ -3,6 +3,7 @@ export type KioskTab = "today" | "completed" | "info";
 export type KioskTaskItem = {
   id: string;
   title: string;
+  note: string | null;
   category: string | null;
   sortOrder: number;
 };

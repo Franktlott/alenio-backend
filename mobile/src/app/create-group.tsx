@@ -44,7 +44,7 @@ export default function CreateGroupScreen() {
     mutationFn: (payload: { name: string; participantIds: string[] }) =>
       api.post<Conversation>("/api/dms/create-group", payload),
     onSuccess: (conv) => {
-      queryClient.invalidateQueries({ queryKey: ["conversations"] });
+      queryClient.invalidateQueries({ queryKey: ["dms"] });
       router.replace({
         pathname: "/dm-chat",
         params: {

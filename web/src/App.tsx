@@ -3,6 +3,7 @@ import { AuthGate } from "./components/AuthGate";
 import { DocumentTitle } from "./components/DocumentTitle";
 import { SessionIdleGuard } from "./components/SessionIdleGuard";
 import { AlenioGoPage } from "./routes/AlenioGoPage";
+import { ChecklistBuilderPage } from "./routes/ChecklistBuilderPage";
 import { ActivityPage } from "./routes/ActivityPage";
 import { BillingPage } from "./routes/BillingPage";
 import { ChatPage } from "./routes/ChatPage";
@@ -130,6 +131,8 @@ export default function App() {
         >
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/go" element={<AlenioGoPage />} />
+          <Route path="/go/checklists/new" element={<ChecklistBuilderPage />} />
+          <Route path="/go/checklists/:checklistId/edit" element={<ChecklistBuilderPage />} />
           <Route path="/activity" element={<ActivityPage />} />
           <Route path="/chat" element={<ChatPage />} />
           <Route path="/billing" element={<BillingPage />} />

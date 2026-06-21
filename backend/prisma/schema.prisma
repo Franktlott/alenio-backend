@@ -574,6 +574,9 @@ model ChecklistLocation {
   id          String   @id @default(cuid())
   teamId      String
   name        String
+  description String?
+  /** One of the preset checklist card color keys (violet, indigo, blue, …). */
+  cardColor   String?
   /** @deprecated Legacy per-checklist token; use Team.checklistHubToken */
   publicToken String?  @unique
   isActive    Boolean  @default(true)
@@ -590,6 +593,7 @@ model ChecklistLocationItem {
   id         String            @id @default(cuid())
   locationId String
   title      String
+  note       String?
   category   String?
   sortOrder  Int               @default(0)
   location   ChecklistLocation @relation(fields: [locationId], references: [id], onDelete: Cascade)

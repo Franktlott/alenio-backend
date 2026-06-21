@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import {
   View,
   Text,
@@ -35,6 +35,8 @@ import { toast } from "burnt";
 import { useDemoMode, showDemoAlert } from "@/lib/useDemo";
 import { useMention } from "@/lib/useMention";
 import { SafeKeyboardAvoidingView } from "@/lib/safe-keyboard-controller";
+import { dmOtherParticipant, resolveUserImageUrl, userInitials } from "@/lib/user-avatar";
+import { UserAvatar } from "@/components/UserAvatar";
 
 const REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🔥'];
 
@@ -111,12 +113,27 @@ export default function DMChatScreen() {
   const { mentionedUserIds, mentionQuery, onTextChange: onMentionTextChange, selectMention, resetMentions } = useMention();
 
   const { data: conversations = [] } = useQuery({
-    queryKey: ["conversations"],
+    queryKey: ["dms"],
     queryFn: () => api.get<Conversation[]>("/api/dms"),
     enabled: !!conversationId,
   });
 
   const currentConversation = conversations.find((c) => c.id === conversationId);
+  const headerUser = useMemo(() => {
+    if (isGroup) {
+      return {
+        name: currentConversation?.name ?? recipientName ?? "Group",
+        email: null as string | null,
+        image: null as string | null,
+      };
+    }
+    const other = currentConversation ? dmOtherParticipant(currentConversation, currentUserId) : null;
+    return {
+      name: recipientName?.trim() || other?.name?.trim() || other?.email?.trim() || "Direct Message",
+      email: other?.email ?? null,
+      image: recipientImage?.trim() || other?.image || null,
+    };
+  }, [currentConversation, currentUserId, isGroup, recipientImage, recipientName]);
   const mentionableUsers = (currentConversation?.participants ?? [])
     .filter((p) => p.id !== currentUserId)
     .map((p) => ({ id: p.id, name: p.name, image: p.image ?? null }));
@@ -133,7 +150,7 @@ export default function DMChatScreen() {
       api.post<DirectMessage>(`/api/dms/${conversationId}/messages`, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["dm-messages", conversationId] });
-      queryClient.invalidateQueries({ queryKey: ["conversations"] });
+      queryClient.invalidateQueries({ queryKey: ["dms"] });
       setReplyTo(null);
       setMediaPreview(null);
     },
@@ -150,14 +167,14 @@ export default function DMChatScreen() {
       api.delete(`/api/dms/${conversationId}/messages/${messageId}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["dm-messages", conversationId] });
-      queryClient.invalidateQueries({ queryKey: ["conversations"] });
+      queryClient.invalidateQueries({ queryKey: ["dms"] });
     },
   });
 
   const leaveConversationMutation = useMutation({
     mutationFn: () => api.post(`/api/dms/${conversationId}/leave`, {}),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["conversations"] });
+      queryClient.invalidateQueries({ queryKey: ["dms"] });
       router.replace("/(app)/chat");
     },
   });
@@ -165,7 +182,7 @@ export default function DMChatScreen() {
   const deleteConversationMutation = useMutation({
     mutationFn: () => api.delete(`/api/dms/${conversationId}`),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["conversations"] });
+      queryClient.invalidateQueries({ queryKey: ["dms"] });
       router.replace("/(app)/chat");
     },
   });
@@ -276,14 +293,19 @@ export default function DMChatScreen() {
           <View className="w-9 h-9 rounded-full bg-white/20 items-center justify-center mr-3 overflow-hidden">
             {isGroup ? (
               <Users size={18} color="white" />
-            ) : recipientImage ? (
-              <Image source={{ uri: recipientImage }} style={{ width: 36, height: 36 }} resizeMode="cover" />
             ) : (
-              <Text className="text-white font-bold">{recipientName?.[0]?.toUpperCase() ?? "?"}</Text>
+              <UserAvatar
+                user={headerUser}
+                size={36}
+                radius={18}
+                backgroundColor="rgba(255,255,255,0.2)"
+                textColor="#FFFFFF"
+                fontSize={14}
+              />
             )}
           </View>
           <View className="flex-1">
-            <Text style={{ color: "white", fontSize: 18, fontWeight: "700" }}>{recipientName}</Text>
+            <Text style={{ color: "white", fontSize: 18, fontWeight: "700" }}>{headerUser.name}</Text>
             <Text className="text-white/70 text-xs">{isGroup ? "Group chat" : "Direct message"}</Text>
           </View>
           {!isDemo ? (
@@ -291,7 +313,7 @@ export default function DMChatScreen() {
               testID="start-video-call-button"
               onPress={() => router.push({
                 pathname: "/video-call",
-                params: { roomId: conversationId, roomName: `${recipientName ?? "Call"}` },
+                params: { roomId: conversationId, roomName: `${headerUser.name ?? "Call"}` },
               })}
               className="w-9 h-9 rounded-full bg-white/20 items-center justify-center mr-2"
             >
@@ -612,12 +634,15 @@ export default function DMChatScreen() {
           </View>
         ) : messages.length === 0 ? (
           <View testID="dm-chat-empty" className="flex-1 items-center justify-center px-6">
-            <View className="w-16 h-16 rounded-full bg-indigo-100 dark:bg-indigo-900 items-center justify-center mb-4">
-              <Text className="text-2xl font-bold text-indigo-500">
-                {recipientName?.[0]?.toUpperCase() ?? "?"}
-              </Text>
-            </View>
-            <Text className="text-lg font-semibold text-slate-700 dark:text-white">{recipientName}</Text>
+            <UserAvatar
+              user={headerUser}
+              size={64}
+              radius={32}
+              backgroundColor="#E0E7FF"
+              textColor="#4361EE"
+              fontSize={24}
+            />
+            <Text className="text-lg font-semibold text-slate-700 dark:text-white mt-4">{headerUser.name}</Text>
             <Text className="text-slate-400 text-sm mt-1 text-center">
               This is the beginning of your conversation
             </Text>
@@ -661,9 +686,9 @@ export default function DMChatScreen() {
                     mediaType={msg.mediaType}
                     replyTo={msg.replyTo}
                     reactions={msg.reactions ?? []}
-                    senderName={msg.sender.name}
-                    senderInitial={msg.sender.name?.[0]?.toUpperCase() ?? "?"}
-                    senderImage={msg.sender.image}
+                    senderName={msg.sender.name ?? msg.sender.email ?? "Member"}
+                    senderInitial={userInitials(msg.sender)}
+                    senderImage={resolveUserImageUrl(msg.sender.image)}
                     createdAt={msg.createdAt}
                     isOwn={isOwn}
                     currentUserId={currentUserId}
@@ -729,7 +754,7 @@ export default function DMChatScreen() {
           <TextInput
             testID="dm-chat-text-input"
             className="flex-1 bg-slate-100 dark:bg-slate-700 rounded-2xl px-4 py-2.5 text-base text-slate-900 dark:text-white mr-2"
-            placeholder={isDemo ? "Read-only demo account" : `Message ${recipientName ?? ""}...`}
+            placeholder={isDemo ? "Read-only demo account" : `Message ${headerUser.name ?? ""}...`}
             placeholderTextColor="#94A3B8"
             value={input}
             onChangeText={(text) => {

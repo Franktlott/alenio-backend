@@ -7,7 +7,7 @@ import { EnterpriseShellContext, type EnterpriseShellContextValue } from "../con
 import { fetchWebMe, fetchWebTeams, patchApiProfile, type WebMeUser, type WebTeamRow } from "../lib/api";
 import { getBrowserTimeZone } from "../lib/timezone";
 import { hasMobileWebPreferred } from "../lib/app-links";
-import { pickEnterpriseTeamId, teamsWorkspaceSelectionKey } from "../lib/enterprise-selected-team";
+import { getPersistedEnterpriseTeamId, pickEnterpriseTeamId, setPersistedEnterpriseTeamId, teamsWorkspaceSelectionKey } from "../lib/enterprise-selected-team";
 import { isMobileBrowser } from "../lib/mobile-browser";
 import { enterpriseNavTitle } from "../lib/enterprise-nav";
 
@@ -40,7 +40,7 @@ export function EnterpriseShellLayout() {
 
   const [me, setMe] = useState<WebMeUser | null | undefined>(undefined);
   const [teams, setTeams] = useState<WebTeamRow[] | null>(null);
-  const [selectedTeamId, setSelectedTeamId] = useState("");
+  const [selectedTeamId, setSelectedTeamId] = useState(() => getPersistedEnterpriseTeamId());
   const [shellLoadErr, setShellLoadErr] = useState<string | null>(null);
   const [workspaceMainLoading, setWorkspaceMainLoading] = useState(false);
   const [shellMainSuffix, setShellMainSuffix] = useState("");
@@ -100,6 +100,12 @@ export function EnterpriseShellLayout() {
     teamsWorkspaceKeyRef.current = nextKey;
     setSelectedTeamId((prev) => pickEnterpriseTeamId(teams, prev));
   }, [teams]);
+
+  useEffect(() => {
+    if (!selectedTeamId) return;
+    if (teams !== null && !teams.some((t) => t.id === selectedTeamId)) return;
+    setPersistedEnterpriseTeamId(selectedTeamId);
+  }, [selectedTeamId, teams]);
 
   const refreshMeAndTeams = useCallback(async () => {
     const [rawMe, t] = await Promise.all([fetchWebMe(), fetchWebTeams()]);

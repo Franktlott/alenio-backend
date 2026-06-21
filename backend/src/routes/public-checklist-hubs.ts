@@ -29,6 +29,7 @@ publicChecklistHubsRouter.get("/:hubToken", async (c) => {
       checklists: team.checklistLocations.map((cl) => ({
         id: cl.id,
         name: cl.name,
+        cardColor: cl.cardColor ?? null,
         taskCount: cl.items.length,
         categories: [...new Set(cl.items.map((i) => i.category).filter(Boolean))],
       })),
@@ -54,6 +55,7 @@ publicChecklistHubsRouter.get("/:hubToken/checklists/:checklistId", async (c) =>
       items: row.location.items.map((i) => ({
         id: i.id,
         title: i.title,
+        note: i.note ?? null,
         category: i.category,
         sortOrder: i.sortOrder,
       })),

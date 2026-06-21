@@ -1,6 +1,8 @@
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
+import { AlenioGoLogo } from "./AlenioGoLogo";
 import { AlenioWorkspaceLoading } from "./AlenioWorkspaceLoading";
 import { clearAccessToken, getAuthClient } from "../lib/auth-client";
 import {
@@ -77,11 +79,12 @@ function IconPlan() {
   );
 }
 
-function IconProfile() {
+function IconSignOut() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-      <circle cx="12" cy="7" r="4" />
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+      <polyline points="16 17 21 12 16 7" />
+      <line x1="21" y1="12" x2="9" y2="12" />
     </svg>
   );
 }
@@ -107,21 +110,7 @@ function NavItem({
       data-testid={`nav-${navId}`}
     >
       <span className="enterprise-nav-icon">{icon}</span>
-      <span>{label}</span>
-    </Link>
-  );
-}
-
-function AlenioGoNavItem({ activeNav }: { activeNav: EnterpriseNavId }) {
-  const active = activeNav === "go";
-  return (
-    <Link
-      to="/go"
-      className={`enterprise-nav-item${active ? " enterprise-nav-item-active" : ""}`}
-      data-testid="nav-go"
-      aria-current={active ? "page" : undefined}
-    >
-      Alenio Go
+      <span className="enterprise-nav-label">{label}</span>
     </Link>
   );
 }
@@ -157,6 +146,23 @@ export function EnterpriseLayout({
   const overlayStartedAtRef = useRef<number | null>(null);
   const hideOverlayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevSelectedTeamIdRef = useRef(selectedTeamId);
+
+  const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
+  const workspaceMenuRef = useRef<HTMLDivElement>(null);
+  const workspaceTriggerRef = useRef<HTMLButtonElement>(null);
+  const [workspaceMenuStyle, setWorkspaceMenuStyle] = useState<CSSProperties | null>(null);
+
+  const updateWorkspaceMenuPosition = useCallback(() => {
+    const trigger = workspaceTriggerRef.current;
+    if (!trigger) return;
+    const rect = trigger.getBoundingClientRect();
+    setWorkspaceMenuStyle({
+      position: "fixed",
+      left: rect.right + 7,
+      bottom: window.innerHeight - rect.bottom,
+      zIndex: 300,
+    });
+  }, []);
 
   const clearPendingHideTimer = useCallback(() => {
     if (hideOverlayTimerRef.current) {
@@ -225,6 +231,29 @@ export function EnterpriseLayout({
     };
   }, [workspaceOverlayLoading, sidebarWorkspaceSwitch, clearPendingHideTimer, endSidebarWorkspaceSwitchSession]);
 
+  useEffect(() => {
+    if (!workspaceMenuOpen) {
+      setWorkspaceMenuStyle(null);
+      return;
+    }
+    updateWorkspaceMenuPosition();
+    const onPointerDown = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (workspaceMenuRef.current?.contains(target)) return;
+      if (workspaceTriggerRef.current?.contains(target)) return;
+      setWorkspaceMenuOpen(false);
+    };
+    const onLayoutChange = () => updateWorkspaceMenuPosition();
+    document.addEventListener("mousedown", onPointerDown);
+    window.addEventListener("resize", onLayoutChange);
+    window.addEventListener("scroll", onLayoutChange, true);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      window.removeEventListener("resize", onLayoutChange);
+      window.removeEventListener("scroll", onLayoutChange, true);
+    };
+  }, [workspaceMenuOpen, updateWorkspaceMenuPosition]);
+
   const signOut = async () => {
     try {
       await getAuthClient().signOut();
@@ -236,94 +265,130 @@ export function EnterpriseLayout({
     onSignOutNavigate("/login?reason=session");
   };
 
-  const roleLabel = teams.find((t) => t.id === selectedTeamId)?.role ?? "member";
   const activeTeam = teams.find((t) => t.id === selectedTeamId) ?? teams[0] ?? null;
+  const workspaceLabel =
+    activeTeam?.name?.trim().split(/\s+/)[0]?.slice(0, 10) ?? "Workspace";
+  const canSwitchWorkspace = teams.length > 1;
 
   return (
     <div className={`enterprise-app ${mainClassName}`.trim()} data-testid="enterprise-layout">
-      <aside className="enterprise-sidebar" aria-label="Main navigation">
-        <Link to="/dashboard" className="enterprise-sidebar-brand">
-          <img src="/alenio-logo-white.png" alt="Alenio home" className="enterprise-sidebar-logo" />
+      <aside className="enterprise-sidebar enterprise-sidebar--rail" aria-label="Main navigation">
+        <Link to="/dashboard" className="enterprise-sidebar-brand" aria-label="Alenio home">
+          <img src="/icon.png" alt="" className="enterprise-sidebar-mark" width={60} height={60} />
         </Link>
-        <div className="enterprise-sidebar-nav-stack">
-          <nav className="enterprise-nav" aria-label="Product">
-            {showActivityExecuteNav ? (
-              <NavItem to="/activity" navId="activity" activeNav={activeNav} icon={<IconActivity />} label="Activity" />
-            ) : null}
-            <NavItem to="/chat" navId="chat" activeNav={activeNav} icon={<IconChat />} label="Chat" />
-            {showActivityExecuteNav ? (
-              <NavItem to="/dashboard" navId="execute" activeNav={activeNav} icon={<IconWorkspace />} label="Workspace" />
-            ) : null}
-            <NavItem to="/team" navId="team" activeNav={activeNav} icon={<IconTeam />} label="Team" />
-            {showPlanNav ? (
-              <NavItem to="/billing" navId="plan" activeNav={activeNav} icon={<IconPlan />} label="Billing" />
-            ) : null}
-            <NavItem to="/profile" navId="profile" activeNav={activeNav} icon={<IconProfile />} label="Profile" />
-          </nav>
+        <nav className="enterprise-nav" aria-label="Product">
           {showActivityExecuteNav ? (
-            <div className="enterprise-nav-go">
-              <AlenioGoNavItem activeNav={activeNav} />
-            </div>
+            <NavItem to="/activity" navId="activity" activeNav={activeNav} icon={<IconActivity />} label="Activity" />
           ) : null}
-        </div>
-        <div className="enterprise-sidebar-footer">
-          <div className="enterprise-sidebar-ws-wrap">
-            <label className="enterprise-workspace-label" htmlFor="enterprise-workspace">
-              Current workspace
-            </label>
-            <div className="enterprise-sidebar-ws-card">
-              {activeTeam ? (
-                <div className="enterprise-sidebar-ws-card-main">
-                  <div className="enterprise-sidebar-ws-icon" aria-hidden>
-                    {activeTeam.image ? (
-                      <img src={activeTeam.image} alt="" className="enterprise-sidebar-ws-icon-img" />
-                    ) : (
-                      <span>{activeTeam.name?.[0]?.toUpperCase() ?? "W"}</span>
-                    )}
-                  </div>
-                  <div className="enterprise-sidebar-ws-copy">
-                    <div className="enterprise-sidebar-ws-name" title={activeTeam.name}>
-                      {activeTeam.name}
-                    </div>
-                    <span className="enterprise-sidebar-ws-badge">Current</span>
-                  </div>
-                </div>
-              ) : (
-                <div className="enterprise-sidebar-ws-empty">No workspace</div>
-              )}
-              <select
-                id="enterprise-workspace"
-                className="enterprise-sidebar-ws-select"
-                value={teams.some((t) => t.id === selectedTeamId) ? selectedTeamId : ""}
-                onChange={(e) => handleWorkspaceSelectChange(e.target.value)}
-                data-testid="enterprise-workspace-select"
-                aria-label="Switch workspace"
-              >
-                {teams.length === 0 ? (
-                  <option value="">No teams</option>
+          <NavItem to="/chat" navId="chat" activeNav={activeNav} icon={<IconChat />} label="Chat" />
+          {showActivityExecuteNav ? (
+            <NavItem to="/dashboard" navId="execute" activeNav={activeNav} icon={<IconWorkspace />} label="Workspace" />
+          ) : null}
+          {showActivityExecuteNav ? (
+            <NavItem
+              to="/go"
+              navId="go"
+              activeNav={activeNav}
+              icon={<AlenioGoLogo variant="nav" />}
+              label="Alenio Go"
+            />
+          ) : null}
+          <NavItem to="/team" navId="team" activeNav={activeNav} icon={<IconTeam />} label="Team" />
+          {showPlanNav ? (
+            <NavItem to="/billing" navId="plan" activeNav={activeNav} icon={<IconPlan />} label="Billing" />
+          ) : null}
+        </nav>
+        <div className="enterprise-rail-footer">
+          <div className="enterprise-rail-footer-item-wrap" ref={workspaceMenuRef}>
+            <button
+              ref={workspaceTriggerRef}
+              type="button"
+              className={`enterprise-nav-item enterprise-nav-item--button${workspaceMenuOpen ? " enterprise-nav-item-active" : ""}${canSwitchWorkspace ? " enterprise-nav-item--switchable" : ""}`}
+              onClick={() => {
+                if (canSwitchWorkspace) setWorkspaceMenuOpen((open) => !open);
+              }}
+              aria-expanded={canSwitchWorkspace ? workspaceMenuOpen : undefined}
+              aria-haspopup={canSwitchWorkspace ? "menu" : undefined}
+              aria-label={canSwitchWorkspace ? `Switch workspace, current: ${activeTeam?.name ?? "none"}` : activeTeam?.name ?? "Workspace"}
+              data-testid="enterprise-workspace-menu-trigger"
+              disabled={!canSwitchWorkspace && teams.length === 0}
+            >
+              <span className="enterprise-nav-icon">
+                {activeTeam?.image ? (
+                  <img src={activeTeam.image} alt="" className="enterprise-rail-ws-icon-img" />
                 ) : (
-                  teams.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                    </option>
-                  ))
+                  <span className="enterprise-rail-ws-fallback">{activeTeam?.name?.[0]?.toUpperCase() ?? "W"}</span>
                 )}
-              </select>
-            </div>
+              </span>
+              <span className="enterprise-nav-label enterprise-nav-label--stack">
+                <span>{workspaceLabel}</span>
+                {canSwitchWorkspace ? (
+                  <span className="enterprise-nav-chevron" aria-hidden>
+                    {workspaceMenuOpen ? "▴" : "▾"}
+                  </span>
+                ) : null}
+              </span>
+            </button>
+            {workspaceMenuOpen && canSwitchWorkspace && workspaceMenuStyle
+              ? createPortal(
+                  <div
+                    ref={workspaceMenuRef}
+                    className="enterprise-ws-menu enterprise-ws-menu--portal"
+                    style={workspaceMenuStyle}
+                    role="menu"
+                    aria-label="Switch workspace"
+                  >
+                    <p className="enterprise-ws-menu-title">Switch workspace</p>
+                    {teams.map((t) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        role="menuitem"
+                        className={`enterprise-ws-menu-item${t.id === selectedTeamId ? " enterprise-ws-menu-item--active" : ""}`}
+                        onClick={() => {
+                          if (t.id !== selectedTeamId) handleWorkspaceSelectChange(t.id);
+                          setWorkspaceMenuOpen(false);
+                        }}
+                      >
+                        <span className="enterprise-ws-menu-item-icon" aria-hidden>
+                          {t.image ? (
+                            <img src={t.image} alt="" className="enterprise-rail-ws-icon-img" />
+                          ) : (
+                            <span className="enterprise-rail-ws-fallback">{t.name?.[0]?.toUpperCase() ?? "W"}</span>
+                          )}
+                        </span>
+                        <span className="enterprise-ws-menu-item-name">{t.name}</span>
+                      </button>
+                    ))}
+                  </div>,
+                  document.body,
+                )
+              : null}
           </div>
-          <div className="enterprise-sidebar-user">
-            {user?.image ? (
-              <img src={user.image} alt={user?.name ?? user?.email ?? "Account"} className="enterprise-user-avatar enterprise-user-avatar-img" />
-            ) : (
-              <div className="enterprise-user-avatar">{userInitials(user)}</div>
-            )}
-            <div className="enterprise-user-text">
-              <div className="enterprise-user-name">{user?.name ?? user?.email ?? "Signed in"}</div>
-              <div className="enterprise-user-role">{formatRole(roleLabel)}</div>
-            </div>
-          </div>
-          <button type="button" className="enterprise-sidebar-signout" onClick={signOut} data-testid="enterprise-sign-out">
-            Sign out
+          <Link
+            to="/profile"
+            className={`enterprise-nav-item${activeNav === "profile" ? " enterprise-nav-item-active" : ""}`}
+            data-testid="nav-profile"
+          >
+            <span className="enterprise-nav-icon">
+              {user?.image ? (
+                <img src={user.image} alt="" className="enterprise-rail-avatar-img" />
+              ) : (
+                <span className="enterprise-rail-avatar-fallback">{userInitials(user)}</span>
+              )}
+            </span>
+            <span className="enterprise-nav-label">Profile</span>
+          </Link>
+          <button
+            type="button"
+            className="enterprise-nav-item enterprise-nav-item--button"
+            onClick={() => void signOut()}
+            data-testid="enterprise-sign-out"
+          >
+            <span className="enterprise-nav-icon">
+              <IconSignOut />
+            </span>
+            <span className="enterprise-nav-label">Sign out</span>
           </button>
         </div>
       </aside>
@@ -347,9 +412,4 @@ export function EnterpriseLayout({
       </div>
     </div>
   );
-}
-
-function formatRole(role: string): string {
-  const r = role.replace(/_/g, " ");
-  return r.replace(/\b\w/g, (c) => c.toUpperCase());
 }

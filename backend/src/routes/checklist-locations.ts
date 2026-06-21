@@ -9,6 +9,7 @@ import {
   startOfTodayUtc,
   teamHasChecklistPlan,
 } from "../lib/checklist-locations";
+import { parseChecklistCardColor } from "../lib/checklist-card-colors";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -54,31 +55,40 @@ function parseChecklistItemRows(rawItems: unknown[]) {
         typeof (row as { category?: unknown }).category === "string"
           ? (row as { category: string }).category.trim().slice(0, 80)
           : "";
-      return { title, category: categoryRaw || null, sortOrder: idx };
+      const noteRaw =
+        typeof (row as { note?: unknown }).note === "string"
+          ? (row as { note: string }).note.trim().slice(0, 280)
+          : "";
+      return { title, note: noteRaw || null, category: categoryRaw || null, sortOrder: idx };
     })
-    .filter((x): x is { title: string; category: string | null; sortOrder: number } => x !== null);
+    .filter((x): x is { title: string; note: string | null; category: string | null; sortOrder: number } => x !== null);
 }
 
 function serializeLocationRow(
   location: {
     id: string;
     name: string;
+    description?: string | null;
+    cardColor?: string | null;
     isActive: boolean;
     createdAt: Date;
     updatedAt: Date;
-    items: { id: string; title: string; category: string | null; sortOrder: number }[];
+    items: { id: string; title: string; note: string | null; category: string | null; sortOrder: number }[];
   },
   stats?: { lastSubmittedAt: Date | null; todayCount: number; recentPartialCount: number },
 ) {
   return {
     id: location.id,
     name: location.name,
+    description: location.description ?? null,
+    cardColor: location.cardColor ?? null,
     isActive: location.isActive,
     createdAt: location.createdAt.toISOString(),
     updatedAt: location.updatedAt.toISOString(),
     items: location.items.map((i) => ({
       id: i.id,
       title: i.title,
+      note: i.note ?? null,
       category: i.category,
       sortOrder: i.sortOrder,
     })),
@@ -172,9 +182,15 @@ checklistLocationsRouter.post("/", async (c) => {
     return c.json({ error: { message: "Upgrade to Team or Pro to use location checklists", code: "PLAN_REQUIRED" } }, 403);
   }
 
-  const body = (await c.req.json().catch(() => ({}))) as { name?: unknown; items?: unknown };
+  const body = (await c.req.json().catch(() => ({}))) as { name?: unknown; description?: unknown; cardColor?: unknown; items?: unknown };
   const name = typeof body.name === "string" ? body.name.trim() : "";
   if (!name) return c.json({ error: { message: "Checklist name is required" } }, 400);
+  const description =
+    typeof body.description === "string" && body.description.trim() ? body.description.trim() : null;
+  const cardColor = parseChecklistCardColor(body.cardColor);
+  if (body.cardColor !== undefined && cardColor === undefined) {
+    return c.json({ error: { message: "Invalid card color" } }, 400);
+  }
 
   const rawItems = Array.isArray(body.items) ? body.items : [];
   const items = parseChecklistItemRows(rawItems);
@@ -185,7 +201,9 @@ checklistLocationsRouter.post("/", async (c) => {
     data: {
       teamId: ctx.teamId,
       name,
-      items: { create: items.map((i) => ({ title: i.title, category: i.category, sortOrder: i.sortOrder })) },
+      description,
+      cardColor: cardColor ?? null,
+      items: { create: items.map((i) => ({ title: i.title, note: i.note, category: i.category, sortOrder: i.sortOrder })) },
     },
     include: { items: { orderBy: { sortOrder: "asc" } } },
   });
@@ -228,9 +246,17 @@ checklistLocationsRouter.patch("/:locationId", async (c) => {
   });
   if (!existing) return c.json({ error: { message: "Not found" } }, 404);
 
-  const body = (await c.req.json().catch(() => ({}))) as { name?: unknown; isActive?: unknown };
-  const data: { name?: string; isActive?: boolean } = {};
+  const body = (await c.req.json().catch(() => ({}))) as { name?: unknown; description?: unknown; cardColor?: unknown; isActive?: unknown };
+  const data: { name?: string; description?: string | null; cardColor?: string | null; isActive?: boolean } = {};
   if (typeof body.name === "string" && body.name.trim()) data.name = body.name.trim();
+  if (body.description !== undefined) {
+    data.description = typeof body.description === "string" && body.description.trim() ? body.description.trim() : null;
+  }
+  if (body.cardColor !== undefined) {
+    const cardColor = parseChecklistCardColor(body.cardColor);
+    if (cardColor === undefined) return c.json({ error: { message: "Invalid card color" } }, 400);
+    data.cardColor = cardColor;
+  }
   if (typeof body.isActive === "boolean") data.isActive = body.isActive;
   if (Object.keys(data).length === 0) return c.json({ error: { message: "No changes provided" } }, 400);
 
@@ -261,7 +287,7 @@ checklistLocationsRouter.put("/:locationId/items", async (c) => {
   const location = await prisma.$transaction(async (tx) => {
     await tx.checklistLocationItem.deleteMany({ where: { locationId } });
     await tx.checklistLocationItem.createMany({
-      data: items.map((i) => ({ locationId, title: i.title, category: i.category, sortOrder: i.sortOrder })),
+      data: items.map((i) => ({ locationId, title: i.title, note: i.note, category: i.category, sortOrder: i.sortOrder })),
     });
     return tx.checklistLocation.findUniqueOrThrow({
       where: { id: locationId },

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { AlenioGoLogo } from "../../AlenioGoLogo";
 import { ChecklistKioskTaskRow } from "./ChecklistKioskTaskRow";
 import type { KioskTab, KioskTaskItem, KioskTaskState } from "./checklist-kiosk-types";
@@ -19,7 +20,10 @@ type Props = {
   submitted?: boolean;
   onSignerChange?: (itemId: string, name: string) => void;
   onSignOff?: (itemId: string) => void;
+  onUnsign?: (itemId: string) => void;
   onRestart?: () => void;
+  backHref?: string;
+  backLabel?: string;
 };
 
 function useKioskClock(): Date {
@@ -47,7 +51,10 @@ export function ChecklistKioskApp({
   submitted = false,
   onSignerChange,
   onSignOff,
+  onUnsign,
   onRestart,
+  backHref,
+  backLabel = "All checklists",
 }: Props) {
   const [tab, setTab] = useState<KioskTab>("today");
   const readOnly = mode === "preview";
@@ -62,55 +69,66 @@ export function ChecklistKioskApp({
       return <p className="kiosk-app-empty">{emptyMessage}</p>;
     }
     return (
-      <ul className="kiosk-task-list">
-        {list.map((item) => {
+      <div className="kiosk-task-panel">
+        <div className="kiosk-task-panel__head" aria-hidden>
+          <span className="kiosk-task-panel__col-num">#</span>
+          <span className="kiosk-task-panel__col-check" />
+          <span className="kiosk-task-panel__col-task">Task</span>
+          <span className="kiosk-task-panel__col-sign">Sign-off</span>
+        </div>
+        <ul className="kiosk-task-list">
+        {list.map((item, idx) => {
           const state = tasks[item.id] ?? { signed: false, signerName: "", signedAt: null };
           return (
             <ChecklistKioskTaskRow
               key={item.id}
+              index={idx + 1}
               item={item}
               locationName={locationName}
               state={state}
               readOnly={readOnly}
               onSignerChange={(name) => onSignerChange?.(item.id, name)}
               onSignOff={() => onSignOff?.(item.id)}
+              onUnsign={() => onUnsign?.(item.id)}
               error={!state.signed && taskError && taskErrorItemId === item.id ? taskError : null}
             />
           );
         })}
-      </ul>
+        </ul>
+      </div>
     );
   };
 
-  const locationLine =
-    teamName && locationName && teamName !== locationName
-      ? `${teamName} — ${locationName}`
-      : locationName || teamName;
+  const clockLabel = `${now.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })} · ${now.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}`;
 
   return (
     <div className={`kiosk-app${mode === "preview" ? " kiosk-app--preview" : ""}`} data-testid="checklist-kiosk-app">
-      <header className="kiosk-app-header">
-        <div className="kiosk-app-header__top">
-          <AlenioGoLogo variant="header" className="kiosk-app-header__go-logo" />
-          <div className="kiosk-app-header__workspace-pill">
-            {teamImage ? <img src={teamImage} alt="" className="kiosk-app-header__pill-avatar" /> : null}
-            <span>{loading ? "…" : teamName}</span>
-          </div>
-          <div className="kiosk-app-header__clock">
-            <div className="kiosk-app-header__time">
-              {now.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}
-            </div>
-            <div className="kiosk-app-header__date">
-              {now.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
+      <header className="kiosk-app-header kiosk-app-header--checklist">
+        {backHref ? (
+          <Link to={backHref} className="kiosk-app-header__back">
+            ← {backLabel}
+          </Link>
+        ) : null}
+        <div className="kiosk-app-header__brand-row">
+          <AlenioGoLogo variant="page" className="kiosk-app-header__go-logo kiosk-app-header__go-logo--page" />
+          <div className="kiosk-app-header__meta">
+            <p className="kiosk-app-header__clock kiosk-app-header__clock--compact" aria-label="Current date and time">
+              {clockLabel}
+            </p>
+            <div className="kiosk-app-header__workspace-pill">
+              {teamImage ? (
+                <img src={teamImage} alt="" className="kiosk-app-header__pill-avatar" />
+              ) : (
+                <span className="kiosk-app-header__pill-fallback" aria-hidden>
+                  {(teamName || "W").charAt(0).toUpperCase()}
+                </span>
+              )}
+              <span>{loading ? "…" : teamName || "Workspace"}</span>
             </div>
           </div>
         </div>
-
-        <p className="kiosk-app-header__location">
-          <span aria-hidden>📍</span> {loading ? "Loading…" : locationLine}
-        </p>
-        <h1 className="kiosk-app-header__title">Today&apos;s Checklist</h1>
-        <p className="kiosk-app-header__subtitle">Complete all tasks below. Thank you!</p>
+        <h1 className="kiosk-app-header__title">{loading ? "Loading…" : locationName || "Checklist"}</h1>
+        <p className="kiosk-app-header__subtitle">Sign off each task below when complete.</p>
       </header>
 
       <main className="kiosk-app-main">
@@ -184,6 +202,7 @@ export function ChecklistKioskApp({
                   <ol>
                     <li>Enter your initials or name on the right of each task.</li>
                     <li>Tap Sign Off to mark the task complete.</li>
+                    <li>Tap Undo to mark a task incomplete again.</li>
                     <li>Completed tasks turn gray and save automatically.</li>
                     <li>The full checklist submits when every task is done.</li>
                   </ol>

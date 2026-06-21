@@ -1,20 +1,28 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
 import { AlenioGoLogo } from "../components/AlenioGoLogo";
 import { LocationChecklistsSection } from "../components/checklists/LocationChecklistsSection";
 import { useEnterpriseShell } from "../contexts/EnterpriseShellContext";
 
 export function AlenioGoPage() {
-  const { teams, selectedTeamId } = useEnterpriseShell();
+  const [params] = useSearchParams();
+  const teamIdFromUrl = params.get("teamId")?.trim() ?? "";
+  const { teams, selectedTeamId, setSelectedTeamId } = useEnterpriseShell();
 
-  const selectedTeam = useMemo(
-    () => teams?.find((t) => t.id === selectedTeamId) ?? null,
-    [teams, selectedTeamId],
-  );
+  useEffect(() => {
+    if (!teams?.length) return;
+    if (teamIdFromUrl && teams.some((t) => t.id === teamIdFromUrl) && teamIdFromUrl !== selectedTeamId) {
+      setSelectedTeamId(teamIdFromUrl);
+    }
+  }, [teams, teamIdFromUrl, selectedTeamId, setSelectedTeamId]);
+
+  const teamId = teamIdFromUrl || selectedTeamId;
+  const selectedTeam = useMemo(() => teams?.find((t) => t.id === teamId) ?? null, [teams, teamId]);
   const myRole = selectedTeam?.role ?? "";
 
-  if (!selectedTeamId) {
+  if (!teamId) {
     return (
-      <div className="enterprise-tab-shell">
+      <div className="enterprise-tab-shell enterprise-go-page">
         <p className="enterprise-muted">Select a workspace to manage checklists.</p>
       </div>
     );
@@ -22,13 +30,15 @@ export function AlenioGoPage() {
 
   return (
     <div className="enterprise-tab-shell enterprise-go-page" data-testid="alenio-go-page">
-      <div className="enterprise-go-intro">
+      <header className="enterprise-go-intro">
         <AlenioGoLogo variant="page" />
-        <p className="enterprise-go-intro__sub">
-          iPad checklists for frontline teams — one QR per workspace, no login for associates.
-        </p>
-      </div>
-      <LocationChecklistsSection teamId={selectedTeamId} myRole={myRole} teamName={selectedTeam?.name} />
+      </header>
+      <LocationChecklistsSection
+        teamId={teamId}
+        myRole={myRole}
+        teamName={selectedTeam?.name}
+        teamImage={selectedTeam?.image}
+      />
     </div>
   );
 }

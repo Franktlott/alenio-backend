@@ -39,7 +39,7 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
   const acknowledgedCounts = useTaskStore((s) => s.acknowledgedCounts);
 
   const { data: conversations = [] } = useQuery({
-    queryKey: ["conversations"],
+    queryKey: ["dms"],
     queryFn: () => api.get<Conversation[]>("/api/dms"),
     enabled: !!session?.user,
     refetchInterval: 5000,
@@ -136,7 +136,7 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
     if (!session?.user) return;
     if (routeName === "chat") {
       void queryClient.prefetchQuery({
-        queryKey: ["conversations"],
+        queryKey: ["dms"],
         queryFn: () => api.get<Conversation[]>("/api/dms"),
       });
       return;

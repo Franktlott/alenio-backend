@@ -27,6 +27,8 @@ import { NoTeamPlaceholder } from "@/components/NoTeamPlaceholder";
 import { useDemoMode } from "@/lib/useDemo";
 import { useSubscriptionStore } from "@/lib/state/subscription-store";
 import { PAYWALL_BODY, PAYWALL_TITLE } from "@/lib/plan-access-copy";
+import { dmOtherParticipant, resolveUserImageUrl } from "@/lib/user-avatar";
+import { UserAvatar } from "@/components/UserAvatar";
 
 const PINNED_DMS_KEY = "pinned_dms";
 
@@ -281,11 +283,10 @@ export default function ChatScreen() {
           conversations.map((conv) => {
             const unreadCount = dmUnreadCounts[`conv:${conv.id}`] ?? 0;
             const isGroup = conv.isGroup;
+            const otherUser = !isGroup ? dmOtherParticipant(conv, session?.user?.id ?? "") : null;
             const displayName = isGroup
-              ? (conv.name ?? conv.participants?.map((p) => p.name ?? "").join(", ") ?? "Group")
-              : (conv.recipient?.name ?? "Unknown");
-            const avatarImage = isGroup ? null : (conv.recipient?.image ?? null);
-            const avatarInitial = displayName[0]?.toUpperCase() ?? "?";
+              ? (conv.name ?? conv.participants?.map((p) => p.name ?? "").filter(Boolean).join(", ") ?? "Group")
+              : (otherUser?.name?.trim() || otherUser?.email?.trim() || "Direct Message");
             const lastMsg = conv.lastMessage;
             const timeStr = lastMsg ? formatTime(lastMsg.createdAt) : (conv.updatedAt ? formatTime(conv.updatedAt) : "");
 
@@ -293,7 +294,17 @@ export default function ChatScreen() {
               <Pressable
                 key={conv.id}
                 testID={`dm-card-${conv.id}`}
-                onPress={() => router.push({ pathname: "/dm-chat", params: { conversationId: conv.id } })}
+                onPress={() =>
+                  router.push({
+                    pathname: "/dm-chat",
+                    params: {
+                      conversationId: conv.id,
+                      recipientName: displayName,
+                      recipientImage: resolveUserImageUrl(otherUser?.image) ?? "",
+                      isGroup: isGroup ? "true" : "false",
+                    },
+                  })
+                }
                 style={{ marginHorizontal: 16, marginBottom: 10, backgroundColor: "white", borderRadius: 20, padding: 14, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 6, shadowOffset: { width: 0, height: 1 }, elevation: 1 }}
               >
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
@@ -302,11 +313,18 @@ export default function ChatScreen() {
                     <View style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: "#F5F3FF", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                       <Users size={22} color="#7C3AED" />
                     </View>
-                  ) : avatarImage ? (
-                    <Image source={{ uri: avatarImage }} style={{ width: 48, height: 48, borderRadius: 14 }} />
+                  ) : otherUser ? (
+                    <UserAvatar
+                      user={otherUser}
+                      size={48}
+                      radius={14}
+                      backgroundColor="#EEF2FF"
+                      textColor="#4361EE"
+                      fontSize={18}
+                    />
                   ) : (
                     <View style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: "#EEF2FF", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                      <Text style={{ fontSize: 18, fontWeight: "700", color: "#4361EE" }}>{avatarInitial}</Text>
+                      <MessageCircle size={22} color="#4361EE" />
                     </View>
                   )}
 

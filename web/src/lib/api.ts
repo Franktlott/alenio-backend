@@ -1714,6 +1714,7 @@ export function deleteDevelopmentGoal(teamId: string, memberUserId: string, goal
 export type ChecklistLocationItemRow = {
   id: string;
   title: string;
+  note?: string | null;
   category: string | null;
   sortOrder: number;
 };
@@ -1721,6 +1722,8 @@ export type ChecklistLocationItemRow = {
 export type ChecklistLocationRow = {
   id: string;
   name: string;
+  description: string | null;
+  cardColor: string | null;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -1758,7 +1761,12 @@ export function fetchChecklistLocations(teamId: string) {
 
 export function createChecklistLocation(
   teamId: string,
-  body: { name: string; items: { title: string; category?: string | null }[] },
+  body: {
+    name: string;
+    description?: string | null;
+    cardColor?: string | null;
+    items: { title: string; note?: string | null; category?: string | null }[];
+  },
 ) {
   return apiPostJson<{ data: ChecklistLocationRow }>(
     `/web/api/teams/${encodeURIComponent(teamId)}/checklist-locations`,
@@ -1769,7 +1777,7 @@ export function createChecklistLocation(
 export function updateChecklistLocation(
   teamId: string,
   locationId: string,
-  body: { name?: string; isActive?: boolean },
+  body: { name?: string; description?: string | null; cardColor?: string | null; isActive?: boolean },
 ) {
   return apiPatchJson<{ data: ChecklistLocationRow }>(
     `/web/api/teams/${encodeURIComponent(teamId)}/checklist-locations/${encodeURIComponent(locationId)}`,
@@ -1780,7 +1788,7 @@ export function updateChecklistLocation(
 export function replaceChecklistLocationItems(
   teamId: string,
   locationId: string,
-  items: { title: string; category?: string | null }[],
+  items: { title: string; note?: string | null; category?: string | null }[],
 ) {
   return apiRequest<{ data: ChecklistLocationRow }>(
     `/web/api/teams/${encodeURIComponent(teamId)}/checklist-locations/${encodeURIComponent(locationId)}/items`,
@@ -1812,7 +1820,7 @@ export function fetchChecklistLocationSubmissions(
 
 export type PublicChecklistHubPayload = {
   team: { name: string; image: string | null };
-  checklists: { id: string; name: string; taskCount: number; categories: (string | null)[] }[];
+  checklists: { id: string; name: string; cardColor: string | null; taskCount: number; categories: (string | null)[] }[];
 };
 
 export type PublicChecklistPayload = {

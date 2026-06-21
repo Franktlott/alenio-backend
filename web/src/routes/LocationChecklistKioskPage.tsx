@@ -1,8 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { ChecklistKioskApp } from "../components/checklists/kiosk/ChecklistKioskApp";
 import { KioskInstallBar } from "../components/checklists/kiosk/KioskInstallBar";
 import type { KioskTaskItem, KioskTaskState } from "../components/checklists/kiosk/checklist-kiosk-types";
+import {
+  clearKioskProgress,
+  loadKioskProgress,
+  mergeKioskProgress,
+  saveKioskProgress,
+} from "../lib/kiosk-checklist-progress";
 import {
   fetchPublicChecklistByHub,
   fetchPublicChecklistByToken,
@@ -60,13 +66,14 @@ export function LocationChecklistKioskPage({ legacyToken: legacyTokenProp }: Pro
       const mapped = data.items.map((i) => ({
         id: i.id,
         title: i.title,
+        note: i.note ?? null,
         category: i.category ?? null,
         sortOrder: i.sortOrder,
       }));
       setItems(mapped);
-      setTasks(
-        Object.fromEntries(mapped.map((i) => [i.id, { signed: false, signerName: "", signedAt: null }])),
-      );
+      const itemIds = mapped.map((i) => i.id);
+      const stored = !isLegacy && checklistId ? loadKioskProgress(hubToken, checklistId) : null;
+      setTasks(mergeKioskProgress(itemIds, stored));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Checklist not found.");
       setChecklistName("");
@@ -81,6 +88,11 @@ export function LocationChecklistKioskPage({ legacyToken: legacyTokenProp }: Pro
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (isLegacy || !hubToken || !checklistId || loading || submitted) return;
+    saveKioskProgress(hubToken, checklistId, tasks);
+  }, [tasks, hubToken, checklistId, isLegacy, loading, submitted]);
 
   const signedCount = useMemo(
     () => items.filter((i) => tasks[i.id]?.signed).length,
@@ -105,6 +117,22 @@ export function LocationChecklistKioskPage({ legacyToken: legacyTokenProp }: Pro
     }));
   };
 
+  const unsignTask = (itemId: string) => {
+    if (!tasks[itemId]?.signed) return;
+    autoSubmitStarted.current = false;
+    setTaskError(null);
+    setTaskErrorItemId(null);
+    setError(null);
+    setTasks((prev) => ({
+      ...prev,
+      [itemId]: {
+        signed: false,
+        signerName: prev[itemId]?.signerName ?? "",
+        signedAt: null,
+      },
+    }));
+  };
+
   const submitChecklist = useCallback(async () => {
     if (!hubToken || !allSigned || submitting) return;
     setSubmitting(true);
@@ -124,6 +152,7 @@ export function LocationChecklistKioskPage({ legacyToken: legacyTokenProp }: Pro
         await submitPublicChecklist(hubToken, checklistId, body);
       }
       setSubmitted(true);
+      if (!isLegacy && checklistId) clearKioskProgress(hubToken, checklistId);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not complete checklist.");
       autoSubmitStarted.current = false;
@@ -151,13 +180,6 @@ export function LocationChecklistKioskPage({ legacyToken: legacyTokenProp }: Pro
 
   return (
     <div className="kiosk-app-page" data-testid="checklist-kiosk-page">
-      {backHref ? (
-        <div className="kiosk-checklist-back-wrap">
-          <Link to={backHref} className="kiosk-checklist-back">
-            ← All checklists
-          </Link>
-        </div>
-      ) : null}
       {!loading && !submitted ? (
         <div className="kiosk-install-bar-wrap">
           <KioskInstallBar teamName={teamName || undefined} />
@@ -176,8 +198,10 @@ export function LocationChecklistKioskPage({ legacyToken: legacyTokenProp }: Pro
         taskErrorItemId={taskErrorItemId}
         submitting={submitting}
         submitted={submitted}
+        backHref={backHref}
         onSignerChange={updateSignerName}
         onSignOff={signOffTask}
+        onUnsign={unsignTask}
         onRestart={() => void load()}
       />
     </div>

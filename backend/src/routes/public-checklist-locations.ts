@@ -28,6 +28,7 @@ publicChecklistLocationsRouter.get("/:token", async (c) => {
       items: location.items.map((i) => ({
         id: i.id,
         title: i.title,
+        note: i.note ?? null,
         category: i.category,
         sortOrder: i.sortOrder,
       })),

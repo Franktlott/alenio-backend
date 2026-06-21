@@ -16,6 +16,7 @@ import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
 import { useTeamStore } from "@/lib/state/team-store";
 import type { User, Team } from "@/lib/types";
+import { resolveUserImageUrl } from "@/lib/user-avatar";
 
 export default function NewDMScreen() {
   const { data: session } = useSession();
@@ -37,14 +38,15 @@ export default function NewDMScreen() {
 
   const dmMutation = useMutation({
     mutationFn: (recipientId: string) =>
-      api.post<{ id: string; recipient: { name: string } | null }>("/api/dms/find-or-create", { recipientId }),
+      api.post<{ id: string; recipient: { name: string; image?: string | null } | null }>("/api/dms/find-or-create", { recipientId }),
     onSuccess: (conv) => {
-      queryClient.invalidateQueries({ queryKey: ["conversations"] });
+      queryClient.invalidateQueries({ queryKey: ["dms"] });
       router.replace({
         pathname: "/dm-chat",
         params: {
           conversationId: conv.id,
           recipientName: conv.recipient?.name ?? "Direct Message",
+          recipientImage: resolveUserImageUrl(conv.recipient?.image) ?? "",
           isGroup: "false",
         },
       });
