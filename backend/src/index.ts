@@ -845,7 +845,7 @@ const port = Number(process.env.PORT) || 3000;
 console.log(
   senecaAvailable()
     ? "✅ Seneca coaching assistant enabled"
-    : `⚠️ Seneca disabled — OPENAI_API_KEY missing or invalid (present=${senecaDiagnostics().present}, length=${senecaDiagnostics().length})`,
+    : `⚠️ Seneca disabled — OPENAI_API_KEY missing or invalid (present=${senecaDiagnostics().present}, length=${senecaDiagnostics().length}, openAiRelatedEnvKeyNames=${JSON.stringify(senecaDiagnostics().openAiRelatedEnvKeyNames)}, railwayService=${senecaDiagnostics().railwayService ?? "n/a"})`,
 );
 
 export default {

@@ -11,20 +11,53 @@ Guidelines:
 - When generating suggestions, make them specific to the team member when context allows.
 - Output valid JSON only when asked for JSON.`;
 
-function resolveOpenAiKey(): string {
-  const raw = (process.env.OPENAI_API_KEY ?? env.OPENAI_API_KEY)?.trim() ?? "";
-  if (!raw) return "";
+const OPENAI_ENV_CANDIDATES = [
+  "OPENAI_API_KEY",
+  "OPENAI_KEY",
+  "OPEN_AI_API_KEY",
+  "SENECA_OPENAI_API_KEY",
+] as const;
+
+function normalizeOpenAiKey(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return "";
   // Railway paste sometimes includes wrapping quotes or accidental line breaks.
-  return raw.replace(/^["']|["']$/g, "").replace(/\s+/g, "");
+  return trimmed.replace(/^["']|["']$/g, "").replace(/\s+/g, "");
+}
+
+function resolveOpenAiKeySource(): { key: string; sourceVar: string | null } {
+  for (const name of OPENAI_ENV_CANDIDATES) {
+    const fromProcess = process.env[name];
+    const fromEnv = name === "OPENAI_API_KEY" ? env.OPENAI_API_KEY : undefined;
+    const raw = fromProcess ?? fromEnv ?? "";
+    const key = normalizeOpenAiKey(raw);
+    if (key) return { key, sourceVar: name };
+  }
+  return { key: "", sourceVar: null };
+}
+
+function resolveOpenAiKey(): string {
+  return resolveOpenAiKeySource().key;
 }
 
 export function senecaDiagnostics() {
-  const raw = process.env.OPENAI_API_KEY ?? env.OPENAI_API_KEY ?? "";
-  const normalized = resolveOpenAiKey();
+  const { key, sourceVar } = resolveOpenAiKeySource();
+  const raw =
+    sourceVar != null
+      ? (process.env[sourceVar] ?? (sourceVar === "OPENAI_API_KEY" ? env.OPENAI_API_KEY : undefined) ?? "")
+      : "";
+  const openAiEnvKeys = OPENAI_ENV_CANDIDATES.filter((name) => Boolean(process.env[name]?.trim()));
+  const openAiRelatedEnvKeyNames = Object.keys(process.env).filter((name) => /openai/i.test(name));
   return {
     present: Boolean(raw),
     length: raw.length,
-    validFormat: normalized.startsWith("sk-") && normalized.length > 20,
+    validFormat: key.startsWith("sk-") && key.length > 20,
+    sourceVar,
+    openAiEnvKeys,
+    openAiRelatedEnvKeyNames,
+    railwayService: process.env.RAILWAY_SERVICE_NAME ?? null,
+    railwayEnvironment: process.env.RAILWAY_ENVIRONMENT ?? null,
+    railwayDeploymentId: process.env.RAILWAY_DEPLOYMENT_ID ?? null,
   };
 }
 
