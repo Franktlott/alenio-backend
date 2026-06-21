@@ -4,7 +4,7 @@ import { authGuard } from "../middleware/auth-guard";
 import { prisma } from "../prisma";
 import {
   canManageLocationChecklists,
-  generateChecklistPublicToken,
+  ensureTeamChecklistHubToken,
   getTeamMembership,
   startOfTodayUtc,
   teamHasChecklistPlan,
@@ -44,26 +44,44 @@ async function requirePlan(teamId: string) {
   return true;
 }
 
+function parseChecklistItemRows(rawItems: unknown[]) {
+  return rawItems
+    .map((row, idx) => {
+      if (!row || typeof row !== "object") return null;
+      const title = typeof (row as { title?: unknown }).title === "string" ? (row as { title: string }).title.trim() : "";
+      if (!title) return null;
+      const categoryRaw =
+        typeof (row as { category?: unknown }).category === "string"
+          ? (row as { category: string }).category.trim().slice(0, 80)
+          : "";
+      return { title, category: categoryRaw || null, sortOrder: idx };
+    })
+    .filter((x): x is { title: string; category: string | null; sortOrder: number } => x !== null);
+}
+
 function serializeLocationRow(
   location: {
     id: string;
     name: string;
-    publicToken: string;
     isActive: boolean;
     createdAt: Date;
     updatedAt: Date;
-    items: { id: string; title: string; sortOrder: number }[];
+    items: { id: string; title: string; category: string | null; sortOrder: number }[];
   },
   stats?: { lastSubmittedAt: Date | null; todayCount: number; recentPartialCount: number },
 ) {
   return {
     id: location.id,
     name: location.name,
-    publicToken: location.publicToken,
     isActive: location.isActive,
     createdAt: location.createdAt.toISOString(),
     updatedAt: location.updatedAt.toISOString(),
-    items: location.items.map((i) => ({ id: i.id, title: i.title, sortOrder: i.sortOrder })),
+    items: location.items.map((i) => ({
+      id: i.id,
+      title: i.title,
+      category: i.category,
+      sortOrder: i.sortOrder,
+    })),
     stats: {
       lastSubmittedAt: stats?.lastSubmittedAt?.toISOString() ?? null,
       todayCount: stats?.todayCount ?? 0,
@@ -102,8 +120,10 @@ checklistLocationsRouter.get("/", async (c) => {
 
   const hasPlan = await requirePlan(ctx.teamId);
   if (!hasPlan) {
-    return c.json({ data: { locations: [], planRequired: true } });
+    return c.json({ data: { locations: [], planRequired: true, hubToken: null } });
   }
+
+  const hubToken = await ensureTeamChecklistHubToken(ctx.teamId);
 
   const locations = await prisma.checklistLocation.findMany({
     where: { teamId: ctx.teamId },
@@ -122,6 +142,7 @@ checklistLocationsRouter.get("/", async (c) => {
   return c.json({
     data: {
       planRequired: false,
+      hubToken,
       locations: locations.map((l) =>
         serializeLocationRow(l, {
           lastSubmittedAt: statsMap.get(l.id)?.lastSubmittedAt ?? null,
@@ -153,26 +174,18 @@ checklistLocationsRouter.post("/", async (c) => {
 
   const body = (await c.req.json().catch(() => ({}))) as { name?: unknown; items?: unknown };
   const name = typeof body.name === "string" ? body.name.trim() : "";
-  if (!name) return c.json({ error: { message: "Location name is required" } }, 400);
+  if (!name) return c.json({ error: { message: "Checklist name is required" } }, 400);
 
   const rawItems = Array.isArray(body.items) ? body.items : [];
-  const items = rawItems
-    .map((row, idx) => {
-      if (!row || typeof row !== "object") return null;
-      const title = typeof (row as { title?: unknown }).title === "string" ? (row as { title: string }).title.trim() : "";
-      if (!title) return null;
-      return { title, sortOrder: idx };
-    })
-    .filter((x): x is { title: string; sortOrder: number } => x !== null);
+  const items = parseChecklistItemRows(rawItems);
 
-  if (items.length === 0) return c.json({ error: { message: "Add at least one checklist item" } }, 400);
+  await ensureTeamChecklistHubToken(ctx.teamId);
 
   const location = await prisma.checklistLocation.create({
     data: {
       teamId: ctx.teamId,
       name,
-      publicToken: generateChecklistPublicToken(),
-      items: { create: items },
+      items: { create: items.map((i) => ({ title: i.title, category: i.category, sortOrder: i.sortOrder })) },
     },
     include: { items: { orderBy: { sortOrder: "asc" } } },
   });
@@ -243,21 +256,12 @@ checklistLocationsRouter.put("/:locationId/items", async (c) => {
 
   const body = (await c.req.json().catch(() => ({}))) as { items?: unknown };
   const rawItems = Array.isArray(body.items) ? body.items : [];
-  const items = rawItems
-    .map((row, idx) => {
-      if (!row || typeof row !== "object") return null;
-      const title = typeof (row as { title?: unknown }).title === "string" ? (row as { title: string }).title.trim() : "";
-      if (!title) return null;
-      return { title, sortOrder: idx };
-    })
-    .filter((x): x is { title: string; sortOrder: number } => x !== null);
-
-  if (items.length === 0) return c.json({ error: { message: "Add at least one checklist item" } }, 400);
+  const items = parseChecklistItemRows(rawItems);
 
   const location = await prisma.$transaction(async (tx) => {
     await tx.checklistLocationItem.deleteMany({ where: { locationId } });
     await tx.checklistLocationItem.createMany({
-      data: items.map((i) => ({ locationId, title: i.title, sortOrder: i.sortOrder })),
+      data: items.map((i) => ({ locationId, title: i.title, category: i.category, sortOrder: i.sortOrder })),
     });
     return tx.checklistLocation.findUniqueOrThrow({
       where: { id: locationId },

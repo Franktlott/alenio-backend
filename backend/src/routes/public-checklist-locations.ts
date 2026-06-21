@@ -25,7 +25,12 @@ publicChecklistLocationsRouter.get("/:token", async (c) => {
         name: location.team.name,
         image: location.team.image,
       },
-      items: location.items.map((i) => ({ id: i.id, title: i.title, sortOrder: i.sortOrder })),
+      items: location.items.map((i) => ({
+        id: i.id,
+        title: i.title,
+        category: i.category,
+        sortOrder: i.sortOrder,
+      })),
     },
   });
 });
@@ -52,11 +57,15 @@ publicChecklistLocationsRouter.post("/:token/submissions", async (c) => {
 
   const rawResponses = Array.isArray(body.responses) ? body.responses : [];
   const responses: ChecklistResponseItem[] = rawResponses
-    .filter((r): r is { itemId: unknown; checked: unknown; signerName?: unknown } => !!r && typeof r === "object")
+    .filter(
+      (r): r is { itemId: unknown; checked: unknown; signerName?: unknown; signedAt?: unknown } =>
+        !!r && typeof r === "object",
+    )
     .map((r) => ({
       itemId: String(r.itemId),
       checked: !!r.checked,
       signerName: normalizeSignerName(r.signerName),
+      signedAt: typeof r.signedAt === "string" && r.signedAt.trim() ? r.signedAt.trim() : null,
     }));
 
   const validationError = validateSignedResponses(location.items, responses);

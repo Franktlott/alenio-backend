@@ -116,6 +116,8 @@ model Team {
   developmentGoals DevelopmentGoal[]
   recurrenceSeries RecurrenceSeries[]
   checklistLocations ChecklistLocation[]
+  /** Public token for the workspace checklist hub (one QR per workspace). */
+  checklistHubToken String? @unique
 }
 
 model TeamSubscription {
@@ -572,7 +574,8 @@ model ChecklistLocation {
   id          String   @id @default(cuid())
   teamId      String
   name        String
-  publicToken String   @unique
+  /** @deprecated Legacy per-checklist token; use Team.checklistHubToken */
+  publicToken String?  @unique
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -587,6 +590,7 @@ model ChecklistLocationItem {
   id         String            @id @default(cuid())
   locationId String
   title      String
+  category   String?
   sortOrder  Int               @default(0)
   location   ChecklistLocation @relation(fields: [locationId], references: [id], onDelete: Cascade)
 

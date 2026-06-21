@@ -1714,13 +1714,13 @@ export function deleteDevelopmentGoal(teamId: string, memberUserId: string, goal
 export type ChecklistLocationItemRow = {
   id: string;
   title: string;
+  category: string | null;
   sortOrder: number;
 };
 
 export type ChecklistLocationRow = {
   id: string;
   name: string;
-  publicToken: string;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -1745,6 +1745,7 @@ export type ChecklistSubmissionRow = {
 
 export type ChecklistLocationsPayload = {
   planRequired: boolean;
+  hubToken: string | null;
   locations: ChecklistLocationRow[];
   recentSubmissions: ChecklistSubmissionRow[];
 };
@@ -1755,7 +1756,10 @@ export function fetchChecklistLocations(teamId: string) {
   ).then((r) => r.data);
 }
 
-export function createChecklistLocation(teamId: string, body: { name: string; items: { title: string }[] }) {
+export function createChecklistLocation(
+  teamId: string,
+  body: { name: string; items: { title: string; category?: string | null }[] },
+) {
   return apiPostJson<{ data: ChecklistLocationRow }>(
     `/web/api/teams/${encodeURIComponent(teamId)}/checklist-locations`,
     body,
@@ -1776,7 +1780,7 @@ export function updateChecklistLocation(
 export function replaceChecklistLocationItems(
   teamId: string,
   locationId: string,
-  items: { title: string }[],
+  items: { title: string; category?: string | null }[],
 ) {
   return apiRequest<{ data: ChecklistLocationRow }>(
     `/web/api/teams/${encodeURIComponent(teamId)}/checklist-locations/${encodeURIComponent(locationId)}/items`,
@@ -1806,21 +1810,55 @@ export function fetchChecklistLocationSubmissions(
   );
 }
 
+export type PublicChecklistHubPayload = {
+  team: { name: string; image: string | null };
+  checklists: { id: string; name: string; taskCount: number; categories: (string | null)[] }[];
+};
+
 export type PublicChecklistPayload = {
-  location: { name: string };
+  checklist: { id: string; name: string };
   team?: { name: string; image: string | null };
   items: ChecklistLocationItemRow[];
 };
 
-export function fetchPublicChecklistByToken(token: string) {
-  return apiGetJson<{ data: PublicChecklistPayload }>(
-    `/api/public/checklist-locations/${encodeURIComponent(token)}`,
+export function fetchPublicChecklistHub(hubToken: string) {
+  return apiGetJson<{ data: PublicChecklistHubPayload }>(
+    `/api/public/checklist-hubs/${encodeURIComponent(hubToken)}`,
   ).then((r) => r.data);
 }
 
+export function fetchPublicChecklistByHub(hubToken: string, checklistId: string) {
+  return apiGetJson<{ data: PublicChecklistPayload }>(
+    `/api/public/checklist-hubs/${encodeURIComponent(hubToken)}/checklists/${encodeURIComponent(checklistId)}`,
+  ).then((r) => r.data);
+}
+
+/** @deprecated Legacy single-checklist token URL */
+export function fetchPublicChecklistByToken(token: string) {
+  return apiGetJson<{ data: { location: { name: string }; team?: { name: string; image: string | null }; items: ChecklistLocationItemRow[] } }>(
+    `/api/public/checklist-locations/${encodeURIComponent(token)}`,
+  ).then((r) => ({
+    checklist: { id: "", name: r.data.location.name },
+    team: r.data.team,
+    items: r.data.items,
+  }));
+}
+
 export function submitPublicChecklist(
+  hubToken: string,
+  checklistId: string,
+  body: { submitterName?: string; responses: { itemId: string; checked: boolean; signerName?: string; signedAt?: string }[] },
+) {
+  return apiPostJson<{ data: { id: string; submittedAt: string; isComplete: boolean } }>(
+    `/api/public/checklist-hubs/${encodeURIComponent(hubToken)}/checklists/${encodeURIComponent(checklistId)}/submissions`,
+    body,
+  ).then((r) => r.data);
+}
+
+/** @deprecated Legacy single-checklist token submit */
+export function submitPublicChecklistLegacy(
   token: string,
-  body: { submitterName?: string; responses: { itemId: string; checked: boolean; signerName?: string }[] },
+  body: { submitterName?: string; responses: { itemId: string; checked: boolean; signerName?: string; signedAt?: string }[] },
 ) {
   return apiPostJson<{ data: { id: string; submittedAt: string; isComplete: boolean } }>(
     `/api/public/checklist-locations/${encodeURIComponent(token)}/submissions`,
@@ -1828,9 +1866,21 @@ export function submitPublicChecklist(
   ).then((r) => r.data);
 }
 
-export function checklistPublicUrl(publicToken: string): string {
+export function workspaceChecklistHubUrl(hubToken: string): string {
   if (typeof window !== "undefined") {
-    return `${window.location.origin}/checklist/${publicToken}`;
+    return `${window.location.origin}/checklist/${hubToken}`;
   }
-  return `/checklist/${publicToken}`;
+  return `/checklist/${hubToken}`;
+}
+
+export function workspaceChecklistUrl(hubToken: string, checklistId: string): string {
+  if (typeof window !== "undefined") {
+    return `${window.location.origin}/checklist/${hubToken}/${checklistId}`;
+  }
+  return `/checklist/${hubToken}/${checklistId}`;
+}
+
+/** @deprecated Use workspaceChecklistHubUrl */
+export function checklistPublicUrl(publicToken: string): string {
+  return workspaceChecklistHubUrl(publicToken);
 }

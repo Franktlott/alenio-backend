@@ -1079,7 +1079,7 @@ export function DashboardPage() {
             </div>
           </section>
           {selectedTeamId ? (
-            <LocationChecklistsSection teamId={selectedTeamId} myRole={myRole} />
+            <LocationChecklistsSection teamId={selectedTeamId} myRole={myRole} teamName={selectedTeam?.name} />
           ) : null}
           </div>
         </div>

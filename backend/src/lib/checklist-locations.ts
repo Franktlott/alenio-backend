@@ -21,6 +21,50 @@ export async function getTeamMembership(userId: string, teamId: string) {
   });
 }
 
+export async function ensureTeamChecklistHubToken(teamId: string): Promise<string> {
+  const team = await prisma.team.findUnique({
+    where: { id: teamId },
+    select: { checklistHubToken: true },
+  });
+  if (team?.checklistHubToken) return team.checklistHubToken;
+  const token = generateChecklistPublicToken();
+  await prisma.team.update({
+    where: { id: teamId },
+    data: { checklistHubToken: token },
+  });
+  return token;
+}
+
+export async function findTeamByChecklistHubToken(token: string) {
+  return prisma.team.findFirst({
+    where: { checklistHubToken: token },
+    select: {
+      id: true,
+      name: true,
+      image: true,
+      checklistLocations: {
+        where: { isActive: true },
+        include: { items: { orderBy: { sortOrder: "asc" } } },
+        orderBy: { name: "asc" },
+      },
+    },
+  });
+}
+
+export async function findActiveChecklistInHub(hubToken: string, checklistId: string) {
+  const team = await prisma.team.findFirst({
+    where: { checklistHubToken: hubToken },
+    select: { id: true, name: true, image: true },
+  });
+  if (!team) return null;
+  const location = await prisma.checklistLocation.findFirst({
+    where: { id: checklistId, teamId: team.id, isActive: true },
+    include: { items: { orderBy: { sortOrder: "asc" } } },
+  });
+  if (!location) return null;
+  return { team, location };
+}
+
 export async function findActiveLocationByToken(token: string) {
   return prisma.checklistLocation.findFirst({
     where: { publicToken: token, isActive: true },
@@ -31,7 +75,12 @@ export async function findActiveLocationByToken(token: string) {
   });
 }
 
-export type ChecklistResponseItem = { itemId: string; checked: boolean; signerName?: string | null };
+export type ChecklistResponseItem = {
+  itemId: string;
+  checked: boolean;
+  signerName?: string | null;
+  signedAt?: string | null;
+};
 
 export function normalizeSignerName(value: unknown): string | null {
   if (typeof value !== "string") return null;
@@ -57,6 +106,7 @@ export function buildSubmissionStats(
       itemId: r.itemId,
       checked: !!r.checked,
       signerName: normalizeSignerName(r.signerName),
+      signedAt: typeof r.signedAt === "string" && r.signedAt.trim() ? r.signedAt.trim() : null,
     });
   }
   const normalized = items.map((i) => {
@@ -65,6 +115,7 @@ export function buildSubmissionStats(
       itemId: i.id,
       checked: row?.checked ?? false,
       signerName: row?.signerName ?? null,
+      signedAt: row?.signedAt ?? null,
     };
   });
   const checkedCount = normalized.filter((r) => r.checked).length;
