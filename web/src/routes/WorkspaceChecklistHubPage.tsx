@@ -25,16 +25,16 @@ export function WorkspaceChecklistHubPage() {
       if (e.key?.startsWith("alenio.kioskProgress:")) setProgressTick((n) => n + 1);
     };
     const refresh = () => setProgressTick((n) => n + 1);
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
     window.addEventListener("storage", onStorage);
     window.addEventListener("focus", refresh);
-    document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "visible") refresh();
-    });
-    const clockLabel = `${now.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })} · ${now.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}`;
-
-  return () => {
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
       window.removeEventListener("storage", onStorage);
       window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", onVisibility);
     };
   }, []);
 
