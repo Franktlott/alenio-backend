@@ -1029,7 +1029,7 @@ export function removeTeamMemberApi(teamId: string, userId: string) {
 
 export function setTeamMemberRole(teamId: string, userId: string, role: "member" | "team_leader") {
   return apiPatchJson<{ data: unknown }>(
-    `/api/teams/${encodeURIComponent(teamId)}/members/${encodeURIComponent(userId)}/role`,
+    `/web/api/teams/${encodeURIComponent(teamId)}/members/${encodeURIComponent(userId)}/role`,
     { role },
   );
 }

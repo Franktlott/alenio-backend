@@ -22,6 +22,7 @@ import {
 import { appendLeaderCommentsIfMissing } from "../lib/check-in-leader-comments";
 import {
   countOverdueFollowUpTasks,
+  checkInEditMenuLabel,
   getOneOnOneMeetingStatusFromMeeting,
   oneOnOneMeetingStatusClass,
   oneOnOneMeetingStatusLabel,
@@ -921,7 +922,7 @@ export function OneOnOneHistoryTab({
 
     const fillTitle = editingMeeting
       ? editingMeeting.status === "draft"
-        ? "Draft check-in"
+        ? "Resume editing"
         : "Edit check-in"
       : selectedTemplate.title;
     const fillSubtitle = editingMeeting
@@ -1159,7 +1160,7 @@ export function OneOnOneHistoryTab({
                                 startEdit(meeting);
                               }}
                             >
-                              Edit
+                              {checkInEditMenuLabel(meeting)}
                             </button>
                             <button
                               type="button"

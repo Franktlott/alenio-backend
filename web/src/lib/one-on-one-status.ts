@@ -36,6 +36,16 @@ export function oneOnOneMeetingStatusClass(status: OneOnOneMeetingStatus): strin
   return `enterprise-oneone-status enterprise-oneone-status--${status.replace(/_/g, "-")}`;
 }
 
+/** Action label when reopening a check-in from the list or preview. */
+export function checkInEditActionLabel(meeting: Pick<OneOnOneMeeting, "status">): string {
+  return meeting.status === "draft" ? "Resume editing" : "Edit check-in";
+}
+
+/** Shorter label for row action menus. */
+export function checkInEditMenuLabel(meeting: Pick<OneOnOneMeeting, "status">): string {
+  return meeting.status === "draft" ? "Resume editing" : "Edit";
+}
+
 function isFollowUpTaskOverdue(task: OneOnOneFollowUpTask, todayStart: Date): boolean {
   if (task.status === "done") return false;
   if (!task.dueDate) return false;

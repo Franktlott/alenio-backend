@@ -111,13 +111,31 @@ export default function SignIn() {
         password,
       });
       if (result.error && isEmailNotVerifiedError(result.error)) {
-        const sent = await authClient.emailOtp.sendVerificationOtp({
-          email: emailNorm,
-          type: "email-verification",
+        try {
+          await authClient.emailOtp.sendVerificationOtp({
+            email: emailNorm,
+            type: "email-verification",
+          });
+        } catch {
+          /* still send user to verify screen */
+        }
+        clearAccessToken();
+        markSessionSignedOut(60_000);
+        router.replace({
+          pathname: "/verify-otp",
+          params: inviteToken ? { email: emailNorm, inviteToken } : { email: emailNorm },
         });
-        if (sent.error) {
-          setError(sent.error.message ?? "Could not send verification code. Try again in a moment.");
-          return;
+        return;
+      }
+      const signedInUser = result.data?.user as { emailVerified?: boolean } | undefined;
+      if (!result.error && signedInUser?.emailVerified === false) {
+        try {
+          await authClient.emailOtp.sendVerificationOtp({
+            email: emailNorm,
+            type: "email-verification",
+          });
+        } catch {
+          /* still send user to verify screen */
         }
         clearAccessToken();
         markSessionSignedOut(60_000);

@@ -45,3 +45,13 @@ export function oneOnOneMeetingStatusColors(status: OneOnOneMeetingStatus): {
       return { bg: "#F1F5F9", text: "#64748B" };
   }
 }
+
+/** Action label when reopening a check-in from the list or preview. */
+export function checkInEditActionLabel(meeting: Pick<OneOnOneMeeting, "status">): string {
+  return meeting.status === "draft" ? "Resume editing" : "Edit check-in";
+}
+
+/** Shorter label for row action menus. */
+export function checkInEditMenuLabel(meeting: Pick<OneOnOneMeeting, "status">): string {
+  return meeting.status === "draft" ? "Resume editing" : "Edit";
+}

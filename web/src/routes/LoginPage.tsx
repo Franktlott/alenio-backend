@@ -8,9 +8,11 @@ import {
   setAccessTokenFromAuthData,
 } from "../lib/auth-client";
 import { formatAuthFlowError, isEmailNotVerifiedError } from "../lib/auth-errors";
+import { authErrorMessage, messageLooksLikeResumeSignUp } from "../lib/signup-recovery";
 import { finishPostAuthNavigation, setPendingInviteToken } from "../lib/invite-auth";
 import { isMobileBrowser } from "../lib/mobile-browser";
 import { isJwtExpiredSkew, looksLikeJwt } from "../lib/token";
+import { goToEmailVerification, needsEmailVerification } from "../lib/verify-redirect";
 
 export function LoginPage() {
   const [params] = useSearchParams();
@@ -55,25 +57,34 @@ export function LoginPage() {
     }
     setLoading(true);
     try {
-      const result = await getAuthClient().signIn.email({
-        email: emailNorm,
-        password,
-      });
-      if (result.error && isEmailNotVerifiedError(result.error)) {
-        const sent = await getAuthClient().emailOtp.sendVerificationOtp({
+      let result: Awaited<ReturnType<ReturnType<typeof getAuthClient>["signIn"]["email"]>>;
+      try {
+        result = await getAuthClient().signIn.email({
           email: emailNorm,
-          type: "email-verification",
+          password,
         });
-        if (sent.error) {
-          setError(sent.error.message ?? "Could not send verification email.");
+      } catch (signInErr) {
+        const msg = authErrorMessage(signInErr) || formatAuthFlowError(signInErr);
+        if (isEmailNotVerifiedError(signInErr) || messageLooksLikeResumeSignUp(msg)) {
+          await goToEmailVerification({ email: emailNorm, inviteToken, password });
           return;
         }
-        clearAccessToken();
-        window.location.href = `/verify?email=${encodeURIComponent(emailNorm)}`;
+        throw signInErr;
+      }
+      const signedInUser = (result.data as { user?: { emailVerified?: boolean } } | undefined)?.user;
+      if (needsEmailVerification(result.error, signedInUser)) {
+        await goToEmailVerification({ email: emailNorm, inviteToken, password });
         return;
       }
       if (result.error) {
-        setError(result.error.message ?? "Invalid email or password.");
+        const msg =
+          (typeof result.error.message === "string" ? result.error.message : authErrorMessage(result.error)) ??
+          "Invalid email or password.";
+        if (messageLooksLikeResumeSignUp(msg)) {
+          await goToEmailVerification({ email: emailNorm, inviteToken, password });
+          return;
+        }
+        setError(msg);
         return;
       }
       setAccessTokenFromAuthData(result ?? null);
@@ -86,7 +97,12 @@ export function LoginPage() {
       const dest = await finishPostAuthNavigation();
       window.location.href = dest;
     } catch (err) {
-      setError(formatAuthFlowError(err));
+      const msg = authErrorMessage(err) || formatAuthFlowError(err);
+      if (isEmailNotVerifiedError(err) || messageLooksLikeResumeSignUp(msg)) {
+        await goToEmailVerification({ email: emailNorm, inviteToken, password });
+        return;
+      }
+      setError(msg);
     } finally {
       setLoading(false);
     }

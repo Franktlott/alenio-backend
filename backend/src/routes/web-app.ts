@@ -268,6 +268,40 @@ webRouter.delete("/api/teams/:id/members/:userId", async (c) => {
   return c.json({ data: { ok: true } });
 });
 
+// ── API: change member role (owner only) ─────────────────────────────────────
+webRouter.patch("/api/teams/:id/members/:userId/role", async (c) => {
+  if (!(await getWebSession(c))) return c.json({ error: "Unauthorized" }, 401);
+  const callerId = webPrismaUserIdFromContext(c);
+  if (!callerId) return c.json({ error: "Unauthorized" }, 401);
+  const { id: teamId, userId: targetUserId } = c.req.param();
+  const body = await c.req.json<{ role?: string }>().catch(() => ({}));
+  const role = body.role ?? "";
+
+  if (!["member", "team_leader"].includes(role)) {
+    return c.json({ error: { message: "Invalid role" } }, 400);
+  }
+
+  const caller = await prisma.teamMember.findFirst({ where: { teamId, userId: callerId } });
+  if (!caller || caller.role !== "owner") {
+    return c.json({ error: { message: "Only owners can change roles" } }, 403);
+  }
+
+  const target = await prisma.teamMember.findUnique({
+    where: { userId_teamId: { userId: targetUserId, teamId } },
+  });
+  if (!target) return c.json({ error: { message: "Member not found" } }, 404);
+  if (target.role === "owner") {
+    return c.json({ error: { message: "Cannot change owner role" } }, 403);
+  }
+
+  const updated = await prisma.teamMember.update({
+    where: { userId_teamId: { userId: targetUserId, teamId } },
+    data: { role },
+  });
+
+  return c.json({ data: updated });
+});
+
 // ── API: task by id (any member of task's team) — before `/api/tasks` list
 webRouter.get("/api/tasks/:id", async (c) => {
   if (!(await getWebSession(c))) return c.json({ error: "Unauthorized" }, 401);

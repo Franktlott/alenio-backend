@@ -56,6 +56,30 @@ export function isEmailNotVerifiedError(err: unknown): boolean {
   );
 }
 
+/** Sign-up rejected because a Neon Auth user already exists for this email. */
+export function isEmailAlreadyRegisteredError(err: unknown): boolean {
+  const { code, message } = pickAuthErrorFields(err);
+  const c = (code ?? "").toLowerCase().replace(/-/g, "_");
+  if (
+    c === "user_already_exists" ||
+    c === "email_already_in_use" ||
+    c === "email_already_exists" ||
+    c === "user_already_exists_use_another_email"
+  ) {
+    return true;
+  }
+  const m = (message ?? "").toLowerCase();
+  return (
+    m.includes("already exists") ||
+    m.includes("already in use") ||
+    m.includes("already registered") ||
+    m.includes("already been used") ||
+    m.includes("email is taken") ||
+    m.includes("user already") ||
+    m.includes("email already")
+  );
+}
+
 /**
  * Turns thrown errors from Neon / Better Auth / fetch into user-visible strings.
  */

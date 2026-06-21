@@ -6,11 +6,20 @@ import {
   getAccessToken,
   getAuthClient,
   setAccessTokenFromAuthData,
+  syncBackendUser,
 } from "../lib/auth-client";
 import { formatAuthFlowError, isEmailNotVerifiedError } from "../lib/auth-errors";
+import {
+  authErrorMessage,
+  handleExistingEmailOnSignUp,
+  isExistingEmailSignUpError,
+  messageLooksLikeResumeSignUp,
+} from "../lib/signup-recovery";
 import { isJwtExpiredSkew, looksLikeJwt } from "../lib/token";
 import { finishPostAuthNavigation, setPendingInviteToken } from "../lib/invite-auth";
 import { isMobileBrowser } from "../lib/mobile-browser";
+import { goToEmailVerification } from "../lib/verify-redirect";
+import { setPendingSignUp } from "../lib/pending-signup";
 import { LEGAL_COMPANY_NAME, LEGAL_PARENT_COMPANY_NAME } from "../lib/legal-constants";
 
 export function SignUpPage() {
@@ -65,30 +74,72 @@ export function SignUpPage() {
       setError("Password must be at least 8 characters.");
       return;
     }
-    setLoading(true);
-    try {
-      const result = await getAuthClient().signUp.email({
-        name: nameTrim,
-        email: emailNorm,
-        password,
-      });
-      if (result.error) {
-        if (isEmailNotVerifiedError(result.error)) {
-          const sent = await getAuthClient().emailOtp.sendVerificationOtp({
-            email: emailNorm,
-            type: "email-verification",
-          });
-          if (sent.error) {
-            setError(sent.error.message ?? "Could not send verification email.");
+
+    const finishExistingEmailRecovery = async (knownUnverified: boolean) => {
+      try {
+        const outcome = await handleExistingEmailOnSignUp({
+          email: emailNorm,
+          password,
+          inviteToken,
+          knownUnverified,
+        });
+        if (outcome.kind === "signed-in") {
+          const ready = await ensureWebSessionAndToken();
+          if (!ready) {
+            setError("Account exists but sign-in did not start. Try signing in.");
             return;
           }
-          clearAccessToken();
-          const q = new URLSearchParams({ email: emailNorm });
-          if (inviteToken) q.set("invite", inviteToken);
-          window.location.href = `/verify?${q.toString()}`;
+          const dest = await finishPostAuthNavigation();
+          window.location.href = dest;
           return;
         }
-        setError(result.error.message ?? "Could not create account.");
+        if (outcome.kind === "wrong-password") {
+          setError(
+            "An account with this email already exists. Sign in with your password, or reset it if you forgot.",
+          );
+          return;
+        }
+      } catch (recoveryErr) {
+        const msg = authErrorMessage(recoveryErr) || formatAuthFlowError(recoveryErr);
+        if (isExistingEmailSignUpError(recoveryErr) || messageLooksLikeResumeSignUp(msg)) {
+          setPendingSignUp(emailNorm, password);
+          await goToEmailVerification({ email: emailNorm, inviteToken, password });
+          return;
+        }
+        throw recoveryErr;
+      }
+    };
+
+    setLoading(true);
+    try {
+      let result: Awaited<ReturnType<ReturnType<typeof getAuthClient>["signUp"]["email"]>>;
+      try {
+        result = await getAuthClient().signUp.email({
+          name: nameTrim,
+          email: emailNorm,
+          password,
+        });
+      } catch (signUpErr) {
+        const signUpMsg = authErrorMessage(signUpErr) || formatAuthFlowError(signUpErr);
+        if (isExistingEmailSignUpError(signUpErr) || messageLooksLikeResumeSignUp(signUpMsg)) {
+          await finishExistingEmailRecovery(
+            isEmailNotVerifiedError(signUpErr) || messageLooksLikeResumeSignUp(signUpMsg),
+          );
+          return;
+        }
+        throw signUpErr;
+      }
+
+      if (result.error) {
+        const resultMsg =
+          (typeof result.error.message === "string" ? result.error.message : authErrorMessage(result.error)) ?? "";
+        if (isExistingEmailSignUpError(result.error) || messageLooksLikeResumeSignUp(resultMsg)) {
+          await finishExistingEmailRecovery(
+            isEmailNotVerifiedError(result.error) || messageLooksLikeResumeSignUp(resultMsg),
+          );
+          return;
+        }
+        setError(resultMsg || "Could not create account.");
         return;
       }
 
@@ -97,20 +148,12 @@ export function SignUpPage() {
 
       const createdUser = (result.data as { user?: { emailVerified?: boolean } } | undefined)?.user;
       if (createdUser && createdUser.emailVerified === false) {
-        const sent = await getAuthClient().emailOtp.sendVerificationOtp({
-          email: emailNorm,
-          type: "email-verification",
-        });
-        if (sent.error) {
-          setError(sent.error.message ?? "Could not send verification email.");
-          return;
-        }
-        clearAccessToken();
-        const q = new URLSearchParams({ email: emailNorm });
-        if (inviteToken) q.set("invite", inviteToken);
-        window.location.href = `/verify?${q.toString()}`;
+        setPendingSignUp(emailNorm, password);
+        await goToEmailVerification({ email: emailNorm, inviteToken, attemptSendCode: false, password });
         return;
       }
+
+      await syncBackendUser();
 
       const ready = await ensureWebSessionAndToken();
       if (!ready) {
@@ -120,7 +163,13 @@ export function SignUpPage() {
       const dest = await finishPostAuthNavigation();
       window.location.href = dest;
     } catch (err) {
-      setError(formatAuthFlowError(err));
+      const msg = authErrorMessage(err) || formatAuthFlowError(err);
+      if (isExistingEmailSignUpError(err) || messageLooksLikeResumeSignUp(msg)) {
+        setPendingSignUp(emailNorm, password);
+        await goToEmailVerification({ email: emailNorm, inviteToken, password });
+        return;
+      }
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -151,6 +200,9 @@ export function SignUpPage() {
             <p className="auth-v2-eyebrow">Web sign-up</p>
             <h2 className="auth-heading">Your account</h2>
             <p className="auth-sub">Use a strong password. You&apos;ll confirm your email next if required.</p>
+            <p className="auth-sub" style={{ marginTop: "0.5rem" }}>
+              Already started sign-up? Use the same email and password here — we&apos;ll send you to verification.
+            </p>
           </div>
           <form onSubmit={onSubmit}>
             <label className="auth-label" htmlFor="su-name">
@@ -199,6 +251,17 @@ export function SignUpPage() {
             {error ? (
               <p className="auth-error" data-testid="sign-up-error">
                 {error}
+                {messageLooksLikeResumeSignUp(error) ? (
+                  <>
+                    {" "}
+                    <Link
+                      to={`/verify?email=${encodeURIComponent(email.trim().toLowerCase())}`}
+                      className="auth-v2-inline-link"
+                    >
+                      Enter verification code
+                    </Link>
+                  </>
+                ) : null}
               </p>
             ) : null}
             <button type="submit" className="auth-btn-primary" disabled={loading} data-testid="sign-up-submit">

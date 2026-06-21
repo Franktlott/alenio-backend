@@ -477,8 +477,8 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
     try {
       await setTeamMemberRole(selectedTeamId, memberModal.userId, rolePick);
       setMemberModal(null);
-      await reloadTeamContext();
-      await onTeamsRefresh();
+      void reloadTeamContext();
+      void onTeamsRefresh();
     } catch (e) {
       setTabErr(e instanceof Error ? e.message : "Could not update role.");
     } finally {

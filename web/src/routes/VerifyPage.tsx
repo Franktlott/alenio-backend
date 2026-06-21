@@ -4,9 +4,12 @@ import {
   ensureWebSessionAndToken,
   getAuthClient,
   setAccessTokenFromAuthData,
+  syncBackendUser,
 } from "../lib/auth-client";
 import { formatAuthFlowError } from "../lib/auth-errors";
 import { finishPostAuthNavigation, setPendingInviteToken } from "../lib/invite-auth";
+import { tryFinishSignUpAfterVerify } from "../lib/signup-recovery";
+import { consumeVerifyHint } from "../lib/verify-redirect";
 
 const OTP_MIN = 6;
 const OTP_MAX = 10;
@@ -24,6 +27,11 @@ export function VerifyPage() {
   useEffect(() => {
     if (inviteToken) setPendingInviteToken(inviteToken);
   }, [inviteToken]);
+
+  useEffect(() => {
+    const stored = consumeVerifyHint();
+    if (stored) setHint(stored);
+  }, []);
 
   if (!email) {
     return <Navigate to="/login" replace />;
@@ -57,11 +65,15 @@ export function VerifyPage() {
       }
       setAccessTokenFromAuthData(result ?? null);
       setAccessTokenFromAuthData(result.data ?? null);
-      const sessionReady = await ensureWebSessionAndToken();
+      let sessionReady = await ensureWebSessionAndToken();
+      if (!sessionReady) {
+        sessionReady = await tryFinishSignUpAfterVerify(email);
+      }
       if (!sessionReady) {
         setError("Verified, but session did not start. Try signing in, then open Chat from the sidebar.");
         return;
       }
+      await syncBackendUser();
       const dest = await finishPostAuthNavigation();
       window.location.href = dest;
     } catch (err) {

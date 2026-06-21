@@ -21,7 +21,6 @@ import {
   AlertCircle,
   Clock,
   X,
-  Check,
   Crown,
   Camera,
   Trash2,
@@ -44,6 +43,8 @@ import { router } from "expo-router";
 import type { Team, TeamMember, Task } from "@/lib/types";
 import { NoTeamPlaceholder } from "@/components/NoTeamPlaceholder";
 import { AddMemberModal } from "@/components/AddMemberModal";
+import { PendingInvitesChip, PendingInvitesSheet } from "@/components/PendingInvitesSheet";
+import { PendingJoinRequestsChip, PendingJoinRequestsSheet } from "@/components/PendingJoinRequestsSheet";
 import {
   cancelTeamInvite,
   fetchTeamInvites,
@@ -310,6 +311,8 @@ export default function TeamScreen() {
   const approveMutation = useMutation({
     mutationFn: (requestId: string) =>
       api.post(`/api/teams/${activeTeamId}/join-requests/${requestId}/approve`, {}),
+    onMutate: (requestId) => setJoinRequestActionId(requestId),
+    onSettled: () => setJoinRequestActionId(null),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["team-join-requests", activeTeamId] });
       queryClient.invalidateQueries({ queryKey: ["team", activeTeamId] });
@@ -319,6 +322,8 @@ export default function TeamScreen() {
   const rejectMutation = useMutation({
     mutationFn: (requestId: string) =>
       api.post(`/api/teams/${activeTeamId}/join-requests/${requestId}/reject`, {}),
+    onMutate: (requestId) => setJoinRequestActionId(requestId),
+    onSettled: () => setJoinRequestActionId(null),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["team-join-requests", activeTeamId] }),
   });
 
@@ -331,6 +336,10 @@ export default function TeamScreen() {
 
   const [addMemberOpen, setAddMemberOpen] = useState(false);
   const [addMemberError, setAddMemberError] = useState<string | null>(null);
+  const [pendingInvitesOpen, setPendingInvitesOpen] = useState(false);
+  const [joinRequestsOpen, setJoinRequestsOpen] = useState(false);
+  const [inviteActionId, setInviteActionId] = useState<string | null>(null);
+  const [joinRequestActionId, setJoinRequestActionId] = useState<string | null>(null);
 
   const inviteMemberMutation = useMutation({
     mutationFn: (email: string) => inviteMemberByEmail(activeTeamId!, email),
@@ -359,11 +368,15 @@ export default function TeamScreen() {
 
   const cancelInviteMutation = useMutation({
     mutationFn: (inviteId: string) => cancelTeamInvite(activeTeamId!, inviteId),
+    onMutate: (inviteId) => setInviteActionId(inviteId),
+    onSettled: () => setInviteActionId(null),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["team-invites", activeTeamId] }),
   });
 
   const resendInviteMutation = useMutation({
     mutationFn: (inviteId: string) => resendTeamInvite(activeTeamId!, inviteId),
+    onMutate: (inviteId) => setInviteActionId(inviteId),
+    onSettled: () => setInviteActionId(null),
     onSuccess: () => toast({ title: "Invite resent", preset: "done" }),
     onError: (err: Error) => toast({ title: err.message, preset: "error" }),
   });
@@ -655,151 +668,6 @@ export default function TeamScreen() {
       </View>
 
       <View>
-        {isOwner && incomingRequests.length > 0 ? (
-          <View style={{ marginTop: 12, marginBottom: 4 }}>
-            <Text style={{ paddingHorizontal: 16, fontSize: 11, fontWeight: "700", color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 8 }}>
-              Pending Requests ({incomingRequests.length})
-            </Text>
-            {incomingRequests.map((req) => (
-              <View
-                key={req.id}
-                style={{
-                  backgroundColor: "white",
-                  marginHorizontal: 12,
-                  marginBottom: 8,
-                  borderRadius: 14,
-                  padding: 14,
-                  shadowColor: "#000",
-                  shadowOpacity: 0.04,
-                  shadowRadius: 6,
-                  shadowOffset: { width: 0, height: 2 },
-                  elevation: 2,
-                }}
-              >
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 12 }}>
-                  <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "#EEF2FF", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-                    {req.user?.image ? (
-                      <Image source={{ uri: req.user.image }} style={{ width: 40, height: 40 }} resizeMode="cover" />
-                    ) : (
-                      <Text style={{ fontSize: 16, fontWeight: "700", color: "#4361EE" }}>
-                        {req.user?.name?.[0]?.toUpperCase() ?? "?"}
-                      </Text>
-                    )}
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 14, fontWeight: "700", color: "#0F172A" }}>{req.user?.name ?? "Unknown"}</Text>
-                  </View>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "#FFF7ED", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 20, borderWidth: 1, borderColor: "#FED7AA" }}>
-                    <Clock size={11} color="#F59E0B" />
-                    <Text style={{ fontSize: 11, fontWeight: "600", color: "#92400E" }}>Pending</Text>
-                  </View>
-                </View>
-                <View style={{ flexDirection: "row", gap: 8 }}>
-                  <Pressable
-                    onPress={() => rejectMutation.mutate(req.id)}
-                    disabled={rejectMutation.isPending || approveMutation.isPending}
-                    style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 10, borderRadius: 10, borderWidth: 1.5, borderColor: "#E2E8F0" }}
-                    testID={`reject-request-${req.id}`}
-                  >
-                    <X size={14} color="#64748B" />
-                    <Text style={{ fontSize: 13, fontWeight: "600", color: "#64748B" }}>Decline</Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => approveMutation.mutate(req.id)}
-                    disabled={approveMutation.isPending || rejectMutation.isPending}
-                    style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 10, borderRadius: 10, backgroundColor: "#4361EE" }}
-                    testID={`approve-request-${req.id}`}
-                  >
-                    {approveMutation.isPending ? (
-                      <ActivityIndicator color="white" size="small" />
-                    ) : (
-                      <>
-                        <Check size={14} color="white" />
-                        <Text style={{ fontSize: 13, fontWeight: "700", color: "white" }}>Approve</Text>
-                      </>
-                    )}
-                  </Pressable>
-                </View>
-              </View>
-            ))}
-          </View>
-        ) : null}
-
-        {isOwner && !isDemo && pendingInvites.length > 0 ? (
-          <View style={{ marginTop: 12, marginBottom: 4 }}>
-            <Text style={{ paddingHorizontal: 16, fontSize: 11, fontWeight: "700", color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 8 }}>
-              Pending Invites ({pendingInvites.length})
-            </Text>
-            {pendingInvites.map((invite: TeamInvite) => (
-              <View
-                key={invite.id}
-                style={{
-                  backgroundColor: "white",
-                  marginHorizontal: 12,
-                  marginBottom: 8,
-                  borderRadius: 14,
-                  padding: 14,
-                  shadowColor: "#000",
-                  shadowOpacity: 0.04,
-                  shadowRadius: 6,
-                  shadowOffset: { width: 0, height: 2 },
-                  elevation: 2,
-                }}
-              >
-                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 14, fontWeight: "700", color: "#0F172A" }}>{invite.email}</Text>
-                    <Text style={{ fontSize: 12, color: "#64748B", marginTop: 2 }}>Waiting to join</Text>
-                  </View>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "#EEF2FF", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 20 }}>
-                    <Clock size={11} color="#4361EE" />
-                    <Text style={{ fontSize: 11, fontWeight: "600", color: "#3730A3" }}>Invited</Text>
-                  </View>
-                </View>
-                <View style={{ flexDirection: "row", gap: 8 }}>
-                  <Pressable
-                    onPress={() => {
-                      Alert.alert(
-                        "Cancel invite?",
-                        `Cancel invite for ${invite.email}? They won't be able to join with this invitation.`,
-                        [
-                          { text: "Keep invite", style: "cancel" },
-                          {
-                            text: "Cancel invite",
-                            style: "destructive",
-                            onPress: () => cancelInviteMutation.mutate(invite.id),
-                          },
-                        ],
-                      );
-                    }}
-                    style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 10, borderRadius: 10, borderWidth: 1.5, borderColor: "#E2E8F0" }}
-                    testID={`cancel-invite-${invite.id}`}
-                  >
-                    <Text style={{ fontSize: 13, fontWeight: "600", color: "#64748B" }}>Cancel</Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => {
-                      Alert.alert(
-                        "Resend invite?",
-                        `Resend invite to ${invite.email}? They'll receive a new invitation email.`,
-                        [
-                          { text: "Not now", style: "cancel" },
-                          { text: "Resend", onPress: () => resendInviteMutation.mutate(invite.id) },
-                        ],
-                      );
-                    }}
-                    disabled={resendInviteMutation.isPending}
-                    style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 10, borderRadius: 10, backgroundColor: "#4361EE" }}
-                    testID={`resend-invite-${invite.id}`}
-                  >
-                    <Text style={{ fontSize: 13, fontWeight: "700", color: "white" }}>Resend</Text>
-                  </Pressable>
-                </View>
-              </View>
-            ))}
-          </View>
-        ) : null}
-
         {/* ── 2. AT A GLANCE CARD (paid only, unified) ──────────────── */}
         {isPaid ? (
           <View
@@ -937,25 +805,29 @@ export default function TeamScreen() {
           >
             <Text style={{ fontSize: 16, fontWeight: "700", color: "#0F172A" }}>Team Members</Text>
             {isOwner && !isDemo ? (
-              <Pressable
-                onPress={() => {
-                  setAddMemberError(null);
-                  setAddMemberOpen(true);
-                }}
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 6,
-                  backgroundColor: "#EEF2FF",
-                  paddingHorizontal: 12,
-                  paddingVertical: 8,
-                  borderRadius: 10,
-                }}
-                testID="add-member-button"
-              >
-                <UserPlus size={16} color="#4361EE" />
-                <Text style={{ fontSize: 13, fontWeight: "700", color: "#4361EE" }}>Add</Text>
-              </Pressable>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <PendingJoinRequestsChip count={incomingRequests.length} onPress={() => setJoinRequestsOpen(true)} />
+                <PendingInvitesChip count={pendingInvites.length} onPress={() => setPendingInvitesOpen(true)} />
+                <Pressable
+                  onPress={() => {
+                    setAddMemberError(null);
+                    setAddMemberOpen(true);
+                  }}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 6,
+                    backgroundColor: "#EEF2FF",
+                    paddingHorizontal: 12,
+                    paddingVertical: 8,
+                    borderRadius: 10,
+                  }}
+                  testID="add-member-button"
+                >
+                  <UserPlus size={16} color="#4361EE" />
+                  <Text style={{ fontSize: 13, fontWeight: "700", color: "#4361EE" }}>Add</Text>
+                </Pressable>
+              </View>
             ) : null}
           </View>
 
@@ -1227,6 +1099,24 @@ export default function TeamScreen() {
         }}
         onClearError={() => setAddMemberError(null)}
         onConfirm={(email) => inviteMemberMutation.mutate(email)}
+      />
+
+      <PendingJoinRequestsSheet
+        visible={joinRequestsOpen}
+        requests={incomingRequests}
+        busyRequestId={joinRequestActionId}
+        onClose={() => setJoinRequestsOpen(false)}
+        onApprove={(req) => approveMutation.mutate(req.id)}
+        onDecline={(req) => rejectMutation.mutate(req.id)}
+      />
+
+      <PendingInvitesSheet
+        visible={pendingInvitesOpen}
+        invites={pendingInvites}
+        busyInviteId={inviteActionId}
+        onClose={() => setPendingInvitesOpen(false)}
+        onCancel={(invite) => cancelInviteMutation.mutate(invite.id)}
+        onResend={(invite) => resendInviteMutation.mutate(invite.id)}
       />
 
     </SafeAreaView>

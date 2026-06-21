@@ -34,6 +34,8 @@ import {
   formatYesNoResponseDisplay,
 } from "@/lib/one-on-one-feedback";
 import {
+  checkInEditActionLabel,
+  checkInEditMenuLabel,
   getOneOnOneMeetingStatusFromMeeting,
   oneOnOneMeetingStatusColors,
   oneOnOneMeetingStatusLabel,
@@ -553,7 +555,11 @@ export function OneOnOneHistoryTab({
           </Pressable>
           <View style={{ flex: 1 }}>
             <Text style={{ fontSize: 17, fontWeight: "800", color: "#0F172A" }}>
-              {editingMeeting ? "Edit check-in" : selectedTemplate.title}
+              {editingMeeting
+                ? editingMeeting.status === "draft"
+                  ? "Resume editing"
+                  : "Edit check-in"
+                : selectedTemplate.title}
             </Text>
             <Text style={{ fontSize: 12, color: "#64748B" }}>{memberName}</Text>
           </View>
@@ -896,7 +902,9 @@ export function OneOnOneHistoryTab({
                         onPress={() => startEdit(meeting)}
                         style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: "#E2E8F0" }}
                       >
-                        <Text style={{ fontSize: 14, fontWeight: "600", color: "#4361EE" }}>Edit</Text>
+                        <Text style={{ fontSize: 14, fontWeight: "600", color: "#4361EE" }}>
+                          {checkInEditMenuLabel(meeting)}
+                        </Text>
                       </Pressable>
                       <Pressable onPress={() => onDelete(meeting)} style={{ padding: 12 }}>
                         <Text style={{ fontSize: 14, fontWeight: "600", color: "#EF4444" }}>Delete</Text>
@@ -1078,7 +1086,9 @@ export function OneOnOneHistoryTab({
                     alignItems: "center",
                   }}
                 >
-                  <Text style={{ fontWeight: "700", color: "white" }}>Edit check-in</Text>
+                  <Text style={{ fontWeight: "700", color: "white" }}>
+                    {checkInEditActionLabel(previewMeeting)}
+                  </Text>
                 </Pressable>
               </View>
             ) : null}

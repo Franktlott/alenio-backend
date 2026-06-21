@@ -14,8 +14,8 @@ import {
 import { authClient, clearAccessToken, setAccessTokenFromAuthData } from "@/lib/auth/auth-client";
 import { provisionBackendUserAfterAuth } from "@/lib/auth/sync-backend-user";
 import { setPendingSignUp } from "@/lib/auth/pending-signup";
-import { formatAuthFlowError } from "@/lib/auth/auth-errors";
-import { markSessionSignedOut } from "@/lib/auth/use-session";
+import { formatAuthFlowError, isEmailAlreadyRegisteredError, isEmailNotVerifiedError } from "@/lib/auth/auth-errors";
+import { clearSignedOutMark, markSessionSignedOut } from "@/lib/auth/use-session";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { StatusBar } from "expo-status-bar";
@@ -68,6 +68,53 @@ export default function SignUp() {
         password,
       });
       if (result.error) {
+        if (isEmailNotVerifiedError(result.error) || isEmailAlreadyRegisteredError(result.error)) {
+          const signIn = await authClient.signIn.email({
+            email: emailNorm,
+            password,
+          });
+          if (signIn.error && isEmailNotVerifiedError(signIn.error)) {
+            try {
+              await authClient.emailOtp.sendVerificationOtp({
+                email: emailNorm,
+                type: "email-verification",
+              });
+            } catch {
+              /* still send user to verify screen */
+            }
+            clearAccessToken();
+            markSessionSignedOut(60_000);
+            setPendingSignUp(emailNorm, password);
+            router.replace({
+              pathname: "/verify-otp",
+              params: inviteToken ? { email: emailNorm, inviteToken } : { email: emailNorm },
+            });
+            return;
+          }
+          if (!signIn.error) {
+            setAccessTokenFromAuthData(signIn ?? null);
+            setAccessTokenFromAuthData(signIn.data ?? null);
+            const existingUser = signIn.data?.user as { emailVerified?: boolean } | undefined;
+            if (existingUser?.emailVerified === false) {
+              clearAccessToken();
+              markSessionSignedOut(60_000);
+              setPendingSignUp(emailNorm, password);
+              router.replace({
+                pathname: "/verify-otp",
+                params: inviteToken ? { email: emailNorm, inviteToken } : { email: emailNorm },
+              });
+              return;
+            }
+            clearSignedOutMark();
+            await provisionBackendUserAfterAuth();
+            router.replace("/(app)/chat");
+            return;
+          }
+          setError(
+            "An account with this email already exists. Sign in with your password, or reset it if you forgot.",
+          );
+          return;
+        }
         setError(result.error.message ?? "Failed to create account. Please try again.");
         return;
       }
@@ -82,18 +129,7 @@ export default function SignUp() {
       setAccessTokenFromAuthData(result);
       await provisionBackendUserAfterAuth();
 
-      const sent = await authClient.emailOtp.sendVerificationOtp({
-        email: emailNorm,
-        type: "email-verification",
-      });
-      if (sent.error) {
-        setError(
-          sent.error.message ??
-            "Account created, but we could not send a verification code. Please try signing in and resend the code.",
-        );
-        router.replace("/sign-in");
-        return;
-      }
+      // Neon Auth sends the verification email on signUp.email — do not send again here.
       clearAccessToken();
       markSessionSignedOut(60_000);
       setPendingSignUp(emailNorm, password);

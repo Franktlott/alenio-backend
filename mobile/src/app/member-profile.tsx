@@ -166,6 +166,7 @@ export default function MemberProfileScreen() {
       setManageOpen(false);
       toast({ title: "Role updated", preset: "done" });
     },
+    onError: (err: Error) => toast({ title: err.message || "Could not update role", preset: "error" }),
   });
 
   const transferOwnershipMutation = useMutation({
@@ -419,48 +420,28 @@ export default function MemberProfileScreen() {
                 Manage member
               </Text>
 
-              {myRole === "owner" && member.role !== "owner" && member.role !== "team_leader" ? (
-                <View style={{ flexDirection: "row", gap: 8, marginBottom: 12 }}>
-                  <Pressable
-                    onPress={() => handleRemove(member)}
-                    style={{
-                      flex: 1,
-                      flexDirection: "row",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      gap: 6,
-                      paddingVertical: 12,
-                      borderRadius: 10,
-                      borderWidth: 1.5,
-                      borderColor: "#FECACA",
-                    }}
-                  >
-                    <UserMinus size={14} color="#EF4444" />
-                    <Text style={{ fontSize: 13, fontWeight: "600", color: "#EF4444" }}>Remove</Text>
-                  </Pressable>
+              {myRole === "owner" && member.role !== "owner" ? (
+                member.role === "team_leader" ? (
                   <Pressable
                     onPress={() => {
-                      const isLeader = member.role === "team_leader";
                       Alert.alert(
-                        isLeader ? "Remove Team Leader" : "Make Team Leader",
-                        isLeader
-                          ? `Remove team leader role from ${member.user.name}?`
-                          : `Give ${member.user.name} team leader access?`,
+                        "Remove Team Leader",
+                        `Remove team leader role from ${member.user.name}? They will become a regular member.`,
                         [
                           { text: "Cancel", style: "cancel" },
                           {
-                            text: isLeader ? "Remove" : "Confirm",
+                            text: "Remove",
                             onPress: () =>
                               setRoleMutation.mutate({
                                 userId: member.userId,
-                                role: isLeader ? "member" : "team_leader",
+                                role: "member",
                               }),
                           },
                         ],
                       );
                     }}
+                    disabled={setRoleMutation.isPending}
                     style={{
-                      flex: 1,
                       flexDirection: "row",
                       alignItems: "center",
                       justifyContent: "center",
@@ -469,12 +450,83 @@ export default function MemberProfileScreen() {
                       borderRadius: 10,
                       borderWidth: 1.5,
                       borderColor: "#EDE9FE",
+                      marginBottom: 12,
+                      opacity: setRoleMutation.isPending ? 0.6 : 1,
                     }}
+                    testID="demote-team-leader"
                   >
-                    <Crown size={14} color="#7C3AED" />
-                    <Text style={{ fontSize: 13, fontWeight: "600", color: "#7C3AED" }}>Set Leader</Text>
+                    {setRoleMutation.isPending ? (
+                      <ActivityIndicator size="small" color="#7C3AED" />
+                    ) : (
+                      <Crown size={14} color="#7C3AED" />
+                    )}
+                    <Text style={{ fontSize: 13, fontWeight: "600", color: "#7C3AED" }}>
+                      {setRoleMutation.isPending ? "Saving…" : "Remove Team Leader"}
+                    </Text>
                   </Pressable>
-                </View>
+                ) : member.role === "member" ? (
+                  <View style={{ flexDirection: "row", gap: 8, marginBottom: 12 }}>
+                    <Pressable
+                      onPress={() => handleRemove(member)}
+                      disabled={setRoleMutation.isPending}
+                      style={{
+                        flex: 1,
+                        flexDirection: "row",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: 6,
+                        paddingVertical: 12,
+                        borderRadius: 10,
+                        borderWidth: 1.5,
+                        borderColor: "#FECACA",
+                        opacity: setRoleMutation.isPending ? 0.6 : 1,
+                      }}
+                    >
+                      <UserMinus size={14} color="#EF4444" />
+                      <Text style={{ fontSize: 13, fontWeight: "600", color: "#EF4444" }}>Remove</Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={() => {
+                        Alert.alert(
+                          "Make Team Leader",
+                          `Give ${member.user.name} team leader access?`,
+                          [
+                            { text: "Cancel", style: "cancel" },
+                            {
+                              text: "Confirm",
+                              onPress: () =>
+                                setRoleMutation.mutate({
+                                  userId: member.userId,
+                                  role: "team_leader",
+                                }),
+                            },
+                          ],
+                        );
+                      }}
+                      disabled={setRoleMutation.isPending}
+                      style={{
+                        flex: 1,
+                        flexDirection: "row",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: 6,
+                        paddingVertical: 12,
+                        borderRadius: 10,
+                        borderWidth: 1.5,
+                        borderColor: "#EDE9FE",
+                        opacity: setRoleMutation.isPending ? 0.6 : 1,
+                      }}
+                      testID="promote-team-leader"
+                    >
+                      {setRoleMutation.isPending ? (
+                        <ActivityIndicator size="small" color="#7C3AED" />
+                      ) : (
+                        <Crown size={14} color="#7C3AED" />
+                      )}
+                      <Text style={{ fontSize: 13, fontWeight: "600", color: "#7C3AED" }}>Set Leader</Text>
+                    </Pressable>
+                  </View>
+                ) : null
               ) : null}
 
               {myRole === "owner" && member.userId !== myId && member.role !== "owner" ? (
