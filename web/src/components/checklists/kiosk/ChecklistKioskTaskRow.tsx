@@ -1,8 +1,14 @@
-import { formatKioskTime, type KioskTaskItem, type KioskTaskState } from "./checklist-kiosk-types";
+import {
+  displayCategory,
+  formatKioskTime,
+  type KioskTaskItem,
+  type KioskTaskState,
+} from "./checklist-kiosk-types";
+import { KioskCategoryIcon } from "./kiosk-category-icon";
 
 type Props = {
   item: KioskTaskItem;
-  index: number;
+  locationName: string;
   state: KioskTaskState;
   readOnly?: boolean;
   onSignerChange?: (name: string) => void;
@@ -12,73 +18,101 @@ type Props = {
 
 export function ChecklistKioskTaskRow({
   item,
-  index,
+  locationName,
   state,
   readOnly = false,
   onSignerChange,
   onSignOff,
   error,
 }: Props) {
+  const category = displayCategory(item, locationName);
+
   return (
     <li
       className={`kiosk-task-row${state.signed ? " kiosk-task-row--complete" : ""}`}
-      data-testid={`kiosk-task-${index}`}
+      data-testid={`kiosk-task-${item.id}`}
     >
-      <div className="kiosk-task-row__main">
-        <span className="kiosk-task-row__index">{String(index + 1).padStart(2, "0")}</span>
-        <div className="kiosk-task-row__text">
-          <p className="kiosk-task-row__title">{item.title}</p>
-          {state.signed && state.signedAt ? (
-            <p className="kiosk-task-row__meta">Completed {formatKioskTime(state.signedAt)}</p>
-          ) : null}
-        </div>
-      </div>
+      <KioskCategoryIcon category={category} />
 
-      <div className="kiosk-task-row__signoff">
-        {state.signed ? (
-          <div className="kiosk-task-row__done" aria-label={`Signed by ${state.signerName}`}>
-            <span className="kiosk-task-row__initials">{(state.signerName || "?").slice(0, 3).toUpperCase()}</span>
-            <span className="kiosk-task-row__check" aria-hidden>
-              ✓
-            </span>
+      <div className="kiosk-task-row__body">
+        <div className="kiosk-task-row__head">
+          <div className="kiosk-task-row__text">
+            <p className="kiosk-task-row__category">{category}</p>
+            <p className="kiosk-task-row__title">{item.title}</p>
           </div>
-        ) : readOnly ? (
-          <span className="kiosk-task-row__preview">Initials</span>
-        ) : (
-          <>
-            <input
-              id={`kiosk-signer-${item.id}`}
-              className={`kiosk-task-row__input${error ? " kiosk-task-row__input--error" : ""}`}
-              value={state.signerName}
-              onChange={(e) => onSignerChange?.(e.target.value)}
-              placeholder="Initials"
-              autoComplete="name"
-              inputMode="text"
-              aria-label={`Initials for ${item.title}`}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") onSignOff?.();
-              }}
-              onBlur={() => {
-                if (state.signerName.trim()) onSignOff?.();
-              }}
-            />
-            <button
-              type="button"
-              className="kiosk-task-row__complete-btn"
-              aria-label={`Mark ${item.title} complete`}
-              onClick={() => onSignOff?.()}
-            >
-              ✓
-            </button>
-          </>
-        )}
-      </div>
+          <span
+            className={`kiosk-task-row__badge${state.signed ? " kiosk-task-row__badge--complete" : " kiosk-task-row__badge--pending"}`}
+          >
+            {state.signed ? "Complete" : "Pending"}
+          </span>
+        </div>
 
-      {error ? (
-        <p className="kiosk-task-row__error" role="alert">
-          {error}
-        </p>
-      ) : null}
+        <div className="kiosk-task-row__signoff">
+          {state.signed ? (
+            <>
+              <div className="kiosk-task-row__signed">
+                <span className="kiosk-task-row__signed-label">Signed off by</span>
+                <div className="kiosk-task-row__signed-row">
+                  <span className="kiosk-task-row__avatar" aria-hidden>
+                    {(state.signerName || "?")
+                      .split(/\s+/)
+                      .map((p) => p.charAt(0))
+                      .join("")
+                      .slice(0, 2)
+                      .toUpperCase()}
+                  </span>
+                  <div>
+                    <p className="kiosk-task-row__signed-name">{state.signerName}</p>
+                    {state.signedAt ? (
+                      <p className="kiosk-task-row__signed-at">{formatKioskTime(state.signedAt)}</p>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+              <div className="kiosk-task-row__check-done" aria-hidden>
+                ✓
+              </div>
+            </>
+          ) : readOnly ? (
+            <button type="button" className="kiosk-task-row__sign-btn" disabled>
+              Sign Off
+            </button>
+          ) : (
+            <>
+              <input
+                id={`kiosk-signer-${item.id}`}
+                className={`kiosk-task-row__input${error ? " kiosk-task-row__input--error" : ""}`}
+                value={state.signerName}
+                onChange={(e) => onSignerChange?.(e.target.value)}
+                placeholder="Initials or name"
+                autoComplete="name"
+                inputMode="text"
+                aria-label={`Initials for ${item.title}`}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") onSignOff?.();
+                }}
+                onBlur={() => {
+                  if (state.signerName.trim()) onSignOff?.();
+                }}
+              />
+              <button
+                type="button"
+                className="kiosk-task-row__sign-btn"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => onSignOff?.()}
+              >
+                Sign Off
+              </button>
+            </>
+          )}
+        </div>
+
+        {error ? (
+          <p className="kiosk-task-row__error" role="alert">
+            {error}
+          </p>
+        ) : null}
+      </div>
     </li>
   );
 }

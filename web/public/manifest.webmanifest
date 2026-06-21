@@ -1,0 +1,25 @@
+{
+  "name": "Alenio Enterprise",
+  "short_name": "Alenio",
+  "description": "Team workspace, tasks, and checklists for frontline teams.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f4f6fb",
+  "theme_color": "#3730a3",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/icon.png",
+      "sizes": "380x348",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon.png",
+      "sizes": "380x348",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

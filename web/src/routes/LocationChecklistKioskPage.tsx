@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ChecklistKioskApp } from "../components/checklists/kiosk/ChecklistKioskApp";
+import { KioskInstallBar } from "../components/checklists/kiosk/KioskInstallBar";
 import type { KioskTaskItem, KioskTaskState } from "../components/checklists/kiosk/checklist-kiosk-types";
 import {
   fetchPublicChecklistByHub,
@@ -155,6 +156,11 @@ export function LocationChecklistKioskPage({ legacyToken: legacyTokenProp }: Pro
           <Link to={backHref} className="kiosk-checklist-back">
             ← All checklists
           </Link>
+        </div>
+      ) : null}
+      {!loading && !submitted ? (
+        <div className="kiosk-install-bar-wrap">
+          <KioskInstallBar teamName={teamName || undefined} />
         </div>
       ) : null}
       <ChecklistKioskApp

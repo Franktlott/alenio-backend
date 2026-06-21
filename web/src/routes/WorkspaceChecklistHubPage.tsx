@@ -1,15 +1,22 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { KioskInstallBar } from "../components/checklists/kiosk/KioskInstallBar";
 import { fetchPublicChecklistByToken, fetchPublicChecklistHub } from "../lib/api";
 import { LocationChecklistKioskPage } from "./LocationChecklistKioskPage";
 
-function todayLabel(): string {
-  return new Date().toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
+function useKioskClock(): Date {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(new Date()), 30_000);
+    return () => window.clearInterval(id);
+  }, []);
+  return now;
 }
 
 export function WorkspaceChecklistHubPage() {
   const { hubToken = "" } = useParams();
   const navigate = useNavigate();
+  const now = useKioskClock();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [legacyToken, setLegacyToken] = useState<string | null>(null);
@@ -59,29 +66,35 @@ export function WorkspaceChecklistHubPage() {
 
   return (
     <div className="kiosk-app-page" data-testid="workspace-checklist-hub">
-      <div className="kiosk-app">
-        <header className="kiosk-app-header">
-          <div className="kiosk-app-header__row">
+      <div className="kiosk-app kiosk-app--hub">
+        <header className="kiosk-app-header kiosk-hub-header">
+          <div className="kiosk-app-header__top">
             <img src="/alenio-logo-white.png" alt="Alenio" className="kiosk-app-header__logo" width={108} height={26} />
-            <div className="kiosk-app-header__date">{todayLabel()}</div>
-          </div>
-          <div className="kiosk-app-header__workspace">
-            {teamImage ? (
-              <img src={teamImage} alt="" className="kiosk-app-header__avatar" />
-            ) : (
-              <div className="kiosk-app-header__avatar kiosk-app-header__avatar--fallback" aria-hidden>
-                {(teamName || "W").charAt(0).toUpperCase()}
+            <div className="kiosk-app-header__workspace-pill">
+              {teamImage ? (
+                <img src={teamImage} alt="" className="kiosk-app-header__pill-avatar" />
+              ) : (
+                <span className="kiosk-app-header__pill-fallback" aria-hidden>
+                  {(teamName || "W").charAt(0).toUpperCase()}
+                </span>
+              )}
+              <span>{loading ? "…" : teamName || "Workspace"}</span>
+            </div>
+            <div className="kiosk-app-header__clock">
+              <div className="kiosk-app-header__time">
+                {now.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}
               </div>
-            )}
-            <div className="kiosk-app-header__meta">
-              <p className="kiosk-app-header__team">{loading ? "Loading…" : teamName || "Workspace"}</p>
-              <h1 className="kiosk-app-header__location">Today&apos;s Checklists</h1>
-              <p className="kiosk-app-sub">Choose a checklist to sign off tasks. No login required.</p>
+              <div className="kiosk-app-header__date">
+                {now.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
+              </div>
             </div>
           </div>
+          <h1 className="kiosk-app-header__title">Today&apos;s Checklists</h1>
+          <p className="kiosk-app-header__subtitle">Choose a checklist to sign off tasks. No login required.</p>
         </header>
 
-        <main className="kiosk-app-main">
+        <main className="kiosk-app-main kiosk-hub-main">
+          {!loading && !error ? <KioskInstallBar teamName={teamName || undefined} /> : null}
           {loading ? (
             <p className="kiosk-app-loading">Loading checklists…</p>
           ) : error ? (
@@ -94,28 +107,31 @@ export function WorkspaceChecklistHubPage() {
               <p className="kiosk-app-empty">Your manager can add checklists from the workspace dashboard.</p>
             </div>
           ) : (
-            <div className="kiosk-hub-tiles">
+            <ul className="kiosk-hub-list">
               {checklists.map((cl) => (
-                <Link
-                  key={cl.id}
-                  to={`/checklist/${hubToken}/${cl.id}`}
-                  className="kiosk-hub-tile"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    navigate(`/checklist/${hubToken}/${cl.id}`);
-                  }}
-                >
-                  <span className="kiosk-hub-tile__eyebrow">
-                    {cl.categories.filter(Boolean)[0] ?? "Checklist"}
-                  </span>
-                  <h2 className="kiosk-hub-tile__title">{cl.name}</h2>
-                  <p className="kiosk-hub-tile__meta">
-                    {cl.taskCount} task{cl.taskCount === 1 ? "" : "s"}
-                  </p>
-                  <span className="kiosk-hub-tile__cta">Open checklist →</span>
-                </Link>
+                <li key={cl.id}>
+                  <Link
+                    to={`/checklist/${hubToken}/${cl.id}`}
+                    className="kiosk-hub-row"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      navigate(`/checklist/${hubToken}/${cl.id}`);
+                    }}
+                  >
+                    <div className="kiosk-hub-row__main">
+                      <span className="kiosk-hub-row__eyebrow">
+                        {cl.categories.filter(Boolean)[0] ?? "Checklist"}
+                      </span>
+                      <h2 className="kiosk-hub-row__title">{cl.name}</h2>
+                      <p className="kiosk-hub-row__meta">
+                        {cl.taskCount} task{cl.taskCount === 1 ? "" : "s"}
+                      </p>
+                    </div>
+                    <span className="kiosk-hub-row__cta">Open →</span>
+                  </Link>
+                </li>
               ))}
-            </div>
+            </ul>
           )}
         </main>
 
