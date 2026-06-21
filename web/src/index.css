@@ -764,6 +764,11 @@ input {
   color: #334155;
 }
 
+.chat-header-icon-btn--danger:hover {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
 .chat-header-icon-count {
   font-size: 0.75rem;
   font-weight: 700;
