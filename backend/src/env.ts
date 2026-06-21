@@ -57,6 +57,10 @@ const envSchema = z.object({
   FIREBASE_CLIENT_EMAIL: z.string().optional(),
   FIREBASE_PRIVATE_KEY: z.string().optional(),
   FIREBASE_STORAGE_BUCKET: z.string().optional(),
+  /** OpenAI API key for Seneca coaching assistant (optional; Seneca features disabled without it). */
+  OPENAI_API_KEY: z.string().optional(),
+  /** OpenAI model for Seneca (default gpt-4o-mini). */
+  OPENAI_MODEL: z.string().optional().default("gpt-4o-mini"),
 });
 
 /**

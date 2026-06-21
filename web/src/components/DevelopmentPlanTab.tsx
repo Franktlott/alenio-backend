@@ -22,6 +22,7 @@ import {
   type DevelopmentGoalStatus,
 } from "../lib/api";
 import { printDevelopmentPlan } from "../lib/development-plan-print";
+import { DevelopmentPlanGenerator } from "./seneca/DevelopmentPlanGenerator";
 
 type Props = {
   teamId: string;
@@ -132,6 +133,25 @@ function GrowIllustration() {
       <circle cx="31" cy="16" r="1" fill="#c4b5fd" />
       <circle cx="28" cy="22" r="1.25" fill="#ddd6fe" />
     </svg>
+  );
+}
+
+function DevPlanGrowCard({ canCreate, onCreate }: { canCreate: boolean; onCreate: () => void }) {
+  return (
+    <div className="enterprise-dev-plan-grow">
+      <GrowIllustration />
+      <p className="enterprise-dev-plan-grow-title">Keep growing</p>
+      <p className="enterprise-dev-plan-grow-copy">
+        {canCreate
+          ? "Add more goals to continue building your skills and reach your potential."
+          : "Goals added by a manager will appear here."}
+      </p>
+      {canCreate ? (
+        <button type="button" className="enterprise-dev-plan-grow-btn" onClick={onCreate}>
+          New developmental goal
+        </button>
+      ) : null}
+    </div>
   );
 }
 
@@ -774,6 +794,7 @@ export function DevelopmentPlanTab({
   const [menuGoalId, setMenuGoalId] = useState<string | null>(null);
   const [statusSavingId, setStatusSavingId] = useState<string | null>(null);
   const [closedSectionOpen, setClosedSectionOpen] = useState(false);
+  const [senecaPlanOpen, setSenecaPlanOpen] = useState(false);
   const canUpdate = canCreate || canAddNotes;
 
   const activeGoals = goals.filter((g) => g.status !== "closed");
@@ -1008,9 +1029,14 @@ export function DevelopmentPlanTab({
             Print
           </button>
           {canCreate ? (
-            <button type="button" className="enterprise-dev-plan-new-btn" onClick={openCreate}>
-              New developmental goal
-            </button>
+            <>
+              <button type="button" className="seneca-dev-plan-trigger" onClick={() => setSenecaPlanOpen(true)}>
+                Generate with Seneca
+              </button>
+              <button type="button" className="enterprise-dev-plan-new-btn" onClick={openCreate}>
+                New developmental goal
+              </button>
+            </>
           ) : null}
         </div>
       </div>
@@ -1020,14 +1046,7 @@ export function DevelopmentPlanTab({
       {loading ? (
         <p className="enterprise-muted">Loading development plan…</p>
       ) : goals.length === 0 ? (
-        <div className="enterprise-dev-plan-empty">
-          <p className="enterprise-dev-plan-empty-title">No developmental goals yet</p>
-          <p className="enterprise-muted">
-            {canCreate
-              ? "Add a skill and steps to start tracking growth."
-              : "Goals added by a manager will appear here."}
-          </p>
-        </div>
+        <DevPlanGrowCard canCreate={canCreate} onCreate={openCreate} />
       ) : (
         <>
           {activeGoals.length > 0 ? (
@@ -1055,16 +1074,7 @@ export function DevelopmentPlanTab({
           ) : null}
 
           {canCreate ? (
-            <div className="enterprise-dev-plan-grow">
-              <GrowIllustration />
-              <p className="enterprise-dev-plan-grow-title">Keep growing</p>
-              <p className="enterprise-dev-plan-grow-copy">
-                Add more goals to continue building your skills and reach your potential.
-              </p>
-              <button type="button" className="enterprise-dev-plan-grow-btn" onClick={openCreate}>
-                New developmental goal
-              </button>
-            </div>
+            <DevPlanGrowCard canCreate onCreate={openCreate} />
           ) : null}
 
           {closedGoals.length > 0 ? (
@@ -1159,6 +1169,17 @@ export function DevelopmentPlanTab({
             />
           ) : null}
         </DevPlanGoalModal>
+      ) : null}
+
+      {senecaPlanOpen ? (
+        <DevelopmentPlanGenerator
+          teamId={teamId}
+          memberUserId={memberUserId}
+          memberName={memberName}
+          managerName={managerName}
+          onCreated={() => void loadGoals()}
+          onClose={() => setSenecaPlanOpen(false)}
+        />
       ) : null}
     </div>
   );

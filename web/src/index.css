@@ -7883,7 +7883,8 @@ input {
 .enterprise-oneone-history--scrollable > .enterprise-dev-plan-head,
 .enterprise-oneone-history--scrollable > .enterprise-form-error,
 .enterprise-oneone-history--scrollable > .enterprise-oneone-history-loading,
-.enterprise-oneone-history--scrollable > .enterprise-dev-plan-empty {
+.enterprise-oneone-history--scrollable > .enterprise-dev-plan-empty,
+.enterprise-oneone-history--scrollable > .enterprise-dev-plan-grow {
   flex-shrink: 0;
 }
 
@@ -13307,23 +13308,6 @@ button.enterprise-profile-legal-link {
   min-height: 0;
 }
 
-.enterprise-dashboard-add-task {
-  border: none;
-  border-radius: 10px;
-  padding: 0.5rem 0.9rem;
-  font-size: 0.8125rem;
-  font-weight: 700;
-  font-family: inherit;
-  cursor: pointer;
-  background: #1e3a8a;
-  color: #fff;
-  white-space: nowrap;
-}
-
-.enterprise-dashboard-add-task:hover {
-  background: #1d4ed8;
-}
-
 .enterprise-dashboard-empty {
   display: flex;
   flex-direction: column;
@@ -13549,18 +13533,6 @@ button.enterprise-profile-legal-link {
 
 .enterprise-dashboard-pro .enterprise-task-head-actions {
   gap: 0.75rem;
-}
-
-.enterprise-dashboard-pro .enterprise-dashboard-add-task {
-  border-radius: 6px;
-  padding: 0.42rem 0.8rem;
-  font-size: 0.75rem;
-  font-weight: 600;
-  background: #0f172a;
-}
-
-.enterprise-dashboard-pro .enterprise-dashboard-add-task:hover {
-  background: #1e293b;
 }
 
 .enterprise-dashboard-pro .enterprise-task-tabs {
@@ -21830,4 +21802,306 @@ button.enterprise-profile-legal-link {
 .mobile-get-app-card {
   max-width: 420px;
   width: 100%;
+}
+
+/* ── Seneca coaching assistant ─────────────────────────────────── */
+.seneca-disclaimer {
+  margin: 0 0 0.65rem;
+  font-size: 0.6875rem;
+  color: #94a3b8;
+  line-height: 1.4;
+}
+
+.seneca-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: #4338ca;
+}
+
+.seneca-prep-card,
+.seneca-checkin-panel {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fafbff;
+  padding: 0.85rem;
+}
+
+.seneca-prep-head,
+.seneca-checkin-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.seneca-prep-head-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.seneca-prep-kicker {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.seneca-prep-toggle {
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #4338ca;
+  cursor: pointer;
+}
+
+.seneca-prep-section {
+  margin-top: 0.65rem;
+}
+
+.seneca-prep-section-title {
+  margin: 0 0 0.25rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.seneca-prep-list {
+  margin: 0;
+  padding-left: 1.1rem;
+  font-size: 0.8125rem;
+  color: #334155;
+  line-height: 1.45;
+}
+
+.seneca-prep-notes {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: #475569;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.seneca-prep-loading {
+  margin: 0;
+  font-size: 0.8125rem;
+}
+
+.seneca-checkin-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 300px);
+  gap: 0.85rem;
+  align-items: start;
+}
+
+.seneca-checkin-layout--prep {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (min-width: 900px) {
+  .seneca-checkin-layout--prep {
+    grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+  }
+}
+
+.seneca-checkin-main {
+  min-width: 0;
+}
+
+.seneca-checkin-tagline {
+  margin: 0;
+  font-size: 0.6875rem;
+  color: #64748b;
+}
+
+.seneca-checkin-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.seneca-checkin-action-btn {
+  font-family: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-align: left;
+  padding: 0.45rem 0.65rem;
+  border-radius: 6px;
+  border: 1px solid #c7d2fe;
+  background: #fff;
+  color: #3730a3;
+  cursor: pointer;
+}
+
+.seneca-checkin-action-btn:hover:not(:disabled) {
+  background: #eef2ff;
+}
+
+.seneca-checkin-action-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.seneca-checkin-result {
+  margin-top: 0.65rem;
+  padding-top: 0.65rem;
+  border-top: 1px solid #e2e8f0;
+}
+
+.seneca-checkin-result-text {
+  margin: 0 0 0.5rem;
+  font-size: 0.8125rem;
+  color: #334155;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.seneca-checkin-result-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.seneca-checkin-apply-btn {
+  font-family: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.35rem 0.65rem;
+  border-radius: 6px;
+  border: 1px solid #4338ca;
+  background: #4338ca;
+  color: #fff;
+  cursor: pointer;
+}
+
+.seneca-checkin-apply-btn:hover {
+  background: #3730a3;
+}
+
+.seneca-checkin-error {
+  margin: 0.5rem 0 0;
+  font-size: 0.8125rem;
+}
+
+.seneca-summary-backdrop {
+  z-index: 2500;
+}
+
+.seneca-summary-modal,
+.seneca-dev-plan-modal {
+  position: relative;
+  width: min(520px, 100%);
+  max-height: 88vh;
+  overflow: auto;
+  background: #fff;
+  border: 1px solid #dce3eb;
+  border-radius: 10px;
+  padding: 1.125rem;
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.2);
+}
+
+.seneca-summary-head {
+  margin-bottom: 0.5rem;
+  padding-right: 1.5rem;
+}
+
+.seneca-summary-title {
+  margin: 0.35rem 0 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.seneca-summary-sub {
+  margin: 0.25rem 0 0;
+  font-size: 0.8125rem;
+}
+
+.seneca-summary-section {
+  margin-top: 0.85rem;
+}
+
+.seneca-summary-section-title {
+  margin: 0 0 0.35rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.seneca-summary-text {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: #334155;
+  line-height: 1.45;
+}
+
+.seneca-summary-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #e2e8f0;
+}
+
+.seneca-dev-plan-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-top: 0.65rem;
+}
+
+.seneca-dev-plan-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #334155;
+  margin-top: 0.35rem;
+}
+
+.seneca-dev-plan-input,
+.seneca-dev-plan-textarea {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.seneca-dev-plan-trigger {
+  font-family: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  padding: 0.45rem 0.85rem;
+  border-radius: 8px;
+  border: 1px solid #c7d2fe;
+  background: #eef2ff;
+  color: #3730a3;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.seneca-dev-plan-trigger:hover {
+  background: #e0e7ff;
+}
+
+@media (max-width: 899px) {
+  .seneca-checkin-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .seneca-checkin-panel {
+    order: -1;
+  }
+}
+
+.enterprise-oneone-fill-body .seneca-checkin-layout {
+  min-height: 0;
 }

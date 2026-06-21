@@ -28,6 +28,11 @@ import {
   oneOnOneMeetingStatusClass,
   oneOnOneMeetingStatusLabel,
 } from "../lib/one-on-one-status";
+import { SenecaPrepCard } from "./seneca/SenecaPrepCard";
+import { SenecaCheckInPanel, type SenecaFollowUpSuggestion } from "./seneca/SenecaCheckInPanel";
+import { SenecaSummaryModal } from "./seneca/SenecaSummaryModal";
+import { DevelopmentPlanGenerator } from "./seneca/DevelopmentPlanGenerator";
+import type { SenecaDevelopmentGoalDraft } from "../lib/seneca-api";
 
 const FIELD_TYPE_LABELS: Record<string, string> = {
   section: "Section",
@@ -191,6 +196,60 @@ function assigneeDisplayName(
   return leaderName ?? "Leader";
 }
 
+function CheckInIllustration() {
+  return (
+    <svg width="40" height="40" viewBox="0 0 48 48" fill="none" aria-hidden>
+      <circle cx="24" cy="24" r="24" fill="#ede9fe" />
+      <rect x="14" y="17" width="20" height="17" rx="3" stroke="#7c3aed" strokeWidth="2" />
+      <path d="M14 22h20" stroke="#7c3aed" strokeWidth="2" />
+      <path d="M19 13v5M29 13v5" stroke="#a78bfa" strokeWidth="2" strokeLinecap="round" />
+      <circle cx="19" cy="28" r="1.25" fill="#c4b5fd" />
+      <circle cx="24" cy="28" r="1.25" fill="#c4b5fd" />
+      <circle cx="29" cy="28" r="1.25" fill="#c4b5fd" />
+    </svg>
+  );
+}
+
+type CheckInGrowCardProps = {
+  canCreate: boolean;
+  onCreate?: () => void;
+  loading?: boolean;
+  title?: string;
+  copy?: string;
+  buttonLabel?: string;
+};
+
+function CheckInGrowCard({
+  canCreate,
+  onCreate,
+  loading = false,
+  title = "Keep checking in",
+  copy,
+  buttonLabel = "New check-in",
+}: CheckInGrowCardProps) {
+  const defaultCopy = canCreate
+    ? "Regular check-ins help track progress, share feedback, and follow up on goals."
+    : "Check-ins will appear here once your manager records them.";
+
+  return (
+    <div className="enterprise-dev-plan-grow">
+      <CheckInIllustration />
+      <p className="enterprise-dev-plan-grow-title">{title}</p>
+      <p className="enterprise-dev-plan-grow-copy">{copy ?? defaultCopy}</p>
+      {canCreate && onCreate ? (
+        <button
+          type="button"
+          className="enterprise-dev-plan-grow-btn"
+          disabled={loading}
+          onClick={onCreate}
+        >
+          {loading ? "Loading…" : buttonLabel}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 function MeetingStatusBadge({ meeting }: { meeting: OneOnOneMeeting }) {
   if (meeting.status === "draft") {
     return (
@@ -233,6 +292,16 @@ export function OneOnOneHistoryTab({
   const [userExpandedFullscreen, setUserExpandedFullscreen] = useState(false);
   const [listNotice, setListNotice] = useState<string | null>(null);
   const [prepAcknowledged, setPrepAcknowledged] = useState(false);
+  const [senecaSummaryOpen, setSenecaSummaryOpen] = useState(false);
+  const [senecaSummaryPayload, setSenecaSummaryPayload] = useState<{
+    templateTitle: string;
+    templateFields: OneOnOneTemplate["fields"];
+    responses: Record<string, string | number>;
+    followUpTasks: SenecaFollowUpSuggestion[];
+  } | null>(null);
+  const [senecaDevPlanOpen, setSenecaDevPlanOpen] = useState(false);
+  const [senecaDevPlanDraft, setSenecaDevPlanDraft] = useState<SenecaDevelopmentGoalDraft | null>(null);
+  const [senecaFocusedFieldId, setSenecaFocusedFieldId] = useState<string | null>(null);
   const compactCheckInLayout = useCompactCheckInLayout();
   const checkInFullscreen = compactCheckInLayout || userExpandedFullscreen;
   const todayStart = useMemo(() => {
@@ -472,12 +541,25 @@ export function OneOnOneHistoryTab({
         });
       }
       await loadMeetings();
-      setView("list");
-      setSelectedTemplate(null);
-      setEditingMeeting(null);
-      setResponses({});
-      setFollowUpDrafts([]);
-      setListNotice(null);
+      if (canCreate) {
+        setSenecaSummaryPayload({
+          templateTitle: selectedTemplate.title,
+          templateFields: selectedTemplate.fields,
+          responses: normalized,
+          followUpTasks: followUpTasks.map((t) => ({
+            title: t.title,
+            assigneeRole: t.assigneeUserId === memberUserId ? "associate" : "leader",
+          })),
+        });
+        setSenecaSummaryOpen(true);
+        setSelectedTemplate(null);
+        setEditingMeeting(null);
+        setResponses({});
+        setFollowUpDrafts([]);
+        setListNotice(null);
+      } else {
+        finishCheckInToList();
+      }
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Could not save check-in.");
     } finally {
@@ -654,6 +736,7 @@ export function OneOnOneHistoryTab({
           minRows={3}
           value={String(value)}
           onChange={(e) => setFieldValue(field.id, e.target.value)}
+          onFocus={() => setSenecaFocusedFieldId(field.id)}
           placeholder={`Enter ${field.label.toLowerCase()}…`}
         />
       );
@@ -665,6 +748,7 @@ export function OneOnOneHistoryTab({
         minRows={1}
         value={String(value)}
         onChange={(e) => setFieldValue(field.id, e.target.value)}
+        onFocus={() => setSenecaFocusedFieldId(field.id)}
         placeholder={`Enter ${field.label.toLowerCase()}…`}
       />
     );
@@ -694,6 +778,34 @@ export function OneOnOneHistoryTab({
 
   const removeFollowUpDraft = (id: string) => {
     setFollowUpDrafts((prev) => prev.filter((draft) => draft.id !== id));
+  };
+
+  const addSenecaFollowUpTasks = (tasks: SenecaFollowUpSuggestion[]) => {
+    setFollowUpDrafts((prev) => [
+      ...prev,
+      ...tasks.map((t) => ({
+        id: crypto.randomUUID(),
+        title: t.title,
+        assigneeRole: t.assigneeRole,
+        dueDate: t.dueDate?.slice(0, 10) ?? "",
+      })),
+    ]);
+  };
+
+  const openSenecaDevPlan = (draft: SenecaDevelopmentGoalDraft) => {
+    setSenecaDevPlanDraft(draft);
+    setSenecaDevPlanOpen(true);
+  };
+
+  const finishCheckInToList = () => {
+    setView("list");
+    setSelectedTemplate(null);
+    setEditingMeeting(null);
+    setResponses({});
+    setFollowUpDrafts([]);
+    setListNotice(null);
+    setSenecaSummaryOpen(false);
+    setSenecaSummaryPayload(null);
   };
 
   const renderFollowUpTaskList = (tasks: NonNullable<OneOnOneMeeting["followUpTasks"]>) => (
@@ -866,12 +978,11 @@ export function OneOnOneHistoryTab({
           </div>
         ) : null}
         {!loadingTemplates && templates.length === 0 && !err ? (
-          <div className="enterprise-dev-plan-empty">
-            <p className="enterprise-dev-plan-empty-title">No templates available</p>
-            <p className="enterprise-muted">
-              Ask your workspace owner to create check-in templates from the Team page.
-            </p>
-          </div>
+          <CheckInGrowCard
+            canCreate={false}
+            title="No templates yet"
+            copy="Ask your workspace owner to create check-in templates from the Team page."
+          />
         ) : null}
       </>,
       {
@@ -895,17 +1006,28 @@ export function OneOnOneHistoryTab({
 
     if (showLeaderPrepGate) {
       return renderCheckInShell(
-        <div className="enterprise-oneone-leader-prep-gate">
-          <p className="enterprise-oneone-leader-prep-kicker">Before you begin</p>
-          <h3 className="enterprise-oneone-leader-prep-title">Leader prep</h3>
-          <p className="enterprise-muted enterprise-oneone-leader-prep-copy">
-            Quick reminders before this check-in with {memberName}. Only you see this list.
-          </p>
-          <ul className="enterprise-oneone-leader-prep-list">
-            {leaderPrepItems.map((item, index) => (
-              <li key={`${index}-${item}`}>{item}</li>
-            ))}
-          </ul>
+        <div className="seneca-checkin-layout seneca-checkin-layout--prep">
+          {canCreate ? (
+            <SenecaPrepCard
+              teamId={teamId}
+              memberUserId={memberUserId}
+              memberName={memberName}
+              managerName={managerName}
+              templateId={selectedTemplate.id}
+            />
+          ) : null}
+          <div className="enterprise-oneone-leader-prep-gate">
+            <p className="enterprise-oneone-leader-prep-kicker">Before you begin</p>
+            <h3 className="enterprise-oneone-leader-prep-title">Leader prep</h3>
+            <p className="enterprise-muted enterprise-oneone-leader-prep-copy">
+              Quick reminders before this check-in with {memberName}. Only you see this list.
+            </p>
+            <ul className="enterprise-oneone-leader-prep-list">
+              {leaderPrepItems.map((item, index) => (
+                <li key={`${index}-${item}`}>{item}</li>
+              ))}
+            </ul>
+          </div>
         </div>,
         {
           title: selectedTemplate.title,
@@ -941,84 +1063,112 @@ export function OneOnOneHistoryTab({
     return renderCheckInShell(
       <>
         {err ? <p className="enterprise-form-error" role="alert">{err}</p> : null}
-        <ul className="enterprise-oneone-fill-fields">
-          {sortedFields.map((field) =>
-            field.type === "associate_notes" ? null : field.type === "section" ? (
-              <li key={field.id} className="enterprise-oneone-fill-section">
-                <h4>{field.label}</h4>
-              </li>
-            ) : (
-              <li key={field.id} className="enterprise-oneone-fill-field">
-                <label className="enterprise-oneone-fill-label">
-                  {field.label}
-                  {field.required ? <span className="enterprise-oneone-fill-required">Required</span> : null}
-                  <span className="enterprise-oneone-fill-type">{fieldTypeLabel(field.type)}</span>
-                </label>
-                {field.helpText ? <p className="enterprise-muted enterprise-oneone-fill-help">{field.helpText}</p> : null}
-                {renderFieldInput(field)}
-              </li>
-            ),
-          )}
-        </ul>
-        <section className="enterprise-oneone-followup">
-          <div className="enterprise-oneone-followup-head">
-            <div>
-              <h4 className="enterprise-oneone-followup-title">Follow-up tasks</h4>
-              <p className="enterprise-muted enterprise-oneone-followup-sub">
-                Optional. Creates real workspace tasks assigned to the leader or associate.
-              </p>
-            </div>
-            <button type="button" className="enterprise-oneone-templates-pane-btn" onClick={addFollowUpDraft}>
-              Add task
-            </button>
-          </div>
-          {existingFollowUps.length > 0 ? renderFollowUpTaskList(existingFollowUps) : null}
-          {followUpDrafts.length > 0 ? (
-            <ul className="enterprise-oneone-followup-drafts">
-              {followUpDrafts.map((draft) => (
-                <li key={draft.id} className="enterprise-oneone-followup-draft">
-                  <input
-                    type="text"
-                    className="auth-input enterprise-oneone-followup-input"
-                    value={draft.title}
-                    onChange={(e) => updateFollowUpDraft(draft.id, { title: e.target.value })}
-                    placeholder="Task title"
-                    aria-label="Follow-up task title"
-                  />
-                  <select
-                    className="auth-input enterprise-oneone-followup-select"
-                    value={draft.assigneeRole}
-                    onChange={(e) =>
-                      updateFollowUpDraft(draft.id, {
-                        assigneeRole: e.target.value as FollowUpDraft["assigneeRole"],
-                      })
-                    }
-                    aria-label="Assign follow-up task to"
-                  >
-                    <option value="associate">Associate · {memberName}</option>
-                    <option value="leader">Leader · {leaderLabel}</option>
-                  </select>
-                  <input
-                    type="date"
-                    className="auth-input enterprise-oneone-followup-date"
-                    value={draft.dueDate}
-                    onChange={(e) => updateFollowUpDraft(draft.id, { dueDate: e.target.value })}
-                    aria-label="Follow-up task due date"
-                  />
-                  <button
-                    type="button"
-                    className="enterprise-oneone-templates-table-action enterprise-oneone-templates-table-action--danger"
-                    onClick={() => removeFollowUpDraft(draft.id)}
-                  >
-                    Remove
-                  </button>
-                </li>
-              ))}
+        <div className="seneca-checkin-layout">
+          <div className="seneca-checkin-main">
+            {canCreate && !editingMeeting ? (
+              <SenecaPrepCard
+                teamId={teamId}
+                memberUserId={memberUserId}
+                memberName={memberName}
+                managerName={managerName}
+                templateId={selectedTemplate.id}
+                compact
+              />
+            ) : null}
+            <ul className="enterprise-oneone-fill-fields">
+              {sortedFields.map((field) =>
+                field.type === "associate_notes" ? null : field.type === "section" ? (
+                  <li key={field.id} className="enterprise-oneone-fill-section">
+                    <h4>{field.label}</h4>
+                  </li>
+                ) : (
+                  <li key={field.id} className="enterprise-oneone-fill-field">
+                    <label className="enterprise-oneone-fill-label">
+                      {field.label}
+                      {field.required ? <span className="enterprise-oneone-fill-required">Required</span> : null}
+                      <span className="enterprise-oneone-fill-type">{fieldTypeLabel(field.type)}</span>
+                    </label>
+                    {field.helpText ? <p className="enterprise-muted enterprise-oneone-fill-help">{field.helpText}</p> : null}
+                    {renderFieldInput(field)}
+                  </li>
+                ),
+              )}
             </ul>
-          ) : existingFollowUps.length === 0 && followUpDrafts.length === 0 ? (
-            <p className="enterprise-muted enterprise-oneone-followup-empty">No follow-up tasks yet.</p>
+            <section className="enterprise-oneone-followup">
+              <div className="enterprise-oneone-followup-head">
+                <div>
+                  <h4 className="enterprise-oneone-followup-title">Follow-up tasks</h4>
+                  <p className="enterprise-muted enterprise-oneone-followup-sub">
+                    Optional. Creates real workspace tasks assigned to the leader or associate.
+                  </p>
+                </div>
+                <button type="button" className="enterprise-oneone-templates-pane-btn" onClick={addFollowUpDraft}>
+                  Add task
+                </button>
+              </div>
+              {existingFollowUps.length > 0 ? renderFollowUpTaskList(existingFollowUps) : null}
+              {followUpDrafts.length > 0 ? (
+                <ul className="enterprise-oneone-followup-drafts">
+                  {followUpDrafts.map((draft) => (
+                    <li key={draft.id} className="enterprise-oneone-followup-draft">
+                      <input
+                        type="text"
+                        className="auth-input enterprise-oneone-followup-input"
+                        value={draft.title}
+                        onChange={(e) => updateFollowUpDraft(draft.id, { title: e.target.value })}
+                        placeholder="Task title"
+                        aria-label="Follow-up task title"
+                      />
+                      <select
+                        className="auth-input enterprise-oneone-followup-select"
+                        value={draft.assigneeRole}
+                        onChange={(e) =>
+                          updateFollowUpDraft(draft.id, {
+                            assigneeRole: e.target.value as FollowUpDraft["assigneeRole"],
+                          })
+                        }
+                        aria-label="Assign follow-up task to"
+                      >
+                        <option value="associate">Associate · {memberName}</option>
+                        <option value="leader">Leader · {leaderLabel}</option>
+                      </select>
+                      <input
+                        type="date"
+                        className="auth-input enterprise-oneone-followup-date"
+                        value={draft.dueDate}
+                        onChange={(e) => updateFollowUpDraft(draft.id, { dueDate: e.target.value })}
+                        aria-label="Follow-up task due date"
+                      />
+                      <button
+                        type="button"
+                        className="enterprise-oneone-templates-table-action enterprise-oneone-templates-table-action--danger"
+                        onClick={() => removeFollowUpDraft(draft.id)}
+                      >
+                        Remove
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : existingFollowUps.length === 0 && followUpDrafts.length === 0 ? (
+                <p className="enterprise-muted enterprise-oneone-followup-empty">No follow-up tasks yet.</p>
+              ) : null}
+            </section>
+          </div>
+          {canCreate ? (
+            <SenecaCheckInPanel
+              teamId={teamId}
+              memberUserId={memberUserId}
+              memberName={memberName}
+              managerName={managerName}
+              template={selectedTemplate}
+              responses={responses}
+              focusFieldId={senecaFocusedFieldId}
+              onApplyText={(fieldId, text) => setFieldValue(fieldId, text)}
+              onAddFollowUpTasks={addSenecaFollowUpTasks}
+              onSuggestDevelopmentGoal={openSenecaDevPlan}
+            />
           ) : null}
-        </section>
+        </div>
         {renderFeedbackPromptModal()}
       </>,
       {
@@ -1087,12 +1237,11 @@ export function OneOnOneHistoryTab({
         <p className="enterprise-muted enterprise-oneone-history-loading">Loading check-ins…</p>
       ) : null}
       {!loadingMeetings && meetings.length === 0 ? (
-        <div className="enterprise-dev-plan-empty">
-          <p className="enterprise-dev-plan-empty-title">No check-ins recorded yet</p>
-          <p className="enterprise-muted">
-            {canCreate ? "Start a check-in using a workspace template." : "Check-ins will appear here once recorded."}
-          </p>
-        </div>
+        <CheckInGrowCard
+          canCreate={canCreate}
+          loading={loadingTemplates}
+          onCreate={() => void startCreate()}
+        />
       ) : null}
       {meetings.length > 0 ? (
         <div className="enterprise-oneone-history-table-wrap">
@@ -1195,7 +1344,46 @@ export function OneOnOneHistoryTab({
           </ul>
         </div>
       ) : null}
+      {!loadingMeetings && meetings.length > 0 && canCreate ? (
+        <CheckInGrowCard
+          canCreate
+          loading={loadingTemplates}
+          onCreate={() => void startCreate()}
+        />
+      ) : null}
       {renderMeetingPreviewModal()}
+      {senecaSummaryOpen && senecaSummaryPayload ? (
+        <SenecaSummaryModal
+          open={senecaSummaryOpen}
+          teamId={teamId}
+          memberUserId={memberUserId}
+          memberName={memberName}
+          managerName={managerName}
+          templateTitle={senecaSummaryPayload.templateTitle}
+          templateFields={senecaSummaryPayload.templateFields}
+          responses={senecaSummaryPayload.responses}
+          followUpTasks={senecaSummaryPayload.followUpTasks}
+          onClose={finishCheckInToList}
+          onAddFollowUpTasks={() => {
+            /* saved check-in already published; suggestions are for manager reference */
+          }}
+          onCreateDevelopmentGoal={openSenecaDevPlan}
+        />
+      ) : null}
+      {senecaDevPlanOpen ? (
+        <DevelopmentPlanGenerator
+          teamId={teamId}
+          memberUserId={memberUserId}
+          memberName={memberName}
+          managerName={managerName}
+          initialDraft={senecaDevPlanDraft}
+          onCreated={() => void loadMeetings()}
+          onClose={() => {
+            setSenecaDevPlanOpen(false);
+            setSenecaDevPlanDraft(null);
+          }}
+        />
+      ) : null}
     </div>
   );
 }

@@ -46,6 +46,7 @@ import { ensureRecurrenceSeriesSchema } from "./lib/ensure-recurrence-series-sch
 import { ensureUserTimezoneSchema } from "./lib/ensure-user-timezone-schema";
 import { ensureCalendarApprovalSchema } from "./lib/ensure-calendar-approval-schema";
 import { developmentGoalsRouter } from "./routes/development-goals";
+import { senecaRouter } from "./routes/seneca";
 import { teamInvitesPublicRouter } from "./routes/team-invites";
 import { publicChecklistHubsRouter } from "./routes/public-checklist-hubs";
 import { publicChecklistLocationsRouter } from "./routes/public-checklist-locations";
@@ -773,6 +774,7 @@ app.route("/api/check-in-template-library", checkInTemplateLibraryRouter);
 app.route("/api/teams/:teamId/one-on-one-templates", oneOnOneTemplatesRouter);
 app.route("/api/teams/:teamId/members", oneOnOneMeetingsRouter);
 app.route("/api/teams/:teamId/members", developmentGoalsRouter);
+app.route("/api/teams/:teamId/members", senecaRouter);
 app.route("/api/teams/:teamId/tasks", tasksRouter);
 app.route("/api/teams/:teamId/messages", messagesRouter);
 app.route("/api/teams/:teamId/templates", templatesRouter);

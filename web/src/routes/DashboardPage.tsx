@@ -944,7 +944,7 @@ export function DashboardPage() {
               <div className="enterprise-task-head-actions">
                 <button
                   type="button"
-                  className="enterprise-dashboard-add-task"
+                  className="enterprise-task-modal-btn enterprise-task-modal-btn-secondary"
                   onClick={() => openCreateTask(selectedDate ? selectedDate.toISOString().slice(0, 10) : undefined)}
                 >
                   + Add task
