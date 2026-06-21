@@ -25,15 +25,22 @@ function normalizeOpenAiKey(raw: string): string {
   return trimmed.replace(/^["']|["']$/g, "").replace(/\s+/g, "");
 }
 
-function resolveOpenAiKeySource(): { key: string; sourceVar: string | null } {
+function resolveOpenAiKeySource(): { key: string; sourceVar: string | null; raw: string } {
   for (const name of OPENAI_ENV_CANDIDATES) {
     const fromProcess = process.env[name];
     const fromEnv = name === "OPENAI_API_KEY" ? env.OPENAI_API_KEY : undefined;
     const raw = fromProcess ?? fromEnv ?? "";
     const key = normalizeOpenAiKey(raw);
-    if (key) return { key, sourceVar: name };
+    if (key) return { key, sourceVar: name, raw };
   }
-  return { key: "", sourceVar: null };
+  // Railway UI sometimes saves the name with a trailing space: "OPENAI_API_KEY "
+  for (const [name, value] of Object.entries(process.env)) {
+    if (name.trim() !== "OPENAI_API_KEY") continue;
+    const raw = value ?? "";
+    const key = normalizeOpenAiKey(raw);
+    if (key) return { key, sourceVar: name, raw };
+  }
+  return { key: "", sourceVar: null, raw: "" };
 }
 
 function resolveOpenAiKey(): string {
@@ -41,13 +48,10 @@ function resolveOpenAiKey(): string {
 }
 
 export function senecaDiagnostics() {
-  const { key, sourceVar } = resolveOpenAiKeySource();
-  const raw =
-    sourceVar != null
-      ? (process.env[sourceVar] ?? (sourceVar === "OPENAI_API_KEY" ? env.OPENAI_API_KEY : undefined) ?? "")
-      : "";
+  const { key, sourceVar, raw } = resolveOpenAiKeySource();
   const openAiEnvKeys = OPENAI_ENV_CANDIDATES.filter((name) => Boolean(process.env[name]?.trim()));
   const openAiRelatedEnvKeyNames = Object.keys(process.env).filter((name) => /openai/i.test(name));
+  const misnamedOpenAiKey = openAiRelatedEnvKeyNames.find((name) => name !== name.trim());
   return {
     present: Boolean(raw),
     length: raw.length,
@@ -55,6 +59,7 @@ export function senecaDiagnostics() {
     sourceVar,
     openAiEnvKeys,
     openAiRelatedEnvKeyNames,
+    misnamedOpenAiKey: misnamedOpenAiKey ?? null,
     railwayService: process.env.RAILWAY_SERVICE_NAME ?? null,
     railwayEnvironment: process.env.RAILWAY_ENVIRONMENT ?? null,
     railwayDeploymentId: process.env.RAILWAY_DEPLOYMENT_ID ?? null,
