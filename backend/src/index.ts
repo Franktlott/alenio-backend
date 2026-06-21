@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { env } from "./env";
+import { senecaAvailable } from "./lib/seneca-openai";
 import { getSessionFromHeaders, type AppSession, type AppUser, verifyEmailPassword } from "./auth";
 import { prisma } from "./prisma";
 import { sampleRouter } from "./routes/sample";
@@ -196,6 +197,7 @@ app.get("/health", (c) => {
     buildMarker: BACKEND_BUILD_MARKER,
     storageProvider: "firebase",
     storageConfigured: isFirebaseStorageConfigured(),
+    senecaConfigured: senecaAvailable(),
     /** Compare with EXPO_PUBLIC_NEON_AUTH_URL from the app — hostnames must be the same Neon Auth project. */
     neonAuthHostname: authProjectHint,
   });
@@ -838,6 +840,8 @@ setInterval(runCleanup, 60 * 60 * 1000);
 initMeetingReminders();
 
 const port = Number(process.env.PORT) || 3000;
+
+console.log(senecaAvailable() ? "✅ Seneca coaching assistant enabled" : "⚠️ Seneca disabled — set OPENAI_API_KEY on the server");
 
 export default {
   port,

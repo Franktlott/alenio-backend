@@ -11,8 +11,16 @@ Guidelines:
 - When generating suggestions, make them specific to the team member when context allows.
 - Output valid JSON only when asked for JSON.`;
 
+function resolveOpenAiKey(): string {
+  const raw = env.OPENAI_API_KEY?.trim() ?? "";
+  if (!raw) return "";
+  // Railway paste sometimes includes wrapping quotes or accidental line breaks.
+  return raw.replace(/^["']|["']$/g, "").replace(/\s+/g, "");
+}
+
 export function senecaAvailable(): boolean {
-  return Boolean(env.OPENAI_API_KEY?.trim());
+  const key = resolveOpenAiKey();
+  return key.startsWith("sk-") && key.length > 20;
 }
 
 export function senecaUnavailableMessage(): string {
@@ -27,7 +35,7 @@ export async function senecaJson<T>(instruction: string, context: string): Promi
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${env.OPENAI_API_KEY}`,
+      Authorization: `Bearer ${resolveOpenAiKey()}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
@@ -70,7 +78,7 @@ export async function senecaText(instruction: string, context: string): Promise<
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${env.OPENAI_API_KEY}`,
+      Authorization: `Bearer ${resolveOpenAiKey()}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
