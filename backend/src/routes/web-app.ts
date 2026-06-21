@@ -10,6 +10,7 @@ import { checkInTemplateLibraryRouter } from "./check-in-template-library";
 import { oneOnOneMeetingsRouter } from "./one-on-one-meetings";
 import { developmentGoalsRouter } from "./development-goals";
 import { checklistLocationsRouter } from "./checklist-locations";
+import { goLocationsRouter } from "./go-locations";
 import { reconcileStripeForSubscriptionRead } from "../lib/stripe-billing";
 import { getTeamSubscription, teamSubscriptionRowHasTeamFeatures } from "./subscription";
 import { webPrismaUserIdFromContext } from "../lib/web-prisma-user";
@@ -168,6 +169,7 @@ webRouter.route("/api/teams/:teamId/one-on-one-templates", oneOnOneTemplatesRout
 webRouter.route("/api/teams/:teamId/members", oneOnOneMeetingsRouter);
 webRouter.route("/api/teams/:teamId/members", developmentGoalsRouter);
 webRouter.route("/api/teams/:teamId/checklist-locations", checklistLocationsRouter);
+webRouter.route("/api/teams/:teamId/go-locations", goLocationsRouter);
 
 // ── API: get team detail ──────────────────────────────────────────────────────
 webRouter.get("/api/teams/:id", async (c) => {

@@ -52,6 +52,7 @@ model User {
   pollsCreated  Poll[]     @relation("PollCreatedBy")
   pollVotes     PollVote[] @relation("PollVoteUser")
   subtaskCompletions SubtaskCompletion[]
+  goLocationsCreated GoLocation[] @relation("GoLocationCreatedBy")
 }
 
 model Session {
@@ -118,6 +119,7 @@ model Team {
   checklistLocations ChecklistLocation[]
   /** Public token for the workspace checklist hub (one QR per workspace). */
   checklistHubToken String? @unique
+  goLocations         GoLocation[]
 }
 
 model TeamSubscription {
@@ -585,6 +587,7 @@ model ChecklistLocation {
   team        Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
   items       ChecklistLocationItem[]
   submissions ChecklistLocationSubmission[]
+  goAssignments GoLocationChecklist[]
 
   @@index([teamId])
 }
@@ -613,4 +616,57 @@ model ChecklistLocationSubmission {
   location      ChecklistLocation @relation(fields: [locationId], references: [id], onDelete: Cascade)
 
   @@index([locationId, submittedAt])
+}
+
+/** Alenio Go access point — separate from workspace invite codes. */
+model GoLocation {
+  id           String   @id @default(cuid())
+  teamId       String
+  name         String
+  area         String?
+  goCode       String   @unique
+  isActive     Boolean  @default(true)
+  guestEnabled Boolean  @default(true)
+  createdById  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  team         Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  createdBy    User?    @relation("GoLocationCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  assignments  GoLocationChecklist[]
+  sessions     GoSession[]
+
+  @@index([teamId])
+}
+
+model GoLocationChecklist {
+  id                  String            @id @default(cuid())
+  goLocationId        String
+  checklistLocationId String
+  dueTime             String?
+  shift               String?
+  isActive            Boolean           @default(true)
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  goLocation          GoLocation        @relation(fields: [goLocationId], references: [id], onDelete: Cascade)
+  checklist           ChecklistLocation @relation(fields: [checklistLocationId], references: [id], onDelete: Cascade)
+
+  @@unique([goLocationId, checklistLocationId])
+  @@index([goLocationId])
+  @@index([checklistLocationId])
+}
+
+/** Temporary no-login browser session for Alenio Go shared devices. */
+model GoSession {
+  id           String     @id @default(cuid())
+  token        String     @unique
+  teamId       String
+  goLocationId String
+  displayName  String
+  deviceLabel  String?
+  startedAt    DateTime   @default(now())
+  expiresAt    DateTime
+  goLocation   GoLocation @relation(fields: [goLocationId], references: [id], onDelete: Cascade)
+
+  @@index([goLocationId, startedAt])
+  @@index([expiresAt])
 }

@@ -1749,6 +1749,7 @@ export type ChecklistSubmissionRow = {
 export type ChecklistLocationsPayload = {
   planRequired: boolean;
   hubToken: string | null;
+  goCode: string | null;
   locations: ChecklistLocationRow[];
   recentSubmissions: ChecklistSubmissionRow[];
 };
@@ -1891,4 +1892,104 @@ export function workspaceChecklistUrl(hubToken: string, checklistId: string): st
 /** @deprecated Use workspaceChecklistHubUrl */
 export function checklistPublicUrl(publicToken: string): string {
   return workspaceChecklistHubUrl(publicToken);
+}
+
+export type GoCodeLookup = {
+  location: { id: string; name: string; area: string | null; guestEnabled: boolean };
+  workspace: { name: string; image: string | null };
+  quickUsers: string[];
+};
+
+export type GoSessionDashboard = {
+  session: { displayName: string; expiresAt: string };
+  location: { id: string; name: string; area: string | null };
+  workspace: { name: string; image: string | null };
+  sections: {
+    dueNow: GoChecklistCard[];
+    today: GoChecklistCard[];
+    recentlyCompleted: GoChecklistCard[];
+  };
+  allChecklists: GoChecklistCard[];
+};
+
+export type GoChecklistCard = {
+  assignmentId: string;
+  checklistId: string;
+  name: string;
+  area: string | null;
+  shift: string | null;
+  dueTime: string | null;
+  taskCount: number;
+  cardColor: string | null;
+  status: "not_started" | "in_progress" | "complete" | "overdue";
+  progressPct: number;
+  lastCompletedAt: string | null;
+  lastCompletedBy: string | null;
+};
+
+export type WorkspaceGoAccess = {
+  planRequired: boolean;
+  goCode: string | null;
+  isActive?: boolean;
+  recentSessions?: number;
+  lastSessionAt?: string | null;
+};
+
+export function fetchGoLocations(teamId: string) {
+  return apiGetJson<{ data: WorkspaceGoAccess }>(`/web/api/teams/${encodeURIComponent(teamId)}/go-locations`).then(
+    (r) => r.data,
+  );
+}
+
+export function regenerateWorkspaceGoCode(teamId: string) {
+  return apiPostJson<{ data: { goCode: string } }>(
+    `/web/api/teams/${encodeURIComponent(teamId)}/go-locations/regenerate-code`,
+    {},
+  ).then((r) => r.data);
+}
+
+export function fetchGoCodeLookup(code: string) {
+  return apiGetJson<{ data: GoCodeLookup }>(`/api/public/alenio-go/codes/${encodeURIComponent(code)}`).then((r) => r.data);
+}
+
+export function createGoSession(body: { goCode: string; displayName: string; deviceLabel?: string }) {
+  return apiPostJson<{
+    data: {
+      sessionToken: string;
+      expiresAt: string;
+      displayName: string;
+      location: { id: string; name: string };
+      workspace: { name: string };
+    };
+  }>("/api/public/alenio-go/sessions", body).then((r) => r.data);
+}
+
+export function fetchGoSessionDashboard(sessionToken: string) {
+  return apiGetJson<{ data: GoSessionDashboard }>(
+    `/api/public/alenio-go/sessions/${encodeURIComponent(sessionToken)}`,
+  ).then((r) => r.data);
+}
+
+export function fetchGoSessionChecklist(sessionToken: string, checklistId: string) {
+  return apiGetJson<{ data: PublicChecklistPayload & { displayName: string; location: { name: string } } }>(
+    `/api/public/alenio-go/sessions/${encodeURIComponent(sessionToken)}/checklists/${encodeURIComponent(checklistId)}`,
+  ).then((r) => r.data);
+}
+
+export function submitGoSessionChecklist(
+  sessionToken: string,
+  checklistId: string,
+  body: { responses: { itemId: string; checked: boolean; signerName?: string; signedAt?: string }[] },
+) {
+  return apiPostJson<{ data: { id: string; submittedAt: string; isComplete: boolean } }>(
+    `/api/public/alenio-go/sessions/${encodeURIComponent(sessionToken)}/checklists/${encodeURIComponent(checklistId)}/submissions`,
+    body,
+  ).then((r) => r.data);
+}
+
+export function alenioGoEntryUrl(goCode: string): string {
+  if (typeof window !== "undefined") {
+    return `${window.location.origin}/aleniogo?code=${encodeURIComponent(goCode)}`;
+  }
+  return `/aleniogo?code=${encodeURIComponent(goCode)}`;
 }

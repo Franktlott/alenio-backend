@@ -1,12 +1,15 @@
 import { useEffect, useState } from "react";
 import QRCode from "qrcode";
-import { workspaceChecklistHubUrl } from "../../lib/api";
+import { alenioGoEntryUrl, workspaceChecklistHubUrl } from "../../lib/api";
 import { formatGoRelative } from "../../lib/go-dashboard-utils";
 
 type Props = {
   teamName?: string;
   teamImage?: string | null;
-  hubToken: string | null;
+  /** Preferred: location Go Code for /aleniogo */
+  goCode?: string | null;
+  /** Legacy hub token fallback */
+  hubToken?: string | null;
   ipadConnected: boolean;
   checklistCount: number;
   lastSeen: string | null;
@@ -15,21 +18,22 @@ type Props = {
 export function GoWorkspaceHeaderInfo({
   teamName,
   teamImage,
-  hubToken,
+  goCode = null,
+  hubToken = null,
   ipadConnected,
   checklistCount,
   lastSeen,
 }: Props) {
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
-  const hubUrl = hubToken ? workspaceChecklistHubUrl(hubToken) : null;
+  const entryUrl = goCode ? alenioGoEntryUrl(goCode) : hubToken ? workspaceChecklistHubUrl(hubToken) : null;
 
   useEffect(() => {
-    if (!hubUrl) {
+    if (!entryUrl) {
       setQrDataUrl(null);
       return;
     }
     let cancelled = false;
-    void QRCode.toDataURL(hubUrl, {
+    void QRCode.toDataURL(entryUrl, {
       margin: 0,
       width: 88,
       color: { dark: "#6336e4", light: "#ffffff" },
@@ -39,7 +43,7 @@ export function GoWorkspaceHeaderInfo({
     return () => {
       cancelled = true;
     };
-  }, [hubUrl]);
+  }, [entryUrl]);
 
   return (
     <div className="go-workspace-header" id="go-workspace-header" data-testid="go-workspace-header">
@@ -64,15 +68,23 @@ export function GoWorkspaceHeaderInfo({
           {checklistCount} active checklist{checklistCount === 1 ? "" : "s"}
           {lastSeen ? <> · Last seen {formatGoRelative(lastSeen)}</> : null}
         </p>
+        {goCode ? (
+          <div className="go-workspace-header__go-code">
+            <span className="go-workspace-header__go-code-label">Go Code</span>
+            <strong className="go-workspace-header__go-code-value">{goCode}</strong>
+          </div>
+        ) : entryUrl ? (
+          <p className="go-workspace-header__go-code-loading">Loading Go Code…</p>
+        ) : null}
       </div>
-      {hubUrl ? (
+      {entryUrl ? (
         <a
-          href={hubUrl}
+          href={entryUrl}
           target="_blank"
           rel="noopener noreferrer"
           className="go-workspace-header__qr-link"
-          title="Open iPad setup"
-          aria-label={`QR code for ${teamName ?? "workspace"} checklists`}
+          title={goCode ? "Open Alenio Go" : "Open iPad setup"}
+          aria-label={`QR code for ${teamName ?? "workspace"} Alenio Go`}
         >
           {qrDataUrl ? (
             <img src={qrDataUrl} alt="" className="go-workspace-header__qr" />

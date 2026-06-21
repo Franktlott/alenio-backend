@@ -206,6 +206,7 @@ export function EnterpriseShellLayout() {
     refetchInterval: 8000,
   });
   const goHubToken = goListQuery.data?.hubToken ?? null;
+  const primaryGoCode = goListQuery.data?.goCode ?? null;
   const goActiveChecklists = useMemo(
     () => (goListQuery.data?.locations ?? []).filter((l) => l.isActive),
     [goListQuery.data?.locations],
@@ -308,6 +309,7 @@ export function EnterpriseShellLayout() {
                 <GoWorkspaceHeaderInfo
                   teamName={selectedTeam?.name}
                   teamImage={selectedTeam?.image}
+                  goCode={primaryGoCode}
                   hubToken={goHubToken}
                   ipadConnected={goIpadConnected}
                   checklistCount={goActiveChecklists.length}

@@ -10,6 +10,7 @@ export const queryKeys = {
   upcomingVideoMeetings: ["upcoming-video-meetings"] as const,
   pendingCalendarEvents: (teamId: string) => ["calendar", "pending", teamId] as const,
   checklistLocations: (teamId: string) => ["checklist-locations", teamId] as const,
+  goLocations: (teamId: string) => ["go-locations", teamId] as const,
   checklistSubmissions: (teamId: string, locationId: string, since?: string) =>
     ["checklist-submissions", teamId, locationId, since ?? "all"] as const,
 };

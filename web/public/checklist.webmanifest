@@ -2,7 +2,7 @@
   "name": "Alenio Go",
   "short_name": "Alenio Go",
   "description": "Sign off daily checklists on iPad. No login required.",
-  "start_url": "/checklist/",
+  "start_url": "/aleniogo",
   "scope": "/",
   "display": "standalone",
   "background_color": "#1e1b4b",

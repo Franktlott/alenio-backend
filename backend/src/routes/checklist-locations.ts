@@ -9,6 +9,7 @@ import {
   startOfTodayUtc,
   teamHasChecklistPlan,
 } from "../lib/checklist-locations";
+import { ensureWorkspaceGoAccess, syncWorkspaceGoChecklists } from "../lib/alenio-go";
 import { parseChecklistCardColor } from "../lib/checklist-card-colors";
 
 type Variables = {
@@ -134,6 +135,7 @@ checklistLocationsRouter.get("/", async (c) => {
   }
 
   const hubToken = await ensureTeamChecklistHubToken(ctx.teamId);
+  const workspaceGo = await ensureWorkspaceGoAccess(ctx.teamId, ctx.user.id);
 
   const locations = await prisma.checklistLocation.findMany({
     where: { teamId: ctx.teamId },
@@ -153,6 +155,7 @@ checklistLocationsRouter.get("/", async (c) => {
     data: {
       planRequired: false,
       hubToken,
+      goCode: workspaceGo.goCode,
       locations: locations.map((l) =>
         serializeLocationRow(l, {
           lastSubmittedAt: statsMap.get(l.id)?.lastSubmittedAt ?? null,
@@ -207,6 +210,8 @@ checklistLocationsRouter.post("/", async (c) => {
     },
     include: { items: { orderBy: { sortOrder: "asc" } } },
   });
+
+  await syncWorkspaceGoChecklists(ctx.teamId);
 
   return c.json({ data: serializeLocationRow(location) }, 201);
 });
@@ -266,6 +271,8 @@ checklistLocationsRouter.patch("/:locationId", async (c) => {
     include: { items: { orderBy: { sortOrder: "asc" } } },
   });
 
+  await syncWorkspaceGoChecklists(ctx.teamId);
+
   return c.json({ data: serializeLocationRow(location) });
 });
 
@@ -315,10 +322,12 @@ checklistLocationsRouter.delete("/:locationId", async (c) => {
       where: { id: locationId },
       data: { isActive: false },
     });
+    await syncWorkspaceGoChecklists(ctx.teamId);
     return c.json({ data: { deactivated: true } });
   }
 
   await prisma.checklistLocation.delete({ where: { id: locationId } });
+  await syncWorkspaceGoChecklists(ctx.teamId);
   return c.json({ data: { deleted: true } });
 });
 

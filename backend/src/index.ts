@@ -42,6 +42,7 @@ import { syncPrismaSchemaOnStartup } from "./lib/sync-prisma-schema";
 import { ensureOneOnOneSchema } from "./lib/ensure-one-on-one-schema";
 import { ensureDevelopmentPlanSchema } from "./lib/ensure-development-plan-schema";
 import { ensureTeamInviteSchema } from "./lib/ensure-team-invite-schema";
+import { ensureAlenioGoSchema } from "./lib/ensure-alenio-go-schema";
 import { ensureRecurrenceSeriesSchema } from "./lib/ensure-recurrence-series-schema";
 import { ensureUserTimezoneSchema } from "./lib/ensure-user-timezone-schema";
 import { ensureCalendarApprovalSchema } from "./lib/ensure-calendar-approval-schema";
@@ -49,7 +50,9 @@ import { developmentGoalsRouter } from "./routes/development-goals";
 import { teamInvitesPublicRouter } from "./routes/team-invites";
 import { publicChecklistHubsRouter } from "./routes/public-checklist-hubs";
 import { publicChecklistLocationsRouter } from "./routes/public-checklist-locations";
+import { publicAlenioGoRouter } from "./routes/public-alenio-go";
 import { checklistLocationsRouter } from "./routes/checklist-locations";
+import { goLocationsRouter } from "./routes/go-locations";
 import { isValidTimeZone } from "./lib/timezone";
 
 syncPrismaSchemaOnStartup();
@@ -59,6 +62,7 @@ const teamInviteSchemaReady = ensureTeamInviteSchema(prisma);
 const recurrenceSeriesSchemaReady = ensureRecurrenceSeriesSchema(prisma);
 const userTimezoneSchemaReady = ensureUserTimezoneSchema(prisma);
 const calendarApprovalSchemaReady = ensureCalendarApprovalSchema(prisma);
+const alenioGoSchemaReady = ensureAlenioGoSchema(prisma);
 
 type Variables = {
   user: AppUser | null;
@@ -778,9 +782,11 @@ app.route("/api/teams/:teamId/messages", messagesRouter);
 app.route("/api/teams/:teamId/templates", templatesRouter);
 app.route("/api/teams/:teamId/subscription", subscriptionRouter);
 app.route("/api/teams/:teamId/checklist-locations", checklistLocationsRouter);
+app.route("/api/teams/:teamId/go-locations", goLocationsRouter);
 app.route("/api/teams", teamsRouter);
 app.route("/api/public/checklist-hubs", publicChecklistHubsRouter);
 app.route("/api/public/checklist-locations", publicChecklistLocationsRouter);
+app.route("/api/public/alenio-go", publicAlenioGoRouter);
 app.route("/api/team-invites", teamInvitesPublicRouter);
 app.route("/api/tasks/mine", myTasksRouter);
 app.route("/api/dms", dmsRouter);
