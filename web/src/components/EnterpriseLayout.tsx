@@ -38,13 +38,6 @@ type Props = {
 
 const WORKSPACE_OVERLAY_MIN_MS = 800;
 
-function IconActivity() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-      <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-    </svg>
-  );
-}
 function IconChat() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
@@ -277,9 +270,6 @@ export function EnterpriseLayout({
           <img src="/icon.png" alt="" className="enterprise-sidebar-mark" width={60} height={60} />
         </Link>
         <nav className="enterprise-nav" aria-label="Product">
-          {showActivityExecuteNav ? (
-            <NavItem to="/activity" navId="activity" activeNav={activeNav} icon={<IconActivity />} label="Activity" />
-          ) : null}
           <NavItem to="/chat" navId="chat" activeNav={activeNav} icon={<IconChat />} label="Chat" />
           {showActivityExecuteNav ? (
             <NavItem to="/dashboard" navId="execute" activeNav={activeNav} icon={<IconWorkspace />} label="Workspace" />

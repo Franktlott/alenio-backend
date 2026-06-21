@@ -11,8 +11,9 @@ import {
   useState,
 } from "react";
 import { useSearchParams } from "react-router-dom";
-import { queryKeys } from "../lib/query-keys";
+import { TeamActivityPanel } from "../components/activity/TeamActivityPanel";
 import { useEnterpriseShell } from "../contexts/EnterpriseShellContext";
+import { queryKeys } from "../lib/query-keys";
 import { CreateChannelModal, CreateGroupModal, NewDmModal } from "../components/ChatCreateModals";
 import {
   ChatMessageActionSheet,
@@ -1386,6 +1387,8 @@ export function ChatPage() {
                 </p>
               ) : null}
             </div>
+
+            <TeamActivityPanel teamId={selectedTeamId} currentUserId={me?.id} />
       </div>
 
       <CreateChannelModal
