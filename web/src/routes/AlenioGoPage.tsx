@@ -1,6 +1,5 @@
 import { useEffect, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
-import { AlenioGoLogo } from "../components/AlenioGoLogo";
 import { LocationChecklistsSection } from "../components/checklists/LocationChecklistsSection";
 import { useEnterpriseShell } from "../contexts/EnterpriseShellContext";
 
@@ -30,9 +29,6 @@ export function AlenioGoPage() {
 
   return (
     <div className="enterprise-tab-shell enterprise-go-page" data-testid="alenio-go-page">
-      <header className="enterprise-go-intro">
-        <AlenioGoLogo variant="page" />
-      </header>
       <LocationChecklistsSection
         teamId={teamId}
         myRole={myRole}

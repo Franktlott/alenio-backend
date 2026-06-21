@@ -2060,6 +2060,70 @@ input {
   flex-shrink: 0;
 }
 
+.enterprise-topbar--go {
+  background: #f8f9fb;
+  border-bottom: none;
+  box-shadow: none;
+  padding: 1rem 1.5rem 1.15rem;
+  align-items: flex-start;
+}
+
+.enterprise-topbar--go .enterprise-topbar-context {
+  align-items: flex-start;
+}
+
+.enterprise-topbar-go-brand {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  max-width: min(38rem, 100%);
+}
+
+.enterprise-topbar-go-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.enterprise-topbar-go-headline {
+  margin: 0;
+  font-size: clamp(1.35rem, 2.4vw, 1.75rem);
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  color: #1e293b;
+}
+
+.enterprise-topbar-go-sub {
+  margin: 0;
+  font-size: 0.9375rem;
+  line-height: 1.45;
+  color: #64748b;
+  max-width: 34rem;
+}
+
+.enterprise-topbar--go .enterprise-topbar-go-logo.alenio-go-logo--header,
+.enterprise-topbar--go .enterprise-topbar-go-logo.alenio-go-logo--dashboard {
+  max-width: 14.5rem;
+  max-height: 3.5rem;
+}
+
+.enterprise-topbar--go .enterprise-topbar-profile {
+  cursor: default;
+}
+
+.enterprise-topbar--go .enterprise-topbar-actions {
+  gap: 1rem;
+  padding-top: 0.15rem;
+}
+
+.enterprise-topbar-profile-chevron {
+  display: inline-flex;
+  align-items: center;
+  color: #94a3b8;
+  margin-left: -0.15rem;
+}
+
 .enterprise-topbar-context {
   flex: 1;
   min-width: 0;
@@ -2067,6 +2131,16 @@ input {
   align-items: center;
   flex-wrap: wrap;
   gap: 0.5rem 0.75rem;
+}
+
+.enterprise-topbar-go-logo.alenio-go-logo--header,
+.enterprise-topbar-go-logo.alenio-go-logo--dashboard {
+  display: block;
+  max-width: 14.5rem;
+  max-height: 3.5rem;
+  width: auto;
+  height: auto;
+  background: transparent;
 }
 
 .enterprise-topbar-title {
@@ -9299,6 +9373,139 @@ input {
   box-sizing: border-box;
 }
 
+.go-dashboard__hero {
+  padding: 0 0 0.25rem;
+}
+
+.go-dashboard__section--activity {
+  min-width: 0;
+}
+
+.go-workspace-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.35rem 0.85rem 0.35rem 0.65rem;
+  border-radius: 12px;
+  background: #fff;
+  border: 1px solid #e8edf2;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  max-width: min(24rem, 38vw);
+}
+
+.go-workspace-header__copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.go-workspace-header__identity {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-width: 0;
+}
+
+.go-workspace-header__thumb-wrap {
+  flex-shrink: 0;
+}
+
+.go-workspace-header__thumb,
+.go-workspace-header__thumb-fallback {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 8px;
+  object-fit: cover;
+}
+
+.go-workspace-header__thumb-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #eef2ff;
+  color: #4338ca;
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+
+.go-workspace-header__text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.08rem;
+}
+
+.go-workspace-header__name {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: #0f172a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.go-workspace-header__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.go-workspace-header__status--on {
+  color: #15803d;
+}
+
+.go-workspace-header__status-dot {
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 999px;
+  background: #94a3b8;
+  flex-shrink: 0;
+}
+
+.go-workspace-header__status--on .go-workspace-header__status-dot {
+  background: #22c55e;
+}
+
+.go-workspace-header__meta {
+  margin: 0.2rem 0 0;
+  font-size: 0.6875rem;
+  color: #94a3b8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.go-workspace-header__qr-link {
+  flex-shrink: 0;
+  display: block;
+  line-height: 0;
+}
+
+.go-workspace-header__qr {
+  width: 3.25rem;
+  height: 3.25rem;
+  border-radius: 8px;
+  border: 1px solid #e8edf2;
+  background: #fff;
+  object-fit: cover;
+}
+
+.go-workspace-header__qr--loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.875rem;
+  color: #94a3b8;
+}
+
+@media (max-width: 960px) {
+  .go-workspace-header {
+    display: none;
+  }
+}
+
 .go-dashboard__toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -9329,20 +9536,20 @@ input {
 }
 
 .go-btn--primary {
-  background: #6366f1;
+  background: #6336e4;
   color: #fff;
-  border-color: #6366f1;
+  border-color: #6336e4;
 }
 
 .go-btn--primary:hover {
-  background: #4f46e5;
-  border-color: #4f46e5;
+  background: #5528d4;
+  border-color: #5528d4;
 }
 
 .go-btn--outline {
   background: #fff;
-  color: #6366f1;
-  border-color: #c7d2fe;
+  color: #6336e4;
+  border-color: #c4b5fd;
 }
 
 .go-btn--outline:hover {
@@ -9384,15 +9591,20 @@ input {
   color: #0f172a;
 }
 
+.go-dashboard__section-title svg {
+  color: #6336e4;
+}
+
 .go-dashboard__section-link {
   border: none;
   background: transparent;
-  color: #6366f1;
+  color: #6336e4;
   font-size: 0.8125rem;
   font-weight: 600;
   cursor: pointer;
   font-family: inherit;
   padding: 0;
+  white-space: nowrap;
 }
 
 .go-dashboard__section-link:hover {
@@ -9401,6 +9613,47 @@ input {
 
 .go-checklist-carousel-wrap {
   position: relative;
+}
+
+.go-checklist-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 15.5rem;
+  padding: 1.5rem 1.25rem;
+  background: #fff;
+  border: 1px dashed #cbd5e1;
+  border-radius: 14px;
+  box-sizing: border-box;
+}
+
+.go-checklist-empty__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 10px;
+  background: #f1f5f9;
+  color: #64748b;
+  margin-bottom: 0.15rem;
+}
+
+.go-checklist-empty__title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.go-checklist-empty__sub {
+  margin: 0 0 0.35rem;
+  max-width: 28rem;
+  font-size: 0.875rem;
+  line-height: 1.45;
+  color: #64748b;
 }
 
 .go-checklist-carousel {
@@ -9431,60 +9684,66 @@ input {
 }
 
 .go-checklist-card {
-  flex: 0 0 min(320px, calc((100% - 1.7rem) / 3));
+  flex: 0 0 min(280px, calc((100% - 1.7rem) / 3));
   scroll-snap-align: start;
   background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 14px;
-  padding: 1rem 1rem 0.85rem;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  border: 1px solid #e8edf2;
+  border-radius: 12px;
+  padding: 1.125rem 1.25rem 1rem;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
   position: relative;
+  display: flex;
+  flex-direction: column;
 }
 
-.go-checklist-card__head {
+.go-checklist-card__top {
   display: flex;
   align-items: flex-start;
-  justify-content: space-between;
-  gap: 0.5rem;
-  margin-bottom: 0.65rem;
+  gap: 0.75rem;
+  padding-right: 1.25rem;
+  margin-bottom: 0.85rem;
+}
+
+.go-checklist-card__info {
+  flex: 1;
+  min-width: 0;
 }
 
 .go-checklist-card__icon {
-  width: 2.25rem;
-  height: 2.25rem;
+  width: 2.75rem;
+  height: 2.75rem;
   border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.125rem;
-  margin-bottom: 0;
-}
-
-.go-checklist-card__menu-wrap {
-  position: relative;
+  font-size: 1.25rem;
   flex-shrink: 0;
 }
 
 .go-checklist-card__menu-btn {
+  position: absolute;
+  top: 0.85rem;
+  right: 0.85rem;
   width: 1.75rem;
   height: 1.75rem;
-  border: 1px solid #e2e8f0;
+  border: none;
   border-radius: 6px;
-  background: #fff;
-  color: #64748b;
-  font-size: 1rem;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 1.05rem;
   line-height: 1;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   font-family: inherit;
+  flex-shrink: 0;
 }
 
-.go-checklist-card__menu-btn:hover {
+.go-checklist-card__menu-btn:hover,
+.go-checklist-card__menu-btn[aria-expanded="true"] {
   background: #f8fafc;
-  border-color: #cbd5e1;
-  color: #334155;
+  color: #64748b;
 }
 
 .go-checklist-card__menu {
@@ -9524,50 +9783,92 @@ input {
 }
 
 .go-checklist-card__title {
-  margin: 0 0 0.65rem;
+  margin: 0 0 0.45rem;
   font-size: 0.9375rem;
   font-weight: 700;
-  color: #0f172a;
-  line-height: 1.3;
+  color: #1e293b;
+  line-height: 1.25;
 }
 
 .go-checklist-card__meta {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.45rem 0.75rem;
-  margin: 0 0 0.65rem;
-}
-
-.go-checklist-card__meta div {
-  min-width: 0;
-}
-
-.go-checklist-card__meta dt {
+  list-style: none;
   margin: 0;
-  font-size: 0.6875rem;
-  font-weight: 600;
-  color: #94a3b8;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.12rem;
 }
 
-.go-checklist-card__meta dd {
-  margin: 0.1rem 0 0;
+.go-checklist-card__meta li {
   font-size: 0.8125rem;
-  font-weight: 600;
-  color: #334155;
-}
-
-.go-checklist-card__updated {
-  margin: 0 0 0.75rem;
-  font-size: 0.75rem;
+  line-height: 1.45;
   color: #64748b;
 }
 
+.go-checklist-card__meta li span {
+  color: #64748b;
+}
+
+.go-checklist-card__meta-value {
+  font-weight: 600;
+  color: #475569;
+}
+
+.go-checklist-card__divider {
+  height: 1px;
+  background: #e8edf2;
+  margin: 0 0 0.65rem;
+}
+
+.go-checklist-card__updated {
+  margin: 0 0 0.85rem;
+  font-size: 0.75rem;
+  color: #94a3b8;
+  text-align: center;
+}
+
 .go-checklist-card__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.45rem;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+  margin-top: auto;
+}
+
+.go-checklist-card__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  border-radius: 8px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  font-family: inherit;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid transparent;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.go-checklist-card__btn--edit {
+  background: #ede9fe;
+  color: #6366f1;
+  border-color: #ddd6fe;
+}
+
+.go-checklist-card__btn--edit:hover {
+  background: #e0e7ff;
+}
+
+.go-checklist-card__btn--preview {
+  background: #fff;
+  color: #475569;
+  border-color: #e2e8f0;
+}
+
+.go-checklist-card__btn--preview:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
 }
 
 .go-dashboard__columns {
@@ -9879,22 +10180,15 @@ input {
 }
 
 @media (max-width: 960px) {
-  .go-dashboard__columns {
+  .go-dashboard__columns,
+  .go-dashboard__layout {
     grid-template-columns: 1fr;
-  }
-
-  .go-checklist-carousel__next {
-    display: none;
   }
 }
 
 @media (max-width: 640px) {
-  .enterprise-go-intro {
-    padding: 1rem 1rem 0.35rem;
-  }
-
   .go-dashboard {
-    padding: 0 1rem 1.5rem;
+    padding: 0.85rem 1rem 1.5rem;
   }
 
   .go-checklist-card {
@@ -9924,8 +10218,13 @@ input {
 }
 
 .alenio-go-logo--header {
-  max-width: 152px;
-  max-height: 44px;
+  max-width: 190px;
+  max-height: 56px;
+}
+
+.alenio-go-logo--dashboard {
+  max-width: 220px;
+  max-height: 64px;
 }
 
 .alenio-go-logo--nav {
@@ -9963,8 +10262,10 @@ input {
 }
 
 .alenio-go-logo--page.kiosk-app-header__go-logo {
-  max-width: min(240px, 58vw);
-  max-height: 52px;
+  max-width: min(132px, 42vw);
+  max-height: 30px;
+  width: auto;
+  height: auto;
 }
 
 .kiosk-hub-brand {
@@ -12425,225 +12726,100 @@ button.enterprise-profile-legal-link {
   max-width: none;
   width: 100%;
   min-height: calc(100dvh - 3.5rem);
-  padding: 0 1.25rem 1.5rem;
+  padding: 1rem 1.25rem 1.5rem;
   box-sizing: border-box;
-}
-
-.checklist-builder-page__topbar {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 0.85rem 0 1rem;
-  border-bottom: 1px solid #e2e8f0;
-  margin-bottom: 1rem;
-}
-
-.checklist-builder-page__topbar-left {
   display: flex;
   flex-direction: column;
-  gap: 0.65rem;
-  min-width: 0;
-}
-
-.checklist-builder-page__title {
-  margin: 0;
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: #0f172a;
-  letter-spacing: -0.01em;
-}
-
-.checklist-builder-page__sub {
-  margin: 0.25rem 0 0;
-  font-size: 0.8125rem;
-  color: #64748b;
-}
-
-.checklist-builder-page__topbar-actions {
-  display: flex;
   align-items: center;
-  gap: 0.65rem;
-  flex-shrink: 0;
 }
 
-.checklist-builder-page__cancel {
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: #64748b;
+.checklist-builder-page .enterprise-oneone-templates-back {
   text-decoration: none;
-  padding: 0.45rem 0.65rem;
-  border-radius: 6px;
+  display: inline-block;
+  width: auto;
 }
 
-.checklist-builder-page__cancel:hover {
-  background: #f1f5f9;
+.checklist-builder-page .enterprise-oneone-templates-back:hover {
   color: #334155;
 }
 
-.checklist-builder-page__split {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
-  gap: 1.25rem;
-  align-items: start;
-}
-
-.checklist-builder-page__editor {
-  min-width: 0;
+.checklist-builder-card {
+  width: 100%;
+  max-width: min(1120px, 100%);
+  min-height: min(720px, calc(100dvh - 5rem));
   display: flex;
   flex-direction: column;
-  gap: 1rem;
-}
-
-.checklist-builder-page__preview {
-  position: sticky;
-  top: 0.75rem;
-}
-
-.checklist-builder-panel {
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  padding: 1rem 1.1rem;
-}
-
-.checklist-builder-panel__title {
-  margin: 0 0 0.75rem;
-  font-size: 0.875rem;
-  font-weight: 700;
-  color: #0f172a;
-}
-
-.checklist-builder-panel__title--inline {
-  margin: 0;
-}
-
-.checklist-card-color-picker {
-  margin-top: 0.85rem;
-}
-
-.checklist-card-color-picker__swatches {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.45rem;
-  margin-top: 0.4rem;
-}
-
-.checklist-card-color-picker__swatch {
-  width: 1.75rem;
-  height: 1.75rem;
-  border-radius: 999px;
-  border: 2px solid transparent;
-  padding: 0;
-  cursor: pointer;
-  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.08);
-  transition: transform 0.12s ease, box-shadow 0.12s ease;
-}
-
-.checklist-card-color-picker__swatch:hover {
-  transform: scale(1.06);
-}
-
-.checklist-card-color-picker__swatch--selected {
-  border-color: #0f172a;
-  box-shadow: 0 0 0 2px #fff, 0 0 0 4px #0f172a;
-}
-
-.checklist-card-color-picker__swatch:focus-visible {
-  outline: 2px solid #6366f1;
-  outline-offset: 2px;
-}
-
-.checklist-builder-tasks {
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
   overflow: hidden;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
   background: #fff;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.08);
 }
 
-.checklist-builder-tasks__head {
-  display: grid;
-  grid-template-columns: 2rem 1fr 1fr 2rem;
-  gap: 0.5rem;
-  padding: 0.45rem 0.65rem;
-  background: #f8fafc;
-  border-bottom: 1px solid #e2e8f0;
-  font-size: 0.625rem;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: #94a3b8;
+.checklist-builder-card .enterprise-oneone-templates-editor-split {
+  flex: 1;
+  min-height: 420px;
 }
 
-.checklist-builder-tasks__list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  max-height: min(52vh, 640px);
+.checklist-builder-preview-pane {
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
+  padding: 1rem 1.25rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
 }
 
-.checklist-builder-tasks__list li {
-  display: grid;
-  grid-template-columns: 2rem 1fr 1fr 2rem;
-  gap: 0.5rem;
-  align-items: center;
-  padding: 0.45rem 0.65rem;
-  border-bottom: 1px solid #eef2f7;
-}
-
-.checklist-builder-tasks__list li:last-child {
-  border-bottom: none;
-}
-
-.checklist-builder-tasks__num {
-  font-size: 0.6875rem;
-  font-weight: 600;
-  color: #94a3b8;
-  text-align: center;
-}
-
-.checklist-builder-tasks__input {
-  min-height: 2rem;
-  padding: 0.35rem 0.55rem;
+.checklist-builder-preview-pane__intro {
+  margin: 0;
   font-size: 0.8125rem;
-  border-radius: 6px;
 }
 
-.checklist-builder-tasks__input--note {
-  font-size: 0.75rem;
-  color: #475569;
+.checklist-builder-preview-pane__desc {
+  margin: 0;
+  font-size: 0.8125rem;
 }
 
-.checklist-builder-tasks__input--note::placeholder {
-  color: #94a3b8;
+.checklist-builder-preview-pane__device {
+  margin-top: 0.25rem;
 }
 
-.checklist-builder-tasks__spacer {
-  width: 2rem;
+.checklist-builder-card .enterprise-oneone-templates-section-head {
+  padding: 0.55rem 0.75rem;
+  border-bottom: 1px solid #e8edf3;
 }
 
 @media (max-width: 960px) {
-  .checklist-builder-page__split {
-    grid-template-columns: 1fr;
+  .checklist-builder-page {
+    padding: 0.75rem 0.85rem 1.25rem;
   }
 
-  .checklist-builder-page__preview {
-    position: static;
-    order: -1;
+  .checklist-builder-card {
+    min-height: auto;
+  }
+
+  .checklist-builder-card .enterprise-oneone-templates-editor-top {
+    flex-direction: column;
+  }
+
+  .checklist-builder-card .enterprise-oneone-templates-editor-top-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .checklist-builder-card .enterprise-oneone-templates-editor-split {
+    grid-template-columns: 1fr;
+    min-height: auto;
+  }
+
+  .checklist-builder-card .enterprise-oneone-templates-fields-pane {
+    border-right: none;
+    border-bottom: 1px solid #e8edf3;
   }
 
   .checklist-kiosk-live-preview__device {
     max-height: 420px;
-  }
-
-  .checklist-builder-page__topbar {
-    flex-direction: column;
-  }
-
-  .checklist-builder-tasks__head,
-  .checklist-builder-tasks__list li {
-    grid-template-columns: 1.75rem 1fr 1fr 1.75rem;
   }
 }
 
@@ -12658,7 +12834,7 @@ button.enterprise-profile-legal-link {
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  background: #f4f6fb;
+  background: #eef2ff;
 }
 
 .kiosk-app--preview {
@@ -12671,177 +12847,525 @@ button.enterprise-profile-legal-link {
 }
 
 .kiosk-app-header {
-  background: linear-gradient(145deg, #1e1b4b 0%, #3730a3 45%, #6366f1 100%);
+  background: linear-gradient(160deg, #312e81 0%, #4338ca 42%, #6366f1 100%);
   color: #fff;
-  padding: 1rem 1.15rem 1.1rem;
-  box-shadow: 0 8px 24px rgba(49, 46, 129, 0.28);
+  padding: 0.75rem 1rem 1rem;
+  box-shadow: 0 4px 16px rgba(49, 46, 129, 0.22);
+}
+
+.kiosk-app-header__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.kiosk-app-header__back-spacer {
+  flex: 1;
 }
 
 .kiosk-app-header__back {
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
-  margin: 0 0 0.65rem;
-  padding: 0.35rem 0.5rem 0.35rem 0;
-  font-size: 0.875rem;
+  padding: 0.15rem 0;
+  font-size: 0.8125rem;
   font-weight: 600;
   color: rgba(255, 255, 255, 0.92);
   text-decoration: none;
-  border-radius: 8px;
-  transition: color 0.15s, background 0.15s;
 }
 
 .kiosk-app-header__back:hover {
   color: #fff;
-  background: rgba(255, 255, 255, 0.1);
-}
-
-.kiosk-app-header__back:focus-visible {
-  outline: 2px solid rgba(255, 255, 255, 0.85);
-  outline-offset: 2px;
-}
-
-.kiosk-app-header__brand-row {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 0.75rem;
-  margin-bottom: 0.75rem;
-}
-
-.kiosk-app-header__brand-row .kiosk-app-header__go-logo {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.kiosk-app-header__meta {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 0.35rem;
-  flex-shrink: 0;
-  max-width: 48%;
-}
-
-.kiosk-app-header__clock--compact {
-  flex-shrink: 0;
-  margin: 0;
-  padding-top: 0.2rem;
-  font-size: 0.6875rem;
-  font-weight: 600;
-  line-height: 1.35;
-  text-align: right;
-  color: rgba(255, 255, 255, 0.82);
-}
-
-.kiosk-app-header--checklist .kiosk-app-header__title {
-  font-size: 1.15rem;
-  margin-bottom: 0.15rem;
-}
-
-.kiosk-app-header--checklist .kiosk-app-header__subtitle {
-  margin-bottom: 0;
-  font-size: 0.8125rem;
-  opacity: 0.82;
-}
-
-.kiosk-app-header__top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  margin-bottom: 1rem;
-}
-
-.kiosk-app-header__logo {
-  display: block;
-  height: auto;
-  flex-shrink: 0;
-}
-
-.kiosk-app-header__workspace-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.35rem 0.75rem;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.14);
-  font-size: 0.8125rem;
-  font-weight: 600;
-  max-width: min(100%, 20rem);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.kiosk-app-header__pill-avatar {
-  width: 22px;
-  height: 22px;
-  border-radius: 4px;
-  object-fit: cover;
-  flex-shrink: 0;
-}
-
-.kiosk-app-header__pill-fallback {
-  width: 22px;
-  height: 22px;
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.22);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.6875rem;
-  font-weight: 700;
-  flex-shrink: 0;
-}
-
-.kiosk-app-header__clock {
-  text-align: right;
-  flex-shrink: 0;
 }
 
 .kiosk-app-header__time {
-  font-size: 0.9375rem;
-  font-weight: 700;
-  line-height: 1.2;
-}
-
-.kiosk-app-header__date {
-  margin-top: 0.1rem;
-  font-size: 0.75rem;
-  opacity: 0.88;
-  font-weight: 500;
-}
-
-.kiosk-app-header__location {
-  margin: 0 0 0.65rem;
-  font-size: 0.875rem;
-  font-weight: 600;
-  opacity: 0.92;
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-}
-
-.kiosk-app-header__title {
   margin: 0;
-  font-size: clamp(1.65rem, 4vw, 2rem);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.kiosk-app-header__context {
+  margin: 0 0 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.kiosk-app-header__checklist-name {
+  margin: 0;
+  font-size: clamp(1.25rem, 3.5vw, 1.6rem);
   font-weight: 800;
-  line-height: 1.1;
+  line-height: 1.15;
   letter-spacing: -0.02em;
 }
 
-.kiosk-app-header__subtitle {
-  margin: 0.45rem 0 0;
-  font-size: 0.9375rem;
-  opacity: 0.88;
-  line-height: 1.4;
+.kiosk-app-header__progress {
+  margin-top: 0.65rem;
+}
+
+.kiosk-app-header__progress-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.kiosk-app-header__progress-bar {
+  height: 0.35rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.22);
+  overflow: hidden;
+}
+
+.kiosk-app-header__progress-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #34d399;
+  transition: width 0.2s ease;
 }
 
 .kiosk-app-main {
   flex: 1;
-  padding: 0.85rem 0.85rem 5.5rem;
+  padding: 0.85rem 0.85rem 1.25rem;
   overflow-y: auto;
+  background: #f4f6fb;
+}
+
+.kiosk-task-cards {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.kiosk-task-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 0.85rem 0.9rem 0.75rem;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.kiosk-task-card--complete {
+  background: #f8fafc;
+  border-color: #d1fae5;
+}
+
+.kiosk-task-card__top {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+}
+
+.kiosk-task-card__index {
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 6px;
+  background: #eef2ff;
+  color: #4338ca;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.kiosk-task-card--complete .kiosk-task-card__index {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.kiosk-task-card__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.kiosk-task-card__title {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  line-height: 1.3;
+  color: #0f172a;
+}
+
+.kiosk-task-card--complete .kiosk-task-card__title {
+  color: #64748b;
+}
+
+.kiosk-task-card__note {
+  margin: 0.25rem 0 0;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  color: #64748b;
+}
+
+.kiosk-task-card__signed {
+  margin: 0.25rem 0 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #059669;
+}
+
+.kiosk-task-card__error {
+  margin: 0.35rem 0 0;
+  font-size: 0.75rem;
+  color: #dc2626;
+}
+
+.kiosk-task-card__badge {
+  flex-shrink: 0;
+  padding: 0.2rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  background: #fff7ed;
+  color: #c2410c;
+}
+
+.kiosk-task-card__badge--done {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.kiosk-task-card__action {
+  margin-top: 0.65rem;
+}
+
+.kiosk-task-card__signoff,
+.kiosk-task-card__confirm {
+  width: 100%;
+  border: none;
+  border-radius: 10px;
+  padding: 0.65rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  background: #4338ca;
+  color: #fff;
+}
+
+.kiosk-task-card__signoff:hover,
+.kiosk-task-card__confirm:hover {
+  background: #3730a3;
+}
+
+.kiosk-task-card__sign-form {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 0.45rem;
+}
+
+.kiosk-task-card__input {
+  min-width: 0;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 0.55rem 0.65rem;
+  font-size: 0.875rem;
+  font-family: inherit;
+}
+
+.kiosk-task-card__input--error {
+  border-color: #fca5a5;
+}
+
+.kiosk-task-card__cancel,
+.kiosk-task-card__undo {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 0.55rem 0.75rem;
+  background: #fff;
+  color: #475569;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.kiosk-task-card__undo {
+  width: 100%;
+}
+
+.kiosk-app-completed-toggle {
+  width: 100%;
+  margin: 0 0 0.65rem;
+  border: 1px dashed #cbd5e1;
+  border-radius: 10px;
+  padding: 0.55rem 0.75rem;
+  background: #fff;
+  color: #475569;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.kiosk-app-empty-panel {
+  background: #fff;
+  border: 1px dashed #cbd5e1;
+  border-radius: 12px;
+  padding: 1.25rem;
+  text-align: center;
+}
+
+.kiosk-app-empty-panel__title {
+  margin: 0 0 0.35rem;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.go-dashboard__layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+  width: 100%;
+}
+
+.go-dashboard__panel--checklists {
+  width: 100%;
+  overflow: visible;
+}
+
+.go-dashboard__panel .go-activity-panel,
+.go-dashboard__section .go-activity-panel {
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  background: transparent;
+}
+
+.go-dashboard__panel {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1rem;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.go-dashboard__section-meta,
+.go-dashboard__live {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.go-dashboard__live--on {
+  color: #059669;
+}
+
+.go-dashboard__toast {
+  margin: 0 0 0.65rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  background: #ecfdf5;
+  color: #047857;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.go-checklist-table-wrap {
+  overflow: visible;
+}
+
+.go-checklist-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+}
+
+.go-checklist-table th {
+  text-align: left;
+  padding: 0.45rem 0.5rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #94a3b8;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.go-checklist-table td {
+  padding: 0.65rem 0.5rem;
+  border-bottom: 1px solid #f1f5f9;
+  vertical-align: middle;
+}
+
+.go-checklist-table tr:last-child td {
+  border-bottom: none;
+}
+
+.go-checklist-table__name {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.go-checklist-table__dot {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.go-checklist-table__muted {
+  color: #64748b;
+}
+
+.go-checklist-table__actions-head,
+.go-checklist-table__actions-cell {
+  width: 2.75rem;
+  text-align: right;
+}
+
+.go-checklist-row-menu-wrap {
+  position: relative;
+  display: inline-flex;
+  justify-content: flex-end;
+}
+
+.go-checklist-row-kebab {
+  width: 2rem;
+  height: 2rem;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+  font-size: 1.1rem;
+  line-height: 1;
+  color: #94a3b8;
+  padding: 0;
+}
+
+.go-checklist-row-kebab:hover {
+  color: #475569;
+  background: #f8fafc;
+}
+
+.go-checklist-row-kebab[aria-expanded="true"] {
+  color: #475569;
+  background: #f1f5f9;
+}
+
+.go-checklist-row-menu {
+  min-width: 132px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+  padding: 0.25rem;
+}
+
+.go-checklist-row-menu--fixed {
+  position: fixed;
+  z-index: 1200;
+}
+
+.go-checklist-row-menu--up {
+  transform: translateY(-100%);
+}
+
+.go-checklist-row-menu button,
+.go-checklist-row-menu-link {
+  display: block;
+  width: 100%;
+  border: none;
+  background: none;
+  text-align: left;
+  padding: 0.45rem 0.55rem;
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #334155;
+  border-radius: 6px;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.go-checklist-row-menu button:hover,
+.go-checklist-row-menu-link:hover {
+  background: #f8fafc;
+}
+
+.go-checklist-row-menu-danger {
+  color: #b91c1c !important;
+}
+
+.go-link-btn {
+  border: none;
+  background: transparent;
+  padding: 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #6366f1;
+  font-family: inherit;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.go-link-btn:hover {
+  text-decoration: underline;
+}
+
+.go-link-btn--danger {
+  color: #dc2626;
+}
+
+.go-dashboard__qr {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid #f1f5f9;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.go-dashboard__qr-label {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #475569;
+}
+
+.go-dashboard__qr-hint {
+  margin: 0;
+  font-size: 0.6875rem;
+  color: #94a3b8;
+}
+
+.go-activity-panel--compact .go-activity-completion__sub {
+  display: block;
+}
+
+@media (max-width: 960px) {
+  .go-dashboard__columns,
+  .go-dashboard__layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .kiosk-task-card__sign-form {
+    grid-template-columns: 1fr;
+  }
 }
 
 .kiosk-app-progress-card {
@@ -13369,7 +13893,7 @@ button.enterprise-profile-legal-link {
 }
 
 .kiosk-hub-header .kiosk-app-header__title {
-  font-size: clamp(1.5rem, 3.5vw, 1.85rem);
+  font-size: clamp(1.2rem, 3.2vw, 1.45rem);
 }
 
 .kiosk-hub-main {

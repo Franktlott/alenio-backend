@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
 import {
@@ -10,18 +11,12 @@ import {
 import {
   checklistCardMeta,
   formatGoDate,
-  formatGoRelative,
   formatGoTime,
-  isIpadRecentlyActive,
-  latestSubmissionAt,
   storeCompletionPercent,
   todaySubmissions,
   userInitials,
 } from "../../lib/go-dashboard-utils";
 import { queryKeys } from "../../lib/query-keys";
-import { checklistCardColorStyles } from "../../lib/checklist-card-colors";
-import { GoLocationQrCompact } from "./GoLocationQrCompact";
-import { LocationChecklistHistoryPanel } from "./LocationChecklistHistoryPanel";
 
 type Props = {
   teamId: string;
@@ -43,15 +38,6 @@ function IconClipboard() {
   );
 }
 
-function IconMapPin() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
-      <circle cx="12" cy="10" r="3" />
-    </svg>
-  );
-}
-
 function IconActivity() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
@@ -60,26 +46,33 @@ function IconActivity() {
   );
 }
 
-function IconDevice() {
+function IconEye() {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-      <rect x="4" y="2" width="16" height="20" rx="2" />
-      <line x1="12" y1="18" x2="12" y2="18" strokeWidth="3" strokeLinecap="round" />
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+      <circle cx="12" cy="12" r="3" />
     </svg>
   );
 }
+
+const CHECKLIST_MENU_WIDTH = 132;
+const CHECKLIST_MENU_HEIGHT = 120;
+
+type MenuCoords = {
+  top: number;
+  left: number;
+  openUp: boolean;
+};
 
 export function LocationChecklistsSection({ teamId, myRole, teamName, teamImage }: Props) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const manager = canManage(myRole);
-  const [historyTarget, setHistoryTarget] = useState<ChecklistLocationRow | null>(null);
-  const [historyFilter, setHistoryFilter] = useState<"today" | "7d" | "30d">("7d");
   const [actionErr, setActionErr] = useState<string | null>(null);
-  const [menuId, setMenuId] = useState<string | null>(null);
-  const [locationExpanded, setLocationExpanded] = useState(true);
+  const [menuChecklistId, setMenuChecklistId] = useState<string | null>(null);
+  const [menuCoords, setMenuCoords] = useState<MenuCoords | null>(null);
+  const menuAnchorRef = useRef<HTMLButtonElement | null>(null);
   const carouselRef = useRef<HTMLDivElement>(null);
-  const locationsRef = useRef<HTMLElement>(null);
 
   const listQuery = useQuery({
     queryKey: queryKeys.checklistLocations(teamId),
@@ -94,19 +87,52 @@ export function LocationChecklistsSection({ teamId, myRole, teamName, teamImage 
   const recentSubmissions = listQuery.data?.recentSubmissions ?? [];
   const activeChecklists = useMemo(() => locations.filter((l) => l.isActive), [locations]);
 
-  const lastDeviceActivity = useMemo(() => latestSubmissionAt(recentSubmissions), [recentSubmissions]);
-  const ipadConnected = isIpadRecentlyActive(lastDeviceActivity);
   const todayActivity = useMemo(() => todaySubmissions(recentSubmissions), [recentSubmissions]);
   const completionPct = storeCompletionPercent(recentSubmissions, activeChecklists.length);
   const completedToday = todayActivity.filter((s) => s.isComplete);
   const needsAttention = todayActivity.filter((s) => !s.isComplete);
 
   useEffect(() => {
-    if (!menuId) return;
-    const close = () => setMenuId(null);
+    if (!menuChecklistId) return;
+    const close = () => setMenuChecklistId(null);
     document.addEventListener("click", close);
     return () => document.removeEventListener("click", close);
-  }, [menuId]);
+  }, [menuChecklistId]);
+
+  const menuChecklist = useMemo(
+    () => activeChecklists.find((cl) => cl.id === menuChecklistId) ?? null,
+    [activeChecklists, menuChecklistId],
+  );
+  const menuPreviewUrl =
+    menuChecklist && hubToken ? `${workspaceChecklistHubUrl(hubToken)}/${menuChecklist.id}` : null;
+
+  useLayoutEffect(() => {
+    if (!menuChecklistId) {
+      setMenuCoords(null);
+      return;
+    }
+
+    const update = () => {
+      const anchor = menuAnchorRef.current;
+      if (!anchor) return;
+      const rect = anchor.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const openUp = spaceBelow < CHECKLIST_MENU_HEIGHT && rect.top > CHECKLIST_MENU_HEIGHT;
+      setMenuCoords({
+        top: openUp ? rect.top - 4 : rect.bottom + 4,
+        left: Math.max(8, rect.right - CHECKLIST_MENU_WIDTH),
+        openUp,
+      });
+    };
+
+    update();
+    window.addEventListener("scroll", update, true);
+    window.addEventListener("resize", update);
+    return () => {
+      window.removeEventListener("scroll", update, true);
+      window.removeEventListener("resize", update);
+    };
+  }, [menuChecklistId]);
 
   const refresh = async () => {
     await queryClient.invalidateQueries({ queryKey: queryKeys.checklistLocations(teamId) });
@@ -114,11 +140,9 @@ export function LocationChecklistsSection({ teamId, myRole, teamName, teamImage 
 
   const onDeactivate = async (checklist: ChecklistLocationRow) => {
     setActionErr(null);
-    setMenuId(null);
     if (!window.confirm(`Remove "${checklist.name}"?`)) return;
     try {
       await deleteChecklistLocation(teamId, checklist.id);
-      if (historyTarget?.id === checklist.id) setHistoryTarget(null);
       await refresh();
     } catch (e) {
       setActionErr(e instanceof Error ? e.message : "Could not remove checklist.");
@@ -136,11 +160,6 @@ export function LocationChecklistsSection({ teamId, myRole, teamName, teamImage 
 
   const scrollCarousel = (dir: 1 | -1) => {
     carouselRef.current?.scrollBy({ left: dir * 320, behavior: "smooth" });
-  };
-
-  const scrollToLocations = () => {
-    locationsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    setLocationExpanded(true);
   };
 
   if (listQuery.isLoading) {
@@ -184,35 +203,42 @@ export function LocationChecklistsSection({ teamId, myRole, teamName, teamImage 
           </p>
         ) : null}
 
-        <div className="go-dashboard__toolbar">
-          {manager ? (
-            <button type="button" className="go-btn go-btn--primary" onClick={() => openBuilder()}>
-              + Create Checklist
-            </button>
-          ) : null}
-          <button type="button" className="go-btn go-btn--outline" onClick={scrollToLocations}>
-            <IconDevice />
-            Connect Device
-          </button>
-        </div>
+        {manager ? (
+          <div className="go-dashboard__hero">
+            <div className="go-dashboard__toolbar">
+              <button type="button" className="go-btn go-btn--primary" onClick={() => openBuilder()}>
+                + Create Checklist
+              </button>
+            </div>
+          </div>
+        ) : null}
 
-        <section className="go-dashboard__section" aria-labelledby="go-checklists-heading">
+        <div className="go-dashboard__body">
+        <section className="go-dashboard__section go-dashboard__section--checklists" aria-labelledby="go-checklists-heading">
           <div className="go-dashboard__section-head">
             <h2 id="go-checklists-heading" className="go-dashboard__section-title">
               <IconClipboard />
               Checklists
             </h2>
-            <button type="button" className="go-dashboard__section-link" onClick={() => carouselRef.current?.scrollIntoView({ behavior: "smooth" })}>
-              View all checklists
-            </button>
+            {activeChecklists.length === 0 ? (
+              <span className="go-dashboard__section-meta">{activeChecklists.length} active</span>
+            ) : null}
           </div>
 
           {activeChecklists.length === 0 ? (
-            <div className="go-dashboard__empty-card">
-              <p className="enterprise-muted">No checklists yet.</p>
+            <div className="go-checklist-empty" data-testid="go-checklists-empty">
+              <div className="go-checklist-empty__icon" aria-hidden>
+                <IconClipboard />
+              </div>
+              <h3 className="go-checklist-empty__title">No checklists yet</h3>
+              <p className="go-checklist-empty__sub">
+                {manager
+                  ? "Create your first checklist for shift tasks, opening routines, and more."
+                  : "Checklists from your manager will show up here."}
+              </p>
               {manager ? (
                 <button type="button" className="go-btn go-btn--primary go-btn--sm" onClick={() => openBuilder()}>
-                  + Create Checklist
+                  + New checklist
                 </button>
               ) : null}
             </div>
@@ -221,97 +247,71 @@ export function LocationChecklistsSection({ teamId, myRole, teamName, teamImage 
               <div className="go-checklist-carousel" ref={carouselRef}>
                 {activeChecklists.map((cl) => {
                   const meta = checklistCardMeta(cl);
-                  const cardStyle = checklistCardColorStyles(cl.cardColor);
                   const previewUrl = hubToken ? `${workspaceChecklistHubUrl(hubToken)}/${cl.id}` : null;
                   return (
-                    <article
-                      key={cl.id}
-                      className="go-checklist-card"
-                      style={{
-                        background: cardStyle.background,
-                        borderColor: cardStyle.borderColor,
-                        boxShadow: `inset 4px 0 0 ${cardStyle.accent}`,
-                      }}
-                    >
-                      <div className="go-checklist-card__head">
+                    <article key={cl.id} className="go-checklist-card">
+                      {manager ? (
+                        <button
+                          type="button"
+                          className="go-checklist-card__menu-btn"
+                          aria-label={`Actions for ${cl.name}`}
+                          aria-expanded={menuChecklistId === cl.id}
+                          aria-haspopup="menu"
+                          ref={menuChecklistId === cl.id ? menuAnchorRef : undefined}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            menuAnchorRef.current = e.currentTarget;
+                            setMenuChecklistId((current) => (current === cl.id ? null : cl.id));
+                          }}
+                        >
+                          ⋮
+                        </button>
+                      ) : null}
+
+                      <div className="go-checklist-card__top">
                         <div className="go-checklist-card__icon" style={{ background: meta.iconBg }} aria-hidden>
                           {meta.icon}
                         </div>
-                        {manager ? (
-                          <div className="go-checklist-card__menu-wrap">
-                            <button
-                              type="button"
-                              className="go-checklist-card__menu-btn"
-                              aria-label={`Actions for ${cl.name}`}
-                              aria-expanded={menuId === cl.id}
-                              aria-haspopup="menu"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setMenuId((prev) => (prev === cl.id ? null : cl.id));
-                              }}
-                            >
-                              ⋯
-                            </button>
-                            {menuId === cl.id ? (
-                              <div className="go-checklist-card__menu" role="menu">
-                                <button
-                                  type="button"
-                                  role="menuitem"
-                                  onClick={() => {
-                                    setMenuId(null);
-                                    openBuilder(cl.id);
-                                  }}
-                                >
-                                  Edit
-                                </button>
-                                <button
-                                  type="button"
-                                  role="menuitem"
-                                  className="go-checklist-card__menu-danger"
-                                  onClick={() => void onDeactivate(cl)}
-                                >
-                                  Remove
-                                </button>
-                              </div>
-                            ) : null}
-                          </div>
-                        ) : null}
+                        <div className="go-checklist-card__info">
+                          <h3 className="go-checklist-card__title">{cl.name}</h3>
+                          <ul className="go-checklist-card__meta">
+                            <li>
+                              <span>Area:</span> <span className="go-checklist-card__meta-value">{meta.area}</span>
+                            </li>
+                            <li>
+                              <span>Frequency:</span> <span className="go-checklist-card__meta-value">{meta.frequency}</span>
+                            </li>
+                            <li>
+                              <span>Tasks:</span> <span className="go-checklist-card__meta-value">{cl.items.length}</span>
+                            </li>
+                            <li>
+                              <span>Locations:</span> <span className="go-checklist-card__meta-value">1</span>
+                            </li>
+                          </ul>
+                        </div>
                       </div>
-                      <h3 className="go-checklist-card__title">{cl.name}</h3>
-                      <dl className="go-checklist-card__meta">
-                        <div>
-                          <dt>Area</dt>
-                          <dd>{meta.area}</dd>
-                        </div>
-                        <div>
-                          <dt>Frequency</dt>
-                          <dd>{meta.frequency}</dd>
-                        </div>
-                        <div>
-                          <dt>Tasks</dt>
-                          <dd>{cl.items.length}</dd>
-                        </div>
-                        <div>
-                          <dt>Locations</dt>
-                          <dd>1</dd>
-                        </div>
-                      </dl>
-                      <p className="go-checklist-card__updated">Last updated {formatGoDate(cl.updatedAt)}</p>
+
+                      <div className="go-checklist-card__divider" aria-hidden />
+
+                      <p className="go-checklist-card__updated">Last updated: {formatGoDate(cl.updatedAt)}</p>
+
                       <div className="go-checklist-card__actions">
+                        {manager ? (
+                          <button type="button" className="go-checklist-card__btn go-checklist-card__btn--edit" onClick={() => openBuilder(cl.id)}>
+                            Edit
+                          </button>
+                        ) : null}
                         {previewUrl ? (
-                          <a href={previewUrl} target="_blank" rel="noopener noreferrer" className="go-btn go-btn--ghost go-btn--sm">
+                          <a
+                            href={previewUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="go-checklist-card__btn go-checklist-card__btn--preview"
+                          >
+                            <IconEye />
                             Preview
                           </a>
                         ) : null}
-                        <button
-                          type="button"
-                          className="go-btn go-btn--ghost go-btn--sm"
-                          onClick={() => {
-                            setHistoryTarget(cl);
-                          }}
-                        >
-                          History
-                        </button>
                       </div>
                     </article>
                   );
@@ -326,84 +326,22 @@ export function LocationChecklistsSection({ teamId, myRole, teamName, teamImage 
           )}
         </section>
 
-        <div className="go-dashboard__columns">
-          <section className="go-dashboard__section" id="go-locations" ref={locationsRef} aria-labelledby="go-locations-heading">
-            <div className="go-dashboard__section-head">
-              <h2 id="go-locations-heading" className="go-dashboard__section-title">
-                <IconMapPin />
-                Locations
-              </h2>
-              <button type="button" className="go-dashboard__section-link" onClick={scrollToLocations}>
-                View all locations
-              </button>
-            </div>
-
-            <div className="go-location-list">
-              <article className={`go-location-card${locationExpanded ? " go-location-card--open" : ""}`}>
-                <button
-                  type="button"
-                  className="go-location-card__head"
-                  onClick={() => setLocationExpanded((v) => !v)}
-                  aria-expanded={locationExpanded}
-                >
-                  <div className="go-location-card__thumb-wrap">
-                    {teamImage ? (
-                      <img src={teamImage} alt="" className="go-location-card__thumb" />
-                    ) : (
-                      <span className="go-location-card__thumb-fallback">{teamName?.[0]?.toUpperCase() ?? "W"}</span>
-                    )}
-                  </div>
-                  <div className="go-location-card__summary">
-                    <strong>{teamName ?? "Workspace"}</strong>
-                    <span className={`go-location-card__status${ipadConnected ? " go-location-card__status--on" : ""}`}>
-                      <span className="go-location-card__status-dot" aria-hidden />
-                      {ipadConnected ? "iPad Connected" : "iPad Not Connected"}
-                    </span>
-                  </div>
-                  <span className="go-location-card__chevron" aria-hidden>
-                    {locationExpanded ? "▴" : "▾"}
-                  </span>
-                </button>
-
-                {locationExpanded ? (
-                  <div className="go-location-card__body">
-                    <p className="go-location-card__last-seen">Last seen {formatGoRelative(lastDeviceActivity)}</p>
-                    <div className="go-location-card__active">
-                      <h3>Active Checklists</h3>
-                      {activeChecklists.length === 0 ? (
-                        <p className="enterprise-muted">None yet</p>
-                      ) : (
-                        <ul>
-                          {activeChecklists.map((cl) => (
-                            <li key={cl.id}>
-                              <span className="go-location-card__check" aria-hidden>
-                                ✓
-                              </span>
-                              {cl.name}
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </div>
-                    <GoLocationQrCompact hubToken={hubToken} workspaceName={teamName} />
-                  </div>
-                ) : null}
-              </article>
-            </div>
-          </section>
-
-          <section className="go-dashboard__section" aria-labelledby="go-activity-heading">
+        <section className="go-dashboard__section go-dashboard__section--activity" aria-labelledby="go-activity-heading">
             <div className="go-dashboard__section-head">
               <h2 id="go-activity-heading" className="go-dashboard__section-title">
                 <IconActivity />
                 Today&apos;s Activity
               </h2>
-              <button type="button" className="go-dashboard__section-link" onClick={() => document.getElementById("go-activity-list")?.scrollIntoView({ behavior: "smooth" })}>
-                View all activity
+              <button
+                type="button"
+                className="go-dashboard__section-link"
+                onClick={() => document.getElementById("go-activity-list")?.scrollIntoView({ behavior: "smooth" })}
+              >
+                View all activity →
               </button>
             </div>
 
-            <div className="go-activity-panel">
+            <div className="go-activity-panel go-activity-panel--compact">
               <div className="go-activity-completion">
                 <div className="go-activity-completion__head">
                   <span>Store Completion</span>
@@ -422,7 +360,7 @@ export function LocationChecklistsSection({ teamId, myRole, teamName, teamImage 
                     <p className="enterprise-muted go-activity-empty">No completions yet today.</p>
                   ) : (
                     <ul>
-                      {completedToday.slice(0, 12).map((s) => (
+                      {completedToday.slice(0, 8).map((s) => (
                         <li key={s.id} className="go-activity-row go-activity-row--done">
                           <span className="go-activity-row__avatar">{userInitials(s.submitterName)}</span>
                           <div className="go-activity-row__copy">
@@ -431,9 +369,6 @@ export function LocationChecklistsSection({ teamId, myRole, teamName, teamImage 
                               {s.locationName} · {formatGoTime(s.submittedAt)}
                             </span>
                           </div>
-                          <span className="go-activity-row__badge go-activity-row__badge--ok" aria-hidden>
-                            ✓
-                          </span>
                         </li>
                       ))}
                     </ul>
@@ -441,21 +376,19 @@ export function LocationChecklistsSection({ teamId, myRole, teamName, teamImage 
                 </div>
 
                 <div className="go-activity-block">
-                  <h3>Needs Attention ({needsAttention.length})</h3>
+                  <h3>Needs attention ({needsAttention.length})</h3>
                   {needsAttention.length === 0 ? (
                     <p className="enterprise-muted go-activity-empty">All caught up.</p>
                   ) : (
                     <ul>
-                      {needsAttention.slice(0, 8).map((s) => (
+                      {needsAttention.slice(0, 6).map((s) => (
                         <li key={s.id} className="go-activity-row go-activity-row--alert">
-                          <span className="go-activity-row__dot" aria-hidden />
                           <div className="go-activity-row__copy">
                             <strong>{s.locationName}</strong>
                             <span>
                               {s.checkedCount}/{s.totalCount} complete · {formatGoTime(s.submittedAt)}
                             </span>
                           </div>
-                          <span className="go-activity-row__due">Due now</span>
                         </li>
                       ))}
                     </ul>
@@ -467,15 +400,51 @@ export function LocationChecklistsSection({ teamId, myRole, teamName, teamImage 
         </div>
       </div>
 
-      {historyTarget ? (
-        <LocationChecklistHistoryPanel
-          teamId={teamId}
-          location={historyTarget}
-          filter={historyFilter}
-          onFilterChange={setHistoryFilter}
-          onClose={() => setHistoryTarget(null)}
-        />
-      ) : null}
+      {menuChecklist && menuCoords
+        ? createPortal(
+            <div
+              className={`go-checklist-row-menu go-checklist-row-menu--fixed${menuCoords.openUp ? " go-checklist-row-menu--up" : ""}`}
+              role="menu"
+              style={{ top: menuCoords.top, left: menuCoords.left, minWidth: CHECKLIST_MENU_WIDTH }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setMenuChecklistId(null);
+                  openBuilder(menuChecklist.id);
+                }}
+              >
+                Edit
+              </button>
+              {menuPreviewUrl ? (
+                <a
+                  href={menuPreviewUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  role="menuitem"
+                  className="go-checklist-row-menu-link"
+                  onClick={() => setMenuChecklistId(null)}
+                >
+                  Preview
+                </a>
+              ) : null}
+              <button
+                type="button"
+                role="menuitem"
+                className="go-checklist-row-menu-danger"
+                onClick={() => {
+                  setMenuChecklistId(null);
+                  void onDeactivate(menuChecklist);
+                }}
+              >
+                Remove
+              </button>
+            </div>,
+            document.body,
+          )
+        : null}
     </>
   );
 }

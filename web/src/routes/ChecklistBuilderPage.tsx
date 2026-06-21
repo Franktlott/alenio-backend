@@ -2,7 +2,6 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ChecklistKioskLivePreview } from "../components/checklists/kiosk/ChecklistKioskLivePreview";
-import { ChecklistCardColorPicker } from "../components/checklists/ChecklistCardColorPicker";
 import { useEnterpriseShell } from "../contexts/EnterpriseShellContext";
 import {
   createChecklistLocation,
@@ -10,10 +9,10 @@ import {
   replaceChecklistLocationItems,
   updateChecklistLocation,
 } from "../lib/api";
-import type { ChecklistCardColorId } from "../lib/checklist-card-colors";
 import { queryKeys } from "../lib/query-keys";
 
 type TaskDraft = { clientId: string; title: string; note: string };
+type EditorView = "edit" | "preview";
 
 function newTaskDraft(): TaskDraft {
   return { clientId: crypto.randomUUID(), title: "", note: "" };
@@ -34,8 +33,10 @@ export function ChecklistBuilderPage() {
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [cardColor, setCardColor] = useState<ChecklistCardColorId>("indigo");
   const [tasks, setTasks] = useState<TaskDraft[]>(() => [newTaskDraft()]);
+  const [editorView, setEditorView] = useState<EditorView>("edit");
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [taskMenuId, setTaskMenuId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [loadedId, setLoadedId] = useState<string | null>(null);
@@ -46,6 +47,13 @@ export function ChecklistBuilderPage() {
       setSelectedTeamId(teamIdFromUrl);
     }
   }, [teams, teamIdFromUrl, selectedTeamId, setSelectedTeamId]);
+
+  useEffect(() => {
+    if (!taskMenuId) return;
+    const close = () => setTaskMenuId(null);
+    document.addEventListener("click", close);
+    return () => document.removeEventListener("click", close);
+  }, [taskMenuId]);
 
   const teamId = teamIdFromUrl || selectedTeamId;
   const selectedTeam = useMemo(() => teams?.find((t) => t.id === teamId) ?? null, [teams, teamId]);
@@ -66,28 +74,37 @@ export function ChecklistBuilderPage() {
     if (!isEdit) {
       setName("");
       setDescription("");
-      setCardColor("indigo");
       setTasks([newTaskDraft()]);
       setLoadedId(null);
+      setSelectedTaskId(null);
+      setEditorView("edit");
       setErr(null);
       return;
     }
     if (!existing || loadedId === existing.id) return;
-    setName(existing.name);
-    setDescription(existing.description ?? "");
-    setCardColor((existing.cardColor as ChecklistCardColorId | null) ?? "indigo");
-    setTasks(
+    const loadedTasks =
       existing.items.length > 0
         ? existing.items.map((i) => ({
             clientId: i.id,
             title: i.title,
             note: i.note ?? "",
           }))
-        : [newTaskDraft()],
-    );
+        : [newTaskDraft()];
+    setName(existing.name);
+    setDescription(existing.description ?? "");
+    setTasks(loadedTasks);
+    setSelectedTaskId(loadedTasks[0]?.clientId ?? null);
     setLoadedId(existing.id);
+    setEditorView("edit");
     setErr(null);
   }, [isEdit, existing, loadedId]);
+
+  useEffect(() => {
+    if (selectedTaskId && tasks.some((t) => t.clientId === selectedTaskId)) return;
+    setSelectedTaskId(tasks[0]?.clientId ?? null);
+  }, [tasks, selectedTaskId]);
+
+  const selectedTask = tasks.find((t) => t.clientId === selectedTaskId) ?? null;
 
   const previewItems = useMemo(
     () =>
@@ -110,6 +127,52 @@ export function ChecklistBuilderPage() {
     }))
     .filter((t) => t.title);
 
+  const updateTask = (clientId: string, patch: Partial<TaskDraft>) => {
+    setTasks((prev) => prev.map((row) => (row.clientId === clientId ? { ...row, ...patch } : row)));
+  };
+
+  const addTask = () => {
+    const task = newTaskDraft();
+    setTasks((prev) => [...prev, task]);
+    setSelectedTaskId(task.clientId);
+    setEditorView("edit");
+  };
+
+  const removeTask = (clientId: string) => {
+    setTasks((prev) => {
+      if (prev.length <= 1) return prev;
+      return prev.filter((row) => row.clientId !== clientId);
+    });
+    if (selectedTaskId === clientId) setSelectedTaskId(null);
+    setTaskMenuId(null);
+  };
+
+  const duplicateTask = (clientId: string) => {
+    setTasks((prev) => {
+      const index = prev.findIndex((row) => row.clientId === clientId);
+      if (index < 0) return prev;
+      const source = prev[index];
+      const copy = { ...source, clientId: crypto.randomUUID(), title: source.title ? `${source.title} (copy)` : "" };
+      const next = [...prev];
+      next.splice(index + 1, 0, copy);
+      return next;
+    });
+    setTaskMenuId(null);
+  };
+
+  const moveTask = (clientId: string, direction: -1 | 1) => {
+    setTasks((prev) => {
+      const index = prev.findIndex((row) => row.clientId === clientId);
+      const target = index + direction;
+      if (index < 0 || target < 0 || target >= prev.length) return prev;
+      const next = [...prev];
+      const [row] = next.splice(index, 1);
+      next.splice(target, 0, row);
+      return next;
+    });
+    setTaskMenuId(null);
+  };
+
   const onSave = async () => {
     const trimmedName = name.trim();
     const trimmedDescription = description.trim() || null;
@@ -120,13 +183,11 @@ export function ChecklistBuilderPage() {
       if (isEdit && existing) {
         const metaChanged =
           trimmedName !== existing.name ||
-          trimmedDescription !== (existing.description ?? null) ||
-          cardColor !== (existing.cardColor ?? "indigo");
+          trimmedDescription !== (existing.description ?? null);
         if (metaChanged) {
           await updateChecklistLocation(teamId, existing.id, {
             name: trimmedName,
             description: trimmedDescription,
-            cardColor,
           });
         }
         await replaceChecklistLocationItems(teamId, existing.id, trimmedTasks);
@@ -134,7 +195,6 @@ export function ChecklistBuilderPage() {
         await createChecklistLocation(teamId, {
           name: trimmedName,
           description: trimmedDescription,
-          cardColor,
           items: trimmedTasks,
         });
       }
@@ -151,7 +211,7 @@ export function ChecklistBuilderPage() {
     return (
       <div className="checklist-builder-page">
         <p className="enterprise-muted">Select a workspace to build checklists.</p>
-        <Link to="/go" className="create-task-back">
+        <Link to="/go" className="enterprise-oneone-templates-back">
           ← Back to Alenio Go
         </Link>
       </div>
@@ -176,7 +236,7 @@ export function ChecklistBuilderPage() {
         <p className="enterprise-form-error" role="alert">
           {listQuery.error instanceof Error ? listQuery.error.message : "Could not load checklist."}
         </p>
-        <Link to="/go" className="create-task-back">
+        <Link to="/go" className="enterprise-oneone-templates-back">
           ← Back to Alenio Go
         </Link>
       </div>
@@ -189,7 +249,7 @@ export function ChecklistBuilderPage() {
         <p className="enterprise-form-error" role="alert">
           Checklist not found.
         </p>
-        <Link to="/go" className="create-task-back">
+        <Link to="/go" className="enterprise-oneone-templates-back">
           ← Back to Alenio Go
         </Link>
       </div>
@@ -200,137 +260,234 @@ export function ChecklistBuilderPage() {
 
   return (
     <div className="checklist-builder-page" data-testid="checklist-builder-page">
-      <header className="checklist-builder-page__topbar">
-        <div className="checklist-builder-page__topbar-left">
-          <Link to={backHref} className="create-task-back">
-            ← Back to Alenio Go
-          </Link>
-          <div>
-            <h1 className="checklist-builder-page__title">{isEdit ? "Edit checklist" : "New checklist"}</h1>
-            <p className="checklist-builder-page__sub">Build tasks on the left — preview updates live on the right.</p>
+      <div className="checklist-builder-card">
+        <header className="enterprise-oneone-templates-editor-top">
+          <div className="enterprise-oneone-templates-editor-top-left">
+            <Link to={backHref} className="enterprise-oneone-templates-back">
+              ← Back to Alenio Go
+            </Link>
+            <div className="enterprise-oneone-templates-editor-title-row">
+              <h2 className="enterprise-oneone-templates-editor-title">
+                {isEdit ? "Edit checklist:" : "New checklist:"}
+              </h2>
+              <input
+                className="enterprise-oneone-templates-editor-title-input"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Checklist name"
+                aria-label="Checklist name"
+              />
+              {!isEdit ? <span className="enterprise-oneone-templates-draft-badge">Draft</span> : null}
+            </div>
+            {editorView === "edit" ? (
+              <input
+                className="enterprise-oneone-templates-editor-desc-input"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Short description (optional)"
+                aria-label="Checklist description"
+              />
+            ) : null}
           </div>
-        </div>
-        <div className="checklist-builder-page__topbar-actions">
-          <Link to={backHref} className="checklist-builder-page__cancel">
-            Cancel
-          </Link>
-          <button
-            type="button"
-            className="go-btn go-btn--primary"
-            disabled={busy || !name.trim()}
-            onClick={() => void onSave()}
-          >
-            {busy ? "Saving…" : "Save checklist"}
-          </button>
-        </div>
-      </header>
-
-      <div className="checklist-builder-page__split">
-        <section className="checklist-builder-page__editor" aria-label="Checklist builder">
-          <div className="checklist-builder-panel">
-            <h2 className="checklist-builder-panel__title">Checklist details</h2>
-            <label className="enterprise-checklist-editor-label" htmlFor="checklist-builder-name">
-              Checklist name
-            </label>
-            <input
-              id="checklist-builder-name"
-              className="auth-input enterprise-checklist-editor-input"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="1st Shift Beverage"
-            />
-
-            <label className="enterprise-checklist-editor-label" htmlFor="checklist-builder-description">
-              Description
-            </label>
-            <textarea
-              id="checklist-builder-description"
-              className="auth-input enterprise-checklist-editor-textarea"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="What this checklist covers and when associates should run it."
-              rows={3}
-            />
-
-            <ChecklistCardColorPicker value={cardColor} onChange={setCardColor} />
+          <div className="enterprise-oneone-templates-editor-top-actions">
+            <button
+              type="button"
+              className={`enterprise-oneone-templates-toolbar-btn${editorView === "preview" ? " enterprise-oneone-templates-toolbar-btn--active" : ""}`}
+              onClick={() => setEditorView((v) => (v === "preview" ? "edit" : "preview"))}
+            >
+              Preview
+            </button>
+            <button
+              type="button"
+              className="enterprise-oneone-templates-primary-btn enterprise-oneone-templates-save-btn"
+              disabled={busy || !name.trim()}
+              onClick={() => void onSave()}
+            >
+              {busy ? "Saving…" : "Save checklist"}
+            </button>
           </div>
+        </header>
 
-          <div className="checklist-builder-panel">
-            <div className="enterprise-checklist-editor-items-head">
-              <h2 className="checklist-builder-panel__title checklist-builder-panel__title--inline">Tasks</h2>
-              <button
-                type="button"
-                className="enterprise-checklist-editor-add-btn"
-                onClick={() => setTasks((prev) => [...prev, newTaskDraft()])}
-              >
+        {err ? (
+          <p className="enterprise-form-error enterprise-oneone-templates-editor-error" role="alert">
+            {err}
+          </p>
+        ) : null}
+
+        {editorView === "preview" ? (
+          <div className="checklist-builder-preview-pane">
+            <p className="enterprise-muted checklist-builder-preview-pane__intro">
+              This is how associates will see the checklist on iPad.
+            </p>
+            {description.trim() ? (
+              <p className="enterprise-muted checklist-builder-preview-pane__desc">{description.trim()}</p>
+            ) : null}
+            <ChecklistKioskLivePreview
+              checklistName={name}
+              teamName={selectedTeam?.name ?? "Workspace"}
+              teamImage={selectedTeam?.image ?? null}
+              items={previewItems}
+              className="checklist-builder-preview-pane__device"
+            />
+          </div>
+        ) : (
+          <div className="enterprise-oneone-templates-editor-split">
+            <div className="enterprise-oneone-templates-fields-pane">
+              <div className="enterprise-oneone-templates-fields-pane-head">
+                <div>
+                  <h3 className="enterprise-oneone-templates-fields-pane-title">Checklist tasks</h3>
+                  <p className="enterprise-muted enterprise-oneone-templates-fields-pane-sub">
+                    Add tasks associates complete and sign off on iPad.
+                  </p>
+                </div>
+                <div className="enterprise-oneone-templates-fields-pane-actions">
+                  <button
+                    type="button"
+                    className="enterprise-oneone-templates-primary-btn enterprise-oneone-templates-pane-btn enterprise-oneone-templates-pane-btn--primary"
+                    onClick={addTask}
+                  >
+                    Add task
+                  </button>
+                </div>
+              </div>
+
+              <section className="enterprise-oneone-templates-section-block">
+                <div className="enterprise-oneone-templates-section-head">
+                  <span className="enterprise-oneone-templates-section-count">
+                    {tasks.length} task{tasks.length !== 1 ? "s" : ""}
+                  </span>
+                </div>
+                <ul className="enterprise-oneone-templates-question-list">
+                  {tasks.map((task, idx) => (
+                    <li
+                      key={task.clientId}
+                      className={`enterprise-oneone-templates-question-row${
+                        selectedTaskId === task.clientId ? " enterprise-oneone-templates-question-row--selected" : ""
+                      }${taskMenuId === task.clientId ? " enterprise-oneone-templates-question-row--menu-open" : ""}`}
+                    >
+                      <button type="button" className="enterprise-oneone-templates-question-drag" aria-label="Reorder" tabIndex={-1}>
+                        ⠿
+                      </button>
+                      <button
+                        type="button"
+                        className="enterprise-oneone-templates-question-main"
+                        onClick={() => {
+                          setSelectedTaskId(task.clientId);
+                          setTaskMenuId(null);
+                        }}
+                      >
+                        <span className="enterprise-oneone-templates-question-num">{idx + 1}</span>
+                        <span className="enterprise-oneone-templates-question-label">
+                          {task.title.trim() || "Untitled task"}
+                        </span>
+                        <span className="enterprise-oneone-templates-field-type-badge">Task</span>
+                      </button>
+                      <div className="enterprise-oneone-templates-question-menu-wrap">
+                        <button
+                          type="button"
+                          className="enterprise-oneone-templates-question-menu-btn"
+                          aria-label="Task options"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setTaskMenuId((id) => (id === task.clientId ? null : task.clientId));
+                          }}
+                        >
+                          ⋮
+                        </button>
+                        {taskMenuId === task.clientId ? (
+                          <div className="enterprise-oneone-templates-question-menu" onClick={(e) => e.stopPropagation()}>
+                            <button type="button" onClick={() => duplicateTask(task.clientId)}>
+                              Duplicate
+                            </button>
+                            <button type="button" onClick={() => moveTask(task.clientId, -1)}>
+                              Move up
+                            </button>
+                            <button type="button" onClick={() => moveTask(task.clientId, 1)}>
+                              Move down
+                            </button>
+                            <button
+                              type="button"
+                              className="enterprise-oneone-templates-menu-danger"
+                              onClick={() => removeTask(task.clientId)}
+                              disabled={tasks.length <= 1}
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        ) : null}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+
+              <button type="button" className="enterprise-oneone-templates-add-section-link" onClick={addTask}>
                 + Add task
               </button>
             </div>
 
-            <div className="checklist-builder-tasks">
-              <div className="checklist-builder-tasks__head" aria-hidden>
-                <span>#</span>
-                <span>Task</span>
-                <span>Note</span>
-                <span />
-              </div>
-              <ul className="checklist-builder-tasks__list">
-                {tasks.map((task, idx) => (
-                  <li key={task.clientId}>
-                    <span className="checklist-builder-tasks__num">{idx + 1}</span>
-                    <input
-                      className="auth-input checklist-builder-tasks__input"
-                      value={task.title}
-                      placeholder={`Task ${idx + 1}`}
-                      onChange={(e) =>
-                        setTasks((prev) =>
-                          prev.map((row) => (row.clientId === task.clientId ? { ...row, title: e.target.value } : row)),
-                        )
-                      }
-                    />
-                    <input
-                      className="auth-input checklist-builder-tasks__input checklist-builder-tasks__input--note"
-                      value={task.note ?? ""}
-                      placeholder="Optional note for iPad"
-                      onChange={(e) =>
-                        setTasks((prev) =>
-                          prev.map((row) => (row.clientId === task.clientId ? { ...row, note: e.target.value } : row)),
-                        )
-                      }
-                    />
-                    {tasks.length > 1 ? (
-                      <button
-                        type="button"
-                        className="enterprise-checklist-editor-remove"
-                        aria-label="Remove task"
-                        onClick={() => setTasks((prev) => prev.filter((row) => row.clientId !== task.clientId))}
-                      >
-                        ×
-                      </button>
-                    ) : (
-                      <span className="checklist-builder-tasks__spacer" aria-hidden />
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </div>
+            <aside className="enterprise-oneone-templates-field-pane">
+              {selectedTask ? (
+                <>
+                  <div className="enterprise-oneone-templates-field-pane-head">
+                    <h3 className="enterprise-oneone-templates-field-pane-title">Edit task</h3>
+                    <button
+                      type="button"
+                      className="enterprise-oneone-templates-field-delete"
+                      onClick={() => removeTask(selectedTask.clientId)}
+                      disabled={tasks.length <= 1}
+                    >
+                      Delete task
+                    </button>
+                  </div>
+
+                  <label className="enterprise-oneone-templates-field-form-label" htmlFor="checklist-task-title">
+                    Task name
+                  </label>
+                  <input
+                    id="checklist-task-title"
+                    className="auth-input enterprise-oneone-templates-field-form-input"
+                    value={selectedTask.title}
+                    onChange={(e) => updateTask(selectedTask.clientId, { title: e.target.value })}
+                    placeholder="e.g. Wipe down beverage station"
+                  />
+                  <p className="enterprise-muted enterprise-oneone-templates-field-hint">
+                    This is what associates see on the checklist.
+                  </p>
+
+                  <label className="enterprise-oneone-templates-field-form-label" htmlFor="checklist-task-note">
+                    iPad note <span className="enterprise-muted">(optional)</span>
+                  </label>
+                  <textarea
+                    id="checklist-task-note"
+                    className="auth-input enterprise-oneone-templates-field-form-textarea"
+                    rows={3}
+                    value={selectedTask.note}
+                    onChange={(e) => updateTask(selectedTask.clientId, { note: e.target.value })}
+                    placeholder="Add guidance or context for this task"
+                  />
+
+                  <div className="enterprise-oneone-templates-field-pane-foot">
+                    <button type="button" className="enterprise-profile-cancel-btn" onClick={() => setSelectedTaskId(null)}>
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      className="enterprise-oneone-templates-primary-btn enterprise-oneone-templates-done-btn"
+                      onClick={() => setSelectedTaskId(null)}
+                    >
+                      Done
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className="enterprise-oneone-templates-field-pane-empty">
+                  <p className="enterprise-muted">Select a task from the list to edit its settings.</p>
+                </div>
+              )}
+            </aside>
           </div>
-
-          {err ? (
-            <p className="enterprise-form-error" role="alert">
-              {err}
-            </p>
-          ) : null}
-        </section>
-
-        <aside className="checklist-builder-page__preview" aria-label="Live Alenio Go preview">
-          <ChecklistKioskLivePreview
-            checklistName={name}
-            teamName={selectedTeam?.name ?? "Workspace"}
-            teamImage={selectedTeam?.image ?? null}
-            items={previewItems}
-          />
-        </aside>
+        )}
       </div>
     </div>
   );

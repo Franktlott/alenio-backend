@@ -1,8 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
-import { AlenioGoLogo } from "../../AlenioGoLogo";
-import { ChecklistKioskTaskRow } from "./ChecklistKioskTaskRow";
-import type { KioskTab, KioskTaskItem, KioskTaskState } from "./checklist-kiosk-types";
+import { useMemo, useState } from "react";
+import { KioskAppHeader } from "./KioskAppHeader";
+import { ChecklistKioskTaskCard } from "./ChecklistKioskTaskCard";
+import type { KioskTaskItem, KioskTaskState } from "./checklist-kiosk-types";
 
 type Props = {
   mode?: "live" | "preview";
@@ -26,20 +25,10 @@ type Props = {
   backLabel?: string;
 };
 
-function useKioskClock(): Date {
-  const [now, setNow] = useState(() => new Date());
-  useEffect(() => {
-    const id = window.setInterval(() => setNow(new Date()), 30_000);
-    return () => window.clearInterval(id);
-  }, []);
-  return now;
-}
-
 export function ChecklistKioskApp({
   mode = "live",
   locationName,
   teamName,
-  teamImage,
   items,
   tasks,
   signedCount,
@@ -56,35 +45,26 @@ export function ChecklistKioskApp({
   backHref,
   backLabel = "All checklists",
 }: Props) {
-  const [tab, setTab] = useState<KioskTab>("today");
   const readOnly = mode === "preview";
-  const now = useKioskClock();
-  const progressPct = items.length > 0 ? Math.round((signedCount / items.length) * 100) : 0;
+  const [showCompleted, setShowCompleted] = useState(false);
 
   const pendingItems = useMemo(() => items.filter((i) => !tasks[i.id]?.signed), [items, tasks]);
   const completedItems = useMemo(() => items.filter((i) => tasks[i.id]?.signed), [items, tasks]);
+  const visibleItems = showCompleted ? items : pendingItems;
 
   const renderTaskList = (list: KioskTaskItem[], emptyMessage: string) => {
     if (list.length === 0) {
       return <p className="kiosk-app-empty">{emptyMessage}</p>;
     }
     return (
-      <div className="kiosk-task-panel">
-        <div className="kiosk-task-panel__head" aria-hidden>
-          <span className="kiosk-task-panel__col-num">#</span>
-          <span className="kiosk-task-panel__col-check" />
-          <span className="kiosk-task-panel__col-task">Task</span>
-          <span className="kiosk-task-panel__col-sign">Sign-off</span>
-        </div>
-        <ul className="kiosk-task-list">
+      <ul className="kiosk-task-cards">
         {list.map((item, idx) => {
           const state = tasks[item.id] ?? { signed: false, signerName: "", signedAt: null };
           return (
-            <ChecklistKioskTaskRow
+            <ChecklistKioskTaskCard
               key={item.id}
               index={idx + 1}
               item={item}
-              locationName={locationName}
               state={state}
               readOnly={readOnly}
               onSignerChange={(name) => onSignerChange?.(item.id, name)}
@@ -94,42 +74,21 @@ export function ChecklistKioskApp({
             />
           );
         })}
-        </ul>
-      </div>
+      </ul>
     );
   };
 
-  const clockLabel = `${now.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })} · ${now.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}`;
-
   return (
     <div className={`kiosk-app${mode === "preview" ? " kiosk-app--preview" : ""}`} data-testid="checklist-kiosk-app">
-      <header className="kiosk-app-header kiosk-app-header--checklist">
-        {backHref ? (
-          <Link to={backHref} className="kiosk-app-header__back">
-            ← {backLabel}
-          </Link>
-        ) : null}
-        <div className="kiosk-app-header__brand-row">
-          <AlenioGoLogo variant="page" className="kiosk-app-header__go-logo kiosk-app-header__go-logo--page" />
-          <div className="kiosk-app-header__meta">
-            <p className="kiosk-app-header__clock kiosk-app-header__clock--compact" aria-label="Current date and time">
-              {clockLabel}
-            </p>
-            <div className="kiosk-app-header__workspace-pill">
-              {teamImage ? (
-                <img src={teamImage} alt="" className="kiosk-app-header__pill-avatar" />
-              ) : (
-                <span className="kiosk-app-header__pill-fallback" aria-hidden>
-                  {(teamName || "W").charAt(0).toUpperCase()}
-                </span>
-              )}
-              <span>{loading ? "…" : teamName || "Workspace"}</span>
-            </div>
-          </div>
-        </div>
-        <h1 className="kiosk-app-header__title">{loading ? "Loading…" : locationName || "Checklist"}</h1>
-        <p className="kiosk-app-header__subtitle">Sign off each task below when complete.</p>
-      </header>
+      <KioskAppHeader
+        teamName={teamName}
+        checklistName={locationName}
+        signedCount={signedCount}
+        totalCount={items.length}
+        loading={loading}
+        backHref={backHref}
+        backLabel={backLabel}
+      />
 
       <main className="kiosk-app-main">
         {loading ? (
@@ -149,131 +108,51 @@ export function ChecklistKioskApp({
             </p>
             {!readOnly && onRestart ? (
               <button type="button" className="kiosk-app-complete-btn" onClick={onRestart}>
-                Start next checklist
+                Back to all checklists
               </button>
             ) : null}
           </div>
         ) : (
           <>
-            {items.length > 0 ? (
-              <section className="kiosk-app-progress-card" aria-label="Checklist progress">
-                <div className="kiosk-app-progress-card__row">
-                  <span className="kiosk-app-progress-card__label">Progress</span>
-                  <span className="kiosk-app-progress-card__count">
-                    {signedCount} of {items.length} complete
-                  </span>
-                </div>
-                <div
-                  className="kiosk-app-progress-card__bar"
-                  role="progressbar"
-                  aria-valuenow={progressPct}
-                  aria-valuemin={0}
-                  aria-valuemax={100}
-                >
-                  <div className="kiosk-app-progress-card__fill" style={{ width: `${progressPct}%` }} />
-                </div>
-              </section>
+            {submitting ? <p className="kiosk-app-banner">Saving completed checklist…</p> : null}
+            {error ? (
+              <p className="kiosk-app-error kiosk-app-error--inline" role="alert">
+                {error}
+              </p>
             ) : null}
 
-            {tab === "today" ? (
+            {items.length === 0 ? (
+              <div className="kiosk-app-empty-panel">
+                <p className="kiosk-app-empty-panel__title">No tasks yet</p>
+                <p className="kiosk-app-empty">Your manager hasn&apos;t added tasks to this checklist yet.</p>
+              </div>
+            ) : (
               <>
-                {submitting ? <p className="kiosk-app-banner">Saving completed checklist…</p> : null}
-                {error ? (
-                  <p className="kiosk-app-error kiosk-app-error--inline" role="alert">
-                    {error}
-                  </p>
+                {completedItems.length > 0 ? (
+                  <button
+                    type="button"
+                    className="kiosk-app-completed-toggle"
+                    onClick={() => setShowCompleted((v) => !v)}
+                    aria-expanded={showCompleted}
+                  >
+                    {showCompleted
+                      ? "Hide completed tasks"
+                      : `Show completed tasks (${completedItems.length})`}
+                  </button>
                 ) : null}
                 {renderTaskList(
-                  items,
-                  items.length === 0
-                    ? "No tasks have been added to this checklist yet. Your manager can add them anytime."
-                    : "All tasks are complete for today.",
+                  visibleItems,
+                  showCompleted
+                    ? "No tasks in this view."
+                    : pendingItems.length === 0
+                      ? "All tasks are complete for today."
+                      : "No tasks to show.",
                 )}
               </>
-            ) : tab === "completed" ? (
-              renderTaskList(
-                completedItems,
-                "No completed tasks yet. Enter initials and sign off on the Today tab.",
-              )
-            ) : (
-              <div className="kiosk-app-info">
-                <section className="kiosk-app-info-card">
-                  <h2>How it works</h2>
-                  <ol>
-                    <li>Enter your initials or name on the right of each task.</li>
-                    <li>Tap Sign Off to mark the task complete.</li>
-                    <li>Tap Undo to mark a task incomplete again.</li>
-                    <li>Completed tasks turn gray and save automatically.</li>
-                    <li>The full checklist submits when every task is done.</li>
-                  </ol>
-                </section>
-                <section className="kiosk-app-info-card">
-                  <h2>Checklist</h2>
-                  <p>
-                    <strong>{locationName}</strong>
-                    <br />
-                    {teamName}
-                  </p>
-                </section>
-                <section className="kiosk-app-info-card kiosk-app-info-card--stats">
-                  <div>
-                    <span className="kiosk-app-stat-num">{pendingItems.length}</span>
-                    <span className="kiosk-app-stat-label">Pending</span>
-                  </div>
-                  <div>
-                    <span className="kiosk-app-stat-num">{completedItems.length}</span>
-                    <span className="kiosk-app-stat-label">Complete</span>
-                  </div>
-                  <div>
-                    <span className="kiosk-app-stat-num">{items.length}</span>
-                    <span className="kiosk-app-stat-label">Total</span>
-                  </div>
-                </section>
-                <p className="kiosk-app-info-foot">No login required · Alenio Go</p>
-              </div>
             )}
           </>
         )}
       </main>
-
-      {!submitted && !loading && locationName ? (
-        <nav className="kiosk-app-nav" aria-label="Checklist navigation">
-          <button
-            type="button"
-            className={`kiosk-app-nav__btn${tab === "today" ? " kiosk-app-nav__btn--active" : ""}`}
-            onClick={() => setTab("today")}
-          >
-            <span className="kiosk-app-nav__icon" aria-hidden>
-              ✓
-            </span>
-            Today
-            {pendingItems.length > 0 ? <span className="kiosk-app-nav__badge">{pendingItems.length}</span> : null}
-          </button>
-          <button
-            type="button"
-            className={`kiosk-app-nav__btn${tab === "completed" ? " kiosk-app-nav__btn--active" : ""}`}
-            onClick={() => setTab("completed")}
-          >
-            <span className="kiosk-app-nav__icon" aria-hidden>
-              ☰
-            </span>
-            Completed
-            {completedItems.length > 0 ? (
-              <span className="kiosk-app-nav__badge kiosk-app-nav__badge--green">{completedItems.length}</span>
-            ) : null}
-          </button>
-          <button
-            type="button"
-            className={`kiosk-app-nav__btn${tab === "info" ? " kiosk-app-nav__btn--active" : ""}`}
-            onClick={() => setTab("info")}
-          >
-            <span className="kiosk-app-nav__icon" aria-hidden>
-              i
-            </span>
-            Info
-          </button>
-        </nav>
-      ) : null}
     </div>
   );
 }

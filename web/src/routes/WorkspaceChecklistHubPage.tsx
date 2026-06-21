@@ -1,27 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { AlenioGoLogo } from "../components/AlenioGoLogo";
+import { KioskAppHeader } from "../components/checklists/kiosk/KioskAppHeader";
 import { KioskInstallBar } from "../components/checklists/kiosk/KioskInstallBar";
 import { fetchPublicChecklistByToken, fetchPublicChecklistHub } from "../lib/api";
 import { checklistCardColorStyles } from "../lib/checklist-card-colors";
 import { kioskProgressPercent, loadKioskProgress } from "../lib/kiosk-checklist-progress";
 import { LocationChecklistKioskPage } from "./LocationChecklistKioskPage";
 
-function useKioskClock(): Date {
-  const [now, setNow] = useState(() => new Date());
-  useEffect(() => {
-    const id = window.setInterval(() => setNow(new Date()), 30_000);
-    return () => window.clearInterval(id);
-  }, []);
-  return now;
-}
-
 type HubChecklist = { id: string; name: string; cardColor: string | null; taskCount: number; categories: (string | null)[] };
 
 export function WorkspaceChecklistHubPage() {
   const { hubToken = "" } = useParams();
   const navigate = useNavigate();
-  const now = useKioskClock();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [legacyToken, setLegacyToken] = useState<string | null>(null);
@@ -40,7 +30,9 @@ export function WorkspaceChecklistHubPage() {
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "visible") refresh();
     });
-    return () => {
+    const clockLabel = `${now.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })} · ${now.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}`;
+
+  return () => {
       window.removeEventListener("storage", onStorage);
       window.removeEventListener("focus", refresh);
     };
@@ -94,33 +86,14 @@ export function WorkspaceChecklistHubPage() {
     return <LocationChecklistKioskPage legacyToken={legacyToken} />;
   }
 
-  const clockLabel = `${now.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })} · ${now.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}`;
-
   return (
     <div className="kiosk-app-page" data-testid="workspace-checklist-hub">
       <div className="kiosk-app kiosk-app--hub">
-        <header className="kiosk-app-header kiosk-hub-header">
-          <div className="kiosk-app-header__brand-row">
-            <AlenioGoLogo variant="page" className="kiosk-app-header__go-logo kiosk-app-header__go-logo--page" />
-            <div className="kiosk-app-header__meta">
-              <p className="kiosk-app-header__clock kiosk-app-header__clock--compact" aria-label="Current date and time">
-                {clockLabel}
-              </p>
-              <div className="kiosk-app-header__workspace-pill">
-                {teamImage ? (
-                  <img src={teamImage} alt="" className="kiosk-app-header__pill-avatar" />
-                ) : (
-                  <span className="kiosk-app-header__pill-fallback" aria-hidden>
-                    {(teamName || "W").charAt(0).toUpperCase()}
-                  </span>
-                )}
-                <span>{loading ? "…" : teamName || "Workspace"}</span>
-              </div>
-            </div>
-          </div>
-          <h1 className="kiosk-app-header__title">Today&apos;s Checklists</h1>
-          <p className="kiosk-app-header__subtitle">Choose a checklist to sign off tasks. No login required.</p>
-        </header>
+        <KioskAppHeader
+          variant="hub"
+          teamName={teamName}
+          loading={loading}
+        />
 
         <main className="kiosk-app-main kiosk-hub-main">
           {!loading && !error ? <KioskInstallBar teamName={teamName || undefined} /> : null}
