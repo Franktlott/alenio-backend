@@ -1,8 +1,10 @@
 import {
   fetchCoreTeamTasks,
+  fetchTeamActivity,
   fetchTeamMemberStats,
   fetchWebTeam,
   fetchWebTeamTasks,
+  type ApiActivityItem,
   type ApiTask,
   type TeamMemberStatsMap,
   type WebTeamMemberRow,
@@ -58,6 +60,23 @@ export type OverdueTaskPreview = {
   dueLabel: string;
 };
 
+export type WorkspaceMemberBrief = {
+  userId: string;
+  name: string;
+  activeTasks: number;
+  overdueTasks: number;
+  completedTasksThisMonth: number;
+  daysSinceLastOneOnOne: number | null;
+  activeDevGoals: number;
+  devEngagementPct: number;
+  streak: number;
+};
+
+export type WorkspaceRecentWin = {
+  name: string;
+  message: string;
+};
+
 export type WorkspaceSnapshot = {
   teamName: string;
   overdueTasks: number;
@@ -66,6 +85,8 @@ export type WorkspaceSnapshot = {
   memberNeedingCheckIn: { name: string; days: number; userId: string } | null;
   activeDevGoals: number;
   membersWithoutRecentCheckIn: number;
+  memberRows: WorkspaceMemberBrief[];
+  recentWin: WorkspaceRecentWin | null;
   fromLiveData: boolean;
   loadError?: string | null;
 };
@@ -129,9 +150,56 @@ function emptySnapshot(teamName: string, loadError?: string | null): WorkspaceSn
     memberNeedingCheckIn: null,
     activeDevGoals: 0,
     membersWithoutRecentCheckIn: 0,
+    memberRows: [],
+    recentWin: null,
     fromLiveData: false,
     loadError: loadError ?? null,
   };
+}
+
+function buildMemberRows(
+  members: WebTeamMemberRow[],
+  stats: TeamMemberStatsMap,
+  managerUserId: string | undefined,
+): WorkspaceMemberBrief[] {
+  return members
+    .filter((member) => member.userId !== managerUserId)
+    .map((member) => {
+      const row = stats[member.userId];
+      return {
+        userId: member.userId,
+        name: member.user?.name ?? member.user?.email ?? "Team member",
+        activeTasks: row?.activeTasks ?? 0,
+        overdueTasks: row?.overdueTasks ?? 0,
+        completedTasksThisMonth: row?.completedTasks ?? 0,
+        daysSinceLastOneOnOne: row?.daysSinceLastOneOnOne ?? null,
+        activeDevGoals: row?.activeDevGoals ?? 0,
+        devEngagementPct: row?.devEngagementPct ?? 0,
+        streak: row?.streak ?? 0,
+      };
+    });
+}
+
+function extractRecentWin(activities: ApiActivityItem[]): WorkspaceRecentWin | null {
+  for (const item of activities) {
+    if (item.type === "celebration") {
+      const name = item.metadata?.targetName ?? item.user?.name ?? "A teammate";
+      const message =
+        typeof item.metadata?.message === "string" && item.metadata.message.trim()
+          ? item.metadata.message.trim()
+          : "Recognized on the activity feed.";
+      return { name, message };
+    }
+    if (item.type === "task_completed") {
+      const name = item.user?.name ?? item.metadata?.assigneeName ?? "A teammate";
+      const taskTitle = item.metadata?.taskTitle;
+      return {
+        name,
+        message: taskTitle ? `Completed "${taskTitle}".` : "Completed a task recently.",
+      };
+    }
+  }
+  return null;
 }
 
 function taskAssigneeLabel(task: ApiTask): string {
@@ -210,17 +278,19 @@ export async function loadWorkspaceSnapshot(
   fallbackTeamName = "Workspace",
 ): Promise<WorkspaceSnapshot> {
   try {
-    const [team, webTasks, coreTasks, stats] = await Promise.all([
+    const [team, webTasks, coreTasks, stats, activities] = await Promise.all([
       fetchWebTeam(teamId),
       fetchWebTeamTasks(teamId).catch(() => [] as ApiTask[]),
       fetchCoreTeamTasks(teamId).catch(() => [] as ApiTask[]),
       fetchTeamMemberStats(teamId).catch(() => ({} as TeamMemberStatsMap)),
+      fetchTeamActivity(teamId).catch(() => [] as ApiActivityItem[]),
     ]);
 
     const tasks = mergeTeamTasks(
       Array.isArray(webTasks) ? webTasks : [],
       Array.isArray(coreTasks) ? coreTasks : [],
     );
+    const memberRows = buildMemberRows(team.members, stats, managerUserId);
     const memberNeedingCheckIn = findMemberNeedingCheckIn(team.members, stats, managerUserId);
 
     return {
@@ -231,6 +301,8 @@ export async function loadWorkspaceSnapshot(
       memberNeedingCheckIn,
       activeDevGoals: sumActiveDevGoals(stats),
       membersWithoutRecentCheckIn: countStaleCheckIns(stats, managerUserId),
+      memberRows,
+      recentWin: extractRecentWin(Array.isArray(activities) ? activities : []),
       fromLiveData: true,
       loadError: null,
     };

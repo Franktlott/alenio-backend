@@ -15,8 +15,8 @@ import {
 } from "../../lib/seneca-assistant";
 import {
   briefingActionPath,
-  getMockLeadershipBriefing,
-  getMockTeamPulse,
+  buildLeadershipBriefing,
+  buildTeamPulse,
   getSenecaGreeting,
   matchStructuredPrompt,
   quickActionPath,
@@ -109,8 +109,14 @@ export function SenecaAssistantDrawer({ open, onClose }: Props) {
   const [chatError, setChatError] = useState<string | null>(null);
 
   const greeting = useMemo(() => getSenecaGreeting(), [open]);
-  const briefingCards = useMemo(() => getMockLeadershipBriefing(), []);
-  const teamPulse = useMemo(() => getMockTeamPulse(), []);
+  const briefingCards = useMemo(
+    () => (snapshot?.fromLiveData ? buildLeadershipBriefing(snapshot) : []),
+    [snapshot],
+  );
+  const teamPulse = useMemo(
+    () => (snapshot?.fromLiveData ? buildTeamPulse(snapshot) : []),
+    [snapshot],
+  );
 
   const statusLabel = snapshotLoading
     ? `Scanning ${teamName}…`
@@ -357,22 +363,34 @@ export function SenecaAssistantDrawer({ open, onClose }: Props) {
                     <h3 id="seneca-brief-heading" className="seneca-brief-section-title">
                       Leadership Briefing
                     </h3>
-                    <div className="seneca-brief-cards">
-                      {briefingCards.map((card) => (
-                        <BriefingCard key={card.id} card={card} onAction={onBriefingAction} />
-                      ))}
-                    </div>
+                    {snapshotLoading ? (
+                      <p className="seneca-drawer-muted">Building your briefing from {teamName}…</p>
+                    ) : snapshot?.loadError ? (
+                      <p className="seneca-drawer-muted seneca-drawer-muted--warn">{snapshot.loadError}</p>
+                    ) : (
+                      <div className="seneca-brief-cards">
+                        {briefingCards.map((card) => (
+                          <BriefingCard key={card.id} card={card} onAction={onBriefingAction} />
+                        ))}
+                      </div>
+                    )}
                   </section>
 
                   <section className="seneca-brief-section" aria-labelledby="seneca-pulse-heading">
                     <h3 id="seneca-pulse-heading" className="seneca-brief-section-title">
                       Team Pulse
                     </h3>
-                    <div className="seneca-pulse-panel">
-                      {teamPulse.map((metric) => (
-                        <TeamPulseRow key={metric.id} metric={metric} />
-                      ))}
-                    </div>
+                    {snapshotLoading ? (
+                      <p className="seneca-drawer-muted">Calculating team pulse…</p>
+                    ) : teamPulse.length > 0 ? (
+                      <div className="seneca-pulse-panel">
+                        {teamPulse.map((metric) => (
+                          <TeamPulseRow key={metric.id} metric={metric} />
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="seneca-drawer-muted">Team pulse will appear once member data loads.</p>
+                    )}
                   </section>
                 </>
               )}
