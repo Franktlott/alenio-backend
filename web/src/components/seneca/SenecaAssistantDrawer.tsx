@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { useEnterpriseShell } from "../../contexts/EnterpriseShellContext";
@@ -8,10 +8,25 @@ import {
   SENECA_QUICK_PROMPTS,
   senecaActionPath,
   type SenecaActionCard,
+  type SenecaInsightItem,
   type SenecaPrompt,
   type SenecaPromptId,
   type WorkspaceSnapshot,
 } from "../../lib/seneca-assistant";
+import {
+  briefingActionPath,
+  getMockLeadershipBriefing,
+  getMockTeamPulse,
+  getSenecaGreeting,
+  matchStructuredPrompt,
+  quickActionPath,
+  SENECA_ASK_EXAMPLES,
+  SENECA_COMPACT_QUICK_ACTIONS,
+  type BriefingInsightCard,
+  type BriefingTone,
+  type TeamPulseMetric,
+} from "../../lib/seneca-briefing";
+import { fetchSenecaAsk, type SenecaAskActionId } from "../../lib/seneca-api";
 import { SenecaIcon } from "./SenecaShared";
 
 type Props = {
@@ -19,47 +34,60 @@ type Props = {
   onClose: () => void;
 };
 
-function PromptIcon({ id }: { id: SenecaPromptId }) {
-  const common = { width: 18, height: 18, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2, "aria-hidden": true as const };
-  switch (id) {
-    case "attention":
-      return (
-        <svg {...common}>
-          <path d="M12 9v4M12 17h.01" strokeLinecap="round" />
-          <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-        </svg>
-      );
-    case "checklist":
-      return (
-        <svg {...common}>
-          <path d="M9 11l3 3L22 4" strokeLinecap="round" strokeLinejoin="round" />
-          <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
-        </svg>
-      );
-    case "prep-1on1":
-      return (
-        <svg {...common}>
-          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-          <circle cx="9" cy="7" r="4" />
-          <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
-        </svg>
-      );
-    case "notes-to-tasks":
-      return (
-        <svg {...common}>
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-          <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" strokeLinecap="round" />
-        </svg>
-      );
-    case "recognize":
-      return (
-        <svg {...common}>
-          <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-        </svg>
-      );
-    default:
-      return null;
-  }
+function toneClass(tone: BriefingTone): string {
+  return `seneca-brief-card--${tone}`;
+}
+
+function pulseStatusClass(status: TeamPulseMetric["status"]): string {
+  return `seneca-pulse-bar-fill--${status}`;
+}
+
+function BriefingCard({
+  card,
+  onAction,
+}: {
+  card: BriefingInsightCard;
+  onAction: (actionId: string) => void;
+}) {
+  return (
+    <article className={`seneca-brief-card ${toneClass(card.tone)}`} data-testid={`seneca-brief-${card.id}`}>
+      <div className="seneca-brief-card-head">
+        <span className={`seneca-brief-card-dot seneca-brief-card-dot--${card.tone}`} aria-hidden />
+        <p className="seneca-brief-card-category">{card.category}</p>
+      </div>
+      <h3 className="seneca-brief-card-title">{card.title}</h3>
+      <p className="seneca-brief-card-detail">{card.detail}</p>
+      <div className="seneca-brief-card-actions">
+        {card.actions.map((action) => (
+          <button
+            key={action.id}
+            type="button"
+            className="seneca-brief-card-action"
+            onClick={() => onAction(action.id)}
+          >
+            {action.label}
+          </button>
+        ))}
+      </div>
+    </article>
+  );
+}
+
+function TeamPulseRow({ metric }: { metric: TeamPulseMetric }) {
+  return (
+    <div className="seneca-pulse-row">
+      <div className="seneca-pulse-row-head">
+        <span className="seneca-pulse-label">{metric.label}</span>
+        <span className={`seneca-pulse-value seneca-pulse-value--${metric.status}`}>{metric.value}%</span>
+      </div>
+      <div className="seneca-pulse-bar" aria-hidden>
+        <span
+          className={`seneca-pulse-bar-fill ${pulseStatusClass(metric.status)}`}
+          style={{ width: `${metric.value}%` }}
+        />
+      </div>
+    </div>
+  );
 }
 
 export function SenecaAssistantDrawer({ open, onClose }: Props) {
@@ -68,20 +96,40 @@ export function SenecaAssistantDrawer({ open, onClose }: Props) {
   const teamId = selectedTeamId || teams?.[0]?.id || "";
   const teamName = teams?.find((t) => t.id === teamId)?.name ?? "Workspace";
 
-  const [view, setView] = useState<"home" | "chat">("home");
+  const [view, setView] = useState<"briefing" | "chat">("briefing");
   const [snapshot, setSnapshot] = useState<WorkspaceSnapshot | null>(null);
   const [snapshotLoading, setSnapshotLoading] = useState(false);
   const [activePrompt, setActivePrompt] = useState<SenecaPrompt | null>(null);
+  const [activeAsk, setActiveAsk] = useState<string | null>(null);
+  const [askDraft, setAskDraft] = useState("");
   const [thinking, setThinking] = useState(false);
   const [message, setMessage] = useState("");
+  const [insights, setInsights] = useState<SenecaInsightItem[]>([]);
   const [actions, setActions] = useState<SenecaActionCard[]>([]);
+  const [chatError, setChatError] = useState<string | null>(null);
+
+  const greeting = useMemo(() => getSenecaGreeting(), [open]);
+  const briefingCards = useMemo(() => getMockLeadershipBriefing(), []);
+  const teamPulse = useMemo(() => getMockTeamPulse(), []);
+
+  const statusLabel = snapshotLoading
+    ? `Scanning ${teamName}…`
+    : snapshot?.fromLiveData
+      ? "Live workspace insights ready"
+      : snapshot?.loadError
+        ? "Workspace data unavailable"
+        : "Briefing ready";
 
   const resetChat = useCallback(() => {
-    setView("home");
+    setView("briefing");
     setActivePrompt(null);
+    setActiveAsk(null);
+    setAskDraft("");
     setThinking(false);
     setMessage("");
+    setInsights([]);
     setActions([]);
+    setChatError(null);
   }, []);
 
   const handleClose = useCallback(() => {
@@ -98,7 +146,7 @@ export function SenecaAssistantDrawer({ open, onClose }: Props) {
 
     let cancelled = false;
     setSnapshotLoading(true);
-    void loadWorkspaceSnapshot(teamId, me?.id)
+    void loadWorkspaceSnapshot(teamId, me?.id, teamName)
       .then((data) => {
         if (!cancelled) setSnapshot(data);
       })
@@ -109,7 +157,7 @@ export function SenecaAssistantDrawer({ open, onClose }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [open, teamId, me?.id, resetChat]);
+  }, [open, teamId, me?.id, teamName, resetChat]);
 
   useEffect(() => {
     if (!open) return;
@@ -125,36 +173,119 @@ export function SenecaAssistantDrawer({ open, onClose }: Props) {
     };
   }, [open, handleClose]);
 
-  const onPromptSelect = (prompt: SenecaPrompt) => {
-    setActivePrompt(prompt);
-    setView("chat");
-    setThinking(true);
-    setMessage("");
-    setActions([]);
+  const runPrompt = useCallback(
+    (label: string, promptId: SenecaPromptId) => {
+      if (!teamId) return;
 
-    window.setTimeout(() => {
-      const ctx =
-        snapshot ??
-        ({
-          teamName,
-          overdueTasks: 3,
-          missedChecklists: 1,
-          memberNeedingCheckIn: { name: "Vera", days: 42 },
-          activeDevGoals: 2,
-          membersWithoutRecentCheckIn: 1,
-          fromLiveData: false,
-        } satisfies WorkspaceSnapshot);
-      const res = buildSenecaResponse(prompt.id, ctx);
-      setMessage(res.message);
-      setActions(res.actions);
-      setThinking(false);
-    }, 900);
+      const prompt = SENECA_QUICK_PROMPTS.find((p) => p.id === promptId) ?? {
+        id: promptId,
+        label,
+        hint: "",
+      };
+
+      setActivePrompt(prompt);
+      setActiveAsk(label);
+      setView("chat");
+      setThinking(true);
+      setMessage("");
+      setInsights([]);
+      setActions([]);
+      setChatError(null);
+
+      void (async () => {
+        try {
+          const ctx = await loadWorkspaceSnapshot(teamId, me?.id, teamName);
+          setSnapshot(ctx);
+          const res = buildSenecaResponse(promptId, ctx);
+          setMessage(res.message);
+          setInsights(res.insights);
+          setActions(res.actions);
+        } catch (e) {
+          setChatError(e instanceof Error ? e.message : "Could not load workspace insights.");
+        } finally {
+          setThinking(false);
+        }
+      })();
+    },
+    [teamId, me?.id, teamName],
+  );
+
+  const runFreeformAsk = useCallback(
+    (question: string) => {
+      if (!teamId) return;
+
+      setActivePrompt(null);
+      setActiveAsk(question);
+      setView("chat");
+      setThinking(true);
+      setMessage("");
+      setInsights([]);
+      setActions([]);
+      setChatError(null);
+
+      void (async () => {
+        try {
+          const res = await fetchSenecaAsk(teamId, question);
+          setMessage(res.message);
+          setInsights(
+            (res.insights ?? []).map((item, index) => ({
+              id: `ask-insight-${index}`,
+              label: item.label,
+              detail: item.detail,
+            })),
+          );
+          setActions(
+            (res.suggestedActions ?? []).map((item) => ({
+              id: item.action as SenecaAskActionId,
+              title: item.title,
+              description: item.description,
+            })),
+          );
+        } catch (e) {
+          setChatError(e instanceof Error ? e.message : "Seneca could not answer right now.");
+          setMessage("");
+        } finally {
+          setThinking(false);
+        }
+      })();
+    },
+    [teamId],
+  );
+
+  const onAskSubmit = (text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed || !teamId) return;
+    setAskDraft("");
+    const structured = matchStructuredPrompt(trimmed);
+    if (structured) {
+      runPrompt(trimmed, structured);
+    } else {
+      runFreeformAsk(trimmed);
+    }
   };
 
-  const onAction = (action: SenecaActionCard) => {
+  const onBriefingAction = (actionId: string) => {
     if (!teamId) return;
     handleClose();
-    navigate(senecaActionPath(action.id, teamId));
+    navigate(briefingActionPath(actionId, teamId));
+  };
+
+  const onQuickAction = (actionId: (typeof SENECA_COMPACT_QUICK_ACTIONS)[number]["id"]) => {
+    if (!teamId) return;
+    handleClose();
+    navigate(quickActionPath(actionId, teamId));
+  };
+
+  const onSenecaAction = (action: SenecaActionCard) => {
+    if (!teamId) return;
+    handleClose();
+    navigate(senecaActionPath(action.id, teamId, action.taskId));
+  };
+
+  const onInsightSelect = (insight: SenecaInsightItem) => {
+    if (!teamId || !insight.taskId) return;
+    handleClose();
+    navigate(senecaActionPath("open_task", teamId, insight.taskId));
   };
 
   if (!open) return null;
@@ -162,7 +293,7 @@ export function SenecaAssistantDrawer({ open, onClose }: Props) {
   return createPortal(
     <div className="seneca-drawer-backdrop" role="presentation" onClick={handleClose}>
       <aside
-        className="seneca-drawer"
+        className="seneca-drawer seneca-drawer--briefing"
         role="dialog"
         aria-modal="true"
         aria-labelledby="seneca-drawer-title"
@@ -178,21 +309,30 @@ export function SenecaAssistantDrawer({ open, onClose }: Props) {
                 type="button"
                 className="seneca-drawer-back"
                 onClick={() => {
-                  setView("home");
+                  setView("briefing");
                   setActivePrompt(null);
+                  setActiveAsk(null);
                   setThinking(false);
                 }}
               >
-                ← Back
+                ← Back to briefing
               </button>
             ) : (
               <div className="seneca-drawer-brand">
-                <SenecaIcon size={36} className="seneca-drawer-brand-icon" />
+                <SenecaIcon size={40} className="seneca-drawer-brand-icon" />
                 <div>
                   <h2 id="seneca-drawer-title" className="seneca-drawer-title">
                     Seneca
                   </h2>
-                  <p className="seneca-drawer-kicker">AI Coaching Assistant</p>
+                  <p className="seneca-drawer-kicker">AI Leadership Assistant</p>
+                  <p
+                    className={`seneca-drawer-status${
+                      snapshot?.fromLiveData ? " seneca-drawer-status--live" : snapshotLoading ? " seneca-drawer-status--loading" : ""
+                    }`}
+                  >
+                    <span className="seneca-drawer-status-dot" aria-hidden />
+                    {statusLabel}
+                  </p>
                 </div>
               </div>
             )}
@@ -202,56 +342,111 @@ export function SenecaAssistantDrawer({ open, onClose }: Props) {
           </button>
         </header>
 
-        {view === "home" ? (
-          <div className="seneca-drawer-body">
-            {!teamId ? (
-              <p className="seneca-drawer-lead">Create or join a workspace to unlock manager insights from Seneca.</p>
-            ) : (
-              <>
-            <p className="seneca-drawer-lead">
-              Your chief of staff for tasks, checklists, check-ins, development plans, and team recognition.
-            </p>
-            {snapshotLoading ? (
-              <p className="seneca-drawer-muted">Scanning {teamName}…</p>
-            ) : snapshot?.fromLiveData ? (
-              <p className="seneca-drawer-muted seneca-drawer-muted--live">Live workspace insights ready</p>
-            ) : (
-              <p className="seneca-drawer-muted">Using sample insights until workspace data loads</p>
-            )}
+        {view === "briefing" ? (
+          <>
+            <div className="seneca-drawer-body seneca-drawer-body--briefing">
+              {!teamId ? (
+                <p className="seneca-drawer-lead">Create or join a workspace to unlock your leadership briefing.</p>
+              ) : (
+                <>
+                  <p className="seneca-drawer-greeting">
+                    {greeting}. Here&apos;s what needs your attention today.
+                  </p>
 
-            <ul className="seneca-drawer-prompts">
-              {SENECA_QUICK_PROMPTS.map((prompt) => (
-                <li key={prompt.id}>
-                  <button
-                    type="button"
-                    className="seneca-drawer-prompt"
-                    disabled={!teamId}
-                    onClick={() => onPromptSelect(prompt)}
-                    data-testid={`seneca-prompt-${prompt.id}`}
+                  <section className="seneca-brief-section" aria-labelledby="seneca-brief-heading">
+                    <h3 id="seneca-brief-heading" className="seneca-brief-section-title">
+                      Leadership Briefing
+                    </h3>
+                    <div className="seneca-brief-cards">
+                      {briefingCards.map((card) => (
+                        <BriefingCard key={card.id} card={card} onAction={onBriefingAction} />
+                      ))}
+                    </div>
+                  </section>
+
+                  <section className="seneca-brief-section" aria-labelledby="seneca-pulse-heading">
+                    <h3 id="seneca-pulse-heading" className="seneca-brief-section-title">
+                      Team Pulse
+                    </h3>
+                    <div className="seneca-pulse-panel">
+                      {teamPulse.map((metric) => (
+                        <TeamPulseRow key={metric.id} metric={metric} />
+                      ))}
+                    </div>
+                  </section>
+                </>
+              )}
+            </div>
+
+            {teamId ? (
+              <div className="seneca-drawer-bottom">
+                <section className="seneca-ask-section" aria-labelledby="seneca-ask-heading">
+                  <h3 id="seneca-ask-heading" className="seneca-ask-heading">
+                    Ask Seneca
+                  </h3>
+                  <form
+                    className="seneca-ask-form"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      onAskSubmit(askDraft);
+                    }}
                   >
-                    <span className="seneca-drawer-prompt-icon">
-                      <PromptIcon id={prompt.id} />
-                    </span>
-                    <span className="seneca-drawer-prompt-copy">
-                      <span className="seneca-drawer-prompt-label">{prompt.label}</span>
-                      <span className="seneca-drawer-prompt-hint">{prompt.hint}</span>
-                    </span>
-                    <span className="seneca-drawer-prompt-chevron" aria-hidden>
-                      ›
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-              </>
-            )}
-          </div>
+                    <input
+                      type="text"
+                      className="seneca-ask-input"
+                      placeholder="Ask about your team, tasks, check-ins, or development…"
+                      value={askDraft}
+                      onChange={(e) => setAskDraft(e.target.value)}
+                      aria-label="Ask Seneca"
+                    />
+                    <button type="submit" className="seneca-ask-submit" disabled={!askDraft.trim()}>
+                      Ask
+                    </button>
+                  </form>
+                  <div className="seneca-ask-examples">
+                    {SENECA_ASK_EXAMPLES.map((example) => (
+                      <button
+                        key={example}
+                        type="button"
+                        className="seneca-ask-chip"
+                        onClick={() => onAskSubmit(example)}
+                      >
+                        {example}
+                      </button>
+                    ))}
+                  </div>
+                </section>
+
+                <section className="seneca-quick-section" aria-labelledby="seneca-quick-heading">
+                  <h3 id="seneca-quick-heading" className="seneca-quick-heading">
+                    Quick Actions
+                  </h3>
+                  <div className="seneca-quick-grid">
+                    {SENECA_COMPACT_QUICK_ACTIONS.map((action) => (
+                      <button
+                        key={action.id}
+                        type="button"
+                        className="seneca-quick-btn"
+                        onClick={() => onQuickAction(action.id)}
+                      >
+                        {action.label}
+                      </button>
+                    ))}
+                  </div>
+                </section>
+
+                <p className="seneca-drawer-footer-note">
+                  Manager coaching only — not generic help. Review suggestions before acting.
+                </p>
+              </div>
+            ) : null}
+          </>
         ) : (
           <div className="seneca-drawer-chat">
-            {activePrompt ? (
+            {(activeAsk || activePrompt) ? (
               <div className="seneca-drawer-chat-prompt">
                 <p className="seneca-drawer-chat-you-label">You asked</p>
-                <p className="seneca-drawer-chat-you-text">{activePrompt.label}</p>
+                <p className="seneca-drawer-chat-you-text">{activeAsk ?? activePrompt?.label}</p>
               </div>
             ) : null}
 
@@ -268,20 +463,54 @@ export function SenecaAssistantDrawer({ open, onClose }: Props) {
                   <span className="seneca-drawer-thinking-label">Reviewing your workspace…</span>
                 </div>
               ) : (
-                <p className="seneca-drawer-chat-message">{message}</p>
+                <>
+                  {chatError ? (
+                    <p className="seneca-drawer-chat-error" role="alert">
+                      {chatError}
+                    </p>
+                  ) : null}
+                  {message ? <p className="seneca-drawer-chat-message">{message}</p> : null}
+                  {insights.length > 0 ? (
+                    <ul className="seneca-drawer-insights">
+                      {insights.map((insight) => (
+                        <li key={insight.id}>
+                          {insight.taskId ? (
+                            <button
+                              type="button"
+                              className="seneca-drawer-insight seneca-drawer-insight--action"
+                              onClick={() => onInsightSelect(insight)}
+                            >
+                              <span className="seneca-drawer-insight-label">{insight.label}</span>
+                              {insight.detail ? (
+                                <span className="seneca-drawer-insight-detail">{insight.detail}</span>
+                              ) : null}
+                            </button>
+                          ) : (
+                            <div className="seneca-drawer-insight">
+                              <span className="seneca-drawer-insight-label">{insight.label}</span>
+                              {insight.detail ? (
+                                <span className="seneca-drawer-insight-detail">{insight.detail}</span>
+                              ) : null}
+                            </div>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </>
               )}
             </div>
 
             {!thinking && actions.length > 0 ? (
               <div className="seneca-drawer-actions">
-                <p className="seneca-drawer-actions-label">Suggested actions</p>
+                <p className="seneca-drawer-actions-label">Recommended next steps</p>
                 <ul className="seneca-drawer-action-list">
                   {actions.map((item) => (
                     <li key={item.id}>
                       <button
                         type="button"
                         className="seneca-drawer-action-card"
-                        onClick={() => onAction(item)}
+                        onClick={() => onSenecaAction(item)}
                         data-testid={`seneca-action-${item.id}`}
                       >
                         <span className="seneca-drawer-action-title">{item.title}</span>
@@ -294,12 +523,6 @@ export function SenecaAssistantDrawer({ open, onClose }: Props) {
             ) : null}
           </div>
         )}
-
-        <footer className="seneca-drawer-footer">
-          <p className="seneca-drawer-footer-note">
-            Manager coaching only — not generic help. Review suggestions before acting.
-          </p>
-        </footer>
       </aside>
     </div>,
     document.body,

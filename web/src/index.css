@@ -10928,7 +10928,7 @@ button.enterprise-profile-legal-link {
 }
 
 .chat-activity-rail {
-  width: 300px;
+  width: 400px;
   flex-shrink: 0;
   min-height: 0;
   display: flex;
@@ -10991,7 +10991,7 @@ button.enterprise-profile-legal-link {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 0.35rem 0.65rem 1rem;
+  padding: 0.35rem 0.75rem 5rem;
   -webkit-overflow-scrolling: touch;
 }
 
@@ -11052,7 +11052,7 @@ button.enterprise-profile-legal-link {
 
 @media (max-width: 1100px) {
   .chat-activity-rail {
-    width: 260px;
+    width: 300px;
   }
 
   .chat-activity-rail__celebrate-label {
@@ -14529,6 +14529,33 @@ button.enterprise-profile-legal-link {
   background: #fff;
   color: var(--text);
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+}
+
+.enterprise-workspace-overdue-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: 10px;
+  border: 1px solid #fecaca;
+  background: #fef2f2;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #991b1b;
+}
+
+.enterprise-workspace-overdue-banner-clear {
+  border: none;
+  background: transparent;
+  color: #b91c1c;
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: underline;
+  white-space: nowrap;
 }
 
 .enterprise-task-toolbar {
@@ -19884,6 +19911,15 @@ button.enterprise-profile-legal-link {
   color: #fff;
 }
 
+.site-v2-nav-seneca {
+  gap: 0.35rem;
+}
+
+.site-v2-nav-seneca-icon.seneca-icon {
+  width: 1rem;
+  height: 1rem;
+}
+
 .site-v2-head-actions {
   display: inline-flex;
   align-items: center;
@@ -20128,7 +20164,7 @@ button.enterprise-profile-legal-link {
   border: 1px solid rgba(255, 255, 255, 0.18);
   background: #fff;
   box-shadow: 0 22px 50px rgba(2, 6, 23, 0.4);
-  overflow: hidden;
+  overflow: visible;
 }
 
 .site-v2-dash-bar {
@@ -20212,6 +20248,272 @@ button.enterprise-profile-legal-link {
   line-height: 1.55;
   display: grid;
   gap: 0.4rem;
+}
+
+.site-v2-pillar-grid-coaching {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.site-v2-pillar-icon-coaching {
+  background: linear-gradient(135deg, #312e81, #4338ca);
+  color: #c7d2fe;
+}
+
+.site-v2-coaching-pillars .site-v2-center-head p {
+  max-width: 36rem;
+  margin: 0.5rem auto 0;
+  color: #64748b;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}
+
+.site-v2-seneca-marketing {
+  padding-top: 2rem;
+  padding-bottom: 2.5rem;
+}
+
+.site-v2-seneca-marketing-inner {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 380px);
+  gap: 1.5rem;
+  align-items: stretch;
+  padding: 1.75rem;
+  border-radius: 20px;
+  border: 1px solid rgba(99, 102, 241, 0.35);
+  background: linear-gradient(145deg, #0f172a 0%, #1e1b4b 55%, #0f172a 100%);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.04) inset,
+    0 24px 48px rgba(15, 23, 42, 0.35);
+  color: #e2e8f0;
+}
+
+.site-v2-seneca-marketing-copy h2 {
+  margin: 0.35rem 0 0;
+  font-size: clamp(1.5rem, 3vw, 2rem);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: #f8fafc;
+}
+
+.site-v2-seneca-marketing-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  margin-bottom: 0.75rem;
+}
+
+.site-v2-seneca-marketing-icon.seneca-icon {
+  width: 3.25rem;
+  height: 3.25rem;
+  box-shadow: 0 8px 24px rgba(99, 102, 241, 0.45);
+}
+
+.site-v2-pillar-seneca-icon.seneca-icon {
+  width: 1.75rem;
+  height: 1.75rem;
+}
+
+.site-v2-pillar-icon-coaching .site-v2-pillar-seneca-icon {
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.35);
+}
+
+.site-v2-seneca-marketing-eyebrow {
+  margin: 0;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #818cf8;
+}
+
+.site-v2-seneca-marketing-sub {
+  margin: 0 0 1rem;
+  font-size: 0.9375rem;
+  line-height: 1.55;
+  color: #cbd5e1;
+}
+
+.site-v2-seneca-prompt-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.site-v2-seneca-prompt-list li {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.35rem 0.65rem;
+  border-radius: 999px;
+  border: 1px solid rgba(129, 140, 248, 0.35);
+  background: rgba(99, 102, 241, 0.12);
+  color: #e0e7ff;
+}
+
+.site-v2-seneca-marketing-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding: 1rem;
+  border-radius: 14px;
+  border: 1px solid rgba(99, 102, 241, 0.28);
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(8px);
+}
+
+.site-v2-seneca-marketing-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.site-v2-seneca-marketing-panel-icon.seneca-icon {
+  width: 2rem;
+  height: 2rem;
+  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.4);
+}
+
+.site-v2-seneca-marketing-panel-head > div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.site-v2-seneca-marketing-panel-brand {
+  font-size: 0.9375rem;
+  font-weight: 800;
+  color: #f8fafc;
+}
+
+.site-v2-seneca-marketing-panel-kicker {
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #818cf8;
+}
+
+.site-v2-seneca-marketing-insight {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: #e2e8f0;
+}
+
+.site-v2-seneca-marketing-actions {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.site-v2-seneca-marketing-actions span {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.45rem 0.6rem;
+  border-radius: 8px;
+  border: 1px solid rgba(99, 102, 241, 0.22);
+  background: rgba(15, 23, 42, 0.55);
+  color: #c7d2fe;
+}
+
+.site-v2-seneca-cap-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1rem;
+  margin-top: 1.25rem;
+}
+
+.site-v2-seneca-cap-card {
+  padding: 1rem 1.05rem;
+  border-radius: 14px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+}
+
+.site-v2-seneca-cap-icon-wrap {
+  margin-bottom: 0.55rem;
+}
+
+.site-v2-seneca-cap-icon.seneca-icon {
+  width: 1.5rem;
+  height: 1.5rem;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.25);
+}
+
+.site-v2-seneca-cap-card h3 {
+  margin: 0 0 0.4rem;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.site-v2-seneca-cap-card p {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: #64748b;
+}
+
+.site-v2-phone-seneca {
+  margin: 0.35rem 0 0.5rem 0.75rem;
+  max-width: 88%;
+  padding: 0.45rem 0.55rem;
+  border-radius: 10px;
+  font-size: 0.62rem;
+  line-height: 1.35;
+  color: #c7d2fe;
+  background: linear-gradient(135deg, rgba(49, 46, 129, 0.95), rgba(67, 56, 202, 0.9));
+  border: 1px solid rgba(129, 140, 248, 0.35);
+}
+
+.site-v2-phone-seneca-label {
+  font-size: 0.55rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #a5b4fc;
+}
+
+.site-v2-phone-seneca-head {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-bottom: 0.15rem;
+}
+
+.site-v2-phone-seneca-icon.seneca-icon {
+  width: 1.125rem;
+  height: 1.125rem;
+}
+
+.site-v2-hero-seneca-fab {
+  position: absolute;
+  right: -0.35rem;
+  bottom: 0.75rem;
+  width: 3rem;
+  height: 3rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+}
+
+.site-v2-hero-seneca-fab-ring {
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  background: conic-gradient(from 0deg, #22d3ee, #6366f1, #a855f7, #22d3ee);
+  opacity: 0.55;
+  animation: seneca-float-ring 3s linear infinite;
+}
+
+.site-v2-hero-seneca-fab-icon.seneca-icon {
+  position: relative;
+  z-index: 1;
+  width: 2.75rem;
+  height: 2.75rem;
+  box-shadow: 0 8px 22px rgba(99, 102, 241, 0.45);
 }
 
 .site-v2-industry-grid-v2 {
@@ -20953,7 +21255,10 @@ button.enterprise-profile-legal-link {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .site-v2-pillar-grid {
+  .site-v2-pillar-grid,
+  .site-v2-pillar-grid-coaching,
+  .site-v2-seneca-cap-grid,
+  .site-v2-seneca-marketing-inner {
     grid-template-columns: 1fr;
   }
 
@@ -21375,6 +21680,19 @@ button.enterprise-profile-legal-link {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: #6366f1;
+}
+
+.site-marketing-eyebrow-seneca {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+}
+
+.site-marketing-eyebrow-seneca-icon.seneca-icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  box-shadow: 0 3px 10px rgba(99, 102, 241, 0.3);
 }
 
 .site-marketing-hero h1 {
@@ -22383,6 +22701,10 @@ button.enterprise-profile-legal-link {
   overflow: hidden;
 }
 
+.seneca-drawer--briefing {
+  width: min(100%, 30rem);
+}
+
 .seneca-drawer-glow {
   position: absolute;
   top: -4rem;
@@ -22506,6 +22828,10 @@ button.enterprise-profile-legal-link {
 
 .seneca-drawer-muted--live {
   color: #86efac;
+}
+
+.seneca-drawer-muted--warn {
+  color: #fca5a5;
 }
 
 .seneca-drawer-prompts {
@@ -22638,6 +22964,59 @@ button.enterprise-profile-legal-link {
   color: #e2e8f0;
 }
 
+.seneca-drawer-chat-error {
+  margin: 0 0 0.65rem;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: #fca5a5;
+}
+
+.seneca-drawer-insights {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.seneca-drawer-insight,
+.seneca-drawer-insight--action {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  width: 100%;
+  text-align: left;
+  padding: 0.55rem 0.65rem;
+  border-radius: 10px;
+  border: 1px solid rgba(99, 102, 241, 0.22);
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.seneca-drawer-insight--action {
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.seneca-drawer-insight--action:hover {
+  background: rgba(99, 102, 241, 0.14);
+  border-color: rgba(129, 140, 248, 0.45);
+}
+
+.seneca-drawer-insight-label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #e2e8f0;
+  line-height: 1.35;
+}
+
+.seneca-drawer-insight-detail {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  line-height: 1.35;
+}
+
 .seneca-drawer-thinking {
   display: flex;
   align-items: center;
@@ -22750,6 +23129,387 @@ button.enterprise-profile-legal-link {
   line-height: 1.4;
   color: #64748b;
   text-align: center;
+}
+
+/* Seneca leadership briefing home */
+.seneca-drawer-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0.35rem 0 0;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+.seneca-drawer-status--live {
+  color: #86efac;
+}
+
+.seneca-drawer-status--loading {
+  color: #a5b4fc;
+}
+
+.seneca-drawer-status-dot {
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 50%;
+  background: #64748b;
+}
+
+.seneca-drawer-status--live .seneca-drawer-status-dot {
+  background: #4ade80;
+  box-shadow: 0 0 8px rgba(74, 222, 128, 0.65);
+}
+
+.seneca-drawer-status--loading .seneca-drawer-status-dot {
+  background: #818cf8;
+  animation: seneca-drawer-dot 1.2s ease-in-out infinite;
+}
+
+.seneca-drawer-body--briefing {
+  padding-bottom: 0.5rem;
+}
+
+.seneca-drawer-greeting {
+  margin: 0 0 1.15rem;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  font-weight: 500;
+  color: #f1f5f9;
+}
+
+.seneca-brief-section {
+  margin-bottom: 1.25rem;
+}
+
+.seneca-brief-section-title {
+  margin: 0 0 0.65rem;
+  font-size: 0.6875rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #818cf8;
+}
+
+.seneca-brief-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.seneca-brief-card {
+  padding: 0.85rem 0.9rem;
+  border-radius: 14px;
+  border: 1px solid rgba(99, 102, 241, 0.22);
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(10px);
+}
+
+.seneca-brief-card--risk {
+  border-color: rgba(251, 146, 60, 0.45);
+  background: linear-gradient(135deg, rgba(251, 146, 60, 0.08) 0%, rgba(255, 255, 255, 0.03) 100%);
+}
+
+.seneca-brief-card--opportunity {
+  border-color: rgba(250, 204, 21, 0.4);
+  background: linear-gradient(135deg, rgba(250, 204, 21, 0.07) 0%, rgba(255, 255, 255, 0.03) 100%);
+}
+
+.seneca-brief-card--follow_up {
+  border-color: rgba(248, 113, 113, 0.42);
+  background: linear-gradient(135deg, rgba(248, 113, 113, 0.08) 0%, rgba(255, 255, 255, 0.03) 100%);
+}
+
+.seneca-brief-card--win {
+  border-color: rgba(52, 211, 153, 0.42);
+  background: linear-gradient(135deg, rgba(52, 211, 153, 0.08) 0%, rgba(99, 102, 241, 0.06) 100%);
+}
+
+.seneca-brief-card-head {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.4rem;
+}
+
+.seneca-brief-card-dot {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.seneca-brief-card-dot--risk {
+  background: #fb923c;
+  box-shadow: 0 0 8px rgba(251, 146, 60, 0.55);
+}
+
+.seneca-brief-card-dot--opportunity {
+  background: #facc15;
+  box-shadow: 0 0 8px rgba(250, 204, 21, 0.5);
+}
+
+.seneca-brief-card-dot--follow_up {
+  background: #f87171;
+  box-shadow: 0 0 8px rgba(248, 113, 113, 0.5);
+}
+
+.seneca-brief-card-dot--win {
+  background: #34d399;
+  box-shadow: 0 0 8px rgba(52, 211, 153, 0.55);
+}
+
+.seneca-brief-card-category {
+  margin: 0;
+  font-size: 0.625rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+.seneca-brief-card-title {
+  margin: 0 0 0.35rem;
+  font-size: 0.875rem;
+  font-weight: 700;
+  line-height: 1.35;
+  color: #f8fafc;
+}
+
+.seneca-brief-card-detail {
+  margin: 0 0 0.65rem;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: #cbd5e1;
+}
+
+.seneca-brief-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.seneca-brief-card-action {
+  border: 1px solid rgba(129, 140, 248, 0.35);
+  border-radius: 999px;
+  background: rgba(99, 102, 241, 0.12);
+  color: #e0e7ff;
+  font-family: inherit;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  padding: 0.3rem 0.65rem;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.seneca-brief-card-action:hover {
+  background: rgba(99, 102, 241, 0.22);
+  border-color: rgba(165, 180, 252, 0.55);
+}
+
+.seneca-pulse-panel {
+  padding: 0.85rem 0.9rem;
+  border-radius: 14px;
+  border: 1px solid rgba(99, 102, 241, 0.22);
+  background: rgba(255, 255, 255, 0.03);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.seneca-pulse-row-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+}
+
+.seneca-pulse-label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #e2e8f0;
+}
+
+.seneca-pulse-value {
+  font-size: 0.8125rem;
+  font-weight: 800;
+}
+
+.seneca-pulse-value--strong {
+  color: #34d399;
+}
+
+.seneca-pulse-value--good {
+  color: #60a5fa;
+}
+
+.seneca-pulse-value--watch {
+  color: #fbbf24;
+}
+
+.seneca-pulse-value--risk {
+  color: #f87171;
+}
+
+.seneca-pulse-bar {
+  height: 0.35rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.seneca-pulse-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  transition: width 0.4s ease;
+}
+
+.seneca-pulse-bar-fill--strong {
+  background: linear-gradient(90deg, #34d399, #22c55e);
+}
+
+.seneca-pulse-bar-fill--good {
+  background: linear-gradient(90deg, #60a5fa, #818cf8);
+}
+
+.seneca-pulse-bar-fill--watch {
+  background: linear-gradient(90deg, #fbbf24, #f59e0b);
+}
+
+.seneca-pulse-bar-fill--risk {
+  background: linear-gradient(90deg, #f87171, #fb923c);
+}
+
+.seneca-drawer-bottom {
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+  padding: 0.75rem 1rem max(0.85rem, env(safe-area-inset-bottom));
+  border-top: 1px solid rgba(99, 102, 241, 0.22);
+  background: rgba(2, 6, 23, 0.55);
+  backdrop-filter: blur(12px);
+}
+
+.seneca-ask-section {
+  margin-bottom: 0.85rem;
+}
+
+.seneca-ask-heading,
+.seneca-quick-heading {
+  margin: 0 0 0.45rem;
+  font-size: 0.625rem;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.seneca-ask-form {
+  display: flex;
+  gap: 0.45rem;
+  margin-bottom: 0.5rem;
+}
+
+.seneca-ask-input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid rgba(99, 102, 241, 0.28);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  color: #f8fafc;
+  font-family: inherit;
+  font-size: 0.8125rem;
+  padding: 0.55rem 0.7rem;
+}
+
+.seneca-ask-input::placeholder {
+  color: #64748b;
+}
+
+.seneca-ask-input:focus {
+  outline: none;
+  border-color: rgba(129, 140, 248, 0.55);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+}
+
+.seneca-ask-submit {
+  flex-shrink: 0;
+  border: none;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: #fff;
+  font-family: inherit;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  padding: 0.55rem 0.85rem;
+  cursor: pointer;
+}
+
+.seneca-ask-submit:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.seneca-ask-examples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.seneca-ask-chip {
+  border: 1px solid rgba(99, 102, 241, 0.22);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #cbd5e1;
+  font-family: inherit;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  padding: 0.28rem 0.55rem;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.seneca-ask-chip:hover {
+  background: rgba(99, 102, 241, 0.14);
+  border-color: rgba(129, 140, 248, 0.4);
+  color: #e0e7ff;
+}
+
+.seneca-quick-section {
+  margin-bottom: 0.55rem;
+}
+
+.seneca-quick-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.4rem;
+}
+
+.seneca-quick-btn {
+  border: 1px solid rgba(99, 102, 241, 0.18);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  color: #94a3b8;
+  font-family: inherit;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  padding: 0.45rem 0.5rem;
+  cursor: pointer;
+  text-align: center;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.seneca-quick-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(129, 140, 248, 0.35);
+  color: #e2e8f0;
+}
+
+.seneca-drawer-bottom .seneca-drawer-footer-note {
+  margin-top: 0.35rem;
 }
 
 .seneca-soon-icon.seneca-icon {

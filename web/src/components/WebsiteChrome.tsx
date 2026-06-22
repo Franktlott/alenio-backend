@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
+import { SenecaIcon } from "./seneca/SenecaShared";
 import { MarketingFooter } from "./MarketingFooter";
 import {
   MARKETING_CTA_START_FREE,
@@ -28,8 +29,12 @@ export function WebsiteChrome({ children, activeNav, variant = "bar" }: Props) {
         />
       </Link>
       <nav className="site-v2-nav" aria-label="Primary">
+        <a href="/#seneca" className={`site-v2-nav-seneca ${navClass("how-it-works") ?? ""}`.trim()}>
+          <SenecaIcon size={16} className="site-v2-nav-seneca-icon" />
+          Seneca AI
+        </a>
         <a href="/#how-alenio-works" className={navClass("how-it-works")}>
-          How Alenio Works
+          How it works
         </a>
         <Link to="/pricing" className={navClass("pricing")}>
           Pricing

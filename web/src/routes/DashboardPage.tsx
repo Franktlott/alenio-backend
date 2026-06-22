@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useEnterpriseShell } from "../contexts/EnterpriseShellContext";
 import { queryKeys } from "../lib/query-keys";
 import {
@@ -53,6 +53,7 @@ import { WorkspaceTaskRow } from "../components/tasks/WorkspaceTaskRow";
 import { isRecurringTask, type RecurrenceScope } from "../lib/recurring-task";
 import {
   dotClassForDayTasks,
+  isTaskOverdue,
   priorityRank,
 } from "../lib/task-display";
 
@@ -86,6 +87,8 @@ export function DashboardPage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const overdueFocus = searchParams.get("overdue") === "1";
   const { me, teams, selectedTeamId, setSelectedTeamId } = useEnterpriseShell();
   const [calendarView, setCalendarView] = useState(() => new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(() => new Date());
@@ -451,8 +454,13 @@ export function DashboardPage() {
     return tabTasks.filter((t) => t.assignments.some((a) => a.user.id === teamMemberFilter));
   }, [tabTasks, taskTab, teamMemberFilter]);
 
+  const tasksForTable = useMemo(() => {
+    if (!overdueFocus) return filteredTabTasks;
+    return tasks.filter((t) => t.status !== "done" && isTaskOverdue(t, now));
+  }, [overdueFocus, filteredTabTasks, tasks, now]);
+
   const tableRows = useMemo(() => {
-    const list = [...filteredTabTasks];
+    const list = [...tasksForTable];
     if (sortBy === "due") {
       list.sort((a, b) => {
         if (!a.dueDate && !b.dueDate) return 0;
@@ -470,7 +478,13 @@ export function DashboardPage() {
       list.sort((a, b) => priorityRank(b.priority) - priorityRank(a.priority));
     }
     return list;
-  }, [filteredTabTasks, sortBy]);
+  }, [tasksForTable, sortBy]);
+
+  const clearOverdueFocus = () => {
+    const next = new URLSearchParams(searchParams);
+    next.delete("overdue");
+    setSearchParams(next, { replace: true });
+  };
 
   const calTitle = calendarView.toLocaleString(undefined, { month: "long", year: "numeric" });
   const weekdayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -957,7 +971,10 @@ export function DashboardPage() {
                       role="tab"
                       aria-selected={taskTab === tab}
                       className={`enterprise-task-tab ${taskTab === tab ? "enterprise-task-tab-on" : ""}`}
-                      onClick={() => setTaskTab(tab)}
+                      onClick={() => {
+                        if (overdueFocus) clearOverdueFocus();
+                        setTaskTab(tab);
+                      }}
                     >
                       {tab === "active" ? "Active" : tab === "completed" ? "Completed" : "Team"}
                     </button>
@@ -965,6 +982,14 @@ export function DashboardPage() {
                 </div>
               </div>
             </div>
+            {overdueFocus ? (
+              <div className="enterprise-workspace-overdue-banner" role="status">
+                <span>Showing overdue tasks across your workspace</span>
+                <button type="button" className="enterprise-workspace-overdue-banner-clear" onClick={clearOverdueFocus}>
+                  Show all tasks
+                </button>
+              </div>
+            ) : null}
             <div className="enterprise-task-toolbar">
               <label className="enterprise-select-label">
                 Sort by
@@ -1012,11 +1037,13 @@ export function DashboardPage() {
                       <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
                     </svg>
                     <p className="enterprise-dashboard-empty-title">
-                      {taskTab === "completed"
-                        ? "No completed tasks"
-                        : taskTab === "team"
-                          ? "No tasks assigned to others"
-                          : "No active tasks"}
+                      {overdueFocus
+                        ? "No overdue tasks"
+                        : taskTab === "completed"
+                          ? "No completed tasks"
+                          : taskTab === "team"
+                            ? "No tasks assigned to others"
+                            : "No active tasks"}
                     </p>
                     <p className="enterprise-dashboard-empty-sub">
                       {taskTab === "team"

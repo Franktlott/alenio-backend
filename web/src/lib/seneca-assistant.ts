@@ -2,10 +2,12 @@ import {
   fetchCoreTeamTasks,
   fetchTeamMemberStats,
   fetchWebTeam,
+  fetchWebTeamTasks,
   type ApiTask,
   type TeamMemberStatsMap,
   type WebTeamMemberRow,
 } from "./api";
+import { isTaskOverdue } from "./task-display";
 
 export type SenecaPromptId =
   | "attention"
@@ -18,7 +20,10 @@ export type SenecaActionId =
   | "create_follow_up_task"
   | "schedule_check_in"
   | "create_recognition"
-  | "build_checklist";
+  | "build_checklist"
+  | "view_overdue_tasks"
+  | "open_task"
+  | "open_team";
 
 export type SenecaPrompt = {
   id: SenecaPromptId;
@@ -30,21 +35,39 @@ export type SenecaActionCard = {
   id: SenecaActionId;
   title: string;
   description: string;
+  taskId?: string;
+};
+
+export type SenecaInsightItem = {
+  id: string;
+  label: string;
+  detail?: string;
+  taskId?: string;
 };
 
 export type SenecaAssistantResponse = {
   message: string;
+  insights: SenecaInsightItem[];
   actions: SenecaActionCard[];
+};
+
+export type OverdueTaskPreview = {
+  id: string;
+  title: string;
+  assigneeLabel: string;
+  dueLabel: string;
 };
 
 export type WorkspaceSnapshot = {
   teamName: string;
   overdueTasks: number;
+  overdueTaskPreviews: OverdueTaskPreview[];
   missedChecklists: number;
-  memberNeedingCheckIn: { name: string; days: number } | null;
+  memberNeedingCheckIn: { name: string; days: number; userId: string } | null;
   activeDevGoals: number;
   membersWithoutRecentCheckIn: number;
   fromLiveData: boolean;
+  loadError?: string | null;
 };
 
 export const SENECA_QUICK_PROMPTS: SenecaPrompt[] = [
@@ -75,31 +98,87 @@ export const SENECA_QUICK_PROMPTS: SenecaPrompt[] = [
   },
 ];
 
-const MOCK_SNAPSHOT: WorkspaceSnapshot = {
-  teamName: "Your workspace",
-  overdueTasks: 3,
-  missedChecklists: 1,
-  memberNeedingCheckIn: { name: "Vera", days: 42 },
-  activeDevGoals: 2,
-  membersWithoutRecentCheckIn: 1,
-  fromLiveData: false,
-};
+function mergeTeamTasks(webTasks: ApiTask[], coreTasks: ApiTask[]): ApiTask[] {
+  const byId = new Map<string, ApiTask>();
+  for (const task of webTasks) byId.set(task.id, task);
+  for (const task of coreTasks) {
+    const prev = byId.get(task.id);
+    if (!prev) {
+      byId.set(task.id, task);
+      continue;
+    }
+    byId.set(task.id, {
+      ...prev,
+      ...task,
+      creatorId: task.creatorId ?? prev.creatorId ?? task.creator?.id ?? prev.creator?.id,
+      assignments: task.assignments?.length ? task.assignments : prev.assignments,
+      subtasks: task.subtasks?.length ? task.subtasks : prev.subtasks,
+      attachmentUrl: task.attachmentUrl ?? prev.attachmentUrl,
+      creator: task.creator ?? prev.creator,
+    });
+  }
+  return [...byId.values()];
+}
+
+function emptySnapshot(teamName: string, loadError?: string | null): WorkspaceSnapshot {
+  return {
+    teamName,
+    overdueTasks: 0,
+    overdueTaskPreviews: [],
+    missedChecklists: 0,
+    memberNeedingCheckIn: null,
+    activeDevGoals: 0,
+    membersWithoutRecentCheckIn: 0,
+    fromLiveData: false,
+    loadError: loadError ?? null,
+  };
+}
+
+function taskAssigneeLabel(task: ApiTask): string {
+  const names = task.assignments
+    .map((a) => a.user.name ?? a.user.email)
+    .filter((name): name is string => Boolean(name?.trim()));
+  if (names.length === 0) return "Unassigned";
+  if (names.length === 1) return names[0]!;
+  return `${names[0]} +${names.length - 1}`;
+}
+
+function formatShortDue(iso: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+function buildOverduePreviews(tasks: ApiTask[]): OverdueTaskPreview[] {
+  const now = new Date();
+  return tasks
+    .filter((t) => isTaskOverdue(t, now))
+    .sort((a, b) => {
+      const aDue = a.dueDate ? new Date(a.dueDate).getTime() : 0;
+      const bDue = b.dueDate ? new Date(b.dueDate).getTime() : 0;
+      return aDue - bDue;
+    })
+    .slice(0, 5)
+    .map((task) => ({
+      id: task.id,
+      title: task.title,
+      assigneeLabel: taskAssigneeLabel(task),
+      dueLabel: formatShortDue(task.dueDate),
+    }));
+}
 
 function countOverdueTasks(tasks: ApiTask[]): number {
-  const now = Date.now();
-  return tasks.filter((t) => {
-    if (t.status === "done") return false;
-    if (!t.dueDate) return false;
-    return new Date(t.dueDate).getTime() < now;
-  }).length;
+  const now = new Date();
+  return tasks.filter((t) => isTaskOverdue(t, now)).length;
 }
 
 function findMemberNeedingCheckIn(
   members: WebTeamMemberRow[],
   stats: TeamMemberStatsMap,
   managerUserId: string | undefined,
-): { name: string; days: number } | null {
-  let worst: { name: string; days: number } | null = null;
+): { name: string; days: number; userId: string } | null {
+  let worst: { name: string; days: number; userId: string } | null = null;
   for (const member of members) {
     if (member.userId === managerUserId) continue;
     const row = stats[member.userId];
@@ -107,7 +186,7 @@ function findMemberNeedingCheckIn(
     if (days == null || days < 14) continue;
     const name = member.user?.name ?? member.user?.email ?? "A team member";
     if (!worst || days > worst.days) {
-      worst = { name, days };
+      worst = { name, days, userId: member.userId };
     }
   }
   return worst;
@@ -128,27 +207,38 @@ function countStaleCheckIns(stats: TeamMemberStatsMap, managerUserId: string | u
 export async function loadWorkspaceSnapshot(
   teamId: string,
   managerUserId?: string,
+  fallbackTeamName = "Workspace",
 ): Promise<WorkspaceSnapshot> {
   try {
-    const [team, tasks, stats] = await Promise.all([
+    const [team, webTasks, coreTasks, stats] = await Promise.all([
       fetchWebTeam(teamId),
+      fetchWebTeamTasks(teamId).catch(() => [] as ApiTask[]),
       fetchCoreTeamTasks(teamId).catch(() => [] as ApiTask[]),
       fetchTeamMemberStats(teamId).catch(() => ({} as TeamMemberStatsMap)),
     ]);
 
+    const tasks = mergeTeamTasks(
+      Array.isArray(webTasks) ? webTasks : [],
+      Array.isArray(coreTasks) ? coreTasks : [],
+    );
     const memberNeedingCheckIn = findMemberNeedingCheckIn(team.members, stats, managerUserId);
 
     return {
       teamName: team.name,
       overdueTasks: countOverdueTasks(tasks),
+      overdueTaskPreviews: buildOverduePreviews(tasks),
       missedChecklists: 0,
       memberNeedingCheckIn,
       activeDevGoals: sumActiveDevGoals(stats),
       membersWithoutRecentCheckIn: countStaleCheckIns(stats, managerUserId),
       fromLiveData: true,
+      loadError: null,
     };
-  } catch {
-    return { ...MOCK_SNAPSHOT, teamName: MOCK_SNAPSHOT.teamName };
+  } catch (error) {
+    return emptySnapshot(
+      fallbackTeamName,
+      error instanceof Error ? error.message : "Could not load workspace data",
+    );
   }
 }
 
@@ -156,8 +246,9 @@ function action(
   id: SenecaActionId,
   title: string,
   description: string,
+  taskId?: string,
 ): SenecaActionCard {
-  return { id, title, description };
+  return { id, title, description, taskId };
 }
 
 export function buildSenecaResponse(
@@ -166,48 +257,120 @@ export function buildSenecaResponse(
 ): SenecaAssistantResponse {
   const team = snapshot.teamName;
 
+  if (!snapshot.fromLiveData) {
+    return {
+      message: snapshot.loadError
+        ? "I couldn't load your workspace data right now. Close Seneca, wait a moment, and try again."
+        : "Workspace data isn't ready yet. Give it a moment and try again.",
+      insights: [],
+      actions: [],
+    };
+  }
+
   switch (promptId) {
     case "attention": {
-      const segments: string[] = [];
+      const insights: SenecaInsightItem[] = [];
+      const actions: SenecaActionCard[] = [];
       const overdue = snapshot.overdueTasks;
-      const missed = snapshot.fromLiveData ? snapshot.missedChecklists : snapshot.missedChecklists || 1;
+      const missed = snapshot.missedChecklists;
+      const checkInGap = snapshot.memberNeedingCheckIn;
+      let issueCount = 0;
 
       if (overdue > 0) {
-        segments.push(`${overdue} overdue task${overdue !== 1 ? "s" : ""}`);
-      }
-      if (missed > 0) {
-        segments.push(`${missed} missed checklist${missed !== 1 ? "s" : ""}`);
-      }
-      if (snapshot.memberNeedingCheckIn) {
-        segments.push(
-          `${snapshot.memberNeedingCheckIn.name} hasn’t had a check-in in ${snapshot.memberNeedingCheckIn.days} days`,
+        issueCount += 1;
+        insights.push({
+          id: "overdue-summary",
+          label: `${overdue} overdue task${overdue !== 1 ? "s" : ""} across the team`,
+        });
+        for (const task of snapshot.overdueTaskPreviews.slice(0, 3)) {
+          insights.push({
+            id: `overdue-${task.id}`,
+            label: task.title,
+            detail: [task.assigneeLabel, task.dueLabel ? `due ${task.dueLabel}` : null]
+              .filter(Boolean)
+              .join(" · "),
+            taskId: task.id,
+          });
+        }
+        if (overdue > snapshot.overdueTaskPreviews.length) {
+          const extra = overdue - snapshot.overdueTaskPreviews.length;
+          insights.push({
+            id: "overdue-more",
+            label: `+${extra} more overdue task${extra !== 1 ? "s" : ""}`,
+          });
+        }
+        actions.push(
+          action("view_overdue_tasks", "View overdue tasks", "Open Workspace filtered to past-due work"),
         );
       }
 
-      let summary: string;
-      if (segments.length === 0) {
-        summary = `You’re in good shape in ${team}. No urgent manager fires — consider a proactive check-in or recognition post.`;
-      } else if (segments.length === 1) {
-        summary = `You have ${segments[0]}.`;
-      } else {
-        const last = segments.pop()!;
-        summary = `You have ${segments.join(", ")}, and ${last}.`;
+      if (missed > 0) {
+        issueCount += 1;
+        insights.push({
+          id: "missed-checklists",
+          label: `${missed} missed checklist${missed !== 1 ? "s" : ""} on the floor`,
+        });
+        actions.push(action("build_checklist", "Review checklists", "Open Alenio Go and follow up on routines"));
       }
 
-      return {
-        message: summary,
-        actions: [
-          action("create_follow_up_task", "Create follow-up task", "Assign ownership with a due date"),
-          action("schedule_check_in", "Schedule check-in", "Open a member profile and start a 1:1"),
-          action("create_recognition", "Create recognition post", "Celebrate progress on the activity feed"),
-          action("build_checklist", "Build checklist", "Standardize a recurring frontline routine"),
-        ],
-      };
+      if (checkInGap) {
+        issueCount += 1;
+        insights.push({
+          id: "checkin-gap",
+          label: `${checkInGap.name} — ${checkInGap.days} days since last check-in`,
+        });
+        actions.push(
+          action(
+            "schedule_check_in",
+            `Prep check-in with ${checkInGap.name}`,
+            "Open Team and start 1:1 prep",
+          ),
+        );
+      }
+
+      if (snapshot.activeDevGoals > 0) {
+        insights.push({
+          id: "dev-goals",
+          label: `${snapshot.activeDevGoals} active development goal${snapshot.activeDevGoals !== 1 ? "s" : ""} in progress`,
+        });
+      }
+
+      if (snapshot.membersWithoutRecentCheckIn > 1) {
+        insights.push({
+          id: "stale-checkins",
+          label: `${snapshot.membersWithoutRecentCheckIn} teammates without a check-in in the last 3 weeks`,
+        });
+      }
+
+      let message: string;
+      if (issueCount === 0) {
+        message = `${team} looks clear — no urgent coaching gaps right now. Consider a recognition post or proactive check-in.`;
+      } else if (overdue > 0 && issueCount === 1 && !checkInGap && missed === 0) {
+        message = `Your team has ${overdue} overdue task${overdue !== 1 ? "s" : ""} that may need a nudge.`;
+      } else {
+        message = `Here's what stands out in ${team}:`;
+      }
+
+      const genericActions: SenecaActionCard[] = [
+        action("create_follow_up_task", "Create follow-up task", "Assign ownership with a due date"),
+        action("create_recognition", "Create recognition post", "Celebrate progress on the activity feed"),
+      ];
+
+      const seen = new Set(actions.map((a) => a.id));
+      for (const item of genericActions) {
+        if (actions.length >= 4) break;
+        if (seen.has(item.id)) continue;
+        actions.push(item);
+        seen.add(item.id);
+      }
+
+      return { message, insights, actions };
     }
 
     case "checklist":
       return {
-        message: `Let’s build a checklist for ${team}. Start with the opening routine, shift handoff, or closing steps your team repeats every day. Seneca can help you turn tribal knowledge into a frontline habit.`,
+        message: `Let's build a checklist for ${team}. Start with the opening routine, shift handoff, or closing steps your team repeats every day. Seneca can help you turn tribal knowledge into a frontline habit.`,
+        insights: [],
         actions: [
           action("build_checklist", "Build checklist", "Create a new checklist in Alenio Go"),
           action("create_follow_up_task", "Assign rollout task", "Task someone to pilot the checklist"),
@@ -219,6 +382,15 @@ export function buildSenecaResponse(
         message: snapshot.memberNeedingCheckIn
           ? `Prep focus: ${snapshot.memberNeedingCheckIn.name} — ${snapshot.memberNeedingCheckIn.days} days since your last check-in. Review open tasks, development goals, and recent wins before you meet.`
           : `Pick a teammate and Seneca will surface open tasks, development goals, and recent activity before your next 1:1.`,
+        insights: snapshot.memberNeedingCheckIn
+          ? [
+              {
+                id: "prep-member",
+                label: `${snapshot.memberNeedingCheckIn.name} is due for a check-in`,
+                detail: `${snapshot.memberNeedingCheckIn.days} days since your last 1:1`,
+              },
+            ]
+          : [],
         actions: [
           action("schedule_check_in", "Start check-in prep", "Open Team and choose a member"),
           action("create_follow_up_task", "Capture follow-up task", "Log action items before the conversation"),
@@ -227,7 +399,8 @@ export function buildSenecaResponse(
 
     case "notes-to-tasks":
       return {
-        message: `Paste rough notes from a huddle or 1:1 and I’ll help you turn them into owned follow-ups. For now, create tasks with clear titles, assignees, and due dates so nothing slips after the conversation.`,
+        message: `Paste rough notes from a huddle or 1:1 and I'll help you turn them into owned follow-ups. For now, create tasks with clear titles, assignees, and due dates so nothing slips after the conversation.`,
+        insights: [],
         actions: [
           action("create_follow_up_task", "Create follow-up task", "Add tasks from your latest notes"),
           action("schedule_check_in", "Review in next 1:1", "Attach follow-ups to an upcoming check-in"),
@@ -239,6 +412,7 @@ export function buildSenecaResponse(
         message: snapshot.activeDevGoals > 0
           ? `${team} has ${snapshot.activeDevGoals} active development goal${snapshot.activeDevGoals !== 1 ? "s" : ""} in progress. A public recognition post reinforces behavior you want repeated — especially after checklist streaks or task wins.`
           : `Recognition keeps momentum visible. Call out a specific win, name the person, and tie it to a value or goal your team is chasing.`,
+        insights: [],
         actions: [
           action("create_recognition", "Create recognition post", "Post to the team activity feed"),
           action("schedule_check_in", "Mention in 1:1", "Reinforce the win in your next check-in"),
@@ -248,12 +422,13 @@ export function buildSenecaResponse(
     default:
       return {
         message: "How can I help you lead the floor today?",
+        insights: [],
         actions: [],
       };
   }
 }
 
-export function senecaActionPath(actionId: SenecaActionId, teamId: string): string {
+export function senecaActionPath(actionId: SenecaActionId, teamId: string, taskId?: string): string {
   switch (actionId) {
     case "create_follow_up_task":
       return `/tasks/new?teamId=${encodeURIComponent(teamId)}`;
@@ -263,6 +438,14 @@ export function senecaActionPath(actionId: SenecaActionId, teamId: string): stri
       return `/chat?teamId=${encodeURIComponent(teamId)}`;
     case "build_checklist":
       return `/go?teamId=${encodeURIComponent(teamId)}`;
+    case "view_overdue_tasks":
+      return `/dashboard?teamId=${encodeURIComponent(teamId)}&overdue=1`;
+    case "open_task":
+      return taskId
+        ? `/tasks/${encodeURIComponent(taskId)}?teamId=${encodeURIComponent(teamId)}`
+        : `/dashboard?teamId=${encodeURIComponent(teamId)}&overdue=1`;
+    case "open_team":
+      return `/team?teamId=${encodeURIComponent(teamId)}`;
     default:
       return "/";
   }

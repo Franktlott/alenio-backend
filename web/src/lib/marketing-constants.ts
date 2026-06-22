@@ -11,11 +11,74 @@ export const MARKETING_DEMO_HREF = `mailto:${LEGAL_CONTACT_EMAIL}?subject=${enco
 export const MARKETING_HERO_HEADLINE = "The operating system for";
 export const MARKETING_HERO_HEADLINE_ACCENT = "team execution.";
 export const MARKETING_HERO_SUBCOPY =
-  "Alenio unifies chat, tasks, and calendar for frontline teams — so managers spend less time chasing updates and more time coaching.";
+  "Alenio unifies chat, tasks, and calendar — plus Seneca AI coaching, 1:1 check-ins, and development plans — so managers spend less time chasing updates and more time leading the floor.";
 
 export const MARKETING_FINAL_CTA_HEADLINE = "Stop guessing. Start executing.";
 export const MARKETING_FINAL_CTA_SUBCOPY =
-  "Create a free account in minutes. Upgrade when your team is ready for full execution tools.";
+  "Create a free account in minutes. Upgrade when your team is ready for Seneca AI, check-ins, and full execution tools.";
+
+export const MARKETING_SENECA_SECTION = {
+  eyebrow: "Seneca AI",
+  title: "Your manager's AI chief of staff",
+  subcopy:
+    "Seneca is built for frontline leaders — not generic help. It surfaces what needs attention, preps you for 1:1s, turns notes into tasks, and helps you recognize wins across your workspace.",
+  insightExample:
+    "You have 3 overdue tasks, 1 missed checklist, and Vera hasn't had a check-in in 42 days.",
+  prompts: [
+    "What needs my attention?",
+    "Prep a 1:1",
+    "Turn notes into tasks",
+    "Recognize a team win",
+  ] as const,
+  capabilities: [
+    {
+      title: "Floating coaching assistant",
+      desc: "Always-visible Seneca button with manager quick prompts and suggested actions.",
+    },
+    {
+      title: "Check-in prep & review",
+      desc: "Pre-meeting briefs, leadership review, and follow-up tasks inside every 1:1.",
+    },
+    {
+      title: "Development plan generation",
+      desc: "Draft 30-day growth plans and skill steps with Seneca — you approve before saving.",
+    },
+    {
+      title: "Template & goal generation",
+      desc: "Build check-in templates and development goals from a short brief.",
+    },
+  ] as const,
+};
+
+export const MARKETING_COACHING_PILLARS = [
+  {
+    title: "Seneca AI coaching",
+    icon: "seneca",
+    points: [
+      "Always-on assistant for managers",
+      "Workspace-aware attention alerts",
+      "Suggested follow-ups and recognition",
+    ],
+  },
+  {
+    title: "Structured 1:1 check-ins",
+    icon: "checkin",
+    points: [
+      "Custom templates with leader prep",
+      "Seneca prep before every check-in",
+      "Follow-up tasks and associate feedback",
+    ],
+  },
+  {
+    title: "Development plans",
+    icon: "growth",
+    points: [
+      "Skill goals with action steps",
+      "Generate plans with Seneca",
+      "Track progress on member profiles",
+    ],
+  },
+] as const;
 
 /** Illustrative dashboard metrics — not live customer data. */
 export const MARKETING_EXAMPLE_METRICS = [
@@ -42,7 +105,7 @@ export const ENTERPRISE_PLAN_FEATURES = [
 export const ENTERPRISE_PAGE_HERO = {
   title: "Enterprise execution at every location",
   subcopy:
-    "Roll out Alenio across stores, districts, and regions with workspace-level billing, owner controls, and support built for operators who run at scale.",
+    "Roll out Alenio across stores, districts, and regions with Seneca AI coaching, check-in playbooks, development plans, and workspace-level control built for operators who run at scale.",
 };
 
 export const ENTERPRISE_PAGE_PILLARS = [
@@ -50,16 +113,16 @@ export const ENTERPRISE_PAGE_PILLARS = [
     title: "Roll out with confidence",
     points: [
       "Workspace-per-location billing and ownership",
-      "Templates for opening, closing, and visit checklists",
+      "Checklists, check-in templates, and leader prep",
       "Consistent playbooks pushed to every site",
     ],
   },
   {
-    title: "Lead from the field",
+    title: "Coach at every layer",
     points: [
-      "Visibility into chat, tasks, and calendar by workspace",
-      "Activity feed for what changed across teams",
-      "Coaching workflows for managers and DMs",
+      "Seneca AI for district and store managers",
+      "1:1 check-ins with prep, notes, and follow-ups",
+      "Development plans tied to member profiles",
     ],
   },
   {

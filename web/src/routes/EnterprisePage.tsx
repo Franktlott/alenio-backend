@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { WebsiteChrome } from "../components/WebsiteChrome";
+import { SenecaIcon } from "../components/seneca/SenecaShared";
 import {
   ENTERPRISE_PAGE_HERO,
   ENTERPRISE_PAGE_PILLARS,
@@ -13,7 +14,10 @@ export function EnterprisePage() {
     <WebsiteChrome activeNav="enterprise">
       <main className="site-marketing-main" data-testid="enterprise-page">
         <header className="site-marketing-hero">
-          <p className="site-marketing-eyebrow">Enterprise</p>
+          <p className="site-marketing-eyebrow site-marketing-eyebrow-seneca">
+            <SenecaIcon size={20} className="site-marketing-eyebrow-seneca-icon" />
+            Enterprise · Seneca AI
+          </p>
           <h1>{ENTERPRISE_PAGE_HERO.title}</h1>
           <p>{ENTERPRISE_PAGE_HERO.subcopy}</p>
           <div className="site-v2-hero-cta site-marketing-hero-actions">

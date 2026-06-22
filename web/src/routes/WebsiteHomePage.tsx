@@ -1,16 +1,19 @@
 import { Link } from "react-router-dom";
 import { MarketingFooter } from "../components/MarketingFooter";
+import { SenecaIcon } from "../components/seneca/SenecaShared";
 import {
   MARKETING_CTA_REQUEST_DEMO,
   MARKETING_CTA_START_FREE,
   MARKETING_DEMO_HREF,
   MARKETING_EXAMPLE_BADGE,
   MARKETING_EXAMPLE_METRICS,
+  MARKETING_COACHING_PILLARS,
   MARKETING_FINAL_CTA_HEADLINE,
   MARKETING_FINAL_CTA_SUBCOPY,
   MARKETING_HERO_HEADLINE,
   MARKETING_HERO_HEADLINE_ACCENT,
   MARKETING_HERO_SUBCOPY,
+  MARKETING_SENECA_SECTION,
 } from "../lib/marketing-constants";
 
 const pillars = [
@@ -101,7 +104,7 @@ const useCases = [
   },
   {
     title: "For managers",
-    desc: "Less follow-up. More coaching. Stronger teams.",
+    desc: "Seneca AI, 1:1 check-ins, and development plans — less follow-up, more coaching.",
     tone: "manager",
     image: "/usecase-for-managers.png",
   },
@@ -158,6 +161,34 @@ const compareRows: {
     alenio: true,
   },
   {
+    feature: "Seneca AI manager coaching",
+    teams: false,
+    slack: false,
+    groupme: false,
+    alenio: true,
+  },
+  {
+    feature: "1:1 check-ins with templates & prep",
+    teams: "Separate tools",
+    slack: false,
+    groupme: false,
+    alenio: true,
+  },
+  {
+    feature: "Development plans & growth tracking",
+    teams: "Add-ons",
+    slack: false,
+    groupme: false,
+    alenio: true,
+  },
+  {
+    feature: "Frontline checklists (Alenio Go)",
+    teams: false,
+    slack: false,
+    groupme: false,
+    alenio: true,
+  },
+  {
     feature: "Built for frontline shift work",
     teams: "Office-first",
     slack: "Office-first",
@@ -199,6 +230,26 @@ const activityItems = [
 ];
 
 function PillarIcon({ type }: { type: string }) {
+  if (type === "seneca") {
+    return <SenecaIcon size={28} className="site-v2-pillar-seneca-icon" />;
+  }
+  if (type === "checkin") {
+    return (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+        <circle cx="9" cy="7" r="4" />
+        <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+      </svg>
+    );
+  }
+  if (type === "growth") {
+    return (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+        <path d="M3 3v18h18" strokeLinecap="round" />
+        <path d="M7 14l4-4 4 4 5-6" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  }
   if (type === "tasks") {
     return (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
@@ -231,7 +282,11 @@ export function WebsiteHomePage() {
             <img src="/alenio-logo-white.png" alt="Alenio" className="site-v2-logo-full" width={168} height={40} />
           </Link>
           <nav className="site-v2-nav" aria-label="Primary">
-            <a href="#how-alenio-works">How Alenio Works</a>
+            <a href="#seneca" className="site-v2-nav-seneca">
+              <SenecaIcon size={16} className="site-v2-nav-seneca-icon" />
+              Seneca AI
+            </a>
+            <a href="#how-alenio-works">How it works</a>
             <Link to="/pricing">Pricing</Link>
             <Link to="/enterprise">Enterprise</Link>
             <Link to="/security">Security</Link>
@@ -271,6 +326,13 @@ export function WebsiteHomePage() {
                   Cooler restock done — photo attached
                 </div>
                 <div className="site-v2-phone-msg site-v2-phone-msg-me">Opening checklist at 85%</div>
+                <div className="site-v2-phone-seneca">
+                  <span className="site-v2-phone-seneca-head">
+                    <SenecaIcon size={18} className="site-v2-phone-seneca-icon" />
+                    <span className="site-v2-phone-seneca-label">Seneca</span>
+                  </span>
+                  3 overdue tasks · check-in due for Vera
+                </div>
                 <div className="site-v2-phone-tasks">
                   <div className="site-v2-phone-tasks-title">Today&apos;s tasks</div>
                   <div className="site-v2-phone-task done">✓ Restock cooler</div>
@@ -280,6 +342,10 @@ export function WebsiteHomePage() {
             </div>
             <div className="site-v2-dashboard-mock">
               <div className="site-v2-dash-bar" />
+              <div className="site-v2-hero-seneca-fab" aria-hidden>
+                <span className="site-v2-hero-seneca-fab-ring" />
+                <SenecaIcon size={44} className="site-v2-hero-seneca-fab-icon" />
+              </div>
               <div className="site-v2-dash-grid">
                 <div className="site-v2-dash-card">
                   <span className="site-v2-dash-label">Shift completion</span>
@@ -292,6 +358,77 @@ export function WebsiteHomePage() {
               </div>
             </div>
           </div>
+        </div>
+      </section>
+
+      <section id="seneca" className="site-v2-section site-v2-seneca-marketing" aria-labelledby="seneca-marketing-title">
+        <div className="site-v2-seneca-marketing-inner">
+          <div className="site-v2-seneca-marketing-copy">
+            <div className="site-v2-seneca-marketing-title-row">
+              <SenecaIcon size={52} className="site-v2-seneca-marketing-icon" />
+              <div>
+                <p className="site-v2-seneca-marketing-eyebrow">{MARKETING_SENECA_SECTION.eyebrow}</p>
+                <h2 id="seneca-marketing-title">{MARKETING_SENECA_SECTION.title}</h2>
+              </div>
+            </div>
+            <p className="site-v2-seneca-marketing-sub">{MARKETING_SENECA_SECTION.subcopy}</p>
+            <ul className="site-v2-seneca-prompt-list">
+              {MARKETING_SENECA_SECTION.prompts.map((prompt) => (
+                <li key={prompt}>{prompt}</li>
+              ))}
+            </ul>
+          </div>
+          <div className="site-v2-seneca-marketing-panel" aria-hidden>
+            <div className="site-v2-seneca-marketing-panel-head">
+              <SenecaIcon size={32} className="site-v2-seneca-marketing-panel-icon" />
+              <div>
+                <span className="site-v2-seneca-marketing-panel-brand">Seneca</span>
+                <span className="site-v2-seneca-marketing-panel-kicker">AI Coaching Assistant</span>
+              </div>
+            </div>
+            <p className="site-v2-seneca-marketing-insight">{MARKETING_SENECA_SECTION.insightExample}</p>
+            <div className="site-v2-seneca-marketing-actions">
+              <span>Create follow-up task</span>
+              <span>Schedule check-in</span>
+              <span>Create recognition post</span>
+              <span>Build checklist</span>
+            </div>
+          </div>
+        </div>
+        <div className="site-v2-seneca-cap-grid">
+          {MARKETING_SENECA_SECTION.capabilities.map((cap, index) => (
+            <article key={cap.title} className="site-v2-seneca-cap-card">
+              {index === 0 ? (
+                <div className="site-v2-seneca-cap-icon-wrap" aria-hidden>
+                  <SenecaIcon size={24} className="site-v2-seneca-cap-icon" />
+                </div>
+              ) : null}
+              <h3>{cap.title}</h3>
+              <p>{cap.desc}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section id="coaching" className="site-v2-section site-v2-pillars site-v2-coaching-pillars">
+        <div className="site-v2-center-head">
+          <h2>Coach and develop your team</h2>
+          <p>Check-ins, development plans, and Seneca AI — built into the same workspace as chat and tasks.</p>
+        </div>
+        <div className="site-v2-pillar-grid site-v2-pillar-grid-coaching">
+          {MARKETING_COACHING_PILLARS.map((p) => (
+            <article key={p.title} className="site-v2-pillar-card">
+              <div className="site-v2-pillar-icon site-v2-pillar-icon-coaching">
+                <PillarIcon type={p.icon} />
+              </div>
+              <h3>{p.title}</h3>
+              <ul>
+                {p.points.map((point) => (
+                  <li key={point}>{point}</li>
+                ))}
+              </ul>
+            </article>
+          ))}
         </div>
       </section>
 
@@ -382,8 +519,8 @@ export function WebsiteHomePage() {
         <div className="site-v2-center-head">
           <h2>How Alenio compares</h2>
           <p>
-            Teams, Slack, and GroupMe are strong at messaging. Alenio adds shift-ready tasks, calendar, and visibility in
-            one app built for the floor.
+            Teams, Slack, and GroupMe are strong at messaging. Alenio adds shift-ready tasks, Seneca AI coaching,
+            check-ins, development plans, and visibility in one app built for the floor.
           </p>
         </div>
         <div className="site-v2-compare-scroll">
