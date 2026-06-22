@@ -5,6 +5,15 @@ import { prisma } from "../prisma";
 import { auth } from "../auth";
 import { authGuard } from "../middleware/auth-guard";
 import { prismaRouteError } from "../lib/prisma-errors";
+import {
+  DEVELOPMENT_GOAL_INACTIVITY_DAYS,
+  daysSinceGoalActivity,
+  daysUntilGoalInactive,
+  isDevelopmentGoalNearingInactive,
+  normalizeDevelopmentGoalStatus,
+  reconcileInactiveDevelopmentGoals,
+  type DevelopmentGoalLifecycleStatus,
+} from "../lib/development-goal-activity";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -29,8 +38,36 @@ const updateStatusSchema = z.object({
   status: z.enum(["active", "closed"]),
 });
 
-function normalizeStatus(raw: string | null | undefined): "active" | "closed" {
-  return raw === "closed" ? "closed" : "active";
+function normalizeStatus(raw: string | null | undefined): DevelopmentGoalLifecycleStatus {
+  return normalizeDevelopmentGoalStatus(raw);
+}
+
+async function reconcileInactiveGoals(
+  goals: Array<{
+    id: string;
+    status?: string | null;
+    lastActivityAt?: Date | null;
+    createdAt: Date;
+    notes?: Array<{ createdAt: Date }>;
+  }>,
+): Promise<Set<string>> {
+  return reconcileInactiveDevelopmentGoals(goals, async (ids) => {
+    await prisma.developmentGoal.updateMany({
+      where: { id: { in: ids } },
+      data: { status: "inactive" },
+    });
+  });
+}
+
+function touchActivityData(
+  existing: { status?: string | null },
+  now = new Date(),
+): { lastActivityAt: Date; status?: string } {
+  const data: { lastActivityAt: Date; status?: string } = { lastActivityAt: now };
+  if (normalizeStatus(existing.status) === "inactive") {
+    data.status = "active";
+  }
+  return data;
 }
 
 async function getMembership(
@@ -68,7 +105,8 @@ function parseSteps(raw: string): string[] {
   }
 }
 
-function serializeGoal(goal: {
+function serializeGoal(
+  goal: {
   id: string;
   teamId: string;
   memberUserId: string;
@@ -76,6 +114,7 @@ function serializeGoal(goal: {
   steps: string;
   status?: string | null;
   closedAt?: Date | null;
+  lastActivityAt?: Date | null;
   createdById: string;
   createdAt: Date;
   createdBy?: { id: string; name: string; email: string; image: string | null };
@@ -86,15 +125,26 @@ function serializeGoal(goal: {
     createdById: string;
     createdBy: { id: string; name: string; email: string; image: string | null };
   }>;
-}) {
+},
+  now = new Date(),
+) {
+  const status = normalizeStatus(goal.status);
+  const lastActivityAt = goal.lastActivityAt ?? goal.createdAt;
+  const daysSinceActivity = daysSinceGoalActivity(goal, now);
+  const daysUntilInactive = daysUntilGoalInactive({ ...goal, status }, now);
   return {
     id: goal.id,
     teamId: goal.teamId,
     memberUserId: goal.memberUserId,
     skill: goal.skill,
     steps: parseSteps(goal.steps),
-    status: normalizeStatus(goal.status),
+    status,
     closedAt: goal.closedAt ? goal.closedAt.toISOString() : null,
+    lastActivityAt: lastActivityAt.toISOString(),
+    daysSinceActivity,
+    daysUntilInactive,
+    nearingInactive: isDevelopmentGoalNearingInactive({ ...goal, status }, now),
+    inactivityPolicyDays: DEVELOPMENT_GOAL_INACTIVITY_DAYS,
     createdById: goal.createdById,
     createdAt: goal.createdAt.toISOString(),
     createdBy: goal.createdBy,
@@ -132,7 +182,16 @@ developmentGoalsRouter.get("/:memberUserId/development-goals", async (c) => {
       include: goalInclude,
       orderBy: { createdAt: "desc" },
     });
-    return c.json({ data: goals.map(serializeGoal) });
+    const inactiveIds = await reconcileInactiveGoals(goals);
+    const now = new Date();
+    return c.json({
+      data: goals.map((goal) =>
+        serializeGoal(
+          inactiveIds.has(goal.id) ? { ...goal, status: "inactive" } : goal,
+          now,
+        ),
+      ),
+    });
   } catch (err) {
     return prismaRouteError(c, err, "[development-goals] GET failed");
   }
@@ -173,6 +232,7 @@ developmentGoalsRouter.post(
           skill: body.skill,
           steps: JSON.stringify(body.steps),
           createdById: user.id,
+          lastActivityAt: new Date(),
         },
         include: goalInclude,
       });
@@ -216,6 +276,7 @@ developmentGoalsRouter.patch(
         data: {
           skill: body.skill,
           steps: JSON.stringify(body.steps),
+          ...touchActivityData(existing),
         },
         include: goalInclude,
       });
@@ -259,6 +320,7 @@ developmentGoalsRouter.patch(
         data: {
           status: body.status,
           closedAt: body.status === "closed" ? new Date() : null,
+          ...(body.status === "active" ? { lastActivityAt: new Date() } : {}),
         },
         include: goalInclude,
       });
@@ -383,6 +445,12 @@ developmentGoalsRouter.patch(
         where: { id: noteId },
         data: { body: body.body },
       });
+      await prisma.developmentGoal.update({
+        where: { id: goalId },
+        data: touchActivityData(
+          await prisma.developmentGoal.findUniqueOrThrow({ where: { id: goalId } }),
+        ),
+      });
       const updated = await prisma.developmentGoal.findUnique({
         where: { id: goalId },
         include: goalInclude,
@@ -432,6 +500,10 @@ developmentGoalsRouter.post(
           body: body.body,
           createdById: user.id,
         },
+      });
+      await prisma.developmentGoal.update({
+        where: { id: goalId },
+        data: touchActivityData(goal),
       });
       const updated = await prisma.developmentGoal.findUnique({
         where: { id: goalId },

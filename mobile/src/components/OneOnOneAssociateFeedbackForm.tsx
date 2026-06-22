@@ -13,6 +13,7 @@ import {
   ASSOCIATE_FEEDBACK_PLACEHOLDER,
   ASSOCIATE_FEEDBACK_SUBMIT_LABEL,
   LEADER_COMMENTS_PREVIEW_TITLE,
+  formatLeaderCommentsFrom,
   NO_FEEDBACK_VALUE,
 } from "@/lib/one-on-one-feedback";
 
@@ -187,8 +188,11 @@ export function OneOnOneAssociateFeedbackForm({
             marginBottom: 12,
           }}
         >
-          <Text style={{ fontSize: 11, fontWeight: "700", color: "#64748B", letterSpacing: 0.6, marginBottom: 6 }}>
+          <Text style={{ fontSize: 11, fontWeight: "700", color: "#64748B", letterSpacing: 0.6, marginBottom: 4 }}>
             {(context.leaderCommentsLabel ?? LEADER_COMMENTS_PREVIEW_TITLE).toUpperCase()}
+          </Text>
+          <Text style={{ fontSize: 12, fontWeight: "600", color: "#4361EE", marginBottom: 8 }}>
+            {formatLeaderCommentsFrom(context.leaderCommentsFrom)}
           </Text>
           <Text style={{ fontSize: 14, color: "#0F172A", lineHeight: 20 }}>{context.leaderComments}</Text>
         </View>

@@ -1,4 +1,8 @@
 import { prisma } from "../prisma";
+import {
+  buildDevelopmentGoalActivityAlerts,
+  reconcileInactiveDevelopmentGoals,
+} from "./development-goal-activity";
 
 export type SenecaWorkspaceMemberRow = {
   userId: string;
@@ -11,6 +15,15 @@ export type SenecaWorkspaceMemberRow = {
   activeDevGoals: number;
 };
 
+export type SenecaStaleDevelopmentGoal = {
+  goalId: string;
+  memberUserId: string;
+  memberName: string;
+  skill: string;
+  daysSinceActivity: number;
+  daysUntilInactive: number | null;
+};
+
 export type SenecaWorkspaceContext = {
   teamName: string;
   managerName: string | null;
@@ -18,6 +31,8 @@ export type SenecaWorkspaceContext = {
   overdueTasks: Array<{ title: string; assigneeNames: string[]; dueDate: string | null }>;
   membersNeedingCheckIn: Array<{ name: string; daysSinceLastOneOnOne: number }>;
   activeDevelopmentGoalsCount: number;
+  developmentGoalsNearingInactive: SenecaStaleDevelopmentGoal[];
+  inactiveDevelopmentGoals: SenecaStaleDevelopmentGoal[];
 };
 
 function roleLabel(role: string): string {
@@ -51,8 +66,16 @@ export async function buildSenecaWorkspaceContext(
       },
     }),
     prisma.developmentGoal.findMany({
-      where: { teamId, status: "active" },
-      select: { memberUserId: true },
+      where: { teamId, status: { not: "closed" } },
+      select: {
+        id: true,
+        memberUserId: true,
+        skill: true,
+        status: true,
+        createdAt: true,
+        lastActivityAt: true,
+        notes: { select: { createdAt: true }, orderBy: { createdAt: "desc" }, take: 1 },
+      },
     }),
     prisma.oneOnOneMeeting.findMany({
       where: { teamId, status: "published" },
@@ -65,9 +88,32 @@ export async function buildSenecaWorkspaceContext(
   const managerName = manager?.user.name ?? manager?.user.email ?? null;
 
   const devGoalCountByUser = new Map<string, number>();
-  for (const goal of devGoals) {
+  const inactiveIds = await reconcileInactiveDevelopmentGoals(devGoals, async (ids) => {
+    await prisma.developmentGoal.updateMany({
+      where: { id: { in: ids } },
+      data: { status: "inactive" },
+    });
+  });
+  const devGoalsLive = devGoals.map((goal) =>
+    inactiveIds.has(goal.id) ? { ...goal, status: "inactive" } : goal,
+  );
+  for (const goal of devGoalsLive) {
+    if (goal.status !== "active") continue;
     devGoalCountByUser.set(goal.memberUserId, (devGoalCountByUser.get(goal.memberUserId) ?? 0) + 1);
   }
+
+  const memberNameByUserId = new Map(
+    members.map((m) => [m.userId, m.user.name ?? m.user.email ?? "Team member"]),
+  );
+  const goalAlerts = buildDevelopmentGoalActivityAlerts(devGoalsLive);
+  const mapAlert = (alert: (typeof goalAlerts.nearingInactive)[number]): SenecaStaleDevelopmentGoal => ({
+    goalId: alert.goalId,
+    memberUserId: alert.memberUserId,
+    memberName: memberNameByUserId.get(alert.memberUserId) ?? "Team member",
+    skill: alert.skill,
+    daysSinceActivity: alert.daysSinceActivity,
+    daysUntilInactive: alert.daysUntilInactive,
+  });
 
   const lastCheckInByUser = new Map<string, Date>();
   for (const meeting of lastMeetings) {
@@ -153,7 +199,9 @@ export async function buildSenecaWorkspaceContext(
     members: memberRows,
     overdueTasks: [...overdueTaskMap.values()].slice(0, 10),
     membersNeedingCheckIn,
-    activeDevelopmentGoalsCount: devGoals.length,
+    activeDevelopmentGoalsCount: [...devGoalCountByUser.values()].reduce((sum, n) => sum + n, 0),
+    developmentGoalsNearingInactive: goalAlerts.nearingInactive.map(mapAlert),
+    inactiveDevelopmentGoals: goalAlerts.inactive.map(mapAlert),
   };
 }
 

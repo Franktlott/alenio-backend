@@ -27,6 +27,13 @@ import {
   type DevelopmentGoalNote,
 } from "@/lib/member-profile-api";
 import { printDevelopmentPlan } from "@/lib/development-plan-print";
+import {
+  DEVELOPMENT_GOAL_ACTIVITY_KEY,
+  goalDaysUntilInactive,
+  goalStatusLabel,
+  isGoalNearingInactive,
+  normalizeDevelopmentGoalStatus,
+} from "@/lib/development-goal-activity";
 
 type Props = {
   teamId: string;
@@ -75,6 +82,7 @@ export function DevelopmentPlanTab({
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [closedOpen, setClosedOpen] = useState(false);
+  const [inactiveOpen, setInactiveOpen] = useState(false);
   const [menuGoalId, setMenuGoalId] = useState<string | null>(null);
   const [statusSavingId, setStatusSavingId] = useState<string | null>(null);
 
@@ -107,7 +115,8 @@ export function DevelopmentPlanTab({
     void loadGoals();
   }, [loadGoals]);
 
-  const activeGoals = goals.filter((g) => g.status !== "closed");
+  const activeGoals = goals.filter((g) => g.status === "active");
+  const inactiveGoals = goals.filter((g) => g.status === "inactive");
   const closedGoals = goals.filter((g) => g.status === "closed");
 
   const onPrint = async () => {
@@ -297,7 +306,14 @@ export function DevelopmentPlanTab({
     ]);
   };
 
-  const renderGoalCard = (goal: DevelopmentGoal, isClosed: boolean) => (
+  const renderGoalCard = (goal: DevelopmentGoal) => {
+    const status = normalizeDevelopmentGoalStatus(goal.status);
+    const isClosed = status === "closed";
+    const isInactive = status === "inactive";
+    const nearingInactive = isGoalNearingInactive(goal);
+    const daysUntilInactive = goalDaysUntilInactive(goal);
+
+    return (
     <View
       key={goal.id}
       style={{
@@ -305,8 +321,8 @@ export function DevelopmentPlanTab({
         borderRadius: 14,
         padding: 16,
         borderWidth: 1,
-        borderColor: isClosed ? "#E2E8F0" : "#C7D2FE",
-        opacity: isClosed ? 0.85 : 1,
+        borderColor: isClosed ? "#E2E8F0" : isInactive ? "#FDE68A" : "#C7D2FE",
+        opacity: isClosed || isInactive ? 0.9 : 1,
       }}
     >
       <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 10 }}>
@@ -348,15 +364,31 @@ export function DevelopmentPlanTab({
             >
               <Text style={{ fontSize: 14, fontWeight: "600", color: "#4361EE" }}>Update</Text>
             </Pressable>
-          ) : (
+          ) : null}
+          {isClosed || isInactive ? (
             <Pressable onPress={() => onReopen(goal)} style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: "#E2E8F0" }}>
-              <Text style={{ fontSize: 14, fontWeight: "600", color: "#4361EE" }}>Reopen goal</Text>
+              <Text style={{ fontSize: 14, fontWeight: "600", color: "#4361EE" }}>
+                {isInactive ? "Reactivate goal" : "Reopen goal"}
+              </Text>
             </Pressable>
-          )}
+          ) : null}
           <Pressable onPress={() => onDelete(goal)} style={{ padding: 12 }}>
             <Text style={{ fontSize: 14, fontWeight: "600", color: "#EF4444" }}>Delete goal</Text>
           </Pressable>
         </View>
+      ) : null}
+
+      {nearingInactive && daysUntilInactive != null ? (
+        <Text style={{ marginTop: 10, fontSize: 12, color: "#C2410C", lineHeight: 18 }}>
+          Seneca reminder: goes inactive in {daysUntilInactive} day{daysUntilInactive !== 1 ? "s" : ""} without an
+          update.
+        </Text>
+      ) : null}
+
+      {isInactive ? (
+        <Text style={{ marginTop: 10, fontSize: 12, color: "#B45309", lineHeight: 18 }}>
+          Inactive after {goal.daysSinceActivity ?? 0} days with no updates. Add a progress note to reactivate.
+        </Text>
       ) : null}
 
       {goal.steps.length > 0 ? (
@@ -414,20 +446,27 @@ export function DevelopmentPlanTab({
         ) : (
           <View
             style={{
-              backgroundColor: isClosed ? "#F1F5F9" : "#DCFCE7",
+              backgroundColor: isClosed ? "#F1F5F9" : isInactive ? "#FFEDD5" : "#DCFCE7",
               borderRadius: 8,
               paddingHorizontal: 8,
               paddingVertical: 4,
             }}
           >
-            <Text style={{ fontSize: 11, fontWeight: "700", color: isClosed ? "#64748B" : "#166534" }}>
-              {isClosed ? "Closed" : "Active"}
+            <Text
+              style={{
+                fontSize: 11,
+                fontWeight: "700",
+                color: isClosed ? "#64748B" : isInactive ? "#C2410C" : "#166534",
+              }}
+            >
+              {goalStatusLabel(status)}
             </Text>
           </View>
         )}
       </View>
     </View>
-  );
+    );
+  };
 
   const modalVisible = createOpen || !!updateGoal;
 
@@ -438,6 +477,9 @@ export function DevelopmentPlanTab({
           <Text style={{ fontSize: 18, fontWeight: "800", color: "#0F172A" }}>Development plan</Text>
           <Text style={{ fontSize: 13, color: "#64748B", marginTop: 2 }}>
             Goals and progress for {memberName}
+          </Text>
+          <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 6, lineHeight: 17 }}>
+            {DEVELOPMENT_GOAL_ACTIVITY_KEY.summary} {DEVELOPMENT_GOAL_ACTIVITY_KEY.reminderSummary}
           </Text>
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
@@ -502,8 +544,27 @@ export function DevelopmentPlanTab({
               </Text>
             </View>
           ) : (
-            <View style={{ gap: 12 }}>{activeGoals.map((g) => renderGoalCard(g, false))}</View>
+            <View style={{ gap: 12 }}>{activeGoals.map((g) => renderGoalCard(g))}</View>
           )}
+
+          {inactiveGoals.length > 0 ? (
+            <View>
+              <Pressable
+                onPress={() => setInactiveOpen(!inactiveOpen)}
+                style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 8 }}
+              >
+                <Text style={{ fontSize: 14, fontWeight: "700", color: "#B45309" }}>
+                  Inactive goals ({inactiveGoals.length})
+                </Text>
+                {inactiveOpen ? <ChevronUp size={18} color="#B45309" /> : <ChevronDown size={18} color="#B45309" />}
+              </Pressable>
+              {inactiveOpen ? (
+                <View style={{ gap: 10, marginTop: 4 }}>
+                  {inactiveGoals.map((g) => renderGoalCard(g))}
+                </View>
+              ) : null}
+            </View>
+          ) : null}
 
           {closedGoals.length > 0 ? (
             <View>
@@ -518,7 +579,7 @@ export function DevelopmentPlanTab({
               </Pressable>
               {closedOpen ? (
                 <View style={{ gap: 10, marginTop: 4 }}>
-                  {closedGoals.map((g) => renderGoalCard(g, true))}
+                  {closedGoals.map((g) => renderGoalCard(g))}
                 </View>
               ) : null}
             </View>

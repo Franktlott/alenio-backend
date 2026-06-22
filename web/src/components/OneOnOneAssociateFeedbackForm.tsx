@@ -9,6 +9,7 @@ import {
   ASSOCIATE_FEEDBACK_PLACEHOLDER,
   ASSOCIATE_FEEDBACK_SUBMIT_LABEL,
   LEADER_COMMENTS_PREVIEW_TITLE,
+  formatLeaderCommentsFrom,
   NO_FEEDBACK_VALUE,
 } from "../lib/one-on-one-feedback";
 
@@ -105,6 +106,9 @@ export function OneOnOneAssociateFeedbackForm({
         <div className="enterprise-oneone-feedback-leader-notes">
           <p className="enterprise-oneone-feedback-leader-notes-label">
             {context.leaderCommentsLabel ?? LEADER_COMMENTS_PREVIEW_TITLE}
+          </p>
+          <p className="enterprise-oneone-feedback-leader-notes-from">
+            {formatLeaderCommentsFrom(context.leaderCommentsFrom)}
           </p>
           <p className="enterprise-oneone-feedback-leader-notes-body">{context.leaderComments}</p>
         </div>

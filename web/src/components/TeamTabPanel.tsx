@@ -174,7 +174,7 @@ async function fetchTeamContext(teamId: string) {
   const plan = sub?.plan ?? "free";
   return {
     detail,
-    memberStats: stats,
+    memberStats: stats?.stats ?? null,
     overviewTasks: Array.isArray(tasks) ? tasks : [],
     isPaid: plan === "team" || plan === "pro",
     incoming: manageJoin ? joinList : [],

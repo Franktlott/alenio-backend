@@ -31,3 +31,31 @@ export function appendLeaderCommentsIfMissing(fields: OneOnOneTemplateField[]): 
     },
   ];
 }
+
+export function findLeaderCommentsField<T extends { id: string; label: string; type: string }>(
+  fields: T[],
+): T | null {
+  const managerNotes = fields.filter((field) => field.type === "manager_notes");
+  if (managerNotes.length === 0) return null;
+  const preferred = managerNotes.find(
+    (field) =>
+      field.label === LEADER_COMMENTS_FIELD_LABEL ||
+      /summary|commitment/i.test(field.label),
+  );
+  return preferred ?? managerNotes[0];
+}
+
+export function isLeaderCommentsEmpty(
+  fields: { id: string; label: string; type: string }[],
+  responses: Record<string, string | number | undefined>,
+): boolean {
+  const field = findLeaderCommentsField(fields);
+  if (!field) return false;
+  const raw = responses[field.id];
+  if (raw === undefined || raw === null) return true;
+  return String(raw).trim() === "";
+}
+
+export const LEADER_COMMENTS_NUDGE_TITLE = "Add leader notes?";
+export const LEADER_COMMENTS_NUDGE_COPY =
+  "You haven't added summary and commitments yet. A short note helps your teammate reflect before they respond — but it's optional.";

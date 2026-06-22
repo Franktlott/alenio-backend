@@ -1,6 +1,10 @@
 import { api } from "@/lib/api/api";
 import type { Task, Team, TeamMember } from "@/lib/types";
 import { isTaskOverdue } from "./seneca-task-display";
+import {
+  EMPTY_DEVELOPMENT_GOAL_ALERTS,
+  type DevelopmentGoalAlerts,
+} from "./development-goal-activity";
 
 export type SenecaPromptId =
   | "attention"
@@ -79,10 +83,15 @@ export type WorkspaceSnapshot = {
   membersWithoutRecentCheckIn: number;
   memberRows: WorkspaceMemberBrief[];
   recentWin: WorkspaceRecentWin | null;
+  developmentGoalAlerts: DevelopmentGoalAlerts;
   fromLiveData: boolean;
   loadError?: string | null;
 };
 
+type MemberStatsResponse = {
+  data: Record<string, MemberStatsRow>;
+  developmentGoalAlerts?: DevelopmentGoalAlerts;
+};
 type MemberStatsRow = {
   activeTasks: number;
   overdueTasks: number;
@@ -143,6 +152,7 @@ function emptySnapshot(teamName: string, loadError?: string | null): WorkspaceSn
     membersWithoutRecentCheckIn: 0,
     memberRows: [],
     recentWin: null,
+    developmentGoalAlerts: EMPTY_DEVELOPMENT_GOAL_ALERTS,
     fromLiveData: false,
     loadError: loadError ?? null,
   };
@@ -269,18 +279,21 @@ export async function loadWorkspaceSnapshot(
   fallbackTeamName = "Workspace",
 ): Promise<WorkspaceSnapshot> {
   try {
-    const [team, tasksResult, stats, activities] = await Promise.all([
+    const [team, tasksResult, statsResult, activities] = await Promise.all([
       api.get<Team>(`/api/teams/${teamId}`),
       api
         .get<{ tasks: Task[]; nextCursor: string | null }>(
           `/api/teams/${teamId}/tasks?activeOnly=true&limit=500`,
         )
         .catch(() => ({ tasks: [] as Task[], nextCursor: null })),
-      api.get<Record<string, MemberStatsRow>>(`/api/teams/${teamId}/tasks/member-stats`).catch(() => ({})),
+      api
+        .get<MemberStatsResponse>(`/api/teams/${teamId}/tasks/member-stats`)
+        .catch(() => ({ data: {} as Record<string, MemberStatsRow> })),
       api.get<ActivityItem[]>(`/api/teams/${teamId}/activity?limit=100`).catch(() => []),
     ]);
 
     const tasks = Array.isArray(tasksResult?.tasks) ? tasksResult.tasks : [];
+    const stats = statsResult.data ?? {};
     const members = team.members ?? [];
     const memberRows = buildMemberRows(members, stats, managerUserId);
     const memberNeedingCheckIn = findMemberNeedingCheckIn(members, stats, managerUserId);
@@ -295,6 +308,8 @@ export async function loadWorkspaceSnapshot(
       membersWithoutRecentCheckIn: countStaleCheckIns(stats, managerUserId),
       memberRows,
       recentWin: extractRecentWin(Array.isArray(activities) ? activities : []),
+      developmentGoalAlerts:
+        statsResult.developmentGoalAlerts ?? EMPTY_DEVELOPMENT_GOAL_ALERTS,
       fromLiveData: true,
       loadError: null,
     };
@@ -391,6 +406,38 @@ export function buildSenecaResponse(
             "Open Team and start 1:1 prep",
             undefined,
             checkInGap.userId,
+          ),
+        );
+      }
+
+      for (const goal of snapshot.developmentGoalAlerts.nearingInactive.slice(0, 2)) {
+        issueCount += 1;
+        const daysLeft = goal.daysUntilInactive ?? 0;
+        insights.push({
+          id: `dev-goal-reminder-${goal.goalId}`,
+          label: `${goal.memberName} — "${goal.skill}" goes inactive in ${daysLeft} day${daysLeft !== 1 ? "s" : ""}`,
+          detail: `No updates in ${goal.daysSinceActivity} days`,
+        });
+      }
+
+      for (const goal of snapshot.developmentGoalAlerts.inactive.slice(0, 2)) {
+        issueCount += 1;
+        insights.push({
+          id: `dev-goal-inactive-${goal.goalId}`,
+          label: `${goal.memberName} — "${goal.skill}" is inactive`,
+          detail: `No activity for ${goal.daysSinceActivity} days`,
+        });
+      }
+
+      if (
+        snapshot.developmentGoalAlerts.nearingInactive.length > 0 ||
+        snapshot.developmentGoalAlerts.inactive.length > 0
+      ) {
+        actions.push(
+          action(
+            "open_team",
+            "Review development plans",
+            "Check progress notes and reactivate stale goals",
           ),
         );
       }

@@ -1007,10 +1007,32 @@ export type TeamMemberStatsRow = {
 
 export type TeamMemberStatsMap = Record<string, TeamMemberStatsRow>;
 
-export function fetchTeamMemberStats(teamId: string) {
-  return apiGetJson<{ data: TeamMemberStatsMap }>(
+export type DevelopmentGoalActivityAlert = {
+  goalId: string;
+  memberUserId: string;
+  memberName: string;
+  skill: string;
+  daysSinceActivity: number;
+  daysUntilInactive: number | null;
+};
+
+export type DevelopmentGoalAlerts = {
+  nearingInactive: DevelopmentGoalActivityAlert[];
+  inactive: DevelopmentGoalActivityAlert[];
+};
+
+export type TeamMemberStatsResponse = {
+  stats: TeamMemberStatsMap;
+  developmentGoalAlerts: DevelopmentGoalAlerts;
+};
+
+export function fetchTeamMemberStats(teamId: string): Promise<TeamMemberStatsResponse> {
+  return apiGetJson<{ data: TeamMemberStatsMap; developmentGoalAlerts?: DevelopmentGoalAlerts }>(
     `/api/teams/${encodeURIComponent(teamId)}/tasks/member-stats`,
-  ).then((r) => r.data);
+  ).then((r) => ({
+    stats: r.data,
+    developmentGoalAlerts: r.developmentGoalAlerts ?? { nearingInactive: [], inactive: [] },
+  }));
 }
 
 export type MonthlyCompletionRow = {
@@ -1343,6 +1365,7 @@ export type OneOnOneAssociateFeedbackContext = {
   associateRequest: AssociateRequestMode | null;
   leaderComments: string | null;
   leaderCommentsLabel: string | null;
+  leaderCommentsFrom: string | null;
 };
 
 export type OneOnOneTemplate = {
@@ -1584,7 +1607,7 @@ export type DevelopmentGoalNote = {
   createdBy: { id: string; name: string; email: string; image: string | null };
 };
 
-export type DevelopmentGoalStatus = "active" | "closed";
+export type DevelopmentGoalStatus = "active" | "inactive" | "closed";
 
 export type DevelopmentGoal = {
   id: string;
@@ -1594,6 +1617,11 @@ export type DevelopmentGoal = {
   steps: string[];
   status: DevelopmentGoalStatus;
   closedAt: string | null;
+  lastActivityAt: string;
+  daysSinceActivity: number;
+  daysUntilInactive: number | null;
+  nearingInactive: boolean;
+  inactivityPolicyDays: number;
   createdById: string;
   createdAt: string;
   createdBy?: { id: string; name: string; email: string; image: string | null };

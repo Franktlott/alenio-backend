@@ -688,6 +688,7 @@ oneOnOneMeetingsRouter.get("/:memberUserId/one-on-ones/:meetingId/associate-feed
 
   const meeting = await prisma.oneOnOneMeeting.findFirst({
     where: { id: meetingId, teamId, memberUserId },
+    include: { createdBy: { select: { id: true, name: true, email: true } } },
   });
   if (!meeting) {
     return c.json({ error: { message: "Check-in not found", code: "NOT_FOUND" } }, 404);
@@ -709,6 +710,9 @@ oneOnOneMeetingsRouter.get("/:memberUserId/one-on-ones/:meetingId/associate-feed
     currentResponse !== undefined &&
     (String(currentResponse) === NO_FEEDBACK_VALUE || String(currentResponse).trim() !== "");
   const leaderComments = readLeaderCommentsFromMeeting(fields, responses);
+  const leaderCommentsFrom = leaderComments
+    ? meeting.createdBy?.name?.trim() || meeting.createdBy?.email || "Your leader"
+    : null;
 
   return c.json({
     data: {
@@ -721,6 +725,7 @@ oneOnOneMeetingsRouter.get("/:memberUserId/one-on-ones/:meetingId/associate-feed
       associateRequest: field.associateRequest,
       leaderComments: leaderComments?.text ?? null,
       leaderCommentsLabel: leaderComments?.label ?? null,
+      leaderCommentsFrom,
     },
   });
 });

@@ -21,6 +21,10 @@ import {
 } from "../lib/recurrence-series";
 import { isValidTimeZone, resolveTimeZone } from "../lib/timezone";
 import { normalizeTaskStatus } from "../lib/task-status";
+import {
+  buildDevelopmentGoalActivityAlerts,
+  reconcileInactiveDevelopmentGoals,
+} from "../lib/development-goal-activity";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -538,7 +542,11 @@ tasksRouter.get("/member-stats", async (c) => {
   // Fetch stored streaks from TeamMember (persists through task deletion)
   const teamMembers = await prisma.teamMember.findMany({
     where: { teamId },
-    select: { userId: true, currentStreak: true },
+    select: {
+      userId: true,
+      currentStreak: true,
+      user: { select: { name: true, email: true } },
+    },
   });
   const storedStreaks: Record<string, number> = {};
   for (const m of teamMembers) storedStreaks[m.userId] = m.currentStreak;
@@ -618,8 +626,13 @@ tasksRouter.get("/member-stats", async (c) => {
     prisma.developmentGoal.findMany({
       where: { teamId, status: { not: "closed" } },
       select: {
+        id: true,
         memberUserId: true,
-        _count: { select: { notes: true } },
+        skill: true,
+        status: true,
+        createdAt: true,
+        lastActivityAt: true,
+        notes: { select: { createdAt: true }, orderBy: { createdAt: "desc" }, take: 1 },
       },
     }),
     prisma.oneOnOneMeeting.findMany({
@@ -629,13 +642,46 @@ tasksRouter.get("/member-stats", async (c) => {
     }),
   ]);
 
+  const devGoalsForActivity = devGoals.map((goal) => ({
+    ...goal,
+    notes: goal.notes,
+  }));
+  const inactiveIds = await reconcileInactiveDevelopmentGoals(devGoalsForActivity, async (ids) => {
+    await prisma.developmentGoal.updateMany({
+      where: { id: { in: ids } },
+      data: { status: "inactive" },
+    });
+  });
+  const devGoalsWithStatus = devGoalsForActivity.map((goal) =>
+    inactiveIds.has(goal.id) ? { ...goal, status: "inactive" } : goal,
+  );
+
   const devByMember: Record<string, { active: number; engaged: number }> = {};
-  for (const goal of devGoals) {
+  for (const goal of devGoalsWithStatus) {
+    if (goal.status === "closed") continue;
     const bucket = devByMember[goal.memberUserId] ?? { active: 0, engaged: 0 };
-    bucket.active += 1;
-    if (goal._count.notes > 0) bucket.engaged += 1;
+    if (goal.status === "active") {
+      bucket.active += 1;
+      if (goal.notes.length > 0) bucket.engaged += 1;
+    }
     devByMember[goal.memberUserId] = bucket;
   }
+
+  const memberNameByUserId = new Map(
+    teamMembers.map((m) => [m.userId, m.user.name ?? m.user.email ?? "Team member"]),
+  );
+
+  const goalAlerts = buildDevelopmentGoalActivityAlerts(devGoalsWithStatus);
+  const developmentGoalAlerts = {
+    nearingInactive: goalAlerts.nearingInactive.map((alert) => ({
+      ...alert,
+      memberName: memberNameByUserId.get(alert.memberUserId) ?? "Team member",
+    })),
+    inactive: goalAlerts.inactive.map((alert) => ({
+      ...alert,
+      memberName: memberNameByUserId.get(alert.memberUserId) ?? "Team member",
+    })),
+  };
 
   const lastOneOnOneByMember: Record<string, Date> = {};
   for (const meeting of oneOnOnes) {
@@ -676,7 +722,7 @@ tasksRouter.get("/member-stats", async (c) => {
     }
   }
 
-  return c.json({ data: statsMap });
+  return c.json({ data: statsMap, developmentGoalAlerts });
 });
 
 // GET /api/teams/:teamId/tasks/count - returns count of todo/in-progress tasks assigned to current user

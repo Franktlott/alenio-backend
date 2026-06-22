@@ -13,6 +13,11 @@ export const ASSOCIATE_FEEDBACK_COMPLETE_MESSAGE = "Thank you for completing thi
 export const ASSOCIATE_FEEDBACK_COMPLETE_DELAY_MS = 4000;
 export const LEADER_COMMENTS_PREVIEW_TITLE = "Leader comments";
 
+export function formatLeaderCommentsFrom(leaderName: string | null | undefined): string {
+  const who = leaderName?.trim();
+  return who ? `From ${who}` : "From your leader";
+}
+
 export function associateFeedbackTaskTitle(templateTitle: string): string {
   return `Follow up on ${templateTitle}`;
 }

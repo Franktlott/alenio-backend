@@ -8,7 +8,7 @@ export type DevelopmentGoalNote = {
   createdBy: { id: string; name: string; email: string; image: string | null };
 };
 
-export type DevelopmentGoalStatus = "active" | "closed";
+export type DevelopmentGoalStatus = "active" | "inactive" | "closed";
 
 export type DevelopmentGoal = {
   id: string;
@@ -18,6 +18,11 @@ export type DevelopmentGoal = {
   steps: string[];
   status: DevelopmentGoalStatus;
   closedAt: string | null;
+  lastActivityAt?: string;
+  daysSinceActivity?: number;
+  daysUntilInactive?: number | null;
+  nearingInactive?: boolean;
+  inactivityPolicyDays?: number;
   createdById: string;
   createdAt: string;
   createdBy?: { id: string; name: string; email: string; image: string | null };

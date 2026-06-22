@@ -87,6 +87,34 @@ export function buildLeadershipBriefing(snapshot: WorkspaceSnapshot): BriefingIn
     });
   }
 
+  const nearingInactive = snapshot.developmentGoalAlerts.nearingInactive[0];
+  if (nearingInactive) {
+    const daysLeft = nearingInactive.daysUntilInactive ?? 0;
+    cards.push({
+      id: `live-dev-goal-reminder-${nearingInactive.goalId}`,
+      category: "Development Opportunity",
+      tone: "follow_up",
+      title: `${nearingInactive.memberName}'s goal goes inactive in ${daysLeft} day${daysLeft !== 1 ? "s" : ""}`,
+      detail: `"${nearingInactive.skill}" has had no updates in ${nearingInactive.daysSinceActivity} days. Add a progress note or update steps to keep it active.`,
+      actions: [
+        { id: "create_dev_note", label: "Review development plan" },
+        { id: "prepare_1on1", label: "Prepare 1:1" },
+      ],
+    });
+  }
+
+  const staleInactiveGoal = snapshot.developmentGoalAlerts.inactive[0];
+  if (staleInactiveGoal) {
+    cards.push({
+      id: `live-dev-goal-inactive-${staleInactiveGoal.goalId}`,
+      category: "Needs Attention",
+      tone: "risk",
+      title: `${staleInactiveGoal.memberName}'s goal is inactive`,
+      detail: `"${staleInactiveGoal.skill}" had no activity for ${staleInactiveGoal.daysSinceActivity} days and is now inactive. Check in or add a progress update to reactivate.`,
+      actions: [{ id: "create_dev_note", label: "Review development plan" }],
+    });
+  }
+
   const checkIn = snapshot.memberNeedingCheckIn;
   if (checkIn) {
     const member = snapshot.memberRows.find((row) => row.userId === checkIn.userId);

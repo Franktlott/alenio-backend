@@ -326,9 +326,11 @@ model DevelopmentGoal {
   skill        String
   /** JSON string array of step labels */
   steps        String
-  status       String   @default("active")
-  closedAt     DateTime?
-  createdById  String
+  status         String   @default("active")
+  closedAt       DateTime?
+  /** Last progress update or goal edit — used for 30-day inactivity policy */
+  lastActivityAt DateTime?
+  createdById    String
   createdBy    User     @relation("DevelopmentGoalCreator", fields: [createdById], references: [id])
   createdAt    DateTime @default(now())
   notes        DevelopmentGoalNote[]

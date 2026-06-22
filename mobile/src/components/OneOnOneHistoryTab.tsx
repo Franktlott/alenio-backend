@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -25,7 +25,13 @@ import {
   type OneOnOneTemplateField,
   type OneOnOneFollowUpTaskInput,
 } from "@/lib/member-profile-api";
-import { appendLeaderCommentsIfMissing } from "@/lib/check-in-leader-comments";
+import {
+  appendLeaderCommentsIfMissing,
+  findLeaderCommentsField,
+  isLeaderCommentsEmpty,
+  LEADER_COMMENTS_NUDGE_COPY,
+  LEADER_COMMENTS_NUDGE_TITLE,
+} from "@/lib/check-in-leader-comments";
 import { meetingNumberFor, printOneOnOneMeeting } from "@/lib/one-on-one-print";
 import {
   ASSOCIATE_FEEDBACK_FIELD_ID,
@@ -148,6 +154,9 @@ export function OneOnOneHistoryTab({
   const [err, setErr] = useState<string | null>(null);
   const [followUpDrafts, setFollowUpDrafts] = useState<FollowUpDraft[]>([]);
   const [feedbackPromptOpen, setFeedbackPromptOpen] = useState(false);
+  const [leaderCommentsNudgeOpen, setLeaderCommentsNudgeOpen] = useState(false);
+  const [highlightLeaderFieldId, setHighlightLeaderFieldId] = useState<string | null>(null);
+  const fillScrollRef = useRef<ScrollView>(null);
   const [prepAcknowledged, setPrepAcknowledged] = useState(false);
 
   const todayStart = useMemo(() => {
@@ -254,6 +263,34 @@ export function OneOnOneHistoryTab({
 
   const setFieldValue = (fieldId: string, value: string | number) => {
     setResponses((prev) => ({ ...prev, [fieldId]: value }));
+    if (highlightLeaderFieldId === fieldId && String(value).trim()) {
+      setHighlightLeaderFieldId(null);
+    }
+  };
+
+  const onPublishClick = () => {
+    if (!selectedTemplate || saving) return;
+    if (canCreate && isLeaderCommentsEmpty(selectedTemplate.fields, responses)) {
+      setLeaderCommentsNudgeOpen(true);
+      return;
+    }
+    setFeedbackPromptOpen(true);
+  };
+
+  const onAddLeaderNotesFromNudge = () => {
+    if (!selectedTemplate) return;
+    const leaderField = findLeaderCommentsField(selectedTemplate.fields);
+    setLeaderCommentsNudgeOpen(false);
+    if (!leaderField) return;
+    setHighlightLeaderFieldId(leaderField.id);
+    setTimeout(() => {
+      fillScrollRef.current?.scrollToEnd({ animated: true });
+    }, 50);
+  };
+
+  const onContinueWithoutLeaderNotes = () => {
+    setLeaderCommentsNudgeOpen(false);
+    setFeedbackPromptOpen(true);
   };
 
   const normalizeResponses = (fields: OneOnOneTemplateField[]) => {
@@ -578,10 +615,23 @@ export function OneOnOneHistoryTab({
         </View>
 
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-          <ScrollView contentContainerStyle={{ padding: 16, gap: 20, paddingBottom: 100 }}>
+          <ScrollView ref={fillScrollRef} contentContainerStyle={{ padding: 16, gap: 20, paddingBottom: 100 }}>
             {err ? <Text style={{ fontSize: 13, color: "#DC2626" }}>{err}</Text> : null}
             {fillFields.map((field) => (
-              <View key={field.id}>
+              <View
+                key={field.id}
+                style={
+                  highlightLeaderFieldId === field.id
+                    ? {
+                        borderWidth: 2,
+                        borderColor: "#818CF8",
+                        borderRadius: 12,
+                        padding: 10,
+                        backgroundColor: "#EEF2FF",
+                      }
+                    : undefined
+                }
+              >
                 <Text style={{ fontSize: 13, fontWeight: "600", color: "#334155", marginBottom: 6 }}>
                   {field.label}
                 </Text>
@@ -724,7 +774,7 @@ export function OneOnOneHistoryTab({
             </Pressable>
           ) : null}
           <Pressable
-            onPress={() => setFeedbackPromptOpen(true)}
+            onPress={onPublishClick}
             disabled={saving}
             style={{
               backgroundColor: "#4361EE",
@@ -1129,6 +1179,41 @@ export function OneOnOneHistoryTab({
             ) : null}
           </View>
         </View>
+      </Modal>
+
+      <Modal visible={leaderCommentsNudgeOpen} transparent animationType="fade" onRequestClose={() => setLeaderCommentsNudgeOpen(false)}>
+        <Pressable
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.4)",
+            justifyContent: "center",
+            padding: 24,
+            paddingTop: 24 + insets.top,
+            paddingBottom: 24 + insets.bottom,
+          }}
+          onPress={() => setLeaderCommentsNudgeOpen(false)}
+        >
+          <Pressable onPress={(e) => e.stopPropagation?.()} style={{ backgroundColor: "white", borderRadius: 16, padding: 20 }}>
+            <Text style={{ fontSize: 18, fontWeight: "800", color: "#0F172A" }}>{LEADER_COMMENTS_NUDGE_TITLE}</Text>
+            <Text style={{ fontSize: 14, color: "#64748B", marginTop: 8, lineHeight: 20 }}>{LEADER_COMMENTS_NUDGE_COPY}</Text>
+            <View style={{ flexDirection: "row", gap: 10, marginTop: 20 }}>
+              <Pressable
+                onPress={onContinueWithoutLeaderNotes}
+                disabled={saving}
+                style={{ flex: 1, paddingVertical: 12, borderRadius: 10, backgroundColor: "#F1F5F9", alignItems: "center" }}
+              >
+                <Text style={{ fontWeight: "700", color: "#64748B" }}>Continue</Text>
+              </Pressable>
+              <Pressable
+                onPress={onAddLeaderNotesFromNudge}
+                disabled={saving}
+                style={{ flex: 1, paddingVertical: 12, borderRadius: 10, backgroundColor: "#4361EE", alignItems: "center" }}
+              >
+                <Text style={{ fontWeight: "700", color: "white" }}>Add notes</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
       </Modal>
 
       <Modal visible={feedbackPromptOpen} transparent animationType="fade" onRequestClose={() => setFeedbackPromptOpen(false)}>

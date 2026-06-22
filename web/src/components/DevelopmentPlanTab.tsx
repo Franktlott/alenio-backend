@@ -22,6 +22,13 @@ import {
   type DevelopmentGoalStatus,
 } from "../lib/api";
 import { printDevelopmentPlan } from "../lib/development-plan-print";
+import {
+  DEVELOPMENT_GOAL_ACTIVITY_KEY,
+  goalDaysUntilInactive,
+  goalStatusLabel,
+  isGoalNearingInactive,
+  normalizeDevelopmentGoalStatus,
+} from "../lib/development-goal-activity";
 import { SenecaGoalModal } from "./seneca/SenecaGoalModal";
 
 type Props = {
@@ -108,18 +115,30 @@ function CalendarIcon() {
   );
 }
 
-function goalStatusLabel(status: DevelopmentGoalStatus | undefined): string {
-  return status === "closed" ? "Closed" : "Active";
-}
-
 function GoalStatusBadge({ status }: { status: DevelopmentGoalStatus | undefined }) {
-  const normalized = status === "closed" ? "closed" : "active";
+  const normalized = normalizeDevelopmentGoalStatus(status);
   return (
     <span
       className={`enterprise-dev-plan-status-badge enterprise-dev-plan-status-badge--${normalized}`}
     >
       {goalStatusLabel(normalized)}
     </span>
+  );
+}
+
+function DevPlanActivityKey() {
+  return (
+    <details className="enterprise-dev-plan-activity-key">
+      <summary>{DEVELOPMENT_GOAL_ACTIVITY_KEY.title}</summary>
+      <p>{DEVELOPMENT_GOAL_ACTIVITY_KEY.summary}</p>
+      <p>{DEVELOPMENT_GOAL_ACTIVITY_KEY.reminderSummary}</p>
+      <p className="enterprise-dev-plan-activity-key-label">Counts as activity</p>
+      <ul>
+        {DEVELOPMENT_GOAL_ACTIVITY_KEY.activityCountsAs.map((item) => (
+          <li key={item}>{item}</li>
+        ))}
+      </ul>
+    </details>
   );
 }
 
@@ -630,11 +649,15 @@ function DevelopmentGoalCard({
   onDelete,
   onMarkComplete,
 }: DevelopmentGoalCardProps) {
-  const isClosed = goal.status === "closed";
+  const status = normalizeDevelopmentGoalStatus(goal.status);
+  const isClosed = status === "closed";
+  const isInactive = status === "inactive";
+  const nearingInactive = isGoalNearingInactive(goal);
+  const daysUntilInactive = goalDaysUntilInactive(goal);
 
   return (
     <li
-      className={`enterprise-dev-plan-goal${isClosed ? " enterprise-dev-plan-goal--closed" : ""}${menuGoalId === goal.id ? " enterprise-dev-plan-goal--menu-open" : ""}`}
+      className={`enterprise-dev-plan-goal${isClosed ? " enterprise-dev-plan-goal--closed" : ""}${isInactive ? " enterprise-dev-plan-goal--inactive" : ""}${menuGoalId === goal.id ? " enterprise-dev-plan-goal--menu-open" : ""}`}
     >
       <header className="enterprise-dev-plan-goal-top">
         <span className="enterprise-dev-plan-goal-icon">
@@ -672,7 +695,7 @@ function DevelopmentGoalCard({
               </button>
               {menuGoalId === goal.id ? (
                 <div className="enterprise-dev-plan-goal-menu" role="menu">
-                  {isClosed ? (
+                  {isClosed || isInactive ? (
                     <button
                       type="button"
                       role="menuitem"
@@ -681,7 +704,7 @@ function DevelopmentGoalCard({
                         onReopen(goal);
                       }}
                     >
-                      Reopen goal
+                      {isInactive ? "Reactivate goal" : "Reopen goal"}
                     </button>
                   ) : null}
                   <button
@@ -701,6 +724,20 @@ function DevelopmentGoalCard({
           ) : null}
         </div>
       </header>
+
+      {nearingInactive && daysUntilInactive != null ? (
+        <p className="enterprise-dev-plan-inactivity-nudge" role="status">
+          Seneca reminder: this goal goes inactive in {daysUntilInactive} day
+          {daysUntilInactive !== 1 ? "s" : ""} without an update.
+        </p>
+      ) : null}
+
+      {isInactive ? (
+        <p className="enterprise-dev-plan-inactivity-note" role="status">
+          Inactive after {goal.daysSinceActivity ?? 0} days with no updates. Add a progress note or
+          edit the goal to reactivate.
+        </p>
+      ) : null}
 
       {goal.steps.length > 0 ? (
         <section className="enterprise-dev-plan-goal-section">
@@ -794,10 +831,12 @@ export function DevelopmentPlanTab({
   const [menuGoalId, setMenuGoalId] = useState<string | null>(null);
   const [statusSavingId, setStatusSavingId] = useState<string | null>(null);
   const [closedSectionOpen, setClosedSectionOpen] = useState(false);
+  const [inactiveSectionOpen, setInactiveSectionOpen] = useState(false);
   const [senecaGoalOpen, setSenecaGoalOpen] = useState(false);
   const canUpdate = canCreate || canAddNotes;
 
-  const activeGoals = goals.filter((g) => g.status !== "closed");
+  const activeGoals = goals.filter((g) => g.status === "active");
+  const inactiveGoals = goals.filter((g) => g.status === "inactive");
   const closedGoals = goals.filter((g) => g.status === "closed");
 
   useEffect(() => {
@@ -970,7 +1009,14 @@ export function DevelopmentPlanTab({
   };
 
   const onReopenGoal = async (goal: DevelopmentGoal) => {
-    if (!window.confirm(`Reopen "${goal.skill}"? It will return to active status.`)) {
+    const isInactive = goal.status === "inactive";
+    if (
+      !window.confirm(
+        isInactive
+          ? `Reactivate "${goal.skill}"? Add progress updates to keep it active.`
+          : `Reopen "${goal.skill}"? It will return to active status.`,
+      )
+    ) {
       return;
     }
     setStatusSavingId(goal.id);
@@ -1018,6 +1064,7 @@ export function DevelopmentPlanTab({
           <p className="enterprise-muted enterprise-dev-plan-sub">
             Skills to build, action steps, and progress notes over time.
           </p>
+          <DevPlanActivityKey />
         </div>
         <div className="enterprise-dev-plan-head-actions">
           <button
@@ -1073,8 +1120,48 @@ export function DevelopmentPlanTab({
                 />
               ))}
             </ul>
-          ) : closedGoals.length > 0 ? (
+          ) : closedGoals.length > 0 || inactiveGoals.length > 0 ? (
             <p className="enterprise-muted enterprise-dev-plan-no-active">No active developmental goals.</p>
+          ) : null}
+
+          {inactiveGoals.length > 0 ? (
+            <section className="enterprise-dev-plan-closed enterprise-dev-plan-inactive-section">
+              <button
+                type="button"
+                className="enterprise-dev-plan-closed-toggle"
+                aria-expanded={inactiveSectionOpen}
+                onClick={() => setInactiveSectionOpen((open) => !open)}
+              >
+                <span className="enterprise-dev-plan-closed-toggle-label">
+                  Inactive goals
+                  <span className="enterprise-dev-plan-closed-count">{inactiveGoals.length}</span>
+                </span>
+                <span className="enterprise-dev-plan-closed-chevron" aria-hidden>
+                  {inactiveSectionOpen ? "▾" : "▸"}
+                </span>
+              </button>
+              {inactiveSectionOpen ? (
+                <ul className="enterprise-dev-plan-goals enterprise-dev-plan-goals--inactive">
+                  {inactiveGoals.map((goal) => (
+                    <DevelopmentGoalCard
+                      key={goal.id}
+                      goal={goal}
+                      menuGoalId={menuGoalId}
+                      statusSavingId={statusSavingId}
+                      canUpdate={canUpdate}
+                      onOpenUpdate={openUpdate}
+                      onToggleMenu={(goalId, e) => {
+                        e.stopPropagation();
+                        setMenuGoalId((current) => (current === goalId ? null : goalId));
+                      }}
+                      onReopen={(g) => void onReopenGoal(g)}
+                      onDelete={(g) => void onDeleteGoal(g)}
+                      onMarkComplete={(g) => void onMarkComplete(g)}
+                    />
+                  ))}
+                </ul>
+              ) : null}
+            </section>
           ) : null}
 
           {canCreate ? (

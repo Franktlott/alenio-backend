@@ -79,7 +79,7 @@ export function ProfileOverviewTab({
       ]);
 
       const active = goals
-        .filter((goal) => goal.status !== "closed")
+        .filter((goal) => goal.status === "active")
         .sort(
           (a, b) => new Date(lastUpdatedAt(b)).getTime() - new Date(lastUpdatedAt(a)).getTime(),
         );

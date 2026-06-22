@@ -19,7 +19,13 @@ import {
   formatAssociateResponseDisplay,
   formatYesNoResponseDisplay,
 } from "../lib/one-on-one-feedback";
-import { appendLeaderCommentsIfMissing } from "../lib/check-in-leader-comments";
+import {
+  appendLeaderCommentsIfMissing,
+  findLeaderCommentsField,
+  isLeaderCommentsEmpty,
+  LEADER_COMMENTS_NUDGE_COPY,
+  LEADER_COMMENTS_NUDGE_TITLE,
+} from "../lib/check-in-leader-comments";
 import {
   countOverdueFollowUpTasks,
   checkInEditMenuLabel,
@@ -289,6 +295,8 @@ export function OneOnOneHistoryTab({
   const [err, setErr] = useState<string | null>(null);
   const [followUpDrafts, setFollowUpDrafts] = useState<FollowUpDraft[]>([]);
   const [feedbackPromptOpen, setFeedbackPromptOpen] = useState(false);
+  const [leaderCommentsNudgeOpen, setLeaderCommentsNudgeOpen] = useState(false);
+  const [highlightLeaderFieldId, setHighlightLeaderFieldId] = useState<string | null>(null);
   const [userExpandedFullscreen, setUserExpandedFullscreen] = useState(false);
   const [listNotice, setListNotice] = useState<string | null>(null);
   const [prepAcknowledged, setPrepAcknowledged] = useState(false);
@@ -545,6 +553,9 @@ export function OneOnOneHistoryTab({
 
   const setFieldValue = (fieldId: string, value: string | number) => {
     setResponses((prev) => ({ ...prev, [fieldId]: value }));
+    if (highlightLeaderFieldId === fieldId && String(value).trim()) {
+      setHighlightLeaderFieldId(null);
+    }
   };
 
   const normalizeResponses = (fields: OneOnOneTemplateField[]) => {
@@ -641,11 +652,75 @@ export function OneOnOneHistoryTab({
 
   const onSaveClick = () => {
     if (!selectedTemplate || saving) return;
+    if (canCreate && isLeaderCommentsEmpty(selectedTemplate.fields, responses)) {
+      setLeaderCommentsNudgeOpen(true);
+      return;
+    }
+    setFeedbackPromptOpen(true);
+  };
+
+  const onAddLeaderNotesFromNudge = () => {
+    if (!selectedTemplate) return;
+    const leaderField = findLeaderCommentsField(selectedTemplate.fields);
+    setLeaderCommentsNudgeOpen(false);
+    if (!leaderField) return;
+    setHighlightLeaderFieldId(leaderField.id);
+    window.setTimeout(() => {
+      document.getElementById(`check-in-field-${leaderField.id}`)?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    }, 50);
+  };
+
+  const onContinueWithoutLeaderNotes = () => {
+    setLeaderCommentsNudgeOpen(false);
     setFeedbackPromptOpen(true);
   };
 
   const onSaveDraftClick = () => {
     void performSaveDraft();
+  };
+
+  const renderLeaderCommentsNudgeModal = () => {
+    if (!leaderCommentsNudgeOpen) return null;
+    return (
+      <div
+        className="enterprise-modal-backdrop enterprise-oneone-feedback-prompt-backdrop"
+        role="presentation"
+        onClick={() => setLeaderCommentsNudgeOpen(false)}
+      >
+        <div
+          className="enterprise-modal-sheet enterprise-oneone-feedback-prompt-modal"
+          role="dialog"
+          aria-labelledby="oneone-leader-notes-nudge-title"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <h2 id="oneone-leader-notes-nudge-title" className="enterprise-oneone-feedback-prompt-title">
+            {LEADER_COMMENTS_NUDGE_TITLE}
+          </h2>
+          <p className="enterprise-oneone-feedback-prompt-copy">{LEADER_COMMENTS_NUDGE_COPY}</p>
+          <div className="enterprise-oneone-feedback-prompt-actions">
+            <button
+              type="button"
+              className="enterprise-profile-cancel-btn"
+              disabled={saving}
+              onClick={onContinueWithoutLeaderNotes}
+            >
+              Continue without notes
+            </button>
+            <button
+              type="button"
+              className="enterprise-oneone-templates-primary-btn"
+              disabled={saving}
+              onClick={onAddLeaderNotesFromNudge}
+            >
+              Add leader notes
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   const renderFeedbackPromptModal = () => {
@@ -1144,7 +1219,13 @@ export function OneOnOneHistoryTab({
                     <h4>{field.label}</h4>
                   </li>
                 ) : (
-                  <li key={field.id} id={`check-in-field-${field.id}`} className="enterprise-oneone-fill-field">
+                  <li
+                    key={field.id}
+                    id={`check-in-field-${field.id}`}
+                    className={`enterprise-oneone-fill-field${
+                      highlightLeaderFieldId === field.id ? " enterprise-oneone-fill-field--nudge" : ""
+                    }`}
+                  >
                     <label className="enterprise-oneone-fill-label">
                       {field.label}
                       {field.required ? <span className="enterprise-oneone-fill-required">Required</span> : null}
@@ -1216,6 +1297,7 @@ export function OneOnOneHistoryTab({
               ) : null}
             </section>
         </div>
+        {renderLeaderCommentsNudgeModal()}
         {renderFeedbackPromptModal()}
       </>,
       {

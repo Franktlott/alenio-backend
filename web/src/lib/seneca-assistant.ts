@@ -6,9 +6,11 @@ import {
   fetchWebTeamTasks,
   type ApiActivityItem,
   type ApiTask,
+  type DevelopmentGoalAlerts,
   type TeamMemberStatsMap,
   type WebTeamMemberRow,
 } from "./api";
+import { EMPTY_DEVELOPMENT_GOAL_ALERTS } from "./development-goal-activity";
 import { isTaskOverdue } from "./task-display";
 
 export type SenecaPromptId =
@@ -87,10 +89,10 @@ export type WorkspaceSnapshot = {
   membersWithoutRecentCheckIn: number;
   memberRows: WorkspaceMemberBrief[];
   recentWin: WorkspaceRecentWin | null;
+  developmentGoalAlerts: DevelopmentGoalAlerts;
   fromLiveData: boolean;
   loadError?: string | null;
 };
-
 export const SENECA_QUICK_PROMPTS: SenecaPrompt[] = [
   {
     id: "attention",
@@ -152,6 +154,7 @@ function emptySnapshot(teamName: string, loadError?: string | null): WorkspaceSn
     membersWithoutRecentCheckIn: 0,
     memberRows: [],
     recentWin: null,
+    developmentGoalAlerts: EMPTY_DEVELOPMENT_GOAL_ALERTS,
     fromLiveData: false,
     loadError: loadError ?? null,
   };
@@ -278,13 +281,18 @@ export async function loadWorkspaceSnapshot(
   fallbackTeamName = "Workspace",
 ): Promise<WorkspaceSnapshot> {
   try {
-    const [team, webTasks, coreTasks, stats, activities] = await Promise.all([
+    const [team, webTasks, coreTasks, memberStatsResponse, activities] = await Promise.all([
       fetchWebTeam(teamId),
       fetchWebTeamTasks(teamId).catch(() => [] as ApiTask[]),
       fetchCoreTeamTasks(teamId).catch(() => [] as ApiTask[]),
-      fetchTeamMemberStats(teamId).catch(() => ({} as TeamMemberStatsMap)),
+      fetchTeamMemberStats(teamId).catch(() => ({
+        stats: {} as TeamMemberStatsMap,
+        developmentGoalAlerts: EMPTY_DEVELOPMENT_GOAL_ALERTS,
+      })),
       fetchTeamActivity(teamId).catch(() => [] as ApiActivityItem[]),
     ]);
+
+    const stats = memberStatsResponse.stats;
 
     const tasks = mergeTeamTasks(
       Array.isArray(webTasks) ? webTasks : [],
@@ -303,6 +311,7 @@ export async function loadWorkspaceSnapshot(
       membersWithoutRecentCheckIn: countStaleCheckIns(stats, managerUserId),
       memberRows,
       recentWin: extractRecentWin(Array.isArray(activities) ? activities : []),
+      developmentGoalAlerts: memberStatsResponse.developmentGoalAlerts,
       fromLiveData: true,
       loadError: null,
     };
@@ -397,6 +406,34 @@ export function buildSenecaResponse(
             `Prep check-in with ${checkInGap.name}`,
             "Open Team and start 1:1 prep",
           ),
+        );
+      }
+
+      for (const goal of snapshot.developmentGoalAlerts.nearingInactive.slice(0, 2)) {
+        issueCount += 1;
+        const daysLeft = goal.daysUntilInactive ?? 0;
+        insights.push({
+          id: `dev-goal-reminder-${goal.goalId}`,
+          label: `${goal.memberName} — "${goal.skill}" goes inactive in ${daysLeft} day${daysLeft !== 1 ? "s" : ""}`,
+          detail: `No updates in ${goal.daysSinceActivity} days`,
+        });
+      }
+
+      for (const goal of snapshot.developmentGoalAlerts.inactive.slice(0, 2)) {
+        issueCount += 1;
+        insights.push({
+          id: `dev-goal-inactive-${goal.goalId}`,
+          label: `${goal.memberName} — "${goal.skill}" is inactive`,
+          detail: `No activity for ${goal.daysSinceActivity} days`,
+        });
+      }
+
+      if (
+        snapshot.developmentGoalAlerts.nearingInactive.length > 0 ||
+        snapshot.developmentGoalAlerts.inactive.length > 0
+      ) {
+        actions.push(
+          action("open_team", "Review development plans", "Check progress notes and reactivate stale goals"),
         );
       }
 
