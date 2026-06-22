@@ -1,5 +1,5 @@
 import type { DevelopmentGoal } from "./api";
-import { alenioLogoUrl, escapeHtml, printHtmlInHiddenFrame } from "./print-html";
+import { alenioLogoUrl, downloadHtmlAsPdf, escapeHtml, printHtmlInHiddenFrame, safePdfFilename } from "./print-html";
 
 export type DevelopmentPlanPrintOptions = {
   goals: DevelopmentGoal[];
@@ -465,4 +465,11 @@ function buildPrintHtml(options: DevelopmentPlanPrintOptions, logoUrl: string): 
 export function printDevelopmentPlan(options: DevelopmentPlanPrintOptions): void {
   const html = buildPrintHtml(options, alenioLogoUrl());
   printHtmlInHiddenFrame(html, "Development plan print preview");
+}
+
+/** Downloads a PDF file for the development plan. */
+export async function downloadDevelopmentPlanPdf(options: DevelopmentPlanPrintOptions): Promise<void> {
+  const html = buildPrintHtml(options, alenioLogoUrl());
+  const filename = `${safePdfFilename(options.memberName)}-development-plan.pdf`;
+  await downloadHtmlAsPdf(html, filename);
 }

@@ -21,7 +21,7 @@ import {
   type DevelopmentGoalNote,
   type DevelopmentGoalStatus,
 } from "../lib/api";
-import { printDevelopmentPlan } from "../lib/development-plan-print";
+import { printDevelopmentPlan, downloadDevelopmentPlanPdf } from "../lib/development-plan-print";
 import {
   DEVELOPMENT_GOAL_ACTIVITY_KEY,
   goalDaysUntilInactive,
@@ -833,6 +833,7 @@ export function DevelopmentPlanTab({
   const [closedSectionOpen, setClosedSectionOpen] = useState(false);
   const [inactiveSectionOpen, setInactiveSectionOpen] = useState(false);
   const [senecaGoalOpen, setSenecaGoalOpen] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
   const canUpdate = canCreate || canAddNotes;
 
   const activeGoals = goals.filter((g) => g.status === "active");
@@ -987,6 +988,23 @@ export function DevelopmentPlanTab({
     }
   };
 
+  const onDownloadPdf = async () => {
+    if (goals.length === 0) return;
+    setDownloadingPdf(true);
+    setErr(null);
+    try {
+      await downloadDevelopmentPlanPdf({
+        goals,
+        memberName,
+        managerName,
+      });
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Could not download PDF.");
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
+
   const onMarkComplete = async (goal: DevelopmentGoal) => {
     if (
       !window.confirm(
@@ -1071,9 +1089,17 @@ export function DevelopmentPlanTab({
             type="button"
             className="enterprise-dev-plan-print-btn"
             onClick={onPrint}
-            disabled={loading}
+            disabled={loading || goals.length === 0}
           >
             Print
+          </button>
+          <button
+            type="button"
+            className="enterprise-dev-plan-print-btn"
+            onClick={() => void onDownloadPdf()}
+            disabled={loading || downloadingPdf || goals.length === 0}
+          >
+            {downloadingPdf ? "Downloading…" : "Download PDF"}
           </button>
           {canCreate ? (
             <>

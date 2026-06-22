@@ -26,7 +26,7 @@ import {
   type DevelopmentGoal,
   type DevelopmentGoalNote,
 } from "@/lib/member-profile-api";
-import { printDevelopmentPlan } from "@/lib/development-plan-print";
+import { printDevelopmentPlan, downloadDevelopmentPlanPdf } from "@/lib/development-plan-print";
 import {
   DEVELOPMENT_GOAL_ACTIVITY_KEY,
   goalDaysUntilInactive,
@@ -93,6 +93,7 @@ export function DevelopmentPlanTab({
   const [modalErr, setModalErr] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [printingPdf, setPrintingPdf] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
 
   const [newNotes, setNewNotes] = useState<string[]>([]);
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
@@ -135,6 +136,25 @@ export function DevelopmentPlanTab({
       toast({ title: message, preset: "error" });
     } finally {
       setPrintingPdf(false);
+    }
+  };
+
+  const onDownloadPdf = async () => {
+    if (goals.length === 0) return;
+    setDownloadingPdf(true);
+    setErr(null);
+    try {
+      await downloadDevelopmentPlanPdf({
+        goals,
+        memberName,
+        managerName,
+      });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "Could not download PDF.";
+      setErr(message);
+      toast({ title: message, preset: "error" });
+    } finally {
+      setDownloadingPdf(false);
     }
   };
 
@@ -484,22 +504,40 @@ export function DevelopmentPlanTab({
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
           {goals.length > 0 ? (
-            <Pressable
-              onPress={() => void onPrint()}
-              disabled={loading || printingPdf}
-              style={{
-                borderWidth: 1,
-                borderColor: "#D8DEE8",
-                borderRadius: 10,
-                paddingHorizontal: 12,
-                paddingVertical: 8,
-                opacity: loading || printingPdf ? 0.55 : 1,
-              }}
-            >
-              <Text style={{ fontSize: 13, fontWeight: "700", color: "#334155" }}>
-                {printingPdf ? "Printing…" : "Print"}
-              </Text>
-            </Pressable>
+            <>
+              <Pressable
+                onPress={() => void onPrint()}
+                disabled={loading || printingPdf}
+                style={{
+                  borderWidth: 1,
+                  borderColor: "#D8DEE8",
+                  borderRadius: 10,
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                  opacity: loading || printingPdf ? 0.55 : 1,
+                }}
+              >
+                <Text style={{ fontSize: 13, fontWeight: "700", color: "#334155" }}>
+                  {printingPdf ? "Printing…" : "Print"}
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => void onDownloadPdf()}
+                disabled={loading || downloadingPdf}
+                style={{
+                  borderWidth: 1,
+                  borderColor: "#D8DEE8",
+                  borderRadius: 10,
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                  opacity: loading || downloadingPdf ? 0.55 : 1,
+                }}
+              >
+                <Text style={{ fontSize: 13, fontWeight: "700", color: "#334155" }}>
+                  {downloadingPdf ? "Downloading…" : "Download PDF"}
+                </Text>
+              </Pressable>
+            </>
           ) : null}
           {canCreate ? (
           <Pressable

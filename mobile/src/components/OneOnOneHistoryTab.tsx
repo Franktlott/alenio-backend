@@ -32,7 +32,7 @@ import {
   LEADER_COMMENTS_NUDGE_COPY,
   LEADER_COMMENTS_NUDGE_TITLE,
 } from "@/lib/check-in-leader-comments";
-import { meetingNumberFor, printOneOnOneMeeting } from "@/lib/one-on-one-print";
+import { meetingNumberFor, downloadOneOnOneMeetingPdf, printOneOnOneMeeting } from "@/lib/one-on-one-print";
 import {
   ASSOCIATE_FEEDBACK_FIELD_ID,
   ASSOCIATE_FEEDBACK_LABEL,
@@ -151,6 +151,7 @@ export function OneOnOneHistoryTab({
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [saving, setSaving] = useState(false);
   const [printingPdf, setPrintingPdf] = useState(false);
+  const [downloadingPdfId, setDownloadingPdfId] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [followUpDrafts, setFollowUpDrafts] = useState<FollowUpDraft[]>([]);
   const [feedbackPromptOpen, setFeedbackPromptOpen] = useState(false);
@@ -372,6 +373,13 @@ export function OneOnOneHistoryTab({
     }
   };
 
+  const checkInExportOptions = (meeting: OneOnOneMeeting) => ({
+    meeting,
+    memberName,
+    managerName,
+    meetingNumber: meetingNumberFor(meetings, meeting.id),
+  });
+
   const onPrint = async (meeting: OneOnOneMeeting) => {
     if (!canPrintCheckIn(meeting)) {
       toast({ title: "Publish this check-in before printing.", preset: "error" });
@@ -380,12 +388,7 @@ export function OneOnOneHistoryTab({
     setPrintingPdf(true);
     setMenuMeetingId(null);
     try {
-      await printOneOnOneMeeting({
-        meeting,
-        memberName,
-        managerName,
-        meetingNumber: meetingNumberFor(meetings, meeting.id),
-      });
+      await printOneOnOneMeeting(checkInExportOptions(meeting));
     } catch (e) {
       toast({
         title: e instanceof Error ? e.message : "Could not open print view.",
@@ -393,6 +396,25 @@ export function OneOnOneHistoryTab({
       });
     } finally {
       setPrintingPdf(false);
+    }
+  };
+
+  const onDownloadPdf = async (meeting: OneOnOneMeeting) => {
+    if (!canPrintCheckIn(meeting)) {
+      toast({ title: "Publish this check-in before downloading a PDF.", preset: "error" });
+      return;
+    }
+    setDownloadingPdfId(meeting.id);
+    setMenuMeetingId(null);
+    try {
+      await downloadOneOnOneMeetingPdf(checkInExportOptions(meeting));
+    } catch (e) {
+      toast({
+        title: e instanceof Error ? e.message : "Could not download PDF.",
+        preset: "error",
+      });
+    } finally {
+      setDownloadingPdfId(null);
     }
   };
 
@@ -971,15 +993,26 @@ export function OneOnOneHistoryTab({
                   {menuMeetingId === meeting.id ? (
                     <View style={{ marginTop: 10, backgroundColor: "#F8FAFC", borderRadius: 10, overflow: "hidden" }}>
                       {canPrintCheckIn(meeting) ? (
-                        <Pressable
-                          onPress={() => void onPrint(meeting)}
-                          disabled={printingPdf}
-                          style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: "#E2E8F0" }}
-                        >
-                          <Text style={{ fontSize: 14, fontWeight: "600", color: "#334155" }}>
-                            {printingPdf ? "Printing…" : "Print"}
-                          </Text>
-                        </Pressable>
+                        <>
+                          <Pressable
+                            onPress={() => void onPrint(meeting)}
+                            disabled={printingPdf}
+                            style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: "#E2E8F0" }}
+                          >
+                            <Text style={{ fontSize: 14, fontWeight: "600", color: "#334155" }}>
+                              {printingPdf ? "Printing…" : "Print"}
+                            </Text>
+                          </Pressable>
+                          <Pressable
+                            onPress={() => void onDownloadPdf(meeting)}
+                            disabled={downloadingPdfId === meeting.id}
+                            style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: "#E2E8F0" }}
+                          >
+                            <Text style={{ fontSize: 14, fontWeight: "600", color: "#334155" }}>
+                              {downloadingPdfId === meeting.id ? "Downloading…" : "Download PDF"}
+                            </Text>
+                          </Pressable>
+                        </>
                       ) : null}
                       <Pressable
                         onPress={() => startEdit(meeting)}
@@ -1036,22 +1069,40 @@ export function OneOnOneHistoryTab({
               </View>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
                 {previewMeeting && canPrintCheckIn(previewMeeting) ? (
-                  <Pressable
-                    onPress={() => void onPrint(previewMeeting)}
-                    disabled={printingPdf}
-                    style={{
-                      borderWidth: 1,
-                      borderColor: "#D8DEE8",
-                      borderRadius: 10,
-                      paddingHorizontal: 12,
-                      paddingVertical: 8,
-                      opacity: printingPdf ? 0.55 : 1,
-                    }}
-                  >
-                    <Text style={{ fontSize: 13, fontWeight: "700", color: "#334155" }}>
-                      {printingPdf ? "Printing…" : "Print"}
-                    </Text>
-                  </Pressable>
+                  <>
+                    <Pressable
+                      onPress={() => void onPrint(previewMeeting)}
+                      disabled={printingPdf}
+                      style={{
+                        borderWidth: 1,
+                        borderColor: "#D8DEE8",
+                        borderRadius: 10,
+                        paddingHorizontal: 12,
+                        paddingVertical: 8,
+                        opacity: printingPdf ? 0.55 : 1,
+                      }}
+                    >
+                      <Text style={{ fontSize: 13, fontWeight: "700", color: "#334155" }}>
+                        {printingPdf ? "Printing…" : "Print"}
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={() => void onDownloadPdf(previewMeeting)}
+                      disabled={downloadingPdfId === previewMeeting.id}
+                      style={{
+                        borderWidth: 1,
+                        borderColor: "#D8DEE8",
+                        borderRadius: 10,
+                        paddingHorizontal: 12,
+                        paddingVertical: 8,
+                        opacity: downloadingPdfId === previewMeeting.id ? 0.55 : 1,
+                      }}
+                    >
+                      <Text style={{ fontSize: 13, fontWeight: "700", color: "#334155" }}>
+                        {downloadingPdfId === previewMeeting.id ? "Downloading…" : "Download PDF"}
+                      </Text>
+                    </Pressable>
+                  </>
                 ) : null}
                 <Pressable onPress={() => setPreviewMeeting(null)} hitSlop={12}>
                   <X size={22} color="#64748B" />

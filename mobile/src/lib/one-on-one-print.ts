@@ -4,7 +4,7 @@ import {
   ASSOCIATE_FEEDBACK_LABEL,
   formatAssociateResponseDisplay,
 } from "./one-on-one-feedback";
-import { ALENIO_LOGO_URL, escapeHtml, printHtml } from "./print-html";
+import { ALENIO_LOGO_URL, downloadHtmlAsPdf, escapeHtml, printHtml, safePdfFilename } from "./print-html";
 
 export type OneOnOnePrintOptions = {
   meeting: OneOnOneMeeting;
@@ -463,6 +463,16 @@ export async function printOneOnOneMeeting(options: OneOnOnePrintOptions): Promi
   }
   const html = buildPrintHtml(options, ALENIO_LOGO_URL);
   await printHtml(html);
+}
+
+/** Generates a PDF and opens the share sheet so the user can save the check-in. */
+export async function downloadOneOnOneMeetingPdf(options: OneOnOnePrintOptions): Promise<void> {
+  if (options.meeting.status === "draft") {
+    throw new Error("Draft check-ins cannot be downloaded. Publish the check-in first.");
+  }
+  const html = buildPrintHtml(options, ALENIO_LOGO_URL);
+  const filename = `${safePdfFilename(options.memberName)}-check-in-${options.meetingNumber}.pdf`;
+  await downloadHtmlAsPdf(html, filename);
 }
 
 export function meetingNumberFor(meetings: OneOnOneMeeting[], meetingId: string): number {

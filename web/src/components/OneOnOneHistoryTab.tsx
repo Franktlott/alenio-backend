@@ -12,7 +12,7 @@ import {
   type OneOnOneTemplateField,
   type OneOnOneFollowUpTaskInput,
 } from "../lib/api";
-import { meetingNumberFor, printOneOnOneMeeting } from "../lib/one-on-one-print";
+import { meetingNumberFor, downloadOneOnOneMeetingPdf, printOneOnOneMeeting } from "../lib/one-on-one-print";
 import {
   ASSOCIATE_FEEDBACK_FIELD_ID,
   ASSOCIATE_FEEDBACK_LABEL,
@@ -289,6 +289,7 @@ export function OneOnOneHistoryTab({
   const [responses, setResponses] = useState<Record<string, string | number>>({});
   const [previewMeeting, setPreviewMeeting] = useState<OneOnOneMeeting | null>(null);
   const [menuMeetingId, setMenuMeetingId] = useState<string | null>(null);
+  const [downloadingPdfId, setDownloadingPdfId] = useState<string | null>(null);
   const [loadingMeetings, setLoadingMeetings] = useState(false);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -789,20 +790,39 @@ export function OneOnOneHistoryTab({
     }
   };
 
+  const checkInExportOptions = (meeting: OneOnOneMeeting) => ({
+    meeting,
+    memberName,
+    managerName,
+    meetingNumber: meetingNumberFor(meetings, meeting.id),
+  });
+
   const onPrint = (meeting: OneOnOneMeeting) => {
     if (!canPrintCheckIn(meeting)) {
       setErr("Publish this check-in before printing.");
       return;
     }
     try {
-      printOneOnOneMeeting({
-        meeting,
-        memberName,
-        managerName,
-        meetingNumber: meetingNumberFor(meetings, meeting.id),
-      });
+      printOneOnOneMeeting(checkInExportOptions(meeting));
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Could not open print view.");
+    }
+  };
+
+  const onDownloadPdf = async (meeting: OneOnOneMeeting) => {
+    if (!canPrintCheckIn(meeting)) {
+      setErr("Publish this check-in before downloading a PDF.");
+      return;
+    }
+    setMenuMeetingId(null);
+    setDownloadingPdfId(meeting.id);
+    setErr(null);
+    try {
+      await downloadOneOnOneMeetingPdf(checkInExportOptions(meeting));
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Could not download PDF.");
+    } finally {
+      setDownloadingPdfId(null);
     }
   };
 
@@ -1039,13 +1059,23 @@ export function OneOnOneHistoryTab({
             </div>
             <div className="enterprise-oneone-preview-header-actions">
               {canPrintCheckIn(previewMeeting) ? (
-                <button
-                  type="button"
-                  className="enterprise-dev-plan-print-btn"
-                  onClick={() => onPrint(previewMeeting)}
-                >
-                  Print
-                </button>
+                <>
+                  <button
+                    type="button"
+                    className="enterprise-dev-plan-print-btn"
+                    onClick={() => onPrint(previewMeeting)}
+                  >
+                    Print
+                  </button>
+                  <button
+                    type="button"
+                    className="enterprise-dev-plan-print-btn"
+                    disabled={downloadingPdfId === previewMeeting.id}
+                    onClick={() => void onDownloadPdf(previewMeeting)}
+                  >
+                    {downloadingPdfId === previewMeeting.id ? "Downloading…" : "Download PDF"}
+                  </button>
+                </>
               ) : null}
               <button
                 type="button"
@@ -1426,17 +1456,30 @@ export function OneOnOneHistoryTab({
                     {menuMeetingId === meeting.id ? (
                       <div className="enterprise-oneone-history-row-menu" role="menu">
                         {canPrintCheckIn(meeting) ? (
-                          <button
-                            type="button"
-                            role="menuitem"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setMenuMeetingId(null);
-                              onPrint(meeting);
-                            }}
-                          >
-                            Print
-                          </button>
+                          <>
+                            <button
+                              type="button"
+                              role="menuitem"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setMenuMeetingId(null);
+                                onPrint(meeting);
+                              }}
+                            >
+                              Print
+                            </button>
+                            <button
+                              type="button"
+                              role="menuitem"
+                              disabled={downloadingPdfId === meeting.id}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void onDownloadPdf(meeting);
+                              }}
+                            >
+                              {downloadingPdfId === meeting.id ? "Downloading…" : "Download PDF"}
+                            </button>
+                          </>
                         ) : null}
                         {canModify ? (
                           <>
