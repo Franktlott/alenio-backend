@@ -1,6 +1,6 @@
 import { Tabs } from "expo-router";
 import { CheckSquare, Users, User, MessageCircle, Activity } from "lucide-react-native";
-import { View, Text, Pressable } from "react-native";
+import { View, Text, Pressable, StyleSheet } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery, useQueryClient, useQueries } from "@tanstack/react-query";
 import { api } from "@/lib/api/api";
@@ -12,6 +12,7 @@ import { useTaskStore } from "@/lib/state/task-store";
 import { useEffect, useMemo } from "react";
 import type { CalendarEvent, Conversation, Team, Task } from "@/lib/types";
 import MeetingBanner from "@/components/MeetingBanner";
+import { SenecaFloatingLauncher } from "@/components/seneca/SenecaFloatingLauncher";
 
 const DEMO_EMAIL = "demo@alenio.app";
 
@@ -299,7 +300,7 @@ export default function AppLayout() {
   const isPaid = plan === "team";
 
   return (
-    <>
+    <View style={styles.shell}>
       <Tabs
         initialRouteName="chat"
         tabBar={(props) => <FloatingTabBar {...props} />}
@@ -313,6 +314,13 @@ export default function AppLayout() {
         <Tabs.Screen name="profile" options={{ title: "Profile" }} />
       </Tabs>
       <MeetingBanner />
-    </>
+      <SenecaFloatingLauncher />
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  shell: {
+    flex: 1,
+  },
+});

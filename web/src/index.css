@@ -8614,6 +8614,30 @@ input {
   font-size: 0.8125rem;
 }
 
+.enterprise-oneone-feedback-leader-notes {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+  padding: 0.75rem 0.85rem;
+}
+
+.enterprise-oneone-feedback-leader-notes-label {
+  margin: 0 0 0.35rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.enterprise-oneone-feedback-leader-notes-body {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.45;
+  color: #0f172a;
+  white-space: pre-wrap;
+}
+
 .enterprise-oneone-feedback-mode {
   display: flex;
   flex-wrap: wrap;
@@ -19916,7 +19940,6 @@ button.enterprise-profile-legal-link {
 }
 
 .site-v2-nav-seneca-icon.seneca-icon {
-  width: 1rem;
   height: 1rem;
 }
 
@@ -20303,13 +20326,11 @@ button.enterprise-profile-legal-link {
 }
 
 .site-v2-seneca-marketing-icon.seneca-icon {
-  width: 3.25rem;
   height: 3.25rem;
   box-shadow: 0 8px 24px rgba(99, 102, 241, 0.45);
 }
 
 .site-v2-pillar-seneca-icon.seneca-icon {
-  width: 1.75rem;
   height: 1.75rem;
 }
 
@@ -20370,7 +20391,6 @@ button.enterprise-profile-legal-link {
 }
 
 .site-v2-seneca-marketing-panel-icon.seneca-icon {
-  width: 2rem;
   height: 2rem;
   box-shadow: 0 4px 14px rgba(99, 102, 241, 0.4);
 }
@@ -20436,7 +20456,6 @@ button.enterprise-profile-legal-link {
 }
 
 .site-v2-seneca-cap-icon.seneca-icon {
-  width: 1.5rem;
   height: 1.5rem;
   box-shadow: 0 4px 12px rgba(99, 102, 241, 0.25);
 }
@@ -20483,7 +20502,6 @@ button.enterprise-profile-legal-link {
 }
 
 .site-v2-phone-seneca-icon.seneca-icon {
-  width: 1.125rem;
   height: 1.125rem;
 }
 
@@ -20511,7 +20529,6 @@ button.enterprise-profile-legal-link {
 .site-v2-hero-seneca-fab-icon.seneca-icon {
   position: relative;
   z-index: 1;
-  width: 2.75rem;
   height: 2.75rem;
   box-shadow: 0 8px 22px rgba(99, 102, 241, 0.45);
 }
@@ -21690,7 +21707,6 @@ button.enterprise-profile-legal-link {
 }
 
 .site-marketing-eyebrow-seneca-icon.seneca-icon {
-  width: 1.25rem;
   height: 1.25rem;
   box-shadow: 0 3px 10px rgba(99, 102, 241, 0.3);
 }
@@ -22231,9 +22247,10 @@ button.enterprise-profile-legal-link {
 }
 
 .seneca-icon {
-  border-radius: 50%;
-  object-fit: cover;
+  object-fit: contain;
   flex-shrink: 0;
+  width: auto;
+  aspect-ratio: 174 / 276;
 }
 
 .seneca-kicker {
@@ -22670,7 +22687,6 @@ button.enterprise-profile-legal-link {
 }
 
 .seneca-floating-launcher__icon.seneca-icon {
-  width: 3.5rem;
   height: 3.5rem;
   box-shadow: 0 8px 28px rgba(99, 102, 241, 0.45);
 }
@@ -22745,7 +22761,6 @@ button.enterprise-profile-legal-link {
 }
 
 .seneca-drawer-brand-icon.seneca-icon {
-  width: 2.25rem;
   height: 2.25rem;
   box-shadow: 0 4px 16px rgba(99, 102, 241, 0.4);
 }
@@ -22953,7 +22968,6 @@ button.enterprise-profile-legal-link {
 }
 
 .seneca-drawer-chat-seneca-head .seneca-icon {
-  width: 1.5rem;
   height: 1.5rem;
 }
 
@@ -23513,7 +23527,6 @@ button.enterprise-profile-legal-link {
 }
 
 .seneca-soon-icon.seneca-icon {
-  width: 5.5rem;
   height: 5.5rem;
 }
 
@@ -23820,7 +23833,6 @@ button.enterprise-profile-legal-link {
 }
 
 .seneca-goal-head-icon {
-  width: 3.25rem;
   height: 3.25rem;
   flex-shrink: 0;
 }

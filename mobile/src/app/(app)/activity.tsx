@@ -1,4 +1,4 @@
-import { View, Text, FlatList, ActivityIndicator, Pressable, ScrollView, Modal, TouchableOpacity, Image, TextInput, Platform } from "react-native";
+import { View, Text, FlatList, ActivityIndicator, Pressable, ScrollView, Modal, TouchableOpacity, Image, TextInput, Platform, Dimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -35,6 +35,8 @@ function formatEventTime(startDate: string, endDate: string | null | undefined, 
 
 
 const REACTION_HINT_KEY = "reaction_hint_shown";
+const CELEBRATE_SHEET_MAX_HEIGHT = Math.round(Dimensions.get("window").height * 0.8);
+const CELEBRATE_HEADER_HEIGHT = 73;
 
 type ActivityEvent = {
   id: string;
@@ -1004,11 +1006,20 @@ export default function ActivityScreen() {
 
       {/* Celebrate modal */}
       <Modal visible={showCelebrateModal} transparent animationType="slide" onRequestClose={() => setShowCelebrateModal(false)}>
-        <SafeKeyboardAvoidingView style={{ flex: 1 }}>
+        <SafeKeyboardAvoidingView style={{ flex: 1, justifyContent: "flex-end" }}>
           <TouchableOpacity style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)" }} activeOpacity={1} onPress={() => setShowCelebrateModal(false)} />
-          <View style={{ backgroundColor: "white", borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: "80%" }}>
+          <View
+            style={{
+              backgroundColor: "white",
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+              maxHeight: CELEBRATE_SHEET_MAX_HEIGHT,
+              flexDirection: "column",
+              overflow: "hidden",
+            }}
+          >
             {/* Modal header */}
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingTop: 20, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: "#F1F5F9" }}>
+            <View style={{ flexShrink: 0, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingTop: 20, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: "#F1F5F9" }}>
               <TouchableOpacity onPress={celebrateStep === 2 ? () => setCelebrateStep(1) : () => setShowCelebrateModal(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                 <Text style={{ fontSize: 14, color: "#64748B", fontWeight: "600" }}>{celebrateStep === 2 ? "← Back" : "Cancel"}</Text>
               </TouchableOpacity>
@@ -1022,7 +1033,14 @@ export default function ActivityScreen() {
 
             {celebrateStep === 1 ? (
               /* Step 1 — pick team member */
-              <ScrollView contentContainerStyle={{ paddingVertical: 8 }} showsVerticalScrollIndicator={false}>
+              <ScrollView
+                style={{ maxHeight: CELEBRATE_SHEET_MAX_HEIGHT - CELEBRATE_HEADER_HEIGHT }}
+                contentContainerStyle={{ paddingVertical: 8, paddingBottom: insets.bottom + 16 }}
+                showsVerticalScrollIndicator
+                keyboardShouldPersistTaps="handled"
+                nestedScrollEnabled
+                testID="celebrate-member-list"
+              >
                 {teamMembersLoading ? (
                   <View style={{ alignItems: "center", paddingVertical: 40 }}>
                     <ActivityIndicator color="#4361EE" />
@@ -1058,7 +1076,13 @@ export default function ActivityScreen() {
               </ScrollView>
             ) : (
               /* Step 2 — pick celebration type + message */
-              <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+              <ScrollView
+                style={{ maxHeight: CELEBRATE_SHEET_MAX_HEIGHT - CELEBRATE_HEADER_HEIGHT }}
+                contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 40 }}
+                showsVerticalScrollIndicator
+                keyboardShouldPersistTaps="handled"
+                nestedScrollEnabled
+              >
                 <Text style={{ fontSize: 13, fontWeight: "600", color: "#64748B", marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.5 }}>Choose a celebration</Text>
                 <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 20 }}>
                   {CELEBRATION_TYPES.map((ct) => {

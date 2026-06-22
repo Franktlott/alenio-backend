@@ -8,6 +8,8 @@ export type OneOnOneAssociateFeedbackContext = {
   currentResponse: string;
   submitted: boolean;
   associateRequest: "task" | "message" | null;
+  leaderComments: string | null;
+  leaderCommentsLabel: string | null;
 };
 
 export function fetchOneOnOneAssociateFeedbackContext(

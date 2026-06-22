@@ -44,3 +44,29 @@ export function appendLeaderCommentsFields<T extends LeaderCommentsField>(
     } as T,
   ];
 }
+
+type LeaderCommentsFieldLike = { id: string; label: string; type: string };
+
+export function findLeaderCommentsField(fields: LeaderCommentsFieldLike[]): LeaderCommentsFieldLike | null {
+  const managerNotes = fields.filter((field) => field.type === "manager_notes");
+  if (managerNotes.length === 0) return null;
+  const preferred = managerNotes.find(
+    (field) =>
+      field.label === LEADER_COMMENTS_FIELD_LABEL ||
+      /summary|commitment/i.test(field.label),
+  );
+  return preferred ?? managerNotes[0];
+}
+
+export function readLeaderCommentsFromMeeting(
+  fields: LeaderCommentsFieldLike[],
+  responses: Record<string, string | number>,
+): { label: string; text: string } | null {
+  const field = findLeaderCommentsField(fields);
+  if (!field) return null;
+  const raw = responses[field.id];
+  if (raw === undefined || raw === null) return null;
+  const text = String(raw).trim();
+  if (!text) return null;
+  return { label: field.label, text };
+}

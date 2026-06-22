@@ -1341,6 +1341,8 @@ export type OneOnOneAssociateFeedbackContext = {
   currentResponse: string;
   submitted: boolean;
   associateRequest: AssociateRequestMode | null;
+  leaderComments: string | null;
+  leaderCommentsLabel: string | null;
 };
 
 export type OneOnOneTemplate = {

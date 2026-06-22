@@ -16,7 +16,7 @@ import {
   NO_FEEDBACK_VALUE,
   type OneOnOneTemplateFieldLike,
 } from "../lib/one-on-one-feedback";
-import { appendLeaderCommentsFields } from "../lib/check-in-leader-comments";
+import { appendLeaderCommentsFields, readLeaderCommentsFromMeeting } from "../lib/check-in-leader-comments";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -708,6 +708,7 @@ oneOnOneMeetingsRouter.get("/:memberUserId/one-on-ones/:meetingId/associate-feed
   const submitted =
     currentResponse !== undefined &&
     (String(currentResponse) === NO_FEEDBACK_VALUE || String(currentResponse).trim() !== "");
+  const leaderComments = readLeaderCommentsFromMeeting(fields, responses);
 
   return c.json({
     data: {
@@ -718,6 +719,8 @@ oneOnOneMeetingsRouter.get("/:memberUserId/one-on-ones/:meetingId/associate-feed
       currentResponse: submitted ? String(currentResponse) : "",
       submitted,
       associateRequest: field.associateRequest,
+      leaderComments: leaderComments?.text ?? null,
+      leaderCommentsLabel: leaderComments?.label ?? null,
     },
   });
 });

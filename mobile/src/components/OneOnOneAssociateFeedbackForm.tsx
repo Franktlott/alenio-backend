@@ -12,6 +12,7 @@ import {
   ASSOCIATE_FEEDBACK_NONE_LABEL,
   ASSOCIATE_FEEDBACK_PLACEHOLDER,
   ASSOCIATE_FEEDBACK_SUBMIT_LABEL,
+  LEADER_COMMENTS_PREVIEW_TITLE,
   NO_FEEDBACK_VALUE,
 } from "@/lib/one-on-one-feedback";
 
@@ -173,6 +174,24 @@ export function OneOnOneAssociateFeedbackForm({
       </Text>
       {context.helpText ? (
         <Text style={{ fontSize: 12, color: "#94A3B8", marginBottom: 10, lineHeight: 17 }}>{context.helpText}</Text>
+      ) : null}
+
+      {context.leaderComments ? (
+        <View
+          style={{
+            borderWidth: 1,
+            borderColor: "#E2E8F0",
+            borderRadius: 10,
+            backgroundColor: "#F8FAFC",
+            padding: 12,
+            marginBottom: 12,
+          }}
+        >
+          <Text style={{ fontSize: 11, fontWeight: "700", color: "#64748B", letterSpacing: 0.6, marginBottom: 6 }}>
+            {(context.leaderCommentsLabel ?? LEADER_COMMENTS_PREVIEW_TITLE).toUpperCase()}
+          </Text>
+          <Text style={{ fontSize: 14, color: "#0F172A", lineHeight: 20 }}>{context.leaderComments}</Text>
+        </View>
       ) : null}
 
       <View style={{ flexDirection: "row", gap: 8, marginBottom: 10 }}>

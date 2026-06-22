@@ -8,6 +8,7 @@ import {
   ASSOCIATE_FEEDBACK_NONE_LABEL,
   ASSOCIATE_FEEDBACK_PLACEHOLDER,
   ASSOCIATE_FEEDBACK_SUBMIT_LABEL,
+  LEADER_COMMENTS_PREVIEW_TITLE,
   NO_FEEDBACK_VALUE,
 } from "../lib/one-on-one-feedback";
 
@@ -99,6 +100,15 @@ export function OneOnOneAssociateFeedbackForm({
     <div className="enterprise-oneone-feedback-form">
       <p className="enterprise-oneone-feedback-intro">{ASSOCIATE_FEEDBACK_INTRO}</p>
       {context.helpText ? <p className="enterprise-muted enterprise-oneone-feedback-help">{context.helpText}</p> : null}
+
+      {context.leaderComments ? (
+        <div className="enterprise-oneone-feedback-leader-notes">
+          <p className="enterprise-oneone-feedback-leader-notes-label">
+            {context.leaderCommentsLabel ?? LEADER_COMMENTS_PREVIEW_TITLE}
+          </p>
+          <p className="enterprise-oneone-feedback-leader-notes-body">{context.leaderComments}</p>
+        </div>
+      ) : null}
 
       <div className="enterprise-oneone-feedback-mode">
         <label className="enterprise-oneone-feedback-mode-option">
