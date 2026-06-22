@@ -98,11 +98,8 @@ export function SenecaPrepCard({
           <PrepSection title="Leader prep" items={leaderPrepSteps} />
           {prep && !loading ? (
             <>
-              {prep.lastCheckInNotes ? (
-                <section className="seneca-prep-section">
-                  <h4 className="seneca-prep-section-title">Last check-in notes</h4>
-                  <p className="seneca-prep-notes">{prep.lastCheckInNotes}</p>
-                </section>
+              {prep.lastCheckInInsights.length > 0 ? (
+                <PrepSection title="Insights from last check-in" items={prep.lastCheckInInsights} />
               ) : null}
               <PrepSection title="Open development goals" items={prep.openDevelopmentGoals} />
               <PrepSection title="Open follow-up tasks" items={prep.openFollowUpTasks} />

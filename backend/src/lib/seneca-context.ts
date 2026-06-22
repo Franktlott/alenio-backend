@@ -1,5 +1,10 @@
 import { prisma } from "../prisma";
 import { parseLeaderPrep } from "./leader-prep";
+import {
+  buildRuleBasedLastCheckInInsights,
+  extractLastCheckInSource,
+  type LastCheckInInsightSource,
+} from "./seneca-last-check-in-insights";
 
 function parseJsonRecord(raw: string): Record<string, string | number> {
   try {
@@ -34,6 +39,12 @@ function formatMeetingResponses(
   return lines.join("\n");
 }
 
+export type SenecaLastCheckInContext = LastCheckInInsightSource & {
+  openFollowUps: Array<{ title: string; status: string; dueDate: string | null }>;
+  /** @deprecated Raw dump for AI debugging only — use lastCheckInInsights in prep UI */
+  notesSummary: string;
+};
+
 export type SenecaRawContext = {
   memberName: string;
   managerName: string | null;
@@ -45,12 +56,8 @@ export type SenecaRawContext = {
     activeDevGoals: number;
     daysSinceLastOneOnOne: number | null;
   } | null;
-  lastCheckIn: {
-    date: string;
-    templateTitle: string;
-    notesSummary: string;
-    openFollowUps: Array<{ title: string; status: string; dueDate: string | null }>;
-  } | null;
+  lastCheckIn: SenecaLastCheckInContext | null;
+  lastCheckInInsights: string[];
   activeDevelopmentGoals: Array<{ skill: string; steps: string[]; recentNote: string | null }>;
   openTasks: Array<{ title: string; status: string; dueDate: string | null }>;
   recentWins: string[];
@@ -136,12 +143,12 @@ export async function buildSenecaRawContext(
   });
 
   const lastMeeting = meetings[0] ?? null;
-  let lastCheckIn: SenecaRawContext["lastCheckIn"] = null;
+  let lastCheckIn: SenecaLastCheckInContext | null = null;
+  let lastCheckInInsights: string[] = [];
 
   if (lastMeeting) {
     const fields = parseJsonArray<{ id: string; label: string; type: string }>(lastMeeting.templateFields);
     const responses = parseJsonRecord(lastMeeting.responses);
-    const notesSummary = formatMeetingResponses(fields, responses);
 
     const followUpTasks = await prisma.task.findMany({
       where: {
@@ -153,10 +160,18 @@ export async function buildSenecaRawContext(
       take: 10,
     });
 
+    const source = extractLastCheckInSource(
+      lastMeeting,
+      fields,
+      responses,
+      followUpTasks.map((task) => ({ title: task.title })),
+      now,
+    );
+
+    lastCheckInInsights = buildRuleBasedLastCheckInInsights(source);
     lastCheckIn = {
-      date: lastMeeting.createdAt.toISOString(),
-      templateTitle: lastMeeting.templateTitle,
-      notesSummary: notesSummary || "No notes recorded.",
+      ...source,
+      notesSummary: formatMeetingResponses(fields, responses) || "No discussion captured.",
       openFollowUps: followUpTasks.map((t) => ({
         title: t.title,
         status: t.status,
@@ -215,6 +230,7 @@ export async function buildSenecaRawContext(
       daysSinceLastOneOnOne,
     },
     lastCheckIn,
+    lastCheckInInsights,
     activeDevelopmentGoals: devGoals.map((g) => ({
       skill: g.skill,
       steps: parseJsonArray<string>(g.steps),

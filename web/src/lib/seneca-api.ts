@@ -2,7 +2,7 @@ import { apiPostJson } from "./api";
 import { normalizeDevelopmentGoalDraft, normalizeQuickDevelopmentGoal, normalizeCheckInTemplateDraft, normalizeStringArray } from "./seneca-normalize";
 
 export type SenecaPrep = {
-  lastCheckInNotes: string | null;
+  lastCheckInInsights: string[];
   openDevelopmentGoals: string[];
   openFollowUpTasks: string[];
   recentWins: string[];
@@ -78,6 +78,10 @@ export function fetchSenecaPrep(
       ...r.data,
       prep: {
         ...r.data.prep,
+        lastCheckInInsights: normalizeStringArray(
+          r.data.prep.lastCheckInInsights ??
+            (r.data.prep as { lastCheckInNotes?: string | null }).lastCheckInNotes,
+        ),
         openDevelopmentGoals: normalizeStringArray(r.data.prep.openDevelopmentGoals),
         openFollowUpTasks: normalizeStringArray(r.data.prep.openFollowUpTasks),
         recentWins: normalizeStringArray(r.data.prep.recentWins),

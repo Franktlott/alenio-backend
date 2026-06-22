@@ -5,6 +5,7 @@ import { auth } from "../auth";
 import { authGuard } from "../middleware/auth-guard";
 import { prisma } from "../prisma";
 import { buildSenecaRawContext, senecaContextToPrompt } from "../lib/seneca-context";
+import { mergeLastCheckInInsights } from "../lib/seneca-last-check-in-insights";
 import { senecaAvailable, senecaJson, senecaText, senecaUnavailableMessage } from "../lib/seneca-openai";
 import {
   normalizeDevelopmentGoalDraft,
@@ -91,7 +92,8 @@ const quickGoalBodySchema = z.object({
 });
 
 type SenecaPrepAi = {
-  lastCheckInNotes: string | null;
+  lastCheckInInsights: string[];
+  lastCheckInNotes?: string | null;
   openDevelopmentGoals: string[];
   openFollowUpTasks: string[];
   recentWins: string[];
@@ -100,6 +102,32 @@ type SenecaPrepAi = {
   suggestedCoachingQuestions: string[];
   leaderPrepSteps: string[];
 };
+
+function finalizePrep(
+  prep: Omit<SenecaPrepAi, "leaderPrepSteps">,
+  ctx: Awaited<ReturnType<typeof buildSenecaRawContext>>,
+  leaderPrepSteps: string[],
+): SenecaPrepAi {
+  const aiInsights =
+    normalizeStringArray(prep.lastCheckInInsights).length > 0
+      ? normalizeStringArray(prep.lastCheckInInsights)
+      : prep.lastCheckInNotes
+        ? normalizeStringArray(prep.lastCheckInNotes)
+        : [];
+
+  return attachLeaderPrepSteps(
+    {
+      lastCheckInInsights: mergeLastCheckInInsights(aiInsights, ctx.lastCheckIn),
+      openDevelopmentGoals: normalizeStringArray(prep.openDevelopmentGoals),
+      openFollowUpTasks: normalizeStringArray(prep.openFollowUpTasks),
+      recentWins: normalizeStringArray(prep.recentWins),
+      completionPatterns: prep.completionPatterns,
+      suggestedTalkingPoints: normalizeStringArray(prep.suggestedTalkingPoints),
+      suggestedCoachingQuestions: normalizeStringArray(prep.suggestedCoachingQuestions),
+    },
+    leaderPrepSteps,
+  );
+}
 
 function attachLeaderPrepSteps(
   prep: Omit<SenecaPrepAi, "leaderPrepSteps">,
@@ -163,9 +191,9 @@ function ruleBasedPrep(ctx: Awaited<ReturnType<typeof buildSenecaRawContext>>): 
     "Are there any obstacles getting in the way of your goals?",
   ];
 
-  return attachLeaderPrepSteps(
+  return finalizePrep(
     {
-      lastCheckInNotes: ctx.lastCheckIn?.notesSummary ?? null,
+      lastCheckInInsights: ctx.lastCheckInInsights,
       openDevelopmentGoals: ctx.activeDevelopmentGoals.map((g) => g.skill),
       openFollowUpTasks: ctx.lastCheckIn?.openFollowUps.map((t) => t.title) ?? [],
       recentWins: ctx.recentWins,
@@ -173,6 +201,7 @@ function ruleBasedPrep(ctx: Awaited<ReturnType<typeof buildSenecaRawContext>>): 
       suggestedTalkingPoints: talkingPoints.length ? talkingPoints : ["Open with how they're doing and what's on their mind."],
       suggestedCoachingQuestions: questions,
     },
+    ctx,
     ctx.templateLeaderPrep,
   );
 }
@@ -208,32 +237,29 @@ senecaRouter.post("/:memberUserId/seneca/prep", zValidator("json", prepBodySchem
 
   try {
     const prep = await senecaJson<Omit<SenecaPrepAi, "leaderPrepSteps">>(
-      `Generate a pre-check-in prep summary for a manager about to meet with ${raw.memberName}.
+      `Generate a pre-check-in prep brief for a manager about to meet with ${raw.memberName}.
+
+The manager needs retrospective INSIGHTS about the PREVIOUS published check-in — not instructions written for the associate.
+
+Use lastCheckIn and lastCheckInInsights in the context JSON. Focus on what was discussed, commitments, associate feedback, and open follow-ups.
+
 Return JSON with keys:
-- lastCheckInNotes (string|null): brief summary of last check-in notes
+- lastCheckInInsights (string[]): 2-6 bullets for the MANAGER summarizing the previous check-in (what was discussed, wins, blockers, commitments, open follow-ups). Write about the associate in third person (e.g. "${raw.memberName} shared…"). Never copy associate-facing script or upcoming-meeting instructions.
 - openDevelopmentGoals (string[]): skill names
-- openFollowUpTasks (string[]): task titles
+- openFollowUpTasks (string[]): task titles still open
 - recentWins (string[])
 - completionPatterns (string|null)
-- suggestedTalkingPoints (string[]): 3-5 practical talking points
-- suggestedCoachingQuestions (string[]): 3-5 open-ended coaching questions
+- suggestedTalkingPoints (string[]): 3-5 practical talking points for the UPCOMING conversation
+- suggestedCoachingQuestions (string[]): 3-5 open-ended coaching questions for the UPCOMING conversation
 
-When templateLeaderPrep items appear in the context JSON, reflect them in suggestedCoachingQuestions and weave them into other sections where helpful. Do not omit them.`,
+Put templateLeaderPrep items in suggestedCoachingQuestions only — never in lastCheckInInsights.`,
       senecaContextToPrompt(raw),
     );
-    const normalized = {
-      ...prep,
-      openDevelopmentGoals: normalizeStringArray(prep.openDevelopmentGoals),
-      openFollowUpTasks: normalizeStringArray(prep.openFollowUpTasks),
-      recentWins: normalizeStringArray(prep.recentWins),
-      suggestedTalkingPoints: normalizeStringArray(prep.suggestedTalkingPoints),
-      suggestedCoachingQuestions: normalizeStringArray(prep.suggestedCoachingQuestions),
-    };
     return c.json({
       data: {
         available: true,
         raw,
-        prep: attachLeaderPrepSteps(normalized, raw.templateLeaderPrep),
+        prep: finalizePrep(prep, raw, raw.templateLeaderPrep),
       },
     });
   } catch (e) {
