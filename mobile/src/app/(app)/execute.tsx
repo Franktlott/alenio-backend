@@ -24,7 +24,7 @@ import { Plus, User, Users, ArrowUpDown, ChevronLeft, ChevronRight, ChevronDown,
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { api } from "@/lib/api/api";
+import { calendarMondayColumnIndex } from "@/lib/calendar-grid";
 import { useSession } from "@/lib/auth/use-session";
 import { useTeamStore } from "@/lib/state/team-store";
 import { useSubscriptionStore } from "@/lib/state/subscription-store";
@@ -47,7 +47,7 @@ import {
 type FilterTab = "all" | "assigned" | "completed";
 type SortMode = "due" | "priority" | "completed";
 
-const DAY_LABELS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+const DAY_LABELS = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
 const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 
 type WeekBar = { id: string; title: string; color: string; startCol: number; endCol: number; isVideoMeeting?: boolean };
@@ -144,7 +144,7 @@ function MiniCalendar({
   const today = new Date();
   const [weekRowWidth, setWeekRowWidth] = useState(0);
 
-  const firstDay = new Date(viewYear, viewMonth, 1).getDay();
+  const firstDay = calendarMondayColumnIndex(new Date(viewYear, viewMonth, 1).getDay());
   const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
 
   // Build set of days that have tasks due

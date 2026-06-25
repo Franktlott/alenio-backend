@@ -1,4 +1,11 @@
-/** Mirrors `mobile/src/app/(app)/calendar.tsx` grid + event-bar logic for web parity. */
+/** Mirrors `mobile/src/lib/calendar-grid.ts` for web parity. */
+
+export const CALENDAR_WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
+
+/** Column index when week starts Monday: 0=Mon … 6=Sun. `dayOfWeek` is JS `Date#getDay()` (0=Sun). */
+export function calendarMondayColumnIndex(dayOfWeek: number): number {
+  return (dayOfWeek + 6) % 7;
+}
 
 export type CalendarEventLike = {
   id: string;
@@ -33,7 +40,7 @@ export function isSameDay(a: Date, b: Date): boolean {
 export function getDaysInMonth(date: Date): Date[] {
   const year = date.getFullYear();
   const month = date.getMonth();
-  const firstDay = new Date(year, month, 1).getDay();
+  const firstDay = calendarMondayColumnIndex(new Date(year, month, 1).getDay());
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const days: Date[] = [];
 

@@ -6,6 +6,7 @@ import { queryKeys } from "../lib/query-keys";
 import {
   computeWeekBars,
   getDaysInMonth,
+  CALENDAR_WEEKDAY_LABELS,
   isCurrentMonth,
   isSameDay,
   startOfDay,
@@ -523,7 +524,7 @@ export function DashboardPage() {
   };
 
   const calTitle = calendarView.toLocaleString(undefined, { month: "long", year: "numeric" });
-  const weekdayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const weekdayLabels = CALENDAR_WEEKDAY_LABELS;
   const toDateInput = (iso: string) => {
     const d = new Date(iso);
     return Number.isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 10);

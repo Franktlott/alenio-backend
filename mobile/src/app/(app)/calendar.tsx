@@ -22,6 +22,7 @@ import type { Task, Team } from "@/lib/types";
 import { useDemoMode } from "@/lib/useDemo";
 import { getUSHolidays, type USFederalHoliday } from "@/lib/us-federal-holidays";
 import { eventShowsScheduledTime, formatEventTimeRange } from "@/lib/format-event-time";
+import { CALENDAR_WEEKDAY_LABELS, getDaysInMonth } from "@/lib/calendar-grid";
 
 type CalendarEvent = {
   id: string;
@@ -50,7 +51,6 @@ type WeekBar = {
   isVideoMeeting?: boolean;
 };
 
-const DAYS_OF_WEEK = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTHS = [
   "January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December",
@@ -76,35 +76,6 @@ function canShowVideoJoinOnEvent(event: CalendarEvent, now: number, isOwnerOrLea
 
 function startOfDay(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
-}
-
-function getDaysInMonth(date: Date): Date[] {
-  const year = date.getFullYear();
-  const month = date.getMonth();
-  const firstDay = new Date(year, month, 1).getDay();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const days: Date[] = [];
-
-  // Pad start with trailing days from previous month
-  const prevMonthDays = new Date(year, month, 0).getDate();
-  for (let i = firstDay - 1; i >= 0; i--) {
-    days.push(new Date(year, month - 1, prevMonthDays - i));
-  }
-
-  // Current month
-  for (let d = 1; d <= daysInMonth; d++) {
-    days.push(new Date(year, month, d));
-  }
-
-  // Pad end with leading days from next month to complete the last week
-  const remaining = days.length % 7;
-  if (remaining !== 0) {
-    for (let d = 1; d <= 7 - remaining; d++) {
-      days.push(new Date(year, month + 1, d));
-    }
-  }
-
-  return days;
 }
 
 function isCurrentMonth(day: Date, month: Date): boolean {
@@ -345,7 +316,7 @@ export default function CalendarScreen() {
         <View style={{ backgroundColor: "white", marginHorizontal: 12, marginTop: 12, borderRadius: 16, shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 2, overflow: "hidden" }}>
           {/* Day of week headers */}
           <View style={{ flexDirection: "row", paddingTop: 10, paddingBottom: 6, borderBottomWidth: 1, borderBottomColor: "#F1F5F9" }}>
-            {DAYS_OF_WEEK.map((d) => (
+            {CALENDAR_WEEKDAY_LABELS.map((d) => (
               <View key={d} style={{ flex: 1, alignItems: "center" }}>
                 <Text style={{ fontSize: 11, fontWeight: "600", color: "#94A3B8" }}>{d}</Text>
               </View>
