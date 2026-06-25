@@ -554,6 +554,7 @@ tasksRouter.get("/member-stats", async (c) => {
           dueDate: true,
           completedAt: true,
           oneOnOneMeetingId: true,
+          oneOnOneMeeting: { select: { status: true } },
         },
       },
     },
@@ -574,7 +575,13 @@ tasksRouter.get("/member-stats", async (c) => {
   // Group by userId
   const userTasks: Record<
     string,
-    { status: string; dueDate: Date | null; completedAt: Date | null; oneOnOneMeetingId: string | null }[]
+    {
+      status: string;
+      dueDate: Date | null;
+      completedAt: Date | null;
+      oneOnOneMeetingId: string | null;
+      oneOnOneMeeting: { status: string } | null;
+    }[]
   > = {};
   for (const a of assignments) {
     if (!userTasks[a.userId]) userTasks[a.userId] = [];
@@ -612,7 +619,9 @@ tasksRouter.get("/member-stats", async (c) => {
         activeTasks++;
         const isOverdue = !!(t.dueDate && t.dueDate < now);
         if (isOverdue) overdueTasks++;
-        if (t.oneOnOneMeetingId) {
+        const isCheckInFollowUp =
+          !!t.oneOnOneMeetingId && t.oneOnOneMeeting?.status === "published";
+        if (isCheckInFollowUp) {
           openFollowUpTasks++;
           if (isOverdue) overdueFollowUpTasks++;
         }

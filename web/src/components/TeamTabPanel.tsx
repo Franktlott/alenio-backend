@@ -40,7 +40,7 @@ import {
   formatActiveGoalsTitle,
   formatDaysSinceCheckIn,
   formatDaysSinceCheckInTitle,
-  formatFollowUpTasksDisplay,
+  formatOverdueFollowUpTasksDisplay,
   formatTaskStreakTitle,
   formatTaskStreakValue,
 } from "../lib/member-stats-display";
@@ -815,10 +815,9 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                 const streak = stats?.streak ?? 0;
                 const daysSinceCheckIn = stats?.daysSinceLastOneOnOne;
                 const activeGoals = stats?.activeDevGoals ?? 0;
-                const openFollowUps = stats?.openFollowUpTasks ?? 0;
                 const overdueFollowUps = stats?.overdueFollowUpTasks ?? 0;
                 const followUpDisplay = statsReady
-                  ? formatFollowUpTasksDisplay(openFollowUps, overdueFollowUps)
+                  ? formatOverdueFollowUpTasksDisplay(overdueFollowUps)
                   : null;
                 const cardClass = `enterprise-team-roster-card${isSelected ? " enterprise-team-roster-card--selected" : ""}${isSelf ? " enterprise-team-roster-card--self" : ""}${!canView ? " enterprise-team-roster-card--static" : ""}`;
                 const cardBody = (
@@ -849,14 +848,14 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                             value={statsReady ? formatActiveGoalsCount(activeGoals) : "…"}
                             title={statsReady ? formatActiveGoalsTitle(activeGoals) : undefined}
                           />
-                          <RosterKpi
-                            label={followUpDisplay?.label ?? "Open follow-ups"}
-                            value={followUpDisplay?.value ?? "…"}
-                            title={followUpDisplay?.title}
-                            valueClassName={
-                              followUpDisplay?.overdue ? "enterprise-team-roster-kpi-value--overdue" : undefined
-                            }
-                          />
+                          {followUpDisplay ? (
+                            <RosterKpi
+                              label={followUpDisplay.label}
+                              value={followUpDisplay.value}
+                              title={followUpDisplay.title}
+                              valueClassName="enterprise-team-roster-kpi-value--overdue"
+                            />
+                          ) : null}
                           <RosterKpi
                             label="Streak"
                             value={statsReady ? formatTaskStreakValue(streak, isPaid) : "…"}

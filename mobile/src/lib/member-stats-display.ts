@@ -2,34 +2,21 @@ export type FollowUpTasksDisplay = {
   label: string;
   value: string;
   title: string;
-  overdue: boolean;
+  overdue: true;
 };
 
-/** Open follow-up count; shows overdue count when any follow-ups are overdue. */
-export function formatFollowUpTasksDisplay(
-  openFollowUpTasks: number,
+/** Roster KPI for overdue check-in follow-ups only; hidden when none are overdue. */
+export function formatOverdueFollowUpTasksDisplay(
   overdueFollowUpTasks: number,
-): FollowUpTasksDisplay {
-  if (overdueFollowUpTasks > 0) {
-    return {
-      label: "Overdue",
-      value: String(overdueFollowUpTasks),
-      title:
-        overdueFollowUpTasks === 1
-          ? "1 overdue follow-up task"
-          : `${overdueFollowUpTasks} overdue follow-up tasks`,
-      overdue: true,
-    };
-  }
+): FollowUpTasksDisplay | null {
+  if (overdueFollowUpTasks <= 0) return null;
   return {
-    label: "Open follow-ups",
-    value: String(Math.max(0, openFollowUpTasks)),
+    label: "Overdue",
+    value: String(overdueFollowUpTasks),
     title:
-      openFollowUpTasks === 0
-        ? "No open follow-up tasks"
-        : openFollowUpTasks === 1
-          ? "1 open follow-up task"
-          : `${openFollowUpTasks} open follow-up tasks`,
-    overdue: false,
+      overdueFollowUpTasks === 1
+        ? "1 overdue follow-up from a check-in"
+        : `${overdueFollowUpTasks} overdue follow-ups from check-ins`,
+    overdue: true,
   };
 }

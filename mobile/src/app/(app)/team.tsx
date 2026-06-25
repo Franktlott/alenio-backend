@@ -34,7 +34,7 @@ import * as Clipboard from "expo-clipboard";
 import * as ImagePicker from "expo-image-picker";
 import { uploadFile } from "@/lib/upload";
 import { api } from "@/lib/api/api";
-import { formatFollowUpTasksDisplay } from "@/lib/member-stats-display";
+import { formatOverdueFollowUpTasksDisplay } from "@/lib/member-stats-display";
 import { useTeamStore } from "@/lib/state/team-store";
 import { useSession } from "@/lib/auth/use-session";
 import QRCode from "react-native-qrcode-svg";
@@ -832,11 +832,7 @@ export default function TeamScreen() {
             const stats = memberStats?.[item.userId];
             const completed = stats?.completedTasks ?? 0;
             const streak = stats?.streak ?? 0;
-            const followUpDisplay = formatFollowUpTasksDisplay(
-              stats?.openFollowUpTasks ?? 0,
-              stats?.overdueFollowUpTasks ?? 0,
-            );
-            const followUpCount = Number.parseInt(followUpDisplay.value, 10) || 0;
+            const followUpDisplay = formatOverdueFollowUpTasksDisplay(stats?.overdueFollowUpTasks ?? 0);
             const isCurrentUser = item.userId === myId;
             const canView = canViewMemberProfile(item.userId);
             const rowStyle = {
@@ -892,15 +888,11 @@ export default function TeamScreen() {
                         <Text style={{ fontSize: 12, fontWeight: "700", color: "#0F172A" }}>{streak}</Text>
                       </>
                     ) : null}
-                    {canView && followUpCount > 0 ? (
+                    {canView && followUpDisplay ? (
                       <>
-                        {followUpDisplay.overdue ? <AlertCircle size={12} color="#EF4444" /> : null}
+                        <AlertCircle size={12} color="#EF4444" />
                         <Text
-                          style={{
-                            fontSize: 12,
-                            fontWeight: "700",
-                            color: followUpDisplay.overdue ? "#EF4444" : "#0F172A",
-                          }}
+                          style={{ fontSize: 12, fontWeight: "700", color: "#EF4444" }}
                           accessibilityLabel={followUpDisplay.title}
                         >
                           {followUpDisplay.value}
