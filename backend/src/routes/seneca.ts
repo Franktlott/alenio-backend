@@ -310,11 +310,12 @@ senecaRouter.post("/:memberUserId/seneca/assist", zValidator("json", assistBodyS
     2,
   );
 
+  const memberLabel = body.memberName?.trim() || raw.memberName || "the team member";
+  const managerLabel = body.managerName?.trim() || raw.managerName || "the manager";
+
   const actionInstructions: Record<string, string> = {
-    suggest_next_question:
-      "Suggest the next best coaching question based on what's been discussed so far. Return JSON: { result: string (the question), suggestions: string[] (1-2 alternate questions) }",
-    rewrite_feedback:
-      "Rewrite the focusText as clear, supportive, professional manager feedback. Return JSON: { result: string (rewritten text) }",
+    suggest_next_question: `Review the check-in template questions (currentCheckIn.templateFields) and the responses entered so far (currentCheckIn.responses). Suggest 3-5 additional open-ended coaching questions that build on what has already been asked and answered for ${memberLabel}. Do not repeat template questions unless a specific follow-up is warranted. Return JSON: { result: string (one short intro sentence), suggestions: string[] (3-5 additional questions) }`,
+    rewrite_feedback: `Review the full in-progress check-in in currentCheckIn (all template questions and responses). Draft Leader Comments for ${memberLabel} to read after the check-in. Write in ${managerLabel}'s first-person voice as the manager speaking directly to ${memberLabel}. Include: (1) a brief summary of what was discussed, (2) genuine thanks for their time and participation in the check-in, and (3) agreed priorities or a constructive way forward. Keep it warm, professional, and concise (2-4 short paragraphs). This is a draft the manager will edit — provide usable prose, not meta-commentary about the draft. Return JSON: { result: string (the full draft text), suggestions: string[] (0-3 optional alternate closing or next-step phrases) }`,
     notes_to_action_items:
       "Turn the current check-in notes into concrete action items. Return JSON: { result: string (summary), suggestions: string[] (action item bullets) }",
     create_follow_up_task:

@@ -17,6 +17,7 @@ import {
   type OneOnOneTemplateFieldLike,
 } from "../lib/one-on-one-feedback";
 import { appendLeaderCommentsFields, readLeaderCommentsFromMeeting } from "../lib/check-in-leader-comments";
+import { oneOnOnePublishedAt } from "../lib/one-on-one-meeting-dates";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -137,6 +138,7 @@ function serializeMeeting(meeting: {
   templateFields: string;
   responses: string;
   status?: string;
+  publishedAt?: Date | null;
   createdById: string;
   createdAt: Date;
   createdBy?: { id: string; name: string; email: string; image: string | null };
@@ -150,6 +152,7 @@ function serializeMeeting(meeting: {
     templateFields: parseJsonArray(meeting.templateFields),
     responses: parseResponses(meeting.responses),
     status: meeting.status === "draft" ? "draft" : "published",
+    publishedAt: oneOnOnePublishedAt(meeting)?.toISOString() ?? null,
     createdById: meeting.createdById,
     createdAt: meeting.createdAt.toISOString(),
     createdBy: meeting.createdBy,
@@ -194,6 +197,7 @@ async function serializeMeetingWithTasks(meeting: {
   templateFields: string;
   responses: string;
   status?: string;
+  publishedAt?: Date | null;
   createdById: string;
   createdAt: Date;
   createdBy?: { id: string; name: string; email: string; image: string | null };
@@ -519,6 +523,7 @@ oneOnOneMeetingsRouter.post(
             templateFields: templateFieldsJson,
             responses: JSON.stringify(body.responses),
             status: isDraft ? "draft" : "published",
+            publishedAt: isDraft ? null : new Date(),
             createdById: user.id,
           },
           include: meetingInclude,
@@ -631,12 +636,15 @@ oneOnOneMeetingsRouter.patch(
       return c.json({ error: { message: followUpError, code: "VALIDATION_ERROR" } }, 400);
     }
 
+    const publishingNow = existing.status === "draft" && nextStatus === "published";
+
     try {
       await prisma.oneOnOneMeeting.update({
         where: { id: meetingId },
         data: {
           responses: JSON.stringify(body.responses),
           status: nextStatus,
+          ...(publishingNow ? { publishedAt: new Date() } : {}),
         },
       });
 

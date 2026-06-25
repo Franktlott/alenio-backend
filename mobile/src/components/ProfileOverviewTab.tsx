@@ -5,6 +5,7 @@ import {
   fetchOneOnOneMeetings,
   type DevelopmentGoal,
 } from "@/lib/member-profile-api";
+import { oneOnOneDisplayDateMs, oneOnOnePublishedAt } from "@/lib/one-on-one-dates";
 
 type Props = {
   teamId: string;
@@ -122,12 +123,13 @@ export function ProfileOverviewTab({ teamId, memberUserId, streak, overdueTasks 
           (a, b) => new Date(lastUpdatedAt(b)).getTime() - new Date(lastUpdatedAt(a)).getTime(),
         );
       setActiveGoals(active);
-      setOneOnOneCount(meetings.length);
+      const publishedMeetings = meetings.filter((meeting) => meeting.status !== "draft");
+      setOneOnOneCount(publishedMeetings.length);
 
-      const latestMeeting = [...meetings].sort(
-        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      const latestMeeting = [...publishedMeetings].sort(
+        (a, b) => oneOnOneDisplayDateMs(b) - oneOnOneDisplayDateMs(a),
       )[0];
-      setLastOneOnOneDate(latestMeeting?.createdAt ?? null);
+      setLastOneOnOneDate(latestMeeting ? oneOnOnePublishedAt(latestMeeting) : null);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Could not load overview.");
       setActiveGoals([]);

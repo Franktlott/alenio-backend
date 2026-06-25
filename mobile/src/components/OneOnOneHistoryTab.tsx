@@ -33,6 +33,7 @@ import {
   LEADER_COMMENTS_NUDGE_TITLE,
 } from "@/lib/check-in-leader-comments";
 import { meetingNumberFor, downloadOneOnOneMeetingPdf, printOneOnOneMeeting } from "@/lib/one-on-one-print";
+import { oneOnOneDisplayDate, oneOnOneDisplayDateMs } from "@/lib/one-on-one-dates";
 import {
   ASSOCIATE_FEEDBACK_FIELD_ID,
   ASSOCIATE_FEEDBACK_LABEL,
@@ -422,7 +423,7 @@ export function OneOnOneHistoryTab({
     setMenuMeetingId(null);
     Alert.alert(
       "Delete check-in?",
-      `Delete this check-in from ${formatMeetingDate(meeting.createdAt)}? This cannot be undone.`,
+      `Delete this check-in from ${formatMeetingDate(oneOnOneDisplayDate(meeting))}? This cannot be undone.`,
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -916,7 +917,7 @@ export function OneOnOneHistoryTab({
       ) : (
         <View style={{ gap: 10 }}>
           {[...meetings]
-            .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+            .sort((a, b) => oneOnOneDisplayDateMs(b) - oneOnOneDisplayDateMs(a))
             .map((meeting) => {
               const isDraft = meeting.status === "draft";
               const overdueCount = countOverdueFollowUpTasks(meeting.followUpTasks, todayStart);
@@ -961,7 +962,7 @@ export function OneOnOneHistoryTab({
                         ) : null}
                       </View>
                       <Text style={{ fontSize: 12, color: "#64748B", marginTop: 2 }}>
-                        {formatMeetingDate(meeting.createdAt)}
+                        {formatMeetingDate(oneOnOneDisplayDate(meeting))}
                       </Text>
                       <View
                         style={{
@@ -1064,7 +1065,7 @@ export function OneOnOneHistoryTab({
                   {previewMeeting?.templateTitle}
                 </Text>
                 <Text style={{ fontSize: 12, color: "#64748B" }}>
-                  {previewMeeting ? formatMeetingDate(previewMeeting.createdAt) : ""}
+                  {previewMeeting ? formatMeetingDate(oneOnOneDisplayDate(previewMeeting)) : ""}
                 </Text>
               </View>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>

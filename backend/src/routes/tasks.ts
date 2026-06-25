@@ -25,6 +25,7 @@ import {
   buildDevelopmentGoalActivityAlerts,
   reconcileInactiveDevelopmentGoals,
 } from "../lib/development-goal-activity";
+import { oneOnOnePublishedAt } from "../lib/one-on-one-meeting-dates";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -636,9 +637,9 @@ tasksRouter.get("/member-stats", async (c) => {
       },
     }),
     prisma.oneOnOneMeeting.findMany({
-      where: { teamId },
-      select: { memberUserId: true, createdAt: true },
-      orderBy: { createdAt: "desc" },
+      where: { teamId, status: "published" },
+      select: { memberUserId: true, createdAt: true, publishedAt: true },
+      orderBy: [{ publishedAt: "desc" }, { createdAt: "desc" }],
     }),
   ]);
 
@@ -686,7 +687,8 @@ tasksRouter.get("/member-stats", async (c) => {
   const lastOneOnOneByMember: Record<string, Date> = {};
   for (const meeting of oneOnOnes) {
     if (!lastOneOnOneByMember[meeting.memberUserId]) {
-      lastOneOnOneByMember[meeting.memberUserId] = meeting.createdAt;
+      const publishedAt = oneOnOnePublishedAt(meeting);
+      if (publishedAt) lastOneOnOneByMember[meeting.memberUserId] = publishedAt;
     }
   }
 

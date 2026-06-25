@@ -48,15 +48,16 @@ export type LastCheckInInsightSource = {
 };
 
 export function extractLastCheckInSource(
-  meeting: { createdAt: Date; templateTitle: string },
+  meeting: { createdAt: Date; publishedAt?: Date | null; status?: string; templateTitle: string },
   fields: CheckInField[],
   responses: Record<string, string | number>,
   openFollowUps: Array<{ title: string }>,
   now = new Date(),
 ): LastCheckInInsightSource {
+  const completedAt = meeting.publishedAt ?? meeting.createdAt;
   const daysAgo = Math.max(
     0,
-    Math.floor((now.getTime() - meeting.createdAt.getTime()) / (24 * 60 * 60 * 1000)),
+    Math.floor((now.getTime() - completedAt.getTime()) / (24 * 60 * 60 * 1000)),
   );
 
   const discussionPoints: Array<{ label: string; response: string }> = [];
@@ -86,7 +87,7 @@ export function extractLastCheckInSource(
   }
 
   return {
-    date: meeting.createdAt.toISOString(),
+    date: completedAt.toISOString(),
     daysAgo,
     templateTitle: meeting.templateTitle,
     discussionPoints,

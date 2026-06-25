@@ -310,6 +310,8 @@ model OneOnOneMeeting {
   responses      String
   /** draft = saved but not published; published = finalized check-in */
   status         String            @default("published")
+  /** Set when first published; null while draft */
+  publishedAt    DateTime?
   createdById    String
   createdBy      User              @relation("OneOnOneMeetingCreator", fields: [createdById], references: [id])
   createdAt      DateTime          @default(now())

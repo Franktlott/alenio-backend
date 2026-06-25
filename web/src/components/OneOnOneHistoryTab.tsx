@@ -13,6 +13,7 @@ import {
   type OneOnOneFollowUpTaskInput,
 } from "../lib/api";
 import { meetingNumberFor, downloadOneOnOneMeetingPdf, printOneOnOneMeeting } from "../lib/one-on-one-print";
+import { oneOnOneDisplayDate, oneOnOneDisplayDateMs } from "../lib/one-on-one-dates";
 import {
   ASSOCIATE_FEEDBACK_FIELD_ID,
   ASSOCIATE_FEEDBACK_LABEL,
@@ -771,7 +772,7 @@ export function OneOnOneHistoryTab({
   };
 
   const onDelete = async (meeting: OneOnOneMeeting) => {
-    if (!window.confirm(`Delete this check-in from ${formatMeetingDate(meeting.createdAt)}? This cannot be undone.`)) {
+    if (!window.confirm(`Delete this check-in from ${formatMeetingDate(oneOnOneDisplayDate(meeting))}? This cannot be undone.`)) {
       return;
     }
     setErr(null);
@@ -1050,7 +1051,7 @@ export function OneOnOneHistoryTab({
               <p className="enterprise-oneone-templates-kicker">Check-in</p>
               <h2 className="enterprise-oneone-preview-title">{previewMeeting.templateTitle}</h2>
               <p className="enterprise-oneone-preview-meta">
-                {formatMeetingDate(previewMeeting.createdAt)} · Check-in #{meetingNum}
+                {formatMeetingDate(oneOnOneDisplayDate(previewMeeting))} · Check-in #{meetingNum}
                 {managerName ? ` · Manager: ${managerName}` : ""}
               </p>
               <div className="enterprise-oneone-preview-status">
@@ -1197,7 +1198,7 @@ export function OneOnOneHistoryTab({
         : "Edit check-in"
       : selectedTemplate.title;
     const fillSubtitle = editingMeeting
-      ? `${selectedTemplate.title} · ${formatMeetingDate(editingMeeting.createdAt)}`
+      ? `${selectedTemplate.title} · ${formatMeetingDate(oneOnOneDisplayDate(editingMeeting))}`
       : selectedTemplate.description ?? undefined;
     const showSaveDraft = !editingMeeting || editingMeeting.status === "draft";
     const publishLabel = editingMeeting?.status === "draft" ? "Publish check-in" : editingMeeting ? "Save changes" : "Save check-in";
@@ -1437,7 +1438,7 @@ export function OneOnOneHistoryTab({
                         {overdueCount} overdue
                       </span>
                     ) : null}
-                    <span className="enterprise-oneone-history-item-date">{formatMeetingDate(meeting.createdAt)}</span>
+                    <span className="enterprise-oneone-history-item-date">{formatMeetingDate(oneOnOneDisplayDate(meeting))}</span>
                     <MeetingStatusBadge meeting={meeting} />
                   </button>
                   <div className="enterprise-oneone-history-row-menu-wrap">

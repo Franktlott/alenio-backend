@@ -3,6 +3,7 @@ import {
   buildDevelopmentGoalActivityAlerts,
   reconcileInactiveDevelopmentGoals,
 } from "./development-goal-activity";
+import { oneOnOnePublishedAt } from "./one-on-one-meeting-dates";
 
 export type SenecaWorkspaceMemberRow = {
   userId: string;
@@ -79,8 +80,8 @@ export async function buildSenecaWorkspaceContext(
     }),
     prisma.oneOnOneMeeting.findMany({
       where: { teamId, status: "published" },
-      orderBy: { createdAt: "desc" },
-      select: { memberUserId: true, createdAt: true },
+      orderBy: [{ publishedAt: "desc" }, { createdAt: "desc" }],
+      select: { memberUserId: true, createdAt: true, publishedAt: true, status: true },
     }),
   ]);
 
@@ -118,7 +119,8 @@ export async function buildSenecaWorkspaceContext(
   const lastCheckInByUser = new Map<string, Date>();
   for (const meeting of lastMeetings) {
     if (!lastCheckInByUser.has(meeting.memberUserId)) {
-      lastCheckInByUser.set(meeting.memberUserId, meeting.createdAt);
+      const publishedAt = oneOnOnePublishedAt(meeting);
+      if (publishedAt) lastCheckInByUser.set(meeting.memberUserId, publishedAt);
     }
   }
 

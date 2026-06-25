@@ -5,6 +5,7 @@ import {
   extractLastCheckInSource,
   type LastCheckInInsightSource,
 } from "./seneca-last-check-in-insights";
+import { oneOnOnePublishedAt } from "./one-on-one-meeting-dates";
 
 function parseJsonRecord(raw: string): Record<string, string | number> {
   try {
@@ -98,7 +99,7 @@ export async function buildSenecaRawContext(
     }),
     prisma.oneOnOneMeeting.findMany({
       where: { teamId, memberUserId, status: "published" },
-      orderBy: { createdAt: "desc" },
+      orderBy: [{ publishedAt: "desc" }, { createdAt: "desc" }],
       take: 3,
     }),
     prisma.teamActivity.findMany({
@@ -181,7 +182,10 @@ export async function buildSenecaRawContext(
   }
 
   const daysSinceLastOneOnOne = lastMeeting
-    ? Math.floor((now.getTime() - lastMeeting.createdAt.getTime()) / (24 * 60 * 60 * 1000))
+    ? Math.floor(
+        (now.getTime() - (oneOnOnePublishedAt(lastMeeting)?.getTime() ?? lastMeeting.createdAt.getTime())) /
+          (24 * 60 * 60 * 1000),
+      )
     : null;
 
   const recentWins: string[] = [];

@@ -5,6 +5,7 @@ import {
   formatAssociateResponseDisplay,
 } from "./one-on-one-feedback";
 import { ALENIO_LOGO_URL, downloadHtmlAsPdf, escapeHtml, printHtml, safePdfFilename } from "./print-html";
+import { oneOnOneDisplayDate, oneOnOneDisplayDateMs } from "./one-on-one-dates";
 
 export type OneOnOnePrintOptions = {
   meeting: OneOnOneMeeting;
@@ -172,7 +173,7 @@ function buildPrintHtml(options: OneOnOnePrintOptions, logoUrl: string): string 
     "This check-in template is designed to help managers and team members have meaningful conversations, align on priorities, and support ongoing growth and development.";
   const sectionsHtml = renderSections(meeting.templateFields, meeting.responses) + renderAssociateFeedbackHtml(meeting);
   const followUpTasksHtml = renderFollowUpTasksHtml(meeting.followUpTasks ?? []);
-  const dateStr = formatPrintDate(meeting.createdAt);
+  const dateStr = formatPrintDate(oneOnOneDisplayDate(meeting));
   const manager = managerName?.trim() || "—";
   const preparedBy = meeting.createdBy?.name ?? meeting.createdBy?.email ?? "—";
 
@@ -476,8 +477,9 @@ export async function downloadOneOnOneMeetingPdf(options: OneOnOnePrintOptions):
 }
 
 export function meetingNumberFor(meetings: OneOnOneMeeting[], meetingId: string): number {
-  const sorted = [...meetings].sort(
-    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+  const published = meetings.filter((m) => m.status !== "draft");
+  const sorted = [...published].sort(
+    (a, b) => oneOnOneDisplayDateMs(a) - oneOnOneDisplayDateMs(b),
   );
   const idx = sorted.findIndex((m) => m.id === meetingId);
   return idx >= 0 ? idx + 1 : sorted.length;

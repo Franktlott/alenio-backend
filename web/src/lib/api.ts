@@ -1503,6 +1503,7 @@ export type OneOnOneMeeting = {
   templateFields: OneOnOneTemplateField[];
   responses: Record<string, string | number>;
   status?: "draft" | "published";
+  publishedAt?: string | null;
   createdById: string;
   createdAt: string;
   createdBy?: { id: string; name: string; email: string; image: string | null };

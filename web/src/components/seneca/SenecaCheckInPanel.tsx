@@ -31,21 +31,14 @@ type Props = {
 };
 
 const ACTIONS: { action: SenecaAssistAction; label: string }[] = [
-  { action: "suggest_next_question", label: "Suggest next question" },
-  { action: "rewrite_feedback", label: "Leadership review" },
+  { action: "suggest_next_question", label: "Suggest additional questions" },
+  { action: "rewrite_feedback", label: "Generate Leadership Comments Draft" },
   { action: "notes_to_action_items", label: "Turn notes into action items" },
   { action: "summarize_conversation", label: "Summarize conversation" },
 ];
 
-function buildLeaderCommitmentsText(result: SenecaAssistResult): string {
-  const parts: string[] = [];
-  const main = result.result?.trim();
-  if (main) parts.push(main);
-  const suggestions = result.suggestions?.map((item) => item.trim()).filter(Boolean) ?? [];
-  if (suggestions.length > 0) {
-    parts.push(suggestions.map((item) => `• ${item}`).join("\n"));
-  }
-  return parts.join("\n\n");
+function leadershipCommentsDraftText(result: SenecaAssistResult): string {
+  return result.result?.trim() ?? "";
 }
 
 function mergeLeaderCommitments(existing: string | number | undefined, next: string): string {
@@ -155,7 +148,7 @@ export function SenecaCheckInPanel({
   };
 
   const leaderCommitmentsFieldId = findLeaderCommitmentsFieldId(template.fields);
-  const leaderCommitmentsText = result ? buildLeaderCommitmentsText(result) : "";
+  const leadershipDraftText = result ? leadershipCommentsDraftText(result) : "";
 
   const panelBody = (
     <>
@@ -195,18 +188,18 @@ export function SenecaCheckInPanel({
           ) : null}
 
           <div className="seneca-checkin-result-actions">
-            {lastAction === "rewrite_feedback" && leaderCommitmentsFieldId && leaderCommitmentsText ? (
+            {lastAction === "rewrite_feedback" && leaderCommitmentsFieldId && leadershipDraftText ? (
               <button
                 type="button"
                 className="seneca-checkin-apply-btn"
                 onClick={() =>
                   onApplyText(
                     leaderCommitmentsFieldId,
-                    mergeLeaderCommitments(responses[leaderCommitmentsFieldId], leaderCommitmentsText),
+                    mergeLeaderCommitments(responses[leaderCommitmentsFieldId], leadershipDraftText),
                   )
                 }
               >
-                Apply to leader commitments
+                Use draft in leader comments
               </button>
             ) : null}
             {result.followUpTasks && result.followUpTasks.length > 0 ? (

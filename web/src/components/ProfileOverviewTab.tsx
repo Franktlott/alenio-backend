@@ -5,6 +5,7 @@ import {
   type DevelopmentGoal,
 } from "../lib/api";
 import { formatTaskStreakValue } from "../lib/member-stats-display";
+import { oneOnOneDisplayDateMs, oneOnOnePublishedAt } from "../lib/one-on-one-dates";
 
 type Props = {
   teamId: string;
@@ -89,9 +90,9 @@ export function ProfileOverviewTab({
       setOneOnOneCount(publishedMeetings.length);
 
       const latestMeeting = [...publishedMeetings].sort(
-        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+        (a, b) => oneOnOneDisplayDateMs(b) - oneOnOneDisplayDateMs(a),
       )[0];
-      setLastOneOnOneDate(latestMeeting?.createdAt ?? null);
+      setLastOneOnOneDate(latestMeeting ? oneOnOnePublishedAt(latestMeeting) : null);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Could not load overview.");
       setActiveGoals([]);
