@@ -13750,6 +13750,8 @@ button.enterprise-profile-legal-link {
   padding: 0.55rem 1.125rem;
   border-bottom: 1px solid #e2e8f0;
   background: #fff;
+  justify-content: space-between;
+  gap: 0.75rem;
 }
 
 .enterprise-dashboard-pro .enterprise-select-label {
@@ -14629,6 +14631,180 @@ button.enterprise-profile-legal-link {
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
 }
 
+.enterprise-workspace-followup-panel {
+  padding: 0 1.125rem 0.85rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.enterprise-workspace-followup-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.85rem;
+}
+
+.enterprise-workspace-followup-scope {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.enterprise-workspace-followup-scope-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: none;
+  background: transparent;
+  padding: 0.35rem 0.15rem;
+  margin: 0;
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #64748b;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+
+.enterprise-workspace-followup-scope-tab-static {
+  cursor: default;
+}
+
+.enterprise-workspace-followup-scope-tab-on {
+  color: #6366f1;
+  border-bottom-color: #6366f1;
+}
+
+.enterprise-workspace-followup-sort {
+  margin-left: auto;
+}
+
+.enterprise-workspace-followup-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.enterprise-workspace-followup-stat {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.7rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  min-width: 0;
+}
+
+.enterprise-workspace-followup-stat-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.enterprise-workspace-followup-stat-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+  min-width: 0;
+}
+
+.enterprise-workspace-followup-stat-copy strong {
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.enterprise-workspace-followup-stat-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.enterprise-workspace-followup-stat-sub {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: #64748b;
+  line-height: 1.25;
+}
+
+.enterprise-workspace-followup-stat--attention {
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
+.enterprise-workspace-followup-stat--attention .enterprise-workspace-followup-stat-icon {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.enterprise-workspace-followup-stat--attention strong {
+  color: #dc2626;
+}
+
+.enterprise-workspace-followup-stat--soon {
+  background: #fff7ed;
+  border-color: #fed7aa;
+}
+
+.enterprise-workspace-followup-stat--soon .enterprise-workspace-followup-stat-icon {
+  background: #ffedd5;
+  color: #ea580c;
+}
+
+.enterprise-workspace-followup-stat--soon strong {
+  color: #ea580c;
+}
+
+.enterprise-workspace-followup-stat--track {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+
+.enterprise-workspace-followup-stat--track .enterprise-workspace-followup-stat-icon {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.enterprise-workspace-followup-stat--track strong {
+  color: #16a34a;
+}
+
+.enterprise-workspace-followup-stat--avg {
+  background: #f5f3ff;
+  border-color: #ddd6fe;
+}
+
+.enterprise-workspace-followup-stat--avg .enterprise-workspace-followup-stat-icon {
+  background: #ede9fe;
+  color: #7c3aed;
+}
+
+.enterprise-workspace-followup-stat--avg strong {
+  color: #7c3aed;
+}
+
+@media (max-width: 1100px) {
+  .enterprise-workspace-followup-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .enterprise-workspace-followup-stats {
+    grid-template-columns: 1fr;
+  }
+}
+
+.enterprise-dashboard-pro .enterprise-workspace-followup-panel {
+  padding-left: 1.125rem;
+  padding-right: 1.125rem;
+}
+
 .enterprise-workspace-overdue-banner {
   display: flex;
   align-items: center;
@@ -14660,6 +14836,8 @@ button.enterprise-profile-legal-link {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
   margin-bottom: 0.75rem;
 }
 
