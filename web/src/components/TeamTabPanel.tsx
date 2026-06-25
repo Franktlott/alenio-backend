@@ -40,6 +40,7 @@ import {
   formatActiveGoalsTitle,
   formatDaysSinceCheckIn,
   formatDaysSinceCheckInTitle,
+  formatFollowUpTasksDisplay,
   formatTaskStreakTitle,
   formatTaskStreakValue,
 } from "../lib/member-stats-display";
@@ -76,16 +77,18 @@ function RosterKpi({
   value,
   title,
   icon,
+  valueClassName,
 }: {
   label: string;
   value: string;
   title?: string;
   icon?: React.ReactNode;
+  valueClassName?: string;
 }) {
   return (
     <span className="enterprise-team-roster-kpi" title={title}>
       <span className="enterprise-team-roster-kpi-label">{label}</span>
-      <span className="enterprise-team-roster-kpi-value">
+      <span className={`enterprise-team-roster-kpi-value${valueClassName ? ` ${valueClassName}` : ""}`}>
         {icon}
         {value}
       </span>
@@ -812,7 +815,11 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                 const streak = stats?.streak ?? 0;
                 const daysSinceCheckIn = stats?.daysSinceLastOneOnOne;
                 const activeGoals = stats?.activeDevGoals ?? 0;
-                const overdue = stats?.overdueTasks ?? 0;
+                const openFollowUps = stats?.openFollowUpTasks ?? 0;
+                const overdueFollowUps = stats?.overdueFollowUpTasks ?? 0;
+                const followUpDisplay = statsReady
+                  ? formatFollowUpTasksDisplay(openFollowUps, overdueFollowUps)
+                  : null;
                 const cardClass = `enterprise-team-roster-card${isSelected ? " enterprise-team-roster-card--selected" : ""}${isSelf ? " enterprise-team-roster-card--self" : ""}${!canView ? " enterprise-team-roster-card--static" : ""}`;
                 const cardBody = (
                   <>
@@ -828,11 +835,6 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                           <span className="enterprise-team-roster-name">
                             {displayName}
                             {isSelf ? " (you)" : ""}
-                            {canView && overdue > 0 ? (
-                              <span className="enterprise-team-roster-overdue" title={`${overdue} overdue task${overdue !== 1 ? "s" : ""}`}>
-                                {overdue} overdue
-                              </span>
-                            ) : null}
                           </span>
                           <span className="enterprise-team-roster-role">{roleAbbrev(m.role)}</span>
                         </span>
@@ -846,6 +848,14 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                             label="Goals"
                             value={statsReady ? formatActiveGoalsCount(activeGoals) : "…"}
                             title={statsReady ? formatActiveGoalsTitle(activeGoals) : undefined}
+                          />
+                          <RosterKpi
+                            label={followUpDisplay?.label ?? "Open follow-ups"}
+                            value={followUpDisplay?.value ?? "…"}
+                            title={followUpDisplay?.title}
+                            valueClassName={
+                              followUpDisplay?.overdue ? "enterprise-team-roster-kpi-value--overdue" : undefined
+                            }
                           />
                           <RosterKpi
                             label="Streak"

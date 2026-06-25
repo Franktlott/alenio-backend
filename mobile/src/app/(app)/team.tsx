@@ -34,6 +34,7 @@ import * as Clipboard from "expo-clipboard";
 import * as ImagePicker from "expo-image-picker";
 import { uploadFile } from "@/lib/upload";
 import { api } from "@/lib/api/api";
+import { formatFollowUpTasksDisplay } from "@/lib/member-stats-display";
 import { useTeamStore } from "@/lib/state/team-store";
 import { useSession } from "@/lib/auth/use-session";
 import QRCode from "react-native-qrcode-svg";
@@ -377,7 +378,20 @@ export default function TeamScreen() {
   const { data: memberStats } = useQuery({
     queryKey: ["member-stats", activeTeamId],
     queryFn: () =>
-      api.get<Record<string, { activeTasks: number; overdueTasks: number; completedTasks: number; streak: number; personalBestStreak: number }>>(
+      api.get<
+        Record<
+          string,
+          {
+            activeTasks: number;
+            overdueTasks: number;
+            completedTasks: number;
+            streak: number;
+            personalBestStreak: number;
+            openFollowUpTasks?: number;
+            overdueFollowUpTasks?: number;
+          }
+        >
+      >(
         `/api/teams/${activeTeamId}/tasks/member-stats`
       ),
     enabled: !!activeTeamId,
@@ -817,8 +831,12 @@ export default function TeamScreen() {
           {sortedMembers.map((item: TeamMember) => {
             const stats = memberStats?.[item.userId];
             const completed = stats?.completedTasks ?? 0;
-            const overdue = stats?.overdueTasks ?? 0;
             const streak = stats?.streak ?? 0;
+            const followUpDisplay = formatFollowUpTasksDisplay(
+              stats?.openFollowUpTasks ?? 0,
+              stats?.overdueFollowUpTasks ?? 0,
+            );
+            const followUpCount = Number.parseInt(followUpDisplay.value, 10) || 0;
             const isCurrentUser = item.userId === myId;
             const canView = canViewMemberProfile(item.userId);
             const rowStyle = {
@@ -874,10 +892,19 @@ export default function TeamScreen() {
                         <Text style={{ fontSize: 12, fontWeight: "700", color: "#0F172A" }}>{streak}</Text>
                       </>
                     ) : null}
-                    {canView && overdue > 0 ? (
+                    {canView && followUpCount > 0 ? (
                       <>
-                        <AlertCircle size={12} color="#EF4444" />
-                        <Text style={{ fontSize: 12, fontWeight: "700", color: "#EF4444" }}>{overdue}</Text>
+                        {followUpDisplay.overdue ? <AlertCircle size={12} color="#EF4444" /> : null}
+                        <Text
+                          style={{
+                            fontSize: 12,
+                            fontWeight: "700",
+                            color: followUpDisplay.overdue ? "#EF4444" : "#0F172A",
+                          }}
+                          accessibilityLabel={followUpDisplay.title}
+                        >
+                          {followUpDisplay.value}
+                        </Text>
                       </>
                     ) : null}
                   </View>

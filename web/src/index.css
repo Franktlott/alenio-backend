@@ -3373,6 +3373,10 @@ input {
   color: #334155;
 }
 
+.enterprise-team-roster-kpi-value--overdue {
+  color: #dc2626;
+}
+
 .enterprise-team-roster-kpi-icon {
   font-size: 0.75rem;
 }

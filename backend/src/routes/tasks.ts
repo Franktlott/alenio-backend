@@ -548,7 +548,14 @@ tasksRouter.get("/member-stats", async (c) => {
   const assignments = await prisma.taskAssignment.findMany({
     where: { task: { teamId } },
     include: {
-      task: { select: { status: true, dueDate: true, completedAt: true } },
+      task: {
+        select: {
+          status: true,
+          dueDate: true,
+          completedAt: true,
+          oneOnOneMeetingId: true,
+        },
+      },
     },
   });
 
@@ -565,7 +572,10 @@ tasksRouter.get("/member-stats", async (c) => {
   for (const m of teamMembers) storedStreaks[m.userId] = m.currentStreak;
 
   // Group by userId
-  const userTasks: Record<string, { status: string; dueDate: Date | null; completedAt: Date | null }[]> = {};
+  const userTasks: Record<
+    string,
+    { status: string; dueDate: Date | null; completedAt: Date | null; oneOnOneMeetingId: string | null }[]
+  > = {};
   for (const a of assignments) {
     if (!userTasks[a.userId]) userTasks[a.userId] = [];
     userTasks[a.userId]!.push(a.task);
@@ -582,6 +592,8 @@ tasksRouter.get("/member-stats", async (c) => {
       activeDevGoals: number;
       devEngagementPct: number;
       daysSinceLastOneOnOne: number | null;
+      openFollowUpTasks: number;
+      overdueFollowUpTasks: number;
     }
   > = {};
 
@@ -592,11 +604,18 @@ tasksRouter.get("/member-stats", async (c) => {
     let activeTasks = 0;
     let overdueTasks = 0;
     let completedTasks = 0;
+    let openFollowUpTasks = 0;
+    let overdueFollowUpTasks = 0;
 
     for (const t of tasks) {
       if (t.status !== "done") {
         activeTasks++;
-        if (t.dueDate && t.dueDate < now) overdueTasks++;
+        const isOverdue = !!(t.dueDate && t.dueDate < now);
+        if (isOverdue) overdueTasks++;
+        if (t.oneOnOneMeetingId) {
+          openFollowUpTasks++;
+          if (isOverdue) overdueFollowUpTasks++;
+        }
       } else {
         if (t.completedAt && t.completedAt >= monthStart && t.completedAt <= monthEnd) completedTasks++;
       }
@@ -614,6 +633,8 @@ tasksRouter.get("/member-stats", async (c) => {
       activeDevGoals: 0,
       devEngagementPct: 0,
       daysSinceLastOneOnOne: null,
+      openFollowUpTasks,
+      overdueFollowUpTasks,
     };
   }
 
@@ -626,6 +647,8 @@ tasksRouter.get("/member-stats", async (c) => {
     activeDevGoals: 0,
     devEngagementPct: 0,
     daysSinceLastOneOnOne: null as number | null,
+    openFollowUpTasks: 0,
+    overdueFollowUpTasks: 0,
   });
 
   // Also include members with no tasks but a stored streak

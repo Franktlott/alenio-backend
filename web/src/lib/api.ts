@@ -1014,6 +1014,8 @@ export type TeamMemberStatsRow = {
   activeDevGoals: number;
   devEngagementPct: number;
   daysSinceLastOneOnOne: number | null;
+  openFollowUpTasks: number;
+  overdueFollowUpTasks: number;
 };
 
 export type TeamMemberStatsMap = Record<string, TeamMemberStatsRow>;
