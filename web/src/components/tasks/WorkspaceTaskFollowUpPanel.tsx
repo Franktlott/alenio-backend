@@ -1,6 +1,7 @@
 import {
   TASK_DUE_SOON_DAYS,
   formatAvgFollowUpDays,
+  type TaskFollowUpStats,
 } from "../../lib/task-follow-up-stats";
 
 type TaskScope = "mine" | "team";
@@ -9,10 +10,7 @@ type Props = {
   taskScope: TaskScope;
   canViewTeamScope: boolean;
   stats: TaskFollowUpStats;
-  sortBy: "due" | "priority" | "completed";
-  showCompletionSort: boolean;
   onScopeChange: (scope: TaskScope) => void;
-  onSortChange: (sort: "due" | "priority" | "completed") => void;
 };
 
 function PersonIcon() {
@@ -39,10 +37,7 @@ export function WorkspaceTaskFollowUpPanel({
   taskScope,
   canViewTeamScope,
   stats,
-  sortBy,
-  showCompletionSort,
   onScopeChange,
-  onSortChange,
 }: Props) {
   return (
     <div className="enterprise-workspace-followup-panel">
@@ -72,19 +67,6 @@ export function WorkspaceTaskFollowUpPanel({
             </div>
           )}
         </div>
-        <label className="enterprise-select-label enterprise-workspace-followup-sort">
-          Sort by
-          <select
-            className="enterprise-select"
-            value={sortBy}
-            onChange={(e) => onSortChange(e.target.value as "due" | "priority" | "completed")}
-            aria-label="Sort tasks"
-          >
-            <option value="due">Due date</option>
-            <option value="priority">Priority</option>
-            {showCompletionSort ? <option value="completed">Completion date</option> : null}
-          </select>
-        </label>
       </div>
 
       <div className="enterprise-workspace-followup-stats" aria-label="Follow-up summary">

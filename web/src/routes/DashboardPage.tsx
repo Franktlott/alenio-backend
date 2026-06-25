@@ -618,35 +618,11 @@ export function DashboardPage() {
             className={`enterprise-card enterprise-card-cal${evMenuId ? " enterprise-card-cal--menu-open" : ""}`}
             aria-labelledby="cal-heading"
           >
-            <div className="enterprise-card-head">
+            <div className="enterprise-card-head enterprise-cal-card-head">
               <h2 id="cal-heading" className="enterprise-card-title">
                 Calendar
               </h2>
-              <div className="enterprise-cal-head-actions">
-                {isOwnerOrLeader && pendingCalendarEvents.length > 0 ? (
-                  <button
-                    type="button"
-                    className="enterprise-team-pending-chip"
-                    onClick={() => setPendingCalendarOpen(true)}
-                    aria-label={`${pendingCalendarEvents.length} pending calendar request${pendingCalendarEvents.length !== 1 ? "s" : ""}`}
-                  >
-                    {pendingCalendarEvents.length} pending
-                  </button>
-                ) : null}
-                {selectedTeamId ? (
-                <button
-                  type="button"
-                  className="enterprise-task-modal-btn enterprise-task-modal-btn-secondary"
-                  onClick={() => {
-                    if (!selectedTeamId) return;
-                    if (isOwnerOrLeader) setEventAddChoiceOpen(true);
-                    else beginNewPersonalEvent();
-                  }}
-                >
-                  + Add event
-                </button>
-                ) : null}
-                <div className="enterprise-cal-nav">
+              <div className="enterprise-cal-nav">
                 <button
                   type="button"
                   className="enterprise-cal-nav-btn"
@@ -664,7 +640,31 @@ export function DashboardPage() {
                 >
                   ›
                 </button>
-                </div>
+              </div>
+              <div className="enterprise-cal-head-actions">
+                {isOwnerOrLeader && pendingCalendarEvents.length > 0 ? (
+                  <button
+                    type="button"
+                    className="enterprise-team-pending-chip"
+                    onClick={() => setPendingCalendarOpen(true)}
+                    aria-label={`${pendingCalendarEvents.length} pending calendar request${pendingCalendarEvents.length !== 1 ? "s" : ""}`}
+                  >
+                    {pendingCalendarEvents.length} pending
+                  </button>
+                ) : null}
+                {selectedTeamId ? (
+                  <button
+                    type="button"
+                    className="enterprise-task-modal-btn enterprise-task-modal-btn-secondary"
+                    onClick={() => {
+                      if (!selectedTeamId) return;
+                      if (isOwnerOrLeader) setEventAddChoiceOpen(true);
+                      else beginNewPersonalEvent();
+                    }}
+                  >
+                    + Add event
+                  </button>
+                ) : null}
               </div>
             </div>
             <div className={`enterprise-cal-mobile-wrap${evMenuId ? " enterprise-cal-mobile-wrap--menu-open" : ""}`}>
@@ -1004,13 +1004,10 @@ export function DashboardPage() {
               taskScope={taskScope}
               canViewTeamScope={canViewTeamTab}
               stats={followUpStats}
-              sortBy={sortBy}
-              showCompletionSort={taskTab === "completed"}
               onScopeChange={(scope) => {
                 if (overdueFocus) clearOverdueFocus();
                 setTaskScope(scope);
               }}
-              onSortChange={setSortBy}
             />
             {overdueFocus ? (
               <div className="enterprise-workspace-overdue-banner" role="status">
@@ -1038,24 +1035,39 @@ export function DashboardPage() {
                   </button>
                 ))}
               </div>
-              {taskScope === "team" && teamDetail?.members?.length ? (
+              <div className="enterprise-task-toolbar-filters">
+                {taskScope === "team" && teamDetail?.members?.length ? (
+                  <label className="enterprise-select-label">
+                    Member
+                    <select
+                      className="enterprise-select"
+                      value={teamMemberFilter}
+                      onChange={(e) => setTeamMemberFilter(e.target.value)}
+                      aria-label="Filter by team member"
+                    >
+                      <option value="all">All members</option>
+                      {teamDetail.members.map((m) => (
+                        <option key={m.userId} value={m.userId}>
+                          {m.user.name ?? m.user.email ?? m.userId}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
                 <label className="enterprise-select-label">
-                  Member
+                  Sort by
                   <select
                     className="enterprise-select"
-                    value={teamMemberFilter}
-                    onChange={(e) => setTeamMemberFilter(e.target.value)}
-                    aria-label="Filter by team member"
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value as "due" | "priority" | "completed")}
+                    aria-label="Sort tasks"
                   >
-                    <option value="all">All members</option>
-                    {teamDetail.members.map((m) => (
-                      <option key={m.userId} value={m.userId}>
-                        {m.user.name ?? m.user.email ?? m.userId}
-                      </option>
-                    ))}
+                    <option value="due">Due date</option>
+                    <option value="priority">Priority</option>
+                    {taskTab === "completed" ? <option value="completed">Completion date</option> : null}
                   </select>
                 </label>
-              ) : null}
+              </div>
             </div>
             {taskActionError ? (
               <p className="enterprise-form-error" role="alert" style={{ marginBottom: "0.75rem" }}>
