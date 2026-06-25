@@ -606,10 +606,12 @@ export type ApiTask = {
   oneOnOneMeeting?: {
     id: string;
     memberUserId: string;
+    createdById: string;
     templateTitle: string;
     status?: string;
     publishedAt?: string | null;
     createdAt: string;
+    createdBy?: { id: string; name: string | null; email?: string | null } | null;
   } | null;
 };
 

@@ -14,6 +14,7 @@ type Props = {
   task: ApiTask;
   now?: Date;
   memberNameByUserId?: Record<string, string>;
+  viewerUserId?: string;
   menuOpen: boolean;
   completeBusy?: boolean;
   deleteBusy?: boolean;
@@ -31,6 +32,7 @@ export function WorkspaceTaskRow({
   task,
   now = new Date(),
   memberNameByUserId,
+  viewerUserId,
   menuOpen,
   completeBusy,
   deleteBusy,
@@ -46,7 +48,7 @@ export function WorkspaceTaskRow({
   const isDone = task.status === "done";
   const assignees = task.assignments.map((a) => a.user).filter(Boolean);
   const overdue = isTaskOverdue(task, now);
-  const oneOnOneSource = formatTaskOneOnOneSource(task, memberNameByUserId);
+  const oneOnOneSource = formatTaskOneOnOneSource(task, { memberNameByUserId, viewerUserId });
   const dueDisplay = isDone ? formatDoneDueDisplay(task) : formatTaskDueDisplay(task.dueDate, now);
 
   return (

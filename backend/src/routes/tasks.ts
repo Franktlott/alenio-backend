@@ -340,10 +340,12 @@ tasksRouter.get("/", async (c) => {
         select: {
           id: true,
           memberUserId: true,
+          createdById: true,
           templateTitle: true,
           status: true,
           publishedAt: true,
           createdAt: true,
+          createdBy: { select: { id: true, name: true, email: true } },
         },
       },
     },

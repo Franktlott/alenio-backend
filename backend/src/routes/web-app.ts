@@ -387,10 +387,12 @@ webRouter.get("/api/teams/:id/tasks", async (c) => {
         select: {
           id: true,
           memberUserId: true,
+          createdById: true,
           templateTitle: true,
           status: true,
           publishedAt: true,
           createdAt: true,
+          createdBy: { select: { id: true, name: true, email: true } },
         },
       },
       subtasks: { orderBy: { order: "asc" }, select: { id: true, title: true, completed: true, order: true } },

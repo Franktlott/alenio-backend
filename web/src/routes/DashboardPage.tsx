@@ -1097,6 +1097,7 @@ export function DashboardPage() {
                             task={t}
                             now={now}
                             memberNameByUserId={memberNameByUserId}
+                            viewerUserId={me?.id}
                             menuOpen={taskMenuId === t.id}
                             completeBusy={completeBusyId === t.id}
                             deleteBusy={taskDeleteId === t.id}
