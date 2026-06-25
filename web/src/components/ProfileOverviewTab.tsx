@@ -4,6 +4,7 @@ import {
   fetchOneOnOneMeetings,
   type DevelopmentGoal,
 } from "../lib/api";
+import { formatTaskStreakValue } from "../lib/member-stats-display";
 
 type Props = {
   teamId: string;
@@ -121,7 +122,9 @@ export function ProfileOverviewTab({
       value: loading ? "—" : lastOneOnOneDate ? daysSinceText(daysSinceOneOnOne ?? 0) : "—",
     },
     { label: "Total check-ins", value: loading ? "—" : String(oneOnOneCount) },
-    ...(streak != null && streak > 0 ? [{ label: "Streak", value: `${streak}d` }] : []),
+    ...(streak != null && streak > 0
+      ? [{ label: "Task streak", value: formatTaskStreakValue(streak, true) }]
+      : []),
     ...(overdueTasks != null && overdueTasks > 0
       ? [{ label: "Overdue", value: String(overdueTasks), tone: "warning" as const }]
       : []),

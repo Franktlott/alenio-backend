@@ -35,6 +35,14 @@ import {
   type WebTeamMemberRow,
   type WebTeamRow,
 } from "../lib/api";
+import {
+  formatActiveGoalsCount,
+  formatActiveGoalsTitle,
+  formatDaysSinceCheckIn,
+  formatDaysSinceCheckInTitle,
+  formatTaskStreakTitle,
+  formatTaskStreakValue,
+} from "../lib/member-stats-display";
 
 function isTaskOverdue(t: ApiTask, todayStart: Date): boolean {
   if (t.status === "done") return false;
@@ -63,10 +71,26 @@ function roleAbbrev(role: string): string {
   return "MBR";
 }
 
-function formatStreakLabel(streak: number, paid: boolean): string {
-  if (!paid) return "—";
-  if (streak <= 0) return "0d";
-  return `${streak}d`;
+function RosterKpi({
+  label,
+  value,
+  title,
+  icon,
+}: {
+  label: string;
+  value: string;
+  title?: string;
+  icon?: React.ReactNode;
+}) {
+  return (
+    <span className="enterprise-team-roster-kpi" title={title}>
+      <span className="enterprise-team-roster-kpi-label">{label}</span>
+      <span className="enterprise-team-roster-kpi-value">
+        {icon}
+        {value}
+      </span>
+    </span>
+  );
 }
 
 function IconLock({ className }: { className?: string }) {
@@ -786,6 +810,8 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                 const stats = memberStats?.[m.userId];
                 const statsReady = memberStats !== null;
                 const streak = stats?.streak ?? 0;
+                const daysSinceCheckIn = stats?.daysSinceLastOneOnOne;
+                const activeGoals = stats?.activeDevGoals ?? 0;
                 const overdue = stats?.overdueTasks ?? 0;
                 const cardClass = `enterprise-team-roster-card${isSelected ? " enterprise-team-roster-card--selected" : ""}${isSelf ? " enterprise-team-roster-card--self" : ""}${!canView ? " enterprise-team-roster-card--static" : ""}`;
                 const cardBody = (
@@ -811,19 +837,28 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                           <span className="enterprise-team-roster-role">{roleAbbrev(m.role)}</span>
                         </span>
                         <span className="enterprise-team-roster-kpis">
-                          <span className="enterprise-team-roster-kpi">
-                            <span className="enterprise-team-roster-kpi-label">Streak</span>
-                            <span className="enterprise-team-roster-kpi-value">
-                              {statsReady ? (
-                                <>
-                                  {isPaid && streak > 0 ? <span className="enterprise-team-roster-kpi-icon" aria-hidden>🔥 </span> : null}
-                                  {formatStreakLabel(streak, isPaid)}
-                                </>
-                              ) : (
-                                "…"
-                              )}
-                            </span>
-                          </span>
+                          <RosterKpi
+                            label="Check-in"
+                            value={statsReady ? formatDaysSinceCheckIn(daysSinceCheckIn) : "…"}
+                            title={statsReady ? formatDaysSinceCheckInTitle(daysSinceCheckIn) : undefined}
+                          />
+                          <RosterKpi
+                            label="Goals"
+                            value={statsReady ? formatActiveGoalsCount(activeGoals) : "…"}
+                            title={statsReady ? formatActiveGoalsTitle(activeGoals) : undefined}
+                          />
+                          <RosterKpi
+                            label="Streak"
+                            value={statsReady ? formatTaskStreakValue(streak, isPaid) : "…"}
+                            title={statsReady && isPaid ? formatTaskStreakTitle(streak) : undefined}
+                            icon={
+                              statsReady && isPaid && streak > 0 ? (
+                                <span className="enterprise-team-roster-kpi-icon" aria-hidden>
+                                  🔥{" "}
+                                </span>
+                              ) : null
+                            }
+                          />
                         </span>
                       </span>
                       {canView ? (
