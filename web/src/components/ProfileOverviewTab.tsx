@@ -13,7 +13,7 @@ type Props = {
   roleLabel: string;
   email?: string | null;
   streak?: number;
-  overdueTasks?: number;
+  overdueFollowUpTasks?: number;
 };
 
 function formatDateOnly(iso: string): string {
@@ -63,7 +63,7 @@ export function ProfileOverviewTab({
   roleLabel,
   email,
   streak,
-  overdueTasks,
+  overdueFollowUpTasks,
 }: Props) {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
@@ -126,8 +126,8 @@ export function ProfileOverviewTab({
     ...(streak != null && streak > 0
       ? [{ label: "Task streak", value: formatTaskStreakValue(streak, true) }]
       : []),
-    ...(overdueTasks != null && overdueTasks > 0
-      ? [{ label: "Overdue", value: String(overdueTasks), tone: "warning" as const }]
+    ...(overdueFollowUpTasks != null && overdueFollowUpTasks > 0
+      ? [{ label: "Overdue", value: String(overdueFollowUpTasks), tone: "warning" as const }]
       : []),
   ];
 

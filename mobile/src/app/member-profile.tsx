@@ -102,6 +102,7 @@ export default function MemberProfileScreen() {
             completedTasks: number;
             streak: number;
             personalBestStreak: number;
+            overdueFollowUpTasks?: number;
           }
         >
       >(`/api/teams/${teamId}/tasks/member-stats`),
@@ -404,7 +405,7 @@ export default function MemberProfileScreen() {
               teamId={teamId}
               memberUserId={memberUserId}
               streak={isPaid ? stats?.streak : undefined}
-              overdueTasks={stats?.overdueTasks}
+              overdueFollowUpTasks={stats?.overdueFollowUpTasks}
             />
           ) : activeTab === "Growth" ? (
             <DevelopmentPlanTab

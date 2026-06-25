@@ -21,7 +21,7 @@ type Props = {
   canCreateDevGoal: boolean;
   canAddDevNotes: boolean;
   streak?: number;
-  overdueTasks?: number;
+  overdueFollowUpTasks?: number;
   onBack: () => void;
   onManage: () => void;
 };
@@ -39,7 +39,7 @@ export function TeamMemberProfilePanel({
   canCreateDevGoal,
   canAddDevNotes,
   streak,
-  overdueTasks,
+  overdueFollowUpTasks,
   onBack,
   onManage,
 }: Props) {
@@ -123,7 +123,7 @@ export function TeamMemberProfilePanel({
             roleLabel={roleLabel}
             email={member.user.email}
             streak={streak}
-            overdueTasks={overdueTasks}
+            overdueFollowUpTasks={overdueFollowUpTasks}
           />
         ) : activeTab === "Growth" ? (
           <DevelopmentPlanTab

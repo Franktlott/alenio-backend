@@ -11,7 +11,7 @@ type Props = {
   teamId: string;
   memberUserId: string;
   streak?: number;
-  overdueTasks?: number;
+  overdueFollowUpTasks?: number;
 };
 
 function formatDateOnly(iso: string): string {
@@ -101,7 +101,7 @@ function KpiCell({
   );
 }
 
-export function ProfileOverviewTab({ teamId, memberUserId, streak, overdueTasks }: Props) {
+export function ProfileOverviewTab({ teamId, memberUserId, streak, overdueFollowUpTasks }: Props) {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [activeGoals, setActiveGoals] = useState<DevelopmentGoal[]>([]);
@@ -161,8 +161,8 @@ export function ProfileOverviewTab({ teamId, memberUserId, streak, overdueTasks 
     },
     { label: "Check-ins", value: loading ? "—" : String(oneOnOneCount) },
     ...(streak != null && streak > 0 ? [{ label: "Streak", value: `${streak}d` }] : []),
-    ...(overdueTasks != null && overdueTasks > 0
-      ? [{ label: "Overdue", value: String(overdueTasks), warning: true as const }]
+    ...(overdueFollowUpTasks != null && overdueFollowUpTasks > 0
+      ? [{ label: "Overdue", value: String(overdueFollowUpTasks), warning: true as const }]
       : []),
   ];
 

@@ -930,7 +930,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                 myRole === "admin"
               }
               streak={isPaid ? memberStats?.[selectedMember.userId]?.streak : undefined}
-              overdueTasks={memberStats?.[selectedMember.userId]?.overdueTasks}
+              overdueFollowUpTasks={memberStats?.[selectedMember.userId]?.overdueFollowUpTasks}
               onBack={() => setSelectedMemberId(null)}
               onManage={() => openMemberModal(selectedMember)}
             />
