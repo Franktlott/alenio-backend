@@ -14864,6 +14864,22 @@ button.enterprise-profile-legal-link {
   table-layout: fixed;
 }
 
+.enterprise-workspace-col-check {
+  width: 3%;
+}
+
+.enterprise-workspace-col-task {
+  width: 50%;
+}
+
+.enterprise-workspace-col-trail {
+  width: 43%;
+}
+
+.enterprise-workspace-col-actions {
+  width: 4%;
+}
+
 .enterprise-workspace-task-th-check,
 .enterprise-workspace-task-td-check {
   width: 2.25rem;
@@ -14873,12 +14889,78 @@ button.enterprise-profile-legal-link {
 
 .enterprise-workspace-task-td-title {
   min-width: 0;
-  width: 38%;
+  width: 50%;
+}
+
+.enterprise-workspace-task-th-trail,
+.enterprise-workspace-task-td-trail {
+  width: 43%;
+  padding-left: 0.5rem !important;
+  padding-right: 0.35rem !important;
+}
+
+.enterprise-workspace-task-trail {
+  display: grid;
+  grid-template-columns: minmax(3.75rem, 1.2fr) minmax(3.5rem, 1fr) minmax(2rem, 0.8fr);
+  gap: 0 0.5rem;
+  align-items: center;
+  justify-items: center;
+  width: 100%;
+  max-width: 100%;
+}
+
+.enterprise-workspace-task-trail--head {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.enterprise-workspace-task-trail-due {
+  justify-self: end;
+  width: 100%;
+}
+
+.enterprise-workspace-task-trail-assignees {
+  justify-content: center;
+}
+
+.enterprise-workspace-task-trail-assignees .enterprise-assignee-img,
+.enterprise-workspace-task-trail-assignees .enterprise-assignee-initials {
+  width: 22px;
+  height: 22px;
+  font-size: 0.5625rem;
+  margin-left: -0.35rem;
+}
+
+.enterprise-workspace-task-trail-assignees .enterprise-assignee-img:first-child,
+.enterprise-workspace-task-trail-assignees .enterprise-assignee-initials:first-child {
+  margin-left: 0;
+}
+
+.enterprise-workspace-task-trail .enterprise-priority {
+  text-align: center;
+  justify-self: center;
+}
+
+.enterprise-workspace-task-title-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.enterprise-workspace-task-source {
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: #64748b;
+  line-height: 1.35;
 }
 
 .enterprise-workspace-task-title-cell {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 0.35rem;
   min-width: 0;
 }
@@ -14890,9 +14972,38 @@ button.enterprise-profile-legal-link {
   line-height: 1;
 }
 
-.enterprise-workspace-task-td-due {
-  width: 7.5rem;
+.enterprise-workspace-task-due-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.1rem;
+  text-align: right;
+}
+
+.enterprise-workspace-task-due-date {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #334155;
   white-space: nowrap;
+}
+
+.enterprise-workspace-task-due-status {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+
+.enterprise-workspace-task-due-status--overdue {
+  color: #dc2626;
+}
+
+.enterprise-workspace-task-due-status--soon {
+  color: #ea580c;
+}
+
+.enterprise-workspace-task-due-status--neutral {
+  color: #64748b;
 }
 
 .enterprise-workspace-task-due {
@@ -14903,18 +15014,6 @@ button.enterprise-profile-legal-link {
 .enterprise-workspace-task-due--overdue {
   color: #dc2626;
   font-weight: 600;
-}
-
-.enterprise-workspace-task-td-priority {
-  width: 5.75rem;
-}
-
-.enterprise-workspace-task-td-status {
-  width: 5.25rem;
-}
-
-.enterprise-workspace-task-td-assignee {
-  width: 4.75rem;
 }
 
 .enterprise-workspace-task-td-assignee .enterprise-assignees {

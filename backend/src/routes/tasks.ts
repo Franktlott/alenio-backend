@@ -336,6 +336,16 @@ tasksRouter.get("/", async (c) => {
       subtasks: subtasksInclude,
       recurrenceRule: true,
       creator: { select: { id: true, name: true, email: true } },
+      oneOnOneMeeting: {
+        select: {
+          id: true,
+          memberUserId: true,
+          templateTitle: true,
+          status: true,
+          publishedAt: true,
+          createdAt: true,
+        },
+      },
     },
     orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
     take: limit,

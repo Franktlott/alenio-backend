@@ -383,6 +383,16 @@ webRouter.get("/api/teams/:id/tasks", async (c) => {
     include: {
       assignments: { include: { user: { select: { id: true, name: true, image: true } } } },
       creator: { select: { id: true, name: true } },
+      oneOnOneMeeting: {
+        select: {
+          id: true,
+          memberUserId: true,
+          templateTitle: true,
+          status: true,
+          publishedAt: true,
+          createdAt: true,
+        },
+      },
       subtasks: { orderBy: { order: "asc" }, select: { id: true, title: true, completed: true, order: true } },
     },
     orderBy: { createdAt: "desc" },

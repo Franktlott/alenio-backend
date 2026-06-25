@@ -602,6 +602,15 @@ export type ApiTask = {
   assignments: Array<{
     user: { id: string; name: string | null; email?: string | null; image: string | null };
   }>;
+  oneOnOneMeetingId?: string | null;
+  oneOnOneMeeting?: {
+    id: string;
+    memberUserId: string;
+    templateTitle: string;
+    status?: string;
+    publishedAt?: string | null;
+    createdAt: string;
+  } | null;
 };
 
 export type ApiSubtask = {

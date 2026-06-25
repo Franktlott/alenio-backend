@@ -449,6 +449,15 @@ export function DashboardPage() {
     return tabs;
   }, [canViewTeamTab]);
 
+  const memberNameByUserId = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const member of teamDetail?.members ?? []) {
+      const label = member.user.name?.trim() || member.user.email?.trim();
+      if (label) map[member.userId] = label;
+    }
+    return map;
+  }, [teamDetail?.members]);
+
   const filteredTabTasks = useMemo(() => {
     if (taskTab !== "team" || teamMemberFilter === "all") return tabTasks;
     return tabTasks.filter((t) => t.assignments.some((a) => a.user.id === teamMemberFilter));
@@ -1053,14 +1062,23 @@ export function DashboardPage() {
                   </div>
                 ) : (
                   <table className="enterprise-table enterprise-workspace-task-table">
+                    <colgroup>
+                      <col className="enterprise-workspace-col-check" />
+                      <col className="enterprise-workspace-col-task" />
+                      <col className="enterprise-workspace-col-trail" />
+                      <col className="enterprise-workspace-col-actions" />
+                    </colgroup>
                     <thead>
                       <tr>
                         <th className="enterprise-workspace-task-th-check" aria-label="Complete" />
                         <th>Task</th>
-                        <th>Due</th>
-                        <th>Priority</th>
-                        <th>Status</th>
-                        <th>Assignee</th>
+                        <th className="enterprise-workspace-task-th-trail">
+                          <div className="enterprise-workspace-task-trail enterprise-workspace-task-trail--head">
+                            <span>Due</span>
+                            <span>Priority</span>
+                            <span>Assignee</span>
+                          </div>
+                        </th>
                         <th className="enterprise-table-th-actions" aria-label="Actions" />
                       </tr>
                     </thead>
@@ -1078,6 +1096,7 @@ export function DashboardPage() {
                             key={t.id}
                             task={t}
                             now={now}
+                            memberNameByUserId={memberNameByUserId}
                             menuOpen={taskMenuId === t.id}
                             completeBusy={completeBusyId === t.id}
                             deleteBusy={taskDeleteId === t.id}
@@ -1581,6 +1600,8 @@ function mergeTaskLists(webTasks: ApiTask[], coreTasks: ApiTask[]): ApiTask[] {
       subtasks: c.subtasks?.length ? c.subtasks : prev.subtasks,
       attachmentUrl: c.attachmentUrl ?? prev.attachmentUrl,
       creator: c.creator ?? prev.creator,
+      oneOnOneMeetingId: c.oneOnOneMeetingId ?? prev.oneOnOneMeetingId,
+      oneOnOneMeeting: c.oneOnOneMeeting ?? prev.oneOnOneMeeting,
     });
   }
   return [...byId.values()];

@@ -1,19 +1,19 @@
 import type { ApiTask } from "../../lib/api";
 import {
   assigneeInitials,
-  formatDoneLabel,
-  formatTaskDue,
+  formatDoneDueDisplay,
+  formatTaskDueDisplay,
   isTaskOverdue,
   priorityClass,
   priorityLabel,
-  statusClass,
-  statusLabel,
 } from "../../lib/task-display";
+import { formatTaskOneOnOneSource } from "../../lib/task-one-on-one-source";
 import { isRecurringTask } from "../../lib/recurring-task";
 
 type Props = {
   task: ApiTask;
   now?: Date;
+  memberNameByUserId?: Record<string, string>;
   menuOpen: boolean;
   completeBusy?: boolean;
   deleteBusy?: boolean;
@@ -30,6 +30,7 @@ type Props = {
 export function WorkspaceTaskRow({
   task,
   now = new Date(),
+  memberNameByUserId,
   menuOpen,
   completeBusy,
   deleteBusy,
@@ -45,6 +46,8 @@ export function WorkspaceTaskRow({
   const isDone = task.status === "done";
   const assignees = task.assignments.map((a) => a.user).filter(Boolean);
   const overdue = isTaskOverdue(task, now);
+  const oneOnOneSource = formatTaskOneOnOneSource(task, memberNameByUserId);
+  const dueDisplay = isDone ? formatDoneDueDisplay(task) : formatTaskDueDisplay(task.dueDate, now);
 
   return (
     <tr
@@ -84,35 +87,42 @@ export function WorkspaceTaskRow({
               🤝
             </span>
           ) : null}
-          <span className="enterprise-task-title">{task.title}</span>
+          <div className="enterprise-workspace-task-title-stack">
+            <span className="enterprise-task-title">{task.title}</span>
+            {oneOnOneSource ? <span className="enterprise-workspace-task-source">{oneOnOneSource}</span> : null}
+          </div>
         </div>
       </td>
-      <td className="enterprise-workspace-task-td-due">
-        <span className={`enterprise-workspace-task-due${overdue ? " enterprise-workspace-task-due--overdue" : ""}`}>
-          {isDone ? formatDoneLabel(task) : formatTaskDue(task.dueDate, now)}
-        </span>
-      </td>
-      <td className="enterprise-workspace-task-td-priority">
-        <span className={priorityClass(task.priority)}>{priorityLabel(task.priority)}</span>
-      </td>
-      <td className="enterprise-workspace-task-td-status">
-        <span className={statusClass(task, now)}>{statusLabel(task, now)}</span>
-      </td>
-      <td className="enterprise-workspace-task-td-assignee">
-        <div className="enterprise-assignees">
-          {assignees.length === 0 ? (
-            <span className="enterprise-muted">—</span>
-          ) : (
-            assignees.slice(0, 3).map((u) =>
-              u.image ? (
-                <img key={u.id} src={u.image} alt={u.name ?? u.email ?? "Assignee"} className="enterprise-assignee-img" />
-              ) : (
-                <span key={u.id} className="enterprise-assignee-initials" title={u.name ?? u.email ?? ""}>
-                  {assigneeInitials(u.name, u.email)}
+      <td className="enterprise-workspace-task-td-trail">
+        <div className="enterprise-workspace-task-trail">
+          <div className="enterprise-workspace-task-trail-due">
+            <div className="enterprise-workspace-task-due-stack">
+              <span className="enterprise-workspace-task-due-date">{dueDisplay.date}</span>
+              {dueDisplay.status ? (
+                <span
+                  className={`enterprise-workspace-task-due-status enterprise-workspace-task-due-status--${dueDisplay.tone}`}
+                >
+                  {dueDisplay.status}
                 </span>
-              ),
-            )
-          )}
+              ) : null}
+            </div>
+          </div>
+          <span className={priorityClass(task.priority)}>{priorityLabel(task.priority)}</span>
+          <div className="enterprise-assignees enterprise-workspace-task-trail-assignees">
+            {assignees.length === 0 ? (
+              <span className="enterprise-muted">—</span>
+            ) : (
+              assignees.slice(0, 3).map((u) =>
+                u.image ? (
+                  <img key={u.id} src={u.image} alt={u.name ?? u.email ?? "Assignee"} className="enterprise-assignee-img" />
+                ) : (
+                  <span key={u.id} className="enterprise-assignee-initials" title={u.name ?? u.email ?? ""}>
+                    {assigneeInitials(u.name, u.email)}
+                  </span>
+                ),
+              )
+            )}
+          </div>
         </div>
       </td>
       <td className="enterprise-table-td-actions" onClick={(e) => e.stopPropagation()}>

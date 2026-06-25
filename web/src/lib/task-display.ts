@@ -62,6 +62,50 @@ export function formatTaskDue(iso: string | null, now: Date): string {
   return datePart;
 }
 
+export type TaskDueDisplay = {
+  date: string;
+  status: string | null;
+  tone: "neutral" | "overdue" | "soon";
+};
+
+/** Stacked due date for workspace task rows: date on top, urgency label below. */
+export function formatTaskDueDisplay(iso: string | null, now = new Date()): TaskDueDisplay {
+  if (!iso) return { date: "—", status: null, tone: "neutral" };
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return { date: "—", status: null, tone: "neutral" };
+
+  const today = startOfDay(now);
+  const dueDay = startOfDay(d);
+  const date = d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+
+  if (dueDay < today) {
+    return { date, status: "Overdue", tone: "overdue" };
+  }
+
+  const days = Math.round((dueDay.getTime() - today.getTime()) / 86_400_000);
+  if (days === 0) {
+    return { date, status: "Due today", tone: "soon" };
+  }
+  if (days <= 3) {
+    const status = days === 1 ? "Due tomorrow" : `Due in ${days} days`;
+    return { date, status, tone: "soon" };
+  }
+
+  return { date, status: null, tone: "neutral" };
+}
+
+export function formatDoneDueDisplay(task: Pick<ApiTask, "completedAt" | "dueDate">): TaskDueDisplay {
+  if (!task.completedAt) {
+    return { date: "—", status: "Completed", tone: "neutral" };
+  }
+  const completed = new Date(task.completedAt);
+  const date = completed.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  if (task.dueDate && completed > new Date(task.dueDate)) {
+    return { date, status: "Done overdue", tone: "overdue" };
+  }
+  return { date, status: "Completed", tone: "neutral" };
+}
+
 export function formatDoneLabel(task: Pick<ApiTask, "completedAt" | "dueDate">): string {
   if (!task.completedAt) return "Completed";
   const completed = new Date(task.completedAt);
