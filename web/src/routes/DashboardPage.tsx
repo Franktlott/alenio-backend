@@ -42,8 +42,9 @@ import {
 } from "../lib/api";
 import {
   formatTaskDescriptionForDisplay,
+  isAssociateFeedbackRecipient,
   isFeedbackTaskDescription,
-  parseFeedbackTaskDescription,
+  resolveFeedbackTaskMeta,
 } from "../lib/one-on-one-feedback";
 import { RecurringTaskScopeModal } from "../components/RecurringTaskScopeModal";
 import { PendingCalendarEventsModal } from "../components/PendingCalendarEventsModal";
@@ -51,6 +52,8 @@ import { TaskPromptModal } from "../components/tasks/TaskPromptModal";
 import { WorkspaceTaskCreateModal } from "../components/tasks/WorkspaceTaskCreateModal";
 import { WorkspaceTaskDetailModal } from "../components/tasks/WorkspaceTaskDetailModal";
 import { WorkspaceTaskFollowUpPanel } from "../components/tasks/WorkspaceTaskFollowUpPanel";
+import { WorkspaceTaskListViewTabs } from "../components/tasks/WorkspaceTaskListViewTabs";
+import { WorkspaceTaskViewMenu, type TaskListView, type TaskPriorityFilter, type TaskStatusFilter } from "../components/tasks/WorkspaceTaskViewMenu";
 import { WorkspaceTaskRow } from "../components/tasks/WorkspaceTaskRow";
 import { computeTaskFollowUpStats } from "../lib/task-follow-up-stats";
 import { isRecurringTask, type RecurrenceScope } from "../lib/recurring-task";
@@ -71,7 +74,7 @@ function taskCreatorId(task: ApiTask): string | undefined {
   return task.creatorId ?? task.creator?.id;
 }
 
-/** Active/Completed tabs: assigned to me, or created by me with no assignee. */
+/** Workspace task list: assigned to me, or created by me with no assignee. */
 function isMyWorkspaceTask(task: ApiTask, userId: string): boolean {
   if (task.assignments.some((a) => a.user.id === userId)) return true;
   return taskCreatorId(task) === userId && task.assignments.length === 0;
@@ -84,7 +87,6 @@ function isDelegatedTeamTask(task: ApiTask, userId: string): boolean {
   return task.assignments.some((a) => a.user.id !== userId);
 }
 
-type TaskTab = "active" | "completed";
 type TaskScope = "mine" | "team";
 
 export function DashboardPage() {
@@ -96,14 +98,17 @@ export function DashboardPage() {
   const { me, teams, selectedTeamId, setSelectedTeamId } = useEnterpriseShell();
   const [calendarView, setCalendarView] = useState(() => new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(() => new Date());
-  const [taskTab, setTaskTab] = useState<TaskTab>("active");
   const [taskScope, setTaskScope] = useState<TaskScope>("mine");
+  const [taskListView, setTaskListView] = useState<TaskListView>("active");
+  const [taskViewMenuOpen, setTaskViewMenuOpen] = useState(false);
+  const [priorityFilter, setPriorityFilter] = useState<TaskPriorityFilter>("all");
+  const [statusFilter, setStatusFilter] = useState<TaskStatusFilter>("all");
   const [sortBy, setSortBy] = useState<"due" | "priority" | "completed">("due");
+  const [assigneeFilter, setAssigneeFilter] = useState("all");
   const [selectedTaskModal, setSelectedTaskModal] = useState<ApiTask | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [createInitialDueDate, setCreateInitialDueDate] = useState<string | undefined>();
   const [teamDetail, setTeamDetail] = useState<WebTeamDetail | null>(null);
-  const [teamMemberFilter, setTeamMemberFilter] = useState("all");
   const [completePromptTask, setCompletePromptTask] = useState<ApiTask | null>(null);
   const [completeBusyId, setCompleteBusyId] = useState<string | null>(null);
   const [eventOpen, setEventOpen] = useState(false);
@@ -135,18 +140,18 @@ export function DashboardPage() {
   const [recurringScopeModal, setRecurringScopeModal] = useState<ApiTask | null>(null);
   const [feedbackContext, setFeedbackContext] = useState<OneOnOneAssociateFeedbackContext | null>(null);
   const [feedbackContextLoading, setFeedbackContextLoading] = useState(false);
+  const [feedbackContextSubmitted, setFeedbackContextSubmitted] = useState(false);
+  const [feedbackContextError, setFeedbackContextError] = useState<string | null>(null);
+  const [feedbackFetchVersion, setFeedbackFetchVersion] = useState(0);
   const [feedbackCompletionActive, setFeedbackCompletionActive] = useState(false);
   const feedbackCompletionActiveRef = useRef(false);
   feedbackCompletionActiveRef.current = feedbackCompletionActive;
 
   const now = new Date();
-  const selectedTaskFeedbackMeta = selectedTaskModal?.description
-    ? parseFeedbackTaskDescription(selectedTaskModal.description)
+  const selectedTaskFeedbackMeta = selectedTaskModal
+    ? resolveFeedbackTaskMeta(selectedTaskModal, selectedTeamId)
     : null;
-  const isSelectedTaskFeedbackAssignee =
-    !!me?.id &&
-    !!selectedTaskFeedbackMeta &&
-    selectedTaskModal?.assignments.some((assignment) => assignment.user.id === me.id) === true;
+  const isSelectedTaskFeedbackAssignee = isAssociateFeedbackRecipient(me?.id, selectedTaskFeedbackMeta);
   const isSelectedTaskFeedback = isFeedbackTaskDescription(selectedTaskModal?.description);
   const showFeedbackFormLoading =
     isSelectedTaskFeedback &&
@@ -228,8 +233,11 @@ export function DashboardPage() {
 
   useEffect(() => {
     setSelectedDate(new Date());
-    setTeamMemberFilter("all");
+    setAssigneeFilter("all");
     setTaskScope("mine");
+    setTaskListView("active");
+    setPriorityFilter("all");
+    setStatusFilter("all");
   }, [selectedTeamId]);
 
   useEffect(() => {
@@ -254,6 +262,8 @@ export function DashboardPage() {
     setSelectedTaskModal(t);
     setFeedbackContext(null);
     setFeedbackContextLoading(false);
+    setFeedbackContextSubmitted(false);
+    setFeedbackContextError(null);
     setFeedbackCompletionActive(false);
   };
 
@@ -289,15 +299,21 @@ export function DashboardPage() {
     if (!selectedTaskFeedbackMeta || !isSelectedTaskFeedbackAssignee) {
       setFeedbackContext(null);
       setFeedbackContextLoading(false);
+      setFeedbackContextSubmitted(false);
+      setFeedbackContextError(null);
       return;
     }
     if (selectedTaskModal?.status === "done" && !feedbackCompletionActive) {
       setFeedbackContext(null);
       setFeedbackContextLoading(false);
+      setFeedbackContextSubmitted(false);
+      setFeedbackContextError(null);
       return;
     }
     let cancelled = false;
     setFeedbackContextLoading(true);
+    setFeedbackContextSubmitted(false);
+    setFeedbackContextError(null);
     (async () => {
       try {
         const context = await fetchOneOnOneAssociateFeedbackContext(
@@ -307,10 +323,16 @@ export function DashboardPage() {
           selectedTaskFeedbackMeta.fieldId,
         );
         if (cancelled || feedbackCompletionActiveRef.current) return;
-        setFeedbackContext(context.submitted ? null : context);
-      } catch {
+        if (context.submitted) {
+          setFeedbackContext(null);
+          setFeedbackContextSubmitted(true);
+        } else {
+          setFeedbackContext(context);
+        }
+      } catch (e) {
         if (cancelled) return;
         setFeedbackContext(null);
+        setFeedbackContextError(e instanceof Error ? e.message : "Could not load your check-in.");
       } finally {
         if (!cancelled) setFeedbackContextLoading(false);
       }
@@ -326,6 +348,7 @@ export function DashboardPage() {
     isSelectedTaskFeedbackAssignee,
     selectedTaskModal?.status,
     feedbackCompletionActive,
+    feedbackFetchVersion,
   ]);
 
   const myRole = selectedTeam?.role ?? "";
@@ -438,28 +461,25 @@ export function DashboardPage() {
   const activeTasks = useMemo(() => myTasks.filter((t) => t.status !== "done"), [myTasks]);
   const completedTasks = useMemo(() => myTasks.filter((t) => t.status === "done"), [myTasks]);
 
-  const delegatedTeamTasks = useMemo(() => {
+  const activeDelegatedTasks = useMemo(() => {
     if (!me?.id) return [];
-    return tasks.filter((t) => isDelegatedTeamTask(t, me.id));
+    return tasks.filter((t) => isDelegatedTeamTask(t, me.id) && t.status !== "done");
   }, [tasks, me?.id]);
 
-  const activeDelegatedTasks = useMemo(
-    () => delegatedTeamTasks.filter((t) => t.status !== "done"),
-    [delegatedTeamTasks],
-  );
-  const completedDelegatedTasks = useMemo(
-    () => delegatedTeamTasks.filter((t) => t.status === "done"),
-    [delegatedTeamTasks],
-  );
+  const completedDelegatedTasks = useMemo(() => {
+    if (!me?.id) return [];
+    return tasks.filter((t) => isDelegatedTeamTask(t, me.id) && t.status === "done");
+  }, [tasks, me?.id]);
 
   const tabTasks = useMemo(() => {
-    if (taskScope === "team") {
-      return taskTab === "completed" ? completedDelegatedTasks : activeDelegatedTasks;
+    if (taskListView === "archived") return [];
+    if (taskListView === "completed") {
+      return taskScope === "team" ? completedDelegatedTasks : completedTasks;
     }
-    return taskTab === "completed" ? completedTasks : activeTasks;
+    return taskScope === "team" ? activeDelegatedTasks : activeTasks;
   }, [
+    taskListView,
     taskScope,
-    taskTab,
     activeTasks,
     completedTasks,
     activeDelegatedTasks,
@@ -476,15 +496,30 @@ export function DashboardPage() {
   }, [teamDetail?.members]);
 
   const filteredTabTasks = useMemo(() => {
-    if (taskScope !== "team" || teamMemberFilter === "all") return tabTasks;
-    return tabTasks.filter((t) => t.assignments.some((a) => a.user.id === teamMemberFilter));
-  }, [tabTasks, taskScope, teamMemberFilter]);
+    let list = tabTasks;
+    if (assigneeFilter !== "all") {
+      list = list.filter((t) => t.assignments.some((a) => a.user.id === assigneeFilter));
+    }
+    if (priorityFilter !== "all") {
+      list = list.filter((t) => t.priority === priorityFilter);
+    }
+    if (taskListView === "active" && statusFilter !== "all") {
+      list =
+        statusFilter === "overdue"
+          ? list.filter((t) => isTaskOverdue(t, now))
+          : list.filter((t) => !isTaskOverdue(t, now));
+    }
+    return list;
+  }, [tabTasks, assigneeFilter, priorityFilter, statusFilter, taskListView, now]);
 
   const scopeTasksForStats = useMemo(() => {
-    const base = taskScope === "team" ? delegatedTeamTasks : myTasks;
-    if (taskScope !== "team" || teamMemberFilter === "all") return base;
-    return base.filter((t) => t.assignments.some((a) => a.user.id === teamMemberFilter));
-  }, [taskScope, myTasks, delegatedTeamTasks, teamMemberFilter]);
+    const base =
+      taskScope === "team"
+        ? tasks.filter((t) => me?.id && isDelegatedTeamTask(t, me.id))
+        : myTasks;
+    if (taskScope !== "team" || assigneeFilter === "all") return base;
+    return base.filter((t) => t.assignments.some((a) => a.user.id === assigneeFilter));
+  }, [taskScope, myTasks, tasks, me?.id, assigneeFilter]);
 
   const followUpStats = useMemo(
     () => computeTaskFollowUpStats(scopeTasksForStats, now),
@@ -517,10 +552,28 @@ export function DashboardPage() {
     return list;
   }, [tasksForTable, sortBy]);
 
+  const assigneeMenuOptions = useMemo(
+    () =>
+      (teamDetail?.members ?? []).map((m) => ({
+        userId: m.userId,
+        label: m.user.name ?? m.user.email ?? m.userId,
+      })),
+    [teamDetail?.members],
+  );
+
+  const openTaskCount = taskScope === "team" ? activeDelegatedTasks.length : activeTasks.length;
+  const completedTaskCount = taskScope === "team" ? completedDelegatedTasks.length : completedTasks.length;
+
   const clearOverdueFocus = () => {
     const next = new URLSearchParams(searchParams);
     next.delete("overdue");
     setSearchParams(next, { replace: true });
+  };
+
+  const handleTaskListViewChange = (view: TaskListView) => {
+    setTaskListView(view);
+    setSortBy(view === "completed" ? "completed" : "due");
+    if (overdueFocus) clearOverdueFocus();
   };
 
   const calTitle = calendarView.toLocaleString(undefined, { month: "long", year: "numeric" });
@@ -1004,6 +1057,7 @@ export function DashboardPage() {
               taskScope={taskScope}
               canViewTeamScope={canViewTeamTab}
               stats={followUpStats}
+              showStats={taskListView === "active"}
               onScopeChange={(scope) => {
                 if (overdueFocus) clearOverdueFocus();
                 setTaskScope(scope);
@@ -1018,42 +1072,13 @@ export function DashboardPage() {
               </div>
             ) : null}
             <div className="enterprise-task-toolbar">
-              <div className="enterprise-task-tabs" role="tablist" aria-label="Task status">
-                {(["active", "completed"] as const).map((tab) => (
-                  <button
-                    key={tab}
-                    type="button"
-                    role="tab"
-                    aria-selected={taskTab === tab}
-                    className={`enterprise-task-tab ${taskTab === tab ? "enterprise-task-tab-on" : ""}`}
-                    onClick={() => {
-                      if (overdueFocus) clearOverdueFocus();
-                      setTaskTab(tab);
-                    }}
-                  >
-                    {tab === "active" ? "Active" : "Completed"}
-                  </button>
-                ))}
-              </div>
+              <WorkspaceTaskListViewTabs
+                view={taskListView}
+                onViewChange={handleTaskListViewChange}
+                openCount={openTaskCount}
+                completedCount={completedTaskCount}
+              />
               <div className="enterprise-task-toolbar-filters">
-                {taskScope === "team" && teamDetail?.members?.length ? (
-                  <label className="enterprise-select-label">
-                    Member
-                    <select
-                      className="enterprise-select"
-                      value={teamMemberFilter}
-                      onChange={(e) => setTeamMemberFilter(e.target.value)}
-                      aria-label="Filter by team member"
-                    >
-                      <option value="all">All members</option>
-                      {teamDetail.members.map((m) => (
-                        <option key={m.userId} value={m.userId}>
-                          {m.user.name ?? m.user.email ?? m.userId}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                ) : null}
                 <label className="enterprise-select-label">
                   Sort by
                   <select
@@ -1062,11 +1087,46 @@ export function DashboardPage() {
                     onChange={(e) => setSortBy(e.target.value as "due" | "priority" | "completed")}
                     aria-label="Sort tasks"
                   >
-                    <option value="due">Due date</option>
-                    <option value="priority">Priority</option>
-                    {taskTab === "completed" ? <option value="completed">Completion date</option> : null}
+                    {taskListView === "completed" ? (
+                      <>
+                        <option value="completed">Completion date</option>
+                        <option value="priority">Priority</option>
+                      </>
+                    ) : (
+                      <>
+                        <option value="due">Due date</option>
+                        <option value="priority">Priority</option>
+                      </>
+                    )}
                   </select>
                 </label>
+                <div className="enterprise-workspace-task-view-trigger-wrap">
+                  <button
+                    type="button"
+                    className="enterprise-workspace-task-view-trigger"
+                    aria-label="Task filters"
+                    aria-expanded={taskViewMenuOpen}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setTaskViewMenuOpen((open) => !open);
+                    }}
+                  >
+                    ⋮
+                  </button>
+                  <WorkspaceTaskViewMenu
+                    open={taskViewMenuOpen}
+                    onClose={() => setTaskViewMenuOpen(false)}
+                    assigneeFilter={assigneeFilter}
+                    onAssigneeFilterChange={setAssigneeFilter}
+                    members={assigneeMenuOptions}
+                    showAssigneeFilter={taskScope === "team" && assigneeMenuOptions.length > 0}
+                    priorityFilter={priorityFilter}
+                    onPriorityFilterChange={setPriorityFilter}
+                    statusFilter={statusFilter}
+                    onStatusFilterChange={setStatusFilter}
+                    statusFilterEnabled={taskListView === "active"}
+                  />
+                </div>
               </div>
             </div>
             {taskActionError ? (
@@ -1085,20 +1145,22 @@ export function DashboardPage() {
                     <p className="enterprise-dashboard-empty-title">
                       {overdueFocus
                         ? "No overdue tasks"
-                        : taskScope === "team"
-                          ? taskTab === "completed"
-                            ? "No completed team tasks"
-                            : "No tasks assigned to others"
-                          : taskTab === "completed"
-                            ? "No completed tasks"
-                            : "No active tasks"}
+                        : taskListView === "archived"
+                          ? "Nothing in archive"
+                          : taskListView === "completed"
+                            ? "No completed tasks yet"
+                            : taskScope === "team"
+                              ? "No open team tasks"
+                              : "No open tasks"}
                     </p>
                     <p className="enterprise-dashboard-empty-sub">
-                      {taskScope === "team"
-                        ? taskTab === "completed"
-                          ? "Completed tasks you assigned to teammates appear here."
-                          : "Tasks you assign to teammates appear here."
-                        : "Create a task to get started."}
+                      {taskListView === "archived"
+                        ? "Deleted tasks are removed permanently and are not stored here."
+                        : taskListView === "completed"
+                          ? "Finished tasks show up here so you can review what got done."
+                          : taskScope === "team"
+                            ? "Tasks you assign to teammates appear on the Open tab."
+                            : "Create a task or switch to Completed to see finished work."}
                     </p>
                   </div>
                 ) : (
@@ -1115,7 +1177,7 @@ export function DashboardPage() {
                         <th>Task</th>
                         <th className="enterprise-workspace-task-th-trail">
                           <div className="enterprise-workspace-task-trail enterprise-workspace-task-trail--head">
-                            <span>Due</span>
+                            <span>{taskListView === "completed" ? "Completed" : "Due"}</span>
                             <span>Priority</span>
                             <span>Assignee</span>
                           </div>
@@ -1177,6 +1239,9 @@ export function DashboardPage() {
           myRole={myRole}
           feedbackContext={feedbackContext}
           feedbackContextLoading={feedbackContextLoading}
+          feedbackContextSubmitted={feedbackContextSubmitted}
+          feedbackContextError={feedbackContextError}
+          onFeedbackRetry={() => setFeedbackFetchVersion((version) => version + 1)}
           feedbackCompletionActive={feedbackCompletionActive}
           onFeedbackCompletionStarted={() => setFeedbackCompletionActive(true)}
           onFeedbackCompletionFailed={() => setFeedbackCompletionActive(false)}

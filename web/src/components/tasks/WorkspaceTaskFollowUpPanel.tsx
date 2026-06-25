@@ -11,6 +11,7 @@ type Props = {
   canViewTeamScope: boolean;
   stats: TaskFollowUpStats;
   onScopeChange: (scope: TaskScope) => void;
+  showStats?: boolean;
 };
 
 function PersonIcon() {
@@ -38,9 +39,10 @@ export function WorkspaceTaskFollowUpPanel({
   canViewTeamScope,
   stats,
   onScopeChange,
+  showStats = true,
 }: Props) {
   return (
-    <div className="enterprise-workspace-followup-panel">
+    <div className={`enterprise-workspace-followup-panel${showStats ? "" : " enterprise-workspace-followup-panel--compact"}`}>
       <div className="enterprise-workspace-followup-head">
         <div className="enterprise-workspace-followup-scope" role={canViewTeamScope ? "tablist" : undefined}>
           {canViewTeamScope ? (
@@ -69,6 +71,7 @@ export function WorkspaceTaskFollowUpPanel({
         </div>
       </div>
 
+      {showStats ? (
       <div className="enterprise-workspace-followup-stats" aria-label="Follow-up summary">
         <article className="enterprise-workspace-followup-stat enterprise-workspace-followup-stat--attention">
           <span className="enterprise-workspace-followup-stat-icon" aria-hidden>
@@ -130,6 +133,7 @@ export function WorkspaceTaskFollowUpPanel({
           </div>
         </article>
       </div>
+      ) : null}
     </div>
   );
 }

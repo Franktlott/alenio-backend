@@ -690,16 +690,16 @@ oneOnOneMeetingsRouter.get("/:memberUserId/one-on-ones/:meetingId/associate-feed
     return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
   }
 
-  if (user.id !== memberUserId) {
-    return c.json({ error: { message: "Only the associate can submit this feedback", code: "FORBIDDEN" } }, 403);
-  }
-
   const meeting = await prisma.oneOnOneMeeting.findFirst({
-    where: { id: meetingId, teamId, memberUserId },
+    where: { id: meetingId, teamId },
     include: { createdBy: { select: { id: true, name: true, email: true } } },
   });
   if (!meeting) {
     return c.json({ error: { message: "Check-in not found", code: "NOT_FOUND" } }, 404);
+  }
+
+  if (user.id !== meeting.memberUserId) {
+    return c.json({ error: { message: "Only the associate can submit this feedback", code: "FORBIDDEN" } }, 403);
   }
 
   if (meeting.status === "draft") {
@@ -754,15 +754,15 @@ oneOnOneMeetingsRouter.post(
       return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
     }
 
-    if (user.id !== memberUserId) {
-      return c.json({ error: { message: "Only the associate can submit this feedback", code: "FORBIDDEN" } }, 403);
-    }
-
     const meeting = await prisma.oneOnOneMeeting.findFirst({
-      where: { id: meetingId, teamId, memberUserId },
+      where: { id: meetingId, teamId },
     });
     if (!meeting) {
       return c.json({ error: { message: "Check-in not found", code: "NOT_FOUND" } }, 404);
+    }
+
+    if (user.id !== meeting.memberUserId) {
+      return c.json({ error: { message: "Only the associate can submit this feedback", code: "FORBIDDEN" } }, 403);
     }
 
     if (meeting.status === "draft") {

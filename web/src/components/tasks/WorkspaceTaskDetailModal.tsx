@@ -19,10 +19,12 @@ import {
   type WebMeUser,
 } from "../../lib/api";
 import {
+  ASSOCIATE_FEEDBACK_INTRO,
   ASSOCIATE_FEEDBACK_SECTION_TITLE,
   formatTaskDescriptionForDisplay,
+  isAssociateFeedbackRecipient,
   isFeedbackTaskDescription,
-  parseFeedbackTaskDescription,
+  resolveFeedbackTaskMeta,
 } from "../../lib/one-on-one-feedback";
 import {
   priorityLabel,
@@ -51,6 +53,9 @@ type Props = {
   myRole: string;
   feedbackContext: OneOnOneAssociateFeedbackContext | null;
   feedbackContextLoading: boolean;
+  feedbackContextSubmitted: boolean;
+  feedbackContextError: string | null;
+  onFeedbackRetry: () => void;
   feedbackCompletionActive: boolean;
   onFeedbackCompletionStarted: () => void;
   onFeedbackCompletionFailed: () => void;
@@ -68,6 +73,9 @@ export function WorkspaceTaskDetailModal({
   myRole,
   feedbackContext,
   feedbackContextLoading,
+  feedbackContextSubmitted,
+  feedbackContextError,
+  onFeedbackRetry,
   feedbackCompletionActive,
   onFeedbackCompletionStarted,
   onFeedbackCompletionFailed,
@@ -100,15 +108,16 @@ export function WorkspaceTaskDetailModal({
   const assignedIds = new Set(task.assignments.map((a) => a.user.id));
   const isAssignee = !!meId && assignedIds.has(meId);
 
-  const feedbackMeta = useMemo(
-    () => (task.description ? parseFeedbackTaskDescription(task.description) : null),
-    [task.description],
-  );
+  const feedbackMeta = useMemo(() => resolveFeedbackTaskMeta(task, teamId), [task, teamId]);
   const isFeedbackTask = isFeedbackTaskDescription(task.description);
-  const isFeedbackAssignee = !!feedbackMeta && isAssignee;
+  const isFeedbackAssignee = isAssociateFeedbackRecipient(meId, feedbackMeta);
   const showFocusedFeedbackTask = isFeedbackTask && isFeedbackAssignee;
   const showFeedbackFormLoading =
     !!feedbackMeta && isFeedbackAssignee && !isCompleted && !feedbackCompletionActive && feedbackContextLoading && !feedbackContext;
+  const showFeedbackAlreadySubmitted =
+    showFocusedFeedbackTask && !feedbackContext && !showFeedbackFormLoading && feedbackContextSubmitted;
+  const showFeedbackLoadError =
+    showFocusedFeedbackTask && !feedbackContext && !showFeedbackFormLoading && !!feedbackContextError;
 
   useEffect(() => {
     if (!headMenuOpen) return;
@@ -267,6 +276,12 @@ export function WorkspaceTaskDetailModal({
   const creatorName = task.creator?.name ?? task.creator?.email ?? "Unknown";
   const descriptionText =
     task.description && !isFeedbackTask ? formatTaskDescriptionForDisplay(task.description) : null;
+  const assigneeLabel =
+    task.assignments[0]?.user.name?.trim() ||
+    task.assignments[0]?.user.email?.trim() ||
+    members.find((member) => member.userId === feedbackMeta?.memberUserId)?.user.name?.trim() ||
+    members.find((member) => member.userId === feedbackMeta?.memberUserId)?.user.email?.trim() ||
+    "the assignee";
   const photoUrl = task.attachmentUrl && isTaskPhotoUrl(task.attachmentUrl) ? task.attachmentUrl : null;
 
   const cancelEdit = () => {
@@ -372,7 +387,13 @@ export function WorkspaceTaskDetailModal({
                   ×
                 </button>
               </div>
-            ) : null}
+            ) : (
+              <div className="task-detail-v2-head-actions">
+                <button type="button" className="task-detail-v2-icon-btn task-detail-v2-icon-btn--icon" onClick={onClose} aria-label="Close">
+                  ×
+                </button>
+              </div>
+            )}
           </header>
 
           <div className={`task-detail-v2-body${showFocusedFeedbackTask ? " task-detail-v2-body--focused" : ""}`}>
@@ -397,6 +418,39 @@ export function WorkspaceTaskDetailModal({
                   <h3 className="task-detail-v2-block-title">{ASSOCIATE_FEEDBACK_SECTION_TITLE}</h3>
                   <p className="enterprise-muted" aria-live="polite">
                     Loading your check-in…
+                  </p>
+                </section>
+              ) : null}
+
+              {showFeedbackAlreadySubmitted ? (
+                <section className="task-detail-v2-block enterprise-oneone-feedback-task-section">
+                  <h3 className="task-detail-v2-block-title">{ASSOCIATE_FEEDBACK_SECTION_TITLE}</h3>
+                  <p className="enterprise-muted">
+                    Your notes are saved. Mark this task complete when you are finished.
+                  </p>
+                </section>
+              ) : null}
+
+              {showFeedbackLoadError ? (
+                <section className="task-detail-v2-block enterprise-oneone-feedback-task-section">
+                  <h3 className="task-detail-v2-block-title">{ASSOCIATE_FEEDBACK_SECTION_TITLE}</h3>
+                  <p className="auth-error" role="alert">
+                    {feedbackContextError === "Check-in not found"
+                      ? "This check-in is no longer available. If you already added your notes, you can mark this task complete."
+                      : feedbackContextError}
+                  </p>
+                  <button type="button" className="task-detail-v2-btn task-detail-v2-btn--ghost" onClick={onFeedbackRetry}>
+                    Try again
+                  </button>
+                </section>
+              ) : null}
+
+              {isFeedbackTask && !showFocusedFeedbackTask ? (
+                <section className="task-detail-v2-block">
+                  <h3 className="task-detail-v2-block-title">Check-in follow-up</h3>
+                  <p className="task-detail-v2-description">{ASSOCIATE_FEEDBACK_INTRO}</p>
+                  <p className="enterprise-muted">
+                    Assigned to {assigneeLabel}. They will add their notes here when ready.
                   </p>
                 </section>
               ) : null}
@@ -644,6 +698,26 @@ export function WorkspaceTaskDetailModal({
                   ) : null}
                 </>
               )}
+            </footer>
+          ) : showFeedbackAlreadySubmitted && !isCompleted ? (
+            <footer className="task-detail-v2-footer">
+              <button type="button" className="task-detail-v2-btn task-detail-v2-btn--ghost" onClick={onClose}>
+                Close
+              </button>
+              <button type="button" className="task-detail-v2-btn task-detail-v2-btn--primary" disabled={busy} onClick={() => setPrompt("complete")}>
+                <span aria-hidden>✓</span> Complete task
+              </button>
+            </footer>
+          ) : showFocusedFeedbackTask ? (
+            <footer className="task-detail-v2-footer">
+              <button type="button" className="task-detail-v2-btn task-detail-v2-btn--ghost" onClick={onClose}>
+                Close
+              </button>
+              {!isCompleted && (showFeedbackLoadError || showFeedbackAlreadySubmitted) ? (
+                <button type="button" className="task-detail-v2-btn task-detail-v2-btn--primary" disabled={busy} onClick={() => setPrompt("complete")}>
+                  <span aria-hidden>✓</span> Complete task
+                </button>
+              ) : null}
             </footer>
           ) : null}
         </div>

@@ -59,6 +59,44 @@ export function isFeedbackTaskDescription(description: string | null | undefined
   return parseFeedbackTaskDescription(description) !== null;
 }
 
+/** True when the signed-in user is the associate who should complete check-in follow-up notes. */
+export function isAssociateFeedbackRecipient(
+  userId: string | undefined,
+  meta: OneOnOneFeedbackMeta | null | undefined,
+): boolean {
+  return !!userId && !!meta && userId === meta.memberUserId;
+}
+
+type FeedbackTaskLink = {
+  description?: string | null;
+  oneOnOneMeetingId?: string | null;
+  oneOnOneMeeting?: {
+    id: string;
+    memberUserId: string;
+  } | null;
+  teamId?: string | null;
+};
+
+/** Prefer live task ↔ check-in link over embedded description metadata. */
+export function resolveFeedbackTaskMeta(
+  task: FeedbackTaskLink,
+  teamIdFallback?: string | null,
+): OneOnOneFeedbackMeta | null {
+  const parsed = parseFeedbackTaskDescription(task.description);
+  const meetingId = task.oneOnOneMeetingId ?? task.oneOnOneMeeting?.id ?? parsed?.meetingId ?? null;
+  const memberUserId = task.oneOnOneMeeting?.memberUserId ?? parsed?.memberUserId ?? null;
+  const teamId = task.teamId ?? teamIdFallback ?? parsed?.teamId ?? null;
+  if (!meetingId || !memberUserId || !teamId) return parsed;
+
+  return {
+    meetingId,
+    memberUserId,
+    teamId,
+    fieldId: parsed?.fieldId ?? ASSOCIATE_FEEDBACK_FIELD_ID,
+    fieldLabel: parsed?.fieldLabel ?? ASSOCIATE_FEEDBACK_LABEL,
+  };
+}
+
 export function formatTaskDescriptionForDisplay(description: string | null | undefined): string {
   if (!description?.trim()) return "";
   const meta = parseFeedbackTaskDescription(description);
