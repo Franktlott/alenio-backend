@@ -23,6 +23,7 @@ import { useDemoMode } from "@/lib/useDemo";
 import { getUSHolidays, type USFederalHoliday } from "@/lib/us-federal-holidays";
 import { eventShowsScheduledTime, formatEventTimeRange } from "@/lib/format-event-time";
 import { CALENDAR_WEEKDAY_LABELS, getDaysInMonth } from "@/lib/calendar-grid";
+import { isMyWorkspaceTask } from "@/lib/workspace-tasks";
 
 type CalendarEvent = {
   id: string;
@@ -191,9 +192,7 @@ export default function CalendarScreen() {
     enabled: !!activeTeamId,
   });
 
-  const myTasks = tasks.filter((t) =>
-    t.assignments?.some((a) => a.userId === currentUserId)
-  );
+  const myTasks = currentUserId ? tasks.filter((t) => isMyWorkspaceTask(t, currentUserId)) : tasks;
 
   const prevMonth = () => setCurrentMonth((m) => new Date(m.getFullYear(), m.getMonth() - 1, 1));
   const nextMonth = () => setCurrentMonth((m) => new Date(m.getFullYear(), m.getMonth() + 1, 1));

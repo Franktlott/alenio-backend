@@ -264,11 +264,6 @@ tasksRouter.get("/", async (c) => {
   const membership = await getMembership(user.id, teamId);
   if (!membership) return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
 
-  const subscription = await getTeamSubscription(teamId);
-  if (!["team", "pro"].includes(subscription.plan)) {
-    return c.json({ error: { message: "Task manager requires Alenio Team or Pro", code: "SUBSCRIPTION_REQUIRED" } }, 403);
-  }
-
   const { status, priority, assigneeId, creatorId, myTasks, cursor, dueYear, dueMonth, completedYear, completedMonth } =
     c.req.query();
   const rawLimit = Number(c.req.query("limit") ?? 50);
@@ -782,7 +777,7 @@ tasksRouter.get("/count", async (c) => {
       userId: user.id,
       task: {
         teamId,
-        status: { in: ["todo", "in-progress"] },
+        status: { not: "done" },
       },
     },
   });

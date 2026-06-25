@@ -5,6 +5,15 @@ export function hasTeamPlan(sub?: { plan?: string | null } | null): boolean {
   return plan === "team" || plan === "pro";
 }
 
+/** Use live subscription when loaded; otherwise fall back to persisted workspace plan. */
+export function hasWorkspaceTaskAccess(
+  subscription: { plan?: string | null } | null | undefined,
+  persistedPlan: "free" | "team",
+): boolean {
+  if (subscription) return hasTeamPlan(subscription);
+  return persistedPlan === "team";
+}
+
 export const PLAN_SCREEN_TITLE = "Plan & access";
 
 export const PLAN_SCREEN_SUBTITLE =

@@ -17,7 +17,6 @@ export async function performWorkspaceSwitch(
 ): Promise<boolean> {
   if (!teamId || teamId === activeTeamId) return false;
 
-  useSubscriptionStore.getState().setPlan("free");
   setActiveTeamId(teamId);
 
   await queryClient.invalidateQueries({
@@ -50,7 +49,7 @@ export async function performWorkspaceSwitch(
   if (hasTeamPlan(subscription)) {
     await Promise.all([
       queryClient.fetchQuery({
-        queryKey: ["tasks", teamId, "mine"],
+        queryKey: ["tasks", teamId, "mine", "active"],
         queryFn: () =>
           api.get<{ tasks: Task[]; nextCursor: string | null }>(
             `/api/teams/${teamId}/tasks?myTasks=true&activeOnly=true&limit=200`,

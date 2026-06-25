@@ -145,7 +145,7 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
     if (!activeTeamId) return;
     if (routeName === "execute" && isPaid) {
       void queryClient.prefetchQuery({
-        queryKey: ["tasks", activeTeamId, "mine"],
+        queryKey: ["tasks", activeTeamId, "mine", "active"],
         queryFn: () =>
           api.get<{ tasks: Task[]; nextCursor: string | null }>(
             `/api/teams/${activeTeamId}/tasks?myTasks=true&activeOnly=true&limit=200`,

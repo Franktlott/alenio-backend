@@ -33,6 +33,7 @@ import type { Task, Team, TeamMember, CalendarEvent } from "@/lib/types";
 import { NoTeamPlaceholder } from "@/components/NoTeamPlaceholder";
 import { useDemoMode, showDemoAlert } from "@/lib/useDemo";
 import { isFeedbackTaskDescription } from "@/lib/one-on-one-feedback";
+import { hasTeamPlan, hasWorkspaceTaskAccess } from "@/lib/plan-access-copy";
 import { SafeKeyboardAvoidingView } from "@/lib/safe-keyboard-controller";
 import { getUSHolidays, type USFederalHoliday } from "@/lib/us-federal-holidays";
 import { formatEventTimeRange } from "@/lib/format-event-time";
@@ -735,13 +736,13 @@ export default function TasksScreen() {
     }
   }, [teams, activeTeamId, setActiveTeamId]);
 
-  const { data: subscription } = useQuery({
+  const { data: subscription, isFetched: subscriptionFetched } = useQuery({
     queryKey: ["subscription", activeTeamId],
     queryFn: () => api.get<{ plan: string; status: string }>(`/api/teams/${activeTeamId}/subscription`),
     enabled: !!activeTeamId,
   });
   const plan = useSubscriptionStore((s) => s.plan);
-  const isPro = plan === "team";
+  const hasTaskAccess = hasWorkspaceTaskAccess(subscription, plan);
   React.useEffect(() => {
     if (subscription) {
       const normalized = subscription.plan === "pro" ? "team" : subscription.plan;
@@ -750,7 +751,13 @@ export default function TasksScreen() {
   }, [subscription]);
 
   // Prefetch my active + completed tasks so tab switches use cache (no full reload).
-  const { data: myActiveTasksData, isPending: myActivePending } = useQuery({
+  const {
+    data: myActiveTasksData,
+    isPending: myActivePending,
+    isError: myActiveError,
+    error: myActiveLoadError,
+    refetch: refetchMyActiveTasks,
+  } = useQuery({
     queryKey: ["tasks", activeTeamId, "mine", "active"],
     queryFn: async () =>
       api.get<{ tasks: Task[]; nextCursor: string | null }>(
@@ -761,7 +768,7 @@ export default function TasksScreen() {
           myTasks: true,
         }),
       ),
-    enabled: !!activeTeamId && isPro,
+    enabled: !!activeTeamId && hasTaskAccess,
     refetchInterval: workspacePollInterval,
     refetchIntervalInBackground: false,
   });
@@ -777,7 +784,7 @@ export default function TasksScreen() {
           myTasks: true,
         }),
       ),
-    enabled: !!activeTeamId && isPro,
+    enabled: !!activeTeamId && hasTaskAccess,
     refetchInterval: workspacePollInterval,
     refetchIntervalInBackground: false,
   });
@@ -799,7 +806,7 @@ export default function TasksScreen() {
       );
       return result;
     },
-    enabled: !!activeTeamId && isPro && isOwnerOrLeader,
+    enabled: !!activeTeamId && hasTaskAccess && isOwnerOrLeader,
     refetchInterval: workspacePollInterval,
     refetchIntervalInBackground: false,
   });
@@ -818,7 +825,7 @@ export default function TasksScreen() {
       );
       return result;
     },
-    enabled: !!activeTeamId && isPro && isOwnerOrLeader,
+    enabled: !!activeTeamId && hasTaskAccess && isOwnerOrLeader,
     refetchInterval: workspacePollInterval,
     refetchIntervalInBackground: false,
   });
@@ -836,7 +843,7 @@ export default function TasksScreen() {
   const { data: calendarEvents = [] } = useQuery({
     queryKey: ["calendar-events", activeTeamId],
     queryFn: () => api.get<CalendarEvent[]>(`/api/teams/${activeTeamId}/events`),
-    enabled: !!activeTeamId && isPro,
+    enabled: !!activeTeamId && hasTaskAccess,
     refetchInterval: workspacePollInterval,
     refetchIntervalInBackground: false,
   });
@@ -1185,9 +1192,26 @@ export default function TasksScreen() {
     );
   }
 
-  if (!isPro) {
+  if (!hasTaskAccess && subscriptionFetched) {
     return <Redirect href="/(app)/team" />;
   }
+
+  if (!hasTaskAccess && !subscriptionFetched) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: "#F8FAFC", alignItems: "center", justifyContent: "center" }} edges={["top"]}>
+        <ActivityIndicator color="#4361EE" />
+      </SafeAreaView>
+    );
+  }
+
+  const tasksLoadError =
+    filter === "completed"
+      ? null
+      : myActiveError
+        ? myActiveLoadError instanceof Error
+          ? myActiveLoadError.message
+          : "Could not load tasks."
+        : null;
 
   if (!teamsLoading && (!teams || teams.length === 0)) {
     return (
@@ -1495,16 +1519,50 @@ export default function TasksScreen() {
                   <Check size={14} color="white" strokeWidth={3} />
                 </View>
               </View>
-              <Text style={{ fontSize: 17, fontWeight: "700", color: "#0F172A", marginBottom: 4, textAlign: "center" }}>
-                {filter === "completed" ? "No completed tasks" : filter === "assigned" ? "No tasks assigned to others" : "No active tasks"}
-              </Text>
-              <Text style={{ fontSize: 13, color: "#64748B", textAlign: "center", lineHeight: 18, maxWidth: 280 }}>
-                {filter === "completed"
-                  ? "Finished tasks will appear here when you complete them."
-                  : filter === "assigned"
-                    ? "Create a task and assign it to a teammate to see it here."
-                    : "You're all caught up. Time to plan your next win."}
-              </Text>
+              {tasksLoadError ? (
+                <>
+                  <Text style={{ fontSize: 17, fontWeight: "700", color: "#0F172A", marginBottom: 4, textAlign: "center" }}>
+                    Couldn't load tasks
+                  </Text>
+                  <Text style={{ fontSize: 13, color: "#64748B", textAlign: "center", lineHeight: 18, maxWidth: 280, marginBottom: 12 }}>
+                    {tasksLoadError}
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => void refetchMyActiveTasks()}
+                    style={{ backgroundColor: "#4361EE", borderRadius: 10, paddingHorizontal: 16, paddingVertical: 10 }}
+                  >
+                    <Text style={{ color: "white", fontWeight: "600", fontSize: 14 }}>Try again</Text>
+                  </TouchableOpacity>
+                </>
+              ) : selectedDay ? (
+                <>
+                  <Text style={{ fontSize: 17, fontWeight: "700", color: "#0F172A", marginBottom: 4, textAlign: "center" }}>
+                    No tasks on this day
+                  </Text>
+                  <Text style={{ fontSize: 13, color: "#64748B", textAlign: "center", lineHeight: 18, maxWidth: 280, marginBottom: 12 }}>
+                    Tasks without a due date on {selectedDay} are hidden while a calendar day is selected.
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => setSelectedDay(null)}
+                    style={{ backgroundColor: "#EEF2FF", borderRadius: 10, paddingHorizontal: 16, paddingVertical: 10 }}
+                  >
+                    <Text style={{ color: "#4361EE", fontWeight: "600", fontSize: 14 }}>Show all tasks</Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <>
+                  <Text style={{ fontSize: 17, fontWeight: "700", color: "#0F172A", marginBottom: 4, textAlign: "center" }}>
+                    {filter === "completed" ? "No completed tasks" : filter === "assigned" ? "No tasks assigned to others" : "No active tasks"}
+                  </Text>
+                  <Text style={{ fontSize: 13, color: "#64748B", textAlign: "center", lineHeight: 18, maxWidth: 280 }}>
+                    {filter === "completed"
+                      ? "Finished tasks will appear here when you complete them."
+                      : filter === "assigned"
+                        ? "Create a task and assign it to a teammate to see it here."
+                        : "You're all caught up. Time to plan your next win."}
+                  </Text>
+                </>
+              )}
             </View>
           ) : (
             tasks.slice(0, filter === "all" ? tasks.length : visibleCount).map((task) => (
