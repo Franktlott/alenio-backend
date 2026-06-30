@@ -25,8 +25,8 @@ export function formatOutlookUserError(raw: string | null | undefined): string {
     return "Connection was cancelled. You can try again whenever you're ready.";
   }
 
-  if (lower.includes("invalid_client") || lower.includes("client secret")) {
-    return "Outlook calendar sync isn't configured on the server. Please contact support.";
+  if (lower.includes("invalid_client") || lower.includes("client secret") || lower.includes("not configured")) {
+    return "Outlook isn't set up correctly on the server yet. Verify the Microsoft Client ID and Client Secret in Railway match your Azure app, then try again.";
   }
 
   if (lower.includes("expired") && lower.includes("token")) {

@@ -71,7 +71,7 @@ export function buildMicrosoftAuthorizeUrl(state: string): string {
     response_mode: "query",
     scope: SCOPES,
     state,
-    prompt: "consent",
+    prompt: "select_account consent",
   });
   return `${MICROSOFT_AUTH_BASE}/authorize?${params.toString()}`;
 }
