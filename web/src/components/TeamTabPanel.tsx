@@ -37,14 +37,10 @@ import {
   type WebTeamRow,
 } from "../lib/api";
 import {
-  formatDaysSinceCheckIn,
-  formatDaysSinceCheckInTitle,
-  formatOverdueFollowUpTasksDisplay,
-} from "../lib/member-stats-display";
-import {
-  memberStandardsBadges,
-  STANDARDS_BADGE_LEGEND,
-  standardsBadgeClassName,
+  formatCheckInFrequencySummary,
+  formatGracePeriodSummary,
+  type MemberStandardsCompliance,
+  type WorkplaceStandards,
 } from "../lib/workplace-standards";
 
 function isTaskOverdue(t: ApiTask, todayStart: Date): boolean {
@@ -74,57 +70,213 @@ function roleAbbrev(role: string): string {
   return "MBR";
 }
 
-function RosterKpi({
-  label,
-  value,
-  title,
-  icon,
-  valueClassName,
+function rolePillClass(role: string): string {
+  if (role === "owner") return "enterprise-team-roster-role-pill enterprise-team-roster-role-pill--owner";
+  if (role === "team_leader") return "enterprise-team-roster-role-pill enterprise-team-roster-role-pill--leader";
+  if (role === "admin") return "enterprise-team-roster-role-pill enterprise-team-roster-role-pill--admin";
+  return "enterprise-team-roster-role-pill";
+}
+
+type RosterTone = "ok" | "warn" | "bad" | "muted";
+
+function formatRosterCheckInPrimary(days: number | null | undefined): string {
+  if (days == null) return "No check-in";
+  if (days === 0) return "Today";
+  if (days === 1) return "1 day ago";
+  return `${days} days ago`;
+}
+
+function rosterCheckInColumn(
+  compliance: MemberStandardsCompliance | undefined,
+  daysSinceCheckIn: number | null | undefined,
+  standards: WorkplaceStandards,
+): { tone: RosterTone; primary: string; secondary: string } {
+  if (!standards.checkInRequired) {
+    return { tone: "muted", primary: "—", secondary: "Not required" };
+  }
+  const frequency = formatCheckInFrequencySummary(standards);
+  if (!compliance) {
+    return { tone: "muted", primary: "—", secondary: frequency };
+  }
+  if (compliance.checkInStatus === "on_track") {
+    return {
+      tone: "ok",
+      primary: formatRosterCheckInPrimary(daysSinceCheckIn),
+      secondary: frequency,
+    };
+  }
+  if (compliance.checkInStatus === "due_soon") {
+    return { tone: "warn", primary: "Due soon", secondary: frequency };
+  }
+  if (compliance.checkInStatus === "overdue") {
+    if (daysSinceCheckIn == null) {
+      return { tone: "bad", primary: "No check-in", secondary: frequency };
+    }
+    return { tone: "bad", primary: "Overdue", secondary: frequency };
+  }
+  return { tone: "muted", primary: "—", secondary: "Not required" };
+}
+
+function rosterGoalsColumn(
+  standards: WorkplaceStandards,
+  activeGoals: number,
+): { tone: RosterTone; primary: string } {
+  if (!standards.goalsRequired || standards.minimumActiveGoals <= 0) {
+    return { tone: "muted", primary: "— Optional" };
+  }
+  const min = standards.minimumActiveGoals;
+  const met = activeGoals >= min;
+  return {
+    tone: met ? "ok" : "bad",
+    primary: `${activeGoals} / ${min}`,
+  };
+}
+
+function rosterOverallStatus(
+  compliance: MemberStandardsCompliance | undefined,
+  daysSinceCheckIn: number | null | undefined,
+  standards: WorkplaceStandards,
+  activeGoals: number,
+): { tone: RosterTone; label: string } {
+  if (!compliance) return { tone: "muted", label: "—" };
+
+  if (standards.checkInRequired) {
+    if (compliance.checkInStatus === "overdue") {
+      if (daysSinceCheckIn == null) return { tone: "bad", label: "Missing check-in" };
+      return { tone: "bad", label: "Overdue" };
+    }
+    if (compliance.checkInStatus === "due_soon") {
+      return { tone: "warn", label: "Due soon" };
+    }
+  }
+
+  if (standards.goalsRequired && activeGoals < standards.minimumActiveGoals) {
+    return { tone: "warn", label: "Needs goals" };
+  }
+
+  if (!standards.checkInRequired && !standards.goalsRequired) {
+    return { tone: "muted", label: "Not required" };
+  }
+
+  return { tone: "ok", label: "On track" };
+}
+
+function IconRosterCheck() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden>
+      <path d="M20 6 9 17l-5-5" />
+    </svg>
+  );
+}
+
+function IconRosterClock() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <circle cx="12" cy="12" r="10" />
+      <polyline points="12 6 12 12 16 14" />
+    </svg>
+  );
+}
+
+function IconRosterX() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden>
+      <line x1="18" y1="6" x2="6" y2="18" />
+      <line x1="6" y1="6" x2="18" y2="18" />
+    </svg>
+  );
+}
+
+function IconRosterWarn() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+      <line x1="12" y1="9" x2="12" y2="13" />
+      <line x1="12" y1="17" x2="12.01" y2="17" />
+    </svg>
+  );
+}
+
+function RosterStatusIcon({ tone }: { tone: RosterTone }) {
+  if (tone === "muted") {
+    return <span className="enterprise-team-roster-status-icon enterprise-team-roster-status-icon--muted" aria-hidden>—</span>;
+  }
+  const className = `enterprise-team-roster-status-icon enterprise-team-roster-status-icon--${tone}`;
+  if (tone === "ok") return <span className={className}><IconRosterCheck /></span>;
+  if (tone === "warn") return <span className={className}><IconRosterClock /></span>;
+  return <span className={className}><IconRosterX /></span>;
+}
+
+function RosterOverallIcon({ tone, label }: { tone: RosterTone; label?: string }) {
+  if (tone === "muted") {
+    return <span className="enterprise-team-roster-status-icon enterprise-team-roster-status-icon--muted" aria-hidden>—</span>;
+  }
+  const className = `enterprise-team-roster-status-icon enterprise-team-roster-status-icon--${tone}`;
+  if (tone === "ok") return <span className={className}><IconRosterCheck /></span>;
+  if (tone === "warn") {
+    if (label === "Due soon") {
+      return (
+        <span className={className}>
+          <IconRosterClock />
+        </span>
+      );
+    }
+    return (
+      <span className={className}>
+        <IconRosterWarn />
+      </span>
+    );
+  }
+  return <span className={className}><IconRosterX /></span>;
+}
+
+function RosterMetricCell({
+  tone,
+  primary,
+  secondary,
+  icon = "status",
 }: {
-  label: string;
-  value: string;
-  title?: string;
-  icon?: React.ReactNode;
-  valueClassName?: string;
+  tone: RosterTone;
+  primary: string;
+  secondary?: string;
+  icon?: "status" | "none";
 }) {
   return (
-    <span className="enterprise-team-roster-kpi" title={title}>
-      <span className="enterprise-team-roster-kpi-label">{label}</span>
-      <span className={`enterprise-team-roster-kpi-value${valueClassName ? ` ${valueClassName}` : ""}`}>
-        {icon}
-        {value}
-      </span>
+    <span className="enterprise-team-roster-metric-cell">
+      {icon === "status" ? (
+        <span className={`enterprise-team-roster-metric-primary enterprise-team-roster-metric-primary--${tone}`}>
+          <RosterStatusIcon tone={tone} />
+          <span>{primary}</span>
+        </span>
+      ) : (
+        <span className={`enterprise-team-roster-metric-primary enterprise-team-roster-metric-primary--${tone}`}>
+          <span>{primary}</span>
+        </span>
+      )}
+      {secondary ? <span className="enterprise-team-roster-metric-secondary">{secondary}</span> : null}
     </span>
   );
 }
 
-function StandardsStatusKey() {
-  const [open, setOpen] = useState(false);
-
+function RosterStatusLegend() {
   return (
-    <div className="enterprise-team-standards-key">
-      <button
-        type="button"
-        className="enterprise-team-standards-key-btn"
-        aria-expanded={open}
-        aria-controls="team-standards-key-panel"
-        onClick={() => setOpen((prev) => !prev)}
-      >
-        Status key
-      </button>
-      {open ? (
-        <div id="team-standards-key-panel" className="enterprise-team-standards-key-panel" role="region" aria-label="Status badge key">
-          <ul className="enterprise-team-standards-key-list">
-            {STANDARDS_BADGE_LEGEND.map((entry) => (
-              <li key={entry.variant}>
-                <span className={standardsBadgeClassName(entry.variant)}>{entry.label}</span>
-                <p>{entry.description}</p>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-    </div>
+    <footer className="enterprise-team-roster-legend" aria-label="Status key">
+      <span className="enterprise-team-roster-legend-item">
+        <RosterStatusIcon tone="ok" /> On track
+      </span>
+      <span className="enterprise-team-roster-legend-sep" aria-hidden>·</span>
+      <span className="enterprise-team-roster-legend-item">
+        <RosterStatusIcon tone="warn" /> Due soon
+      </span>
+      <span className="enterprise-team-roster-legend-sep" aria-hidden>·</span>
+      <span className="enterprise-team-roster-legend-item">
+        <RosterStatusIcon tone="bad" /> Attention
+      </span>
+      <span className="enterprise-team-roster-legend-sep" aria-hidden>·</span>
+      <span className="enterprise-team-roster-legend-item enterprise-team-roster-legend-item--muted">
+        <span className="enterprise-team-roster-status-icon enterprise-team-roster-status-icon--muted" aria-hidden>—</span> Not required
+      </span>
+    </footer>
   );
 }
 
@@ -224,6 +376,15 @@ function IconWorkplaceStandards() {
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
       <path d="M12 3l7 4v5c0 4.2-2.8 7.6-7 9-4.2-1.4-7-4.8-7-9V7l7-4z" />
       <path d="M9 12l2 2 4-4" />
+    </svg>
+  );
+}
+
+function IconGear() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
     </svg>
   );
 }
@@ -863,118 +1024,167 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
           ) : null}
 
           <div className="enterprise-team-roster-section">
-            <div className="enterprise-team-roster-head">
-              <h2 className="enterprise-team-roster-title">Team members</h2>
-              <div className="enterprise-team-roster-head-actions">
-                <StandardsStatusKey />
+            <div className="enterprise-team-roster-panel">
+              <div className="enterprise-team-roster-head">
+                <h2 className="enterprise-team-roster-title">Team members</h2>
                 <label className="enterprise-team-role-filter enterprise-team-role-filter--soon">
                   <select disabled aria-label="Filter by role">
                     <option>All roles</option>
                   </select>
                 </label>
               </div>
-            </div>
 
-            <ul className="enterprise-team-roster">
-              {filteredMembers.map((m) => {
-                const isSelf = m.userId === myId;
-                const isSelected = m.userId === selectedMemberId;
-                const canView = canViewMemberProfile(myRole, m.userId, myId);
-                const displayName = m.user.name ?? m.user.email ?? "Member";
-                const stats = memberStats?.[m.userId];
-                const statsReady = memberStats !== null;
-                const daysSinceCheckIn = stats?.daysSinceLastOneOnOne;
-                const compliance = stats?.standardsCompliance;
-                const followUpDisplay = statsReady
-                  ? formatOverdueFollowUpTasksDisplay(stats?.overdueFollowUpTasks ?? 0)
-                  : null;
-                const cardClass = `enterprise-team-roster-card${isSelected ? " enterprise-team-roster-card--selected" : ""}${isSelf ? " enterprise-team-roster-card--self" : ""}${!canView ? " enterprise-team-roster-card--static" : ""}`;
-                const cardBody = (
-                  <>
-                      <span className="enterprise-team-roster-avatar">
-                        {m.user.image ? (
-                          <img src={m.user.image} alt={displayName} />
-                        ) : (
-                          (m.user.name?.[0] ?? m.user.email?.[0] ?? "?").toUpperCase()
-                        )}
-                      </span>
-                      <span className="enterprise-team-roster-main">
-                        <span className="enterprise-team-roster-headline">
-                          <span className="enterprise-team-roster-name">
-                            {displayName}
-                            {isSelf ? " (you)" : ""}
-                          </span>
-                          <span className="enterprise-team-roster-role">{roleAbbrev(m.role)}</span>
+              <div className="enterprise-team-roster-standards-bar">
+                <span className="enterprise-team-roster-standards-bar-icon" aria-hidden>
+                  <IconWorkplaceStandards />
+                </span>
+                <div className="enterprise-team-roster-standards-bar-copy">
+                  <p className="enterprise-team-roster-standards-kicker">Workplace standards</p>
+                  <p className="enterprise-team-roster-standards-line">
+                    {workplaceStandards.checkInRequired ? (
+                      <>
+                        <span>
+                          Check-ins: {formatCheckInFrequencySummary(workplaceStandards)} · Grace period:{" "}
+                          {formatGracePeriodSummary(workplaceStandards.checkInGracePeriodDays)}
                         </span>
-                        <span className="enterprise-team-roster-kpis">
-                          <RosterKpi
-                            label="Last check-in"
-                            value={statsReady ? formatDaysSinceCheckIn(daysSinceCheckIn) : "…"}
-                            title={statsReady ? formatDaysSinceCheckInTitle(daysSinceCheckIn) : undefined}
-                          />
-                          <RosterKpi
-                            label="Goals"
-                            value={statsReady ? (compliance?.goalsDisplay ?? "—") : "…"}
-                            title={
-                              statsReady && compliance
-                                ? compliance.goalsActionText
-                                : undefined
-                            }
-                          />
-                          {statsReady && compliance ? (
-                            <span className="enterprise-team-roster-standards-badges">
-                              {memberStandardsBadges(compliance, daysSinceCheckIn).map((badge) => (
-                                <span
-                                  key={badge.key}
-                                  className={standardsBadgeClassName(badge.variant)}
-                                  title={badge.title}
-                                >
-                                  {badge.label}
-                                </span>
-                              ))}
-                            </span>
-                          ) : null}
-                          {followUpDisplay ? (
-                            <RosterKpi
-                              label={followUpDisplay.label}
-                              value={followUpDisplay.value}
-                              title={followUpDisplay.title}
-                              valueClassName="enterprise-team-roster-kpi-value--overdue"
-                            />
-                          ) : null}
-                        </span>
-                      </span>
-                      {canView ? (
-                        <span className="enterprise-team-roster-chevron" aria-hidden>
-                          ›
-                        </span>
-                      ) : (
-                        <span className="enterprise-team-roster-lock" title="You don't have access to this member's profile" aria-label="Profile locked">
-                          <IconLock />
-                        </span>
-                      )}
-                  </>
-                );
-                return (
-                  <li key={m.id}>
-                    {canView ? (
-                      <button
-                        type="button"
-                        className={cardClass}
-                        onClick={() => setSelectedMemberId(m.userId)}
-                        data-testid={`team-roster-member-${m.userId}`}
-                      >
-                        {cardBody}
-                      </button>
+                      </>
                     ) : (
-                      <div className={cardClass} data-testid={`team-roster-member-${m.userId}`}>
-                        {cardBody}
-                      </div>
+                      <span>Check-ins: Not required</span>
                     )}
-                  </li>
-                );
-              })}
-            </ul>
+                  </p>
+                  <p className="enterprise-team-roster-standards-line">
+                    Goals:{" "}
+                    {workplaceStandards.goalsRequired && workplaceStandards.minimumActiveGoals > 0
+                      ? `${workplaceStandards.minimumActiveGoals} active goal${workplaceStandards.minimumActiveGoals === 1 ? "" : "s"} required`
+                      : "Optional"}
+                  </p>
+                </div>
+                {showOwnerManageRow ? (
+                  <button
+                    type="button"
+                    className="enterprise-team-roster-standards-manage"
+                    onClick={() => setWorkplaceStandardsOpen(true)}
+                  >
+                    Manage Standards
+                  </button>
+                ) : null}
+              </div>
+
+              <div className="enterprise-team-roster-table">
+                <div className="enterprise-team-roster-table-head" aria-hidden>
+                  <span>Member</span>
+                  <span>Check-in</span>
+                  <span>Goals</span>
+                  <span>Overall</span>
+                  <span className="enterprise-team-roster-table-head-spacer" />
+                </div>
+
+                <ul className="enterprise-team-roster">
+                  {filteredMembers.map((m) => {
+                    const isSelf = m.userId === myId;
+                    const isSelected = m.userId === selectedMemberId;
+                    const canView = canViewMemberProfile(myRole, m.userId, myId);
+                    const displayName = m.user.name ?? m.user.email ?? "Member";
+                    const stats = memberStats?.[m.userId];
+                    const statsReady = memberStats !== null;
+                    const daysSinceCheckIn = stats?.daysSinceLastOneOnOne;
+                    const compliance = stats?.standardsCompliance;
+                    const activeGoals = stats?.activeDevGoals ?? 0;
+                    const checkIn = statsReady
+                      ? rosterCheckInColumn(compliance, daysSinceCheckIn, workplaceStandards)
+                      : null;
+                    const goals = statsReady ? rosterGoalsColumn(workplaceStandards, activeGoals) : null;
+                    const overall = statsReady
+                      ? rosterOverallStatus(compliance, daysSinceCheckIn, workplaceStandards, activeGoals)
+                      : null;
+                    const cardClass = `enterprise-team-roster-card${isSelected ? " enterprise-team-roster-card--selected" : ""}${isSelf ? " enterprise-team-roster-card--self" : ""}${!canView ? " enterprise-team-roster-card--static" : ""}`;
+                    const cardBody = (
+                      <>
+                        <span className="enterprise-team-roster-col enterprise-team-roster-col--member">
+                          <span className="enterprise-team-roster-avatar">
+                            {m.user.image ? (
+                              <img src={m.user.image} alt={displayName} />
+                            ) : (
+                              (m.user.name?.[0] ?? m.user.email?.[0] ?? "?").toUpperCase()
+                            )}
+                          </span>
+                          <span className="enterprise-team-roster-member-copy">
+                            <span className="enterprise-team-roster-headline">
+                              <span className="enterprise-team-roster-name">
+                                {displayName}
+                                {isSelf ? " (you)" : ""}
+                              </span>
+                              <span className={rolePillClass(m.role)}>{roleLabel(m.role)}</span>
+                            </span>
+                          </span>
+                        </span>
+
+                        <span className="enterprise-team-roster-col enterprise-team-roster-col--check-in">
+                          {checkIn ? (
+                            <RosterMetricCell
+                              tone={checkIn.tone}
+                              primary={checkIn.primary}
+                              secondary={checkIn.secondary}
+                            />
+                          ) : (
+                            <span className="enterprise-team-roster-metric-cell">…</span>
+                          )}
+                        </span>
+
+                        <span className="enterprise-team-roster-col enterprise-team-roster-col--goals">
+                          {goals ? (
+                            <RosterMetricCell tone={goals.tone} primary={goals.primary} icon="none" />
+                          ) : (
+                            <span className="enterprise-team-roster-metric-cell">…</span>
+                          )}
+                        </span>
+
+                        <span className="enterprise-team-roster-col enterprise-team-roster-col--overall">
+                          {overall ? (
+                            <span className={`enterprise-team-roster-overall enterprise-team-roster-overall--${overall.tone}`}>
+                              <RosterOverallIcon tone={overall.tone} label={overall.label} />
+                              <span>{overall.label}</span>
+                            </span>
+                          ) : (
+                            <span className="enterprise-team-roster-metric-cell">…</span>
+                          )}
+                        </span>
+
+                        {canView ? (
+                          <span className="enterprise-team-roster-chevron" aria-hidden>
+                            ›
+                          </span>
+                        ) : (
+                          <span className="enterprise-team-roster-lock" title="You don't have access to this member's profile" aria-label="Profile locked">
+                            <IconLock />
+                          </span>
+                        )}
+                      </>
+                    );
+                    return (
+                      <li key={m.id}>
+                        {canView ? (
+                          <button
+                            type="button"
+                            className={cardClass}
+                            onClick={() => setSelectedMemberId(m.userId)}
+                            data-testid={`team-roster-member-${m.userId}`}
+                          >
+                            {cardBody}
+                          </button>
+                        ) : (
+                          <div className={cardClass} data-testid={`team-roster-member-${m.userId}`}>
+                            {cardBody}
+                          </div>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+
+              <RosterStatusLegend />
+            </div>
           </div>
         </aside>
 

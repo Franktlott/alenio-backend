@@ -215,6 +215,19 @@ export function patchApiProfile(body: { name?: string; image?: string | null; ti
   ).then((r) => r.data);
 }
 
+export function requestEmailChange(newEmail: string) {
+  return apiPostJson<{ data: { ok: true; email: string } }>("/api/profile/email-change/request", {
+    newEmail,
+  }).then((r) => r.data);
+}
+
+export function confirmEmailChange(newEmail: string, otp: string) {
+  return apiPostJson<{ data: { id: string; name: string | null; email: string | null; image: string | null; timezone: string | null } }>(
+    "/api/profile/email-change/confirm",
+    { newEmail, otp },
+  ).then((r) => r.data);
+}
+
 /** Permanently delete the signed-in user and all associated app data (password required). */
 export function deleteApiAccount(password: string) {
   return apiRequest<{ data: { deleted: boolean } }>("/api/user", {

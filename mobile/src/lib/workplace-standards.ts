@@ -12,7 +12,7 @@ export type WorkplaceStandards = {
 
 export const DEFAULT_WORKPLACE_STANDARDS: WorkplaceStandards = {
   checkInRequired: true,
-  checkInFrequencyValue: 7,
+  checkInFrequencyValue: 30,
   checkInFrequencyUnit: "days",
   checkInGracePeriodDays: 2,
   requiredCheckInTemplateId: null,

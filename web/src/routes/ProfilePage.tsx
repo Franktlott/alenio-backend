@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { LEGAL_COMPANY_NAME, LEGAL_PARENT_COMPANY_NAME } from "../lib/legal-constants";
-import { clearAccessToken, getAuthClient } from "../lib/auth-client";
+import { clearAccessToken, getAuthClient, syncBackendUser } from "../lib/auth-client";
 import { useEnterpriseShell } from "../contexts/EnterpriseShellContext";
 import { DeleteAccountModal } from "../components/DeleteAccountModal";
+import { ChangeEmailModal } from "../components/ChangeEmailModal";
 import { ProfileTeamsSection } from "../components/ProfileTeamsSection";
 import {
   fetchWebTeams,
@@ -58,6 +59,7 @@ export function ProfilePage() {
   const [photoBusy, setPhotoBusy] = useState(false);
   const [formErr, setFormErr] = useState<string | null>(null);
   const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
+  const [changeEmailOpen, setChangeEmailOpen] = useState(false);
   const [timezone, setTimezone] = useState(getBrowserTimeZone());
   const [timezoneSaving, setTimezoneSaving] = useState(false);
 
@@ -234,7 +236,7 @@ export function ProfilePage() {
                     disabled={!me}
                     autoComplete="name"
                   />
-                  <p className="enterprise-profile-edit-hint">Email cannot be changed here.</p>
+                  <p className="enterprise-profile-edit-hint">Display name only — use Change email below to update your sign-in address.</p>
                 </>
               ) : (
                 <>
@@ -244,7 +246,21 @@ export function ProfilePage() {
                   </p>
                 </>
               )}
-              <div className="enterprise-muted enterprise-profile-email">{me?.email ?? "—"}</div>
+              <div className="enterprise-profile-email-row">
+                <div className="enterprise-muted enterprise-profile-email">{me?.email ?? "—"}</div>
+                {!isEditing && me?.email ? (
+                  <button
+                    type="button"
+                    className="enterprise-profile-change-email-btn"
+                    onClick={() => {
+                      setFormErr(null);
+                      setChangeEmailOpen(true);
+                    }}
+                  >
+                    Change email
+                  </button>
+                ) : null}
+              </div>
               <label className="enterprise-muted enterprise-profile-label" htmlFor="profile-timezone">
                 Time zone
               </label>
@@ -353,6 +369,22 @@ export function ProfilePage() {
         </footer>
         </div>
       </div>
+
+      <ChangeEmailModal
+        open={changeEmailOpen}
+        currentEmail={me?.email ?? ""}
+        onClose={() => setChangeEmailOpen(false)}
+        onChanged={async (email) => {
+          setMe((prev) => (prev ? { ...prev, email } : prev));
+          await syncBackendUser();
+          try {
+            await getAuthClient().getSession({ fetchOptions: { headers: { "X-Force-Fetch": "1" } } } as never);
+          } catch {
+            /* session refresh best-effort */
+          }
+          await refreshMeAndTeams();
+        }}
+      />
 
       <DeleteAccountModal
         open={deleteAccountOpen}

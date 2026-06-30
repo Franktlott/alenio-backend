@@ -315,6 +315,7 @@ export function OneOnOneHistoryTab({
   const [senecaPrep, setSenecaPrep] = useState<SenecaPrep | null>(null);
   const [senecaPrepLoading, setSenecaPrepLoading] = useState(false);
   const [senecaPrepErr, setSenecaPrepErr] = useState<string | null>(null);
+  const [senecaPrepRequested, setSenecaPrepRequested] = useState(false);
   const compactCheckInLayout = useCompactCheckInLayout();
   const checkInFullscreen = compactCheckInLayout || userExpandedFullscreen;
   const todayStart = useMemo(() => {
@@ -413,14 +414,15 @@ export function OneOnOneHistoryTab({
     setSenecaPrep(null);
     setSenecaPrepErr(null);
     setSenecaPrepLoading(false);
+    setSenecaPrepRequested(false);
     setErr(null);
     setView("fill");
   };
 
-  useEffect(() => {
-    if (view !== "fill" || !selectedTemplate || !canCreate || editingMeeting) return;
+  const requestSenecaPrep = useCallback(() => {
+    if (!selectedTemplate || senecaPrepLoading) return;
 
-    let cancelled = false;
+    setSenecaPrepRequested(true);
     setSenecaPrepLoading(true);
     setSenecaPrepErr(null);
     void fetchSenecaPrep(teamId, memberUserId, {
@@ -428,23 +430,13 @@ export function OneOnOneHistoryTab({
       memberName,
       managerName,
     })
-      .then((res) => {
-        if (!cancelled) setSenecaPrep(res.prep);
-      })
+      .then((res) => setSenecaPrep(res.prep))
       .catch((e) => {
-        if (!cancelled) {
-          setSenecaPrepErr(e instanceof Error ? e.message : "Could not load Seneca prep.");
-          setSenecaPrep(null);
-        }
+        setSenecaPrepErr(e instanceof Error ? e.message : "Could not load Seneca prep.");
+        setSenecaPrep(null);
       })
-      .finally(() => {
-        if (!cancelled) setSenecaPrepLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [view, selectedTemplate?.id, teamId, memberUserId, memberName, managerName, canCreate, editingMeeting]);
+      .finally(() => setSenecaPrepLoading(false));
+  }, [selectedTemplate, senecaPrepLoading, teamId, memberUserId, memberName, managerName]);
 
   useEffect(() => {
     if (!menuMeetingId) return;
@@ -907,6 +899,7 @@ export function OneOnOneHistoryTab({
     setSenecaPrep(null);
     setSenecaPrepErr(null);
     setSenecaPrepLoading(false);
+    setSenecaPrepRequested(false);
     setErr(null);
   };
 
@@ -1169,11 +1162,13 @@ export function OneOnOneHistoryTab({
             prep={senecaPrep}
             loading={senecaPrepLoading}
             err={senecaPrepErr}
+            prepRequested={senecaPrepRequested}
+            onRequestPrep={requestSenecaPrep}
           />
         </div>,
         {
           title: selectedTemplate.title,
-          subtitle: `Before your check-in with ${memberName}${leaderPrepItems.length ? " · review Seneca prep below" : ""}`,
+          subtitle: `Before your check-in with ${memberName}${leaderPrepItems.length ? " · review leader prep below" : ""}`,
           backLabel: "Choose another template",
           onBack: exitFill,
           footer: (
@@ -1182,7 +1177,6 @@ export function OneOnOneHistoryTab({
                 type="button"
                 className="enterprise-oneone-templates-primary-btn enterprise-oneone-fill-save"
                 onClick={() => setPrepAcknowledged(true)}
-                disabled={senecaPrepLoading}
               >
                 Start check-in
               </button>
@@ -1240,6 +1234,8 @@ export function OneOnOneHistoryTab({
               prep={senecaPrep}
               loading={senecaPrepLoading}
               err={senecaPrepErr}
+              prepRequested={senecaPrepRequested}
+              onRequestPrep={requestSenecaPrep}
               compact
             />
           ) : null}

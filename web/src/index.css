@@ -3241,80 +3241,118 @@ input {
   gap: 0.75rem;
 }
 
+.enterprise-team-roster-panel {
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
+  overflow: hidden;
+}
+
 .enterprise-team-roster-head {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid #eef2f6;
 }
 
-.enterprise-team-roster-head-actions {
+.enterprise-team-roster-standards-bar {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #eef2f6;
+  background: #f8fafc;
+}
+
+.enterprise-team-roster-standards-bar-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 8px;
+  background: #eef2ff;
+  color: #6366f1;
   flex-shrink: 0;
-  position: relative;
 }
 
-.enterprise-team-standards-key {
-  position: relative;
+.enterprise-team-roster-standards-bar-copy {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
 }
 
-.enterprise-team-standards-key-btn {
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  padding: 0.45rem 0.65rem;
-  font: inherit;
+.enterprise-team-roster-standards-kicker {
+  margin: 0;
+  font-size: 0.5625rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.enterprise-team-roster-standards-line {
+  margin: 0;
   font-size: 0.8125rem;
-  font-weight: 600;
   color: #334155;
+  line-height: 1.35;
+}
+
+.enterprise-team-roster-standards-manage {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 0.3rem 0.55rem;
+  font: inherit;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: #64748b;
   background: #fff;
   cursor: pointer;
+  white-space: nowrap;
 }
 
-.enterprise-team-standards-key-btn:hover {
-  border-color: #c7d2fe;
+.enterprise-team-roster-standards-manage:hover {
   color: #4338ca;
+  border-color: #c7d2fe;
+  background: #fafbff;
 }
 
-.enterprise-team-standards-key-btn:focus-visible {
-  outline: 2px solid #6366f1;
-  outline-offset: 2px;
-}
-
-.enterprise-team-standards-key-panel {
-  position: absolute;
-  top: calc(100% + 0.35rem);
-  right: 0;
-  z-index: 20;
-  width: min(320px, 78vw);
-  padding: 0.75rem;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  background: #fff;
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.12);
-}
-
-.enterprise-team-standards-key-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
+.enterprise-team-roster-table {
   display: flex;
   flex-direction: column;
-  gap: 0.65rem;
 }
 
-.enterprise-team-standards-key-list li {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
+.enterprise-team-roster-table-head {
+  display: grid;
+  grid-template-columns: minmax(150px, 1.5fr) minmax(120px, 1fr) minmax(100px, 1fr) minmax(110px, 1fr) 1.25rem;
+  gap: 0.55rem;
+  padding: 0.4rem 1rem;
+  border-bottom: 1px solid #eef2f6;
+  background: #f8fafc;
+  font-size: 0.5625rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #94a3b8;
+  text-align: left;
 }
 
-.enterprise-team-standards-key-list p {
-  margin: 0;
-  font-size: 0.6875rem;
-  line-height: 1.35;
-  color: #64748b;
+.enterprise-team-roster-table-head span {
+  display: block;
+  min-width: 0;
+  text-align: left;
+}
+
+.enterprise-team-roster-table-head-spacer {
+  width: 1.25rem;
 }
 
 .enterprise-team-roster-title {
@@ -3330,35 +3368,38 @@ input {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
 }
 
 .enterprise-team-roster-card {
   width: 100%;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(150px, 1.5fr) minmax(120px, 1fr) minmax(100px, 1fr) minmax(110px, 1fr) 1.25rem;
   align-items: center;
-  gap: 0.65rem;
-  padding: 0.55rem 0.75rem;
-  border: 1px solid #e8edf3;
-  border-radius: 12px;
+  gap: 0.55rem;
+  padding: 0.6rem 1rem;
+  border: 0;
+  border-bottom: 1px solid #eef2f6;
+  border-radius: 0;
   background: #fff;
   cursor: pointer;
   text-align: left;
   font: inherit;
   color: inherit;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  box-shadow: none;
+  transition: background 0.15s ease;
+}
+
+.enterprise-team-roster-card:last-child {
+  border-bottom: 0;
 }
 
 .enterprise-team-roster-card:hover {
-  border-color: #c7d2fe;
-  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.08);
+  background: #fafbff;
 }
 
 .enterprise-team-roster-card--selected {
-  border-color: #6366f1;
-  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.28);
+  background: rgba(99, 102, 241, 0.06);
+  box-shadow: inset 3px 0 0 #818cf8;
 }
 
 .enterprise-team-roster-card--self {
@@ -3371,19 +3412,40 @@ input {
 }
 
 .enterprise-team-roster-card--static:hover {
-  border-color: #e8edf3;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
+  background: #fff;
+}
+
+.enterprise-team-roster-col {
+  min-width: 0;
+  text-align: left;
+  justify-self: start;
+}
+
+.enterprise-team-roster-col--check-in,
+.enterprise-team-roster-col--goals,
+.enterprise-team-roster-col--overall {
+  padding-top: 0;
+}
+
+.enterprise-team-roster-col--member {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.enterprise-team-roster-member-copy {
+  min-width: 0;
 }
 
 .enterprise-team-roster-avatar {
-  width: 40px;
-  height: 40px;
+  width: 32px;
+  height: 32px;
   border-radius: 999px;
   overflow: hidden;
   background: #eef2ff;
   color: #4361ee;
   font-weight: 800;
-  font-size: 0.875rem;
+  font-size: 0.75rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -3396,79 +3458,184 @@ input {
   object-fit: cover;
 }
 
-.enterprise-team-roster-main {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-}
-
 .enterprise-team-roster-headline {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   flex-wrap: wrap;
-  gap: 0.35rem 0.5rem;
+  gap: 0.35rem;
   min-width: 0;
 }
 
 .enterprise-team-roster-name {
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   font-weight: 700;
   color: #0f172a;
-  line-height: 1.2;
+  line-height: 1.15;
 }
 
-.enterprise-team-roster-role {
-  font-size: 0.6875rem;
-  font-weight: 700;
-  color: #94a3b8;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  flex-shrink: 0;
-}
-
-.enterprise-team-roster-overdue {
-  margin-left: 0.5rem;
-  font-size: 0.6875rem;
-  font-weight: 700;
-  color: #dc2626;
+.enterprise-team-roster-role-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.12rem 0.4rem;
+  border-radius: 6px;
+  font-size: 0.625rem;
+  font-weight: 600;
   letter-spacing: 0;
+  text-transform: none;
+  background: #f1f5f9;
+  color: #475569;
 }
 
-.enterprise-team-roster-kpis {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem 1.25rem;
+.enterprise-team-roster-role-pill--owner {
+  background: #ede9fe;
+  color: #6d28d9;
 }
 
-.enterprise-team-roster-kpi {
+.enterprise-team-roster-role-pill--leader {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.enterprise-team-roster-role-pill--admin {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.enterprise-team-roster-metric-cell {
   display: flex;
-  align-items: baseline;
-  gap: 0.3rem;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.05rem;
   min-width: 0;
 }
 
-.enterprise-team-roster-kpi-label {
-  font-size: 0.625rem;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: #94a3b8;
-  flex-shrink: 0;
-}
-
-.enterprise-team-roster-kpi-value {
+.enterprise-team-roster-metric-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
   font-size: 0.75rem;
-  font-weight: 700;
-  color: #334155;
+  font-weight: 600;
+  line-height: 1.15;
+  color: #0f172a;
 }
 
-.enterprise-team-roster-kpi-value--overdue {
+.enterprise-team-roster-metric-primary--ok {
+  color: #059669;
+}
+
+.enterprise-team-roster-metric-primary--warn {
+  color: #c2410c;
+}
+
+.enterprise-team-roster-metric-primary--bad {
   color: #dc2626;
 }
 
-.enterprise-team-roster-kpi-icon {
+.enterprise-team-roster-metric-primary--muted {
+  color: #64748b;
+  font-weight: 500;
+}
+
+.enterprise-team-roster-metric-secondary {
+  font-size: 0.625rem;
+  color: #94a3b8;
+  line-height: 1.15;
+}
+
+.enterprise-team-roster-status-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+}
+
+.enterprise-team-roster-status-icon--ok {
+  color: #059669;
+}
+
+.enterprise-team-roster-status-icon--warn {
+  color: #c2410c;
+}
+
+.enterprise-team-roster-status-icon--bad {
+  color: #dc2626;
+}
+
+.enterprise-team-roster-status-icon--muted {
+  width: auto;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: #94a3b8;
+}
+
+.enterprise-team-roster-overall {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
   font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.15;
+}
+
+.enterprise-team-roster-overall--ok {
+  color: #059669;
+}
+
+.enterprise-team-roster-overall--warn {
+  color: #c2410c;
+}
+
+.enterprise-team-roster-overall--bad {
+  color: #dc2626;
+}
+
+.enterprise-team-roster-overall--muted {
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.enterprise-team-roster-chevron {
+  align-self: center;
+  font-size: 1rem;
+  color: #cbd5e1;
+  line-height: 1;
+}
+
+.enterprise-team-roster-lock {
+  align-self: center;
+  color: #cbd5e1;
+}
+
+.enterprise-team-roster-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0.45rem 1rem 0.55rem;
+  border-top: 1px solid #f1f5f9;
+  background: transparent;
+}
+
+.enterprise-team-roster-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.625rem;
+  font-weight: 500;
+  color: #94a3b8;
+}
+
+.enterprise-team-roster-legend-item--muted {
+  color: #cbd5e1;
+}
+
+.enterprise-team-roster-legend-sep {
+  font-size: 0.625rem;
+  color: #cbd5e1;
+  line-height: 1;
 }
 
 .enterprise-team-roster-standards-badges,
@@ -5580,6 +5747,54 @@ input {
   margin-top: 0.75rem;
 }
 
+@media (max-width: 900px) {
+  .enterprise-team-roster-table-head {
+    display: none;
+  }
+
+  .enterprise-team-roster-card {
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      "member chevron"
+      "checkin checkin"
+      "goals goals"
+      "status status";
+    gap: 0.45rem 0.65rem;
+    padding: 0.75rem 1rem;
+  }
+
+  .enterprise-team-roster-col--member {
+    grid-area: member;
+  }
+
+  .enterprise-team-roster-col--check-in {
+    grid-area: checkin;
+  }
+
+  .enterprise-team-roster-col--goals {
+    grid-area: goals;
+  }
+
+  .enterprise-team-roster-col--status {
+    grid-area: status;
+  }
+
+  .enterprise-team-roster-chevron,
+  .enterprise-team-roster-lock {
+    grid-area: chevron;
+    align-self: start;
+    margin-top: 0.35rem;
+  }
+
+  .enterprise-team-roster-standards-bar {
+    grid-template-columns: 1fr;
+  }
+
+  .enterprise-team-roster-standards-manage {
+    justify-self: start;
+  }
+}
+
 @media (max-width: 640px) {
   .enterprise-team-stat-row {
     grid-template-columns: 1fr;
@@ -5587,15 +5802,6 @@ input {
 
   .enterprise-team-template-manage-row {
     grid-template-columns: 1fr;
-  }
-
-  .enterprise-team-roster-card {
-    gap: 0.55rem;
-    padding: 0.5rem 0.65rem;
-  }
-
-  .enterprise-team-roster-kpis {
-    gap: 0.3rem 0.85rem;
   }
 }
 
@@ -11170,6 +11376,54 @@ button.enterprise-profile-legal-link {
 
 .enterprise-profile-email {
   font-size: 0.875rem;
+}
+
+.enterprise-profile-email-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+}
+
+.enterprise-profile-change-email-btn {
+  border: none;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--accent, #6366f1);
+  cursor: pointer;
+}
+
+.enterprise-profile-change-email-btn:hover {
+  text-decoration: underline;
+}
+
+.enterprise-change-email-modal {
+  max-width: 440px;
+}
+
+.enterprise-change-email-modal form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.enterprise-change-email-current {
+  margin: 0 0 0.15rem;
+  font-size: 0.875rem;
+  color: #0f172a;
+}
+
+.enterprise-change-email-otp {
+  letter-spacing: 0.18em;
+  font-size: 1.05rem;
+}
+
+.enterprise-change-email-hint {
+  margin: 0;
+  font-size: 0.8125rem;
 }
 
 .enterprise-profile-teams {
@@ -23663,6 +23917,141 @@ button.enterprise-profile-legal-link {
   padding: 0.85rem;
 }
 
+.seneca-prep-card--compact {
+  padding: 0;
+  overflow: hidden;
+}
+
+.seneca-prep-card--ready {
+  border-color: #bbf7d0;
+  background: linear-gradient(180deg, #f0fdf4 0%, #fafbff 100%);
+}
+
+.seneca-prep-ready-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.7rem 0.85rem;
+}
+
+.seneca-prep-ready-bar-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.seneca-prep-ready-bar-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.12rem;
+  min-width: 0;
+}
+
+.seneca-prep-ready-bar-title {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1.2;
+}
+
+.seneca-prep-ready-bar-sub,
+.seneca-prep-ready-bar-summary {
+  font-size: 0.75rem;
+  color: #64748b;
+  line-height: 1.35;
+}
+
+.seneca-prep-ready-bar-preview {
+  display: block;
+  font-size: 0.75rem;
+  color: #475569;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.seneca-prep-ready-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  width: fit-content;
+  padding: 0.12rem 0.45rem 0.12rem 0.35rem;
+  border-radius: 999px;
+  background: #dcfce7;
+  color: #15803d;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.seneca-prep-ready-badge--inline {
+  margin-left: 0.15rem;
+}
+
+.seneca-prep-ready-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-shrink: 0;
+  border: 1px solid #c7d2fe;
+  border-radius: 8px;
+  padding: 0.38rem 0.7rem;
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--seneca-accent-deep);
+  background: #fff;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.seneca-prep-ready-action:hover {
+  background: #eef2ff;
+}
+
+.seneca-prep-ready-action--primary {
+  color: #fff;
+  background: var(--seneca-accent-deep);
+  border-color: var(--seneca-accent-deep);
+}
+
+.seneca-prep-ready-action--primary:hover {
+  filter: brightness(1.05);
+  background: var(--seneca-accent-deep);
+}
+
+.seneca-prep-ready-bar--loading {
+  background: linear-gradient(180deg, #fafbff 0%, #fff 100%);
+}
+
+.seneca-prep-ready-bar--idle {
+  background: linear-gradient(180deg, #fafbff 0%, #fff 100%);
+}
+
+.seneca-prep-ready-bar--error {
+  background: #fffafa;
+}
+
+.seneca-prep-ready-spinner {
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid #e2e8f0;
+  border-top-color: var(--seneca-accent-deep);
+  border-radius: 999px;
+  animation: seneca-prep-spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes seneca-prep-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .seneca-prep-head,
 .seneca-checkin-head {
   display: flex;
@@ -23721,6 +24110,44 @@ button.enterprise-profile-legal-link {
 .seneca-prep-loading {
   margin: 0;
   font-size: 0.8125rem;
+}
+
+.seneca-prep-request {
+  margin-top: 0.65rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.seneca-prep-request-copy {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+.seneca-prep-request-btn {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--seneca-surface-border);
+  border-radius: 8px;
+  padding: 0.4rem 0.75rem;
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--seneca-accent-deep);
+  background: #fff;
+  cursor: pointer;
+}
+
+.seneca-prep-request-btn:hover {
+  background: var(--seneca-surface);
+}
+
+.seneca-prep-request-btn--secondary {
+  font-size: 0.75rem;
+  padding: 0.3rem 0.6rem;
 }
 
 .seneca-checkin-layout {

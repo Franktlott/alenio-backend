@@ -4,6 +4,7 @@ import { logger } from "hono/logger";
 import { env } from "./env";
 import { senecaAvailable, senecaDiagnostics } from "./lib/seneca-openai";
 import { getSessionFromHeaders, type AppSession, type AppUser, verifyEmailPassword } from "./auth";
+import { confirmEmailChange, normalizeEmailInput, requestEmailChange } from "./lib/email-change";
 import { prisma } from "./prisma";
 import { sampleRouter } from "./routes/sample";
 import { teamsRouter } from "./routes/teams";
@@ -591,6 +592,60 @@ app.patch("/api/profile", async (c) => {
   });
 
   return c.json({ data: updated });
+});
+
+app.post("/api/profile/email-change/request", async (c) => {
+  const user = c.get("user");
+  if (!user) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
+
+  const body = await c.req.json().catch(() => ({}));
+  const newEmail = normalizeEmailInput(body.newEmail);
+  if (!newEmail) {
+    return c.json({ error: { message: "Enter a valid email address.", code: "INVALID_EMAIL" } }, 400);
+  }
+
+  const fullUser = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { email: true },
+  });
+  if (!fullUser) return c.json({ error: { message: "User not found", code: "NOT_FOUND" } }, 404);
+
+  try {
+    await requestEmailChange(user.id, fullUser.email, newEmail);
+    return c.json({ data: { ok: true, email: newEmail } });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Could not send verification code.";
+    return c.json({ error: { message, code: "EMAIL_CHANGE_REQUEST_FAILED" } }, 400);
+  }
+});
+
+app.post("/api/profile/email-change/confirm", async (c) => {
+  const user = c.get("user");
+  if (!user) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
+
+  const body = await c.req.json().catch(() => ({}));
+  const newEmail = normalizeEmailInput(body.newEmail);
+  const otp = typeof body.otp === "string" ? body.otp.replace(/\D/g, "") : "";
+  if (!newEmail) {
+    return c.json({ error: { message: "Enter a valid email address.", code: "INVALID_EMAIL" } }, 400);
+  }
+  if (otp.length < 6) {
+    return c.json({ error: { message: "Enter the full verification code.", code: "INVALID_OTP" } }, 400);
+  }
+
+  const fullUser = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { email: true },
+  });
+  if (!fullUser) return c.json({ error: { message: "User not found", code: "NOT_FOUND" } }, 404);
+
+  try {
+    const updated = await confirmEmailChange(user.id, fullUser.email, newEmail, otp);
+    return c.json({ data: updated });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Could not update email.";
+    return c.json({ error: { message, code: "EMAIL_CHANGE_CONFIRM_FAILED" } }, 400);
+  }
 });
 
 // Get current user profile with admin flag

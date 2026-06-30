@@ -203,3 +203,42 @@ export async function createEmailPasswordUser(email: string, password: string, n
   const result = await neonAuthClient.signUp.email({ email, password, name });
   return !result.error;
 }
+
+type NeonEmailOtpClient = {
+  emailOtp: {
+    sendVerificationOtp: (input: {
+      email: string;
+      type: "email-verification";
+    }) => Promise<{ error?: { message?: string } | null }>;
+    checkVerificationOtp: (input: {
+      email: string;
+      otp: string;
+      type: "email-verification";
+    }) => Promise<{ error?: { message?: string } | null }>;
+  };
+};
+
+function emailOtpClient(): NeonEmailOtpClient {
+  return neonAuthClient as unknown as NeonEmailOtpClient;
+}
+
+export async function sendEmailVerificationOtp(email: string): Promise<void> {
+  const result = await emailOtpClient().emailOtp.sendVerificationOtp({
+    email,
+    type: "email-verification",
+  });
+  if (result.error) {
+    throw new Error(result.error.message ?? "Could not send verification code.");
+  }
+}
+
+export async function verifyEmailVerificationOtp(email: string, otp: string): Promise<void> {
+  const result = await emailOtpClient().emailOtp.checkVerificationOtp({
+    email,
+    otp,
+    type: "email-verification",
+  });
+  if (result.error) {
+    throw new Error(result.error.message ?? "Invalid or expired verification code.");
+  }
+}
