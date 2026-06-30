@@ -24,6 +24,9 @@ import { getUSHolidays, type USFederalHoliday } from "@/lib/us-federal-holidays"
 import { eventShowsScheduledTime, formatEventTimeRange } from "@/lib/format-event-time";
 import { CALENDAR_WEEKDAY_LABELS, getDaysInMonth } from "@/lib/calendar-grid";
 import { isMyWorkspaceTask } from "@/lib/workspace-tasks";
+import { fetchExternalCalendarEvents, type ExternalCalendarEventItem } from "@/lib/outlook-calendar-api";
+
+const EXTERNAL_BUSY_COLOR = "#94A3B8";
 
 type CalendarEvent = {
   id: string;
@@ -183,6 +186,42 @@ export default function CalendarScreen() {
     enabled: !!activeTeamId,
   });
 
+  const calendarRange = useMemo(() => {
+    const monthDays = getDaysInMonth(currentMonth);
+    const startDay = monthDays[0];
+    const endDay = monthDays[monthDays.length - 1];
+    if (!startDay || !endDay) return { start: "", end: "" };
+    return {
+      start: startOfDay(startDay).toISOString(),
+      end: new Date(endDay.getFullYear(), endDay.getMonth(), endDay.getDate(), 23, 59, 59, 999).toISOString(),
+    };
+  }, [currentMonth]);
+
+  const { data: externalBusyEvents = [] } = useQuery({
+    queryKey: ["external-calendar-events", calendarRange.start, calendarRange.end],
+    queryFn: () => fetchExternalCalendarEvents(calendarRange.start, calendarRange.end),
+    enabled: !!currentUserId && !!calendarRange.start,
+    staleTime: 60_000,
+  });
+
+  const calendarBarEvents = useMemo(
+    () => [
+      ...events,
+      ...externalBusyEvents.map((event) => ({
+        id: `ext-${event.id}`,
+        title: "Busy",
+        startDate: event.startDate,
+        endDate: event.endDate,
+        allDay: event.allDay,
+        color: EXTERNAL_BUSY_COLOR,
+        teamId: "",
+        createdById: "",
+        createdAt: event.startDate,
+      })),
+    ],
+    [events, externalBusyEvents],
+  );
+
   const { data: tasks = [], isLoading: tasksLoading } = useQuery({
     queryKey: ["tasks", activeTeamId],
     queryFn: () =>
@@ -199,6 +238,14 @@ export default function CalendarScreen() {
 
   const getEventsForDay = (day: Date) =>
     events.filter((e) => {
+      const s = startOfDay(new Date(e.startDate));
+      const en = e.endDate ? startOfDay(new Date(e.endDate)) : s;
+      const d = startOfDay(day);
+      return d >= s && d <= en;
+    });
+
+  const getExternalForDay = (day: Date): ExternalCalendarEventItem[] =>
+    externalBusyEvents.filter((e) => {
       const s = startOfDay(new Date(e.startDate));
       const en = e.endDate ? startOfDay(new Date(e.endDate)) : s;
       const d = startOfDay(day);
@@ -232,6 +279,7 @@ export default function CalendarScreen() {
   for (let i = 0; i < days.length; i += 7) weeks.push(days.slice(i, i + 7));
 
   const selectedEvents = selectedDate ? getEventsForDay(selectedDate) : [];
+  const selectedExternalEvents = selectedDate ? getExternalForDay(selectedDate) : [];
   const selectedTasks = selectedDate ? getTasksForDay(selectedDate) : [];
   const isLoading = eventsLoading || tasksLoading;
 
@@ -254,6 +302,7 @@ export default function CalendarScreen() {
     setRefreshing(true);
     await queryClient.invalidateQueries({ queryKey: ["calendar-events", activeTeamId] });
     await queryClient.invalidateQueries({ queryKey: ["calendar-events-pending", activeTeamId] });
+    await queryClient.invalidateQueries({ queryKey: ["external-calendar-events"] });
     await queryClient.invalidateQueries({ queryKey: ["upcoming-video-meetings"] });
     await queryClient.invalidateQueries({ queryKey: ["tasks", activeTeamId] });
     await queryClient.invalidateQueries({ queryKey: ["teams"] });
@@ -324,7 +373,7 @@ export default function CalendarScreen() {
 
           {/* Week rows */}
           {weeks.map((week, weekIndex) => {
-            const tracks = computeWeekBars(week, events);
+            const tracks = computeWeekBars(week, calendarBarEvents);
             const numTracks = tracks.length;
             const rowHeight = 32 + numTracks * 18 + 6;
 
@@ -491,6 +540,10 @@ export default function CalendarScreen() {
             <Text style={{ fontSize: 11, color: "#64748B" }}>Team events</Text>
           </View>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+            <View style={{ width: 20, height: 8, borderRadius: 2, backgroundColor: EXTERNAL_BUSY_COLOR }} />
+            <Text style={{ fontSize: 11, color: "#64748B" }}>Outlook busy</Text>
+          </View>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
             <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#10B981" }} />
             <Text style={{ fontSize: 11, color: "#64748B" }}>Your tasks</Text>
           </View>
@@ -532,7 +585,10 @@ export default function CalendarScreen() {
               <View style={{ alignItems: "center", paddingVertical: 24 }} testID="loading-indicator">
                 <ActivityIndicator color="#4361EE" />
               </View>
-            ) : selectedEvents.length === 0 && selectedTasks.length === 0 && selectedHolidays.length === 0 ? (
+            ) : selectedEvents.length === 0 &&
+              selectedExternalEvents.length === 0 &&
+              selectedTasks.length === 0 &&
+              selectedHolidays.length === 0 ? (
               <View style={{ backgroundColor: "white", borderRadius: 14, padding: 24, alignItems: "center", shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 4, shadowOffset: { width: 0, height: 1 }, elevation: 1 }} testID="empty-day-state">
                 <Calendar size={28} color="#CBD5E1" />
                 <Text style={{ color: "#94A3B8", marginTop: 8, fontSize: 14 }}>Nothing scheduled</Text>
@@ -685,6 +741,39 @@ export default function CalendarScreen() {
                     </View>
                   );
                 })}
+
+                {selectedExternalEvents.map((event) => (
+                  <View
+                    key={event.id}
+                    style={{
+                      backgroundColor: "white",
+                      borderRadius: 14,
+                      padding: 14,
+                      borderLeftWidth: 4,
+                      borderLeftColor: EXTERNAL_BUSY_COLOR,
+                      shadowColor: "#000",
+                      shadowOpacity: 0.04,
+                      shadowRadius: 4,
+                      shadowOffset: { width: 0, height: 1 },
+                      elevation: 1,
+                    }}
+                    testID={`external-event-${event.id}`}
+                  >
+                    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                      <Text style={{ fontSize: 14, fontWeight: "700", color: "#0F172A", flex: 1 }} numberOfLines={1}>
+                        Busy
+                      </Text>
+                      <View style={{ backgroundColor: "#F1F5F9", paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 }}>
+                        <Text style={{ fontSize: 10, fontWeight: "700", color: "#64748B" }}>Outlook</Text>
+                      </View>
+                    </View>
+                    {!event.allDay ? (
+                      <Text style={{ fontSize: 12, color: "#64748B", marginTop: 4 }}>
+                        {formatEventTimeRange(event.startDate, event.endDate)}
+                      </Text>
+                    ) : null}
+                  </View>
+                ))}
 
                 {selectedTasks.map((task) => (
                   <View key={task.id} style={{ backgroundColor: "white", borderRadius: 14, padding: 14, borderLeftWidth: 4, borderLeftColor: "#10B981", shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 4, shadowOffset: { width: 0, height: 1 }, elevation: 1 }} testID={`task-item-${task.id}`}>

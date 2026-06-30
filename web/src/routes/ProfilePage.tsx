@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { LEGAL_COMPANY_NAME, LEGAL_PARENT_COMPANY_NAME } from "../lib/legal-constants";
 import { clearAccessToken, getAuthClient, syncBackendUser } from "../lib/auth-client";
 import { useEnterpriseShell } from "../contexts/EnterpriseShellContext";
 import { DeleteAccountModal } from "../components/DeleteAccountModal";
 import { ChangeEmailModal } from "../components/ChangeEmailModal";
 import { ProfileTeamsSection } from "../components/ProfileTeamsSection";
+import { OutlookCalendarPanel } from "../components/OutlookCalendarPanel";
 import {
   fetchWebTeams,
   patchApiProfile,
@@ -44,6 +45,7 @@ function IconPencil() {
 
 export function ProfilePage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const {
     me,
     setMe,
@@ -62,6 +64,24 @@ export function ProfilePage() {
   const [changeEmailOpen, setChangeEmailOpen] = useState(false);
   const [timezone, setTimezone] = useState(getBrowserTimeZone());
   const [timezoneSaving, setTimezoneSaving] = useState(false);
+  const [outlookNotice, setOutlookNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    const outlook = searchParams.get("outlook");
+    if (!outlook) return;
+    const message = searchParams.get("message");
+    const next = new URLSearchParams(searchParams);
+    next.delete("outlook");
+    next.delete("message");
+    setSearchParams(next, { replace: true });
+    if (outlook === "connected") {
+      setOutlookNotice("Outlook connected. Your busy times will appear on your calendar.");
+      setFormErr(null);
+    } else if (outlook === "error") {
+      setOutlookNotice(null);
+      setFormErr(message?.trim() || "Could not connect Outlook.");
+    }
+  }, [searchParams, setSearchParams]);
 
   const onAccountDeleted = async () => {
     try {
@@ -323,6 +343,16 @@ export function ProfilePage() {
               await refreshMeAndTeams();
             }}
           />
+
+          <section className="enterprise-card enterprise-profile-outlook">
+            <h2 className="enterprise-card-title enterprise-card-title-spaced">Outlook calendar</h2>
+            {outlookNotice ? (
+              <p className="enterprise-outlook-notice" role="status">
+                {outlookNotice}
+              </p>
+            ) : null}
+            <OutlookCalendarPanel onStatusChange={() => setOutlookNotice(null)} />
+          </section>
           </div>
 
         <footer className="enterprise-profile-legal" aria-labelledby="profile-legal-heading">

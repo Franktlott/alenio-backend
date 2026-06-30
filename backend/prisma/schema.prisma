@@ -46,6 +46,8 @@ model User {
   teamInvitesSent TeamInvite[] @relation("TeamInvitesSent")
   teamInvitesAccepted TeamInvite[] @relation("TeamInvitesAccepted")
   calendarEvents CalendarEvent[]
+  calendarConnections CalendarConnection[]
+  externalCalendarEvents ExternalCalendarEvent[]
   activities    TeamActivity[]
   createdTopics Topic[] @relation("TopicCreator")
   activityReactions TeamActivityReaction[]
@@ -511,6 +513,47 @@ model CalendarEvent {
   createdBy User @relation(fields: [createdById], references: [id], onDelete: Cascade)
 
   @@index([teamId, startDate])
+}
+
+model CalendarConnection {
+  id                   String    @id @default(cuid())
+  userId               String
+  provider             String
+  accountEmail         String?
+  externalCalendarId   String?
+  externalCalendarName String?
+  accessTokenEnc       String?
+  refreshTokenEnc      String
+  accessTokenExpiresAt DateTime?
+  lastSyncedAt         DateTime?
+  syncError            String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  user   User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  events ExternalCalendarEvent[]
+
+  @@unique([userId, provider])
+  @@index([userId])
+}
+
+model ExternalCalendarEvent {
+  id              String   @id @default(cuid())
+  userId          String
+  connectionId    String
+  externalEventId String
+  startDate       DateTime
+  endDate         DateTime?
+  allDay          Boolean  @default(false)
+  titleDisplay    String   @default("Busy")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user       User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  connection CalendarConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  @@unique([connectionId, externalEventId])
+  @@index([userId, startDate])
 }
 
 model TeamActivity {

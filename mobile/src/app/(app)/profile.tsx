@@ -25,7 +25,7 @@ import { COMMON_TIMEZONES, formatTimeZoneLabel, getBrowserTimeZone, resolveTimeZ
 import { authClient, clearAccessToken, getAuthHeaders } from "@/lib/auth/auth-client";
 import { SESSION_QUERY_KEY, markSessionSignedOut, useInvalidateSession, useSession } from "@/lib/auth/use-session";
 import { clearNotifDebugLog, getNotifDebugLog, getNotifStatus, registerForPushNotificationsAsync } from "@/lib/notifications";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { useMutation, useQuery, useQueryClient, useQueries } from "@tanstack/react-query";
 import { api } from "@/lib/api/api";
 import { readJsonSafe } from "@/lib/api/api";
@@ -46,6 +46,7 @@ import {
   ProfileSection,
 } from "@/components/profile/ProfileEnterpriseUI";
 import { ProfileWorkspaceList } from "@/components/profile/ProfileWorkspaceList";
+import { OutlookCalendarCard } from "@/components/profile/OutlookCalendarCard";
 
 const DEMO_EMAIL = "demo@alenio.app";
 
@@ -67,6 +68,7 @@ type NotifPrefs = {
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
+  const { outlook, message } = useLocalSearchParams<{ outlook?: string; message?: string }>();
   const { data: session } = useSession();
   const invalidateSession = useInvalidateSession();
   const queryClient = useQueryClient();
@@ -75,6 +77,17 @@ export default function ProfileScreen() {
   const { switchWorkspace } = useSwitchWorkspace();
   const user = session?.user;
   const isDemo = user?.email === DEMO_EMAIL;
+
+  useEffect(() => {
+    if (outlook === "connected") {
+      toast({ title: "Outlook connected", preset: "done" });
+      void queryClient.invalidateQueries({ queryKey: ["external-calendar-events"] });
+      router.setParams({ outlook: undefined, message: undefined });
+    } else if (outlook === "error") {
+      Alert.alert("Outlook", typeof message === "string" ? message : "Could not connect Outlook.");
+      router.setParams({ outlook: undefined, message: undefined });
+    }
+  }, [outlook, message, queryClient]);
 
   const nameColor = "#0F172A";
   const emailColor = "#64748B";
@@ -742,6 +755,10 @@ export default function ProfileScreen() {
                 testID="timezone-menu-row"
               />
             </ProfileCard>
+          </ProfileSection>
+
+          <ProfileSection title="Calendar sync">
+            <OutlookCalendarCard />
           </ProfileSection>
 
         {/* Push Notifications Debug — hidden, preserved for future use */}

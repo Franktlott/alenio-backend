@@ -15243,6 +15243,71 @@ button.enterprise-profile-legal-link {
   background: #4361ee;
 }
 
+.enterprise-cal-legend-bar-outlook {
+  background: #94a3b8;
+}
+
+.enterprise-cal-badge-outlook {
+  font-size: 10px;
+  font-weight: 700;
+  color: #64748b;
+  background: #f1f5f9;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.enterprise-cal-day-event-external {
+  opacity: 0.95;
+}
+
+.enterprise-profile-outlook {
+  grid-column: 1 / -1;
+}
+
+.enterprise-outlook-notice {
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #047857;
+  padding: 0.65rem 1rem;
+  border-radius: 10px;
+  margin: 0 0 0.75rem;
+  font-size: 0.875rem;
+}
+
+.enterprise-outlook-panel-copy {
+  margin: 0 0 1rem;
+  font-size: 0.875rem;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.enterprise-outlook-panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.enterprise-outlook-connected-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: #047857;
+  background: #ecfdf5;
+  padding: 3px 10px;
+  border-radius: 999px;
+}
+
+.enterprise-outlook-panel-meta {
+  margin: 0.35rem 0 0;
+  font-size: 0.8125rem;
+}
+
+.enterprise-outlook-panel-loading {
+  margin: 0;
+}
+
 .enterprise-cal-legend-dot {
   width: 6px;
   height: 6px;

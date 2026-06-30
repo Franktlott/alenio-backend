@@ -48,6 +48,8 @@ import { ensureRecurrenceSeriesSchema } from "./lib/ensure-recurrence-series-sch
 import { ensureUserTimezoneSchema } from "./lib/ensure-user-timezone-schema";
 import { ensureCalendarApprovalSchema } from "./lib/ensure-calendar-approval-schema";
 import { ensureWorkplaceStandardsSchema } from "./lib/ensure-workplace-standards-schema";
+import { ensureCalendarConnectionSchema } from "./lib/ensure-calendar-connection-schema";
+import { calendarConnectionsRouter } from "./routes/calendar-connections";
 import { developmentGoalsRouter } from "./routes/development-goals";
 import { senecaRouter } from "./routes/seneca";
 import { senecaTeamRouter } from "./routes/seneca-team";
@@ -65,6 +67,7 @@ const recurrenceSeriesSchemaReady = ensureRecurrenceSeriesSchema(prisma);
 const userTimezoneSchemaReady = ensureUserTimezoneSchema(prisma);
 const calendarApprovalSchemaReady = ensureCalendarApprovalSchema(prisma);
 const workplaceStandardsSchemaReady = ensureWorkplaceStandardsSchema(prisma);
+const calendarConnectionSchemaReady = ensureCalendarConnectionSchema(prisma);
 
 type Variables = {
   user: AppUser | null;
@@ -123,6 +126,7 @@ app.use("*", async (_c, next) => {
   await recurrenceSeriesSchemaReady;
   await userTimezoneSchemaReady;
   await workplaceStandardsSchemaReady;
+  await calendarConnectionSchemaReady;
   await next();
 });
 
@@ -830,6 +834,7 @@ app.delete("/api/user", async (c) => {
 });
 
 // Routes
+app.route("/api/calendar-connections", calendarConnectionsRouter);
 app.route("/api/sample", sampleRouter);
 app.route("/api/users", usersRouter);
 app.route("/api/check-in-template-library", checkInTemplateLibraryRouter);

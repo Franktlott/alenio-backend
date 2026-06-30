@@ -48,6 +48,7 @@ import {
   type WebMeUser,
   type WebTeamRow,
 } from "../lib/api";
+import { fetchExternalCalendarEvents } from "../lib/outlook-calendar-api";
 import {
   formatTaskDescriptionForDisplay,
   isAssociateFeedbackRecipient,
@@ -96,6 +97,8 @@ function isDelegatedTeamTask(task: ApiTask, userId: string): boolean {
 }
 
 type TaskScope = "mine" | "team";
+
+const EXTERNAL_BUSY_COLOR = "#94A3B8";
 
 export function DashboardPage() {
   const queryClient = useQueryClient();
@@ -430,6 +433,48 @@ export function DashboardPage() {
     });
   }, [events, me?.id]);
 
+  const calendarRange = useMemo(() => {
+    const days = getDaysInMonth(calendarView);
+    const startDay = days[0];
+    const endDay = days[days.length - 1];
+    if (!startDay || !endDay) return { start: "", end: "" };
+    return {
+      start: startOfDay(startDay).toISOString(),
+      end: new Date(endDay.getFullYear(), endDay.getMonth(), endDay.getDate(), 23, 59, 59, 999).toISOString(),
+    };
+  }, [calendarView]);
+
+  const externalEventsQuery = useQuery({
+    queryKey: queryKeys.externalCalendarEvents(calendarRange.start, calendarRange.end),
+    queryFn: () => fetchExternalCalendarEvents(calendarRange.start, calendarRange.end),
+    enabled: !!me?.id && !!calendarRange.start,
+    staleTime: 60_000,
+  });
+
+  const externalBusyEvents = externalEventsQuery.data ?? [];
+
+  const calendarBarEvents = useMemo(
+    () => [
+      ...visibleEvents,
+      ...externalBusyEvents.map((event) => ({
+        id: `ext-${event.id}`,
+        title: "Busy",
+        startDate: event.startDate,
+        endDate: event.endDate,
+        color: EXTERNAL_BUSY_COLOR,
+      })),
+    ],
+    [visibleEvents, externalBusyEvents],
+  );
+
+  const getExternalForDay = (day: Date) =>
+    externalBusyEvents.filter((e) => {
+      const s = startOfDay(new Date(e.startDate));
+      const en = e.endDate ? startOfDay(new Date(e.endDate)) : s;
+      const d = startOfDay(day);
+      return d >= s && d <= en;
+    });
+
   const myTasks = useMemo(() => {
     if (!me?.id) return [];
     return tasks.filter((t) => isMyWorkspaceTask(t, me.id));
@@ -472,6 +517,7 @@ export function DashboardPage() {
   }, [holidays, selectedDate]);
 
   const selectedEvents = selectedDate ? getEventsForDay(selectedDate) : [];
+  const selectedExternalEvents = selectedDate ? getExternalForDay(selectedDate) : [];
   const selectedTasks = selectedDate ? getTasksForDay(selectedDate) : [];
 
   const activeTasks = useMemo(() => myTasks.filter((t) => t.status !== "done"), [myTasks]);
@@ -746,7 +792,7 @@ export function DashboardPage() {
               </div>
               <div className="enterprise-cal-weeks">
                 {calWeeks.map((week, weekIndex) => {
-                  const tracks = computeWeekBars(week, visibleEvents);
+                  const tracks = computeWeekBars(week, calendarBarEvents);
                   return (
                     <div key={weekIndex} className="enterprise-cal-week">
                       <div className="enterprise-cal-day-row">
@@ -844,6 +890,10 @@ export function DashboardPage() {
                   <span>Team events</span>
                 </div>
                 <div className="enterprise-cal-legend-item">
+                  <span className="enterprise-cal-legend-bar enterprise-cal-legend-bar-outlook" />
+                  <span>Outlook busy</span>
+                </div>
+                <div className="enterprise-cal-legend-item">
                   <span className="enterprise-cal-legend-dot" />
                   <span>Your tasks</span>
                 </div>
@@ -862,7 +912,10 @@ export function DashboardPage() {
                   </div>
                   {dashboardQuery.isPending && !dashboardQuery.data ? (
                     <div className="enterprise-cal-day-loading">Loading…</div>
-                  ) : selectedEvents.length === 0 && selectedTasks.length === 0 && selectedHolidays.length === 0 ? (
+                  ) : selectedEvents.length === 0 &&
+                    selectedExternalEvents.length === 0 &&
+                    selectedTasks.length === 0 &&
+                    selectedHolidays.length === 0 ? (
                     <div className="enterprise-dashboard-empty enterprise-cal-day-empty">
                       <svg className="enterprise-dashboard-empty-icon" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
                         <rect x="3" y="4" width="18" height="18" rx="2" />
@@ -1022,6 +1075,29 @@ export function DashboardPage() {
                           </div>
                         );
                       })}
+                      {selectedExternalEvents.map((event) => (
+                        <div
+                          key={event.id}
+                          className="enterprise-cal-day-event enterprise-cal-day-event-external"
+                          style={{ borderLeftColor: EXTERNAL_BUSY_COLOR }}
+                          data-testid={`external-event-${event.id}`}
+                        >
+                          <div className="enterprise-cal-day-event-top">
+                            <span className="enterprise-cal-day-event-name">Busy</span>
+                            <div className="enterprise-cal-day-event-meta">
+                              <span className="enterprise-cal-badge-outlook">Outlook</span>
+                            </div>
+                          </div>
+                          {event.allDay !== true ? (
+                            <div className="enterprise-cal-day-event-time">
+                              {new Date(event.startDate).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}
+                              {event.endDate
+                                ? ` – ${new Date(event.endDate).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}`
+                                : null}
+                            </div>
+                          ) : null}
+                        </div>
+                      ))}
                       {selectedTasks.map((task) => (
                         <div
                           key={task.id}

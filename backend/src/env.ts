@@ -61,6 +61,11 @@ const envSchema = z.object({
   OPENAI_API_KEY: z.string().optional(),
   /** OpenAI model for Seneca (default gpt-4o-mini). */
   OPENAI_MODEL: z.string().optional().default("gpt-4o-mini"),
+  /** Microsoft Outlook calendar sync (optional). */
+  MICROSOFT_CALENDAR_CLIENT_ID: z.string().optional(),
+  MICROSOFT_CALENDAR_CLIENT_SECRET: z.string().optional(),
+  /** 32+ char secret for encrypting OAuth refresh tokens at rest. */
+  CALENDAR_TOKEN_ENCRYPTION_KEY: z.string().optional(),
 });
 
 /**
