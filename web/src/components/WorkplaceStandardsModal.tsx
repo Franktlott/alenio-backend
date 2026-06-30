@@ -108,13 +108,13 @@ export function WorkplaceStandardsModal({
           </p>
         </header>
 
-        <div className="enterprise-workplace-standards-form">
+        <div className="enterprise-workplace-standards-grid">
           <section className="enterprise-workplace-standards-section">
             <div className="enterprise-workplace-standards-toggle-row">
               <div>
                 <span className="enterprise-workplace-standards-label">Check-in required</span>
                 <p className="enterprise-muted enterprise-workplace-standards-hint">
-                  Team members must complete check-ins on schedule.
+                  Scheduled check-ins for team members.
                 </p>
               </div>
               <label className="enterprise-workplace-standards-switch">
@@ -128,7 +128,7 @@ export function WorkplaceStandardsModal({
             </div>
 
             {draft.checkInRequired ? (
-              <>
+              <div className="enterprise-workplace-standards-fields">
                 <label className="enterprise-workplace-standards-field">
                   <span className="enterprise-workplace-standards-label">Check-in frequency</span>
                   <div className="enterprise-workplace-standards-frequency">
@@ -178,12 +178,12 @@ export function WorkplaceStandardsModal({
                         }))
                       }
                     />
-                    <span className="enterprise-workplace-standards-grace-suffix">days after due date</span>
+                    <span className="enterprise-workplace-standards-grace-suffix">days</span>
                   </div>
                 </label>
 
-                <label className="enterprise-workplace-standards-field">
-                  <span className="enterprise-workplace-standards-label">Required check-in template</span>
+                <label className="enterprise-workplace-standards-field enterprise-workplace-standards-field--full">
+                  <span className="enterprise-workplace-standards-label">Required template</span>
                   <select
                     value={draft.requiredCheckInTemplateId ?? ""}
                     disabled={loading}
@@ -202,7 +202,7 @@ export function WorkplaceStandardsModal({
                     ))}
                   </select>
                 </label>
-              </>
+              </div>
             ) : null}
           </section>
 
@@ -211,7 +211,7 @@ export function WorkplaceStandardsModal({
               <div>
                 <span className="enterprise-workplace-standards-label">Development goals required</span>
                 <p className="enterprise-muted enterprise-workplace-standards-hint">
-                  Team members must maintain active development goals.
+                  Minimum active goals per member.
                 </p>
               </div>
               <label className="enterprise-workplace-standards-switch">
@@ -243,27 +243,27 @@ export function WorkplaceStandardsModal({
             ) : null}
           </section>
 
-          <div className="enterprise-workplace-standards-preview">
+          <aside className="enterprise-workplace-standards-preview">
             <p className="enterprise-workplace-standards-label">Summary</p>
             <ul className="enterprise-workplace-standards-preview-list">
               <li>
-                <span>Check-in frequency</span>
+                <span>Check-in</span>
                 <strong>{formatCheckInFrequencySummary(draft)}</strong>
               </li>
               <li>
-                <span>Required active goals</span>
+                <span>Goals</span>
                 <strong>{draft.goalsRequired ? draft.minimumActiveGoals : "Not required"}</strong>
               </li>
               <li>
-                <span>Grace period</span>
+                <span>Grace</span>
                 <strong>{formatGracePeriodSummary(draft.checkInGracePeriodDays)}</strong>
               </li>
               <li>
-                <span>Required template</span>
+                <span>Template</span>
                 <strong>{formatRequiredTemplateSummary(selectedTemplateTitle)}</strong>
               </li>
             </ul>
-          </div>
+          </aside>
         </div>
 
         {err ? (
