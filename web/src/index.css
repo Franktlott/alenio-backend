@@ -4705,6 +4705,8 @@ input {
 
 .enterprise-overview-goals-panel-head {
   align-items: center;
+  border-bottom: none;
+  padding-bottom: 0.5rem;
 }
 
 .enterprise-overview-view-goals-btn {
@@ -4754,7 +4756,14 @@ input {
 }
 
 .enterprise-overview-goals-list {
-  padding: 0 1.15rem 1.15rem;
+  padding: 0.35rem 1.15rem 1.15rem;
+}
+
+.enterprise-overview-goals-table-wrap {
+  border: 1px solid #e8edf3;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fff;
 }
 
 @media (max-width: 960px) {
@@ -4945,7 +4954,7 @@ input {
 }
 
 .enterprise-overview-goals-table th {
-  padding: 0.35rem 0.55rem;
+  padding: 0.55rem 0.75rem;
   text-align: left;
   font-size: 0.5625rem;
   font-weight: 700;
@@ -4957,7 +4966,7 @@ input {
 }
 
 .enterprise-overview-goals-table td {
-  padding: 0.4rem 0.55rem;
+  padding: 0.6rem 0.75rem;
   color: #334155;
   border-bottom: 1px solid #f1f5f9;
   vertical-align: middle;

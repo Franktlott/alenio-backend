@@ -422,7 +422,8 @@ export function ProfileOverviewTab({
           </div>
         ) : (
           <div className="enterprise-overview-goals-list">
-            <table className="enterprise-overview-goals-table">
+            <div className="enterprise-overview-goals-table-wrap">
+              <table className="enterprise-overview-goals-table">
               <thead>
                 <tr>
                   <th scope="col">Goal</th>
@@ -442,6 +443,7 @@ export function ProfileOverviewTab({
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
         )}
       </section>
