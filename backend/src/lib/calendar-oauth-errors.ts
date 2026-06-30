@@ -5,6 +5,10 @@ export function formatOutlookUserError(raw: string | null | undefined): string {
 
   const lower = input.toLowerCase();
 
+  if (lower.includes("aadsts90023") || lower.includes("unsupported 'prompt'")) {
+    return "We couldn't open Microsoft sign-in. Please try Connect Outlook again.";
+  }
+
   if (
     lower.includes("aadsts65004") ||
     lower.includes("declined to consent") ||
