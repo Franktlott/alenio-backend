@@ -61,7 +61,7 @@ type Props = {
   onFeedbackCompletionFailed: () => void;
   onFeedbackSubmitted: () => void;
   onClose: () => void;
-  onUpdated: () => Promise<void>;
+  onUpdated: (updated?: ApiTask) => Promise<void>;
   onDeleted: () => Promise<void>;
 };
 
@@ -164,7 +164,7 @@ export function WorkspaceTaskDetailModal({
       setTask(updated);
       setEditMode(false);
       setRecurringScopeMode(null);
-      await onUpdated();
+      await onUpdated(updated);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not save task.");
     } finally {
@@ -196,8 +196,8 @@ export function WorkspaceTaskDetailModal({
       const updated = await updateCoreTeamTask(teamId, task.id, { status: nextStatus });
       setTask(updated);
       setPrompt(null);
+      await onUpdated(updated);
       if (nextStatus === "done") onClose();
-      else await onUpdated();
     } catch (e) {
       const message = e instanceof Error ? e.message : "Could not update task.";
       if (message.toLowerCase().includes("subtask")) setPrompt("subtasks");

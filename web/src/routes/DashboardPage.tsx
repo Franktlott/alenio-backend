@@ -4,6 +4,14 @@ import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useEnterpriseShell } from "../contexts/EnterpriseShellContext";
 import { queryKeys } from "../lib/query-keys";
 import {
+  getDashboardSnapshot,
+  markDashboardTaskDone,
+  reconcileDashboardTasks,
+  removeDashboardTask,
+  upsertDashboardTask,
+  upsertDashboardTasks,
+} from "../lib/dashboard-task-cache";
+import {
   computeWeekBars,
   getDaysInMonth,
   CALENDAR_WEEKDAY_LABELS,
@@ -183,6 +191,7 @@ export function DashboardPage() {
       };
     },
     enabled: !!selectedTeamId,
+    staleTime: 0,
     refetchOnMount: false,
     refetchInterval: 15_000,
     refetchIntervalInBackground: false,
@@ -197,8 +206,8 @@ export function DashboardPage() {
         ? "Could not load tasks."
         : null;
 
-  const refreshTeamData = async (teamId: string) => {
-    await queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(teamId) });
+  const refreshTeamData = (teamId: string) => {
+    reconcileDashboardTasks(queryClient, teamId);
   };
 
   useEffect(() => {
@@ -281,15 +290,19 @@ export function DashboardPage() {
     if (!selectedTeamId) return;
     setCompleteBusyId(task.id);
     setTaskActionError(null);
+    const snapshot = getDashboardSnapshot(queryClient, selectedTeamId);
+    markDashboardTaskDone(queryClient, selectedTeamId, task.id);
     try {
-      await updateCoreTeamTask(selectedTeamId, task.id, { status: "done" });
+      const updated = await updateCoreTeamTask(selectedTeamId, task.id, { status: "done" });
+      upsertDashboardTask(queryClient, selectedTeamId, updated);
       if (selectedTaskModal?.id === task.id) setSelectedTaskModal(null);
-      await refreshTeamData(selectedTeamId);
     } catch (err) {
+      if (snapshot) queryClient.setQueryData(queryKeys.dashboard(selectedTeamId), snapshot);
       setTaskActionError(err instanceof Error ? err.message : "Could not complete task.");
     } finally {
       setCompleteBusyId(null);
       setCompletePromptTask(null);
+      refreshTeamData(selectedTeamId);
     }
   };
 
@@ -380,17 +393,20 @@ export function DashboardPage() {
     setTaskDeleteId(task.id);
     setTaskActionError(null);
     setTaskMenuId(null);
+    const snapshot = getDashboardSnapshot(queryClient, selectedTeamId);
+    removeDashboardTask(queryClient, selectedTeamId, task.id);
     try {
       await deleteWebTask(task.id, selectedTeamId, scope);
       if (selectedTaskModal?.id === task.id) {
         setSelectedTaskModal(null);
       }
-      await refreshTeamData(selectedTeamId);
     } catch (err) {
+      if (snapshot) queryClient.setQueryData(queryKeys.dashboard(selectedTeamId), snapshot);
       setTaskActionError(err instanceof Error ? err.message : "Could not delete task.");
     } finally {
       setTaskDeleteId(null);
       setRecurringScopeModal(null);
+      refreshTeamData(selectedTeamId);
     }
   };
 
@@ -1256,7 +1272,10 @@ export function DashboardPage() {
             setFeedbackContext(null);
             setFeedbackCompletionActive(false);
           }}
-          onUpdated={async () => refreshTeamData(selectedTeamId)}
+          onUpdated={async (updated) => {
+            if (updated && selectedTeamId) upsertDashboardTask(queryClient, selectedTeamId, updated);
+            refreshTeamData(selectedTeamId);
+          }}
           onDeleted={async () => refreshTeamData(selectedTeamId)}
         />
       ) : null}
@@ -1268,8 +1287,11 @@ export function DashboardPage() {
         myRole={myRole}
         initialDueDate={createInitialDueDate}
         onClose={() => setCreateOpen(false)}
-        onCreated={async () => {
-          if (selectedTeamId) await refreshTeamData(selectedTeamId);
+        onCreated={async (created) => {
+          if (selectedTeamId && created.length > 0) {
+            upsertDashboardTasks(queryClient, selectedTeamId, created);
+          }
+          if (selectedTeamId) refreshTeamData(selectedTeamId);
         }}
       />
       <TaskPromptModal

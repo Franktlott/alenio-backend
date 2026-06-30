@@ -3,6 +3,7 @@ import {
   createWebTask,
   fetchTaskTemplates,
   uploadChatMedia,
+  type ApiTask,
   type TaskTemplate,
   type WebTeamDetail,
   type WebMeUser,
@@ -43,7 +44,7 @@ type Props = {
   myRole: string;
   initialDueDate?: string;
   onClose: () => void;
-  onCreated: () => Promise<void>;
+  onCreated: (created: ApiTask[]) => void | Promise<void>;
 };
 
 export function WorkspaceTaskCreateModal({
@@ -162,7 +163,7 @@ export function WorkspaceTaskCreateModal({
     setError(null);
     try {
       const userTimeZone = resolveTimeZone(me?.timezone);
-      await createWebTask({
+      const created = await createWebTask({
         teamId,
         title: title.trim(),
         description: description.trim() || null,
@@ -183,7 +184,7 @@ export function WorkspaceTaskCreateModal({
             }
           : undefined,
       });
-      await onCreated();
+      await onCreated(created);
       onClose();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not create task.");
