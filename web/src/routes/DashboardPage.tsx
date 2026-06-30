@@ -451,6 +451,7 @@ export function DashboardPage() {
     staleTime: 15 * 60 * 1000,
     refetchInterval: 15 * 60 * 1000,
     refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
   });
 
   const externalBusyEvents = externalEventsQuery.data ?? [];

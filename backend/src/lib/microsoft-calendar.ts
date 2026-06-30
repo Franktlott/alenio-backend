@@ -138,6 +138,29 @@ async function graphGet<T>(accessToken: string, path: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+async function graphGetCollection<T>(accessToken: string, initialPath: string): Promise<T[]> {
+  const items: T[] = [];
+  let url: string | null = initialPath.startsWith("http") ? initialPath : `${GRAPH_BASE}${initialPath}`;
+
+  while (url) {
+    const res = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Prefer: 'outlook.timezone="UTC"',
+      },
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw new Error(`Microsoft Graph error (${res.status}): ${text || res.statusText}`);
+    }
+    const data = (await res.json()) as { value?: T[]; "@odata.nextLink"?: string };
+    items.push(...(data.value ?? []));
+    url = data["@odata.nextLink"] ?? null;
+  }
+
+  return items;
+}
+
 export type MicrosoftCalendarListItem = {
   id: string;
   name: string;
@@ -174,10 +197,12 @@ export async function fetchMicrosoftCalendarView(
   const params = new URLSearchParams({
     startDateTime: startIso,
     endDateTime: endIso,
+    $top: "250",
+    $orderby: "start/dateTime",
+    $select: "id,subject,isAllDay,start,end,showAs",
   });
   const path = `/me/calendars/${encodeURIComponent(calendarId)}/calendarView?${params.toString()}`;
-  const data = await graphGet<{ value?: MicrosoftCalendarEvent[] }>(accessToken, path);
-  return data.value ?? [];
+  return graphGetCollection<MicrosoftCalendarEvent>(accessToken, path);
 }
 
 export async function fetchMicrosoftProfile(accessToken: string): Promise<{ mail?: string; userPrincipalName?: string }> {

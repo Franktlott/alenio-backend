@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   disconnectMicrosoftCalendar,
   fetchCalendarConnections,
@@ -17,6 +18,7 @@ type Props = {
 };
 
 export function OutlookCalendarPanel({ onStatusChange }: Props) {
+  const queryClient = useQueryClient();
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -25,6 +27,10 @@ export function OutlookCalendarPanel({ onStatusChange }: Props) {
   const [calendars, setCalendars] = useState<MicrosoftOutlookCalendarOption[]>([]);
   const [calendarsLoading, setCalendarsLoading] = useState(false);
   const [selectedCalendarId, setSelectedCalendarId] = useState("");
+
+  const refreshOutlookCalendar = async () => {
+    await queryClient.invalidateQueries({ queryKey: ["calendar", "external"] });
+  };
 
   const load = async () => {
     setLoading(true);
@@ -107,6 +113,7 @@ export function OutlookCalendarPanel({ onStatusChange }: Props) {
     try {
       const updated = await syncMicrosoftCalendar();
       setConnection(updated);
+      await refreshOutlookCalendar();
       onStatusChange?.();
     } catch (e) {
       setError(formatOutlookUserError(e instanceof Error ? e.message : "Could not sync Outlook."));
@@ -125,6 +132,7 @@ export function OutlookCalendarPanel({ onStatusChange }: Props) {
     try {
       const updated = await updateMicrosoftOutlookCalendar(chosen.id, chosen.name);
       setConnection(updated);
+      await refreshOutlookCalendar();
       onStatusChange?.();
     } catch (e) {
       setSelectedCalendarId(previous);

@@ -29,12 +29,37 @@ function syncWindow(): { start: Date; end: Date } {
 
 function parseGraphDate(value?: string, isAllDay?: boolean): Date | null {
   if (!value) return null;
+  if (isAllDay) {
+    const datePart = value.slice(0, 10);
+    const [year, month, day] = datePart.split("-").map(Number);
+    if (!year || !month || !day) return null;
+    return new Date(year, month - 1, day);
+  }
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return null;
-  if (isAllDay) {
-    d.setHours(0, 0, 0, 0);
-  }
   return d;
+}
+
+/** Graph all-day end dates are exclusive (midnight after the last day). */
+function normalizeOutlookEventDates(
+  startRaw?: string,
+  endRaw?: string | null,
+  isAllDay?: boolean,
+): { startDate: Date; endDate: Date | null } | null {
+  const startDate = parseGraphDate(startRaw, isAllDay);
+  if (!startDate) return null;
+
+  if (!endRaw) return { startDate, endDate: null };
+
+  let endDate = parseGraphDate(endRaw, isAllDay);
+  if (!endDate) return { startDate, endDate: null };
+
+  if (isAllDay) {
+    endDate = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate() - 1);
+    if (endDate < startDate) endDate = startDate;
+  }
+
+  return { startDate, endDate };
 }
 
 export type CalendarConnectionPublic = {
@@ -105,9 +130,9 @@ export async function syncOutlookConnection(connectionId: string): Promise<Calen
     for (const event of events) {
       if (!event.id) continue;
       if (event.showAs === "free") continue;
-      const startDate = parseGraphDate(event.start?.dateTime, event.isAllDay);
-      if (!startDate) continue;
-      const endDate = parseGraphDate(event.end?.dateTime, event.isAllDay);
+      const normalized = normalizeOutlookEventDates(event.start?.dateTime, event.end?.dateTime, event.isAllDay);
+      if (!normalized) continue;
+      const { startDate, endDate } = normalized;
       seen.add(event.id);
       await prisma.externalCalendarEvent.upsert({
         where: {
@@ -137,8 +162,9 @@ export async function syncOutlookConnection(connectionId: string): Promise<Calen
     await prisma.externalCalendarEvent.deleteMany({
       where: {
         connectionId: connection.id,
-        startDate: { gte: start, lte: end },
         ...(seen.size > 0 ? { externalEventId: { notIn: [...seen] } } : {}),
+        startDate: { lte: end },
+        OR: [{ endDate: null }, { endDate: { gte: start } }],
       },
     });
 

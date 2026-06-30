@@ -204,6 +204,7 @@ export default function CalendarScreen() {
     staleTime: 15 * 60 * 1000,
     refetchInterval: 15 * 60 * 1000,
     refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
   });
 
   const calendarBarEvents = useMemo(
