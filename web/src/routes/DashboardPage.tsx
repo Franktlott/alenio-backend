@@ -448,7 +448,9 @@ export function DashboardPage() {
     queryKey: queryKeys.externalCalendarEvents(calendarRange.start, calendarRange.end),
     queryFn: () => fetchExternalCalendarEvents(calendarRange.start, calendarRange.end),
     enabled: !!me?.id && !!calendarRange.start,
-    staleTime: 60_000,
+    staleTime: 15 * 60 * 1000,
+    refetchInterval: 15 * 60 * 1000,
+    refetchIntervalInBackground: false,
   });
 
   const externalBusyEvents = externalEventsQuery.data ?? [];
@@ -458,7 +460,7 @@ export function DashboardPage() {
       ...visibleEvents,
       ...externalBusyEvents.map((event) => ({
         id: `ext-${event.id}`,
-        title: "Busy",
+        title: event.title?.trim() || "Untitled event",
         startDate: event.startDate,
         endDate: event.endDate,
         color: EXTERNAL_BUSY_COLOR,
@@ -891,7 +893,7 @@ export function DashboardPage() {
                 </div>
                 <div className="enterprise-cal-legend-item">
                   <span className="enterprise-cal-legend-bar enterprise-cal-legend-bar-outlook" />
-                  <span>Outlook busy</span>
+                  <span>Outlook</span>
                 </div>
                 <div className="enterprise-cal-legend-item">
                   <span className="enterprise-cal-legend-dot" />
@@ -1083,9 +1085,9 @@ export function DashboardPage() {
                           data-testid={`external-event-${event.id}`}
                         >
                           <div className="enterprise-cal-day-event-top">
-                            <span className="enterprise-cal-day-event-name">Busy</span>
+                            <span className="enterprise-cal-day-event-name">{event.title?.trim() || "Untitled event"}</span>
                             <div className="enterprise-cal-day-event-meta">
-                              <span className="enterprise-cal-badge-outlook">Outlook</span>
+                              <span className="enterprise-cal-badge-outlook">Private · Outlook</span>
                             </div>
                           </div>
                           {event.allDay !== true ? (

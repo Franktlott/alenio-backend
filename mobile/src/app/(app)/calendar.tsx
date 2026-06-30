@@ -201,7 +201,9 @@ export default function CalendarScreen() {
     queryKey: ["external-calendar-events", calendarRange.start, calendarRange.end],
     queryFn: () => fetchExternalCalendarEvents(calendarRange.start, calendarRange.end),
     enabled: !!currentUserId && !!calendarRange.start,
-    staleTime: 60_000,
+    staleTime: 15 * 60 * 1000,
+    refetchInterval: 15 * 60 * 1000,
+    refetchIntervalInBackground: false,
   });
 
   const calendarBarEvents = useMemo(
@@ -209,7 +211,7 @@ export default function CalendarScreen() {
       ...events,
       ...externalBusyEvents.map((event) => ({
         id: `ext-${event.id}`,
-        title: "Busy",
+        title: event.title?.trim() || "Untitled event",
         startDate: event.startDate,
         endDate: event.endDate,
         allDay: event.allDay,
@@ -541,7 +543,7 @@ export default function CalendarScreen() {
           </View>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
             <View style={{ width: 20, height: 8, borderRadius: 2, backgroundColor: EXTERNAL_BUSY_COLOR }} />
-            <Text style={{ fontSize: 11, color: "#64748B" }}>Outlook busy</Text>
+            <Text style={{ fontSize: 11, color: "#64748B" }}>Outlook</Text>
           </View>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
             <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#10B981" }} />
@@ -761,10 +763,10 @@ export default function CalendarScreen() {
                   >
                     <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
                       <Text style={{ fontSize: 14, fontWeight: "700", color: "#0F172A", flex: 1 }} numberOfLines={1}>
-                        Busy
+                        {event.title?.trim() || "Untitled event"}
                       </Text>
                       <View style={{ backgroundColor: "#F1F5F9", paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 }}>
-                        <Text style={{ fontSize: 10, fontWeight: "700", color: "#64748B" }}>Outlook</Text>
+                        <Text style={{ fontSize: 10, fontWeight: "700", color: "#64748B" }}>Private · Outlook</Text>
                       </View>
                     </View>
                     {!event.allDay ? (

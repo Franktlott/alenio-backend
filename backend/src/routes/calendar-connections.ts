@@ -210,6 +210,7 @@ calendarConnectionsRouter.get("/external-events", async (c) => {
       endDate: event.endDate?.toISOString() ?? null,
       allDay: event.allDay,
       isExternal: true,
+      isPrivate: true,
     })),
   });
 });

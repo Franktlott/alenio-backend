@@ -12,6 +12,11 @@ const SYNC_PAST_DAYS = 14;
 const SYNC_FUTURE_DAYS = 90;
 const STALE_SYNC_MS = 15 * 60 * 1000;
 
+function outlookEventTitle(subject?: string | null): string {
+  const trimmed = subject?.trim();
+  return trimmed || "Untitled event";
+}
+
 function syncWindow(): { start: Date; end: Date } {
   const start = new Date();
   start.setHours(0, 0, 0, 0);
@@ -118,13 +123,13 @@ export async function syncOutlookConnection(connectionId: string): Promise<Calen
           startDate,
           endDate,
           allDay: Boolean(event.isAllDay),
-          titleDisplay: "Busy",
+          titleDisplay: outlookEventTitle(event.subject),
         },
         update: {
           startDate,
           endDate,
           allDay: Boolean(event.isAllDay),
-          titleDisplay: "Busy",
+          titleDisplay: outlookEventTitle(event.subject),
         },
       });
     }

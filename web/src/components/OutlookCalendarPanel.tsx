@@ -149,7 +149,7 @@ export function OutlookCalendarPanel({ onStatusChange }: Props) {
   return (
     <div className="enterprise-outlook-panel">
       <p className="enterprise-outlook-panel-copy">
-        Connect Outlook to see personal busy times on your Alenio calendar. Only you see these blocks — they appear as <strong>Busy</strong>.
+        Connect Outlook to see your personal events on your Alenio calendar. Only you see these — your team does not.
       </p>
       {connection?.connected ? (
         <div className="enterprise-outlook-panel-status">
