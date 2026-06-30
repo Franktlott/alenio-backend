@@ -157,7 +157,7 @@ export function OutlookCalendarPanel({ onStatusChange }: Props) {
   return (
     <div className="enterprise-outlook-panel">
       <p className="enterprise-outlook-panel-copy">
-        Connect Outlook to see your personal events on your Alenio calendar. Only you see these — your team does not.
+        Connect Outlook to see your personal events on your Alenio calendar. Only you see these — your team does not. Events sync from the calendar you pick below (Outlook may show multiple calendars merged together).
       </p>
       {connection?.connected ? (
         <div className="enterprise-outlook-panel-status">

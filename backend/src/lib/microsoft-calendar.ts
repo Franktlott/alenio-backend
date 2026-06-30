@@ -183,6 +183,7 @@ export type MicrosoftCalendarEvent = {
   id: string;
   subject?: string;
   isAllDay?: boolean;
+  isCancelled?: boolean;
   start?: { dateTime?: string; timeZone?: string };
   end?: { dateTime?: string; timeZone?: string };
   showAs?: string;
@@ -199,7 +200,7 @@ export async function fetchMicrosoftCalendarView(
     endDateTime: endIso,
     $top: "250",
     $orderby: "start/dateTime",
-    $select: "id,subject,isAllDay,start,end,showAs",
+    $select: "id,subject,isAllDay,isCancelled,start,end,showAs",
   });
   const path = `/me/calendars/${encodeURIComponent(calendarId)}/calendarView?${params.toString()}`;
   return graphGetCollection<MicrosoftCalendarEvent>(accessToken, path);

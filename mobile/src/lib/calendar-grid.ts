@@ -42,14 +42,42 @@ export function calendarDateFromIsoDay(iso: string): Date {
   return new Date(year!, month! - 1, day!);
 }
 
+function isMidnightUtcIso(iso: string): boolean {
+  return /T00:00:00(\.0+)?Z?$/.test(iso);
+}
+
+function shouldUseCalendarDays(event: {
+  startDate: string;
+  endDate?: string | null;
+  allDay?: boolean | null;
+  isExternal?: boolean;
+}): boolean {
+  if (event.allDay) return true;
+  if (!event.isExternal) return false;
+  if (/T12:00:00(\.0+)?Z$/.test(event.startDate)) return true;
+  if (event.endDate && isMidnightUtcIso(event.startDate) && isMidnightUtcIso(event.endDate)) return true;
+  return false;
+}
+
 export function eventCalendarDayRange(event: {
   startDate: string;
   endDate?: string | null;
   allDay?: boolean | null;
+  isExternal?: boolean;
 }): { start: Date; end: Date } {
-  if (event.allDay) {
+  if (shouldUseCalendarDays(event)) {
     const start = calendarDateFromIsoDay(event.startDate);
-    const end = event.endDate ? calendarDateFromIsoDay(event.endDate) : start;
+    let end = event.endDate ? calendarDateFromIsoDay(event.endDate) : start;
+    if (
+      event.isExternal &&
+      !event.allDay &&
+      event.endDate &&
+      isMidnightUtcIso(event.startDate) &&
+      isMidnightUtcIso(event.endDate)
+    ) {
+      const daySpan = Math.round((end.getTime() - start.getTime()) / 86_400_000);
+      if (daySpan === 1) end = start;
+    }
     return { start, end };
   }
   const start = startOfDay(new Date(event.startDate));

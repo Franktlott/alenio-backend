@@ -224,6 +224,7 @@ export default function CalendarScreen() {
         startDate: event.startDate,
         endDate: event.endDate,
         allDay: event.allDay,
+        isExternal: true,
         color: EXTERNAL_BUSY_COLOR,
         teamId: "",
         createdById: "",

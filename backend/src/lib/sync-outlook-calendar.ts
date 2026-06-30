@@ -53,7 +53,8 @@ function isGraphAllDayEvent(event: {
   const endRaw = event.end?.dateTime;
   if (!startRaw || !endRaw) return false;
   if (!/T00:00:00/.test(startRaw) || !/T00:00:00/.test(endRaw)) return false;
-  return startRaw.slice(0, 10) !== endRaw.slice(0, 10);
+  // All-day events use midnight boundaries; end is the day after the last day (or same for edge cases).
+  return startRaw.slice(0, 10) !== endRaw.slice(0, 10) || event.isAllDay === true;
 }
 
 /** Graph all-day end dates are exclusive (midnight after the last day). */
@@ -148,36 +149,41 @@ export async function syncOutlookConnection(connectionId: string): Promise<Calen
 
     const seen = new Set<string>();
     for (const event of events) {
-      if (!event.id) continue;
-      if (event.showAs === "free") continue;
-      const allDay = isGraphAllDayEvent(event);
-      const normalized = normalizeOutlookEventDates(event.start?.dateTime, event.end?.dateTime, allDay);
-      if (!normalized) continue;
-      const { startDate, endDate } = normalized;
-      seen.add(event.id);
-      await prisma.externalCalendarEvent.upsert({
-        where: {
-          connectionId_externalEventId: {
+      try {
+        if (!event.id) continue;
+        if (event.isCancelled) continue;
+        if (event.showAs === "free") continue;
+        const allDay = isGraphAllDayEvent(event);
+        const normalized = normalizeOutlookEventDates(event.start?.dateTime, event.end?.dateTime, allDay);
+        if (!normalized) continue;
+        const { startDate, endDate } = normalized;
+        seen.add(event.id);
+        await prisma.externalCalendarEvent.upsert({
+          where: {
+            connectionId_externalEventId: {
+              connectionId: connection.id,
+              externalEventId: event.id,
+            },
+          },
+          create: {
+            userId: connection.userId,
             connectionId: connection.id,
             externalEventId: event.id,
+            startDate,
+            endDate,
+            allDay: normalized.allDay,
+            titleDisplay: outlookEventTitle(event.subject),
           },
-        },
-        create: {
-          userId: connection.userId,
-          connectionId: connection.id,
-          externalEventId: event.id,
-          startDate,
-          endDate,
-          allDay: normalized.allDay,
-          titleDisplay: outlookEventTitle(event.subject),
-        },
-        update: {
-          startDate,
-          endDate,
-          allDay: normalized.allDay,
-          titleDisplay: outlookEventTitle(event.subject),
-        },
-      });
+          update: {
+            startDate,
+            endDate,
+            allDay: normalized.allDay,
+            titleDisplay: outlookEventTitle(event.subject),
+          },
+        });
+      } catch {
+        // Keep syncing remaining events if one row fails.
+      }
     }
 
     await prisma.externalCalendarEvent.deleteMany({
