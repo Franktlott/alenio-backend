@@ -89,7 +89,10 @@ export type WorkspaceSnapshot = {
 };
 
 type MemberStatsResponse = {
-  data: Record<string, MemberStatsRow>;
+  data: {
+    stats: Record<string, MemberStatsRow>;
+    workplaceStandards?: import("./workplace-standards").WorkplaceStandards;
+  };
   developmentGoalAlerts?: DevelopmentGoalAlerts;
 };
 type MemberStatsRow = {
@@ -288,12 +291,12 @@ export async function loadWorkspaceSnapshot(
         .catch(() => ({ tasks: [] as Task[], nextCursor: null })),
       api
         .get<MemberStatsResponse>(`/api/teams/${teamId}/tasks/member-stats`)
-        .catch(() => ({ data: {} as Record<string, MemberStatsRow> })),
+        .catch(() => ({ data: { stats: {} as Record<string, MemberStatsRow> } })),
       api.get<ActivityItem[]>(`/api/teams/${teamId}/activity?limit=100`).catch(() => []),
     ]);
 
     const tasks = Array.isArray(tasksResult?.tasks) ? tasksResult.tasks : [];
-    const stats = statsResult.data ?? {};
+    const stats = statsResult.data?.stats ?? {};
     const members = team.members ?? [];
     const memberRows = buildMemberRows(members, stats, managerUserId);
     const memberNeedingCheckIn = findMemberNeedingCheckIn(members, stats, managerUserId);

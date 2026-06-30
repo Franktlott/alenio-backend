@@ -118,6 +118,8 @@ model Team {
   checklistLocations ChecklistLocation[]
   /** Public token for the workspace checklist hub (one QR per workspace). */
   checklistHubToken String? @unique
+  /** JSON: per-workspace check-in and development goal expectations. */
+  workplaceStandards String?
 }
 
 model TeamSubscription {

@@ -964,6 +964,8 @@ export type WebTeamDetail = {
   _count?: { members: number; tasks: number };
   members: WebTeamMemberRow[];
   myRole: string;
+  workplaceStandards?: import("./workplace-standards").WorkplaceStandards;
+  requiredCheckInTemplateTitle?: string | null;
 };
 
 export type MyJoinRequestRow = {
@@ -1005,6 +1007,17 @@ export function patchApiTeam(teamId: string, body: { name?: string; image?: stri
   ).then((r) => r.data);
 }
 
+export function patchWebTeamWorkplaceStandards(
+  teamId: string,
+  workplaceStandards: import("./workplace-standards").WorkplaceStandards,
+) {
+  return apiPatchJson<{
+    data: { workplaceStandards: import("./workplace-standards").WorkplaceStandards };
+  }>(`/web/api/teams/${encodeURIComponent(teamId)}`, { workplaceStandards }).then(
+    (r) => r.data.workplaceStandards,
+  );
+}
+
 export type TeamMemberStatsRow = {
   activeTasks: number;
   overdueTasks: number;
@@ -1016,6 +1029,7 @@ export type TeamMemberStatsRow = {
   daysSinceLastOneOnOne: number | null;
   openFollowUpTasks: number;
   overdueFollowUpTasks: number;
+  standardsCompliance?: import("./workplace-standards").MemberStandardsCompliance;
 };
 
 export type TeamMemberStatsMap = Record<string, TeamMemberStatsRow>;
@@ -1037,14 +1051,22 @@ export type DevelopmentGoalAlerts = {
 export type TeamMemberStatsResponse = {
   stats: TeamMemberStatsMap;
   developmentGoalAlerts: DevelopmentGoalAlerts;
+  workplaceStandards?: import("./workplace-standards").WorkplaceStandards;
 };
 
 export function fetchTeamMemberStats(teamId: string): Promise<TeamMemberStatsResponse> {
-  return apiGetJson<{ data: TeamMemberStatsMap; developmentGoalAlerts?: DevelopmentGoalAlerts }>(
+  return apiGetJson<{
+    data: {
+      stats: TeamMemberStatsMap;
+      workplaceStandards?: import("./workplace-standards").WorkplaceStandards;
+    };
+    developmentGoalAlerts?: DevelopmentGoalAlerts;
+  }>(
     `/api/teams/${encodeURIComponent(teamId)}/tasks/member-stats`,
   ).then((r) => ({
-    stats: r.data,
+    stats: r.data.stats,
     developmentGoalAlerts: r.developmentGoalAlerts ?? { nearingInactive: [], inactive: [] },
+    workplaceStandards: r.data.workplaceStandards,
   }));
 }
 

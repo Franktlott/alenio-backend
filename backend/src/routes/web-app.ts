@@ -22,6 +22,11 @@ import {
   resolveCalendarCreate,
   resolveCalendarUpdate,
 } from "../lib/calendar-permissions";
+import {
+  parseWorkplaceStandards,
+  parseWorkplaceStandardsPatch,
+  serializeWorkplaceStandards,
+} from "../lib/workplace-standards";
 
 const webRouter = new Hono();
 
@@ -180,7 +185,7 @@ webRouter.get("/api/teams/:id", async (c) => {
   const team = await prisma.team.findUnique({
     where: { id },
     select: {
-      id: true, name: true, image: true, createdAt: true, inviteCode: true,
+      id: true, name: true, image: true, createdAt: true, inviteCode: true, workplaceStandards: true,
       _count: { select: { members: true, tasks: true } },
     },
   });
@@ -188,7 +193,24 @@ webRouter.get("/api/teams/:id", async (c) => {
     where: { teamId: id },
     include: { user: { select: { id: true, name: true, email: true, image: true } } },
   });
-  return c.json({ data: { ...team, members, myRole: membership.role } });
+  const workplaceStandards = parseWorkplaceStandards(team?.workplaceStandards);
+  let requiredCheckInTemplateTitle: string | null = null;
+  if (workplaceStandards.requiredCheckInTemplateId) {
+    const template = await prisma.oneOnOneTemplate.findFirst({
+      where: { id: workplaceStandards.requiredCheckInTemplateId, teamId: id },
+      select: { title: true },
+    });
+    requiredCheckInTemplateTitle = template?.title ?? null;
+  }
+  return c.json({
+    data: {
+      ...team,
+      members,
+      myRole: membership.role,
+      workplaceStandards,
+      requiredCheckInTemplateTitle,
+    },
+  });
 });
 
 // ── API: edit team name ───────────────────────────────────────────────────────
@@ -201,12 +223,38 @@ webRouter.patch("/api/teams/:id", async (c) => {
   if (!membership || !["owner", "team_leader", "admin"].includes(membership.role)) {
     return c.json({ error: { message: "Forbidden" } }, 403);
   }
-  const body = await c.req.json().catch(() => ({})) as { name?: string; image?: string | null };
+  const body = await c.req.json().catch(() => ({})) as {
+    name?: string;
+    image?: string | null;
+    workplaceStandards?: unknown;
+  };
   const nameTrim = typeof body.name === "string" ? body.name.trim() : "";
   const hasImage = "image" in body;
-  if (!nameTrim && !hasImage) {
-    return c.json({ error: { message: "Name or image is required" } }, 400);
+  const hasWorkplaceStandards = body.workplaceStandards !== undefined;
+  if (hasWorkplaceStandards && membership.role !== "owner") {
+    return c.json({ error: { message: "Only the workspace owner can edit workplace standards" } }, 403);
   }
+  if (!nameTrim && !hasImage && !hasWorkplaceStandards) {
+    return c.json({ error: { message: "Name, image, or workplace standards is required" } }, 400);
+  }
+
+  let parsedStandards: ReturnType<typeof parseWorkplaceStandardsPatch> | null = null;
+  if (hasWorkplaceStandards) {
+    parsedStandards = parseWorkplaceStandardsPatch(body.workplaceStandards);
+    if (!parsedStandards.ok) {
+      return c.json({ error: { message: parsedStandards.message } }, 400);
+    }
+    if (parsedStandards.value.requiredCheckInTemplateId) {
+      const template = await prisma.oneOnOneTemplate.findFirst({
+        where: { id: parsedStandards.value.requiredCheckInTemplateId, teamId: id },
+        select: { id: true },
+      });
+      if (!template) {
+        return c.json({ error: { message: "Check-in template not found in this workspace" } }, 404);
+      }
+    }
+  }
+
   if (nameTrim && (await isTeamDisplayNameTaken(nameTrim, id))) {
     return c.json(
       { error: { message: "Another workspace already uses this name. Pick a different name.", code: "TEAM_NAME_TAKEN" } },
@@ -220,8 +268,11 @@ webRouter.patch("/api/teams/:id", async (c) => {
       data: {
         ...(nameTrim ? { name: nameTrim } : {}),
         ...(hasImage ? { image: body.image ?? null } : {}),
+        ...(parsedStandards?.ok
+          ? { workplaceStandards: serializeWorkplaceStandards(parsedStandards.value) }
+          : {}),
       },
-      select: { id: true, name: true, image: true, inviteCode: true },
+      select: { id: true, name: true, image: true, inviteCode: true, workplaceStandards: true },
     });
   } catch (err) {
     if (isPrismaUniqueOnName(err)) {
@@ -232,7 +283,8 @@ webRouter.patch("/api/teams/:id", async (c) => {
     }
     throw err;
   }
-  return c.json({ data: team });
+  const workplaceStandards = parseWorkplaceStandards(team.workplaceStandards);
+  return c.json({ data: { ...team, workplaceStandards } });
 });
 
 // ── API: remove team member ───────────────────────────────────────────────────

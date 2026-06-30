@@ -2751,6 +2751,37 @@ input {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.enterprise-team-stat-row--four {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (min-width: 900px) {
+  .enterprise-team-stat-row--four {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.enterprise-team-stat-card--standards .enterprise-team-stat-icon--standards {
+  background: #f5f3ff;
+  color: #7c3aed;
+}
+
+.enterprise-team-stat-copy--standards {
+  flex: 1;
+  min-width: 0;
+}
+
+.enterprise-team-standards-summary {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.625rem !important;
+  color: #94a3b8 !important;
+}
+
+.enterprise-team-standards-summary-dot {
+  margin: 0 0.25rem;
+}
+
 .enterprise-team-stat-card {
   background: #fff;
   border: 1px solid #dce3eb;
@@ -3379,6 +3410,262 @@ input {
 
 .enterprise-team-roster-kpi-icon {
   font-size: 0.75rem;
+}
+
+.enterprise-standards-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.5625rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.enterprise-standards-badge--on-track {
+  background: #ecfdf5;
+  color: #059669;
+}
+
+.enterprise-standards-badge--due-soon {
+  background: #fff7ed;
+  color: #c2410c;
+}
+
+.enterprise-standards-badge--overdue {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.enterprise-standards-badge--missing-goals {
+  background: #eef2ff;
+  color: #4f46e5;
+}
+
+.enterprise-workplace-standards-modal {
+  width: min(520px, 100%);
+  max-height: min(90vh, 760px);
+  overflow: auto;
+}
+
+.enterprise-workplace-standards-head {
+  margin-bottom: 1rem;
+}
+
+.enterprise-workplace-standards-title {
+  margin: 0.15rem 0 0.35rem;
+  font-size: 1.25rem;
+}
+
+.enterprise-workplace-standards-sub {
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+.enterprise-workplace-standards-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.enterprise-workplace-standards-section {
+  border: 1px solid #e8edf3;
+  border-radius: 12px;
+  padding: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.enterprise-workplace-standards-toggle-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.enterprise-workplace-standards-label {
+  display: block;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.enterprise-workplace-standards-hint {
+  margin: 0.2rem 0 0;
+  font-size: 0.8125rem;
+}
+
+.enterprise-workplace-standards-switch {
+  position: relative;
+  width: 42px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.enterprise-workplace-standards-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.enterprise-workplace-standards-switch span {
+  position: absolute;
+  inset: 0;
+  background: #cbd5e1;
+  border-radius: 999px;
+  transition: background 0.15s ease;
+}
+
+.enterprise-workplace-standards-switch span::before {
+  content: "";
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  left: 3px;
+  top: 3px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.15s ease;
+}
+
+.enterprise-workplace-standards-switch input:checked + span {
+  background: #6366f1;
+}
+
+.enterprise-workplace-standards-switch input:checked + span::before {
+  transform: translateX(18px);
+}
+
+.enterprise-workplace-standards-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.enterprise-workplace-standards-field input,
+.enterprise-workplace-standards-field select {
+  border: 1px solid #dce3eb;
+  border-radius: 8px;
+  padding: 0.5rem 0.65rem;
+  font: inherit;
+  color: #0f172a;
+  background: #fff;
+}
+
+.enterprise-workplace-standards-frequency,
+.enterprise-workplace-standards-grace {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.enterprise-workplace-standards-frequency input {
+  width: 4.5rem;
+}
+
+.enterprise-workplace-standards-frequency-prefix,
+.enterprise-workplace-standards-grace-suffix {
+  font-size: 0.875rem;
+  color: #64748b;
+}
+
+.enterprise-workplace-standards-preview {
+  border: 1px dashed #e2e8f0;
+  border-radius: 10px;
+  padding: 0.75rem;
+  background: #fafbff;
+}
+
+.enterprise-workplace-standards-preview-list {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.enterprise-workplace-standards-preview-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 0.8125rem;
+  color: #64748b;
+}
+
+.enterprise-workplace-standards-preview-list strong {
+  color: #0f172a;
+  font-weight: 600;
+  text-align: right;
+}
+
+.enterprise-workplace-standards-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #f1f5f9;
+}
+
+.enterprise-overview-standards {
+  margin-top: 1rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid #e8edf3;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.enterprise-overview-standards-head h4 {
+  margin: 0.15rem 0 0;
+  font-size: 1rem;
+}
+
+.enterprise-overview-standards-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-top: 0.85rem;
+}
+
+.enterprise-overview-standards-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.enterprise-overview-standards-label {
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+.enterprise-overview-standards-item strong {
+  font-size: 0.875rem;
+  color: #0f172a;
+}
+
+.enterprise-overview-standards-actions {
+  margin: 0.75rem 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.enterprise-overview-standards-actions li {
+  font-size: 0.8125rem;
+  color: #475569;
 }
 
 .enterprise-team-roster-progress-block {

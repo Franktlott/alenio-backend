@@ -8,6 +8,11 @@ import { sendPushToUsers } from "../lib/push";
 import { logActivity } from "../lib/activity";
 import { isPrismaUniqueOnName, isTeamDisplayNameTaken, normalizeTeamName } from "../lib/team-name";
 import {
+  parseWorkplaceStandards,
+  parseWorkplaceStandardsPatch,
+  serializeWorkplaceStandards,
+} from "../lib/workplace-standards";
+import {
   canInviteMembers,
   generateInviteToken,
   inviteExpiresAt,
@@ -217,7 +222,8 @@ teamsRouter.get("/:teamId", async (c) => {
     },
   });
 
-  return c.json({ data: { ...team, role: membership.role } });
+  const workplaceStandards = parseWorkplaceStandards(team?.workplaceStandards);
+  return c.json({ data: { ...team, role: membership.role, workplaceStandards } });
 });
 
 // PATCH /api/teams/:teamId - update team name
@@ -234,6 +240,31 @@ teamsRouter.patch("/:teamId", async (c) => {
   }
 
   const nameTrim = typeof body.name === "string" ? body.name.trim() : "";
+  const hasWorkplaceStandards = body.workplaceStandards !== undefined;
+  if (hasWorkplaceStandards && membership.role !== "owner") {
+    return c.json(
+      { error: { message: "Only the workspace owner can edit workplace standards", code: "FORBIDDEN" } },
+      403,
+    );
+  }
+
+  let parsedStandards: ReturnType<typeof parseWorkplaceStandardsPatch> | null = null;
+  if (hasWorkplaceStandards) {
+    parsedStandards = parseWorkplaceStandardsPatch(body.workplaceStandards);
+    if (!parsedStandards.ok) {
+      return c.json({ error: { message: parsedStandards.message, code: "VALIDATION_ERROR" } }, 400);
+    }
+    if (parsedStandards.value.requiredCheckInTemplateId) {
+      const template = await prisma.oneOnOneTemplate.findFirst({
+        where: { id: parsedStandards.value.requiredCheckInTemplateId, teamId },
+        select: { id: true },
+      });
+      if (!template) {
+        return c.json({ error: { message: "Check-in template not found in this workspace", code: "NOT_FOUND" } }, 404);
+      }
+    }
+  }
+
   if (nameTrim && (await isTeamDisplayNameTaken(nameTrim, teamId))) {
     return c.json(
       { error: { message: "Another workspace already uses this name. Pick a different name.", code: "TEAM_NAME_TAKEN" } },
@@ -248,6 +279,9 @@ teamsRouter.patch("/:teamId", async (c) => {
       data: {
         ...(nameTrim ? { name: nameTrim } : {}),
         ...(body.image !== undefined ? { image: body.image } : {}),
+        ...(parsedStandards?.ok
+          ? { workplaceStandards: serializeWorkplaceStandards(parsedStandards.value) }
+          : {}),
       },
     });
   } catch (err) {
@@ -260,7 +294,8 @@ teamsRouter.patch("/:teamId", async (c) => {
     throw err;
   }
 
-  return c.json({ data: team });
+  const workplaceStandards = parseWorkplaceStandards(team.workplaceStandards);
+  return c.json({ data: { ...team, workplaceStandards } });
 });
 
 // DELETE /api/teams/:teamId/leave - leave team (workspace owner cannot leave)

@@ -34,7 +34,11 @@ import * as Clipboard from "expo-clipboard";
 import * as ImagePicker from "expo-image-picker";
 import { uploadFile } from "@/lib/upload";
 import { api } from "@/lib/api/api";
-import { formatOverdueFollowUpTasksDisplay } from "@/lib/member-stats-display";
+import { formatOverdueFollowUpTasksDisplay, formatDaysSinceCheckIn } from "@/lib/member-stats-display";
+import {
+  standardsBadgeColors,
+  type MemberStatsPayload,
+} from "@/lib/workplace-standards";
 import { useTeamStore } from "@/lib/state/team-store";
 import { useSession } from "@/lib/auth/use-session";
 import QRCode from "react-native-qrcode-svg";
@@ -375,27 +379,13 @@ export default function TeamScreen() {
 
   const [refreshing, setRefreshing] = useState(false);
 
-  const { data: memberStats } = useQuery({
+  const { data: memberStatsPayload } = useQuery({
     queryKey: ["member-stats", activeTeamId],
     queryFn: () =>
-      api.get<
-        Record<
-          string,
-          {
-            activeTasks: number;
-            overdueTasks: number;
-            completedTasks: number;
-            streak: number;
-            personalBestStreak: number;
-            openFollowUpTasks?: number;
-            overdueFollowUpTasks?: number;
-          }
-        >
-      >(
-        `/api/teams/${activeTeamId}/tasks/member-stats`
-      ),
+      api.get<MemberStatsPayload>(`/api/teams/${activeTeamId}/tasks/member-stats`),
     enabled: !!activeTeamId,
   });
+  const memberStats = memberStatsPayload?.stats;
 
   const { data: teamTasksData } = useQuery({
     queryKey: ["team-overview-tasks", activeTeamId],
@@ -830,9 +820,9 @@ export default function TeamScreen() {
           >
           {sortedMembers.map((item: TeamMember) => {
             const stats = memberStats?.[item.userId];
-            const completed = stats?.completedTasks ?? 0;
-            const streak = stats?.streak ?? 0;
+            const compliance = stats?.standardsCompliance;
             const followUpDisplay = formatOverdueFollowUpTasksDisplay(stats?.overdueFollowUpTasks ?? 0);
+            const badgeColors = compliance ? standardsBadgeColors(compliance.statusBadge) : null;
             const isCurrentUser = item.userId === myId;
             const canView = canViewMemberProfile(item.userId);
             const rowStyle = {
@@ -880,26 +870,48 @@ export default function TeamScreen() {
                 </View>
 
                 {/* Metrics */}
-                <View style={{ alignItems: "flex-end", gap: 2 }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                    {isPaid ? (
-                      <>
-                        <Text style={{ fontSize: 14 }}>🔥</Text>
-                        <Text style={{ fontSize: 12, fontWeight: "700", color: "#0F172A" }}>{streak}</Text>
-                      </>
-                    ) : null}
-                    {canView && followUpDisplay ? (
-                      <>
-                        <AlertCircle size={12} color="#EF4444" />
-                        <Text
-                          style={{ fontSize: 12, fontWeight: "700", color: "#EF4444" }}
-                          accessibilityLabel={followUpDisplay.title}
-                        >
-                          {followUpDisplay.value}
-                        </Text>
-                      </>
-                    ) : null}
+                <View style={{ alignItems: "flex-end", gap: 4 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                    <Text style={{ fontSize: 10, fontWeight: "700", color: "#94A3B8", textTransform: "uppercase" }}>
+                      Check-in
+                    </Text>
+                    <Text style={{ fontSize: 12, fontWeight: "700", color: "#0F172A" }}>
+                      {formatDaysSinceCheckIn(stats?.daysSinceLastOneOnOne)}
+                    </Text>
                   </View>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                    <Text style={{ fontSize: 10, fontWeight: "700", color: "#94A3B8", textTransform: "uppercase" }}>
+                      Goals
+                    </Text>
+                    <Text style={{ fontSize: 12, fontWeight: "700", color: "#0F172A" }}>
+                      {compliance?.goalsDisplay ?? "—"}
+                    </Text>
+                  </View>
+                  {compliance && badgeColors ? (
+                    <View
+                      style={{
+                        backgroundColor: badgeColors.bg,
+                        paddingHorizontal: 8,
+                        paddingVertical: 3,
+                        borderRadius: 999,
+                      }}
+                    >
+                      <Text style={{ fontSize: 9, fontWeight: "800", color: badgeColors.text, letterSpacing: 0.4 }}>
+                        {compliance.statusBadge.toUpperCase()}
+                      </Text>
+                    </View>
+                  ) : null}
+                  {canView && followUpDisplay ? (
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                      <AlertCircle size={12} color="#EF4444" />
+                      <Text
+                        style={{ fontSize: 12, fontWeight: "700", color: "#EF4444" }}
+                        accessibilityLabel={followUpDisplay.title}
+                      >
+                        {followUpDisplay.value}
+                      </Text>
+                    </View>
+                  ) : null}
                   {!canView ? (
                     <View
                       style={{

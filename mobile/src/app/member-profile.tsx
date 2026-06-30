@@ -29,6 +29,7 @@ import type { Team, TeamMember, TeamRole } from "@/lib/types";
 import { ProfileOverviewTab } from "@/components/ProfileOverviewTab";
 import { DevelopmentPlanTab } from "@/components/DevelopmentPlanTab";
 import { OneOnOneHistoryTab } from "@/components/OneOnOneHistoryTab";
+import { mergeWorkplaceStandards, type MemberStatsPayload } from "@/lib/workplace-standards";
 
 const PROFILE_TABS = ["Overview", "Growth", "Check-In"] as const;
 const PAGE_BG = "#F3F5FC";
@@ -90,24 +91,13 @@ export default function MemberProfileScreen() {
     enabled: !!teamId,
   });
 
-  const { data: memberStats } = useQuery({
+  const { data: memberStatsPayload } = useQuery({
     queryKey: ["member-stats", teamId],
-    queryFn: () =>
-      api.get<
-        Record<
-          string,
-          {
-            activeTasks: number;
-            overdueTasks: number;
-            completedTasks: number;
-            streak: number;
-            personalBestStreak: number;
-            overdueFollowUpTasks?: number;
-          }
-        >
-      >(`/api/teams/${teamId}/tasks/member-stats`),
+    queryFn: () => api.get<MemberStatsPayload>(`/api/teams/${teamId}/tasks/member-stats`),
     enabled: !!teamId,
   });
+  const memberStats = memberStatsPayload?.stats;
+  const workplaceStandards = mergeWorkplaceStandards(memberStatsPayload?.workplaceStandards);
 
   const member = team?.members?.find((m) => m.userId === memberUserId) ?? null;
   const myMembership = team?.members?.find((m) => m.userId === session?.user?.id);
@@ -406,6 +396,8 @@ export default function MemberProfileScreen() {
               memberUserId={memberUserId}
               streak={isPaid ? stats?.streak : undefined}
               overdueFollowUpTasks={stats?.overdueFollowUpTasks}
+              workplaceStandards={workplaceStandards}
+              standardsCompliance={stats?.standardsCompliance}
             />
           ) : activeTab === "Growth" ? (
             <DevelopmentPlanTab

@@ -9,6 +9,7 @@ import { PendingCalendarEventsModal } from "./PendingCalendarEventsModal";
 import { TeamMemberManageModal } from "./TeamMemberManageModal";
 import { TeamMemberProfilePanel } from "./TeamMemberProfilePanel";
 import { OneOnOneTemplatesModal } from "./OneOnOneTemplatesModal";
+import { WorkplaceStandardsModal, mergeWorkplaceStandards } from "./WorkplaceStandardsModal";
 import {
   approveTeamJoinRequest,
   fetchPendingCalendarEvents,
@@ -36,14 +37,16 @@ import {
   type WebTeamRow,
 } from "../lib/api";
 import {
-  formatActiveGoalsCount,
-  formatActiveGoalsTitle,
   formatDaysSinceCheckIn,
   formatDaysSinceCheckInTitle,
   formatOverdueFollowUpTasksDisplay,
-  formatTaskStreakTitle,
-  formatTaskStreakValue,
 } from "../lib/member-stats-display";
+import {
+  formatCheckInFrequencySummary,
+  formatGracePeriodSummary,
+  formatRequiredTemplateSummary,
+  standardsBadgeClassName,
+} from "../lib/workplace-standards";
 
 function isTaskOverdue(t: ApiTask, todayStart: Date): boolean {
   if (t.status === "done") return false;
@@ -187,6 +190,15 @@ function IconTemplateOneOne() {
   );
 }
 
+function IconWorkplaceStandards() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <path d="M12 3l7 4v5c0 4.2-2.8 7.6-7 9-4.2-1.4-7-4.8-7-9V7l7-4z" />
+      <path d="M9 12l2 2 4-4" />
+    </svg>
+  );
+}
+
 async function fetchTeamContext(teamId: string) {
   const detail = await fetchWebTeam(teamId);
   const manageJoin = canManageJoinRequests(detail.myRole);
@@ -202,6 +214,7 @@ async function fetchTeamContext(teamId: string) {
   return {
     detail,
     memberStats: stats?.stats ?? null,
+    workplaceStandards: mergeWorkplaceStandards(stats?.workplaceStandards ?? detail.workplaceStandards),
     overviewTasks: Array.isArray(tasks) ? tasks : [],
     isPaid: plan === "team" || plan === "pro",
     incoming: manageJoin ? joinList : [],
@@ -262,6 +275,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
 
   const teamDetail = teamContextQuery.data?.detail ?? null;
   const memberStats = teamContextQuery.data?.memberStats ?? null;
+  const workplaceStandards = teamContextQuery.data?.workplaceStandards ?? mergeWorkplaceStandards(null);
   const overviewTasks = teamContextQuery.data?.overviewTasks ?? [];
   const isPaid = teamContextQuery.data?.isPaid ?? false;
   const incoming = teamContextQuery.data?.incoming ?? [];
@@ -309,12 +323,20 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
   const [memberSearch, setMemberSearch] = useState("");
   const [workspaceSettingsOpen, setWorkspaceSettingsOpen] = useState(false);
   const [oneOneTemplatesOpen, setOneOneTemplatesOpen] = useState(false);
+  const [workplaceStandardsOpen, setWorkplaceStandardsOpen] = useState(false);
+  const [requiredTemplateTitle, setRequiredTemplateTitle] = useState<string | null>(
+    teamDetail?.requiredCheckInTemplateTitle ?? null,
+  );
 
   const myId = me?.id ?? "";
 
   useEffect(() => {
     if (teamDetail) setNameEdit(teamDetail.name);
   }, [teamDetail?.id, teamDetail?.name]);
+
+  useEffect(() => {
+    setRequiredTemplateTitle(teamDetail?.requiredCheckInTemplateTitle ?? null);
+  }, [teamDetail?.id, teamDetail?.requiredCheckInTemplateTitle]);
 
   useEffect(() => {
     if (!onWorkspaceSwitchLoading) return;
@@ -585,6 +607,19 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
   const myRole = teamDetail?.myRole ?? "";
   const manageJoin = canManageJoinRequests(myRole);
   const manageMembers = canRemoveMembers(myRole);
+  const canManageOneOneTemplates = myRole === "owner";
+  const showOwnerManageRow = canManageOneOneTemplates;
+  const standardsSummary = useMemo(
+    () => ({
+      frequency: formatCheckInFrequencySummary(workplaceStandards),
+      goals: workplaceStandards.goalsRequired
+        ? String(workplaceStandards.minimumActiveGoals)
+        : "Not required",
+      grace: formatGracePeriodSummary(workplaceStandards.checkInGracePeriodDays),
+      template: formatRequiredTemplateSummary(requiredTemplateTitle),
+    }),
+    [workplaceStandards, requiredTemplateTitle],
+  );
 
   if (!selectedTeamId) {
     return (
@@ -605,9 +640,6 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
       </div>
     );
   }
-
-  const canManageOneOneTemplates = myRole === "owner";
-  const showTemplateManageRow = canManageOneOneTemplates;
 
   return (
     <div className="enterprise-team-tab enterprise-team-page">
@@ -681,7 +713,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
             </div>
           </header>
 
-          <div className={`enterprise-team-stat-row${showTemplateManageRow ? "" : " enterprise-team-stat-row--two"}`}>
+          <div className={`enterprise-team-stat-row${showOwnerManageRow ? " enterprise-team-stat-row--four" : " enterprise-team-stat-row--two"}`}>
             <div className="enterprise-team-stat-card enterprise-team-stat-card--members">
               <span className="enterprise-team-stat-icon" aria-hidden><IconStatMembers /></span>
               <span className="enterprise-team-stat-copy">
@@ -696,7 +728,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                 <span>Open actions</span>
               </span>
             </div>
-            {showTemplateManageRow ? (
+            {showOwnerManageRow ? (
               <button
                 type="button"
                 className="enterprise-team-stat-card enterprise-team-stat-card--templates enterprise-team-stat-card--action"
@@ -708,6 +740,33 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                 <span className="enterprise-team-stat-copy enterprise-team-stat-copy--templates">
                   <span className="enterprise-team-stat-templates-title">Check-in templates</span>
                   <span>Manage forms</span>
+                </span>
+                <span className="enterprise-team-stat-chevron" aria-hidden>
+                  ›
+                </span>
+              </button>
+            ) : null}
+            {showOwnerManageRow ? (
+              <button
+                type="button"
+                className="enterprise-team-stat-card enterprise-team-stat-card--standards enterprise-team-stat-card--action"
+                onClick={() => setWorkplaceStandardsOpen(true)}
+              >
+                <span className="enterprise-team-stat-icon enterprise-team-stat-icon--standards" aria-hidden>
+                  <IconWorkplaceStandards />
+                </span>
+                <span className="enterprise-team-stat-copy enterprise-team-stat-copy--standards">
+                  <span className="enterprise-team-stat-templates-title">Workplace Standards</span>
+                  <span>Set check-in and development expectations</span>
+                  <span className="enterprise-team-standards-summary">
+                    {standardsSummary.frequency}
+                    <span className="enterprise-team-standards-summary-dot" aria-hidden>·</span>
+                    Goals {standardsSummary.goals}
+                    <span className="enterprise-team-standards-summary-dot" aria-hidden>·</span>
+                    Grace {standardsSummary.grace}
+                    <span className="enterprise-team-standards-summary-dot" aria-hidden>·</span>
+                    {standardsSummary.template}
+                  </span>
                 </span>
                 <span className="enterprise-team-stat-chevron" aria-hidden>
                   ›
@@ -812,12 +871,10 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                 const displayName = m.user.name ?? m.user.email ?? "Member";
                 const stats = memberStats?.[m.userId];
                 const statsReady = memberStats !== null;
-                const streak = stats?.streak ?? 0;
                 const daysSinceCheckIn = stats?.daysSinceLastOneOnOne;
-                const activeGoals = stats?.activeDevGoals ?? 0;
-                const overdueFollowUps = stats?.overdueFollowUpTasks ?? 0;
+                const compliance = stats?.standardsCompliance;
                 const followUpDisplay = statsReady
-                  ? formatOverdueFollowUpTasksDisplay(overdueFollowUps)
+                  ? formatOverdueFollowUpTasksDisplay(stats?.overdueFollowUpTasks ?? 0)
                   : null;
                 const cardClass = `enterprise-team-roster-card${isSelected ? " enterprise-team-roster-card--selected" : ""}${isSelf ? " enterprise-team-roster-card--self" : ""}${!canView ? " enterprise-team-roster-card--static" : ""}`;
                 const cardBody = (
@@ -839,15 +896,27 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                         </span>
                         <span className="enterprise-team-roster-kpis">
                           <RosterKpi
-                            label="Check-in"
+                            label="Last check-in"
                             value={statsReady ? formatDaysSinceCheckIn(daysSinceCheckIn) : "…"}
                             title={statsReady ? formatDaysSinceCheckInTitle(daysSinceCheckIn) : undefined}
                           />
                           <RosterKpi
                             label="Goals"
-                            value={statsReady ? formatActiveGoalsCount(activeGoals) : "…"}
-                            title={statsReady ? formatActiveGoalsTitle(activeGoals) : undefined}
+                            value={statsReady ? (compliance?.goalsDisplay ?? "—") : "…"}
+                            title={
+                              statsReady && compliance
+                                ? compliance.goalsActionText
+                                : undefined
+                            }
                           />
+                          {statsReady && compliance ? (
+                            <span
+                              className={standardsBadgeClassName(compliance.statusBadge)}
+                              title={`${compliance.checkInActionText}. ${compliance.goalsActionText}`}
+                            >
+                              {compliance.statusBadge}
+                            </span>
+                          ) : null}
                           {followUpDisplay ? (
                             <RosterKpi
                               label={followUpDisplay.label}
@@ -856,18 +925,6 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                               valueClassName="enterprise-team-roster-kpi-value--overdue"
                             />
                           ) : null}
-                          <RosterKpi
-                            label="Streak"
-                            value={statsReady ? formatTaskStreakValue(streak, isPaid) : "…"}
-                            title={statsReady && isPaid ? formatTaskStreakTitle(streak) : undefined}
-                            icon={
-                              statsReady && isPaid && streak > 0 ? (
-                                <span className="enterprise-team-roster-kpi-icon" aria-hidden>
-                                  🔥{" "}
-                                </span>
-                              ) : null
-                            }
-                          />
                         </span>
                       </span>
                       {canView ? (
@@ -931,6 +988,8 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
               }
               streak={isPaid ? memberStats?.[selectedMember.userId]?.streak : undefined}
               overdueFollowUpTasks={memberStats?.[selectedMember.userId]?.overdueFollowUpTasks}
+              workplaceStandards={workplaceStandards}
+              standardsCompliance={memberStats?.[selectedMember.userId]?.standardsCompliance}
               onBack={() => setSelectedMemberId(null)}
               onManage={() => openMemberModal(selectedMember)}
             />
@@ -1114,6 +1173,18 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
         teamId={teamDetail.id}
         open={oneOneTemplatesOpen}
         onClose={() => setOneOneTemplatesOpen(false)}
+      />
+
+      <WorkplaceStandardsModal
+        teamId={teamDetail.id}
+        open={workplaceStandardsOpen}
+        initialStandards={workplaceStandards}
+        initialTemplateTitle={requiredTemplateTitle}
+        onClose={() => setWorkplaceStandardsOpen(false)}
+        onSaved={(_saved, templateTitle) => {
+          setRequiredTemplateTitle(templateTitle);
+          void reloadTeamContext();
+        }}
       />
     </div>
   );

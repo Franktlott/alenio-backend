@@ -7,11 +7,21 @@ import {
 } from "@/lib/member-profile-api";
 import { oneOnOneDisplayDateMs, oneOnOnePublishedAt } from "@/lib/one-on-one-dates";
 
+import {
+  DEFAULT_WORKPLACE_STANDARDS,
+  formatCheckInFrequencySummary,
+  standardsBadgeColors,
+  type MemberStandardsCompliance,
+  type WorkplaceStandards,
+} from "@/lib/workplace-standards";
+
 type Props = {
   teamId: string;
   memberUserId: string;
   streak?: number;
   overdueFollowUpTasks?: number;
+  workplaceStandards?: WorkplaceStandards;
+  standardsCompliance?: MemberStandardsCompliance;
 };
 
 function formatDateOnly(iso: string): string {
@@ -101,7 +111,15 @@ function KpiCell({
   );
 }
 
-export function ProfileOverviewTab({ teamId, memberUserId, streak, overdueFollowUpTasks }: Props) {
+export function ProfileOverviewTab({
+  teamId,
+  memberUserId,
+  streak,
+  overdueFollowUpTasks,
+  workplaceStandards,
+  standardsCompliance,
+}: Props) {
+  const standards = workplaceStandards ?? DEFAULT_WORKPLACE_STANDARDS;
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [activeGoals, setActiveGoals] = useState<DevelopmentGoal[]>([]);
@@ -231,6 +249,72 @@ export function ProfileOverviewTab({ teamId, memberUserId, streak, overdueFollow
       {err ? (
         <Text style={{ fontSize: 12, color: "#DC2626", paddingHorizontal: 14, paddingTop: 10 }}>{err}</Text>
       ) : null}
+
+      <View
+        style={{
+          marginHorizontal: 14,
+          marginTop: 10,
+          marginBottom: 4,
+          padding: 12,
+          borderRadius: 12,
+          borderWidth: 1,
+          borderColor: "#E8EDF3",
+          backgroundColor: "#FFFFFF",
+        }}
+      >
+        <Text style={{ fontSize: 9, fontWeight: "700", color: "#64748B", letterSpacing: 1.1, textTransform: "uppercase" }}>
+          Standards Status
+        </Text>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12, marginTop: 10 }}>
+          <View style={{ minWidth: "40%" }}>
+            <Text style={{ fontSize: 9, fontWeight: "700", color: "#94A3B8", textTransform: "uppercase" }}>Check-in</Text>
+            <Text style={{ fontSize: 13, fontWeight: "600", color: "#0F172A", marginTop: 2 }}>
+              {standards.checkInRequired ? formatCheckInFrequencySummary(standards) : "Not required"}
+            </Text>
+          </View>
+          <View style={{ minWidth: "40%" }}>
+            <Text style={{ fontSize: 9, fontWeight: "700", color: "#94A3B8", textTransform: "uppercase" }}>Goals</Text>
+            <Text style={{ fontSize: 13, fontWeight: "600", color: "#0F172A", marginTop: 2 }}>
+              {standards.goalsRequired
+                ? `${standards.minimumActiveGoals} active goal${standards.minimumActiveGoals === 1 ? "" : "s"}`
+                : "Not required"}
+            </Text>
+          </View>
+        </View>
+        {standardsCompliance ? (
+          <>
+            <View
+              style={{
+                alignSelf: "flex-start",
+                marginTop: 10,
+                backgroundColor: standardsBadgeColors(standardsCompliance.statusBadge).bg,
+                paddingHorizontal: 8,
+                paddingVertical: 4,
+                borderRadius: 999,
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: 9,
+                  fontWeight: "800",
+                  color: standardsBadgeColors(standardsCompliance.statusBadge).text,
+                  letterSpacing: 0.4,
+                }}
+              >
+                {standardsCompliance.statusBadge.toUpperCase()}
+              </Text>
+            </View>
+            <View style={{ marginTop: 8, gap: 4 }}>
+              {standardsCompliance.checkInStatus !== "not_required" ? (
+                <Text style={{ fontSize: 12, color: "#475569" }}>{standardsCompliance.checkInActionText}</Text>
+              ) : null}
+              {standardsCompliance.goalsStatus !== "not_required" ? (
+                <Text style={{ fontSize: 12, color: "#475569" }}>{standardsCompliance.goalsActionText}</Text>
+              ) : null}
+            </View>
+          </>
+        ) : null}
+      </View>
 
       <View style={{ paddingHorizontal: 14, paddingVertical: 10 }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 }}>

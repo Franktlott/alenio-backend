@@ -26,6 +26,12 @@ import {
   reconcileInactiveDevelopmentGoals,
 } from "../lib/development-goal-activity";
 import { oneOnOnePublishedAt } from "../lib/one-on-one-meeting-dates";
+import {
+  computeMemberStandardsCompliance,
+  parseWorkplaceStandards,
+  type MemberStandardsCompliance,
+  type WorkplaceStandards,
+} from "../lib/workplace-standards";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -531,6 +537,12 @@ tasksRouter.get("/member-stats", async (c) => {
   const membership = await getMembership(user.id, teamId);
   if (!membership) return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
 
+  const teamRow = await prisma.team.findUnique({
+    where: { id: teamId },
+    select: { workplaceStandards: true },
+  });
+  const workplaceStandards = parseWorkplaceStandards(teamRow?.workplaceStandards);
+
   const now = new Date();
 
   // Accept optional year/month query params (month is 0-indexed)
@@ -596,6 +608,7 @@ tasksRouter.get("/member-stats", async (c) => {
       daysSinceLastOneOnOne: number | null;
       openFollowUpTasks: number;
       overdueFollowUpTasks: number;
+      standardsCompliance: MemberStandardsCompliance;
     }
   > = {};
 
@@ -639,6 +652,7 @@ tasksRouter.get("/member-stats", async (c) => {
       daysSinceLastOneOnOne: null,
       openFollowUpTasks,
       overdueFollowUpTasks,
+      standardsCompliance: computeMemberStandardsCompliance(workplaceStandards, null, 0),
     };
   }
 
@@ -653,6 +667,7 @@ tasksRouter.get("/member-stats", async (c) => {
     daysSinceLastOneOnOne: null as number | null,
     openFollowUpTasks: 0,
     overdueFollowUpTasks: 0,
+    standardsCompliance: computeMemberStandardsCompliance(workplaceStandards, null, 0),
   });
 
   // Also include members with no tasks but a stored streak
@@ -677,7 +692,7 @@ tasksRouter.get("/member-stats", async (c) => {
     }),
     prisma.oneOnOneMeeting.findMany({
       where: { teamId, status: "published" },
-      select: { memberUserId: true, createdAt: true, publishedAt: true },
+      select: { memberUserId: true, createdAt: true, publishedAt: true, templateId: true },
       orderBy: [{ publishedAt: "desc" }, { createdAt: "desc" }],
     }),
   ]);
@@ -724,7 +739,9 @@ tasksRouter.get("/member-stats", async (c) => {
   };
 
   const lastOneOnOneByMember: Record<string, Date> = {};
+  const requiredTemplateId = workplaceStandards.requiredCheckInTemplateId;
   for (const meeting of oneOnOnes) {
+    if (requiredTemplateId && meeting.templateId !== requiredTemplateId) continue;
     if (!lastOneOnOneByMember[meeting.memberUserId]) {
       const publishedAt = oneOnOnePublishedAt(meeting);
       if (publishedAt) lastOneOnOneByMember[meeting.memberUserId] = publishedAt;
@@ -746,6 +763,11 @@ tasksRouter.get("/member-stats", async (c) => {
     row.devEngagementPct =
       dev.active === 0 ? 0 : Math.round((dev.engaged / dev.active) * 100);
     row.daysSinceLastOneOnOne = lastMeeting ? daysSinceCalendar(lastMeeting) : null;
+    row.standardsCompliance = computeMemberStandardsCompliance(
+      workplaceStandards,
+      row.daysSinceLastOneOnOne,
+      row.activeDevGoals,
+    );
     statsMap[m.userId] = row;
   }
 
@@ -763,7 +785,7 @@ tasksRouter.get("/member-stats", async (c) => {
     }
   }
 
-  return c.json({ data: statsMap, developmentGoalAlerts });
+  return c.json({ data: { stats: statsMap, workplaceStandards }, developmentGoalAlerts });
 });
 
 // GET /api/teams/:teamId/tasks/count - returns count of todo/in-progress tasks assigned to current user

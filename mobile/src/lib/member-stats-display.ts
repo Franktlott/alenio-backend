@@ -5,6 +5,13 @@ export type FollowUpTasksDisplay = {
   overdue: true;
 };
 
+export function formatDaysSinceCheckIn(days: number | null | undefined): string {
+  if (days == null) return "None";
+  if (days === 0) return "Today";
+  if (days === 1) return "1d";
+  return `${days}d`;
+}
+
 /** Roster KPI for overdue check-in follow-ups only; hidden when none are overdue. */
 export function formatOverdueFollowUpTasksDisplay(
   overdueFollowUpTasks: number,

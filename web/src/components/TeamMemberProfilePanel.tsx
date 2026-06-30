@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { WebTeamMemberRow } from "../lib/api";
+import type { MemberStandardsCompliance, WorkplaceStandards } from "../lib/workplace-standards";
 import { DevelopmentPlanTab } from "./DevelopmentPlanTab";
 import { OneOnOneHistoryTab } from "./OneOnOneHistoryTab";
 import { ProfileOverviewTab } from "./ProfileOverviewTab";
@@ -22,6 +23,8 @@ type Props = {
   canAddDevNotes: boolean;
   streak?: number;
   overdueFollowUpTasks?: number;
+  workplaceStandards?: WorkplaceStandards;
+  standardsCompliance?: MemberStandardsCompliance;
   onBack: () => void;
   onManage: () => void;
 };
@@ -40,6 +43,8 @@ export function TeamMemberProfilePanel({
   canAddDevNotes,
   streak,
   overdueFollowUpTasks,
+  workplaceStandards,
+  standardsCompliance,
   onBack,
   onManage,
 }: Props) {
@@ -124,6 +129,8 @@ export function TeamMemberProfilePanel({
             email={member.user.email}
             streak={streak}
             overdueFollowUpTasks={overdueFollowUpTasks}
+            workplaceStandards={workplaceStandards}
+            standardsCompliance={standardsCompliance}
           />
         ) : activeTab === "Growth" ? (
           <DevelopmentPlanTab

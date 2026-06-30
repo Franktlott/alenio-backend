@@ -46,6 +46,7 @@ import { ensureTeamInviteSchema } from "./lib/ensure-team-invite-schema";
 import { ensureRecurrenceSeriesSchema } from "./lib/ensure-recurrence-series-schema";
 import { ensureUserTimezoneSchema } from "./lib/ensure-user-timezone-schema";
 import { ensureCalendarApprovalSchema } from "./lib/ensure-calendar-approval-schema";
+import { ensureWorkplaceStandardsSchema } from "./lib/ensure-workplace-standards-schema";
 import { developmentGoalsRouter } from "./routes/development-goals";
 import { senecaRouter } from "./routes/seneca";
 import { senecaTeamRouter } from "./routes/seneca-team";
@@ -62,6 +63,7 @@ const teamInviteSchemaReady = ensureTeamInviteSchema(prisma);
 const recurrenceSeriesSchemaReady = ensureRecurrenceSeriesSchema(prisma);
 const userTimezoneSchemaReady = ensureUserTimezoneSchema(prisma);
 const calendarApprovalSchemaReady = ensureCalendarApprovalSchema(prisma);
+const workplaceStandardsSchemaReady = ensureWorkplaceStandardsSchema(prisma);
 
 type Variables = {
   user: AppUser | null;
@@ -119,6 +121,7 @@ app.use("*", async (_c, next) => {
   await teamInviteSchemaReady;
   await recurrenceSeriesSchemaReady;
   await userTimezoneSchemaReady;
+  await workplaceStandardsSchemaReady;
   await next();
 });
 

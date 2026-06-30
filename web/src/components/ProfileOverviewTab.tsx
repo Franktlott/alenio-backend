@@ -5,6 +5,13 @@ import {
   type DevelopmentGoal,
 } from "../lib/api";
 import { formatTaskStreakValue } from "../lib/member-stats-display";
+import {
+  DEFAULT_WORKPLACE_STANDARDS,
+  formatCheckInFrequencySummary,
+  standardsBadgeClassName,
+  type MemberStandardsCompliance,
+  type WorkplaceStandards,
+} from "../lib/workplace-standards";
 import { oneOnOneDisplayDateMs, oneOnOnePublishedAt } from "../lib/one-on-one-dates";
 
 type Props = {
@@ -14,6 +21,8 @@ type Props = {
   email?: string | null;
   streak?: number;
   overdueFollowUpTasks?: number;
+  workplaceStandards?: WorkplaceStandards;
+  standardsCompliance?: MemberStandardsCompliance;
 };
 
 function formatDateOnly(iso: string): string {
@@ -64,7 +73,10 @@ export function ProfileOverviewTab({
   email,
   streak,
   overdueFollowUpTasks,
+  workplaceStandards,
+  standardsCompliance,
 }: Props) {
+  const standards = workplaceStandards ?? DEFAULT_WORKPLACE_STANDARDS;
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [activeGoals, setActiveGoals] = useState<DevelopmentGoal[]>([]);
@@ -157,6 +169,51 @@ export function ProfileOverviewTab({
         </div>
 
         {err ? <p className="enterprise-form-error enterprise-overview-snapshot-error" role="alert">{err}</p> : null}
+
+        <section className="enterprise-overview-standards">
+          <header className="enterprise-overview-standards-head">
+            <p className="enterprise-overview-kicker">Workspace</p>
+            <h4>Standards Status</h4>
+          </header>
+          <div className="enterprise-overview-standards-grid">
+            <div className="enterprise-overview-standards-item">
+              <span className="enterprise-overview-standards-label">Check-in requirement</span>
+              <strong>
+                {standards.checkInRequired
+                  ? formatCheckInFrequencySummary(standards)
+                  : "Not required"}
+              </strong>
+            </div>
+            <div className="enterprise-overview-standards-item">
+              <span className="enterprise-overview-standards-label">Goal requirement</span>
+              <strong>
+                {standards.goalsRequired
+                  ? `${standards.minimumActiveGoals} active goal${standards.minimumActiveGoals === 1 ? "" : "s"}`
+                  : "Not required"}
+              </strong>
+            </div>
+            <div className="enterprise-overview-standards-item enterprise-overview-standards-item--status">
+              <span className="enterprise-overview-standards-label">Member status</span>
+              {standardsCompliance ? (
+                <span className={standardsBadgeClassName(standardsCompliance.statusBadge)}>
+                  {standardsCompliance.statusBadge}
+                </span>
+              ) : (
+                <strong>—</strong>
+              )}
+            </div>
+          </div>
+          {standardsCompliance ? (
+            <ul className="enterprise-overview-standards-actions">
+              {standardsCompliance.checkInStatus !== "not_required" ? (
+                <li>{standardsCompliance.checkInActionText}</li>
+              ) : null}
+              {standardsCompliance.goalsStatus !== "not_required" ? (
+                <li>{standardsCompliance.goalsActionText}</li>
+              ) : null}
+            </ul>
+          ) : null}
+        </section>
 
         <div className="enterprise-overview-snapshot-section">
           <div className="enterprise-overview-snapshot-section-head">
