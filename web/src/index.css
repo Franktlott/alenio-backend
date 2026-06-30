@@ -15274,11 +15274,86 @@ button.enterprise-profile-legal-link {
   font-size: 0.875rem;
 }
 
+.enterprise-outlook-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  padding: 0.75rem 0.9rem;
+  border-radius: 10px;
+  margin: 0 0 0.85rem;
+}
+
+.enterprise-outlook-alert--success {
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #065f46;
+}
+
+.enterprise-outlook-alert--error {
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  color: #9a3412;
+}
+
+.enterprise-outlook-alert-icon {
+  flex-shrink: 0;
+  margin-top: 1px;
+  display: inline-flex;
+}
+
+.enterprise-outlook-alert-copy {
+  min-width: 0;
+}
+
+.enterprise-outlook-alert-title {
+  margin: 0 0 0.2rem;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.enterprise-outlook-alert-message {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+.enterprise-outlook-panel .enterprise-outlook-alert {
+  margin-top: 0.65rem;
+}
+
+.enterprise-profile-outlook .enterprise-outlook-alert:last-of-type {
+  margin-bottom: 0.85rem;
+}
+
 .enterprise-outlook-panel-copy {
   margin: 0 0 1rem;
   font-size: 0.875rem;
   line-height: 1.45;
   color: var(--muted);
+}
+
+.enterprise-outlook-calendar-picker {
+  margin: 0.75rem 0;
+}
+
+.enterprise-outlook-calendar-picker-label {
+  display: block;
+  margin-bottom: 0.35rem;
+  font-size: 0.8125rem;
+}
+
+.enterprise-outlook-calendar-select {
+  width: 100%;
+  max-width: 420px;
+  margin-bottom: 0.35rem;
+}
+
+.enterprise-outlook-calendar-picker-hint {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.4;
 }
 
 .enterprise-outlook-panel-actions {

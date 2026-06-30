@@ -6,6 +6,7 @@ import {
   refreshMicrosoftAccessToken,
 } from "./microsoft-calendar";
 import { prisma } from "../prisma";
+import { formatOutlookUserError } from "./calendar-oauth-errors";
 
 const SYNC_PAST_DAYS = 14;
 const SYNC_FUTURE_DAYS = 90;
@@ -50,7 +51,7 @@ export function serializeCalendarConnection(row: CalendarConnection): CalendarCo
     externalCalendarId: row.externalCalendarId,
     externalCalendarName: row.externalCalendarName,
     lastSyncedAt: row.lastSyncedAt?.toISOString() ?? null,
-    syncError: row.syncError,
+    syncError: row.syncError ? formatOutlookUserError(row.syncError) : null,
     connected: Boolean(row.refreshTokenEnc),
   };
 }

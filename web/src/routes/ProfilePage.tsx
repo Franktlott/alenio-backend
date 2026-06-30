@@ -7,6 +7,8 @@ import { DeleteAccountModal } from "../components/DeleteAccountModal";
 import { ChangeEmailModal } from "../components/ChangeEmailModal";
 import { ProfileTeamsSection } from "../components/ProfileTeamsSection";
 import { OutlookCalendarPanel } from "../components/OutlookCalendarPanel";
+import { OutlookCalendarAlert } from "../components/OutlookCalendarAlert";
+import { formatOutlookUserError } from "../lib/outlook-calendar-errors";
 import {
   fetchWebTeams,
   patchApiProfile,
@@ -65,6 +67,7 @@ export function ProfilePage() {
   const [timezone, setTimezone] = useState(getBrowserTimeZone());
   const [timezoneSaving, setTimezoneSaving] = useState(false);
   const [outlookNotice, setOutlookNotice] = useState<string | null>(null);
+  const [outlookError, setOutlookError] = useState<string | null>(null);
 
   useEffect(() => {
     const outlook = searchParams.get("outlook");
@@ -75,11 +78,11 @@ export function ProfilePage() {
     next.delete("message");
     setSearchParams(next, { replace: true });
     if (outlook === "connected") {
-      setOutlookNotice("Outlook connected. Your busy times will appear on your calendar.");
-      setFormErr(null);
+      setOutlookNotice("Your busy times will appear on your Alenio calendar.");
+      setOutlookError(null);
     } else if (outlook === "error") {
       setOutlookNotice(null);
-      setFormErr(message?.trim() || "Could not connect Outlook.");
+      setOutlookError(formatOutlookUserError(message));
     }
   }, [searchParams, setSearchParams]);
 
@@ -347,11 +350,17 @@ export function ProfilePage() {
           <section className="enterprise-card enterprise-profile-outlook">
             <h2 className="enterprise-card-title enterprise-card-title-spaced">Outlook calendar</h2>
             {outlookNotice ? (
-              <p className="enterprise-outlook-notice" role="status">
-                {outlookNotice}
-              </p>
+              <OutlookCalendarAlert variant="success" message={outlookNotice} />
             ) : null}
-            <OutlookCalendarPanel onStatusChange={() => setOutlookNotice(null)} />
+            {outlookError ? (
+              <OutlookCalendarAlert variant="error" message={outlookError} />
+            ) : null}
+            <OutlookCalendarPanel
+              onStatusChange={() => {
+                setOutlookNotice(null);
+                setOutlookError(null);
+              }}
+            />
           </section>
           </div>
 

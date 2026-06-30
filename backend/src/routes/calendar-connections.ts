@@ -18,6 +18,7 @@ import {
   syncOutlookConnection,
   syncOutlookForUserIfStale,
 } from "../lib/sync-outlook-calendar";
+import { formatOutlookUserError } from "../lib/calendar-oauth-errors";
 
 type Variables = {
   user: { id: string; email: string | null; name: string | null; image?: string | null } | null;
@@ -73,7 +74,8 @@ calendarConnectionsRouter.get("/microsoft/callback", async (c) => {
   const platform: OAuthPlatform = state?.platform ?? "web";
 
   if (oauthError || !code || !state) {
-    return c.redirect(successRedirectUrl(platform, "error", oauthError || "Authorization was cancelled."));
+    const friendly = formatOutlookUserError(oauthError || "Authorization was cancelled.");
+    return c.redirect(successRedirectUrl(platform, "error", friendly));
   }
 
   try {
@@ -106,7 +108,7 @@ calendarConnectionsRouter.get("/microsoft/callback", async (c) => {
 
     return c.redirect(successRedirectUrl(platform, "connected"));
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Could not connect Outlook";
+    const message = formatOutlookUserError(err instanceof Error ? err.message : "Could not connect Outlook");
     return c.redirect(successRedirectUrl(platform, "error", message));
   }
 });

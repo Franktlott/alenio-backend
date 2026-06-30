@@ -21,6 +21,12 @@ export type ExternalCalendarEventItem = {
   isExternal: true;
 };
 
+export type MicrosoftOutlookCalendarOption = {
+  id: string;
+  name: string;
+  isDefaultCalendar?: boolean;
+};
+
 export function fetchCalendarConnections() {
   return api.get<{ configured: boolean; connections: CalendarConnectionSummary[] }>("/api/calendar-connections");
 }
@@ -37,6 +43,17 @@ export function disconnectMicrosoftCalendar() {
 
 export function syncMicrosoftCalendar() {
   return api.post<CalendarConnectionSummary>("/api/calendar-connections/microsoft/sync", {});
+}
+
+export function fetchMicrosoftOutlookCalendars() {
+  return api.get<MicrosoftOutlookCalendarOption[]>("/api/calendar-connections/microsoft/calendars");
+}
+
+export function updateMicrosoftOutlookCalendar(calendarId: string, calendarName: string) {
+  return api.patch<CalendarConnectionSummary>("/api/calendar-connections/microsoft", {
+    calendarId,
+    calendarName,
+  });
 }
 
 export function fetchExternalCalendarEvents(start?: string, end?: string) {

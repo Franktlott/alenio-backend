@@ -1,4 +1,4 @@
-import { apiDeleteJson, apiGetJson, apiPostJson } from "./api";
+import { apiDeleteJson, apiGetJson, apiPatchJson, apiPostJson } from "./api";
 
 export type CalendarConnectionSummary = {
   id: string;
@@ -21,6 +21,12 @@ export type ExternalCalendarEventItem = {
   isExternal: true;
 };
 
+export type MicrosoftOutlookCalendarOption = {
+  id: string;
+  name: string;
+  isDefaultCalendar?: boolean;
+};
+
 export function fetchCalendarConnections() {
   return apiGetJson<{
     data: { configured: boolean; connections: CalendarConnectionSummary[] };
@@ -41,6 +47,19 @@ export function syncMicrosoftCalendar() {
   return apiPostJson<{ data: CalendarConnectionSummary }>("/api/calendar-connections/microsoft/sync", {}).then(
     (r) => r.data,
   );
+}
+
+export function fetchMicrosoftOutlookCalendars() {
+  return apiGetJson<{ data: MicrosoftOutlookCalendarOption[] }>("/api/calendar-connections/microsoft/calendars").then(
+    (r) => r.data,
+  );
+}
+
+export function updateMicrosoftOutlookCalendar(calendarId: string, calendarName: string) {
+  return apiPatchJson<{ data: CalendarConnectionSummary }>("/api/calendar-connections/microsoft", {
+    calendarId,
+    calendarName,
+  }).then((r) => r.data);
 }
 
 export function fetchExternalCalendarEvents(start?: string, end?: string) {

@@ -47,6 +47,7 @@ import {
 } from "@/components/profile/ProfileEnterpriseUI";
 import { ProfileWorkspaceList } from "@/components/profile/ProfileWorkspaceList";
 import { OutlookCalendarCard } from "@/components/profile/OutlookCalendarCard";
+import { formatOutlookUserError } from "@/lib/outlook-calendar-errors";
 
 const DEMO_EMAIL = "demo@alenio.app";
 
@@ -84,7 +85,7 @@ export default function ProfileScreen() {
       void queryClient.invalidateQueries({ queryKey: ["external-calendar-events"] });
       router.setParams({ outlook: undefined, message: undefined });
     } else if (outlook === "error") {
-      Alert.alert("Outlook", typeof message === "string" ? message : "Could not connect Outlook.");
+      Alert.alert("Outlook calendar", formatOutlookUserError(typeof message === "string" ? message : undefined));
       router.setParams({ outlook: undefined, message: undefined });
     }
   }, [outlook, message, queryClient]);
