@@ -53,9 +53,10 @@ function shouldUseCalendarDays(event: {
   isExternal?: boolean;
 }): boolean {
   if (event.allDay) return true;
-  if (!event.isExternal) return false;
   if (/T12:00:00(\.0+)?Z$/.test(event.startDate)) return true;
-  if (event.endDate && isMidnightUtcIso(event.startDate) && isMidnightUtcIso(event.endDate)) return true;
+  if (event.isExternal && event.endDate && isMidnightUtcIso(event.startDate) && isMidnightUtcIso(event.endDate)) {
+    return true;
+  }
   return false;
 }
 
@@ -75,8 +76,8 @@ export function eventCalendarDayRange(event: {
       isMidnightUtcIso(event.startDate) &&
       isMidnightUtcIso(event.endDate)
     ) {
-      const daySpan = Math.round((end.getTime() - start.getTime()) / 86_400_000);
-      if (daySpan === 1) end = start;
+      end = new Date(end.getTime() - 86_400_000);
+      if (end < start) end = start;
     }
     return { start, end };
   }

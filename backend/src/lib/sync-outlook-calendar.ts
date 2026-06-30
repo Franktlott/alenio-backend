@@ -3,7 +3,9 @@ import { decryptSecret, encryptSecret } from "./calendar-token-crypto";
 import {
   fetchMicrosoftCalendarView,
   fetchMicrosoftCalendars,
+  graphDateTimeRaw,
   refreshMicrosoftAccessToken,
+  type MicrosoftCalendarEvent,
 } from "./microsoft-calendar";
 import { prisma } from "../prisma";
 import { formatOutlookUserError } from "./calendar-oauth-errors";
@@ -43,18 +45,18 @@ function parseTimedGraphDate(value?: string): Date | null {
   return d;
 }
 
-function isGraphAllDayEvent(event: {
-  isAllDay?: boolean;
-  start?: { dateTime?: string };
-  end?: { dateTime?: string };
-}): boolean {
+function isMidnightBoundary(raw: string): boolean {
+  return !raw.includes("T") || /T00:00:00/.test(raw);
+}
+
+function isGraphAllDayEvent(event: MicrosoftCalendarEvent): boolean {
   if (event.isAllDay === true) return true;
-  const startRaw = event.start?.dateTime;
-  const endRaw = event.end?.dateTime;
+  const startRaw = graphDateTimeRaw(event.start);
+  const endRaw = graphDateTimeRaw(event.end);
   if (!startRaw || !endRaw) return false;
-  if (!/T00:00:00/.test(startRaw) || !/T00:00:00/.test(endRaw)) return false;
-  // All-day events use midnight boundaries; end is the day after the last day (or same for edge cases).
-  return startRaw.slice(0, 10) !== endRaw.slice(0, 10) || event.isAllDay === true;
+  if (!isMidnightBoundary(startRaw) || !isMidnightBoundary(endRaw)) return false;
+  // All-day events use midnight boundaries; end is the day after the last day.
+  return startRaw.slice(0, 10) !== endRaw.slice(0, 10);
 }
 
 /** Graph all-day end dates are exclusive (midnight after the last day). */
@@ -147,17 +149,21 @@ export async function syncOutlookConnection(connectionId: string): Promise<Calen
       end.toISOString(),
     );
 
-    const seen = new Set<string>();
+    const graphEventIds = new Set<string>();
+    for (const event of events) {
+      if (event.id) graphEventIds.add(event.id);
+    }
+
     for (const event of events) {
       try {
         if (!event.id) continue;
         if (event.isCancelled) continue;
-        if (event.showAs === "free") continue;
-        const allDay = isGraphAllDayEvent(event);
-        const normalized = normalizeOutlookEventDates(event.start?.dateTime, event.end?.dateTime, allDay);
+        const startRaw = graphDateTimeRaw(event.start);
+        const endRaw = graphDateTimeRaw(event.end);
+        const allDay = event.isAllDay === true || isGraphAllDayEvent(event);
+        const normalized = normalizeOutlookEventDates(startRaw, endRaw, allDay);
         if (!normalized) continue;
         const { startDate, endDate } = normalized;
-        seen.add(event.id);
         await prisma.externalCalendarEvent.upsert({
           where: {
             connectionId_externalEventId: {
@@ -186,10 +192,11 @@ export async function syncOutlookConnection(connectionId: string): Promise<Calen
       }
     }
 
+    // Remove only events Outlook no longer returned (not events we failed to parse).
     await prisma.externalCalendarEvent.deleteMany({
       where: {
         connectionId: connection.id,
-        ...(seen.size > 0 ? { externalEventId: { notIn: [...seen] } } : {}),
+        ...(graphEventIds.size > 0 ? { externalEventId: { notIn: [...graphEventIds] } } : {}),
         startDate: { lte: end },
         OR: [{ endDate: null }, { endDate: { gte: start } }],
       },

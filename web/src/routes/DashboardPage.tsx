@@ -19,6 +19,7 @@ import {
   isSameDay,
   startOfDay,
   eventCalendarDayRange,
+  calendarDayToUtcNoonIso,
 } from "../lib/calendar-mobile-parity";
 import { getUSHolidays } from "../lib/us-federal-holidays";
 import { canShowVideoJoin } from "../lib/video-meeting-join";
@@ -496,10 +497,9 @@ export function DashboardPage() {
 
   const getEventsForDay = (day: Date) =>
     visibleEvents.filter((e) => {
-      const s = startOfDay(new Date(e.startDate));
-      const en = e.endDate ? startOfDay(new Date(e.endDate)) : s;
+      const { start, end } = eventCalendarDayRange(e);
       const d = startOfDay(day);
-      return d >= s && d <= en;
+      return d >= start && d <= end;
     });
 
   const getTasksForDay = (day: Date): ApiTask[] =>
@@ -1528,7 +1528,7 @@ export function DashboardPage() {
                 try {
                   const useAllDay = isVideoMeeting ? false : evAllDay;
                   const startIso = useAllDay
-                    ? new Date(`${evStart}T00:00:00`).toISOString()
+                    ? calendarDayToUtcNoonIso(evStart)
                     : new Date(evStart).toISOString();
                   let endIso: string | null;
                   if (isVideoMeeting) {
@@ -1537,7 +1537,7 @@ export function DashboardPage() {
                     endIso =
                       evEnd && evEnd.trim()
                         ? useAllDay
-                          ? new Date(`${evEnd}T23:59:59`).toISOString()
+                          ? calendarDayToUtcNoonIso(evEnd)
                           : new Date(evEnd).toISOString()
                         : null;
                   }

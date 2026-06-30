@@ -39,6 +39,12 @@ export function calendarDateFromIsoDay(iso: string): Date {
   return new Date(year!, month! - 1, day!);
 }
 
+/** Store all-day events at UTC noon so the calendar day never shifts with timezone. */
+export function calendarDayToUtcNoonIso(dateStr: string): string {
+  const [year, month, day] = dateStr.slice(0, 10).split("-").map(Number);
+  return new Date(Date.UTC(year!, month! - 1, day!, 12, 0, 0)).toISOString();
+}
+
 function isMidnightUtcIso(iso: string): boolean {
   return /T00:00:00(\.0+)?Z?$/.test(iso);
 }
@@ -50,9 +56,10 @@ function shouldUseCalendarDays(event: {
   isExternal?: boolean;
 }): boolean {
   if (event.allDay) return true;
-  if (!event.isExternal) return false;
   if (/T12:00:00(\.0+)?Z$/.test(event.startDate)) return true;
-  if (event.endDate && isMidnightUtcIso(event.startDate) && isMidnightUtcIso(event.endDate)) return true;
+  if (event.isExternal && event.endDate && isMidnightUtcIso(event.startDate) && isMidnightUtcIso(event.endDate)) {
+    return true;
+  }
   return false;
 }
 
@@ -65,7 +72,7 @@ export function eventCalendarDayRange(event: {
   if (shouldUseCalendarDays(event)) {
     const start = calendarDateFromIsoDay(event.startDate);
     let end = event.endDate ? calendarDateFromIsoDay(event.endDate) : start;
-    // Legacy rows stored Outlook's exclusive end without subtracting a day.
+    // Legacy Outlook rows stored midnight UTC with an exclusive end date.
     if (
       event.isExternal &&
       !event.allDay &&
@@ -73,8 +80,8 @@ export function eventCalendarDayRange(event: {
       isMidnightUtcIso(event.startDate) &&
       isMidnightUtcIso(event.endDate)
     ) {
-      const daySpan = Math.round((end.getTime() - start.getTime()) / 86_400_000);
-      if (daySpan === 1) end = start;
+      end = new Date(end.getTime() - 86_400_000);
+      if (end < start) end = start;
     }
     return { start, end };
   }

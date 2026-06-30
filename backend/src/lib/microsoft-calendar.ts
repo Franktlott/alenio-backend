@@ -144,10 +144,7 @@ async function graphGetCollection<T>(accessToken: string, initialPath: string): 
 
   while (url) {
     const res = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        Prefer: 'outlook.timezone="UTC"',
-      },
+      headers: { Authorization: `Bearer ${accessToken}` },
     });
     if (!res.ok) {
       const text = await res.text().catch(() => "");
@@ -179,15 +176,28 @@ export async function fetchMicrosoftCalendars(accessToken: string): Promise<Micr
   }));
 }
 
+export type GraphDateTimeZone = {
+  dateTime?: string;
+  /** Some Graph responses use date-only for all-day events. */
+  date?: string;
+  timeZone?: string;
+};
+
 export type MicrosoftCalendarEvent = {
   id: string;
   subject?: string;
   isAllDay?: boolean;
   isCancelled?: boolean;
-  start?: { dateTime?: string; timeZone?: string };
-  end?: { dateTime?: string; timeZone?: string };
+  start?: GraphDateTimeZone;
+  end?: GraphDateTimeZone;
   showAs?: string;
 };
+
+/** Read start/end from Graph whether the value is in dateTime or date. */
+export function graphDateTimeRaw(value?: GraphDateTimeZone): string | undefined {
+  const raw = value?.dateTime?.trim() || value?.date?.trim();
+  return raw || undefined;
+}
 
 export async function fetchMicrosoftCalendarView(
   accessToken: string,
@@ -195,9 +205,14 @@ export async function fetchMicrosoftCalendarView(
   startIso: string,
   endIso: string,
 ): Promise<MicrosoftCalendarEvent[]> {
+  // Pad the window so all-day events on range edges are not dropped by Graph.
+  const start = new Date(startIso);
+  start.setUTCDate(start.getUTCDate() - 1);
+  const end = new Date(endIso);
+  end.setUTCDate(end.getUTCDate() + 1);
   const params = new URLSearchParams({
-    startDateTime: startIso,
-    endDateTime: endIso,
+    startDateTime: start.toISOString(),
+    endDateTime: end.toISOString(),
     $top: "250",
     $orderby: "start/dateTime",
     $select: "id,subject,isAllDay,isCancelled,start,end,showAs",
