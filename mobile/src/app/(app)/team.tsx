@@ -36,6 +36,7 @@ import { uploadFile } from "@/lib/upload";
 import { api } from "@/lib/api/api";
 import { formatOverdueFollowUpTasksDisplay, formatDaysSinceCheckIn } from "@/lib/member-stats-display";
 import {
+  memberStandardsBadges,
   standardsBadgeColors,
   type MemberStatsPayload,
 } from "@/lib/workplace-standards";
@@ -822,7 +823,9 @@ export default function TeamScreen() {
             const stats = memberStats?.[item.userId];
             const compliance = stats?.standardsCompliance;
             const followUpDisplay = formatOverdueFollowUpTasksDisplay(stats?.overdueFollowUpTasks ?? 0);
-            const badgeColors = compliance ? standardsBadgeColors(compliance.statusBadge) : null;
+            const complianceBadges = compliance
+              ? memberStandardsBadges(compliance, stats?.daysSinceLastOneOnOne)
+              : [];
             const isCurrentUser = item.userId === myId;
             const canView = canViewMemberProfile(item.userId);
             const rowStyle = {
@@ -887,18 +890,27 @@ export default function TeamScreen() {
                       {compliance?.goalsDisplay ?? "—"}
                     </Text>
                   </View>
-                  {compliance && badgeColors ? (
-                    <View
-                      style={{
-                        backgroundColor: badgeColors.bg,
-                        paddingHorizontal: 8,
-                        paddingVertical: 3,
-                        borderRadius: 999,
-                      }}
-                    >
-                      <Text style={{ fontSize: 9, fontWeight: "800", color: badgeColors.text, letterSpacing: 0.4 }}>
-                        {compliance.statusBadge.toUpperCase()}
-                      </Text>
+                  {complianceBadges.length > 0 ? (
+                    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 4, justifyContent: "flex-end" }}>
+                      {complianceBadges.map((badge) => {
+                        const colors = standardsBadgeColors(badge.variant);
+                        return (
+                          <View
+                            key={badge.key}
+                            accessibilityLabel={badge.title}
+                            style={{
+                              backgroundColor: colors.bg,
+                              paddingHorizontal: 8,
+                              paddingVertical: 3,
+                              borderRadius: 999,
+                            }}
+                          >
+                            <Text style={{ fontSize: 9, fontWeight: "800", color: colors.text, letterSpacing: 0.4 }}>
+                              {badge.label.toUpperCase()}
+                            </Text>
+                          </View>
+                        );
+                      })}
                     </View>
                   ) : null}
                   {canView && followUpDisplay ? (

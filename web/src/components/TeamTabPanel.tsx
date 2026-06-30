@@ -42,6 +42,8 @@ import {
   formatOverdueFollowUpTasksDisplay,
 } from "../lib/member-stats-display";
 import {
+  memberStandardsBadges,
+  STANDARDS_BADGE_LEGEND,
   standardsBadgeClassName,
 } from "../lib/workplace-standards";
 
@@ -93,6 +95,36 @@ function RosterKpi({
         {value}
       </span>
     </span>
+  );
+}
+
+function StandardsStatusKey() {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="enterprise-team-standards-key">
+      <button
+        type="button"
+        className="enterprise-team-standards-key-btn"
+        aria-expanded={open}
+        aria-controls="team-standards-key-panel"
+        onClick={() => setOpen((prev) => !prev)}
+      >
+        Status key
+      </button>
+      {open ? (
+        <div id="team-standards-key-panel" className="enterprise-team-standards-key-panel" role="region" aria-label="Status badge key">
+          <ul className="enterprise-team-standards-key-list">
+            {STANDARDS_BADGE_LEGEND.map((entry) => (
+              <li key={entry.variant}>
+                <span className={standardsBadgeClassName(entry.variant)}>{entry.label}</span>
+                <p>{entry.description}</p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -833,11 +865,14 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
           <div className="enterprise-team-roster-section">
             <div className="enterprise-team-roster-head">
               <h2 className="enterprise-team-roster-title">Team members</h2>
-              <label className="enterprise-team-role-filter enterprise-team-role-filter--soon">
-                <select disabled aria-label="Filter by role">
-                  <option>All roles</option>
-                </select>
-              </label>
+              <div className="enterprise-team-roster-head-actions">
+                <StandardsStatusKey />
+                <label className="enterprise-team-role-filter enterprise-team-role-filter--soon">
+                  <select disabled aria-label="Filter by role">
+                    <option>All roles</option>
+                  </select>
+                </label>
+              </div>
             </div>
 
             <ul className="enterprise-team-roster">
@@ -887,11 +922,16 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                             }
                           />
                           {statsReady && compliance ? (
-                            <span
-                              className={standardsBadgeClassName(compliance.statusBadge)}
-                              title={`${compliance.checkInActionText}. ${compliance.goalsActionText}`}
-                            >
-                              {compliance.statusBadge}
+                            <span className="enterprise-team-roster-standards-badges">
+                              {memberStandardsBadges(compliance, daysSinceCheckIn).map((badge) => (
+                                <span
+                                  key={badge.key}
+                                  className={standardsBadgeClassName(badge.variant)}
+                                  title={badge.title}
+                                >
+                                  {badge.label}
+                                </span>
+                              ))}
                             </span>
                           ) : null}
                           {followUpDisplay ? (
@@ -967,6 +1007,8 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
               overdueFollowUpTasks={memberStats?.[selectedMember.userId]?.overdueFollowUpTasks}
               workplaceStandards={workplaceStandards}
               standardsCompliance={memberStats?.[selectedMember.userId]?.standardsCompliance}
+              canManageStandards={canManageOneOneTemplates}
+              onManageStandards={() => setWorkplaceStandardsOpen(true)}
               onBack={() => setSelectedMemberId(null)}
               onManage={() => openMemberModal(selectedMember)}
             />

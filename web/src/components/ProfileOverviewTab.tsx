@@ -4,10 +4,12 @@ import {
   fetchOneOnOneMeetings,
   type DevelopmentGoal,
 } from "../lib/api";
-import { formatTaskStreakValue } from "../lib/member-stats-display";
 import {
   DEFAULT_WORKPLACE_STANDARDS,
   formatCheckInFrequencySummary,
+  formatGracePeriodSummary,
+  frequencyToDays,
+  memberStandardsBadges,
   standardsBadgeClassName,
   type MemberStandardsCompliance,
   type WorkplaceStandards,
@@ -19,10 +21,13 @@ type Props = {
   memberUserId: string;
   roleLabel: string;
   email?: string | null;
-  streak?: number;
-  overdueFollowUpTasks?: number;
+  isSelf?: boolean;
+  canManageStandards?: boolean;
+  canCreateDevGoal?: boolean;
   workplaceStandards?: WorkplaceStandards;
   standardsCompliance?: MemberStandardsCompliance;
+  onManageStandards?: () => void;
+  onOpenGrowthTab?: () => void;
 };
 
 function formatDateOnly(iso: string): string {
@@ -57,13 +62,74 @@ function daysSinceDate(iso: string): number {
 }
 
 function daysSinceText(days: number): string {
-  if (days === 1) return "1 day";
-  return `${days} days`;
+  if (days === 0) return "Today";
+  if (days === 1) return "1 day ago";
+  return `${days} days ago`;
 }
 
 function formatUpdatedWithDays(iso: string): string {
   const days = daysSinceDate(iso);
-  return `${formatDateOnly(iso)} · ${daysSinceText(days)}`;
+  const ago = days === 0 ? "today" : days === 1 ? "1 day ago" : `${days} days ago`;
+  return `${formatDateOnly(iso)} · ${ago}`;
+}
+
+function IconTarget() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <circle cx="12" cy="12" r="10" />
+      <circle cx="12" cy="12" r="6" />
+      <circle cx="12" cy="12" r="2" />
+    </svg>
+  );
+}
+
+function IconCalendar() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <rect x="3" y="4" width="18" height="18" rx="2" />
+      <line x1="16" y1="2" x2="16" y2="6" />
+      <line x1="8" y1="2" x2="8" y2="6" />
+      <line x1="3" y1="10" x2="21" y2="10" />
+    </svg>
+  );
+}
+
+function IconClock() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <circle cx="12" cy="12" r="10" />
+      <polyline points="12 6 12 12 16 14" />
+    </svg>
+  );
+}
+
+function IconList() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <line x1="8" y1="6" x2="21" y2="6" />
+      <line x1="8" y1="12" x2="21" y2="12" />
+      <line x1="8" y1="18" x2="21" y2="18" />
+      <line x1="3" y1="6" x2="3.01" y2="6" />
+      <line x1="3" y1="12" x2="3.01" y2="12" />
+      <line x1="3" y1="18" x2="3.01" y2="18" />
+    </svg>
+  );
+}
+
+function IconGear() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+    </svg>
+  );
+}
+
+function checkInChipClass(status: MemberStandardsCompliance["checkInStatus"]): string {
+  if (status === "overdue") return "enterprise-overview-status-chip enterprise-overview-status-chip--danger";
+  if (status === "due_soon") return "enterprise-overview-status-chip enterprise-overview-status-chip--warn";
+  if (status === "on_track") return "enterprise-overview-status-chip enterprise-overview-status-chip--success";
+  return "enterprise-overview-status-chip enterprise-overview-status-chip--muted";
 }
 
 export function ProfileOverviewTab({
@@ -71,10 +137,13 @@ export function ProfileOverviewTab({
   memberUserId,
   roleLabel,
   email,
-  streak,
-  overdueFollowUpTasks,
+  isSelf = false,
+  canManageStandards = false,
+  canCreateDevGoal = false,
   workplaceStandards,
   standardsCompliance,
+  onManageStandards,
+  onOpenGrowthTab,
 }: Props) {
   const standards = workplaceStandards ?? DEFAULT_WORKPLACE_STANDARDS;
   const [loading, setLoading] = useState(true);
@@ -124,134 +193,257 @@ export function ProfileOverviewTab({
     [lastOneOnOneDate],
   );
 
-  const kpis = [
-    { label: "Active goals", value: loading ? "—" : String(activeGoals.length) },
-    {
-      label: "Last check-in",
-      value: loading ? "—" : lastOneOnOneDate ? formatDateOnly(lastOneOnOneDate) : "None",
-    },
-    {
-      label: "Days since check-in",
-      value: loading ? "—" : lastOneOnOneDate ? daysSinceText(daysSinceOneOnOne ?? 0) : "—",
-    },
-    { label: "Total check-ins", value: loading ? "—" : String(oneOnOneCount) },
-    ...(streak != null && streak > 0
-      ? [{ label: "Task streak", value: formatTaskStreakValue(streak, true) }]
-      : []),
-    ...(overdueFollowUpTasks != null && overdueFollowUpTasks > 0
-      ? [{ label: "Overdue", value: String(overdueFollowUpTasks), tone: "warning" as const }]
-      : []),
-  ];
+  const requiredGoals = standards.goalsRequired ? standards.minimumActiveGoals : 0;
+  const goalsBelowRequired = standards.goalsRequired && activeGoals.length < requiredGoals;
+  const checkInFrequencyDays = standards.checkInRequired
+    ? frequencyToDays(standards.checkInFrequencyValue, standards.checkInFrequencyUnit)
+    : null;
 
   const profileMeta = [roleLabel, email].filter(Boolean).join(" · ");
+  const goalsTitle = isSelf ? "Your active goals" : "Active goals";
+  const memberBadges = standardsCompliance
+    ? memberStandardsBadges(standardsCompliance, daysSinceOneOnOne)
+    : [];
+
+  const goalsGuidance =
+    standardsCompliance && standardsCompliance.missingGoals > 0
+      ? `Add ${standardsCompliance.missingGoals} active development goal${standardsCompliance.missingGoals === 1 ? "" : "s"} to meet ${isSelf ? "your" : "this"} workplace standard.`
+      : null;
 
   return (
     <div className="enterprise-profile-overview">
-      <section className="enterprise-overview-snapshot">
-        <header className="enterprise-overview-snapshot-head">
+      <section className="enterprise-overview-panel">
+        <header className="enterprise-overview-panel-head">
           <div>
-            <p className="enterprise-overview-kicker">Overview</p>
-            <h3 className="enterprise-overview-title">Member snapshot</h3>
+            <p className="enterprise-overview-kicker enterprise-overview-kicker--accent">Overview</p>
+            <h3 className="enterprise-overview-panel-title">Member snapshot</h3>
           </div>
-          {profileMeta ? <p className="enterprise-overview-snapshot-meta">{profileMeta}</p> : null}
+          {profileMeta ? <p className="enterprise-overview-panel-meta">{profileMeta}</p> : null}
         </header>
 
-        <div className="enterprise-overview-kpi-row">
-          {kpis.map((kpi) => (
-            <div
-              key={kpi.label}
-              className={`enterprise-overview-kpi${kpi.tone === "warning" ? " enterprise-overview-kpi--warning" : ""}`}
-            >
-              <span className="enterprise-overview-kpi-label">{kpi.label}</span>
-              <span className="enterprise-overview-kpi-value">{kpi.value}</span>
-            </div>
-          ))}
-        </div>
-
-        {err ? <p className="enterprise-form-error enterprise-overview-snapshot-error" role="alert">{err}</p> : null}
-
-        <section className="enterprise-overview-standards">
-          <header className="enterprise-overview-standards-head">
-            <p className="enterprise-overview-kicker">Workspace</p>
-            <h4>Standards Status</h4>
-          </header>
-          <div className="enterprise-overview-standards-grid">
-            <div className="enterprise-overview-standards-item">
-              <span className="enterprise-overview-standards-label">Check-in requirement</span>
-              <strong>
-                {standards.checkInRequired
-                  ? formatCheckInFrequencySummary(standards)
-                  : "Not required"}
-              </strong>
-            </div>
-            <div className="enterprise-overview-standards-item">
-              <span className="enterprise-overview-standards-label">Goal requirement</span>
-              <strong>
-                {standards.goalsRequired
-                  ? `${standards.minimumActiveGoals} active goal${standards.minimumActiveGoals === 1 ? "" : "s"}`
-                  : "Not required"}
-              </strong>
-            </div>
-            <div className="enterprise-overview-standards-item enterprise-overview-standards-item--status">
-              <span className="enterprise-overview-standards-label">Member status</span>
-              {standardsCompliance ? (
-                <span className={standardsBadgeClassName(standardsCompliance.statusBadge)}>
-                  {standardsCompliance.statusBadge}
-                </span>
+        <div className="enterprise-overview-metric-grid">
+          <article className="enterprise-overview-metric-card">
+            <span className="enterprise-overview-metric-icon" aria-hidden>
+              <IconTarget />
+            </span>
+            <div className="enterprise-overview-metric-copy">
+              <span className="enterprise-overview-metric-label">Active goals</span>
+              {loading ? (
+                <strong className="enterprise-overview-metric-value">—</strong>
+              ) : standards.goalsRequired ? (
+                <strong className="enterprise-overview-metric-value">
+                  <span className={goalsBelowRequired ? "enterprise-overview-metric-value--alert" : undefined}>
+                    {activeGoals.length}
+                  </span>
+                  <span className="enterprise-overview-metric-value-muted">
+                    {" "}
+                    of {requiredGoals} required
+                  </span>
+                </strong>
               ) : (
-                <strong>—</strong>
+                <strong className="enterprise-overview-metric-value">{activeGoals.length}</strong>
               )}
             </div>
-          </div>
-          {standardsCompliance ? (
-            <ul className="enterprise-overview-standards-actions">
-              {standardsCompliance.checkInStatus !== "not_required" ? (
-                <li>{standardsCompliance.checkInActionText}</li>
-              ) : null}
-              {standardsCompliance.goalsStatus !== "not_required" ? (
-                <li>{standardsCompliance.goalsActionText}</li>
-              ) : null}
-            </ul>
-          ) : null}
-        </section>
+          </article>
 
-        <div className="enterprise-overview-snapshot-section">
-          <div className="enterprise-overview-snapshot-section-head">
-            <h4>Active development goals</h4>
-            {!loading && activeGoals.length > 0 ? (
-              <span className="enterprise-overview-snapshot-count">{activeGoals.length}</span>
+          <article className="enterprise-overview-metric-card">
+            <span className="enterprise-overview-metric-icon" aria-hidden>
+              <IconCalendar />
+            </span>
+            <div className="enterprise-overview-metric-copy">
+              <span className="enterprise-overview-metric-label">Last check-in</span>
+              {loading ? (
+                <strong className="enterprise-overview-metric-value">—</strong>
+              ) : lastOneOnOneDate ? (
+                <>
+                  <strong className="enterprise-overview-metric-value">{formatDateOnly(lastOneOnOneDate)}</strong>
+                  <span className="enterprise-overview-metric-sub">{daysSinceText(daysSinceOneOnOne ?? 0)}</span>
+                </>
+              ) : (
+                <>
+                  <strong className="enterprise-overview-metric-value">None</strong>
+                  <span className="enterprise-overview-metric-sub">No check-in on record</span>
+                </>
+              )}
+            </div>
+          </article>
+
+          <article className="enterprise-overview-metric-card">
+            <span className="enterprise-overview-metric-icon" aria-hidden>
+              <IconClock />
+            </span>
+            <div className="enterprise-overview-metric-copy">
+              <span className="enterprise-overview-metric-label">Days since check-in</span>
+              {loading ? (
+                <strong className="enterprise-overview-metric-value">—</strong>
+              ) : (
+                <>
+                  <strong className="enterprise-overview-metric-value">
+                    {lastOneOnOneDate ? `${daysSinceOneOnOne} days` : "—"}
+                  </strong>
+                  {checkInFrequencyDays ? (
+                    <span className="enterprise-overview-metric-sub">of {checkInFrequencyDays} day requirement</span>
+                  ) : (
+                    <span className="enterprise-overview-metric-sub">Check-ins not required</span>
+                  )}
+                </>
+              )}
+            </div>
+          </article>
+
+          <article className="enterprise-overview-metric-card">
+            <span className="enterprise-overview-metric-icon" aria-hidden>
+              <IconList />
+            </span>
+            <div className="enterprise-overview-metric-copy">
+              <span className="enterprise-overview-metric-label">Total check-ins</span>
+              <strong className="enterprise-overview-metric-value">{loading ? "—" : String(oneOnOneCount)}</strong>
+              <span className="enterprise-overview-metric-sub">All time</span>
+            </div>
+          </article>
+        </div>
+
+        {err ? (
+          <p className="enterprise-form-error enterprise-overview-panel-error" role="alert">
+            {err}
+          </p>
+        ) : null}
+      </section>
+
+      <section className="enterprise-overview-panel enterprise-overview-standards-panel">
+        <header className="enterprise-overview-panel-head enterprise-overview-standards-panel-head">
+          <div>
+            <p className="enterprise-overview-kicker">Workplace</p>
+            <h3 className="enterprise-overview-panel-title">Standards Status</h3>
+            <p className="enterprise-overview-panel-sub">Expectations for this workplace</p>
+          </div>
+          {canManageStandards && onManageStandards ? (
+            <button type="button" className="enterprise-overview-manage-standards-btn" onClick={onManageStandards}>
+              <IconGear />
+              Manage Standards
+            </button>
+          ) : null}
+        </header>
+
+        <div className="enterprise-overview-standards-columns">
+          <div className="enterprise-overview-standards-column">
+            <span className="enterprise-overview-standards-column-label">Check-in requirement</span>
+            <strong className="enterprise-overview-standards-column-value">
+              {standards.checkInRequired ? formatCheckInFrequencySummary(standards) : "Not required"}
+            </strong>
+            {standardsCompliance && standards.checkInRequired ? (
+              <div className="enterprise-overview-standards-chips">
+                <span className={checkInChipClass(standardsCompliance.checkInStatus)}>
+                  {standardsCompliance.checkInActionText}
+                </span>
+                <span className="enterprise-overview-status-chip enterprise-overview-status-chip--muted">
+                  Grace period: {formatGracePeriodSummary(standards.checkInGracePeriodDays)}
+                </span>
+              </div>
             ) : null}
           </div>
 
-          {loading ? (
-            <p className="enterprise-overview-inline-empty">Loading…</p>
-          ) : activeGoals.length === 0 ? (
-            <p className="enterprise-overview-inline-empty">No active development goals.</p>
-          ) : (
-            <div className="enterprise-overview-goals-scroll">
-              <table className="enterprise-overview-goals-table">
-                <thead>
-                  <tr>
-                    <th scope="col">Goal</th>
-                    <th scope="col">Last updated</th>
-                    <th scope="col">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {activeGoals.map((goal) => (
-                    <tr key={goal.id}>
-                      <td className="enterprise-overview-goals-table-goal">{goal.skill}</td>
-                      <td>{formatUpdatedWithDays(lastUpdatedAt(goal))}</td>
-                      <td>
-                        <span className="enterprise-overview-goal-pill">Active</span>
-                      </td>
-                    </tr>
+          <div className="enterprise-overview-standards-column">
+            <span className="enterprise-overview-standards-column-label">Goal requirement</span>
+            <strong className="enterprise-overview-standards-column-value">
+              {standards.goalsRequired
+                ? `${standards.minimumActiveGoals} active goal${standards.minimumActiveGoals === 1 ? "" : "s"}`
+                : "Not required"}
+            </strong>
+            {standardsCompliance && standards.goalsRequired ? (
+              <div className="enterprise-overview-standards-chips">
+                <span
+                  className={
+                    standardsCompliance.goalsStatus === "missing_goals"
+                      ? "enterprise-overview-status-chip enterprise-overview-status-chip--danger"
+                      : "enterprise-overview-status-chip enterprise-overview-status-chip--success"
+                  }
+                >
+                  {standardsCompliance.goalsActionText}
+                </span>
+              </div>
+            ) : null}
+          </div>
+
+          <div className="enterprise-overview-standards-column enterprise-overview-standards-column--status">
+            <span className="enterprise-overview-standards-column-label">Member status</span>
+            {standardsCompliance ? (
+              <>
+                <div className="enterprise-overview-standards-badges">
+                  {memberBadges.map((badge) => (
+                    <span key={badge.key} className={standardsBadgeClassName(badge.variant)} title={badge.title}>
+                      {badge.label}
+                    </span>
                   ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+                </div>
+                {goalsGuidance ? (
+                  <p className="enterprise-overview-standards-guidance">{goalsGuidance}</p>
+                ) : null}
+                {canCreateDevGoal && goalsGuidance && onOpenGrowthTab ? (
+                  <button type="button" className="enterprise-overview-standards-action-link" onClick={onOpenGrowthTab}>
+                    + Add Goal
+                  </button>
+                ) : null}
+              </>
+            ) : (
+              <strong className="enterprise-overview-standards-column-value">—</strong>
+            )}
+          </div>
         </div>
+      </section>
+
+      <section className="enterprise-overview-panel enterprise-overview-goals-panel">
+        <header className="enterprise-overview-panel-head enterprise-overview-goals-panel-head">
+          <div>
+            <p className="enterprise-overview-kicker">Active development goals</p>
+            <h3 className="enterprise-overview-panel-title">{goalsTitle}</h3>
+          </div>
+          {onOpenGrowthTab ? (
+            <button type="button" className="enterprise-overview-view-goals-btn" onClick={onOpenGrowthTab}>
+              View all goals ›
+            </button>
+          ) : null}
+        </header>
+
+        {loading ? (
+          <p className="enterprise-overview-goals-empty">Loading…</p>
+        ) : activeGoals.length === 0 ? (
+          <div className="enterprise-overview-goals-empty-state">
+            <p>
+              {isSelf
+                ? "You don't have any active development goals. Set a goal to grow and achieve more."
+                : "No active development goals for this member."}
+            </p>
+            {canCreateDevGoal && isSelf && onOpenGrowthTab ? (
+              <button type="button" className="enterprise-overview-standards-action-link" onClick={onOpenGrowthTab}>
+                + Create your first goal
+              </button>
+            ) : null}
+          </div>
+        ) : (
+          <div className="enterprise-overview-goals-list">
+            <table className="enterprise-overview-goals-table">
+              <thead>
+                <tr>
+                  <th scope="col">Goal</th>
+                  <th scope="col">Last updated</th>
+                  <th scope="col">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {activeGoals.map((goal) => (
+                  <tr key={goal.id}>
+                    <td className="enterprise-overview-goals-table-goal">{goal.skill}</td>
+                    <td>{formatUpdatedWithDays(lastUpdatedAt(goal))}</td>
+                    <td>
+                      <span className="enterprise-overview-goal-pill">Active</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
     </div>
   );

@@ -10,6 +10,7 @@ import { oneOnOneDisplayDateMs, oneOnOnePublishedAt } from "@/lib/one-on-one-dat
 import {
   DEFAULT_WORKPLACE_STANDARDS,
   formatCheckInFrequencySummary,
+  memberStandardsBadges,
   standardsBadgeColors,
   type MemberStandardsCompliance,
   type WorkplaceStandards,
@@ -283,26 +284,33 @@ export function ProfileOverviewTab({
         </View>
         {standardsCompliance ? (
           <>
-            <View
-              style={{
-                alignSelf: "flex-start",
-                marginTop: 10,
-                backgroundColor: standardsBadgeColors(standardsCompliance.statusBadge).bg,
-                paddingHorizontal: 8,
-                paddingVertical: 4,
-                borderRadius: 999,
-              }}
-            >
-              <Text
-                style={{
-                  fontSize: 9,
-                  fontWeight: "800",
-                  color: standardsBadgeColors(standardsCompliance.statusBadge).text,
-                  letterSpacing: 0.4,
-                }}
-              >
-                {standardsCompliance.statusBadge.toUpperCase()}
-              </Text>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 10 }}>
+              {memberStandardsBadges(standardsCompliance).map((badge) => {
+                const colors = standardsBadgeColors(badge.variant);
+                return (
+                  <View
+                    key={badge.key}
+                    accessibilityLabel={badge.title}
+                    style={{
+                      backgroundColor: colors.bg,
+                      paddingHorizontal: 8,
+                      paddingVertical: 4,
+                      borderRadius: 999,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 9,
+                        fontWeight: "800",
+                        color: colors.text,
+                        letterSpacing: 0.4,
+                      }}
+                    >
+                      {badge.label.toUpperCase()}
+                    </Text>
+                  </View>
+                );
+              })}
             </View>
             <View style={{ marginTop: 8, gap: 4 }}>
               {standardsCompliance.checkInStatus !== "not_required" ? (

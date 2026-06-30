@@ -20,7 +20,26 @@ export const DEFAULT_WORKPLACE_STANDARDS: WorkplaceStandards = {
   minimumActiveGoals: 2,
 };
 
-export type StandardsStatusBadge = "On Track" | "Due Soon" | "Overdue" | "Missing Goals";
+export type StandardsStatusBadge =
+  | "On track"
+  | "Check-in due soon"
+  | "No check-in"
+  | "Overdue check-in"
+  | "Needs active goals";
+
+export type StandardsBadgeVariant =
+  | "on_track"
+  | "check_in_due_soon"
+  | "no_check_in"
+  | "overdue_check_in"
+  | "needs_active_goals";
+
+export type StandardsBadgeDisplay = {
+  key: string;
+  label: string;
+  title: string;
+  variant: StandardsBadgeVariant;
+};
 
 export type MemberStandardsCompliance = {
   checkInStatus: "on_track" | "due_soon" | "overdue" | "not_required";
@@ -28,10 +47,90 @@ export type MemberStandardsCompliance = {
   goalsStatus: "on_track" | "missing_goals" | "not_required";
   goalsActionText: string;
   missingGoals: number;
+  /** Primary badge — highest-priority issue, or "On track". */
   statusBadge: StandardsStatusBadge;
+  /** All applicable badges (check-in and goals can both appear). */
+  statusBadges: StandardsStatusBadge[];
+  statusBadgeItems: StandardsBadgeDisplay[];
   goalsDisplay: string;
   minimumActiveGoals: number;
 };
+
+export const STANDARDS_BADGE_LEGEND: ReadonlyArray<{
+  variant: StandardsBadgeVariant;
+  label: string;
+  description: string;
+}> = [
+  {
+    variant: "no_check_in",
+    label: "No check-in",
+    description: "No published check-in on record (or none using the required template).",
+  },
+  {
+    variant: "overdue_check_in",
+    label: "Overdue check-in",
+    description: "Last check-in is past the workspace schedule plus grace period.",
+  },
+  {
+    variant: "check_in_due_soon",
+    label: "Check-in due soon",
+    description: "Check-in is due within 2 days.",
+  },
+  {
+    variant: "needs_active_goals",
+    label: "Needs active goals",
+    description:
+      "Active goals are below the workspace minimum. Inactive goals (30+ days without progress) do not count toward the minimum.",
+  },
+  {
+    variant: "on_track",
+    label: "On track",
+    description: "Meets check-in and goal requirements.",
+  },
+];
+
+export function buildMemberStandardsBadgeItems(input: {
+  checkInStatus: MemberStandardsCompliance["checkInStatus"];
+  checkInActionText: string;
+  goalsStatus: MemberStandardsCompliance["goalsStatus"];
+  goalsActionText: string;
+  daysSinceLastCheckIn: number | null;
+}): StandardsBadgeDisplay[] {
+  const items: StandardsBadgeDisplay[] = [];
+  if (input.checkInStatus === "overdue") {
+    const noCheckIn = input.daysSinceLastCheckIn === null;
+    items.push({
+      key: noCheckIn ? "no_check_in" : "overdue_check_in",
+      label: noCheckIn ? "No check-in" : "Overdue check-in",
+      title: input.checkInActionText,
+      variant: noCheckIn ? "no_check_in" : "overdue_check_in",
+    });
+  } else if (input.checkInStatus === "due_soon") {
+    items.push({
+      key: "check_in_due_soon",
+      label: "Check-in due soon",
+      title: input.checkInActionText,
+      variant: "check_in_due_soon",
+    });
+  }
+  if (input.goalsStatus === "missing_goals") {
+    items.push({
+      key: "needs_active_goals",
+      label: "Needs active goals",
+      title: input.goalsActionText,
+      variant: "needs_active_goals",
+    });
+  }
+  if (items.length === 0) {
+    items.push({
+      key: "on_track",
+      label: "On track",
+      title: "Meets check-in and goal requirements.",
+      variant: "on_track",
+    });
+  }
+  return items;
+}
 
 const FREQUENCY_UNITS: CheckInFrequencyUnit[] = ["days", "weeks", "months"];
 
@@ -225,10 +324,16 @@ export function computeMemberStandardsCompliance(
     }
   }
 
-  let statusBadge: StandardsStatusBadge = "On Track";
-  if (checkInStatus === "overdue") statusBadge = "Overdue";
-  else if (goalsStatus === "missing_goals") statusBadge = "Missing Goals";
-  else if (checkInStatus === "due_soon") statusBadge = "Due Soon";
+  let statusBadge: StandardsStatusBadge = "On track";
+  const statusBadgeItems = buildMemberStandardsBadgeItems({
+    checkInStatus,
+    checkInActionText,
+    goalsStatus,
+    goalsActionText,
+    daysSinceLastCheckIn,
+  });
+  const statusBadges = statusBadgeItems.map((item) => item.label as StandardsStatusBadge);
+  statusBadge = statusBadges[0] ?? "On track";
 
   return {
     checkInStatus,
@@ -237,6 +342,8 @@ export function computeMemberStandardsCompliance(
     goalsActionText,
     missingGoals,
     statusBadge,
+    statusBadges,
+    statusBadgeItems,
     goalsDisplay,
     minimumActiveGoals,
   };

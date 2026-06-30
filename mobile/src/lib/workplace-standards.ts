@@ -20,7 +20,26 @@ export const DEFAULT_WORKPLACE_STANDARDS: WorkplaceStandards = {
   minimumActiveGoals: 2,
 };
 
-export type StandardsStatusBadge = "On Track" | "Due Soon" | "Overdue" | "Missing Goals";
+export type StandardsStatusBadge =
+  | "On track"
+  | "Check-in due soon"
+  | "No check-in"
+  | "Overdue check-in"
+  | "Needs active goals";
+
+export type StandardsBadgeVariant =
+  | "on_track"
+  | "check_in_due_soon"
+  | "no_check_in"
+  | "overdue_check_in"
+  | "needs_active_goals";
+
+export type StandardsBadgeDisplay = {
+  key: string;
+  label: string;
+  title: string;
+  variant: StandardsBadgeVariant;
+};
 
 export type MemberStandardsCompliance = {
   checkInStatus: "on_track" | "due_soon" | "overdue" | "not_required";
@@ -29,6 +48,8 @@ export type MemberStandardsCompliance = {
   goalsActionText: string;
   missingGoals: number;
   statusBadge: StandardsStatusBadge;
+  statusBadges?: StandardsStatusBadge[];
+  statusBadgeItems?: StandardsBadgeDisplay[];
   goalsDisplay: string;
   minimumActiveGoals: number;
 };
@@ -70,13 +91,78 @@ export function formatCheckInFrequencySummary(standards: WorkplaceStandards): st
   return `Every ${value} ${unit}`;
 }
 
-export function standardsBadgeColors(badge: StandardsStatusBadge): { bg: string; text: string } {
-  switch (badge) {
-    case "Overdue":
+export function buildMemberStandardsBadgeItems(input: {
+  checkInStatus: MemberStandardsCompliance["checkInStatus"];
+  checkInActionText: string;
+  goalsStatus: MemberStandardsCompliance["goalsStatus"];
+  goalsActionText: string;
+  daysSinceLastCheckIn: number | null;
+}): StandardsBadgeDisplay[] {
+  const items: StandardsBadgeDisplay[] = [];
+  if (input.checkInStatus === "overdue") {
+    const noCheckIn = input.daysSinceLastCheckIn === null;
+    items.push({
+      key: noCheckIn ? "no_check_in" : "overdue_check_in",
+      label: noCheckIn ? "No check-in" : "Overdue check-in",
+      title: input.checkInActionText,
+      variant: noCheckIn ? "no_check_in" : "overdue_check_in",
+    });
+  } else if (input.checkInStatus === "due_soon") {
+    items.push({
+      key: "check_in_due_soon",
+      label: "Check-in due soon",
+      title: input.checkInActionText,
+      variant: "check_in_due_soon",
+    });
+  }
+  if (input.goalsStatus === "missing_goals") {
+    items.push({
+      key: "needs_active_goals",
+      label: "Needs active goals",
+      title: input.goalsActionText,
+      variant: "needs_active_goals",
+    });
+  }
+  if (items.length === 0) {
+    items.push({
+      key: "on_track",
+      label: "On track",
+      title: "Meets check-in and goal requirements.",
+      variant: "on_track",
+    });
+  }
+  return items;
+}
+
+/** All status badges for a member — check-in and goals issues can both appear. */
+export function memberStandardsBadges(
+  compliance: MemberStandardsCompliance,
+  daysSinceLastCheckIn?: number | null,
+): StandardsBadgeDisplay[] {
+  if (compliance.statusBadgeItems?.length) return compliance.statusBadgeItems;
+  const resolvedDaysSinceCheckIn =
+    daysSinceLastCheckIn !== undefined
+      ? daysSinceLastCheckIn
+      : compliance.checkInActionText === "Check-in required"
+        ? null
+        : 0;
+  return buildMemberStandardsBadgeItems({
+    checkInStatus: compliance.checkInStatus,
+    checkInActionText: compliance.checkInActionText,
+    goalsStatus: compliance.goalsStatus,
+    goalsActionText: compliance.goalsActionText,
+    daysSinceLastCheckIn: resolvedDaysSinceCheckIn,
+  });
+}
+
+export function standardsBadgeColors(variant: StandardsBadgeVariant): { bg: string; text: string } {
+  switch (variant) {
+    case "no_check_in":
+    case "overdue_check_in":
       return { bg: "#FEF2F2", text: "#DC2626" };
-    case "Missing Goals":
+    case "needs_active_goals":
       return { bg: "#EEF2FF", text: "#4F46E5" };
-    case "Due Soon":
+    case "check_in_due_soon":
       return { bg: "#FFF7ED", text: "#C2410C" };
     default:
       return { bg: "#ECFDF5", text: "#059669" };

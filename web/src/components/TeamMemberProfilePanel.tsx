@@ -25,6 +25,8 @@ type Props = {
   overdueFollowUpTasks?: number;
   workplaceStandards?: WorkplaceStandards;
   standardsCompliance?: MemberStandardsCompliance;
+  canManageStandards?: boolean;
+  onManageStandards?: () => void;
   onBack: () => void;
   onManage: () => void;
 };
@@ -45,6 +47,8 @@ export function TeamMemberProfilePanel({
   overdueFollowUpTasks,
   workplaceStandards,
   standardsCompliance,
+  canManageStandards,
+  onManageStandards,
   onBack,
   onManage,
 }: Props) {
@@ -127,10 +131,13 @@ export function TeamMemberProfilePanel({
             memberUserId={member.userId}
             roleLabel={roleLabel}
             email={member.user.email}
-            streak={streak}
-            overdueFollowUpTasks={overdueFollowUpTasks}
+            isSelf={isSelf}
+            canManageStandards={canManageStandards}
+            canCreateDevGoal={canCreateDevGoal}
             workplaceStandards={workplaceStandards}
             standardsCompliance={standardsCompliance}
+            onManageStandards={onManageStandards}
+            onOpenGrowthTab={() => setActiveTab("Growth")}
           />
         ) : activeTab === "Growth" ? (
           <DevelopmentPlanTab
