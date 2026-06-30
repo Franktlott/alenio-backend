@@ -42,9 +42,6 @@ import {
   formatOverdueFollowUpTasksDisplay,
 } from "../lib/member-stats-display";
 import {
-  formatCheckInFrequencySummary,
-  formatGracePeriodSummary,
-  formatRequiredTemplateSummary,
   standardsBadgeClassName,
 } from "../lib/workplace-standards";
 
@@ -609,17 +606,6 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
   const manageMembers = canRemoveMembers(myRole);
   const canManageOneOneTemplates = myRole === "owner";
   const showOwnerManageRow = canManageOneOneTemplates;
-  const standardsSummary = useMemo(
-    () => ({
-      frequency: formatCheckInFrequencySummary(workplaceStandards),
-      goals: workplaceStandards.goalsRequired
-        ? String(workplaceStandards.minimumActiveGoals)
-        : "Not required",
-      grace: formatGracePeriodSummary(workplaceStandards.checkInGracePeriodDays),
-      template: formatRequiredTemplateSummary(requiredTemplateTitle),
-    }),
-    [workplaceStandards, requiredTemplateTitle],
-  );
 
   if (!selectedTeamId) {
     return (
@@ -755,18 +741,9 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                 <span className="enterprise-team-stat-icon enterprise-team-stat-icon--standards" aria-hidden>
                   <IconWorkplaceStandards />
                 </span>
-                <span className="enterprise-team-stat-copy enterprise-team-stat-copy--standards">
+                <span className="enterprise-team-stat-copy enterprise-team-stat-copy--templates">
                   <span className="enterprise-team-stat-templates-title">Workplace Standards</span>
-                  <span>Set check-in and development expectations</span>
-                  <span className="enterprise-team-standards-summary">
-                    {standardsSummary.frequency}
-                    <span className="enterprise-team-standards-summary-dot" aria-hidden>·</span>
-                    Goals {standardsSummary.goals}
-                    <span className="enterprise-team-standards-summary-dot" aria-hidden>·</span>
-                    Grace {standardsSummary.grace}
-                    <span className="enterprise-team-standards-summary-dot" aria-hidden>·</span>
-                    {standardsSummary.template}
-                  </span>
+                  <span>Manage expectations</span>
                 </span>
                 <span className="enterprise-team-stat-chevron" aria-hidden>
                   ›
