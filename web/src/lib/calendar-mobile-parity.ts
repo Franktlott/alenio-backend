@@ -12,6 +12,7 @@ export type CalendarEventLike = {
   title: string;
   startDate: string;
   endDate?: string | null;
+  allDay?: boolean | null;
   color?: string | null;
   isHidden?: boolean | null;
   isVideoMeeting?: boolean | null;
@@ -29,6 +30,27 @@ export type WeekBar = {
 
 export function startOfDay(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+/** Parse YYYY-MM-DD from an ISO timestamp without timezone drift. */
+export function calendarDateFromIsoDay(iso: string): Date {
+  const [year, month, day] = iso.slice(0, 10).split("-").map(Number);
+  return new Date(year!, month! - 1, day!);
+}
+
+export function eventCalendarDayRange(event: {
+  startDate: string;
+  endDate?: string | null;
+  allDay?: boolean | null;
+}): { start: Date; end: Date } {
+  if (event.allDay) {
+    const start = calendarDateFromIsoDay(event.startDate);
+    const end = event.endDate ? calendarDateFromIsoDay(event.endDate) : start;
+    return { start, end };
+  }
+  const start = startOfDay(new Date(event.startDate));
+  const end = event.endDate ? startOfDay(new Date(event.endDate)) : start;
+  return { start, end };
 }
 
 export function isSameDay(a: Date, b: Date): boolean {
@@ -71,8 +93,7 @@ export function computeWeekBars(week: Date[], events: CalendarEventLike[]): Week
   const bars: WeekBar[] = [];
 
   for (const event of events) {
-    const evStart = startOfDay(new Date(event.startDate));
-    const evEnd = event.endDate ? startOfDay(new Date(event.endDate)) : evStart;
+    const { start: evStart, end: evEnd } = eventCalendarDayRange(event);
 
     let startCol = -1;
     let endCol = -1;

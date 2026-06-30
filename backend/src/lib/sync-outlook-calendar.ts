@@ -27,17 +27,33 @@ function syncWindow(): { start: Date; end: Date } {
   return { start, end };
 }
 
-function parseGraphDate(value?: string, isAllDay?: boolean): Date | null {
+function parseAllDayGraphDate(value?: string): Date | null {
   if (!value) return null;
-  if (isAllDay) {
-    const datePart = value.slice(0, 10);
-    const [year, month, day] = datePart.split("-").map(Number);
-    if (!year || !month || !day) return null;
-    return new Date(year, month - 1, day);
-  }
+  const datePart = value.slice(0, 10);
+  const [year, month, day] = datePart.split("-").map(Number);
+  if (!year || !month || !day) return null;
+  // Noon UTC keeps the calendar day stable across user timezones.
+  return new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+}
+
+function parseTimedGraphDate(value?: string): Date | null {
+  if (!value) return null;
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return null;
   return d;
+}
+
+function isGraphAllDayEvent(event: {
+  isAllDay?: boolean;
+  start?: { dateTime?: string };
+  end?: { dateTime?: string };
+}): boolean {
+  if (event.isAllDay === true) return true;
+  const startRaw = event.start?.dateTime;
+  const endRaw = event.end?.dateTime;
+  if (!startRaw || !endRaw) return false;
+  if (!/T00:00:00/.test(startRaw) || !/T00:00:00/.test(endRaw)) return false;
+  return startRaw.slice(0, 10) !== endRaw.slice(0, 10);
 }
 
 /** Graph all-day end dates are exclusive (midnight after the last day). */
@@ -45,21 +61,25 @@ function normalizeOutlookEventDates(
   startRaw?: string,
   endRaw?: string | null,
   isAllDay?: boolean,
-): { startDate: Date; endDate: Date | null } | null {
-  const startDate = parseGraphDate(startRaw, isAllDay);
-  if (!startDate) return null;
-
-  if (!endRaw) return { startDate, endDate: null };
-
-  let endDate = parseGraphDate(endRaw, isAllDay);
-  if (!endDate) return { startDate, endDate: null };
-
-  if (isAllDay) {
-    endDate = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate() - 1);
+): { startDate: Date; endDate: Date | null; allDay: boolean } | null {
+  const allDay = Boolean(isAllDay);
+  if (allDay) {
+    const startDate = parseAllDayGraphDate(startRaw);
+    if (!startDate) return null;
+    if (!endRaw) return { startDate, endDate: null, allDay: true };
+    let endDate = parseAllDayGraphDate(endRaw);
+    if (!endDate) return { startDate, endDate: null, allDay: true };
+    endDate = new Date(
+      Date.UTC(endDate.getUTCFullYear(), endDate.getUTCMonth(), endDate.getUTCDate() - 1, 12, 0, 0),
+    );
     if (endDate < startDate) endDate = startDate;
+    return { startDate, endDate, allDay: true };
   }
 
-  return { startDate, endDate };
+  const startDate = parseTimedGraphDate(startRaw);
+  if (!startDate) return null;
+  const endDate = endRaw ? parseTimedGraphDate(endRaw) : null;
+  return { startDate, endDate, allDay: false };
 }
 
 export type CalendarConnectionPublic = {
@@ -130,7 +150,8 @@ export async function syncOutlookConnection(connectionId: string): Promise<Calen
     for (const event of events) {
       if (!event.id) continue;
       if (event.showAs === "free") continue;
-      const normalized = normalizeOutlookEventDates(event.start?.dateTime, event.end?.dateTime, event.isAllDay);
+      const allDay = isGraphAllDayEvent(event);
+      const normalized = normalizeOutlookEventDates(event.start?.dateTime, event.end?.dateTime, allDay);
       if (!normalized) continue;
       const { startDate, endDate } = normalized;
       seen.add(event.id);
@@ -147,13 +168,13 @@ export async function syncOutlookConnection(connectionId: string): Promise<Calen
           externalEventId: event.id,
           startDate,
           endDate,
-          allDay: Boolean(event.isAllDay),
+          allDay: normalized.allDay,
           titleDisplay: outlookEventTitle(event.subject),
         },
         update: {
           startDate,
           endDate,
-          allDay: Boolean(event.isAllDay),
+          allDay: normalized.allDay,
           titleDisplay: outlookEventTitle(event.subject),
         },
       });

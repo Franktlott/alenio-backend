@@ -32,3 +32,27 @@ export function getDaysInMonth(date: Date): Date[] {
 
   return days;
 }
+
+function startOfDay(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+export function calendarDateFromIsoDay(iso: string): Date {
+  const [year, month, day] = iso.slice(0, 10).split("-").map(Number);
+  return new Date(year!, month! - 1, day!);
+}
+
+export function eventCalendarDayRange(event: {
+  startDate: string;
+  endDate?: string | null;
+  allDay?: boolean | null;
+}): { start: Date; end: Date } {
+  if (event.allDay) {
+    const start = calendarDateFromIsoDay(event.startDate);
+    const end = event.endDate ? calendarDateFromIsoDay(event.endDate) : start;
+    return { start, end };
+  }
+  const start = startOfDay(new Date(event.startDate));
+  const end = event.endDate ? startOfDay(new Date(event.endDate)) : start;
+  return { start, end };
+}

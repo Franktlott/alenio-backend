@@ -18,6 +18,7 @@ import {
   isCurrentMonth,
   isSameDay,
   startOfDay,
+  eventCalendarDayRange,
 } from "../lib/calendar-mobile-parity";
 import { getUSHolidays } from "../lib/us-federal-holidays";
 import { canShowVideoJoin } from "../lib/video-meeting-join";
@@ -458,12 +459,22 @@ export function DashboardPage() {
 
   const calendarBarEvents = useMemo(
     () => [
-      ...visibleEvents,
+      ...visibleEvents.map((e) => ({
+        id: e.id,
+        title: e.title,
+        startDate: e.startDate,
+        endDate: e.endDate,
+        allDay: e.allDay,
+        color: e.color,
+        isHidden: e.isHidden,
+        isVideoMeeting: e.isVideoMeeting,
+      })),
       ...externalBusyEvents.map((event) => ({
         id: `ext-${event.id}`,
         title: event.title?.trim() || "Untitled event",
         startDate: event.startDate,
         endDate: event.endDate,
+        allDay: event.allDay,
         color: EXTERNAL_BUSY_COLOR,
       })),
     ],
@@ -472,10 +483,9 @@ export function DashboardPage() {
 
   const getExternalForDay = (day: Date) =>
     externalBusyEvents.filter((e) => {
-      const s = startOfDay(new Date(e.startDate));
-      const en = e.endDate ? startOfDay(new Date(e.endDate)) : s;
+      const { start, end } = eventCalendarDayRange(e);
       const d = startOfDay(day);
-      return d >= s && d <= en;
+      return d >= start && d <= end;
     });
 
   const myTasks = useMemo(() => {

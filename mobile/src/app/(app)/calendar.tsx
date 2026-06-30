@@ -22,7 +22,7 @@ import type { Task, Team } from "@/lib/types";
 import { useDemoMode } from "@/lib/useDemo";
 import { getUSHolidays, type USFederalHoliday } from "@/lib/us-federal-holidays";
 import { eventShowsScheduledTime, formatEventTimeRange } from "@/lib/format-event-time";
-import { CALENDAR_WEEKDAY_LABELS, getDaysInMonth } from "@/lib/calendar-grid";
+import { CALENDAR_WEEKDAY_LABELS, eventCalendarDayRange, getDaysInMonth } from "@/lib/calendar-grid";
 import { isMyWorkspaceTask } from "@/lib/workspace-tasks";
 import { fetchExternalCalendarEvents, type ExternalCalendarEventItem } from "@/lib/outlook-calendar-api";
 
@@ -91,8 +91,7 @@ function computeWeekBars(week: Date[], events: CalendarEvent[]): WeekBar[][] {
   const bars: WeekBar[] = [];
 
   for (const event of events) {
-    const evStart = startOfDay(new Date(event.startDate));
-    const evEnd = event.endDate ? startOfDay(new Date(event.endDate)) : evStart;
+    const { start: evStart, end: evEnd } = eventCalendarDayRange(event);
 
     // Find which columns in this week the event covers
     let startCol = -1;
@@ -209,7 +208,16 @@ export default function CalendarScreen() {
 
   const calendarBarEvents = useMemo(
     () => [
-      ...events,
+      ...events.map((e) => ({
+        id: e.id,
+        title: e.title,
+        startDate: e.startDate,
+        endDate: e.endDate,
+        allDay: e.allDay,
+        color: e.color,
+        isHidden: e.isHidden,
+        isVideoMeeting: e.isVideoMeeting,
+      })),
       ...externalBusyEvents.map((event) => ({
         id: `ext-${event.id}`,
         title: event.title?.trim() || "Untitled event",
@@ -249,10 +257,9 @@ export default function CalendarScreen() {
 
   const getExternalForDay = (day: Date): ExternalCalendarEventItem[] =>
     externalBusyEvents.filter((e) => {
-      const s = startOfDay(new Date(e.startDate));
-      const en = e.endDate ? startOfDay(new Date(e.endDate)) : s;
+      const { start, end } = eventCalendarDayRange(e);
       const d = startOfDay(day);
-      return d >= s && d <= en;
+      return d >= start && d <= end;
     });
 
   const getTasksForDay = (day: Date): Task[] =>
