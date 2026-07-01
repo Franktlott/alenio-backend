@@ -2443,6 +2443,8 @@ input {
   flex-direction: column;
   gap: 1.25rem;
   padding-right: 0.15rem;
+  container-type: inline-size;
+  container-name: team-list;
 }
 
 .enterprise-team-split-detail {
@@ -2719,8 +2721,9 @@ input {
 
 .enterprise-team-stat-row {
   display: grid;
-  gap: 0.75rem;
+  gap: 0.65rem;
   align-items: stretch;
+  width: 100%;
 }
 
 .enterprise-team-stat-row--one {
@@ -2729,11 +2732,48 @@ input {
 
 .enterprise-team-stat-row--three {
   grid-template-columns: 1fr;
+  grid-template-areas:
+    "actions"
+    "templates"
+    "standards";
 }
 
-@media (min-width: 768px) {
+.enterprise-team-stat-card--actions {
+  grid-area: actions;
+}
+
+.enterprise-team-stat-card--templates {
+  grid-area: templates;
+}
+
+.enterprise-team-stat-card--standards {
+  grid-area: standards;
+}
+
+/* iPad split view / narrow list column: full-width open actions, two manage buttons side by side */
+@container team-list (min-width: 480px) {
+  .enterprise-team-stat-row--three {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas:
+      "actions actions"
+      "templates standards";
+  }
+
+  .enterprise-team-stat-card {
+    min-height: 4.5rem;
+    padding: 0.85rem 1rem;
+  }
+
+  .enterprise-team-stat-copy--templates .enterprise-team-stat-templates-title {
+    font-size: 0.875rem;
+  }
+}
+
+/* Wide list column: three equal cards in one row */
+@container team-list (min-width: 720px) {
   .enterprise-team-stat-row--three {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-areas: "actions templates standards";
   }
 }
 
