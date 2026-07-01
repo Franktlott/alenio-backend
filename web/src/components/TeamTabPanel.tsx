@@ -87,31 +87,29 @@ function rosterCheckInColumn(
   compliance: MemberStandardsCompliance | undefined,
   daysSinceCheckIn: number | null | undefined,
   standards: WorkplaceStandards,
-): { tone: RosterTone; primary: string; secondary: string } {
+): { tone: RosterTone; primary: string } {
   if (!standards.checkInRequired) {
-    return { tone: "muted", primary: "—", secondary: "Not required" };
+    return { tone: "muted", primary: "—" };
   }
-  const frequency = formatCheckInFrequencySummary(standards);
   if (!compliance) {
-    return { tone: "muted", primary: "—", secondary: frequency };
+    return { tone: "muted", primary: "—" };
   }
   if (compliance.checkInStatus === "on_track") {
     return {
       tone: "ok",
       primary: formatRosterCheckInPrimary(daysSinceCheckIn),
-      secondary: frequency,
     };
   }
   if (compliance.checkInStatus === "due_soon") {
-    return { tone: "warn", primary: "Due soon", secondary: frequency };
+    return { tone: "warn", primary: "Due soon" };
   }
   if (compliance.checkInStatus === "overdue") {
     if (daysSinceCheckIn == null) {
-      return { tone: "bad", primary: "No check-in", secondary: frequency };
+      return { tone: "bad", primary: "No check-in" };
     }
-    return { tone: "bad", primary: "Overdue", secondary: frequency };
+    return { tone: "bad", primary: "Overdue" };
   }
-  return { tone: "muted", primary: "—", secondary: "Not required" };
+  return { tone: "muted", primary: "—" };
 }
 
 function rosterGoalsColumn(
@@ -980,11 +978,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
 
                         <span className="enterprise-team-roster-col enterprise-team-roster-col--check-in">
                           {checkIn ? (
-                            <RosterMetricCell
-                              tone={checkIn.tone}
-                              primary={checkIn.primary}
-                              secondary={checkIn.secondary}
-                            />
+                            <RosterMetricCell tone={checkIn.tone} primary={checkIn.primary} />
                           ) : (
                             <span className="enterprise-team-roster-metric-cell">…</span>
                           )}
