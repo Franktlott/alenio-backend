@@ -314,7 +314,10 @@ export function ProfileOverviewTab({
         <header className="enterprise-overview-panel-head enterprise-overview-standards-panel-head">
           <div>
             <p className="enterprise-overview-kicker">Workplace</p>
-            <h3 className="enterprise-overview-panel-title">Standards status</h3>
+            <h3 className="enterprise-overview-panel-title enterprise-overview-panel-title--with-key">
+              Standards status
+              <StandardsStatusKey />
+            </h3>
           </div>
           {canManageStandards && onManageStandards ? (
             <button type="button" className="enterprise-overview-manage-standards-btn" onClick={onManageStandards}>
@@ -386,8 +389,6 @@ export function ProfileOverviewTab({
             )}
           </div>
         </div>
-
-        <StandardsStatusKey />
       </section>
 
       <section className="enterprise-overview-panel enterprise-overview-goals-panel">

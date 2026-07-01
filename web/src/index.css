@@ -3265,6 +3265,9 @@ input {
 
 .enterprise-team-roster-standards-kicker {
   margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
   font-size: 0.5625rem;
   font-weight: 700;
   letter-spacing: 0.12em;
@@ -3301,44 +3304,101 @@ input {
   background: #fafbff;
 }
 
-.enterprise-overview-standards-panel .enterprise-standards-status-key {
-  margin-top: 0.75rem;
+.enterprise-standards-status-key-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.125rem;
+  height: 1.125rem;
+  padding: 0;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #f8fafc;
+  color: #64748b;
+  cursor: pointer;
+  vertical-align: middle;
+  flex-shrink: 0;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
 }
 
-.enterprise-standards-status-key {
-  margin: 0 0 0.75rem;
-  padding: 0.55rem 0.75rem;
+.enterprise-standards-status-key-btn:hover {
+  color: #4338ca;
+  border-color: #c7d2fe;
+  background: #eef2ff;
+}
+
+.enterprise-overview-panel-title--with-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.enterprise-modal-sheet.enterprise-standards-status-key-modal {
+  position: relative;
+  max-width: 32rem;
+  width: 100%;
+  padding: 0;
+  overflow: hidden;
+}
+
+.enterprise-standards-status-key-head {
+  padding: 1.1rem 1.25rem 0.85rem;
+  border-bottom: 1px solid #e2e8f0;
+  background: linear-gradient(180deg, #fcfcfd 0%, #f8fafc 100%);
+}
+
+.enterprise-standards-status-key-title {
+  margin: 0.15rem 0 0;
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: #0f172a;
+}
+
+.enterprise-standards-status-key-sub {
+  margin: 0.35rem 0 0;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+
+.enterprise-standards-status-key-list {
+  margin: 0;
+  padding: 0.85rem 1.25rem;
+  list-style: none;
+  display: grid;
+  gap: 0.65rem;
+  max-height: min(52vh, 24rem);
+  overflow: auto;
+}
+
+.enterprise-standards-status-key-list li {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.65rem;
+  align-items: start;
+  padding: 0.65rem 0.75rem;
   border: 1px solid #e2e8f0;
   border-radius: 10px;
-  background: #f8fafc;
+  background: #fcfcfd;
+}
+
+.enterprise-standards-status-key-list p {
+  margin: 0.1rem 0 0;
   font-size: 0.8125rem;
+  line-height: 1.45;
   color: #475569;
 }
 
-.enterprise-standards-status-key summary {
-  cursor: pointer;
-  font-weight: 600;
-  color: #334155;
-  list-style-position: outside;
-}
-
-.enterprise-standards-status-key ul {
-  margin: 0.55rem 0 0;
-  padding: 0;
-  list-style: none;
-  display: grid;
-  gap: 0.45rem;
-}
-
-.enterprise-standards-status-key li {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 0.55rem;
-  align-items: start;
-}
-
-.enterprise-standards-status-key .enterprise-standards-badge {
+.enterprise-standards-status-key-list .enterprise-standards-badge {
   margin-top: 0.05rem;
+}
+
+.enterprise-standards-status-key-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0.75rem 1.25rem 1rem;
+  border-top: 1px solid #e2e8f0;
+  background: #fff;
 }
 
 .enterprise-team-roster-table {

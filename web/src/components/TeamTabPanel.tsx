@@ -897,7 +897,10 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                   <IconWorkplaceStandards />
                 </span>
                 <div className="enterprise-team-roster-standards-bar-copy">
-                  <p className="enterprise-team-roster-standards-kicker">Workplace standards</p>
+                  <p className="enterprise-team-roster-standards-kicker">
+                    <span>Workplace standards</span>
+                    <StandardsStatusKey />
+                  </p>
                   <p className="enterprise-team-roster-standards-line">
                     {workplaceStandards.checkInRequired ? (
                       <span>
@@ -925,8 +928,6 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                   </button>
                 ) : null}
               </div>
-
-              <StandardsStatusKey />
 
               <div className="enterprise-team-roster-table">
                 <div className="enterprise-team-roster-table-head" aria-hidden>

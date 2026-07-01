@@ -782,7 +782,10 @@ export default function TeamScreen() {
               paddingVertical: 14,
             }}
           >
-            <Text style={{ fontSize: 16, fontWeight: "700", color: "#0F172A" }}>Team Members</Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <Text style={{ fontSize: 16, fontWeight: "700", color: "#0F172A" }}>Team Members</Text>
+              <StandardsStatusKey />
+            </View>
             {isOwner && !isDemo ? (
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                 <PendingJoinRequestsChip count={incomingRequests.length} onPress={() => setJoinRequestsOpen(true)} />
@@ -808,10 +811,6 @@ export default function TeamScreen() {
                 </Pressable>
               </View>
             ) : null}
-          </View>
-
-          <View style={{ paddingHorizontal: 16, paddingBottom: 10 }}>
-            <StandardsStatusKey />
           </View>
 
           {/* Member rows */}

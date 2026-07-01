@@ -264,9 +264,12 @@ export function ProfileOverviewTab({
           backgroundColor: "#FFFFFF",
         }}
       >
-        <Text style={{ fontSize: 9, fontWeight: "700", color: "#64748B", letterSpacing: 1.1, textTransform: "uppercase" }}>
-          Standards Status
-        </Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 }}>
+          <Text style={{ fontSize: 9, fontWeight: "700", color: "#64748B", letterSpacing: 1.1, textTransform: "uppercase" }}>
+            Standards Status
+          </Text>
+          <StandardsStatusKey />
+        </View>
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12, marginTop: 10 }}>
           <View style={{ minWidth: "40%" }}>
             <Text style={{ fontSize: 9, fontWeight: "700", color: "#94A3B8", textTransform: "uppercase" }}>Check-in</Text>
@@ -323,7 +326,6 @@ export function ProfileOverviewTab({
             </View>
           </>
         ) : null}
-        <StandardsStatusKey />
       </View>
 
       <View style={{ paddingHorizontal: 14, paddingVertical: 10 }}>
