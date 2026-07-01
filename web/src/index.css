@@ -3372,7 +3372,7 @@ input {
 .enterprise-overview-panel-title--with-key {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.28rem;
 }
 
 .enterprise-modal-sheet.enterprise-standards-status-key-modal {
@@ -4610,7 +4610,7 @@ input {
 .enterprise-profile-overview {
   display: flex;
   flex-direction: column;
-  gap: 0.625rem;
+  gap: 0.5rem;
 }
 
 .enterprise-overview-panel {
@@ -4625,34 +4625,35 @@ input {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.75rem;
-  padding: 0.55rem 0.875rem;
+  gap: 0.45rem;
+  padding: 0.45rem 0.65rem;
   border-bottom: 1px solid #eef2f6;
   background: #fafbfc;
 }
 
 .enterprise-overview-panel-meta {
   margin: 0;
-  max-width: 16rem;
-  font-size: 0.6875rem;
+  max-width: 14rem;
+  font-size: 0.625rem;
+  font-weight: 500;
   color: #64748b;
   text-align: right;
-  line-height: 1.35;
+  line-height: 1.25;
   word-break: break-word;
 }
 
 .enterprise-overview-panel-title {
-  margin: 0.1rem 0 0;
-  font-size: 0.875rem;
-  font-weight: 600;
+  margin: 0.06rem 0 0;
+  font-size: 0.75rem;
+  font-weight: 700;
   letter-spacing: -0.01em;
   color: #0f172a;
-  line-height: 1.25;
+  line-height: 1.2;
 }
 
 .enterprise-overview-panel-sub {
-  margin: 0.15rem 0 0;
-  font-size: 0.75rem;
+  margin: 0.1rem 0 0;
+  font-size: 0.6875rem;
   color: #64748b;
 }
 
@@ -4662,30 +4663,31 @@ input {
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: #64748b;
+  color: #94a3b8;
 }
 
 .enterprise-overview-kicker--accent {
-  color: #6366f1;
+  color: #94a3b8;
 }
 
 .enterprise-overview-panel-error {
-  margin: 0.5rem 0.875rem 0.65rem;
+  margin: 0.45rem 0.65rem 0.55rem;
+  font-size: 0.6875rem;
 }
 
 .enterprise-overview-metric-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.5rem;
-  padding: 0.625rem 0.875rem 0.75rem;
+  gap: 0.35rem;
+  padding: 0.45rem 0.65rem 0.55rem;
 }
 
 .enterprise-overview-metric-card {
   display: flex;
-  align-items: flex-start;
-  gap: 0.5rem;
+  align-items: center;
+  gap: 0.4rem;
   min-width: 0;
-  padding: 0.5rem 0.6rem;
+  padding: 0.4rem 0.45rem;
   border: 1px solid #e8edf3;
   border-radius: 8px;
   background: #fff;
@@ -4695,34 +4697,40 @@ input {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.75rem;
-  height: 1.75rem;
+  width: 1.125rem;
+  height: 1.125rem;
   flex-shrink: 0;
-  border-radius: 7px;
+  border-radius: 4px;
   background: #eef2ff;
   color: #6366f1;
+}
+
+.enterprise-overview-metric-icon svg {
+  width: 11px;
+  height: 11px;
 }
 
 .enterprise-overview-metric-copy {
   display: flex;
   flex-direction: column;
-  gap: 0.05rem;
+  gap: 0.04rem;
   min-width: 0;
 }
 
 .enterprise-overview-metric-label {
   font-size: 0.5625rem;
   font-weight: 700;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: #94a3b8;
+  line-height: 1.15;
 }
 
 .enterprise-overview-metric-value {
-  font-size: 0.875rem;
+  font-size: 0.6875rem;
   font-weight: 600;
   color: #0f172a;
-  line-height: 1.25;
+  line-height: 1.2;
 }
 
 .enterprise-overview-metric-value--alert {
@@ -4730,16 +4738,16 @@ input {
 }
 
 .enterprise-overview-metric-value-muted {
-  font-size: 0.75rem;
-  font-weight: 500;
+  font-size: 0.6875rem;
+  font-weight: 600;
   color: #64748b;
 }
 
 .enterprise-overview-metric-sub {
-  font-size: 0.625rem;
+  font-size: 0.5625rem;
   font-weight: 500;
   color: #94a3b8;
-  line-height: 1.25;
+  line-height: 1.2;
 }
 
 .enterprise-overview-standards-panel-head {
@@ -4749,68 +4757,68 @@ input {
 .enterprise-overview-manage-standards-btn {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
   flex-shrink: 0;
-  border: 1px solid #c7d2fe;
-  border-radius: 7px;
-  padding: 0.3rem 0.6rem;
+  border: 0;
+  border-radius: 6px;
+  padding: 0.2rem 0.4rem;
   font: inherit;
-  font-size: 0.75rem;
+  font-size: 0.625rem;
   font-weight: 600;
-  color: #4338ca;
-  background: #fff;
+  color: #6366f1;
+  background: transparent;
   cursor: pointer;
   white-space: nowrap;
 }
 
 .enterprise-overview-manage-standards-btn:hover {
+  color: #4338ca;
   background: #eef2ff;
-  border-color: #a5b4fc;
 }
 
 .enterprise-overview-standards-columns {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.75rem 1rem;
-  padding: 0.625rem 0.875rem 0.75rem;
+  gap: 0.45rem 0.55rem;
+  padding: 0.45rem 0.65rem 0.55rem;
 }
 
 .enterprise-overview-standards-column {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: 0.08rem;
   min-width: 0;
 }
 
 .enterprise-overview-standards-column-label {
-  font-size: 0.625rem;
+  font-size: 0.5625rem;
   font-weight: 700;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: #94a3b8;
+  line-height: 1.15;
 }
 
 .enterprise-overview-standards-column-value {
-  font-size: 0.8125rem;
+  font-size: 0.6875rem;
   font-weight: 600;
   color: #0f172a;
-  line-height: 1.3;
+  line-height: 1.25;
 }
 
 .enterprise-overview-standards-chips {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 0.35rem;
-  margin-top: 0.35rem;
+  gap: 0.15rem;
+  margin-top: 0.12rem;
 }
 
 .enterprise-overview-status-chip {
   display: inline-flex;
   align-items: center;
-  padding: 0.2rem 0.45rem;
-  border-radius: 999px;
-  font-size: 0.625rem;
+  padding: 0.06rem 0.32rem;
+  border-radius: 5px;
+  font-size: 0.5625rem;
   font-weight: 600;
   line-height: 1.2;
 }
@@ -4837,24 +4845,24 @@ input {
 }
 
 .enterprise-overview-standards-column--status .enterprise-overview-standards-badges {
-  margin-top: 0.15rem;
+  margin-top: 0.08rem;
 }
 
 .enterprise-overview-standards-guidance {
-  margin: 0.25rem 0 0;
-  font-size: 0.6875rem;
-  line-height: 1.35;
+  margin: 0.15rem 0 0;
+  font-size: 0.625rem;
+  line-height: 1.3;
   color: #64748b;
 }
 
 .enterprise-overview-standards-action-link {
   align-self: flex-start;
-  margin-top: 0.35rem;
+  margin-top: 0.2rem;
   padding: 0;
   border: 0;
   background: none;
   font: inherit;
-  font-size: 0.8125rem;
+  font-size: 0.625rem;
   font-weight: 600;
   color: #6366f1;
   cursor: pointer;
@@ -4868,38 +4876,39 @@ input {
 .enterprise-overview-goals-panel-head {
   align-items: center;
   border-bottom: 1px solid #eef2f6;
-  padding-bottom: 0.55rem;
+  padding-bottom: 0.45rem;
 }
 
 .enterprise-overview-view-goals-btn {
   flex-shrink: 0;
-  border: 1px solid #c7d2fe;
-  border-radius: 7px;
-  padding: 0.3rem 0.6rem;
+  border: 0;
+  border-radius: 6px;
+  padding: 0.2rem 0.4rem;
   font: inherit;
-  font-size: 0.75rem;
+  font-size: 0.625rem;
   font-weight: 600;
-  color: #4338ca;
-  background: #fff;
+  color: #6366f1;
+  background: transparent;
   cursor: pointer;
   white-space: nowrap;
 }
 
 .enterprise-overview-view-goals-btn:hover {
+  color: #4338ca;
   background: #eef2ff;
 }
 
 .enterprise-overview-goals-empty {
   margin: 0;
-  padding: 0.625rem 0.875rem 0.75rem;
-  font-size: 0.75rem;
+  padding: 0.45rem 0.65rem 0.55rem;
+  font-size: 0.6875rem;
   color: #94a3b8;
 }
 
 .enterprise-overview-goals-empty-state {
-  margin: 0 0.875rem 0.75rem;
-  padding: 0.75rem 0.875rem;
-  border: 1px dashed #cbd5e1;
+  margin: 0 0.65rem 0.55rem;
+  padding: 0.55rem 0.65rem;
+  border: 1px dashed #dbe3ec;
   border-radius: 8px;
   background: #fafbfc;
   text-align: center;
@@ -4907,19 +4916,19 @@ input {
 
 .enterprise-overview-goals-empty-state p {
   margin: 0;
-  font-size: 0.75rem;
-  line-height: 1.45;
+  font-size: 0.6875rem;
+  line-height: 1.35;
   color: #64748b;
 }
 
 .enterprise-overview-goals-empty-state .enterprise-overview-standards-action-link {
   align-self: center;
-  margin: 0.5rem auto 0;
-  font-size: 0.75rem;
+  margin: 0.35rem auto 0;
+  font-size: 0.625rem;
 }
 
 .enterprise-overview-goals-list {
-  padding: 0.25rem 0.875rem 0.75rem;
+  padding: 0.2rem 0.65rem 0.55rem;
 }
 
 .enterprise-overview-goals-table-wrap {
@@ -5107,7 +5116,7 @@ input {
 .enterprise-overview-goals-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.75rem;
+  font-size: 0.6875rem;
 }
 
 .enterprise-overview-goals-table thead {
@@ -5117,11 +5126,11 @@ input {
 }
 
 .enterprise-overview-goals-table th {
-  padding: 0.55rem 0.75rem;
+  padding: 0.35rem 0.55rem;
   text-align: left;
   font-size: 0.5625rem;
   font-weight: 700;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: #94a3b8;
   background: #f8fafc;
@@ -5129,8 +5138,8 @@ input {
 }
 
 .enterprise-overview-goals-table td {
-  padding: 0.6rem 0.75rem;
-  color: #334155;
+  padding: 0.4rem 0.55rem;
+  color: #64748b;
   border-bottom: 1px solid #f1f5f9;
   vertical-align: middle;
 }
@@ -5140,6 +5149,7 @@ input {
 }
 
 .enterprise-overview-goals-table-goal {
+  font-size: 0.6875rem;
   font-weight: 600;
   color: #0f172a;
   max-width: 12rem;
@@ -5151,9 +5161,9 @@ input {
 .enterprise-overview-goal-pill {
   display: inline-block;
   border-radius: 999px;
-  padding: 0.1rem 0.4rem;
+  padding: 0.06rem 0.32rem;
   font-size: 0.5625rem;
-  font-weight: 700;
+  font-weight: 600;
   color: #6d28d9;
   background: #ede9fe;
 }
