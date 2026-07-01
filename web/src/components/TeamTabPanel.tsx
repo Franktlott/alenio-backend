@@ -34,8 +34,9 @@ import {
   type WebTeamRow,
 } from "../lib/api";
 import {
+  checkInDueSoonStartDays,
   formatCheckInFrequencySummary,
-  formatDueSoonThresholdSummary,
+  frequencyToDays,
   type MemberStandardsCompliance,
   type WorkplaceStandards,
 } from "../lib/workplace-standards";
@@ -81,6 +82,25 @@ function formatRosterCheckInPrimary(days: number | null | undefined): string {
   if (days === 0) return "Today";
   if (days === 1) return "1 day";
   return `${days} days`;
+}
+
+function rosterStandardsSummary(standards: WorkplaceStandards): string {
+  const parts: string[] = [];
+  if (standards.checkInRequired) {
+    parts.push(formatCheckInFrequencySummary(standards));
+    const frequencyDays = frequencyToDays(standards.checkInFrequencyValue, standards.checkInFrequencyUnit);
+    const dueSoonAt = checkInDueSoonStartDays(frequencyDays);
+    parts.push(dueSoonAt === 1 ? "Due soon at 1 day" : `Due soon at ${dueSoonAt} days`);
+  } else {
+    parts.push("Check-ins optional");
+  }
+  if (standards.goalsRequired && standards.minimumActiveGoals > 0) {
+    const min = standards.minimumActiveGoals;
+    parts.push(`${min} goal${min === 1 ? "" : "s"} required`);
+  } else {
+    parts.push("Goals optional");
+  }
+  return parts.join(" · ");
 }
 
 function rosterCheckInColumn(
@@ -869,30 +889,15 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
               </div>
 
               <div className="enterprise-team-roster-standards-bar">
-                <span className="enterprise-team-roster-standards-bar-icon" aria-hidden>
-                  <IconWorkplaceStandards />
-                </span>
                 <div className="enterprise-team-roster-standards-bar-copy">
                   <p className="enterprise-team-roster-standards-kicker">
-                    <span>Workplace standards</span>
+                    <span className="enterprise-team-roster-standards-bar-icon" aria-hidden>
+                      <IconWorkplaceStandards />
+                    </span>
+                    <span>Standards</span>
                     <StandardsStatusKey />
                   </p>
-                  <p className="enterprise-team-roster-standards-line">
-                    {workplaceStandards.checkInRequired ? (
-                      <span>
-                        Check-ins: {formatCheckInFrequencySummary(workplaceStandards)} ·{" "}
-                        {formatDueSoonThresholdSummary(workplaceStandards)}
-                      </span>
-                    ) : (
-                      <span>Check-ins: Not required</span>
-                    )}
-                  </p>
-                  <p className="enterprise-team-roster-standards-line">
-                    Goals:{" "}
-                    {workplaceStandards.goalsRequired && workplaceStandards.minimumActiveGoals > 0
-                      ? `${workplaceStandards.minimumActiveGoals} active goal${workplaceStandards.minimumActiveGoals === 1 ? "" : "s"} required`
-                      : "Optional"}
-                  </p>
+                  <p className="enterprise-team-roster-standards-line">{rosterStandardsSummary(workplaceStandards)}</p>
                 </div>
                 {showOwnerManageRow ? (
                   <button
@@ -900,7 +905,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                     className="enterprise-team-roster-standards-manage"
                     onClick={() => setWorkplaceStandardsOpen(true)}
                   >
-                    Manage Standards
+                    Manage
                   </button>
                 ) : null}
               </div>
