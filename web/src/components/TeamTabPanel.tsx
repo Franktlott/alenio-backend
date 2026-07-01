@@ -315,17 +315,6 @@ function IconSearch({ size = 18 }: { size?: number }) {
   );
 }
 
-function IconStatMembers() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-      <circle cx="9" cy="7" r="4" />
-      <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-    </svg>
-  );
-}
-
 function IconStatActions() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
@@ -748,14 +737,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
             </div>
           </header>
 
-          <div className={`enterprise-team-stat-row${showOwnerManageRow ? " enterprise-team-stat-row--four" : " enterprise-team-stat-row--two"}`}>
-            <div className="enterprise-team-stat-card enterprise-team-stat-card--members">
-              <span className="enterprise-team-stat-icon" aria-hidden><IconStatMembers /></span>
-              <span className="enterprise-team-stat-copy">
-                <strong>{sortedMembers.length}</strong>
-                <span>Team members</span>
-              </span>
-            </div>
+          <div className={`enterprise-team-stat-row${showOwnerManageRow ? " enterprise-team-stat-row--three" : " enterprise-team-stat-row--one"}`}>
             <div className="enterprise-team-stat-card enterprise-team-stat-card--actions">
               <span className="enterprise-team-stat-icon" aria-hidden><IconStatActions /></span>
               <span className="enterprise-team-stat-copy">
