@@ -190,7 +190,7 @@ export function OutlookCalendarPanel({ onStatusChange }: Props) {
             <OutlookBrandIcon />
           </div>
           <div className="enterprise-outlook-card-head-copy">
-            <h2 className="enterprise-outlook-card-title">Microsoft Outlook</h2>
+            <h3 className="enterprise-outlook-card-title">Microsoft Outlook</h3>
             <p className="enterprise-outlook-card-subtitle">
               {connected
                 ? (connection?.accountEmail ?? "Outlook account connected")

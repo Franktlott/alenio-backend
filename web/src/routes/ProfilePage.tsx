@@ -326,6 +326,21 @@ export function ProfilePage() {
               {formErr}
             </p>
           ) : null}
+
+          <div className="enterprise-profile-account-outlook">
+            {outlookNotice ? (
+              <OutlookCalendarAlert variant="success" message={outlookNotice} />
+            ) : null}
+            {outlookError ? (
+              <OutlookCalendarAlert variant="error" message={outlookError} />
+            ) : null}
+            <OutlookCalendarPanel
+              onStatusChange={() => {
+                setOutlookNotice(null);
+                setOutlookError(null);
+              }}
+            />
+          </div>
           </section>
 
           <ProfileTeamsSection
@@ -346,21 +361,6 @@ export function ProfilePage() {
               await refreshMeAndTeams();
             }}
           />
-
-          <section className="enterprise-card enterprise-profile-outlook">
-            {outlookNotice ? (
-              <OutlookCalendarAlert variant="success" message={outlookNotice} />
-            ) : null}
-            {outlookError ? (
-              <OutlookCalendarAlert variant="error" message={outlookError} />
-            ) : null}
-            <OutlookCalendarPanel
-              onStatusChange={() => {
-                setOutlookNotice(null);
-                setOutlookError(null);
-              }}
-            />
-          </section>
           </div>
 
         <footer className="enterprise-profile-legal" aria-labelledby="profile-legal-heading">

@@ -153,18 +153,7 @@ export function ProfileTeamsSection({ teams, selectedTeamId, onSelectWorkspace, 
         </p>
       ) : null}
 
-      <WorkspaceCreateJoinModals
-        joinOpen={joinOpen}
-        createOpen={createOpen}
-        onCloseJoin={() => setJoinOpen(false)}
-        onCloseCreate={() => setCreateOpen(false)}
-        onRefreshWorkspaces={onRefresh}
-        onJoinSuccessInfo={(msg) => {
-          setJoinInfo(msg);
-          window.setTimeout(() => setJoinInfo(null), 8000);
-        }}
-      />
-
+      <div className="enterprise-profile-teams-body">
       {teams.length === 0 ? (
         <p className="enterprise-muted">You are not in any workspace yet.</p>
       ) : (
@@ -271,6 +260,19 @@ export function ProfileTeamsSection({ teams, selectedTeamId, onSelectWorkspace, 
           );
         })()
       )}
+      </div>
+
+      <WorkspaceCreateJoinModals
+        joinOpen={joinOpen}
+        createOpen={createOpen}
+        onCloseJoin={() => setJoinOpen(false)}
+        onCloseCreate={() => setCreateOpen(false)}
+        onRefreshWorkspaces={onRefresh}
+        onJoinSuccessInfo={(msg) => {
+          setJoinInfo(msg);
+          window.setTimeout(() => setJoinInfo(null), 8000);
+        }}
+      />
 
       <EditWorkspaceModal
         team={editTarget}

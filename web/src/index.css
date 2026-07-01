@@ -11090,7 +11090,7 @@ body:has(.seneca-checkin-header-wrap) .seneca-floating-launcher {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(300px, 0.9fr) minmax(340px, 1.4fr);
+  grid-template-columns: repeat(2, minmax(300px, 1fr));
   gap: 1rem;
   align-items: stretch;
 }
@@ -11106,6 +11106,11 @@ body:has(.seneca-checkin-header-wrap) .seneca-floating-launcher {
 .enterprise-profile-account {
   min-height: 0;
   align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  padding-bottom: 0;
 }
 
 .enterprise-profile-legal {
@@ -11405,6 +11410,8 @@ button.enterprise-profile-legal-link {
   gap: 1.25rem;
   align-items: flex-start;
   flex-wrap: wrap;
+  flex: 1;
+  min-height: 0;
 }
 
 .enterprise-profile-avatar-btn {
@@ -11516,6 +11523,7 @@ button.enterprise-profile-legal-link {
   margin-top: 0;
   min-height: 0;
   height: 100%;
+  align-self: stretch;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -11523,6 +11531,13 @@ button.enterprise-profile-legal-link {
 
 .enterprise-profile-teams > .enterprise-card-head {
   flex-shrink: 0;
+}
+
+.enterprise-profile-teams-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .enterprise-profile-teams-scroll {
@@ -15437,15 +15452,23 @@ button.enterprise-profile-legal-link {
   line-height: 1.35;
 }
 
-.enterprise-profile-outlook {
-  grid-column: 1 / -1;
-  padding: 0;
+.enterprise-profile-account-outlook {
+  flex-shrink: 0;
+  margin: 1rem -1.25rem 0;
+  border-top: 1px solid #e2e8f0;
   overflow: hidden;
-  border: 1px solid #e2e8f0;
 }
 
-.enterprise-profile-outlook .enterprise-outlook-alert {
+.enterprise-profile-account-outlook .enterprise-outlook-alert {
   margin: 1rem 1.25rem 0;
+}
+
+.enterprise-profile-account-outlook .enterprise-outlook-alert:last-of-type {
+  margin-bottom: 0;
+}
+
+.enterprise-profile-account-outlook .enterprise-outlook-card-head {
+  padding-top: 1rem;
 }
 
 .enterprise-outlook-card {
@@ -15747,10 +15770,6 @@ button.enterprise-profile-legal-link {
 
 .enterprise-outlook-panel .enterprise-outlook-alert {
   margin-top: 0.65rem;
-}
-
-.enterprise-profile-outlook .enterprise-outlook-alert:last-of-type {
-  margin-bottom: 0.85rem;
 }
 
 .enterprise-outlook-panel-copy {
