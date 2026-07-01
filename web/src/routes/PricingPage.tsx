@@ -23,8 +23,8 @@ export function PricingPage() {
               <strong>Free</strong> includes activity, chat, and team members for every workspace.
             </li>
             <li>
-              <strong>Team</strong> unlocks tasks, Seneca AI coaching, 1:1 check-ins, development plans, calendar, metrics,
-              and the full workspace on web and mobile.
+              <strong>Team</strong> unlocks tasks, Seneca AI coaching, 1:1 check-ins, development plans, calendar, Outlook
+              sync, metrics, and the full workspace on web and mobile.
             </li>
             <li>
               <strong>Enterprise</strong> adds rollout support, SLAs, and security documentation for multi-location

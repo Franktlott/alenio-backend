@@ -7,7 +7,6 @@ import {
 import {
   DEFAULT_WORKPLACE_STANDARDS,
   formatCheckInFrequencySummary,
-  formatGracePeriodSummary,
   formatRequiredTemplateSummary,
   type CheckInFrequencyUnit,
   type WorkplaceStandards,
@@ -73,7 +72,10 @@ export function WorkplaceStandardsModal({
     setSaving(true);
     setErr(null);
     try {
-      const saved = await patchWebTeamWorkplaceStandards(teamId, draft);
+      const saved = await patchWebTeamWorkplaceStandards(teamId, {
+        ...draft,
+        checkInGracePeriodDays: 0,
+      });
       const title = saved.requiredCheckInTemplateId
         ? templates.find((t) => t.id === saved.requiredCheckInTemplateId)?.title ?? null
         : null;
@@ -163,25 +165,6 @@ export function WorkplaceStandardsModal({
                   </div>
                 </label>
 
-                <label className="enterprise-workplace-standards-field">
-                  <span className="enterprise-workplace-standards-label">Grace period</span>
-                  <div className="enterprise-workplace-standards-grace">
-                    <input
-                      type="number"
-                      min={0}
-                      max={90}
-                      value={draft.checkInGracePeriodDays}
-                      onChange={(e) =>
-                        setDraft((prev) => ({
-                          ...prev,
-                          checkInGracePeriodDays: Math.max(0, Number(e.target.value) || 0),
-                        }))
-                      }
-                    />
-                    <span className="enterprise-workplace-standards-grace-suffix">days</span>
-                  </div>
-                </label>
-
                 <label className="enterprise-workplace-standards-field enterprise-workplace-standards-field--full">
                   <span className="enterprise-workplace-standards-label">Required template</span>
                   <select
@@ -253,10 +236,6 @@ export function WorkplaceStandardsModal({
               <li>
                 <span>Goals</span>
                 <strong>{draft.goalsRequired ? draft.minimumActiveGoals : "Not required"}</strong>
-              </li>
-              <li>
-                <span>Grace</span>
-                <strong>{formatGracePeriodSummary(draft.checkInGracePeriodDays)}</strong>
               </li>
               <li>
                 <span>Template</span>

@@ -7,7 +7,6 @@ import {
 import {
   DEFAULT_WORKPLACE_STANDARDS,
   formatCheckInFrequencySummary,
-  formatGracePeriodSummary,
   frequencyToDays,
   memberStandardsBadges,
   standardsBadgeClassName,
@@ -75,7 +74,7 @@ function formatUpdatedWithDays(iso: string): string {
 
 function IconTarget() {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
       <circle cx="12" cy="12" r="10" />
       <circle cx="12" cy="12" r="6" />
       <circle cx="12" cy="12" r="2" />
@@ -85,7 +84,7 @@ function IconTarget() {
 
 function IconCalendar() {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
       <rect x="3" y="4" width="18" height="18" rx="2" />
       <line x1="16" y1="2" x2="16" y2="6" />
       <line x1="8" y1="2" x2="8" y2="6" />
@@ -96,7 +95,7 @@ function IconCalendar() {
 
 function IconClock() {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
       <circle cx="12" cy="12" r="10" />
       <polyline points="12 6 12 12 16 14" />
     </svg>
@@ -105,7 +104,7 @@ function IconClock() {
 
 function IconList() {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
       <line x1="8" y1="6" x2="21" y2="6" />
       <line x1="8" y1="12" x2="21" y2="12" />
       <line x1="8" y1="18" x2="21" y2="18" />
@@ -314,8 +313,7 @@ export function ProfileOverviewTab({
         <header className="enterprise-overview-panel-head enterprise-overview-standards-panel-head">
           <div>
             <p className="enterprise-overview-kicker">Workplace</p>
-            <h3 className="enterprise-overview-panel-title">Standards Status</h3>
-            <p className="enterprise-overview-panel-sub">Expectations for this workplace</p>
+            <h3 className="enterprise-overview-panel-title">Standards status</h3>
           </div>
           {canManageStandards && onManageStandards ? (
             <button type="button" className="enterprise-overview-manage-standards-btn" onClick={onManageStandards}>
@@ -335,9 +333,6 @@ export function ProfileOverviewTab({
               <div className="enterprise-overview-standards-chips">
                 <span className={checkInChipClass(standardsCompliance.checkInStatus)}>
                   {standardsCompliance.checkInActionText}
-                </span>
-                <span className="enterprise-overview-status-chip enterprise-overview-status-chip--muted">
-                  Grace period: {formatGracePeriodSummary(standards.checkInGracePeriodDays)}
                 </span>
               </div>
             ) : null}
@@ -395,7 +390,6 @@ export function ProfileOverviewTab({
       <section className="enterprise-overview-panel enterprise-overview-goals-panel">
         <header className="enterprise-overview-panel-head enterprise-overview-goals-panel-head">
           <div>
-            <p className="enterprise-overview-kicker">Active development goals</p>
             <h3 className="enterprise-overview-panel-title">{goalsTitle}</h3>
           </div>
           {onOpenGrowthTab ? (

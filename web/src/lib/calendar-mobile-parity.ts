@@ -27,6 +27,10 @@ export type WeekBar = {
   endCol: number;
   isHidden?: boolean | null;
   isVideoMeeting?: boolean | null;
+  isExternal?: boolean;
+  allDay?: boolean | null;
+  continuesBefore?: boolean;
+  continuesAfter?: boolean;
 };
 
 export function startOfDay(d: Date): Date {
@@ -96,6 +100,57 @@ export function isSameDay(a: Date, b: Date): boolean {
   );
 }
 
+const RANGE_FMT: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" };
+
+export function formatCalendarEventRangeLabel(event: {
+  startDate: string;
+  endDate?: string | null;
+  allDay?: boolean | null;
+  isExternal?: boolean;
+}): string {
+  const { start, end } = eventCalendarDayRange(event);
+  if (isSameDay(start, end)) {
+    return event.allDay !== false ? "All day" : "Event";
+  }
+  const a = start.toLocaleDateString("en-US", RANGE_FMT).toUpperCase();
+  const b = end.toLocaleDateString("en-US", RANGE_FMT).toUpperCase();
+  return `${a} – ${b}`;
+}
+
+export function formatCalendarEventTimeLabel(event: {
+  startDate: string;
+  endDate?: string | null;
+  allDay?: boolean | null;
+  isExternal?: boolean;
+}): string | null {
+  if (event.allDay !== false && shouldUseCalendarDays(event)) return null;
+  const start = new Date(event.startDate);
+  const end = event.endDate ? new Date(event.endDate) : null;
+  const timeFmt: Intl.DateTimeFormatOptions = { hour: "numeric", minute: "2-digit", hour12: true };
+  const startLabel = start.toLocaleTimeString("en-US", timeFmt);
+  if (!end) return startLabel;
+  return `${startLabel} – ${end.toLocaleTimeString("en-US", timeFmt)}`;
+}
+
+export function calendarEventSpanContext(
+  event: {
+    startDate: string;
+    endDate?: string | null;
+    allDay?: boolean | null;
+    isExternal?: boolean;
+  },
+  day: Date,
+): { isMultiDay: boolean; continuesBefore: boolean; continuesAfter: boolean } {
+  const { start, end } = eventCalendarDayRange(event);
+  const d = startOfDay(day);
+  const isMultiDay = !isSameDay(start, end);
+  return {
+    isMultiDay,
+    continuesBefore: isMultiDay && d > start,
+    continuesAfter: isMultiDay && d < end,
+  };
+}
+
 export function getDaysInMonth(date: Date): Date[] {
   const year = date.getFullYear();
   const month = date.getMonth();
@@ -145,6 +200,9 @@ export function computeWeekBars(week: Date[], events: CalendarEventLike[]): Week
     }
     if (startCol === -1) continue;
 
+    const weekStart = startOfDay(week[0]!);
+    const weekEnd = startOfDay(week[week.length - 1]!);
+
     bars.push({
       id: event.id,
       title: event.title,
@@ -153,6 +211,10 @@ export function computeWeekBars(week: Date[], events: CalendarEventLike[]): Week
       endCol,
       isHidden: event.isHidden ?? undefined,
       isVideoMeeting: event.isVideoMeeting ?? undefined,
+      isExternal: event.isExternal ?? undefined,
+      allDay: event.allDay ?? undefined,
+      continuesBefore: evStart < weekStart,
+      continuesAfter: evEnd > weekEnd,
     });
   }
 

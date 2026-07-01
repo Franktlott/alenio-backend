@@ -20,6 +20,9 @@ import {
   startOfDay,
   eventCalendarDayRange,
   calendarDayToUtcNoonIso,
+  formatCalendarEventRangeLabel,
+  formatCalendarEventTimeLabel,
+  calendarEventSpanContext,
 } from "../lib/calendar-mobile-parity";
 import { getUSHolidays } from "../lib/us-federal-holidays";
 import { canShowVideoJoin } from "../lib/video-meeting-join";
@@ -100,7 +103,19 @@ function isDelegatedTeamTask(task: ApiTask, userId: string): boolean {
 
 type TaskScope = "mine" | "team";
 
-const EXTERNAL_BUSY_COLOR = "#94A3B8";
+const EXTERNAL_BUSY_COLOR = "#475569";
+const OUTLOOK_ACCENT_COLOR = "#0078D4";
+
+function OutlookGlyph({ size = 12 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden className="enterprise-cal-outlook-glyph">
+      <rect x="3" y="5" width="18" height="16" rx="2" fill="currentColor" opacity="0.15" />
+      <rect x="3" y="5" width="18" height="5" rx="2" fill="currentColor" />
+      <rect x="6" y="13" width="4" height="3" rx="0.5" fill="currentColor" />
+      <rect x="11" y="13" width="7" height="3" rx="0.5" fill="currentColor" opacity="0.7" />
+    </svg>
+  );
+}
 
 export function DashboardPage() {
   const queryClient = useQueryClient();
@@ -841,57 +856,43 @@ export function DashboardPage() {
                       </div>
                       {tracks.map((track, trackIndex) => (
                         <div key={trackIndex} className="enterprise-cal-track-row">
-                          {week.map((_, colIndex) => {
-                            const bar = track.find((b) => b.startCol <= colIndex && b.endCol >= colIndex);
-                            if (!bar) {
-                              return <div key={colIndex} className="enterprise-cal-track-cell" />;
-                            }
-                            const isBarStart = colIndex === bar.startCol;
-                            const isBarEnd = colIndex === bar.endCol;
+                          {track.map((bar) => {
+                            const showTitle = !bar.continuesBefore;
                             return (
-                              <div key={colIndex} className="enterprise-cal-track-cell">
-                                <button
-                                  type="button"
-                                  className="enterprise-cal-bar-seg"
-                                  style={{
-                                    backgroundColor: bar.color,
-                                    borderTopLeftRadius: isBarStart ? 3 : 0,
-                                    borderBottomLeftRadius: isBarStart ? 3 : 0,
-                                    borderTopRightRadius: isBarEnd ? 3 : 0,
-                                    borderBottomRightRadius: isBarEnd ? 3 : 0,
-                                    marginLeft: isBarStart ? 2 : 0,
-                                    marginRight: isBarEnd ? 2 : 0,
-                                  }}
-                                  title={bar.title}
-                                  aria-label={bar.title}
-                                  onClick={() => {
-                                    /* parity: mobile opens edit; web has no editor */
-                                  }}
-                                />
-                              </div>
+                              <button
+                                key={bar.id}
+                                type="button"
+                                className={[
+                                  "enterprise-cal-bar",
+                                  bar.isExternal ? "enterprise-cal-bar-outlook" : "enterprise-cal-bar-team",
+                                  bar.continuesBefore ? "enterprise-cal-bar-continues-before" : "",
+                                  bar.continuesAfter ? "enterprise-cal-bar-continues-after" : "",
+                                ]
+                                  .filter(Boolean)
+                                  .join(" ")}
+                                style={{
+                                  left: `calc(${bar.startCol} * (100% / 7) + 2px)`,
+                                  width: `calc(${bar.endCol - bar.startCol + 1} * (100% / 7) - 4px)`,
+                                  ...(bar.isExternal ? {} : { backgroundColor: bar.color }),
+                                }}
+                                title={bar.title}
+                                aria-label={bar.title}
+                              >
+                                {showTitle ? (
+                                  <span className="enterprise-cal-bar-title-inner">
+                                    {bar.isVideoMeeting ? (
+                                      <svg className="enterprise-cal-bar-video" width="10" height="10" viewBox="0 0 24 24" fill="none" aria-hidden>
+                                        <polygon points="23 7 16 12 23 17 23 7" fill="white" />
+                                        <rect x="1" y="5" width="15" height="14" rx="2" stroke="white" strokeWidth="2" />
+                                      </svg>
+                                    ) : null}
+                                    {bar.isExternal ? <OutlookGlyph size={10} /> : null}
+                                    <span className="enterprise-cal-bar-title-text">{bar.title}</span>
+                                  </span>
+                                ) : null}
+                              </button>
                             );
                           })}
-                          {track.map((bar) => (
-                            <div
-                              key={`title-${bar.id}`}
-                              className="enterprise-cal-bar-title"
-                              style={{
-                                left: `calc(${bar.startCol} * (100% / 7) + 2px)`,
-                                width: `calc(${bar.endCol - bar.startCol + 1} * (100% / 7) - 4px)`,
-                              }}
-                              aria-hidden
-                            >
-                              <span className="enterprise-cal-bar-title-inner">
-                                {bar.isVideoMeeting ? (
-                                  <svg className="enterprise-cal-bar-video" width="10" height="10" viewBox="0 0 24 24" fill="none" aria-hidden>
-                                    <polygon points="23 7 16 12 23 17 23 7" fill="white" />
-                                    <rect x="1" y="5" width="15" height="14" rx="2" stroke="white" strokeWidth="2" />
-                                  </svg>
-                                ) : null}
-                                <span className="enterprise-cal-bar-title-text">{bar.title}</span>
-                              </span>
-                            </div>
-                          ))}
                         </div>
                       ))}
                     </div>
@@ -1089,29 +1090,50 @@ export function DashboardPage() {
                           </div>
                         );
                       })}
-                      {selectedExternalEvents.map((event) => (
-                        <div
-                          key={event.id}
-                          className="enterprise-cal-day-event enterprise-cal-day-event-external"
-                          style={{ borderLeftColor: EXTERNAL_BUSY_COLOR }}
-                          data-testid={`external-event-${event.id}`}
-                        >
-                          <div className="enterprise-cal-day-event-top">
-                            <span className="enterprise-cal-day-event-name">{event.title?.trim() || "Untitled event"}</span>
-                            <div className="enterprise-cal-day-event-meta">
-                              <span className="enterprise-cal-badge-outlook">Private · Outlook</span>
+                      {selectedExternalEvents.map((event) => {
+                        const rangeLabel = formatCalendarEventRangeLabel({ ...event, isExternal: true });
+                        const timeLabel = formatCalendarEventTimeLabel({ ...event, isExternal: true });
+                        const span = selectedDate
+                          ? calendarEventSpanContext({ ...event, isExternal: true }, selectedDate)
+                          : null;
+                        return (
+                          <div
+                            key={event.id}
+                            className="enterprise-cal-day-event enterprise-cal-day-event-external"
+                            style={{ borderLeftColor: OUTLOOK_ACCENT_COLOR }}
+                            data-testid={`external-event-${event.id}`}
+                          >
+                            <div className="enterprise-cal-day-event-top">
+                              <span className="enterprise-cal-day-event-name">{event.title?.trim() || "Untitled event"}</span>
+                              <div className="enterprise-cal-day-event-meta">
+                                <span className="enterprise-cal-day-event-badges">
+                                  <span className="enterprise-cal-badge-outlook">
+                                    <OutlookGlyph size={11} />
+                                    Outlook
+                                  </span>
+                                  <span
+                                    className="enterprise-cal-badge-range enterprise-cal-badge-range-outlook"
+                                    style={{ color: OUTLOOK_ACCENT_COLOR, background: `${OUTLOOK_ACCENT_COLOR}18` }}
+                                  >
+                                    {rangeLabel}
+                                  </span>
+                                </span>
+                              </div>
                             </div>
+                            {timeLabel ? <div className="enterprise-cal-day-event-time">{timeLabel}</div> : null}
+                            {span?.isMultiDay && (span.continuesBefore || span.continuesAfter) ? (
+                              <p className="enterprise-cal-day-event-span-hint">
+                                {span.continuesBefore && span.continuesAfter
+                                  ? "Multi-day event — continues before and after this date"
+                                  : span.continuesBefore
+                                    ? "Multi-day event — started on an earlier date"
+                                    : "Multi-day event — continues on later dates"}
+                              </p>
+                            ) : null}
+                            <p className="enterprise-cal-day-event-source-hint">Synced from your Outlook calendar · only visible to you</p>
                           </div>
-                          {event.allDay !== true ? (
-                            <div className="enterprise-cal-day-event-time">
-                              {new Date(event.startDate).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}
-                              {event.endDate
-                                ? ` – ${new Date(event.endDate).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}`
-                                : null}
-                            </div>
-                          ) : null}
-                        </div>
-                      ))}
+                        );
+                      })}
                       {selectedTasks.map((task) => (
                         <div
                           key={task.id}

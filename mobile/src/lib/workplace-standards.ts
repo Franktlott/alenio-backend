@@ -14,7 +14,7 @@ export const DEFAULT_WORKPLACE_STANDARDS: WorkplaceStandards = {
   checkInRequired: true,
   checkInFrequencyValue: 30,
   checkInFrequencyUnit: "days",
-  checkInGracePeriodDays: 2,
+  checkInGracePeriodDays: 0,
   requiredCheckInTemplateId: null,
   goalsRequired: true,
   minimumActiveGoals: 2,

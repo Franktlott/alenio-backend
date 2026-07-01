@@ -40,7 +40,7 @@ const pillars = [
     icon: "locations",
     points: [
       "Calendar for trainings and visits",
-      "Visibility across stores",
+      "Personal Outlook calendar sync",
       "Same playbook at every site",
     ],
   },
@@ -143,6 +143,13 @@ const compareRows: {
     feature: "Team calendar in the same app",
     teams: true,
     slack: "Integrations",
+    groupme: false,
+    alenio: true,
+  },
+  {
+    feature: "Personal Outlook calendar sync",
+    teams: "Outlook app only",
+    slack: "Add-on integrations",
     groupme: false,
     alenio: true,
   },

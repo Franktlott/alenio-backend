@@ -15,6 +15,7 @@ export const TEAM_FEATURES = [
   "1:1 check-ins with Seneca prep",
   "Development plans & Seneca goal generation",
   "Team calendar",
+  "Outlook calendar sync (private, read-only)",
   "Metrics & dashboards",
   "Workflow execution & checklists",
   "Performance insights",

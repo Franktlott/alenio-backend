@@ -2,7 +2,6 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { queryKeys } from "../lib/query-keys";
-import QRCode from "qrcode";
 import { AddMemberModal } from "./AddMemberModal";
 import { PendingInvitesModal } from "./PendingInvitesModal";
 import { PendingCalendarEventsModal } from "./PendingCalendarEventsModal";
@@ -20,13 +19,10 @@ import {
   fetchWebTeamSubscription,
   fetchWebTeamTasks,
   inviteMemberByEmail,
-  leaveTeam,
-  patchApiTeam,
   rejectTeamJoinRequest,
   removeTeamMemberApi,
   setTeamMemberRole,
   transferTeamOwnership,
-  uploadTeamPhoto,
   type ApiTask,
   type TeamMemberStatsMap,
   type WebMeUser,
@@ -38,8 +34,11 @@ import {
 } from "../lib/api";
 import {
   formatCheckInFrequencySummary,
-  formatGracePeriodSummary,
+  formatDueSoonThresholdSummary,
+  STANDARDS_BADGE_LEGEND,
+  standardsBadgeClassName,
   type MemberStandardsCompliance,
+  type StandardsBadgeVariant,
   type WorkplaceStandards,
 } from "../lib/workplace-standards";
 
@@ -75,6 +74,34 @@ function rolePillClass(role: string): string {
   if (role === "team_leader") return "enterprise-team-roster-role-pill enterprise-team-roster-role-pill--leader";
   if (role === "admin") return "enterprise-team-roster-role-pill enterprise-team-roster-role-pill--admin";
   return "enterprise-team-roster-role-pill";
+}
+
+const STANDARDS_STATUS_KEY_ORDER: StandardsBadgeVariant[] = [
+  "on_track",
+  "check_in_due_soon",
+  "overdue_check_in",
+  "no_check_in",
+  "needs_active_goals",
+];
+
+function StandardsStatusKey() {
+  const items = STANDARDS_STATUS_KEY_ORDER.map((variant) =>
+    STANDARDS_BADGE_LEGEND.find((entry) => entry.variant === variant),
+  ).filter((entry): entry is (typeof STANDARDS_BADGE_LEGEND)[number] => Boolean(entry));
+
+  return (
+    <details className="enterprise-standards-status-key">
+      <summary>Status key</summary>
+      <ul>
+        {items.map((item) => (
+          <li key={item.variant}>
+            <span className={standardsBadgeClassName(item.variant)}>{item.label}</span>
+            <span>{item.description}</span>
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
 }
 
 type RosterTone = "ok" | "warn" | "bad" | "muted";
@@ -311,25 +338,6 @@ function IconUserPlus({ size = 22 }: { size?: number }) {
   );
 }
 
-function IconPencil() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-    </svg>
-  );
-}
-
-function IconLogOut() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-      <polyline points="16 17 21 12 16 7" />
-      <line x1="21" y1="12" x2="9" y2="12" />
-    </svg>
-  );
-}
-
 function IconSearch({ size = 18 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
@@ -494,24 +502,13 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
   const [inviteActionId, setInviteActionId] = useState<string | null>(null);
   const [calendarActionId, setCalendarActionId] = useState<string | null>(null);
 
-  const [nameEdit, setNameEdit] = useState("");
-  const [nameSaving, setNameSaving] = useState(false);
-  const [photoBusy, setPhotoBusy] = useState(false);
-  const [isEditingWorkspace, setIsEditingWorkspace] = useState(false);
-
-  const [qrOpen, setQrOpen] = useState(false);
-  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
-
   const [memberModal, setMemberModal] = useState<WebTeamMemberRow | null>(null);
   const [memberModalErr, setMemberModalErr] = useState<string | null>(null);
   const [rolePick, setRolePick] = useState<"member" | "team_leader">("member");
   const [modalBusy, setModalBusy] = useState(false);
 
-  const [leaveBusy, setLeaveBusy] = useState(false);
-
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
   const [memberSearch, setMemberSearch] = useState("");
-  const [workspaceSettingsOpen, setWorkspaceSettingsOpen] = useState(false);
   const [oneOneTemplatesOpen, setOneOneTemplatesOpen] = useState(false);
   const [workplaceStandardsOpen, setWorkplaceStandardsOpen] = useState(false);
   const [requiredTemplateTitle, setRequiredTemplateTitle] = useState<string | null>(
@@ -519,10 +516,6 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
   );
 
   const myId = me?.id ?? "";
-
-  useEffect(() => {
-    if (teamDetail) setNameEdit(teamDetail.name);
-  }, [teamDetail?.id, teamDetail?.name]);
 
   useEffect(() => {
     setRequiredTemplateTitle(teamDetail?.requiredCheckInTemplateTitle ?? null);
@@ -537,10 +530,6 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
   }, [showInitialLoading, onWorkspaceSwitchLoading]);
 
   useEffect(() => {
-    setIsEditingWorkspace(false);
-  }, [selectedTeamId]);
-
-  useEffect(() => {
     if (!teamDetail || !myId) return;
     if (canViewMemberProfile(teamDetail.myRole, selectedMemberId ?? myId, myId)) return;
     setSelectedMemberId(myId);
@@ -551,22 +540,6 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
     if (teamDetail.myRole === "owner" || teamDetail.myRole === "team_leader") return;
     setSelectedMemberId(myId);
   }, [teamDetail?.id, teamDetail?.myRole, myId]);
-
-  useEffect(() => {
-    if (!qrOpen || !teamDetail?.inviteCode) {
-      setQrDataUrl(null);
-      return;
-    }
-    let cancelled = false;
-    void QRCode.toDataURL(teamDetail.inviteCode, { margin: 1, width: 200, color: { dark: "#1e293b", light: "#ffffff" } }).then(
-      (url) => {
-        if (!cancelled) setQrDataUrl(url);
-      },
-    );
-    return () => {
-      cancelled = true;
-    };
-  }, [qrOpen, teamDetail?.inviteCode]);
 
   const todayStart = useMemo(() => {
     const d = new Date();
@@ -623,65 +596,6 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
     () => overviewTasks.filter((t) => t.status !== "done" && !isTaskOverdue(t, todayStart)).length,
     [overviewTasks, todayStart],
   );
-
-  const onSaveTeamName = async () => {
-    if (!selectedTeamId || !nameEdit.trim()) return;
-    setNameSaving(true);
-    setActionErr(null);
-    try {
-      await patchApiTeam(selectedTeamId, { name: nameEdit.trim() });
-      setIsEditingWorkspace(false);
-      await reloadTeamContext();
-      await onTeamsRefresh();
-    } catch (e) {
-      setActionErr(e instanceof Error ? e.message : "Could not update name.");
-    } finally {
-      setNameSaving(false);
-    }
-  };
-
-  const onPickTeamPhoto = () => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = "image/*";
-    input.onchange = async () => {
-      const file = input.files?.[0];
-      if (!file || !selectedTeamId) return;
-      setPhotoBusy(true);
-      setActionErr(null);
-      try {
-        const up = await uploadTeamPhoto(file, selectedTeamId);
-        await patchApiTeam(selectedTeamId, { image: up.url });
-        await reloadTeamContext();
-        await onTeamsRefresh();
-      } catch (e) {
-        setActionErr(e instanceof Error ? e.message : "Photo upload failed.");
-      } finally {
-        setPhotoBusy(false);
-      }
-    };
-    input.click();
-  };
-
-  const copyInvite = async () => {
-    if (!teamDetail?.inviteCode) return;
-    try {
-      await navigator.clipboard.writeText(teamDetail.inviteCode);
-    } catch {
-      setActionErr("Could not copy to clipboard.");
-    }
-  };
-
-  const shareInvite = async () => {
-    if (!teamDetail?.inviteCode) return;
-    const text = `Join my team "${teamDetail.name}" on Alenio! Use invite code: ${teamDetail.inviteCode}`;
-    try {
-      if (navigator.share) await navigator.share({ text });
-      else await navigator.clipboard.writeText(text);
-    } catch {
-      /* user cancelled share */
-    }
-  };
 
   const onAddMemberByEmail = async (email: string) => {
     if (!selectedTeamId || !email.trim()) return;
@@ -778,22 +692,6 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
     }
   };
 
-  const onLeaveTeam = async () => {
-    if (!selectedTeamId) return;
-    if (!window.confirm("Leave this team? You will lose access until invited again.")) return;
-    setLeaveBusy(true);
-    setActionErr(null);
-    try {
-      await leaveTeam(selectedTeamId);
-      setMemberModal(null);
-      await onTeamsRefresh();
-    } catch (e) {
-      setActionErr(e instanceof Error ? e.message : "Could not leave team.");
-    } finally {
-      setLeaveBusy(false);
-    }
-  };
-
   const myRole = teamDetail?.myRole ?? "";
   const manageJoin = canManageJoinRequests(myRole);
   const manageMembers = canRemoveMembers(myRole);
@@ -831,16 +729,6 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
       <div className="enterprise-team-split">
         <aside className="enterprise-team-split-list">
           <header className="enterprise-team-list-header">
-            <div className="enterprise-team-list-header-top">
-              <h1 className="enterprise-team-list-title">Team</h1>
-              <button
-                type="button"
-                className="enterprise-team-list-settings"
-                onClick={() => setWorkspaceSettingsOpen(true)}
-              >
-                Workspace
-              </button>
-            </div>
             <div className="enterprise-team-list-toolbar">
               <div className="enterprise-team-list-search-wrap">
                 <input
@@ -1042,12 +930,10 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                   <p className="enterprise-team-roster-standards-kicker">Workplace standards</p>
                   <p className="enterprise-team-roster-standards-line">
                     {workplaceStandards.checkInRequired ? (
-                      <>
-                        <span>
-                          Check-ins: {formatCheckInFrequencySummary(workplaceStandards)} · Grace period:{" "}
-                          {formatGracePeriodSummary(workplaceStandards.checkInGracePeriodDays)}
-                        </span>
-                      </>
+                      <span>
+                        Check-ins: {formatCheckInFrequencySummary(workplaceStandards)} ·{" "}
+                        {formatDueSoonThresholdSummary(workplaceStandards)}
+                      </span>
                     ) : (
                       <span>Check-ins: Not required</span>
                     )}
@@ -1069,6 +955,8 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                   </button>
                 ) : null}
               </div>
+
+              <StandardsStatusKey />
 
               <div className="enterprise-team-roster-table">
                 <div className="enterprise-team-roster-table-head" aria-hidden>
@@ -1231,102 +1119,6 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
         </main>
       </div>
 
-      {workspaceSettingsOpen ? (
-        <div className="enterprise-modal-backdrop" role="presentation" onClick={() => setWorkspaceSettingsOpen(false)}>
-          <div className="enterprise-modal-sheet enterprise-team-ws-modal" role="dialog" aria-label="Workspace settings" onClick={(e) => e.stopPropagation()}>
-            <button type="button" className="enterprise-task-modal-close" aria-label="Close" onClick={() => setWorkspaceSettingsOpen(false)}>
-              ×
-            </button>
-            <h3 style={{ marginTop: 0 }}>Workspace</h3>
-            <p className="enterprise-muted">{teamDetail.name}</p>
-            {myRole !== "owner" ? (
-              <button
-                type="button"
-                className="enterprise-team-leave-inline"
-                disabled={leaveBusy}
-                onClick={() => void onLeaveTeam()}
-                style={{ marginBottom: 12 }}
-              >
-                <IconLogOut /> {leaveBusy ? "Leaving…" : "Leave workspace"}
-              </button>
-            ) : null}
-            {manageMembers && !isEditingWorkspace ? (
-              <button
-                type="button"
-                className="enterprise-profile-edit-btn enterprise-profile-edit-btn-with-icon"
-                onClick={() => {
-                  setActionErr(null);
-                  setIsEditingWorkspace(true);
-                  setNameEdit(teamDetail.name);
-                }}
-              >
-                <IconPencil /> Edit workspace
-              </button>
-            ) : null}
-            {isEditingWorkspace && manageMembers ? (
-              <div className="enterprise-team-ws-modal-edit">
-                <label className="enterprise-muted enterprise-profile-label" htmlFor="team-ws-name-modal">
-                  Workspace name
-                </label>
-                <input
-                  id="team-ws-name-modal"
-                  className="auth-input enterprise-profile-name-input"
-                  value={nameEdit}
-                  onChange={(e) => setNameEdit(e.target.value)}
-                  autoComplete="organization"
-                />
-                <button
-                  type="button"
-                  className="enterprise-team-pill-btn"
-                  disabled={photoBusy}
-                  onClick={() => void onPickTeamPhoto()}
-                  style={{ marginTop: 8 }}
-                >
-                  {photoBusy ? "Updating photo…" : "Update photo"}
-                </button>
-                <div className="enterprise-profile-account-actions" style={{ marginTop: 12 }}>
-                  <button
-                    type="button"
-                    className="enterprise-profile-cancel-btn"
-                    disabled={nameSaving}
-                    onClick={() => {
-                      setIsEditingWorkspace(false);
-                      setNameEdit(teamDetail.name);
-                    }}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    className="auth-submit"
-                    disabled={nameSaving || !nameEdit.trim()}
-                    onClick={async () => {
-                      await onSaveTeamName();
-                      setIsEditingWorkspace(false);
-                    }}
-                  >
-                    {nameSaving ? "Saving…" : "Save"}
-                  </button>
-                </div>
-              </div>
-            ) : null}
-            <div className="enterprise-team-code-row-ws enterprise-team-ws-invite-tools" style={{ marginTop: 16 }}>
-              <span className="enterprise-team-code-mono">{teamDetail.inviteCode}</span>
-              <button type="button" className="enterprise-team-pill-btn" onClick={() => void copyInvite()}>
-                Copy
-              </button>
-              <button type="button" className="enterprise-team-pill-btn" onClick={() => void shareInvite()}>
-                Share
-              </button>
-              <button type="button" className="enterprise-team-pill-btn" onClick={() => setQrOpen(true)}>
-                QR code
-              </button>
-            </div>
-            <p className="enterprise-team-hint-ws">Share this code to invite team members</p>
-          </div>
-        </div>
-      ) : null}
-
       <AddMemberModal
         open={addMemberOpen}
         teamId={selectedTeamId}
@@ -1368,18 +1160,6 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
         onActionStart={setCalendarActionId}
         onActionEnd={() => setCalendarActionId(null)}
       />
-
-      {qrOpen ? (
-        <div className="enterprise-modal-backdrop" role="presentation" onClick={() => setQrOpen(false)}>
-          <div className="enterprise-modal-sheet" role="dialog" aria-label="Invite QR code" onClick={(e) => e.stopPropagation()}>
-            <button type="button" className="enterprise-task-modal-close" aria-label="Close" onClick={() => setQrOpen(false)}>
-              ×
-            </button>
-            <p className="enterprise-muted">Scan or share the invite code: <strong>{teamDetail.inviteCode}</strong></p>
-            {qrDataUrl ? <img src={qrDataUrl} alt="QR code for invite" className="enterprise-team-qr-img" /> : <p className="enterprise-muted">Generating…</p>}
-          </div>
-        </div>
-      ) : null}
 
       {memberModal && teamDetail ? (
         <TeamMemberManageModal

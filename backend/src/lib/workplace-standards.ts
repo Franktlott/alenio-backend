@@ -14,7 +14,7 @@ export const DEFAULT_WORKPLACE_STANDARDS: WorkplaceStandards = {
   checkInRequired: true,
   checkInFrequencyValue: 30,
   checkInFrequencyUnit: "days",
-  checkInGracePeriodDays: 2,
+  checkInGracePeriodDays: 0,
   requiredCheckInTemplateId: null,
   goalsRequired: true,
   minimumActiveGoals: 2,
@@ -69,12 +69,12 @@ export const STANDARDS_BADGE_LEGEND: ReadonlyArray<{
   {
     variant: "overdue_check_in",
     label: "Overdue check-in",
-    description: "Last check-in is past the workspace schedule plus grace period.",
+    description: "Last check-in is past the workspace check-in schedule.",
   },
   {
     variant: "check_in_due_soon",
     label: "Check-in due soon",
-    description: "Check-in is due within 2 days.",
+    description: "90% of the check-in window has passed (e.g. every 10 days → due soon after 9 days).",
   },
   {
     variant: "needs_active_goals",
@@ -157,11 +157,7 @@ export function parseWorkplaceStandards(raw: string | null | undefined): Workpla
         365,
       ),
       checkInFrequencyUnit: unit,
-      checkInGracePeriodDays: clampInt(
-        Number(parsed.checkInGracePeriodDays),
-        0,
-        90,
-      ),
+      checkInGracePeriodDays: 0,
       requiredCheckInTemplateId:
         typeof parsed.requiredCheckInTemplateId === "string" && parsed.requiredCheckInTemplateId.trim()
           ? parsed.requiredCheckInTemplateId.trim()
@@ -213,12 +209,10 @@ export function parseWorkplaceStandardsPatch(
   }
 
   if (input.checkInGracePeriodDays !== undefined) {
-    const grace = Number(input.checkInGracePeriodDays);
-    if (!Number.isFinite(grace) || grace < 0 || grace > 90) {
-      return { ok: false, message: "Grace period must be between 0 and 90 days" };
-    }
-    current.checkInGracePeriodDays = Math.round(grace);
+    current.checkInGracePeriodDays = 0;
   }
+
+  current.checkInGracePeriodDays = 0;
 
   if (input.minimumActiveGoals !== undefined) {
     const minGoals = Number(input.minimumActiveGoals);
@@ -242,6 +236,12 @@ export function frequencyToDays(value: number, unit: CheckInFrequencyUnit): numb
   if (unit === "weeks") return value * 7;
   if (unit === "months") return value * 30;
   return value;
+}
+
+/** Day count when a check-in becomes "due soon" (90% of the schedule window). */
+export function checkInDueSoonStartDays(frequencyDays: number): number {
+  if (frequencyDays <= 1) return 1;
+  return Math.max(1, Math.ceil(frequencyDays * 0.9));
 }
 
 function pluralize(count: number, singular: string, plural = `${singular}s`): string {
@@ -284,32 +284,27 @@ export function computeMemberStandardsCompliance(
       standards.checkInFrequencyValue,
       standards.checkInFrequencyUnit,
     );
-    const grace = standards.checkInGracePeriodDays;
-    const overdueThreshold = frequencyDays + grace;
+    const dueSoonStart = checkInDueSoonStartDays(frequencyDays);
 
     if (daysSinceLastCheckIn === null) {
       checkInStatus = "overdue";
       checkInActionText = "Check-in required";
-    } else {
+    } else if (daysSinceLastCheckIn > frequencyDays) {
+      checkInStatus = "overdue";
+      const daysOverdue = daysSinceLastCheckIn - frequencyDays;
+      checkInActionText = `Check-in overdue by ${pluralize(daysOverdue, "day")}`;
+    } else if (daysSinceLastCheckIn >= dueSoonStart) {
+      checkInStatus = "due_soon";
       const daysUntilDue = frequencyDays - daysSinceLastCheckIn;
-      if (daysSinceLastCheckIn > overdueThreshold) {
-        checkInStatus = "overdue";
-        const daysOverdue = daysSinceLastCheckIn - overdueThreshold;
-        checkInActionText = `Check-in overdue by ${pluralize(daysOverdue, "day")}`;
-      } else if (daysUntilDue <= 2) {
-        checkInStatus = "due_soon";
-        if (daysUntilDue < 0) {
-          const daysPastDue = Math.abs(daysUntilDue);
-          checkInActionText = `Check-in overdue by ${pluralize(daysPastDue, "day")}`;
-        } else if (daysUntilDue === 0) {
-          checkInActionText = "Check-in due today";
-        } else {
-          checkInActionText = `Check-in due in ${pluralize(daysUntilDue, "day")}`;
-        }
+      if (daysUntilDue <= 0) {
+        checkInActionText = "Check-in due today";
       } else {
-        checkInStatus = "on_track";
         checkInActionText = `Check-in due in ${pluralize(daysUntilDue, "day")}`;
       }
+    } else {
+      checkInStatus = "on_track";
+      const daysUntilDue = frequencyDays - daysSinceLastCheckIn;
+      checkInActionText = `Check-in due in ${pluralize(daysUntilDue, "day")}`;
     }
   }
 

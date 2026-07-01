@@ -11,7 +11,7 @@ export const MARKETING_DEMO_HREF = `mailto:${LEGAL_CONTACT_EMAIL}?subject=${enco
 export const MARKETING_HERO_HEADLINE = "The operating system for";
 export const MARKETING_HERO_HEADLINE_ACCENT = "team execution.";
 export const MARKETING_HERO_SUBCOPY =
-  "Alenio unifies chat, tasks, and calendar — plus Seneca AI coaching, 1:1 check-ins, and development plans — so managers spend less time chasing updates and more time leading the floor.";
+  "Alenio unifies chat, tasks, and calendar — with optional Outlook sync, Seneca AI coaching, 1:1 check-ins, and development plans — so managers spend less time chasing updates and more time leading the floor.";
 
 export const MARKETING_FINAL_CTA_HEADLINE = "Stop guessing. Start executing.";
 export const MARKETING_FINAL_CTA_SUBCOPY =
@@ -155,6 +155,7 @@ export const SECURITY_PAGE_SECTIONS = [
     points: [
       "Encrypted connections (HTTPS/TLS) for web and API traffic",
       "Workspace data scoped to team membership",
+      "Outlook calendar sync is read-only with encrypted OAuth tokens",
       "Account deletion flow documented for users and admins",
     ],
   },

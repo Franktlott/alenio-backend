@@ -348,7 +348,6 @@ export function ProfilePage() {
           />
 
           <section className="enterprise-card enterprise-profile-outlook">
-            <h2 className="enterprise-card-title enterprise-card-title-spaced">Outlook calendar</h2>
             {outlookNotice ? (
               <OutlookCalendarAlert variant="success" message={outlookNotice} />
             ) : null}

@@ -14,7 +14,7 @@ export const DEFAULT_WORKPLACE_STANDARDS: WorkplaceStandards = {
   checkInRequired: true,
   checkInFrequencyValue: 30,
   checkInFrequencyUnit: "days",
-  checkInGracePeriodDays: 2,
+  checkInGracePeriodDays: 0,
   requiredCheckInTemplateId: null,
   goalsRequired: true,
   minimumActiveGoals: 2,
@@ -67,12 +67,12 @@ export const STANDARDS_BADGE_LEGEND: ReadonlyArray<{
   {
     variant: "overdue_check_in",
     label: "Overdue check-in",
-    description: "Last check-in is past the workspace schedule plus grace period.",
+    description: "Last check-in is past the workspace check-in schedule.",
   },
   {
     variant: "check_in_due_soon",
     label: "Check-in due soon",
-    description: "Check-in is due within 2 days.",
+    description: "90% of the check-in window has passed (e.g. every 10 days → due soon after 9 days).",
   },
   {
     variant: "needs_active_goals",
@@ -141,15 +141,25 @@ export function formatCheckInFrequencySummary(standards: WorkplaceStandards): st
   return `Every ${value} ${unit}`;
 }
 
-export function formatGracePeriodSummary(days: number): string {
-  if (days === 0) return "None";
-  return days === 1 ? "1 day" : `${days} days`;
-}
-
 export function frequencyToDays(value: number, unit: CheckInFrequencyUnit): number {
   if (unit === "weeks") return value * 7;
   if (unit === "months") return value * 30;
   return value;
+}
+
+/** Day count when a check-in becomes "due soon" (90% of the schedule window). */
+export function checkInDueSoonStartDays(frequencyDays: number): number {
+  if (frequencyDays <= 1) return 1;
+  return Math.max(1, Math.ceil(frequencyDays * 0.9));
+}
+
+export function formatDueSoonThresholdSummary(standards: WorkplaceStandards): string {
+  const frequencyDays = frequencyToDays(
+    standards.checkInFrequencyValue,
+    standards.checkInFrequencyUnit,
+  );
+  const start = checkInDueSoonStartDays(frequencyDays);
+  return start === 1 ? "Due soon after 1 day" : `Due soon after ${start} days`;
 }
 
 export function formatRequiredTemplateSummary(templateTitle: string | null | undefined): string {
