@@ -5971,6 +5971,188 @@ input {
   }
 }
 
+/* Desktop web: readable type on Team (iPad/touch keeps compact roster) */
+@media (min-width: 961px) and (pointer: fine) {
+  .enterprise-team-list-title {
+    font-size: 1.0625rem;
+  }
+
+  .enterprise-team-list-search,
+  .enterprise-team-list-add-btn,
+  .enterprise-team-pending-chip,
+  .enterprise-team-role-filter select {
+    font-size: 0.875rem;
+  }
+
+  .enterprise-team-stat-card {
+    padding: 0.85rem 0.9rem;
+    min-height: 4.35rem;
+  }
+
+  .enterprise-team-stat-title {
+    font-size: 0.875rem;
+  }
+
+  .enterprise-team-stat-sub,
+  .enterprise-team-stat-copy span,
+  .enterprise-team-stat-copy--templates > span:not(.enterprise-team-stat-templates-title) {
+    font-size: 0.8125rem;
+  }
+
+  .enterprise-team-stat-copy--templates .enterprise-team-stat-templates-title {
+    font-size: 0.9375rem;
+  }
+
+  .enterprise-team-roster-title {
+    font-size: 1.0625rem;
+  }
+
+  .enterprise-team-roster-head {
+    padding: 0.65rem 0.85rem;
+  }
+
+  .enterprise-team-roster-standards-bar {
+    padding: 0.45rem 0.85rem;
+  }
+
+  .enterprise-team-roster-standards-kicker,
+  .enterprise-overview-kicker {
+    font-size: 0.6875rem;
+  }
+
+  .enterprise-team-roster-standards-line {
+    font-size: 0.8125rem;
+  }
+
+  .enterprise-team-roster-standards-manage,
+  .enterprise-overview-manage-standards-btn {
+    font-size: 0.75rem;
+    padding: 0.28rem 0.5rem;
+  }
+
+  .enterprise-team-roster-table-head {
+    font-size: 0.6875rem;
+    padding: 0.45rem 0.85rem;
+  }
+
+  .enterprise-team-roster-card {
+    padding: 0.55rem 0.85rem;
+    min-height: 3.25rem;
+    gap: 0.45rem;
+  }
+
+  .enterprise-team-roster-avatar {
+    width: 34px;
+    height: 34px;
+    font-size: 0.8125rem;
+  }
+
+  .enterprise-team-roster-name {
+    font-size: 0.875rem;
+  }
+
+  .enterprise-team-roster-role-pill {
+    font-size: 0.6875rem;
+    padding: 0.1rem 0.4rem;
+  }
+
+  .enterprise-team-roster-metric-primary,
+  .enterprise-team-roster-overall {
+    font-size: 0.8125rem;
+  }
+
+  .enterprise-team-roster-metric-secondary,
+  .enterprise-team-roster-legend-item,
+  .enterprise-team-roster-legend-sep {
+    font-size: 0.75rem;
+  }
+
+  .enterprise-team-roster-legend {
+    padding: 0.55rem 1rem 0.65rem;
+  }
+
+  .enterprise-standards-badge {
+    font-size: 0.625rem;
+    padding: 0.2rem 0.5rem;
+  }
+
+  .enterprise-team-profile-email,
+  .enterprise-team-profile-reports,
+  .enterprise-team-profile-tab,
+  .enterprise-team-profile-back {
+    font-size: 0.875rem;
+  }
+
+  .enterprise-team-profile-active-badge {
+    font-size: 0.75rem;
+  }
+
+  .enterprise-team-role-badge {
+    font-size: 0.75rem;
+  }
+
+  .enterprise-overview-panel-head {
+    padding: 0.55rem 0.85rem;
+  }
+
+  .enterprise-overview-panel-meta {
+    font-size: 0.75rem;
+  }
+
+  .enterprise-overview-panel-title {
+    font-size: 0.875rem;
+  }
+
+  .enterprise-overview-panel-sub {
+    font-size: 0.8125rem;
+  }
+
+  .enterprise-overview-metric-grid {
+    padding: 0.55rem 0.85rem 0.65rem;
+    gap: 0.45rem;
+  }
+
+  .enterprise-overview-metric-card {
+    padding: 0.5rem 0.55rem;
+  }
+
+  .enterprise-overview-metric-icon {
+    width: 1.375rem;
+    height: 1.375rem;
+  }
+
+  .enterprise-overview-metric-icon svg {
+    width: 13px;
+    height: 13px;
+  }
+
+  .enterprise-overview-metric-label,
+  .enterprise-overview-standards-column-label {
+    font-size: 0.6875rem;
+  }
+
+  .enterprise-overview-metric-value,
+  .enterprise-overview-metric-value-muted,
+  .enterprise-overview-standards-column-value,
+  .enterprise-overview-panel-error {
+    font-size: 0.8125rem;
+  }
+
+  .enterprise-overview-metric-sub,
+  .enterprise-overview-status-chip {
+    font-size: 0.6875rem;
+  }
+
+  .enterprise-overview-standards-columns {
+    padding: 0.55rem 0.85rem 0.65rem;
+  }
+
+  .enterprise-overview-standards-guidance,
+  .enterprise-overview-standards-action-link {
+    font-size: 0.75rem;
+  }
+}
+
 .enterprise-team-section--coming-soon {
   background: #f8fafc;
   border-color: #e2e8f0;

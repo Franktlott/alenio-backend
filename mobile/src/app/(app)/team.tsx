@@ -242,8 +242,11 @@ export default function TeamScreen() {
   const myRole = currentMembership?.role;
   const myId = session?.user?.id ?? "";
   const isOwner = myRole === "owner" || myRole === "team_leader";
-  const canViewMemberProfile = (targetUserId: string) =>
-    !myId || targetUserId === myId || myRole === "owner" || myRole === "team_leader";
+  const canViewMemberProfile = (targetUserId: string, targetRole: string) => {
+    if (!myId || targetUserId === myId) return true;
+    if (targetRole === "owner") return false;
+    return myRole === "owner" || myRole === "team_leader";
+  };
 
   const [uploadingTeamImage, setUploadingTeamImage] = useState(false);
   const [photoMenuOpen, setPhotoMenuOpen] = useState(false);
@@ -831,7 +834,7 @@ export default function TeamScreen() {
               ? memberStandardsBadges(compliance, stats?.daysSinceLastOneOnOne)
               : [];
             const isCurrentUser = item.userId === myId;
-            const canView = canViewMemberProfile(item.userId);
+            const canView = canViewMemberProfile(item.userId, item.role);
             const rowStyle = {
               flexDirection: "row" as const,
               alignItems: "center" as const,

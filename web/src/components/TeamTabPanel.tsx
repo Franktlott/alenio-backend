@@ -414,8 +414,14 @@ function canOpenMemberRow(meRole: string, m: WebTeamMemberRow): boolean {
   return true;
 }
 
-function canViewMemberProfile(meRole: string, targetUserId: string, myId: string): boolean {
+function canViewMemberProfile(
+  meRole: string,
+  targetUserId: string,
+  myId: string,
+  targetRole: string,
+): boolean {
   if (!myId || targetUserId === myId) return true;
+  if (targetRole === "owner") return false;
   return meRole === "owner" || meRole === "team_leader";
 }
 
@@ -506,11 +512,15 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
     };
   }, [showInitialLoading, onWorkspaceSwitchLoading]);
 
+  const sortedMembers = useMemo(() => [...(teamDetail?.members ?? [])].sort(memberSort), [teamDetail?.members]);
+
   useEffect(() => {
-    if (!teamDetail || !myId) return;
-    if (canViewMemberProfile(teamDetail.myRole, selectedMemberId ?? myId, myId)) return;
+    if (!teamDetail || !myId || !selectedMemberId) return;
+    const selected = sortedMembers.find((m) => m.userId === selectedMemberId);
+    if (!selected) return;
+    if (canViewMemberProfile(teamDetail.myRole, selected.userId, myId, selected.role)) return;
     setSelectedMemberId(myId);
-  }, [teamDetail, myId, selectedMemberId]);
+  }, [teamDetail, myId, selectedMemberId, sortedMembers]);
 
   useEffect(() => {
     if (!teamDetail || !myId) return;
@@ -524,8 +534,6 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
     return d;
   }, []);
 
-
-  const sortedMembers = useMemo(() => [...(teamDetail?.members ?? [])].sort(memberSort), [teamDetail?.members]);
 
   useEffect(() => {
     setMemberSearch("");
@@ -923,7 +931,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                   {filteredMembers.map((m) => {
                     const isSelf = m.userId === myId;
                     const isSelected = m.userId === selectedMemberId;
-                    const canView = canViewMemberProfile(myRole, m.userId, myId);
+                    const canView = canViewMemberProfile(myRole, m.userId, myId, m.role);
                     const displayName = m.user.name ?? m.user.email ?? "Member";
                     const stats = memberStats?.[m.userId];
                     const statsReady = memberStats !== null;
@@ -1023,7 +1031,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
         </aside>
 
         <main className="enterprise-team-split-detail">
-          {selectedMember && canViewMemberProfile(myRole, selectedMember.userId, myId) ? (
+          {selectedMember && canViewMemberProfile(myRole, selectedMember.userId, myId, selectedMember.role) ? (
             <TeamMemberProfilePanel
               key={selectedMember.userId}
               teamId={teamDetail.id}
