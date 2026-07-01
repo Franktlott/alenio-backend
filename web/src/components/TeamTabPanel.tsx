@@ -944,13 +944,11 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                             )}
                           </span>
                           <span className="enterprise-team-roster-member-copy">
-                            <span className="enterprise-team-roster-headline">
-                              <span className="enterprise-team-roster-name">
-                                {displayName}
-                                {isSelf ? " (you)" : ""}
-                              </span>
-                              <span className={rolePillClass(m.role)}>{roleLabel(m.role)}</span>
+                            <span className="enterprise-team-roster-name">
+                              {displayName}
+                              {isSelf ? " (you)" : ""}
                             </span>
+                            <span className={rolePillClass(m.role)}>{roleLabel(m.role)}</span>
                           </span>
                         </span>
 
