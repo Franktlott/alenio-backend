@@ -2445,6 +2445,60 @@ input {
   padding-right: 0.15rem;
 }
 
+@media (min-width: 961px) {
+  .enterprise-team-split-list {
+    overflow: hidden;
+  }
+
+  .enterprise-team-list-header,
+  .enterprise-team-stat-row,
+  .enterprise-team-pending-panel {
+    flex-shrink: 0;
+  }
+
+  .enterprise-team-roster-section {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .enterprise-team-roster-panel {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .enterprise-team-roster-head,
+  .enterprise-team-roster-standards-bar {
+    flex-shrink: 0;
+  }
+
+  .enterprise-team-roster-table {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .enterprise-team-roster-table-head {
+    flex-shrink: 0;
+  }
+
+  .enterprise-team-roster {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  .enterprise-team-roster-legend {
+    margin-top: auto;
+    flex-shrink: 0;
+  }
+}
+
 .enterprise-team-split-detail {
   background: #fff;
   border: 1px solid var(--border);
