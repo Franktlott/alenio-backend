@@ -77,10 +77,10 @@ function rolePillClass(role: string): string {
 type RosterTone = "ok" | "warn" | "bad" | "muted";
 
 function formatRosterCheckInPrimary(days: number | null | undefined): string {
-  if (days == null) return "No check-in";
+  if (days == null) return "None";
   if (days === 0) return "Today";
-  if (days === 1) return "1 day ago";
-  return `${days} days ago`;
+  if (days === 1) return "1 day";
+  return `${days} days`;
 }
 
 function rosterCheckInColumn(
@@ -105,7 +105,7 @@ function rosterCheckInColumn(
   }
   if (compliance.checkInStatus === "overdue") {
     if (daysSinceCheckIn == null) {
-      return { tone: "bad", primary: "No check-in" };
+      return { tone: "bad", primary: "None" };
     }
     return { tone: "bad", primary: "Overdue" };
   }
@@ -117,7 +117,7 @@ function rosterGoalsColumn(
   activeGoals: number,
 ): { tone: RosterTone; primary: string } {
   if (!standards.goalsRequired || standards.minimumActiveGoals <= 0) {
-    return { tone: "muted", primary: "— Optional" };
+    return { tone: "muted", primary: "Optional" };
   }
   const min = standards.minimumActiveGoals;
   const met = activeGoals >= min;
@@ -137,7 +137,7 @@ function rosterOverallStatus(
 
   if (standards.checkInRequired) {
     if (compliance.checkInStatus === "overdue") {
-      if (daysSinceCheckIn == null) return { tone: "bad", label: "Missing check-in" };
+      if (daysSinceCheckIn == null) return { tone: "bad", label: "Missing" };
       return { tone: "bad", label: "Overdue" };
     }
     if (compliance.checkInStatus === "due_soon") {
@@ -158,7 +158,7 @@ function rosterOverallStatus(
 
 function IconRosterCheck() {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden>
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden>
       <path d="M20 6 9 17l-5-5" />
     </svg>
   );
@@ -175,7 +175,7 @@ function IconRosterClock() {
 
 function IconRosterX() {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden>
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden>
       <line x1="18" y1="6" x2="6" y2="18" />
       <line x1="6" y1="6" x2="18" y2="18" />
     </svg>
