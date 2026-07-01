@@ -58,6 +58,7 @@ import { publicChecklistHubsRouter } from "./routes/public-checklist-hubs";
 import { publicChecklistLocationsRouter } from "./routes/public-checklist-locations";
 import { checklistLocationsRouter } from "./routes/checklist-locations";
 import { isValidTimeZone } from "./lib/timezone";
+import { redeemPendingInvitesForUser } from "./lib/team-invites";
 
 syncPrismaSchemaOnStartup();
 const oneOnOneSchemaReady = ensureOneOnOneSchema(prisma);
@@ -182,11 +183,9 @@ app.use("*", async (c, next) => {
     });
 
     if (user.email) {
-      try {
-        await redeemPendingInvitesForUser(user.id, user.email);
-      } catch (err) {
+      void redeemPendingInvitesForUser(user.id, user.email).catch((err) => {
         console.error("[auth-middleware] redeemPendingInvitesForUser failed:", err);
-      }
+      });
     }
   }
   await next();

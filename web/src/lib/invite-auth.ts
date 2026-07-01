@@ -1,4 +1,4 @@
-import { fetchWebMe, fetchWebTeams, redeemTeamInvite } from "./api";
+import { fetchWebMe, redeemTeamInvite } from "./api";
 import { syncBackendUser } from "./auth-client";
 import { setMobileHandoffEmail } from "./app-links";
 import { setPersistedEnterpriseTeamId } from "./enterprise-selected-team";
@@ -31,12 +31,6 @@ export async function finishPostAuthNavigation(): Promise<string> {
       /* pending invites may already be redeemed by email on the server */
     }
     clearPendingInviteToken();
-  }
-
-  try {
-    await fetchWebTeams();
-  } catch {
-    /* chat will show join/create if needed */
   }
 
   if (isMobileBrowser()) {

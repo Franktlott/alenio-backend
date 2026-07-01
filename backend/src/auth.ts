@@ -152,16 +152,7 @@ export async function getSessionFromHeaders(headers: Headers): Promise<{ user: A
     let email = claims.email ?? null;
     let name = claims.name ?? claims.preferred_username ?? null;
     let image = claims.picture ?? null;
-    let expiresAt = claims.exp ? new Date(claims.exp * 1000) : null;
-    // Neon session is the most reliable source of identity/profile across token variants.
-    const neon = await getSessionFromNeon(token);
-    if (neon?.user.id) {
-      userId = neon.user.id;
-      email = neon.user.email ?? email;
-      name = neon.user.name ?? name;
-      image = neon.user.image ?? image;
-      expiresAt = neon.expiresAt ?? expiresAt;
-    }
+    const expiresAt = claims.exp ? new Date(claims.exp * 1000) : null;
     return {
       user: {
         id: userId,
