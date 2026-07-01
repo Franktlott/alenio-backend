@@ -739,10 +739,12 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
 
           <div className={`enterprise-team-stat-row${showOwnerManageRow ? " enterprise-team-stat-row--three" : " enterprise-team-stat-row--one"}`}>
             <div className="enterprise-team-stat-card enterprise-team-stat-card--actions">
-              <span className="enterprise-team-stat-icon" aria-hidden><IconStatActions /></span>
-              <span className="enterprise-team-stat-copy">
-                <strong>{openActionCount}</strong>
-                <span>Open actions</span>
+              <span className="enterprise-team-stat-icon enterprise-team-stat-icon--actions" aria-hidden>
+                <IconStatActions />
+              </span>
+              <span className="enterprise-team-stat-copy enterprise-team-stat-copy--stat">
+                <span className="enterprise-team-stat-title">Open actions</span>
+                <span className="enterprise-team-stat-sub">{openActionCount} open</span>
               </span>
             </div>
             {showOwnerManageRow ? (
@@ -754,12 +756,9 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                 <span className="enterprise-team-stat-icon enterprise-team-stat-icon--templates" aria-hidden>
                   <IconTemplateOneOne />
                 </span>
-                <span className="enterprise-team-stat-copy enterprise-team-stat-copy--templates">
-                  <span className="enterprise-team-stat-templates-title">Check-in templates</span>
-                  <span>Manage forms</span>
-                </span>
-                <span className="enterprise-team-stat-chevron" aria-hidden>
-                  ›
+                <span className="enterprise-team-stat-copy enterprise-team-stat-copy--stat">
+                  <span className="enterprise-team-stat-title">Check-in templates</span>
+                  <span className="enterprise-team-stat-sub">Manage forms</span>
                 </span>
               </button>
             ) : null}
@@ -772,12 +771,9 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                 <span className="enterprise-team-stat-icon enterprise-team-stat-icon--standards" aria-hidden>
                   <IconWorkplaceStandards />
                 </span>
-                <span className="enterprise-team-stat-copy enterprise-team-stat-copy--templates">
-                  <span className="enterprise-team-stat-templates-title">Workplace Standards</span>
-                  <span>Manage expectations</span>
-                </span>
-                <span className="enterprise-team-stat-chevron" aria-hidden>
-                  ›
+                <span className="enterprise-team-stat-copy enterprise-team-stat-copy--stat">
+                  <span className="enterprise-team-stat-title">Workplace Standards</span>
+                  <span className="enterprise-team-stat-sub">Manage expectations</span>
                 </span>
               </button>
             ) : null}
