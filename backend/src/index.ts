@@ -60,15 +60,50 @@ import { checklistLocationsRouter } from "./routes/checklist-locations";
 import { isValidTimeZone } from "./lib/timezone";
 import { redeemPendingInvitesForUser } from "./lib/team-invites";
 
-syncPrismaSchemaOnStartup();
-const oneOnOneSchemaReady = ensureOneOnOneSchema(prisma);
-const developmentPlanSchemaReady = ensureDevelopmentPlanSchema(prisma);
-const teamInviteSchemaReady = ensureTeamInviteSchema(prisma);
-const recurrenceSeriesSchemaReady = ensureRecurrenceSeriesSchema(prisma);
-const userTimezoneSchemaReady = ensureUserTimezoneSchema(prisma);
-const calendarApprovalSchemaReady = ensureCalendarApprovalSchema(prisma);
-const workplaceStandardsSchemaReady = ensureWorkplaceStandardsSchema(prisma);
-const calendarConnectionSchemaReady = ensureCalendarConnectionSchema(prisma);
+const isProduction = env.NODE_ENV === "production";
+
+/** Railway preDeploy already runs `prisma db push`; avoid blocking process start in prod. */
+if (!isProduction) {
+  syncPrismaSchemaOnStartup();
+}
+
+/** Dev-only safety net when db push was skipped; prod schema comes from preDeploy + prisma/schema.prisma. */
+const startupSchemaReady = isProduction
+  ? Promise.resolve()
+  : Promise.all([
+      ensureOneOnOneSchema(prisma),
+      ensureDevelopmentPlanSchema(prisma),
+      ensureTeamInviteSchema(prisma),
+      ensureRecurrenceSeriesSchema(prisma),
+      ensureUserTimezoneSchema(prisma),
+      ensureCalendarApprovalSchema(prisma),
+      ensureWorkplaceStandardsSchema(prisma),
+      ensureCalendarConnectionSchema(prisma),
+    ]);
+
+function isFastPublicPath(path: string): boolean {
+  return path === "/health";
+}
+
+function buildHealthPayload() {
+  let authProjectHint: string | null = null;
+  try {
+    authProjectHint = new URL(env.NEON_AUTH_URL).hostname;
+  } catch {
+    authProjectHint = null;
+  }
+  return {
+    status: "ok",
+    database: getDatabasePublicSummary(),
+    buildMarker: env.BACKEND_BUILD_MARKER,
+    storageProvider: "firebase",
+    storageConfigured: isFirebaseStorageConfigured(),
+    senecaConfigured: senecaAvailable(),
+    senecaDiagnostics: senecaDiagnostics(),
+    /** Compare with EXPO_PUBLIC_NEON_AUTH_URL from the app — hostnames must be the same Neon Auth project. */
+    neonAuthHostname: authProjectHint,
+  };
+}
 
 type Variables = {
   user: AppUser | null;
@@ -84,6 +119,9 @@ type Variables = {
 
 const app = new Hono<{ Variables: Variables }>();
 const BACKEND_BUILD_MARKER = env.BACKEND_BUILD_MARKER;
+
+// Fast health for Railway — must not wait on schema/auth startup work.
+app.get("/health", (c) => c.json(buildHealthPayload()));
 
 // CORS middleware - validates origin against allowlist
 const allowedPatterns = [
@@ -119,23 +157,29 @@ app.use(
 // Logging
 app.use("*", logger());
 
-// Ensure 1:1 tables exist before handling API requests (fixes 500 when db push was skipped).
-app.use("*", async (_c, next) => {
-  await oneOnOneSchemaReady;
-  await developmentPlanSchemaReady;
-  await teamInviteSchemaReady;
-  await recurrenceSeriesSchemaReady;
-  await userTimezoneSchemaReady;
-  await workplaceStandardsSchemaReady;
-  await calendarConnectionSchemaReady;
+async function waitForStartupSchema(c: { req: { path: string } }, next: () => Promise<void>) {
+  if (isFastPublicPath(c.req.path)) {
+    await next();
+    return;
+  }
+  await startupSchemaReady;
   await next();
-});
+}
+
+// Ensure dev-only schema patches before API traffic (prod uses Railway preDeploy db push).
+app.use("/api/*", waitForStartupSchema);
+app.use("/web/*", waitForStartupSchema);
+app.use("/admin/*", waitForStartupSchema);
 
 // Stripe webhooks need the raw body for signature verification (must run before JSON parsers on this path only — no global body parser).
 app.post("/api/webhooks/stripe", handleStripeWebhook);
 
 // Auth session middleware - populates user/session for all routes
 app.use("*", async (c, next) => {
+  if (isFastPublicPath(c.req.path)) {
+    await next();
+    return;
+  }
   const session = await getSessionFromHeaders(c.req.raw.headers);
   if (!session) {
     c.set("user", null);
@@ -189,27 +233,6 @@ app.use("*", async (c, next) => {
     }
   }
   await next();
-});
-
-// Health check endpoint (database = which store this API instance uses; no secrets)
-app.get("/health", (c) => {
-  let authProjectHint: string | null = null;
-  try {
-    authProjectHint = new URL(env.NEON_AUTH_URL).hostname;
-  } catch {
-    authProjectHint = null;
-  }
-  return c.json({
-    status: "ok",
-    database: getDatabasePublicSummary(),
-    buildMarker: BACKEND_BUILD_MARKER,
-    storageProvider: "firebase",
-    storageConfigured: isFirebaseStorageConfigured(),
-    senecaConfigured: senecaAvailable(),
-    senecaDiagnostics: senecaDiagnostics(),
-    /** Compare with EXPO_PUBLIC_NEON_AUTH_URL from the app — hostnames must be the same Neon Auth project. */
-    neonAuthHostname: authProjectHint,
-  });
 });
 
 /** Browsers opening the API port directly see a hint (API has no HTML app at `/`). */
