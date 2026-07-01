@@ -15,6 +15,7 @@ import {
   type MemberStandardsCompliance,
   type WorkplaceStandards,
 } from "@/lib/workplace-standards";
+import { StandardsStatusKey } from "@/components/StandardsStatusKey";
 
 type Props = {
   teamId: string;
@@ -322,6 +323,7 @@ export function ProfileOverviewTab({
             </View>
           </>
         ) : null}
+        <StandardsStatusKey />
       </View>
 
       <View style={{ paddingHorizontal: 14, paddingVertical: 10 }}>

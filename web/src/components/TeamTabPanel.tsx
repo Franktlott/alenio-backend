@@ -9,6 +9,7 @@ import { TeamMemberManageModal } from "./TeamMemberManageModal";
 import { TeamMemberProfilePanel } from "./TeamMemberProfilePanel";
 import { OneOnOneTemplatesModal } from "./OneOnOneTemplatesModal";
 import { WorkplaceStandardsModal, mergeWorkplaceStandards } from "./WorkplaceStandardsModal";
+import { StandardsStatusKey } from "./StandardsStatusKey";
 import {
   approveTeamJoinRequest,
   fetchPendingCalendarEvents,
@@ -35,10 +36,7 @@ import {
 import {
   formatCheckInFrequencySummary,
   formatDueSoonThresholdSummary,
-  STANDARDS_BADGE_LEGEND,
-  standardsBadgeClassName,
   type MemberStandardsCompliance,
-  type StandardsBadgeVariant,
   type WorkplaceStandards,
 } from "../lib/workplace-standards";
 
@@ -74,34 +72,6 @@ function rolePillClass(role: string): string {
   if (role === "team_leader") return "enterprise-team-roster-role-pill enterprise-team-roster-role-pill--leader";
   if (role === "admin") return "enterprise-team-roster-role-pill enterprise-team-roster-role-pill--admin";
   return "enterprise-team-roster-role-pill";
-}
-
-const STANDARDS_STATUS_KEY_ORDER: StandardsBadgeVariant[] = [
-  "on_track",
-  "check_in_due_soon",
-  "overdue_check_in",
-  "no_check_in",
-  "needs_active_goals",
-];
-
-function StandardsStatusKey() {
-  const items = STANDARDS_STATUS_KEY_ORDER.map((variant) =>
-    STANDARDS_BADGE_LEGEND.find((entry) => entry.variant === variant),
-  ).filter((entry): entry is (typeof STANDARDS_BADGE_LEGEND)[number] => Boolean(entry));
-
-  return (
-    <details className="enterprise-standards-status-key">
-      <summary>Status key</summary>
-      <ul>
-        {items.map((item) => (
-          <li key={item.variant}>
-            <span className={standardsBadgeClassName(item.variant)}>{item.label}</span>
-            <span>{item.description}</span>
-          </li>
-        ))}
-      </ul>
-    </details>
-  );
 }
 
 type RosterTone = "ok" | "warn" | "bad" | "muted";

@@ -91,6 +91,39 @@ export function formatCheckInFrequencySummary(standards: WorkplaceStandards): st
   return `Every ${value} ${unit}`;
 }
 
+export const STANDARDS_BADGE_LEGEND: ReadonlyArray<{
+  variant: StandardsBadgeVariant;
+  label: string;
+  description: string;
+}> = [
+  {
+    variant: "no_check_in",
+    label: "No check-in",
+    description: "No published check-in on record (or none using the required template).",
+  },
+  {
+    variant: "overdue_check_in",
+    label: "Overdue check-in",
+    description: "Last check-in is past the workspace check-in schedule.",
+  },
+  {
+    variant: "check_in_due_soon",
+    label: "Check-in due soon",
+    description: "80% of the check-in window has passed (e.g. every 10 days → due soon after 8 days).",
+  },
+  {
+    variant: "needs_active_goals",
+    label: "Needs active goals",
+    description:
+      "Active goals are below the workspace minimum. Inactive goals (30+ days without progress) do not count toward the minimum.",
+  },
+  {
+    variant: "on_track",
+    label: "On track",
+    description: "Meets check-in and goal requirements.",
+  },
+];
+
 export function buildMemberStandardsBadgeItems(input: {
   checkInStatus: MemberStandardsCompliance["checkInStatus"];
   checkInActionText: string;

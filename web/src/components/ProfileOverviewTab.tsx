@@ -13,6 +13,7 @@ import {
   type MemberStandardsCompliance,
   type WorkplaceStandards,
 } from "../lib/workplace-standards";
+import { StandardsStatusKey } from "./StandardsStatusKey";
 import { oneOnOneDisplayDateMs, oneOnOnePublishedAt } from "../lib/one-on-one-dates";
 
 type Props = {
@@ -385,6 +386,8 @@ export function ProfileOverviewTab({
             )}
           </div>
         </div>
+
+        <StandardsStatusKey />
       </section>
 
       <section className="enterprise-overview-panel enterprise-overview-goals-panel">

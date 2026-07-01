@@ -3301,6 +3301,10 @@ input {
   background: #fafbff;
 }
 
+.enterprise-overview-standards-panel .enterprise-standards-status-key {
+  margin-top: 0.75rem;
+}
+
 .enterprise-standards-status-key {
   margin: 0 0 0.75rem;
   padding: 0.55rem 0.75rem;

@@ -74,7 +74,7 @@ export const STANDARDS_BADGE_LEGEND: ReadonlyArray<{
   {
     variant: "check_in_due_soon",
     label: "Check-in due soon",
-    description: "90% of the check-in window has passed (e.g. every 10 days → due soon after 9 days).",
+    description: "80% of the check-in window has passed (e.g. every 10 days → due soon after 8 days).",
   },
   {
     variant: "needs_active_goals",
@@ -238,10 +238,10 @@ export function frequencyToDays(value: number, unit: CheckInFrequencyUnit): numb
   return value;
 }
 
-/** Day count when a check-in becomes "due soon" (90% of the schedule window). */
+/** Day count when a check-in becomes "due soon" (80% of the schedule window). */
 export function checkInDueSoonStartDays(frequencyDays: number): number {
   if (frequencyDays <= 1) return 1;
-  return Math.max(1, Math.ceil(frequencyDays * 0.9));
+  return Math.max(1, Math.ceil(frequencyDays * 0.8));
 }
 
 function pluralize(count: number, singular: string, plural = `${singular}s`): string {

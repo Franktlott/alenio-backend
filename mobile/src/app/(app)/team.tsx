@@ -40,6 +40,7 @@ import {
   standardsBadgeColors,
   type MemberStatsPayload,
 } from "@/lib/workplace-standards";
+import { StandardsStatusKey } from "@/components/StandardsStatusKey";
 import { useTeamStore } from "@/lib/state/team-store";
 import { useSession } from "@/lib/auth/use-session";
 import QRCode from "react-native-qrcode-svg";
@@ -807,6 +808,10 @@ export default function TeamScreen() {
                 </Pressable>
               </View>
             ) : null}
+          </View>
+
+          <View style={{ paddingHorizontal: 16, paddingBottom: 10 }}>
+            <StandardsStatusKey />
           </View>
 
           {/* Member rows */}
