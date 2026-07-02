@@ -1017,10 +1017,10 @@ teamsRouter.post("/:teamId/briefings/:briefingId/complete", zValidator("json", b
   if (!result.ok) {
     if (result.code === "NOT_FOUND") return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
     if (result.code === "ALREADY_COMPLETED") {
-      return c.json({ error: { message: "Already completed", code: "ALREADY_COMPLETED" } }, 409);
+      return c.json({ error: { message: "This name and initials were already recorded", code: "ALREADY_COMPLETED" } }, 409);
     }
-    if (result.code === "SIGNATURE_REQUIRED" || result.code === "INITIALS_REQUIRED") {
-      return c.json({ error: { message: "Initials or signature required", code: "VALIDATION_ERROR" } }, 400);
+    if (result.code === "SIGNATURE_REQUIRED" || result.code === "INITIALS_REQUIRED" || result.code === "NAME_REQUIRED") {
+      return c.json({ error: { message: "Name, initials, or signature required", code: "VALIDATION_ERROR" } }, 400);
     }
     return c.json({ error: { message: "Forbidden", code: "FORBIDDEN" } }, 403);
   }

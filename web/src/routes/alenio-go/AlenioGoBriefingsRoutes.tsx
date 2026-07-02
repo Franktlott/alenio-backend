@@ -127,10 +127,9 @@ function BriefingReviewPage() {
             setError(null);
             try {
               await postBriefingComplete(teamId, briefing.id, payload);
-              const refreshed = await fetchTeamBriefing(teamId, briefing.id);
-              setBriefing(refreshed.briefing);
             } catch (err) {
               setError(err instanceof Error ? err.message : "Could not complete briefing.");
+              throw err;
             } finally {
               setBusy(false);
             }
@@ -162,7 +161,7 @@ function BriefingAdminPage() {
   return (
     <GoBackendModuleShell
       title={`Tracking · ${data.briefing.title}`}
-      subtitle="See who has reviewed this briefing on accounts and Alenio Go devices."
+      subtitle="See who has signed this briefing with their name and initials."
       tone="amber"
     >
       <div className="go-backend-module-panel go-backend-panel-card">

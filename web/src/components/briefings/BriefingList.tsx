@@ -49,7 +49,7 @@ export function BriefingList({ briefings, canManage, reviewBasePath, adminBasePa
               to={`${reviewBasePath}/${b.id}`}
               className="enterprise-alenio-go-link-btn briefing-card-btn"
             >
-              {b.status === "reviewed" ? "View briefing" : "Review Briefing"}
+              {b.status === "overdue" ? "Review Briefing" : "Review & Sign"}
             </Link>
             {canManage && adminBasePath ? (
               <Link to={`${adminBasePath}/${b.id}/admin`} className="briefing-card-admin-link">

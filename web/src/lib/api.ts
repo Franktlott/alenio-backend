@@ -420,31 +420,15 @@ export function fetchTeamBriefing(teamId: string, briefingId: string) {
 }
 
 export type BriefingAdminStats = {
-  totalAssigned: number;
-  reviewed: number;
-  pending: number;
-  overdue: number;
-  completionPct: number;
-  users: Array<{
-    completionId: string | null;
-    userId: string;
-    name: string;
-    email: string;
-    status: BriefingStatus;
-    completedAt: string | null;
-    initials: string | null;
-    source: "account";
-  }>;
-  kioskCompletions: Array<{
+  signed: number;
+  overdue: boolean;
+  completions: Array<{
     completionId: string;
-    userId: null;
     name: string;
-    email: null;
-    status: BriefingStatus;
     completedAt: string;
     initials: string;
     deviceId: string | null;
-    source: "kiosk";
+    source: "web" | "kiosk";
   }>;
 };
 

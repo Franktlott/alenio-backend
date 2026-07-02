@@ -286,7 +286,10 @@ publicGoLinkRouter.post("/briefings/:briefingId/complete", zValidator("json", pu
       if (result.code === "FORBIDDEN") return c.json({ error: { message: "Device not approved", code: "FORBIDDEN" } }, 403);
       if (result.code === "NOT_FOUND") return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
       if (result.code === "ALREADY_COMPLETED") {
-        return c.json({ error: { message: "Already completed", code: "ALREADY_COMPLETED" } }, 409);
+        return c.json({ error: { message: "This name and initials were already recorded", code: "ALREADY_COMPLETED" } }, 409);
+      }
+      if (result.code === "NAME_REQUIRED") {
+        return c.json({ error: { message: "Name is required", code: "VALIDATION_ERROR" } }, 400);
       }
       return c.json({ error: { message: "Initials or signature required", code: "VALIDATION_ERROR" } }, 400);
     }

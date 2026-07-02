@@ -53,16 +53,12 @@ function normalizeName(value: string | null | undefined): string {
 }
 
 export function buildCompletionKey(input: {
-  userId?: string | null;
-  deviceId?: string | null;
   initials: string;
   reviewerName?: string | null;
 }): string {
   const initials = normalizeInitials(input.initials);
-  if (input.userId) return `user:${input.userId}`;
-  const deviceId = input.deviceId?.trim() || "unknown";
-  const name = normalizeName(input.reviewerName);
-  return `kiosk:${deviceId}:${initials}:${name.toLowerCase()}`;
+  const name = normalizeName(input.reviewerName).toLowerCase();
+  return `signer:${name}:${initials}`;
 }
 
 export { canManageGoLoginRequests as canManageBriefings };
@@ -166,28 +162,17 @@ export async function listBriefingsForUser(teamId: string, userId: string) {
   const member = await assertTeamMember(teamId, userId);
   if (!member) return { ok: false as const, code: "FORBIDDEN" as const };
 
-  const [briefings, completions] = await Promise.all([
-    prisma.briefing.findMany({
-      where: { teamId },
-      orderBy: { publishedAt: "desc" },
-    }),
-    prisma.briefingCompletion.findMany({
-      where: { teamId, userId },
-      select: { briefingId: true, completedAt: true },
-    }),
-  ]);
+  const briefings = await prisma.briefing.findMany({
+    where: { teamId },
+    orderBy: { publishedAt: "desc" },
+  });
 
-  const completionByBriefing = new Map(completions.map((c) => [c.briefingId, c.completedAt]));
   const now = new Date();
 
   return {
     ok: true as const,
     briefings: briefings.map((b) =>
-      serializeBriefingRow(
-        b,
-        briefingStatus(b.dueAt, completionByBriefing.get(b.id) ?? null, now),
-        completionByBriefing.get(b.id) ?? null,
-      ),
+      serializeBriefingRow(b, briefingStatus(b.dueAt, null, now), null),
     ),
     canManage: isBriefingManagerRole(member.role),
   };
@@ -200,16 +185,12 @@ export async function getBriefingForUser(teamId: string, briefingId: string, use
   const briefing = await prisma.briefing.findFirst({ where: { id: briefingId, teamId } });
   if (!briefing) return { ok: false as const, code: "NOT_FOUND" as const };
 
-  const completion = await prisma.briefingCompletion.findFirst({
-    where: { briefingId, userId },
-  });
-
   return {
     ok: true as const,
     briefing: serializeBriefingRow(
       briefing,
-      briefingStatus(briefing.dueAt, completion?.completedAt ?? null),
-      completion?.completedAt ?? null,
+      briefingStatus(briefing.dueAt, null),
+      null,
     ),
     canManage: isBriefingManagerRole(member.role),
   };
@@ -230,6 +211,10 @@ export async function completeBriefingForUser(
 
   const initials = normalizeInitials(input.initials ?? "");
   const signatureData = input.signatureData?.trim() || null;
+  const reviewerName = normalizeName(input.reviewerName || userName);
+  if (!reviewerName) {
+    return { ok: false as const, code: "NAME_REQUIRED" as const };
+  }
   if (briefing.requireSignature && !signatureData) {
     return { ok: false as const, code: "SIGNATURE_REQUIRED" as const };
   }
@@ -240,7 +225,7 @@ export async function completeBriefingForUser(
     return { ok: false as const, code: "VALIDATION" as const };
   }
 
-  const completionKey = buildCompletionKey({ userId, initials: initials || "OK" });
+  const completionKey = buildCompletionKey({ initials: initials || "OK", reviewerName });
 
   try {
     const completion = await prisma.briefingCompletion.create({
@@ -251,7 +236,7 @@ export async function completeBriefingForUser(
         userId,
         initials: initials || "—",
         signatureData,
-        reviewerName: userName?.trim() || null,
+        reviewerName,
         documentUrl: briefing.documentUrl,
       },
     });
@@ -270,70 +255,31 @@ export async function getBriefingAdminStats(teamId: string, briefingId: string, 
   const briefing = await prisma.briefing.findFirst({ where: { id: briefingId, teamId } });
   if (!briefing) return { ok: false as const, code: "NOT_FOUND" as const };
 
-  const [members, completions] = await Promise.all([
-    prisma.teamMember.findMany({
-      where: { teamId },
-      select: {
-        userId: true,
-        user: { select: { id: true, name: true, email: true } },
-      },
-    }),
-    prisma.briefingCompletion.findMany({
-      where: { briefingId },
-      orderBy: { completedAt: "desc" },
-    }),
-  ]);
-
-  const now = new Date();
-  const userCompletion = new Map(
-    completions.filter((c) => c.userId).map((c) => [c.userId!, c]),
-  );
-  const kioskCompletions = completions.filter((c) => !c.userId);
-
-  const users = members.map((m) => {
-    const done = userCompletion.get(m.userId);
-    const status = briefingStatus(briefing.dueAt, done?.completedAt ?? null, now);
-    return {
-      completionId: done?.id ?? null,
-      userId: m.userId,
-      name: m.user.name,
-      email: m.user.email,
-      status,
-      completedAt: done?.completedAt.toISOString() ?? null,
-      initials: done?.initials ?? null,
-      source: "account" as const,
-    };
+  const completions = await prisma.briefingCompletion.findMany({
+    where: { briefingId },
+    orderBy: { completedAt: "desc" },
   });
 
-  const kioskRows = kioskCompletions.map((c) => ({
+  const signers = completions.map((c) => ({
     completionId: c.id,
-    userId: null,
-    name: c.reviewerName || "Floor associate",
-    email: null,
-    status: "reviewed" as BriefingStatus,
+    name: c.reviewerName || "Associate",
     completedAt: c.completedAt.toISOString(),
     initials: c.initials,
     deviceId: c.deviceId,
-    source: "kiosk" as const,
+    source: c.deviceId ? ("kiosk" as const) : ("web" as const),
   }));
 
-  const reviewedUserCount = users.filter((u) => u.status === "reviewed").length;
-  const pendingCount = users.filter((u) => u.status === "not_started").length;
-  const overdueCount = users.filter((u) => u.status === "overdue").length;
-  const totalAssigned = members.length;
+  const now = new Date();
+  const briefingDueStatus = briefingStatus(briefing.dueAt, null, now);
 
   return {
     ok: true as const,
     stats: {
-      totalAssigned,
-      reviewed: reviewedUserCount + kioskCompletions.length,
-      pending: pendingCount,
-      overdue: overdueCount,
-      completionPct: totalAssigned > 0 ? Math.round((reviewedUserCount / totalAssigned) * 100) : 0,
-      users,
-      kioskCompletions: kioskRows,
+      signed: completions.length,
+      overdue: briefingDueStatus === "overdue",
+      completions: signers,
     },
-    briefing: serializeBriefingRow(briefing, "reviewed", null),
+    briefing: serializeBriefingRow(briefing, briefingDueStatus, null),
   };
 }
 
@@ -364,18 +310,11 @@ export async function listPublicBriefings(hubToken: string, deviceId: string) {
   const reachable = await isGoDeviceApproved(team.id, deviceId);
   if (!reachable) return { ok: false as const, code: "FORBIDDEN" as const };
 
-  const [briefings, completions] = await Promise.all([
-    prisma.briefing.findMany({
-      where: { teamId: team.id },
-      orderBy: { publishedAt: "desc" },
-    }),
-    prisma.briefingCompletion.findMany({
-      where: { teamId: team.id, deviceId },
-      select: { briefingId: true, completedAt: true },
-    }),
-  ]);
+  const briefings = await prisma.briefing.findMany({
+    where: { teamId: team.id },
+    orderBy: { publishedAt: "desc" },
+  });
 
-  const completionByBriefing = new Map(completions.map((c) => [c.briefingId, c.completedAt]));
   const now = new Date();
 
   return {
@@ -383,7 +322,6 @@ export async function listPublicBriefings(hubToken: string, deviceId: string) {
     briefings: briefings.map((b) =>
       serializeBriefingRow(
         b,
-        // Kiosk list: due-date status only; each associate completes with their own initials.
         briefingStatus(b.dueAt, null, now),
         null,
       ),
@@ -401,16 +339,12 @@ export async function getPublicBriefing(hubToken: string, deviceId: string, brie
   const briefing = await prisma.briefing.findFirst({ where: { id: briefingId, teamId: team.id } });
   if (!briefing) return { ok: false as const, code: "NOT_FOUND" as const };
 
-  const completion = await prisma.briefingCompletion.findFirst({
-    where: { briefingId, deviceId },
-  });
-
   return {
     ok: true as const,
     briefing: serializeBriefingRow(
       briefing,
-      briefingStatus(briefing.dueAt, completion?.completedAt ?? null),
-      completion?.completedAt ?? null,
+      briefingStatus(briefing.dueAt, null),
+      null,
     ),
   };
 }
@@ -432,7 +366,10 @@ export async function completePublicBriefing(
 
   const initials = normalizeInitials(input.initials ?? "");
   const signatureData = input.signatureData?.trim() || null;
-  const reviewerName = normalizeName(input.reviewerName) || null;
+  const reviewerName = normalizeName(input.reviewerName);
+  if (!reviewerName) {
+    return { ok: false as const, code: "NAME_REQUIRED" as const };
+  }
 
   if (briefing.requireSignature && !signatureData) {
     return { ok: false as const, code: "SIGNATURE_REQUIRED" as const };
@@ -441,7 +378,7 @@ export async function completePublicBriefing(
     return { ok: false as const, code: "INITIALS_REQUIRED" as const };
   }
 
-  const completionKey = buildCompletionKey({ deviceId, initials: initials || "SIG", reviewerName });
+  const completionKey = buildCompletionKey({ initials: initials || "SIG", reviewerName });
 
   try {
     const completion = await prisma.briefingCompletion.create({

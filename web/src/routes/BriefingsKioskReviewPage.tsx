@@ -30,7 +30,6 @@ export function BriefingsKioskReviewPage() {
         briefing={briefing}
         busy={busy}
         error={error}
-        kioskMode
         onComplete={async (payload) => {
           setBusy(true);
           setError(null);
@@ -42,9 +41,9 @@ export function BriefingsKioskReviewPage() {
               signatureData: payload.signatureData,
               reviewerName: payload.reviewerName,
             });
-            setBriefing({ ...briefing, status: "reviewed", completedAt: new Date().toISOString() });
           } catch (err) {
             setError(err instanceof Error ? err.message : "Could not complete briefing.");
+            throw err;
           } finally {
             setBusy(false);
           }
