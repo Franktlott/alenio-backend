@@ -176,6 +176,9 @@ function RootLayoutNav() {
         queryClient.invalidateQueries({ queryKey: ["teams"] });
         queryClient.invalidateQueries({ queryKey: ["join-requests"] });
         queryClient.invalidateQueries({ queryKey: ["team-join-requests"] });
+      } else if (data?.type === "go_login_request") {
+        queryClient.invalidateQueries({ queryKey: ["team-go-login-requests"] });
+        queryClient.invalidateQueries({ queryKey: ["team-join-requests"] });
       } else if (data?.teamId) {
         // team message, poll, etc.
         queryClient.invalidateQueries({ queryKey: ["messages"] });

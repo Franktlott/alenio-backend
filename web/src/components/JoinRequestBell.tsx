@@ -1,15 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  approveTeamGoLoginRequest,
   approveTeamJoinRequest,
+  fetchTeamGoLoginRequests,
   fetchTeamJoinRequests,
   fetchWebTeams,
+  rejectTeamGoLoginRequest,
   rejectTeamJoinRequest,
+  type WebGoLoginRequest,
   type WebTeamJoinRequest,
 } from "../lib/api";
 
-type PendingRow = WebTeamJoinRequest & { teamName: string };
+type JoinRow = WebTeamJoinRequest & { teamName: string };
+type GoRow = WebGoLoginRequest & { teamName: string };
 
-function canManageJoinRequests(role: string): boolean {
+function canManageApprovals(role: string): boolean {
   return role === "owner" || role === "team_leader";
 }
 
@@ -24,7 +29,8 @@ type Props = {
 
 export function JoinRequestBell({ extraNotificationCount = 0 }: Props) {
   const [open, setOpen] = useState(false);
-  const [rows, setRows] = useState<PendingRow[]>([]);
+  const [joinRows, setJoinRows] = useState<JoinRow[]>([]);
+  const [goRows, setGoRows] = useState<GoRow[]>([]);
   const [loadErr, setLoadErr] = useState<string | null>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -32,8 +38,8 @@ export function JoinRequestBell({ extraNotificationCount = 0 }: Props) {
   const load = useCallback(async () => {
     try {
       const teams = await fetchWebTeams();
-      const managed = (teams ?? []).filter((t) => canManageJoinRequests(t.role));
-      const chunks = await Promise.all(
+      const managed = (teams ?? []).filter((t) => canManageApprovals(t.role));
+      const joinChunks = await Promise.all(
         managed.map(async (t) => {
           try {
             const list = await fetchTeamJoinRequests(t.id);
@@ -43,7 +49,18 @@ export function JoinRequestBell({ extraNotificationCount = 0 }: Props) {
           }
         }),
       );
-      setRows(chunks.flat());
+      const goChunks = await Promise.all(
+        managed.map(async (t) => {
+          try {
+            const list = await fetchTeamGoLoginRequests(t.id);
+            return list.map((r) => ({ ...r, teamName: t.name }));
+          } catch {
+            return [];
+          }
+        }),
+      );
+      setJoinRows(joinChunks.flat());
+      setGoRows(goChunks.flat());
       setLoadErr(null);
     } catch (e) {
       setLoadErr(e instanceof Error ? e.message : "Could not load notifications.");
@@ -79,10 +96,10 @@ export function JoinRequestBell({ extraNotificationCount = 0 }: Props) {
     };
   }, [open]);
 
-  const total = rows.length + extraNotificationCount;
+  const total = joinRows.length + goRows.length + extraNotificationCount;
 
-  const onApprove = async (teamId: string, requestId: string) => {
-    const key = `${teamId}:${requestId}`;
+  const onApproveJoin = async (teamId: string, requestId: string) => {
+    const key = `join:${teamId}:${requestId}`;
     setBusyKey(key);
     try {
       await approveTeamJoinRequest(teamId, requestId);
@@ -94,8 +111,8 @@ export function JoinRequestBell({ extraNotificationCount = 0 }: Props) {
     }
   };
 
-  const onReject = async (teamId: string, requestId: string) => {
-    const key = `${teamId}:${requestId}`;
+  const onRejectJoin = async (teamId: string, requestId: string) => {
+    const key = `join:${teamId}:${requestId}`;
     setBusyKey(key);
     try {
       await rejectTeamJoinRequest(teamId, requestId);
@@ -106,6 +123,34 @@ export function JoinRequestBell({ extraNotificationCount = 0 }: Props) {
       setBusyKey(null);
     }
   };
+
+  const onApproveGo = async (teamId: string, requestId: string) => {
+    const key = `go:${teamId}:${requestId}`;
+    setBusyKey(key);
+    try {
+      await approveTeamGoLoginRequest(teamId, requestId);
+      await load();
+    } catch (e) {
+      setLoadErr(e instanceof Error ? e.message : "Could not approve.");
+    } finally {
+      setBusyKey(null);
+    }
+  };
+
+  const onRejectGo = async (teamId: string, requestId: string) => {
+    const key = `go:${teamId}:${requestId}`;
+    setBusyKey(key);
+    try {
+      await rejectTeamGoLoginRequest(teamId, requestId);
+      await load();
+    } catch (e) {
+      setLoadErr(e instanceof Error ? e.message : "Could not decline.");
+    } finally {
+      setBusyKey(null);
+    }
+  };
+
+  const empty = joinRows.length === 0 && goRows.length === 0;
 
   return (
     <div className="enterprise-join-requests-wrap" ref={wrapRef}>
@@ -125,9 +170,9 @@ export function JoinRequestBell({ extraNotificationCount = 0 }: Props) {
         {total > 0 ? <span className="enterprise-topbar-badge">{total > 9 ? "9+" : total}</span> : null}
       </button>
       {open ? (
-        <div className="enterprise-join-requests-panel" role="dialog" aria-label="Join requests">
+        <div className="enterprise-join-requests-panel" role="dialog" aria-label="Pending approvals">
           <div className="enterprise-join-requests-panel-head">
-            <span className="enterprise-join-requests-panel-title">Join requests</span>
+            <span className="enterprise-join-requests-panel-title">Approvals</span>
             <span className="enterprise-join-requests-panel-sub">Teams you manage</span>
           </div>
           {loadErr ? (
@@ -135,12 +180,45 @@ export function JoinRequestBell({ extraNotificationCount = 0 }: Props) {
               {loadErr}
             </p>
           ) : null}
-          {rows.length === 0 && !loadErr ? (
-            <p className="enterprise-join-requests-empty">No pending join requests.</p>
+          {empty && !loadErr ? (
+            <p className="enterprise-join-requests-empty">No pending approvals.</p>
           ) : (
             <ul className="enterprise-join-requests-list">
-              {rows.map((r) => {
-                const key = `${r.teamId}:${r.id}`;
+              {goRows.map((r) => {
+                const key = `go:${r.teamId}:${r.id}`;
+                const busy = busyKey === key;
+                const label = r.deviceLabel?.trim() || "A device";
+                return (
+                  <li key={r.id} className="enterprise-join-requests-item">
+                    <div className="enterprise-join-requests-item-text">
+                      <strong>{label}</strong>
+                      <span className="enterprise-muted enterprise-join-requests-meta">
+                        wants Alenio Go access to <strong>{r.teamName}</strong>
+                      </span>
+                    </div>
+                    <div className="enterprise-join-requests-actions">
+                      <button
+                        type="button"
+                        className="enterprise-join-requests-btn enterprise-join-requests-btn-decline"
+                        disabled={busy}
+                        onClick={() => void onRejectGo(r.teamId, r.id)}
+                      >
+                        Decline
+                      </button>
+                      <button
+                        type="button"
+                        className="enterprise-join-requests-btn enterprise-join-requests-btn-approve"
+                        disabled={busy}
+                        onClick={() => void onApproveGo(r.teamId, r.id)}
+                      >
+                        {busy ? "…" : "Approve"}
+                      </button>
+                    </div>
+                  </li>
+                );
+              })}
+              {joinRows.map((r) => {
+                const key = `join:${r.teamId}:${r.id}`;
                 const busy = busyKey === key;
                 return (
                   <li key={r.id} className="enterprise-join-requests-item">
@@ -155,7 +233,7 @@ export function JoinRequestBell({ extraNotificationCount = 0 }: Props) {
                         type="button"
                         className="enterprise-join-requests-btn enterprise-join-requests-btn-decline"
                         disabled={busy}
-                        onClick={() => void onReject(r.teamId, r.id)}
+                        onClick={() => void onRejectJoin(r.teamId, r.id)}
                       >
                         Decline
                       </button>
@@ -163,7 +241,7 @@ export function JoinRequestBell({ extraNotificationCount = 0 }: Props) {
                         type="button"
                         className="enterprise-join-requests-btn enterprise-join-requests-btn-approve"
                         disabled={busy}
-                        onClick={() => void onApprove(r.teamId, r.id)}
+                        onClick={() => void onApproveJoin(r.teamId, r.id)}
                       >
                         {busy ? "…" : "Approve"}
                       </button>

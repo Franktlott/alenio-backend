@@ -13,6 +13,10 @@ import {
   serializeWorkplaceStandards,
 } from "../lib/workplace-standards";
 import {
+  approveGoLoginRequest,
+  canManageGoLoginRequests,
+} from "../lib/go-login-requests";
+import {
   canInviteMembers,
   generateInviteToken,
   inviteExpiresAt,
@@ -516,6 +520,65 @@ teamsRouter.post("/:teamId/join-requests/:requestId/reject", async (c) => {
     undefined,
     teamId
   );
+
+  return c.json({ data: { success: true } });
+});
+
+// GET /api/teams/:teamId/go-login-requests - pending Alenio Go device link requests
+teamsRouter.get("/:teamId/go-login-requests", async (c) => {
+  const user = c.get("user")!;
+  const { teamId } = c.req.param();
+
+  if (!(await canManageGoLoginRequests(teamId, user.id))) {
+    return c.json({ error: { message: "You cannot view Alenio Go login requests for this workspace", code: "FORBIDDEN" } }, 403);
+  }
+
+  const requests = await prisma.goLoginRequest.findMany({
+    where: { teamId, status: "pending" },
+    orderBy: { createdAt: "asc" },
+  });
+
+  return c.json({ data: requests });
+});
+
+// POST /api/teams/:teamId/go-login-requests/:requestId/approve
+teamsRouter.post("/:teamId/go-login-requests/:requestId/approve", async (c) => {
+  const user = c.get("user")!;
+  const { teamId, requestId } = c.req.param();
+
+  if (!(await canManageGoLoginRequests(teamId, user.id))) {
+    return c.json({ error: { message: "You cannot approve Alenio Go login requests for this workspace", code: "FORBIDDEN" } }, 403);
+  }
+
+  const result = await approveGoLoginRequest(teamId, requestId, user.id);
+  if (!result.ok) {
+    if (result.code === "NOT_FOUND") {
+      return c.json({ error: { message: "Login request not found", code: "NOT_FOUND" } }, 404);
+    }
+    return c.json({ error: { message: "Request is no longer pending", code: "CONFLICT" } }, 409);
+  }
+
+  return c.json({ data: { success: true, hubToken: result.hubToken } });
+});
+
+// POST /api/teams/:teamId/go-login-requests/:requestId/reject
+teamsRouter.post("/:teamId/go-login-requests/:requestId/reject", async (c) => {
+  const user = c.get("user")!;
+  const { teamId, requestId } = c.req.param();
+
+  if (!(await canManageGoLoginRequests(teamId, user.id))) {
+    return c.json({ error: { message: "You cannot reject Alenio Go login requests for this workspace", code: "FORBIDDEN" } }, 403);
+  }
+
+  const request = await prisma.goLoginRequest.findUnique({ where: { id: requestId } });
+  if (!request || request.teamId !== teamId) {
+    return c.json({ error: { message: "Login request not found", code: "NOT_FOUND" } }, 404);
+  }
+
+  await prisma.goLoginRequest.update({
+    where: { id: requestId },
+    data: { status: "rejected" },
+  });
 
   return c.json({ data: { success: true } });
 });

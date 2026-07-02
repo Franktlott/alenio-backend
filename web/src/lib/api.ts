@@ -277,6 +277,48 @@ export function rejectTeamJoinRequest(teamId: string, requestId: string) {
   );
 }
 
+export type WebGoLoginRequest = {
+  id: string;
+  teamId: string;
+  deviceId: string;
+  deviceLabel: string | null;
+  status: string;
+  createdAt: string;
+};
+
+export function fetchTeamGoLoginRequests(teamId: string) {
+  return apiGetJson<{ data: WebGoLoginRequest[] }>(
+    `/api/teams/${encodeURIComponent(teamId)}/go-login-requests`,
+  ).then((r) => r.data);
+}
+
+export function approveTeamGoLoginRequest(teamId: string, requestId: string) {
+  return apiPostJson<{ data: { success: boolean; hubToken: string } }>(
+    `/api/teams/${encodeURIComponent(teamId)}/go-login-requests/${encodeURIComponent(requestId)}/approve`,
+    {},
+  );
+}
+
+export function rejectTeamGoLoginRequest(teamId: string, requestId: string) {
+  return apiPostJson<{ data: { success: boolean } }>(
+    `/api/teams/${encodeURIComponent(teamId)}/go-login-requests/${encodeURIComponent(requestId)}/reject`,
+    {},
+  );
+}
+
+export type GoLinkResponse =
+  | { status: "pending"; requestId: string; teamName: string }
+  | { status: "approved"; requestId?: string; teamName: string; hubToken: string };
+
+export function postGoWorkspaceLink(body: { inviteCode: string; deviceId: string; deviceLabel?: string }) {
+  return apiPostJson<{ data: GoLinkResponse }>("/api/public/go/link", body).then((r) => r.data);
+}
+
+export function fetchGoLinkStatus(deviceId: string, requestId: string) {
+  const q = new URLSearchParams({ deviceId, requestId });
+  return apiGetJson<{ data: GoLinkResponse }>(`/api/public/go/status?${q}`).then((r) => r.data);
+}
+
 export type WebTeamInvite = {
   id: string;
   teamId: string;

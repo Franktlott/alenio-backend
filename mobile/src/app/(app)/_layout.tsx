@@ -112,6 +112,16 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
     })),
   });
 
+  const goLoginRequestQueries = useQueries({
+    queries: manageableTeamIds.map((teamId) => ({
+      queryKey: ["team-go-login-requests", teamId] as const,
+      queryFn: () => api.get<JoinReqRow[]>(`/api/teams/${teamId}/go-login-requests`),
+      enabled: !!session?.user && manageableTeamIds.length > 0,
+      staleTime: 15_000,
+      refetchInterval: 25_000,
+    })),
+  });
+
   const pendingJoinRequestCount = useMemo(() => {
     let n = 0;
     for (const q of joinRequestQueries) {
@@ -121,8 +131,15 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
         if (r.status === "pending") n += 1;
       }
     }
+    for (const q of goLoginRequestQueries) {
+      const rows = q.data;
+      if (!Array.isArray(rows)) continue;
+      for (const r of rows) {
+        if (r.status === "pending") n += 1;
+      }
+    }
     return n;
-  }, [joinRequestQueries]);
+  }, [joinRequestQueries, goLoginRequestQueries]);
 
   const visibleRoutes = state.routes.filter((r: any) => {
     if (r.name === "calendar") return false;

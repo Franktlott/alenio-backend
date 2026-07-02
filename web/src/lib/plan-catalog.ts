@@ -25,3 +25,20 @@ export const TEAM_FEATURES = [
 
 export const TEAM_PRICE_AMOUNT = "$19";
 export const TEAM_PRICE_PERIOD = "per workspace / month";
+
+/** Compact feature matrix for in-app billing (Free vs Team). */
+export const BILLING_COMPARE_FEATURES = [
+  { name: "Activity feed", free: true },
+  { name: "Team chat", free: true },
+  { name: "Team members", free: true },
+  { name: "Tasks & action items", free: false },
+  { name: "Seneca AI coaching", free: false },
+  { name: "1:1 check-ins & development plans", free: false },
+  { name: "Team calendar", free: false },
+  { name: "Outlook calendar sync", free: false },
+  { name: "Metrics & dashboards", free: false },
+  { name: "Workflow execution & checklists", free: false },
+  { name: "Performance insights", free: false },
+  { name: "Celebrations & shoutouts", free: false },
+  { name: "Priority support", free: false },
+] as const;

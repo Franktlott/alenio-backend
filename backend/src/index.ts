@@ -48,6 +48,7 @@ import { ensureRecurrenceSeriesSchema } from "./lib/ensure-recurrence-series-sch
 import { ensureUserTimezoneSchema } from "./lib/ensure-user-timezone-schema";
 import { ensureCalendarApprovalSchema } from "./lib/ensure-calendar-approval-schema";
 import { ensureWorkplaceStandardsSchema } from "./lib/ensure-workplace-standards-schema";
+import { ensureGoLoginSchema } from "./lib/ensure-go-login-schema";
 import { ensureCalendarConnectionSchema } from "./lib/ensure-calendar-connection-schema";
 import { calendarConnectionsRouter } from "./routes/calendar-connections";
 import { developmentGoalsRouter } from "./routes/development-goals";
@@ -56,6 +57,7 @@ import { senecaTeamRouter } from "./routes/seneca-team";
 import { teamInvitesPublicRouter } from "./routes/team-invites";
 import { publicChecklistHubsRouter } from "./routes/public-checklist-hubs";
 import { publicChecklistLocationsRouter } from "./routes/public-checklist-locations";
+import { publicGoLinkRouter } from "./routes/public-go-link";
 import { checklistLocationsRouter } from "./routes/checklist-locations";
 import { isValidTimeZone } from "./lib/timezone";
 import { redeemPendingInvitesForUser } from "./lib/team-invites";
@@ -79,6 +81,7 @@ const startupSchemaReady = isProduction
       ensureCalendarApprovalSchema(prisma),
       ensureWorkplaceStandardsSchema(prisma),
       ensureCalendarConnectionSchema(prisma),
+      ensureGoLoginSchema(prisma),
     ]);
 
 function isFastPublicPath(path: string): boolean {
@@ -873,6 +876,7 @@ app.route("/api/teams/:teamId/checklist-locations", checklistLocationsRouter);
 app.route("/api/teams", teamsRouter);
 app.route("/api/public/checklist-hubs", publicChecklistHubsRouter);
 app.route("/api/public/checklist-locations", publicChecklistLocationsRouter);
+app.route("/api/public/go", publicGoLinkRouter);
 app.route("/api/team-invites", teamInvitesPublicRouter);
 app.route("/api/tasks/mine", myTasksRouter);
 app.route("/api/dms", dmsRouter);

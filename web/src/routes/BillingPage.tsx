@@ -1,71 +1,76 @@
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import { useEnterpriseShell } from "../contexts/EnterpriseShellContext";
 import { queryKeys } from "../lib/query-keys";
 import {
   fetchWebTeamSubscription,
   postWebBillingCheckout,
   postWebBillingPortal,
-  type WebMeUser,
-  type WebTeamRow,
   type WebTeamSubscription,
 } from "../lib/api";
 import { loadWebCheckoutConfig, peekWebCheckoutConfig, type WebCheckoutConfig } from "../lib/checkout-config-cache";
-import { FREE_INCLUDED, FREE_LOCKED, TEAM_FEATURES } from "../lib/plan-catalog";
+import {
+  BILLING_COMPARE_FEATURES,
+  FREE_INCLUDED,
+  TEAM_PRICE_AMOUNT,
+  TEAM_PRICE_PERIOD,
+} from "../lib/plan-catalog";
 
 function planLabel(plan: string): string {
   if (plan === "team" || plan === "pro") return "Team";
   return "Free";
 }
 
-function IconCheck({ className }: { className?: string }) {
-  return (
-    <svg className={className} width="14" height="14" viewBox="0 0 24 24" aria-hidden fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M20 6 9 17l-5-5" />
-    </svg>
-  );
-}
-
-function IconLock({ className }: { className?: string }) {
-  return (
-    <svg className={className} width="12" height="12" viewBox="0 0 24 24" aria-hidden fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-    </svg>
-  );
-}
-
-function IconStar({ className }: { className?: string }) {
-  return (
-    <svg className={className} width="12" height="12" viewBox="0 0 24 24" aria-hidden fill="currentColor" stroke="currentColor" strokeWidth="1.5">
-      <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-    </svg>
-  );
+function formatRenewalDate(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
 
 function subscriptionLine(sub: WebTeamSubscription, stripeActive: boolean): string | null {
   if (stripeActive) {
-    return "Billed on the web — use Manage billing below to update payment or cancel.";
+    return "Billed on the web — use Manage billing to update payment or cancel.";
   }
   if (
     sub.currentPeriodEnd &&
     (sub.plan === "team" || sub.plan === "pro") &&
     ["active", "trialing", "past_due"].includes(sub.status)
   ) {
-    return `Renews ${new Date(sub.currentPeriodEnd).toLocaleDateString(undefined, {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    })}`;
+    return `Renews ${formatRenewalDate(sub.currentPeriodEnd)}`;
   }
   return null;
 }
 
+function CompareIcon({ included }: { included: boolean }) {
+  return (
+    <span
+      className={`enterprise-billing-compare-icon ${included ? "enterprise-billing-compare-icon--yes" : "enterprise-billing-compare-icon--no"}`}
+      aria-hidden
+    >
+      {included ? (
+        <svg viewBox="0 0 12 12" fill="none">
+          <path
+            d="M2.5 6L5 8.5L9.5 3.5"
+            stroke="currentColor"
+            strokeWidth="1.75"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      ) : (
+        <svg viewBox="0 0 12 12" fill="none">
+          <path d="M3 6H9" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+        </svg>
+      )}
+    </span>
+  );
+}
+
 export function BillingPage() {
-  const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
-  const { me, teams, selectedTeamId, setSelectedTeamId } = useEnterpriseShell();
+  const { me, teams, selectedTeamId } = useEnterpriseShell();
   const [actionErr, setActionErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [checkoutCfg, setCheckoutCfg] = useState<WebCheckoutConfig | null>(() => peekWebCheckoutConfig());
@@ -257,6 +262,9 @@ export function BillingPage() {
     sub !== null &&
     currentPlanTier === "free";
 
+  const premiumCount = BILLING_COMPARE_FEATURES.filter((f) => !f.free).length;
+  const subLine = !showPlanLoading && sub ? subscriptionLine(sub, stripeActive) : null;
+
   if (me === undefined) {
     return (
       <div className="enterprise-tab-shell enterprise-tab-shell-billing">
@@ -266,271 +274,121 @@ export function BillingPage() {
   }
 
   return (
-    <>
-      <div className="enterprise-tab-shell enterprise-tab-shell-scroll enterprise-tab-shell-billing">
-        {billingFlash === "success" ? (
-          <div className="enterprise-card" style={{ marginBottom: 16, borderColor: "rgba(34,197,94,0.45)" }}>
-            <p style={{ margin: 0 }}>Thanks — your payment is processing. It may take a moment for your plan to update.</p>
-            <button type="button" className="enterprise-inline-link" style={{ marginTop: 12 }} onClick={clearBillingParam}>
-              Dismiss
-            </button>
-          </div>
-        ) : null}
-        {billingFlash === "cancel" ? (
-          <div className="enterprise-card" style={{ marginBottom: 16 }}>
-            <p style={{ margin: 0 }}>Checkout was canceled. No charge was made.</p>
-            <button type="button" className="enterprise-inline-link" style={{ marginTop: 12 }} onClick={clearBillingParam}>
-              Dismiss
-            </button>
-          </div>
-        ) : null}
-
-        {actionErr ? (
-          <p className="enterprise-form-error" role="alert" style={{ marginBottom: 16 }}>
-            {actionErr}
-          </p>
-        ) : null}
-
-        <section className="enterprise-card" style={{ marginBottom: 16 }}>
-          {showPlanLoading ? (
-            <p className="enterprise-muted" style={{ margin: "0 0 8px" }}>
-              Loading plan…
-            </p>
-          ) : null}
-          <p className="enterprise-muted" style={{ margin: 0, lineHeight: 1.5 }}>
-            Simple pricing. No hidden fees. Cancel anytime. Subscriptions are per workspace — only the{" "}
-            <strong>owner</strong> can start checkout or open the billing portal.
-          </p>
-          {!showPlanLoading && sub && subscriptionLine(sub, stripeActive) ? (
-            <p className="enterprise-muted" style={{ fontSize: 14, marginTop: 8, marginBottom: 0 }}>
-              {subscriptionLine(sub, stripeActive)}
-            </p>
-          ) : null}
-        </section>
-
-        {subErr ? (
-          <div className="enterprise-card" role="alert" style={{ marginBottom: 20 }}>
-            <p className="enterprise-form-error" style={{ marginBottom: 12 }}>
-              {subErr}
-            </p>
-            <button type="button" className="enterprise-inline-link" onClick={() => void subQuery.refetch()}>
-              Try again
-            </button>
-          </div>
-        ) : null}
-
-        {/* Two-column plans */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-            gap: 16,
-            marginBottom: 24,
-          }}
-        >
-          {/* Free */}
-          <section
-            className="enterprise-card"
-            style={{
-              margin: 0,
-              borderWidth: currentPlanTier === "free" && sub && !showPlanLoading ? 2 : 1,
-              borderColor: currentPlanTier === "free" && sub && !showPlanLoading ? "#64748b" : undefined,
-            }}
-            aria-labelledby="billing-free-heading"
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
-              <div>
-                <h2 id="billing-free-heading" className="enterprise-card-title" style={{ marginBottom: 4 }}>
-                  Free
-                </h2>
-                <p className="enterprise-muted" style={{ margin: 0, fontSize: 13, lineHeight: 1.45 }}>
-                  Perfect for teams getting started
-                </p>
-              </div>
-              {currentPlanTier === "free" && sub && !showPlanLoading ? (
-                <span
-                  style={{
-                    fontSize: 10,
-                    fontWeight: 800,
-                    letterSpacing: "0.06em",
-                    color: "#fff",
-                    background: "#64748b",
-                    padding: "5px 10px",
-                    borderRadius: 999,
-                  }}
-                >
-                  CURRENT
-                </span>
-              ) : null}
-            </div>
-            <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginTop: 16 }}>
-              <span style={{ fontSize: 28, fontWeight: 800, color: "#64748b" }}>$0</span>
-              <span className="enterprise-muted" style={{ fontSize: 14, fontWeight: 600 }}>
-                forever
-              </span>
-            </div>
-            <p style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.08em", color: "#94a3b8", marginTop: 18, marginBottom: 0 }}>
-              INCLUDED
-            </p>
-            <ul style={{ listStyle: "none", margin: "10px 0 0", padding: 0 }}>
-              {FREE_INCLUDED.map((label) => (
-                <li key={label} style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 10 }}>
-                  <span
-                    style={{
-                      width: 22,
-                      height: 22,
-                      borderRadius: 11,
-                      background: "#e0f2fe",
-                      color: "#0284c7",
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      flexShrink: 0,
-                    }}
-                  >
-                    <IconCheck />
-                  </span>
-                  <span style={{ fontSize: 14, color: "#334155" }}>{label}</span>
-                </li>
-              ))}
-            </ul>
-            <p style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.08em", color: "#94a3b8", marginTop: 18, marginBottom: 0 }}>
-              UNLOCK WITH TEAM
-            </p>
-            <ul style={{ listStyle: "none", margin: "10px 0 0", padding: 0 }}>
-              {FREE_LOCKED.map((label) => (
-                <li key={label} style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 10 }}>
-                  <span
-                    style={{
-                      width: 22,
-                      height: 22,
-                      borderRadius: 11,
-                      background: "#f1f5f9",
-                      color: "#94a3b8",
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      flexShrink: 0,
-                    }}
-                  >
-                    <IconLock />
-                  </span>
-                  <span style={{ fontSize: 14, color: "#94a3b8" }}>{label}</span>
-                </li>
-              ))}
-            </ul>
-            <div style={{ marginTop: 20 }}>
-              <button type="button" className="auth-submit auth-submit--muted" disabled>
-                {currentPlanTier === "free" ? "Current plan" : "Included in Team"}
+    <div className="enterprise-tab-shell enterprise-tab-shell-billing">
+      <div className="enterprise-billing-page">
+        <div className="enterprise-billing-alerts">
+          {billingFlash === "success" ? (
+            <div className="enterprise-billing-alert enterprise-billing-alert--info" role="status">
+              <p>Thanks — your payment is processing. It may take a moment for your plan to update.</p>
+              <button type="button" className="enterprise-inline-link" onClick={clearBillingParam}>
+                Dismiss
               </button>
             </div>
-          </section>
-
-          {/* Team */}
-          <section
-            className="enterprise-card"
-            style={{
-              margin: 0,
-              borderWidth: currentPlanTier === "team" && sub && !subLoading ? 2 : 1,
-              borderColor: currentPlanTier === "team" && sub && !subLoading ? "#6366f1" : undefined,
-            }}
-            aria-labelledby="billing-team-heading"
-          >
-            {currentPlanTier !== "team" || showPlanLoading || !sub ? (
-              <div
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 6,
-                  padding: "5px 10px",
-                  borderRadius: 999,
-                  background: "#eef2ff",
-                  border: "1px solid #c7d2fe",
-                  marginBottom: 10,
-                }}
-              >
-                <IconStar />
-                <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.06em", color: "#4f46e5" }}>MOST POPULAR</span>
-              </div>
-            ) : (
-              <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
-                <span
-                  style={{
-                    fontSize: 10,
-                    fontWeight: 800,
-                    letterSpacing: "0.06em",
-                    color: "#fff",
-                    background: "#6366f1",
-                    padding: "5px 10px",
-                    borderRadius: 999,
-                  }}
-                >
-                  CURRENT
-                </span>
-              </div>
-            )}
-            <h2 id="billing-team-heading" className="enterprise-card-title" style={{ marginBottom: 4 }}>
-              Team
-            </h2>
-            <p className="enterprise-muted" style={{ margin: 0, fontSize: 13, lineHeight: 1.45 }}>
-              For fast-moving teams that need execution
-            </p>
-            <div style={{ display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: 8, marginTop: 16 }}>
-              <span style={{ fontSize: 28, fontWeight: 800, color: "#6366f1" }}>$19</span>
-              <span className="enterprise-muted" style={{ fontSize: 14, fontWeight: 600 }}>
-                per workspace / month
-              </span>
+          ) : null}
+          {billingFlash === "cancel" ? (
+            <div className="enterprise-billing-alert enterprise-billing-alert--info" role="status">
+              <p>Checkout was canceled. No charge was made.</p>
+              <button type="button" className="enterprise-inline-link" onClick={clearBillingParam}>
+                Dismiss
+              </button>
             </div>
-            <p style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.08em", color: "#94a3b8", marginTop: 18, marginBottom: 0 }}>
-              EVERYTHING IN FREE, PLUS
+          ) : null}
+          {actionErr ? (
+            <p className="enterprise-billing-alert enterprise-billing-alert--error" role="alert">
+              {actionErr}
             </p>
-            <ul style={{ listStyle: "none", margin: "10px 0 0", padding: 0 }}>
-              {TEAM_FEATURES.map((label) => (
-                <li key={label} style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 10 }}>
-                  <span
-                    style={{
-                      width: 22,
-                      height: 22,
-                      borderRadius: 11,
-                      background: "#eef2ff",
-                      color: "#6366f1",
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      flexShrink: 0,
-                    }}
-                  >
-                    <IconCheck />
-                  </span>
-                  <span style={{ fontSize: 14, color: "#334155" }}>{label}</span>
-                </li>
-              ))}
-            </ul>
-            <div style={{ marginTop: 20 }}>
+          ) : null}
+          {subErr ? (
+            <div className="enterprise-billing-alert enterprise-billing-alert--error" role="alert">
+              <p>{subErr}</p>
+              <button type="button" className="enterprise-inline-link" onClick={() => void subQuery.refetch()}>
+                Try again
+              </button>
+            </div>
+          ) : null}
+        </div>
+
+        <header className="enterprise-billing-header">
+          <div className="enterprise-billing-header-copy">
+            <h1>Billing</h1>
+            <p>
+              Simple pricing. No hidden fees. Cancel anytime. Subscriptions are per workspace — only the{" "}
+              <strong>owner</strong> can start checkout or open the billing portal.
+              {showPlanLoading ? " Loading plan…" : null}
+              {subLine ? <> {subLine}</> : null}
+            </p>
+          </div>
+        </header>
+
+        <div className="enterprise-billing-main">
+          <div className="enterprise-billing-plans">
+            <article
+              className={`enterprise-billing-plan${currentPlanTier === "free" && sub && !showPlanLoading ? " enterprise-billing-plan--current" : ""}`}
+              aria-labelledby="billing-free-heading"
+            >
+              {currentPlanTier === "free" && sub && !showPlanLoading ? (
+                <span className="enterprise-billing-plan-badge">Current</span>
+              ) : null}
+              <div className="enterprise-billing-plan-head">
+                <h2 id="billing-free-heading" className="enterprise-billing-plan-name">
+                  Free
+                </h2>
+                <p className="enterprise-billing-plan-tagline">Perfect for teams getting started</p>
+              </div>
+              <p className="enterprise-billing-plan-price">
+                $0
+                <span>forever</span>
+              </p>
+              <ul className="enterprise-billing-plan-highlights">
+                {FREE_INCLUDED.map((feature) => (
+                  <li key={feature}>{feature}</li>
+                ))}
+              </ul>
+              <button
+                type="button"
+                className="enterprise-billing-plan-cta enterprise-billing-plan-cta--secondary"
+                disabled
+              >
+                {currentPlanTier === "free" ? "Current plan" : "Included in Team"}
+              </button>
+            </article>
+
+            <article
+              className={`enterprise-billing-plan${currentPlanTier === "team" && sub && !subLoading ? " enterprise-billing-plan--current" : ""}`}
+              aria-labelledby="billing-team-heading"
+            >
+              {currentPlanTier === "team" && sub && !showPlanLoading ? (
+                <span className="enterprise-billing-plan-badge">Current</span>
+              ) : (
+                <span className="enterprise-billing-plan-badge enterprise-billing-plan-badge--popular">Popular</span>
+              )}
+              <div className="enterprise-billing-plan-head">
+                <h2 id="billing-team-heading" className="enterprise-billing-plan-name">
+                  Team
+                </h2>
+                <p className="enterprise-billing-plan-tagline">For fast-moving teams that need execution</p>
+              </div>
+              <p className="enterprise-billing-plan-price enterprise-billing-plan-price--accent">
+                {TEAM_PRICE_AMOUNT}
+                <span>{TEAM_PRICE_PERIOD}</span>
+              </p>
+              <ul className="enterprise-billing-plan-highlights">
+                <li>All Free features</li>
+                <li>{premiumCount} premium capabilities</li>
+              </ul>
               {showCheckoutNotConfigured ? (
-                <div
-                  role="status"
-                  style={{
-                    marginBottom: 14,
-                    padding: "12px 14px",
-                    borderRadius: 12,
-                    border: "1px solid #fcd34d",
-                    background: "#fffbeb",
-                    fontSize: 13,
-                    color: "#92400e",
-                    lineHeight: 1.5,
-                  }}
-                >
-                  <strong>Web checkout is not configured</strong> on this API server. That is typical in local
-                  development until you set: {checkoutCfg.missingKeys.join(", ")} on the backend. For{" "}
-                  <code style={{ fontSize: 12 }}>WEB_PUBLIC_URL</code>, use your Vite URL (for example{" "}
-                  <code style={{ fontSize: 12 }}>http://127.0.0.1:5173</code>). Production uses the same variables on your
-                  host (Railway, etc.). The API must have those variables wherever it runs — missing keys are not caused
-                  only by running locally.
+                <div className="enterprise-billing-checkout-warn" role="status">
+                  <strong>Web checkout is not configured</strong> on this API server. Set{" "}
+                  {checkoutCfg?.missingKeys.join(", ")} on the backend (including{" "}
+                  <code>WEB_PUBLIC_URL</code> for your Vite URL).
                 </div>
               ) : null}
               {!showPlanLoading && sub && currentPlanTier === "team" ? (
-                <button type="button" className="auth-submit auth-submit--team-current" disabled>
+                <button
+                  type="button"
+                  className="enterprise-billing-plan-cta enterprise-billing-plan-cta--current"
+                  disabled
+                >
                   Current plan
                 </button>
               ) : !showPlanLoading && sub ? (
@@ -538,134 +396,115 @@ export function BillingPage() {
                   {showSubscribeCta ? (
                     <button
                       type="button"
-                      className="auth-submit"
-                      disabled={busy || !!subErr || checkoutCfgLoading || (checkoutCfg !== null && !checkoutCfg.configured)}
+                      className="enterprise-billing-plan-cta enterprise-billing-plan-cta--primary"
+                      disabled={
+                        busy || !!subErr || checkoutCfgLoading || (checkoutCfg !== null && !checkoutCfg.configured)
+                      }
                       onClick={onSubscribe}
                     >
                       {busy ? "Opening checkout…" : "Upgrade to Team"}
                     </button>
                   ) : (
-                    <button type="button" className="auth-submit auth-submit--muted" disabled style={{ cursor: "not-allowed" }}>
+                    <button
+                      type="button"
+                      className="enterprise-billing-plan-cta enterprise-billing-plan-cta--secondary"
+                      disabled
+                    >
                       Upgrade to Team
                     </button>
                   )}
-                  {isOwner ? (
-                    <p className="enterprise-muted" style={{ textAlign: "center", fontSize: 12, marginTop: 10, marginBottom: 0 }}>
-                      Cancel anytime · Secure checkout
-                    </p>
-                  ) : (
-                    <p className="enterprise-muted" style={{ textAlign: "center", fontSize: 12, marginTop: 10, marginBottom: 0 }}>
-                      Only the workspace owner can upgrade.
-                    </p>
-                  )}
+                  <p className="enterprise-billing-plan-footnote">
+                    {isOwner ? "Cancel anytime · Secure checkout" : "Only the workspace owner can upgrade."}
+                  </p>
                 </>
               ) : (
-                <p className="enterprise-muted" style={{ margin: 0 }}>
-                  {showPlanLoading ? "Loading…" : "—"}
-                </p>
+                <p className="enterprise-billing-plan-footnote">{showPlanLoading ? "Loading…" : "—"}</p>
               )}
+            </article>
+          </div>
+
+          <aside className="enterprise-billing-sidebar">
+            <div className="enterprise-billing-subscription">
+              <h3 className="enterprise-billing-subscription-title">Subscription</h3>
+              {showPlanLoading ? (
+                <p className="enterprise-billing-plan-footnote">Loading subscription…</p>
+              ) : sub && !subErr ? (
+                <>
+                  <dl className="enterprise-billing-subscription-dl">
+                    <div className="enterprise-billing-subscription-row">
+                      <dt>Plan</dt>
+                      <dd>{planLabel(sub.plan)}</dd>
+                    </div>
+                    <div className="enterprise-billing-subscription-row">
+                      <dt>Status</dt>
+                      <dd>
+                        <span
+                          className={`enterprise-billing-subscription-status${
+                            ["active", "trialing"].includes(sub.status) ? "" : " enterprise-billing-subscription-status--inactive"
+                          }`}
+                        >
+                          <span className="enterprise-billing-subscription-status-dot" aria-hidden />
+                          <span style={{ textTransform: "capitalize" }}>{sub.status.replace(/_/g, " ")}</span>
+                        </span>
+                      </dd>
+                    </div>
+                    <div className="enterprise-billing-subscription-row">
+                      <dt>Renews or ends</dt>
+                      <dd>{formatRenewalDate(sub.currentPeriodEnd)}</dd>
+                    </div>
+                  </dl>
+                  {mobileManaged ? (
+                    <div className="enterprise-billing-mobile-notice">
+                      <p className="enterprise-billing-mobile-notice-title">Mobile app billing</p>
+                      <p>
+                        Team is billed through the App Store or Google Play. Manage payment and cancellation in your
+                        device subscription settings.
+                      </p>
+                    </div>
+                  ) : null}
+                  {isOwner && !mobileManaged ? (
+                    <button
+                      type="button"
+                      className="enterprise-billing-manage-btn"
+                      disabled={busy || !canOpenStripePortal || !!subErr || showPlanLoading}
+                      onClick={onPortal}
+                    >
+                      {busy ? "Opening…" : "Manage billing"}
+                    </button>
+                  ) : !isOwner ? (
+                    <p className="enterprise-billing-plan-footnote">
+                      Ask a team owner to manage the subscription for this workspace.
+                    </p>
+                  ) : null}
+                </>
+              ) : !subErr ? (
+                <p className="enterprise-billing-plan-footnote">No subscription details loaded yet.</p>
+              ) : null}
+            </div>
+          </aside>
+
+          <section className="enterprise-billing-compare" aria-label="Plan comparison">
+            <div className="enterprise-billing-compare-head">
+              <span>Feature</span>
+              <span>Free</span>
+              <span>Team</span>
+            </div>
+            <div className="enterprise-billing-compare-body">
+              {BILLING_COMPARE_FEATURES.map((row) => (
+                <div key={row.name} className="enterprise-billing-compare-row">
+                  <span className="enterprise-billing-compare-feature">{row.name}</span>
+                  <span className="enterprise-billing-compare-cell">
+                    <CompareIcon included={row.free} />
+                  </span>
+                  <span className="enterprise-billing-compare-cell">
+                    <CompareIcon included />
+                  </span>
+                </div>
+              ))}
             </div>
           </section>
         </div>
-
-        {/* Status + actions */}
-        <section className="enterprise-card" style={{ marginBottom: 20 }}>
-          <h2 className="enterprise-card-title" style={{ fontSize: 16 }}>
-            Billing actions
-          </h2>
-          {showPlanLoading ? (
-            <p className="enterprise-muted">Loading subscription…</p>
-          ) : sub && !subErr ? (
-            <>
-              <dl style={{ display: "grid", gap: "12px 24px", margin: "0 0 16px", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))" }}>
-                <div>
-                  <dt className="enterprise-muted" style={{ fontSize: 13, marginBottom: 4 }}>
-                    Plan
-                  </dt>
-                  <dd style={{ margin: 0, fontWeight: 600 }}>{planLabel(sub.plan)}</dd>
-                </div>
-                <div>
-                  <dt className="enterprise-muted" style={{ fontSize: 13, marginBottom: 4 }}>
-                    Status
-                  </dt>
-                  <dd style={{ margin: 0, textTransform: "capitalize" }}>{sub.status.replace(/_/g, " ")}</dd>
-                </div>
-                <div>
-                  <dt className="enterprise-muted" style={{ fontSize: 13, marginBottom: 4 }}>
-                    Renews or ends
-                  </dt>
-                  <dd style={{ margin: 0 }}>
-                    {sub.currentPeriodEnd
-                      ? new Date(sub.currentPeriodEnd).toLocaleDateString(undefined, {
-                          month: "short",
-                          day: "numeric",
-                          year: "numeric",
-                        })
-                      : "—"}
-                  </dd>
-                </div>
-              </dl>
-              {stripeActive ? (
-                <p className="enterprise-muted" style={{ marginTop: 0, marginBottom: 16 }}>
-                  Your team plan is billed on the web. Use <strong>Manage billing</strong> to update payment details or cancel.
-                </p>
-              ) : null}
-              {mobileManaged ? (
-                <div
-                  className="enterprise-card"
-                  style={{
-                    marginTop: 0,
-                    marginBottom: 16,
-                    padding: "16px 18px",
-                    background: "var(--surface-muted)",
-                    borderStyle: "solid",
-                    borderWidth: 1,
-                    borderColor: "var(--border)",
-                  }}
-                >
-                  <p style={{ margin: "0 0 8px", fontSize: 13, fontWeight: 600, color: "var(--text)" }}>
-                    Subscription: Mobile app (app store billing)
-                  </p>
-                  <p className="enterprise-muted" style={{ margin: 0, fontSize: 13, lineHeight: 1.6 }}>
-                    This workspace is on Team through an in-app subscription (Apple App Store or Google Play). Billing,
-                    payment methods, and plan changes for that purchase are handled by the platform—not through this web
-                    administrator. To modify or cancel, sign in on the account that bought the subscription and open that
-                    store&apos;s subscription settings (for example, <strong>Settings → Subscriptions</strong> on iOS, or
-                    Google Play → Payments &amp; subscriptions on Android). To return this workspace to Free, cancel the Team
-                    plan there; entitlement updates follow each platform&apos;s billing cycle.
-                  </p>
-                </div>
-              ) : null}
-            </>
-          ) : !subErr ? (
-            <p className="enterprise-muted">No subscription details loaded yet.</p>
-          ) : null}
-
-          {isOwner && !mobileManaged ? (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 12, justifyContent: "center" }}>
-              <button
-                type="button"
-                className={stripeActive || canOpenStripePortal ? "auth-submit" : "auth-link-button"}
-                style={{
-                  minWidth: 220,
-                  maxWidth: 360,
-                  width: "100%",
-                }}
-                disabled={busy || !canOpenStripePortal || !!subErr || showPlanLoading}
-                onClick={onPortal}
-              >
-                Manage billing
-              </button>
-            </div>
-          ) : !isOwner ? (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 12, justifyContent: "center" }}>
-              <p className="enterprise-muted" style={{ margin: 0 }}>
-                Ask a team owner to manage the subscription for this workspace.
-              </p>
-            </div>
-          ) : null}
-        </section>
       </div>
-    </>
+    </div>
   );
 }

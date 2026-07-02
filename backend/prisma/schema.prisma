@@ -122,6 +122,7 @@ model Team {
   checklistHubToken String? @unique
   /** JSON: per-workspace check-in and development goal expectations. */
   workplaceStandards String?
+  goLoginRequests GoLoginRequest[]
 }
 
 model TeamSubscription {
@@ -470,6 +471,22 @@ model JoinRequest {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([teamId, userId])
+}
+
+model GoLoginRequest {
+  id               String   @id @default(cuid())
+  teamId           String
+  deviceId         String
+  deviceLabel      String?
+  status           String   @default("pending") // pending, approved, rejected
+  approvedByUserId String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, deviceId])
+  @@index([teamId, status])
 }
 
 model TeamInvite {

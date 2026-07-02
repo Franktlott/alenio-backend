@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthGate } from "./components/AuthGate";
 import { DocumentTitle } from "./components/DocumentTitle";
 import { SessionIdleGuard } from "./components/SessionIdleGuard";
+import { AlenioGoLinkPage } from "./routes/AlenioGoLinkPage";
 import { AlenioGoPage } from "./routes/AlenioGoPage";
 import { ActivityPage } from "./routes/ActivityPage";
 import { BillingPage } from "./routes/BillingPage";
@@ -113,6 +114,7 @@ export default function App() {
         <Route path="/invite/:token" element={<InvitePage />} />
         <Route path="/checklist/:hubToken/:checklistId" element={<LocationChecklistKioskPage />} />
         <Route path="/checklist/:hubToken" element={<WorkspaceChecklistHubPage />} />
+        <Route path="/aleniogo" element={<AlenioGoLinkPage />} />
         <Route path="/get-app" element={<GetAppPage />} />
         <Route path="/privacy" element={<PrivacyPolicyPage />} />
         <Route path="/terms" element={<TermsOfServicePage />} />

@@ -303,6 +303,23 @@ export default function TeamScreen() {
     refetchInterval: 15000,
   });
 
+  type GoLoginRequest = {
+    id: string;
+    status: string;
+    deviceId: string;
+    deviceLabel: string | null;
+    createdAt: string;
+  };
+
+  const { data: incomingGoLoginRequests = [] } = useQuery({
+    queryKey: ["team-go-login-requests", activeTeamId],
+    queryFn: () => api.get<GoLoginRequest[]>(`/api/teams/${activeTeamId}/go-login-requests`),
+    enabled: !!activeTeamId && isOwner,
+    refetchInterval: 15000,
+  });
+
+  const pendingApprovalCount = incomingRequests.length + incomingGoLoginRequests.length;
+
   const cancelMutation = useMutation({
     mutationFn: (requestId: string) => api.delete(`/api/join-requests/${requestId}`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["join-requests-mine"] }),
@@ -325,6 +342,22 @@ export default function TeamScreen() {
     onMutate: (requestId) => setJoinRequestActionId(requestId),
     onSettled: () => setJoinRequestActionId(null),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["team-join-requests", activeTeamId] }),
+  });
+
+  const approveGoLoginMutation = useMutation({
+    mutationFn: (requestId: string) =>
+      api.post(`/api/teams/${activeTeamId}/go-login-requests/${requestId}/approve`, {}),
+    onMutate: (requestId) => setJoinRequestActionId(requestId),
+    onSettled: () => setJoinRequestActionId(null),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["team-go-login-requests", activeTeamId] }),
+  });
+
+  const rejectGoLoginMutation = useMutation({
+    mutationFn: (requestId: string) =>
+      api.post(`/api/teams/${activeTeamId}/go-login-requests/${requestId}/reject`, {}),
+    onMutate: (requestId) => setJoinRequestActionId(requestId),
+    onSettled: () => setJoinRequestActionId(null),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["team-go-login-requests", activeTeamId] }),
   });
 
   const { data: pendingInvites = [] } = useQuery({
@@ -791,7 +824,7 @@ export default function TeamScreen() {
             </View>
             {isOwner && !isDemo ? (
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                <PendingJoinRequestsChip count={incomingRequests.length} onPress={() => setJoinRequestsOpen(true)} />
+                <PendingJoinRequestsChip count={pendingApprovalCount} onPress={() => setJoinRequestsOpen(true)} />
                 <PendingInvitesChip count={pendingInvites.length} onPress={() => setPendingInvitesOpen(true)} />
                 <Pressable
                   onPress={() => {
@@ -1127,10 +1160,13 @@ export default function TeamScreen() {
       <PendingJoinRequestsSheet
         visible={joinRequestsOpen}
         requests={incomingRequests}
+        goLoginRequests={incomingGoLoginRequests}
         busyRequestId={joinRequestActionId}
         onClose={() => setJoinRequestsOpen(false)}
         onApprove={(req) => approveMutation.mutate(req.id)}
         onDecline={(req) => rejectMutation.mutate(req.id)}
+        onApproveGo={(req) => approveGoLoginMutation.mutate(req.id)}
+        onDeclineGo={(req) => rejectGoLoginMutation.mutate(req.id)}
       />
 
       <PendingInvitesSheet

@@ -1,0 +1,77 @@
+import { prisma } from "../prisma";
+import { sendPushToUsers } from "./push";
+import { ensureTeamChecklistHubToken } from "./checklist-locations";
+
+export function normalizeWorkspaceCode(code: string): string {
+  return code.trim().toUpperCase();
+}
+
+/** Owners and team leaders can approve Alenio Go device links. */
+export async function canManageGoLoginRequests(teamId: string, userId: string): Promise<boolean> {
+  const membership = await prisma.teamMember.findUnique({
+    where: { userId_teamId: { userId, teamId } },
+  });
+  if (!membership) return false;
+  return membership.role === "owner" || membership.role === "team_leader";
+}
+
+export async function notifyGoLoginApprovers(
+  teamId: string,
+  teamName: string,
+  deviceLabel: string,
+  requestId: string,
+): Promise<void> {
+  const approvers = await prisma.teamMember.findMany({
+    where: { teamId, role: { in: ["owner", "team_leader"] } },
+    select: { userId: true },
+  });
+  const approverIds = approvers.map((a) => a.userId);
+  if (approverIds.length === 0) return;
+
+  await sendPushToUsers(
+    approverIds,
+    "Alenio Go login",
+    `${deviceLabel} wants to connect to ${teamName}`,
+    { teamId, type: "go_login_request", requestId },
+    undefined,
+    teamId,
+  );
+}
+
+export async function getGoLoginHubTokenForRequest(teamId: string, requestId: string) {
+  const request = await prisma.goLoginRequest.findUnique({
+    where: { id: requestId },
+    include: { team: { select: { name: true } } },
+  });
+  if (!request || request.teamId !== teamId || request.status !== "approved") {
+    return null;
+  }
+  const hubToken = await ensureTeamChecklistHubToken(teamId);
+  return { hubToken, teamName: request.team.name };
+}
+
+export async function approveGoLoginRequest(teamId: string, requestId: string, approverUserId: string) {
+  const request = await prisma.goLoginRequest.findUnique({
+    where: { id: requestId },
+    include: { team: { select: { name: true } } },
+  });
+  if (!request || request.teamId !== teamId) {
+    return { ok: false as const, code: "NOT_FOUND" as const };
+  }
+  if (request.status !== "pending") {
+    return { ok: false as const, code: "CONFLICT" as const };
+  }
+
+  const hubToken = await ensureTeamChecklistHubToken(teamId);
+  await prisma.goLoginRequest.update({
+    where: { id: requestId },
+    data: { status: "approved", approvedByUserId: approverUserId },
+  });
+
+  return {
+    ok: true as const,
+    hubToken,
+    teamName: request.team.name,
+    deviceId: request.deviceId,
+  };
+}
