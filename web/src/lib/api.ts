@@ -324,12 +324,21 @@ export type GoDeviceRow = {
   deviceId: string;
   deviceLabel: string | null;
   updatedAt: string;
+  source?: "approved" | "active";
 };
 
 export function fetchTeamGoDevices(teamId: string) {
   return apiGetJson<{ data: GoDeviceRow[] }>(`/api/teams/${encodeURIComponent(teamId)}/go-devices`).then(
     (r) => r.data,
   );
+}
+
+export function postGoDeviceCheckIn(hubToken: string, deviceId: string, deviceLabel?: string) {
+  return apiPostJson<{ data: { success: boolean; approved: boolean } }>("/api/public/go/check-in", {
+    hubToken,
+    deviceId,
+    deviceLabel,
+  }).then((r) => r.data);
 }
 
 export type WorkplaceAlertPayload = {

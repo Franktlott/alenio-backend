@@ -124,6 +124,7 @@ model Team {
   workplaceStandards String?
   goLoginRequests GoLoginRequest[]
   workplaceAlerts WorkplaceAlert[]
+  goDevicePresences GoDevicePresence[]
 }
 
 model TeamSubscription {
@@ -516,6 +517,20 @@ model WorkplaceAlertAck {
   alert WorkplaceAlert @relation(fields: [alertId], references: [id], onDelete: Cascade)
 
   @@unique([alertId, deviceId])
+}
+
+model GoDevicePresence {
+  id          String   @id @default(cuid())
+  teamId      String
+  deviceId    String
+  deviceLabel String?
+  lastSeenAt  DateTime @default(now()) @updatedAt
+  createdAt   DateTime @default(now())
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, deviceId])
+  @@index([teamId, lastSeenAt])
 }
 
 model TeamInvite {

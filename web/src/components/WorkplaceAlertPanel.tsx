@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { fetchTeamGoDevices, postWorkplaceAlert, type GoDeviceRow } from "../lib/api";
 
 type TargetKind = "device" | "all_devices" | "all_users";
@@ -7,9 +7,16 @@ type Props = {
   teamId: string;
 };
 
+function deviceOptionLabel(d: GoDeviceRow): string {
+  const name = d.deviceLabel?.trim() || "Device";
+  const suffix = d.source === "active" ? " · active now" : d.source === "approved" ? " · approved" : "";
+  return `${name}${suffix} · ${d.deviceId.slice(0, 8)}…`;
+}
+
 export function WorkplaceAlertPanel({ teamId }: Props) {
   const [devices, setDevices] = useState<GoDeviceRow[]>([]);
   const [loadingDevices, setLoadingDevices] = useState(true);
+  const [deviceLoadError, setDeviceLoadError] = useState<string | null>(null);
   const [targetKind, setTargetKind] = useState<TargetKind>("all_devices");
   const [deviceId, setDeviceId] = useState("");
   const [title, setTitle] = useState("Workplace alert");
@@ -19,25 +26,32 @@ export function WorkplaceAlertPanel({ teamId }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
+  const loadDevices = useCallback(() => {
     setLoadingDevices(true);
-    void fetchTeamGoDevices(teamId)
+    setDeviceLoadError(null);
+    return fetchTeamGoDevices(teamId)
       .then((rows) => {
-        if (cancelled) return;
         setDevices(rows);
-        if (rows.length > 0) setDeviceId(rows[0]!.deviceId);
+        setDeviceId((prev) => {
+          if (rows.length === 0) return "";
+          if (prev && rows.some((r) => r.deviceId === prev)) return prev;
+          return rows[0]!.deviceId;
+        });
       })
-      .catch(() => {
-        if (!cancelled) setDevices([]);
+      .catch((err) => {
+        setDevices([]);
+        setDeviceLoadError(err instanceof Error ? err.message : "Could not load linked devices.");
       })
       .finally(() => {
-        if (!cancelled) setLoadingDevices(false);
+        setLoadingDevices(false);
       });
-    return () => {
-      cancelled = true;
-    };
   }, [teamId]);
+
+  useEffect(() => {
+    void loadDevices();
+    const id = window.setInterval(() => void loadDevices(), 30_000);
+    return () => window.clearInterval(id);
+  }, [loadDevices]);
 
   async function onPush(e: React.FormEvent) {
     e.preventDefault();
@@ -156,8 +170,14 @@ export function WorkplaceAlertPanel({ teamId }: Props) {
         {targetKind === "device" ? (
           loadingDevices ? (
             <p className="enterprise-muted">Loading devices…</p>
+          ) : deviceLoadError ? (
+            <p className="enterprise-alenio-go-alert-error" role="alert">
+              {deviceLoadError}
+            </p>
           ) : devices.length === 0 ? (
-            <p className="enterprise-muted">No approved devices yet. Approve a device link first.</p>
+            <p className="enterprise-muted">
+              No linked devices yet. Open the Alenio Go dashboard on a tablet — it will appear here within a minute.
+            </p>
           ) : (
             <select
               id="alert-device"
@@ -167,7 +187,7 @@ export function WorkplaceAlertPanel({ teamId }: Props) {
             >
               {devices.map((d) => (
                 <option key={d.id} value={d.deviceId}>
-                  {d.deviceLabel?.trim() || "Device"} · {d.deviceId.slice(0, 8)}…
+                  {deviceOptionLabel(d)}
                 </option>
               ))}
             </select>
@@ -193,7 +213,7 @@ export function WorkplaceAlertPanel({ teamId }: Props) {
         <button
           type="submit"
           className="enterprise-alenio-go-link-btn enterprise-alenio-go-alert-push"
-          disabled={busy || (targetKind === "device" && devices.length === 0)}
+          disabled={busy || (targetKind === "device" && (devices.length === 0 || !!deviceLoadError))}
         >
           {busy ? "Sending…" : "Push alert"}
         </button>

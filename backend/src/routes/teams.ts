@@ -19,7 +19,7 @@ import {
 import {
   canManageWorkplaceAlerts,
   createWorkplaceAlert,
-  listApprovedGoDevices,
+  listLinkedGoDevices,
 } from "../lib/workplace-alerts";
 import {
   canInviteMembers,
@@ -888,8 +888,16 @@ teamsRouter.get("/:teamId/go-devices", async (c) => {
     return c.json({ error: { message: "Forbidden", code: "FORBIDDEN" } }, 403);
   }
 
-  const devices = await listApprovedGoDevices(teamId);
-  return c.json({ data: devices });
+  const devices = await listLinkedGoDevices(teamId);
+  return c.json({
+    data: devices.map((d) => ({
+      id: d.id,
+      deviceId: d.deviceId,
+      deviceLabel: d.deviceLabel,
+      updatedAt: d.updatedAt.toISOString(),
+      source: d.source,
+    })),
+  });
 });
 
 // POST /api/teams/:teamId/workplace-alerts — push alert to devices or workspace users

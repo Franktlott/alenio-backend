@@ -13,17 +13,123 @@ export type CreateWorkplaceAlertInput = {
   playSound?: boolean;
 };
 
-export async function listApprovedGoDevices(teamId: string) {
-  return prisma.goLoginRequest.findMany({
-    where: { teamId, status: "approved" },
-    select: {
-      id: true,
-      deviceId: true,
-      deviceLabel: true,
-      updatedAt: true,
-    },
-    orderBy: { updatedAt: "desc" },
+export type LinkedGoDeviceRow = {
+  id: string;
+  deviceId: string;
+  deviceLabel: string | null;
+  updatedAt: Date;
+  source: "approved" | "active";
+};
+
+export async function recordGoDeviceCheckIn(
+  hubToken: string,
+  deviceId: string,
+  deviceLabel?: string | null,
+) {
+  const team = await findTeamByChecklistHubToken(hubToken);
+  if (!team) return { ok: false as const, code: "NOT_FOUND" as const };
+
+  const label = deviceLabel?.trim() || null;
+  const approved = await prisma.goLoginRequest.findUnique({
+    where: { teamId_deviceId: { teamId: team.id, deviceId } },
+    select: { status: true, deviceLabel: true },
   });
+
+  await prisma.goDevicePresence.upsert({
+    where: { teamId_deviceId: { teamId: team.id, deviceId } },
+    create: {
+      teamId: team.id,
+      deviceId,
+      deviceLabel: label ?? approved?.deviceLabel ?? null,
+    },
+    update: {
+      lastSeenAt: new Date(),
+      ...(label ? { deviceLabel: label } : {}),
+    },
+  });
+
+  return {
+    ok: true as const,
+    teamId: team.id,
+    approved: approved?.status === "approved",
+  };
+}
+
+export async function listLinkedGoDevices(teamId: string): Promise<LinkedGoDeviceRow[]> {
+  const [approved, active] = await Promise.all([
+    prisma.goLoginRequest.findMany({
+      where: { teamId, status: "approved" },
+      select: {
+        id: true,
+        deviceId: true,
+        deviceLabel: true,
+        updatedAt: true,
+      },
+      orderBy: { updatedAt: "desc" },
+    }),
+    prisma.goDevicePresence.findMany({
+      where: {
+        teamId,
+        lastSeenAt: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) },
+      },
+      select: {
+        id: true,
+        deviceId: true,
+        deviceLabel: true,
+        lastSeenAt: true,
+      },
+      orderBy: { lastSeenAt: "desc" },
+    }),
+  ]);
+
+  const byDeviceId = new Map<string, LinkedGoDeviceRow>();
+  for (const row of approved) {
+    byDeviceId.set(row.deviceId, {
+      id: row.id,
+      deviceId: row.deviceId,
+      deviceLabel: row.deviceLabel,
+      updatedAt: row.updatedAt,
+      source: "approved",
+    });
+  }
+  for (const row of active) {
+    if (byDeviceId.has(row.deviceId)) continue;
+    byDeviceId.set(row.deviceId, {
+      id: row.id,
+      deviceId: row.deviceId,
+      deviceLabel: row.deviceLabel,
+      updatedAt: row.lastSeenAt,
+      source: "active",
+    });
+  }
+
+  return [...byDeviceId.values()].sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
+}
+
+/** @deprecated Use listLinkedGoDevices */
+export async function listApprovedGoDevices(teamId: string) {
+  const rows = await listLinkedGoDevices(teamId);
+  return rows.map(({ id, deviceId, deviceLabel, updatedAt }) => ({
+    id,
+    deviceId,
+    deviceLabel,
+    updatedAt,
+  }));
+}
+
+async function isGoDeviceReachable(teamId: string, deviceId: string): Promise<boolean> {
+  const approved = await prisma.goLoginRequest.findFirst({
+    where: { teamId, deviceId, status: "approved" },
+    select: { id: true },
+  });
+  if (approved) return true;
+
+  const active = await prisma.goDevicePresence.findUnique({
+    where: { teamId_deviceId: { teamId, deviceId } },
+    select: { lastSeenAt: true },
+  });
+  if (!active) return false;
+  return active.lastSeenAt.getTime() >= Date.now() - 30 * 24 * 60 * 60 * 1000;
 }
 
 export async function createWorkplaceAlert(
@@ -42,10 +148,8 @@ export async function createWorkplaceAlert(
     if (!deviceId) {
       return { ok: false as const, code: "VALIDATION" as const };
     }
-    const linked = await prisma.goLoginRequest.findFirst({
-      where: { teamId, deviceId, status: "approved" },
-    });
-    if (!linked) {
+    const reachable = await isGoDeviceReachable(teamId, deviceId);
+    if (!reachable) {
       return { ok: false as const, code: "DEVICE_NOT_FOUND" as const };
     }
   }
@@ -84,18 +188,14 @@ export async function createWorkplaceAlert(
 }
 
 export async function isGoDeviceApproved(teamId: string, deviceId: string): Promise<boolean> {
-  const row = await prisma.goLoginRequest.findFirst({
-    where: { teamId, deviceId, status: "approved" },
-    select: { id: true },
-  });
-  return !!row;
+  return isGoDeviceReachable(teamId, deviceId);
 }
 
 export async function pollWorkplaceAlertsForDevice(hubToken: string, deviceId: string) {
   const team = await findTeamByChecklistHubToken(hubToken);
   if (!team) return { ok: false as const, code: "NOT_FOUND" as const };
 
-  const approved = await isGoDeviceApproved(team.id, deviceId);
+  const approved = await isGoDeviceReachable(team.id, deviceId);
   if (!approved) return { ok: false as const, code: "FORBIDDEN" as const };
 
   const alerts = await prisma.workplaceAlert.findMany({
@@ -122,7 +222,7 @@ export async function ackWorkplaceAlertForDevice(alertId: string, hubToken: stri
   const team = await findTeamByChecklistHubToken(hubToken);
   if (!team) return { ok: false as const, code: "NOT_FOUND" as const };
 
-  const approved = await isGoDeviceApproved(team.id, deviceId);
+  const approved = await isGoDeviceReachable(team.id, deviceId);
   if (!approved) return { ok: false as const, code: "FORBIDDEN" as const };
 
   const alert = await prisma.workplaceAlert.findUnique({ where: { id: alertId } });

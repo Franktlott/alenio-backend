@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AlenioGoLogo } from "../AlenioGoLogo";
-import { ackGoWorkplaceAlert, fetchGoWorkplaceAlerts, fetchPublicChecklistHub, type GoWorkplaceAlert } from "../../lib/api";
+import { ackGoWorkplaceAlert, fetchGoWorkplaceAlerts, fetchPublicChecklistHub, postGoDeviceCheckIn, type GoWorkplaceAlert } from "../../lib/api";
 import { playGoAlertSound } from "../../lib/go-alert-sound";
 import {
   formatGoDashClock,
@@ -9,7 +9,7 @@ import {
   GO_DASH_QUICK_ACTIONS,
   greetingForHour,
 } from "../../lib/alenio-go-dashboard";
-import { clearGoLinkedWorkspace, getGoDeviceId, saveGoLinkedWorkspace } from "../../lib/go-device";
+import { clearGoLinkedWorkspace, defaultGoDeviceLabel, getGoDeviceId, saveGoLinkedWorkspace } from "../../lib/go-device";
 import { GoDashFooter, GoDashModuleCard, GoDashQuickActionsGrid } from "./go-dash-parts";
 
 type Props = {
@@ -90,7 +90,17 @@ export function AlenioGoKioskDashboard({ hubToken }: Props) {
   useEffect(() => {
     if (!hubToken || loading || error) return;
     const deviceId = getGoDeviceId();
+    const label = defaultGoDeviceLabel();
     let cancelled = false;
+
+    const checkIn = () => {
+      void postGoDeviceCheckIn(hubToken, deviceId, label).catch(() => {
+        /* ignore check-in errors */
+      });
+    };
+
+    checkIn();
+    const checkInId = window.setInterval(checkIn, 60_000);
 
     const poll = () => {
       void fetchGoWorkplaceAlerts(hubToken, deviceId)
@@ -103,10 +113,11 @@ export function AlenioGoKioskDashboard({ hubToken }: Props) {
     };
 
     poll();
-    const id = window.setInterval(poll, 10_000);
+    const pollId = window.setInterval(poll, 10_000);
     return () => {
       cancelled = true;
-      window.clearInterval(id);
+      window.clearInterval(checkInId);
+      window.clearInterval(pollId);
     };
   }, [hubToken, loading, error, handleIncomingAlerts]);
 
@@ -125,6 +136,7 @@ export function AlenioGoKioskDashboard({ hubToken }: Props) {
         setTeamName(data.team.name);
         setTeamImage(data.team.image);
         saveGoLinkedWorkspace(hubToken, data.team.name);
+        void postGoDeviceCheckIn(hubToken, getGoDeviceId(), defaultGoDeviceLabel());
       })
       .catch(() => {
         if (!cancelled) setError("Workspace not found.");

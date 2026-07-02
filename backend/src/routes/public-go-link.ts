@@ -10,6 +10,7 @@ import {
 import {
   ackWorkplaceAlertForDevice,
   pollWorkplaceAlertsForDevice,
+  recordGoDeviceCheckIn,
 } from "../lib/workplace-alerts";
 
 const publicGoLinkRouter = new Hono();
@@ -149,6 +150,26 @@ publicGoLinkRouter.get("/status", async (c) => {
   } catch (err) {
     console.error("[go-link] GET /status failed:", err);
     return c.json({ error: { message: "Could not load link status", code: "INTERNAL" } }, 500);
+  }
+});
+
+const checkInBodySchema = z.object({
+  hubToken: z.string().min(1).max(256),
+  deviceId: z.string().min(8).max(128),
+  deviceLabel: z.string().max(120).optional(),
+});
+
+publicGoLinkRouter.post("/check-in", zValidator("json", checkInBodySchema), async (c) => {
+  try {
+    const { hubToken, deviceId, deviceLabel } = c.req.valid("json");
+    const result = await recordGoDeviceCheckIn(hubToken, deviceId, deviceLabel);
+    if (!result.ok) {
+      return c.json({ error: { message: "Workspace not found", code: "NOT_FOUND" } }, 404);
+    }
+    return c.json({ data: { success: true, approved: result.approved } });
+  } catch (err) {
+    console.error("[go-link] POST /check-in failed:", err);
+    return c.json({ error: { message: "Could not register device", code: "INTERNAL" } }, 500);
   }
 });
 
