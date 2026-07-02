@@ -454,7 +454,7 @@ function buildPrintHtml(options: DevelopmentPlanPrintOptions, logoUrl: string): 
 
     <div class="bottom-bar">
       <img src="${escapeHtml(logoUrl)}" alt="Alenio" class="brand-logo" />
-      <span>alenio.com</span>
+      <span>alenio.app</span>
     </div>
   </div>
 </body>

@@ -155,9 +155,24 @@ function rosterOverallStatus(
 ): { tone: RosterTone; label: string } {
   if (!compliance) return { tone: "muted", label: "—" };
 
+  const noInitialCheckIn =
+    standards.checkInRequired &&
+    compliance.checkInStatus === "overdue" &&
+    daysSinceCheckIn == null;
+  const missingGoals =
+    standards.goalsRequired &&
+    standards.minimumActiveGoals > 0 &&
+    activeGoals < standards.minimumActiveGoals;
+
+  if (noInitialCheckIn && missingGoals) {
+    return { tone: "bad", label: "No check-in or goals" };
+  }
+
   if (standards.checkInRequired) {
+    if (noInitialCheckIn) {
+      return { tone: "bad", label: "No initial check-in" };
+    }
     if (compliance.checkInStatus === "overdue") {
-      if (daysSinceCheckIn == null) return { tone: "bad", label: "Missing" };
       return { tone: "bad", label: "Overdue" };
     }
     if (compliance.checkInStatus === "due_soon") {
@@ -165,7 +180,7 @@ function rosterOverallStatus(
     }
   }
 
-  if (standards.goalsRequired && activeGoals < standards.minimumActiveGoals) {
+  if (missingGoals) {
     return { tone: "warn", label: "Needs goals" };
   }
 

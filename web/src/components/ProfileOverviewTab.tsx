@@ -253,7 +253,7 @@ export function ProfileOverviewTab({
               ) : (
                 <>
                   <strong className="enterprise-overview-metric-value">None</strong>
-                  <span className="enterprise-overview-metric-sub">No check-in on record</span>
+                  <span className="enterprise-overview-metric-sub">No initial check-in yet</span>
                 </>
               )}
             </div>

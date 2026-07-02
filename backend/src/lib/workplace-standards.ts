@@ -23,9 +23,14 @@ export const DEFAULT_WORKPLACE_STANDARDS: WorkplaceStandards = {
 export type StandardsStatusBadge =
   | "On track"
   | "Check-in due soon"
-  | "No check-in"
+  | "No initial check-in"
+  | "No initial check-in or goals"
   | "Overdue check-in"
   | "Needs active goals";
+
+export const NO_INITIAL_CHECK_IN_ACTION = "No check-in on record yet";
+export const NO_INITIAL_CHECK_IN_LABEL = "No initial check-in";
+export const NO_INITIAL_CHECK_IN_OR_GOALS_LABEL = "No initial check-in or goals";
 
 export type StandardsBadgeVariant =
   | "on_track"
@@ -63,8 +68,8 @@ export const STANDARDS_BADGE_LEGEND: ReadonlyArray<{
 }> = [
   {
     variant: "no_check_in",
-    label: "No check-in",
-    description: "No published check-in on record (or none using the required template).",
+    label: NO_INITIAL_CHECK_IN_LABEL,
+    description: "No published check-in on record yet (or none using the required template).",
   },
   {
     variant: "overdue_check_in",
@@ -96,12 +101,26 @@ export function buildMemberStandardsBadgeItems(input: {
   goalsActionText: string;
   daysSinceLastCheckIn: number | null;
 }): StandardsBadgeDisplay[] {
+  const noCheckIn =
+    input.checkInStatus === "overdue" && input.daysSinceLastCheckIn === null;
+  const missingGoals = input.goalsStatus === "missing_goals";
+
+  if (noCheckIn && missingGoals) {
+    return [
+      {
+        key: "no_initial_check_in_or_goals",
+        label: NO_INITIAL_CHECK_IN_OR_GOALS_LABEL,
+        title: `${input.checkInActionText}. ${input.goalsActionText}.`,
+        variant: "no_check_in",
+      },
+    ];
+  }
+
   const items: StandardsBadgeDisplay[] = [];
   if (input.checkInStatus === "overdue") {
-    const noCheckIn = input.daysSinceLastCheckIn === null;
     items.push({
       key: noCheckIn ? "no_check_in" : "overdue_check_in",
-      label: noCheckIn ? "No check-in" : "Overdue check-in",
+      label: noCheckIn ? NO_INITIAL_CHECK_IN_LABEL : "Overdue check-in",
       title: input.checkInActionText,
       variant: noCheckIn ? "no_check_in" : "overdue_check_in",
     });
@@ -288,7 +307,7 @@ export function computeMemberStandardsCompliance(
 
     if (daysSinceLastCheckIn === null) {
       checkInStatus = "overdue";
-      checkInActionText = "Check-in required";
+      checkInActionText = NO_INITIAL_CHECK_IN_ACTION;
     } else if (daysSinceLastCheckIn > frequencyDays) {
       checkInStatus = "overdue";
       const daysOverdue = daysSinceLastCheckIn - frequencyDays;
