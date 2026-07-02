@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { formatGoDashClock } from "../../lib/alenio-go-dashboard";
 
 type Props = {
   deviceCount: number;
@@ -37,7 +36,7 @@ export function BriefingConsoleStats({ deviceCount, memberCount, lastSyncMs }: P
       </div>
       <div className="briefing-console-stat">
         <span className="briefing-console-stat-label">Last Sync</span>
-        <strong className="briefing-console-stat-value">{syncLabel(lastSyncMs)} · {formatGoDashClock()}</strong>
+        <strong className="briefing-console-stat-value">{syncLabel(lastSyncMs)}</strong>
       </div>
     </div>
   );
