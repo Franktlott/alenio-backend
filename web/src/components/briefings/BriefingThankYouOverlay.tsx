@@ -7,7 +7,7 @@ type Props = {
 
 export function BriefingThankYouOverlay({ reviewerName, onDone }: Props) {
   useEffect(() => {
-    const timer = window.setTimeout(onDone, 2400);
+    const timer = window.setTimeout(onDone, 3800);
     return () => window.clearTimeout(timer);
   }, [onDone]);
 
