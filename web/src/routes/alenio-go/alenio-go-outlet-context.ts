@@ -13,5 +13,9 @@ export type AlenioGoOutletContext = {
 };
 
 export function useAlenioGoShell(): AlenioGoOutletContext {
-  return useOutletContext<AlenioGoOutletContext>();
+  const ctx = useOutletContext<AlenioGoOutletContext>();
+  if (!ctx) {
+    throw new Error("Alenio Go pages must be opened from the /go console.");
+  }
+  return ctx;
 }

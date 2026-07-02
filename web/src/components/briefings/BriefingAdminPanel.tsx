@@ -1,4 +1,5 @@
 import type { BriefingAdminStats } from "../../lib/api";
+import { normalizeBriefingAdminStats } from "../../lib/api";
 import { formatBriefingDate } from "../../lib/briefings-display";
 
 type Props = {
@@ -7,7 +8,9 @@ type Props = {
   onReset: (completionId: string) => Promise<void>;
 };
 
-export function BriefingAdminPanel({ stats, busyKey, onReset }: Props) {
+export function BriefingAdminPanel({ stats: rawStats, busyKey, onReset }: Props) {
+  const stats = normalizeBriefingAdminStats(rawStats);
+  const completions = stats.completions ?? [];
   return (
     <div className="briefing-admin">
       <div className="briefing-admin-stats">
@@ -23,7 +26,7 @@ export function BriefingAdminPanel({ stats, busyKey, onReset }: Props) {
         ) : null}
       </div>
 
-      {stats.completions.length === 0 ? (
+      {completions.length === 0 ? (
         <p className="enterprise-muted">No one has signed this briefing yet.</p>
       ) : (
         <div className="briefing-admin-table-wrap">
@@ -38,7 +41,7 @@ export function BriefingAdminPanel({ stats, busyKey, onReset }: Props) {
               </tr>
             </thead>
             <tbody>
-              {stats.completions.map((row) => (
+              {completions.map((row) => (
                 <tr key={row.completionId}>
                   <td>
                     <strong>{row.name}</strong>

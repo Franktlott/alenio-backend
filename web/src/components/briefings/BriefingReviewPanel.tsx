@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import type { BriefingRow } from "../../lib/api";
 import { BriefingDocumentViewer } from "./BriefingDocumentViewer";
 import { BriefingSignaturePad } from "./BriefingSignaturePad";
+import { BriefingThankYouOverlay } from "./BriefingThankYouOverlay";
 
 type Props = {
   briefing: BriefingRow;
@@ -16,18 +17,30 @@ type Props = {
   }) => Promise<void>;
 };
 
+function scrollBriefingToTop(root: HTMLElement | null) {
+  if (!root) return;
+  root.scrollIntoView({ behavior: "smooth", block: "start" });
+  root.querySelector<HTMLElement>(".briefing-doc-pdf-pages")?.scrollTo({ top: 0, behavior: "smooth" });
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
 export function BriefingReviewPanel({ briefing, documentFetchPath, useAuth, busy, error, onComplete }: Props) {
+  const reviewRef = useRef<HTMLDivElement>(null);
   const [initials, setInitials] = useState("");
   const [reviewerName, setReviewerName] = useState("");
   const [signatureData, setSignatureData] = useState<string | null>(null);
   const [localErr, setLocalErr] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
+  const [thankYouName, setThankYouName] = useState<string | null>(null);
   const [signatureResetKey, setSignatureResetKey] = useState(0);
+
+  const finishThankYou = useCallback(() => {
+    setThankYouName(null);
+    scrollBriefingToTop(reviewRef.current);
+  }, []);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setLocalErr(null);
-    setSuccess(null);
     if (!reviewerName.trim()) {
       setLocalErr("Enter your name so your completion is recorded.");
       return;
@@ -40,17 +53,18 @@ export function BriefingReviewPanel({ briefing, documentFetchPath, useAuth, busy
       setLocalErr("Enter your initials to complete this briefing.");
       return;
     }
+    const signedName = reviewerName.trim();
     try {
       await onComplete({
         initials: initials.trim() || undefined,
         signatureData,
-        reviewerName: reviewerName.trim(),
+        reviewerName: signedName,
       });
-      setSuccess("Signed. The next associate can review and sign below.");
       setInitials("");
       setReviewerName("");
       setSignatureData(null);
       setSignatureResetKey((k) => k + 1);
+      setThankYouName(signedName);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not complete briefing.";
       if (message.toLowerCase().includes("already")) {
@@ -62,7 +76,9 @@ export function BriefingReviewPanel({ briefing, documentFetchPath, useAuth, busy
   }
 
   return (
-    <div className="briefing-review">
+    <div className="briefing-review" ref={reviewRef}>
+      {thankYouName ? <BriefingThankYouOverlay reviewerName={thankYouName} onDone={finishThankYou} /> : null}
+
       <header className="briefing-review-head">
         <h2>{briefing.title}</h2>
         <p className="enterprise-muted">{briefing.description}</p>
@@ -116,14 +132,7 @@ export function BriefingReviewPanel({ briefing, documentFetchPath, useAuth, busy
           </p>
         ) : null}
 
-        {success ? (
-          <div className="briefing-review-done" role="status">
-            <strong>Recorded</strong>
-            <span>{success}</span>
-          </div>
-        ) : null}
-
-        <button type="submit" className="enterprise-alenio-go-link-btn briefing-complete-btn" disabled={busy}>
+        <button type="submit" className="enterprise-alenio-go-link-btn briefing-complete-btn" disabled={busy || !!thankYouName}>
           {busy ? "Saving…" : "Complete Briefing"}
         </button>
       </form>

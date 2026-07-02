@@ -139,7 +139,7 @@ export function buildLeadershipBriefing(snapshot: WorkspaceSnapshot): BriefingIn
     });
   }
 
-  const worstOverdueMember = [...snapshot.memberRows]
+  const worstOverdueMember = [...(snapshot.memberRows ?? [])]
     .filter((row) => row.overdueTasks > 0)
     .sort((a, b) => b.overdueTasks - a.overdueTasks)[0];
 
@@ -166,7 +166,7 @@ export function buildLeadershipBriefing(snapshot: WorkspaceSnapshot): BriefingIn
     });
   }
 
-  const topPerformer = [...snapshot.memberRows].sort((a, b) => {
+  const topPerformer = [...(snapshot.memberRows ?? [])].sort((a, b) => {
     if (b.completedTasksThisMonth !== a.completedTasksThisMonth) {
       return b.completedTasksThisMonth - a.completedTasksThisMonth;
     }

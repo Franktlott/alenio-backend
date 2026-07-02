@@ -432,10 +432,72 @@ export type BriefingAdminStats = {
   }>;
 };
 
+type LegacyBriefingAdminRow = {
+  completionId: string | null;
+  name: string;
+  status?: string;
+  completedAt: string | null;
+  initials: string | null;
+  deviceId?: string | null;
+};
+
+type LegacyBriefingAdminStats = {
+  users?: LegacyBriefingAdminRow[];
+  kioskCompletions?: LegacyBriefingAdminRow[];
+  reviewed?: number;
+  overdue?: number | boolean;
+  signed?: number;
+  completions?: BriefingAdminStats["completions"];
+};
+
+export function normalizeBriefingAdminStats(raw: LegacyBriefingAdminStats | BriefingAdminStats): BriefingAdminStats {
+  if (Array.isArray(raw.completions)) {
+    return {
+      signed: typeof raw.signed === "number" ? raw.signed : raw.completions.length,
+      overdue: raw.overdue === true,
+      completions: raw.completions,
+    };
+  }
+
+  const users = Array.isArray(raw.users) ? raw.users : [];
+  const kiosk = Array.isArray(raw.kioskCompletions) ? raw.kioskCompletions : [];
+  const completions: BriefingAdminStats["completions"] = [
+    ...users
+      .filter((row) => row.completionId && row.status === "reviewed")
+      .map((row) => ({
+        completionId: row.completionId!,
+        name: row.name,
+        completedAt: row.completedAt ?? new Date().toISOString(),
+        initials: row.initials ?? "—",
+        deviceId: null,
+        source: "web" as const,
+      })),
+    ...kiosk
+      .filter((row) => row.completionId)
+      .map((row) => ({
+        completionId: row.completionId!,
+        name: row.name,
+        completedAt: row.completedAt ?? new Date().toISOString(),
+        initials: row.initials ?? "—",
+        deviceId: row.deviceId ?? null,
+        source: "kiosk" as const,
+      })),
+  ];
+
+  return {
+    signed: completions.length,
+    overdue: raw.overdue === true,
+    completions,
+  };
+}
+
 export function fetchBriefingAdminStats(teamId: string, briefingId: string) {
-  return apiGetJson<{ data: { briefing: BriefingRow; stats: BriefingAdminStats } }>(
+  return apiGetJson<{ data: { briefing: BriefingRow; stats: LegacyBriefingAdminStats | BriefingAdminStats } }>(
     `/api/teams/${encodeURIComponent(teamId)}/briefings/${encodeURIComponent(briefingId)}/stats`,
-  ).then((r) => r.data);
+  ).then((r) => ({
+    briefing: r.data.briefing,
+    stats: normalizeBriefingAdminStats(r.data.stats),
+  }));
 }
 
 export function postTeamBriefing(teamId: string, body: BriefingCreatePayload) {

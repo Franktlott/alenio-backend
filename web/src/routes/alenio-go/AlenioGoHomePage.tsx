@@ -3,5 +3,6 @@ import { useAlenioGoShell } from "./alenio-go-outlet-context";
 
 export function AlenioGoHomePage() {
   const ctx = useAlenioGoShell();
+  if (!ctx) return null;
   return <AlenioGoBackendDashboard {...ctx} />;
 }

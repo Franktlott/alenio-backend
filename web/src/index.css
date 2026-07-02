@@ -3374,6 +3374,127 @@ input {
   color: #065f46;
 }
 
+.briefing-thankyou-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.briefing-thankyou-card {
+  width: min(100%, 420px);
+  padding: 2rem 1.75rem;
+  border-radius: 20px;
+  background: linear-gradient(160deg, #fff 0%, #f8fafc 100%);
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 24px 48px rgba(15, 23, 42, 0.18);
+  text-align: center;
+}
+
+.briefing-thankyou-card--animate {
+  animation: briefing-thankyou-in 0.45s ease-out;
+}
+
+.briefing-thankyou-check {
+  width: 72px;
+  height: 72px;
+  margin: 0 auto 1.25rem;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+  position: relative;
+  opacity: 0;
+  transform: scale(0.7);
+  box-shadow: 0 12px 28px rgba(34, 197, 94, 0.35);
+}
+
+.briefing-thankyou-card--animate .briefing-thankyou-check {
+  animation: briefing-thankyou-check 0.55s ease-out 0.08s forwards;
+}
+
+.briefing-thankyou-check::after {
+  content: "";
+  position: absolute;
+  left: 26px;
+  top: 16px;
+  width: 14px;
+  height: 28px;
+  border: solid #fff;
+  border-width: 0 4px 4px 0;
+  transform: rotate(45deg);
+}
+
+.briefing-thankyou-title {
+  margin: 0 0 0.5rem;
+  font-size: 1.75rem;
+  font-weight: 800;
+  color: #0f172a;
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+.briefing-thankyou-card--animate .briefing-thankyou-title {
+  animation: briefing-thankyou-in 0.45s ease-out 0.2s forwards;
+}
+
+.briefing-thankyou-sub {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+  color: #334155;
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+.briefing-thankyou-card--animate .briefing-thankyou-sub {
+  animation: briefing-thankyou-in 0.45s ease-out 0.32s forwards;
+}
+
+.briefing-thankyou-hint {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: #64748b;
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+.briefing-thankyou-card--animate .briefing-thankyou-hint {
+  animation: briefing-thankyou-in 0.45s ease-out 0.44s forwards;
+}
+
+@keyframes briefing-thankyou-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes briefing-thankyou-check {
+  0% {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+
+  60% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
 .briefing-signature-canvas {
   width: 100%;
   max-width: 640px;
