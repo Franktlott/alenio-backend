@@ -94,6 +94,7 @@ function serializeBriefingRow(
   },
   status: BriefingStatus,
   completedAt: Date | null,
+  signedCount?: number,
 ) {
   return {
     id: row.id,
@@ -111,6 +112,7 @@ function serializeBriefingRow(
     createdAt: row.createdAt.toISOString(),
     status,
     completedAt: completedAt?.toISOString() ?? null,
+    ...(signedCount !== undefined ? { signedCount } : {}),
   };
 }
 
@@ -169,13 +171,29 @@ export async function listBriefingsForUser(teamId: string, userId: string) {
   });
 
   const now = new Date();
+  const canManage = isBriefingManagerRole(member.role);
+
+  let signedCounts = new Map<string, number>();
+  if (canManage && briefings.length > 0) {
+    const grouped = await prisma.briefingCompletion.groupBy({
+      by: ["briefingId"],
+      where: { teamId, briefingId: { in: briefings.map((b) => b.id) } },
+      _count: { _all: true },
+    });
+    signedCounts = new Map(grouped.map((g) => [g.briefingId, g._count._all]));
+  }
 
   return {
     ok: true as const,
     briefings: briefings.map((b) =>
-      serializeBriefingRow(b, briefingStatus(b.dueAt, null, now), null),
+      serializeBriefingRow(
+        b,
+        briefingStatus(b.dueAt, null, now),
+        null,
+        canManage ? signedCounts.get(b.id) ?? 0 : undefined,
+      ),
     ),
-    canManage: isBriefingManagerRole(member.role),
+    canManage,
   };
 }
 

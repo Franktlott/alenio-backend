@@ -394,6 +394,7 @@ export type BriefingRow = {
   createdAt: string;
   status: BriefingStatus;
   completedAt: string | null;
+  signedCount?: number;
 };
 
 export type BriefingCreatePayload = {
