@@ -21,7 +21,7 @@ function pageTitleForPath(pathname: string): string | null {
   if (pathname.startsWith("/dashboard")) return enterpriseNavTitle("execute");
   if (pathname.startsWith("/aleniogo")) return "Alenio Go";
   if (pathname.startsWith("/checklist/")) return "Alenio Go";
-  if (pathname.startsWith("/go")) return "Alenio Go";
+  if (pathname.startsWith("/go")) return enterpriseNavTitle("go");
   if (pathname.startsWith("/tasks/new")) return "New task";
   if (pathname.startsWith("/tasks/")) return "Task";
   if (pathname.startsWith("/billing")) return enterpriseNavTitle("plan");

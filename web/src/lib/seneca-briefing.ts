@@ -270,7 +270,7 @@ export function briefingActionPath(actionId: string, teamId: string): string {
   const ws = encodeURIComponent(teamId);
   switch (actionId) {
     case "review_checklist":
-      return `/aleniogo`;
+      return `/go?teamId=${ws}`;
     case "coach_owner":
     case "prepare_1on1":
     case "create_dev_note":
@@ -290,7 +290,7 @@ export function quickActionPath(actionId: SenecaQuickAction["id"], teamId: strin
   const ws = encodeURIComponent(teamId);
   switch (actionId) {
     case "checklist":
-      return `/aleniogo`;
+      return `/go?teamId=${ws}`;
     case "task":
       return `/tasks/new?teamId=${ws}`;
     case "check_in":

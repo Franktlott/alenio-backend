@@ -115,8 +115,6 @@ export default function App() {
         <Route path="/checklist/:hubToken/:checklistId" element={<LocationChecklistKioskPage />} />
         <Route path="/checklist/:hubToken" element={<WorkspaceChecklistHubPage />} />
         <Route path="/aleniogo" element={<AlenioGoLinkPage />} />
-        <Route path="/go" element={<AlenioGoPage />} />
-        <Route path="/go/*" element={<AlenioGoPage />} />
         <Route path="/get-app" element={<GetAppPage />} />
         <Route path="/privacy" element={<PrivacyPolicyPage />} />
         <Route path="/terms" element={<TermsOfServicePage />} />
@@ -133,6 +131,8 @@ export default function App() {
           }
         >
           <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/go" element={<AlenioGoPage />} />
+          <Route path="/go/*" element={<Navigate to="/go" replace />} />
           <Route path="/activity" element={<ActivityPage />} />
           <Route path="/chat" element={<ChatPage />} />
           <Route path="/billing" element={<BillingPage />} />
