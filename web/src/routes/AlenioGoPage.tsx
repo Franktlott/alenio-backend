@@ -1,5 +1,6 @@
 import { AlenioGoLogo } from "../components/AlenioGoLogo";
 import { PendingApprovalsPanel } from "../components/PendingApprovalsPanel";
+import { WorkplaceAlertPanel } from "../components/WorkplaceAlertPanel";
 import { useEnterpriseShell } from "../contexts/EnterpriseShellContext";
 import { usePendingApprovals } from "../hooks/usePendingApprovals";
 import { canManageApprovals } from "../lib/pending-approvals";
@@ -23,6 +24,8 @@ export function AlenioGoPage() {
   return (
     <div className="enterprise-tab-shell enterprise-alenio-go-page" data-testid="alenio-go-page">
       <div className="enterprise-alenio-go-layout">
+        {canManage && selectedTeamId ? <WorkplaceAlertPanel teamId={selectedTeamId} /> : null}
+
         <section className="enterprise-card enterprise-alenio-go-approvals" aria-labelledby="alenio-go-approvals-title">
           <header className="enterprise-alenio-go-approvals-head">
             <div>

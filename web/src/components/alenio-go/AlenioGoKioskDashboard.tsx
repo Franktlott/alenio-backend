@@ -1,14 +1,15 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AlenioGoLogo } from "../AlenioGoLogo";
-import { fetchPublicChecklistHub } from "../../lib/api";
+import { ackGoWorkplaceAlert, fetchGoWorkplaceAlerts, fetchPublicChecklistHub, type GoWorkplaceAlert } from "../../lib/api";
+import { playGoAlertSound } from "../../lib/go-alert-sound";
 import {
   formatGoDashClock,
   GO_DASH_KIOSK_MODULES,
   GO_DASH_QUICK_ACTIONS,
   greetingForHour,
 } from "../../lib/alenio-go-dashboard";
-import { clearGoLinkedWorkspace, saveGoLinkedWorkspace } from "../../lib/go-device";
+import { clearGoLinkedWorkspace, getGoDeviceId, saveGoLinkedWorkspace } from "../../lib/go-device";
 import { GoDashFooter, GoDashModuleCard, GoDashQuickActionsGrid } from "./go-dash-parts";
 
 type Props = {
@@ -61,6 +62,53 @@ export function AlenioGoKioskDashboard({ hubToken }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [teamName, setTeamName] = useState("");
   const [teamImage, setTeamImage] = useState<string | null>(null);
+  const [alerts, setAlerts] = useState<GoWorkplaceAlert[]>([]);
+  const handledAlertIds = useRef(new Set<string>());
+
+  const handleIncomingAlerts = useCallback(
+    (incoming: GoWorkplaceAlert[]) => {
+      if (incoming.length === 0) return;
+      const deviceId = getGoDeviceId();
+      let played = false;
+      for (const alert of incoming) {
+        if (handledAlertIds.current.has(alert.id)) continue;
+        handledAlertIds.current.add(alert.id);
+        if (alert.playSound && !played) {
+          playGoAlertSound();
+          played = true;
+        }
+        void ackGoWorkplaceAlert(alert.id, hubToken, deviceId);
+      }
+      setAlerts((prev) => {
+        const merged = [...incoming, ...prev.filter((a) => !incoming.some((n) => n.id === a.id))];
+        return merged.slice(0, 8);
+      });
+    },
+    [hubToken],
+  );
+
+  useEffect(() => {
+    if (!hubToken || loading || error) return;
+    const deviceId = getGoDeviceId();
+    let cancelled = false;
+
+    const poll = () => {
+      void fetchGoWorkplaceAlerts(hubToken, deviceId)
+        .then((rows) => {
+          if (!cancelled) handleIncomingAlerts(rows);
+        })
+        .catch(() => {
+          /* ignore poll errors */
+        });
+    };
+
+    poll();
+    const id = window.setInterval(poll, 10_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [hubToken, loading, error, handleIncomingAlerts]);
 
   useEffect(() => {
     if (!hubToken) {
@@ -170,7 +218,7 @@ export function AlenioGoKioskDashboard({ hubToken }: Props) {
               <GoDashModuleCard key={m.id} module={m} />
             ))}
 
-            <section className="go-dash-alerts" aria-labelledby="go-kiosk-alerts-title">
+            <section className="go-dash-alerts go-dash-alerts--live" aria-labelledby="go-kiosk-alerts-title">
               <div className="go-dash-alerts-head">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
                   <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
@@ -178,7 +226,23 @@ export function AlenioGoKioskDashboard({ hubToken }: Props) {
                 </svg>
                 <h2 id="go-kiosk-alerts-title">Alerts</h2>
               </div>
-              <p className="go-dash-alerts-empty">No alerts right now.</p>
+              {alerts.length === 0 ? (
+                <p className="go-dash-alerts-empty">No alerts right now.</p>
+              ) : (
+                <ul className="go-dash-alerts-list">
+                  {alerts.map((alert) => (
+                    <li key={alert.id}>
+                      <div className="go-dash-alert-item go-dash-alert-item--banner">
+                        <span className="go-dash-alert-dot" aria-hidden />
+                        <div className="go-dash-alert-copy">
+                          <strong>{alert.title}</strong>
+                          <span>{alert.body}</span>
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </section>
           </div>
         </div>

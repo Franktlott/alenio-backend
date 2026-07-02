@@ -123,6 +123,7 @@ model Team {
   /** JSON: per-workspace check-in and development goal expectations. */
   workplaceStandards String?
   goLoginRequests GoLoginRequest[]
+  workplaceAlerts WorkplaceAlert[]
 }
 
 model TeamSubscription {
@@ -487,6 +488,34 @@ model GoLoginRequest {
 
   @@unique([teamId, deviceId])
   @@index([teamId, status])
+}
+
+model WorkplaceAlert {
+  id              String   @id @default(cuid())
+  teamId          String
+  title           String
+  body            String
+  targetType      String   // device, all_devices, all_users
+  targetDeviceId  String?
+  playSound       Boolean  @default(true)
+  createdByUserId String
+  createdAt       DateTime @default(now())
+
+  team Team                  @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  acks WorkplaceAlertAck[]
+
+  @@index([teamId, createdAt])
+}
+
+model WorkplaceAlertAck {
+  id        String   @id @default(cuid())
+  alertId   String
+  deviceId  String
+  createdAt DateTime @default(now())
+
+  alert WorkplaceAlert @relation(fields: [alertId], references: [id], onDelete: Cascade)
+
+  @@unique([alertId, deviceId])
 }
 
 model TeamInvite {

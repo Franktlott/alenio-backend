@@ -319,6 +319,54 @@ export function fetchGoLinkStatus(deviceId: string, requestId: string) {
   return apiGetJson<{ data: GoLinkResponse }>(`/api/public/go/status?${q}`).then((r) => r.data);
 }
 
+export type GoDeviceRow = {
+  id: string;
+  deviceId: string;
+  deviceLabel: string | null;
+  updatedAt: string;
+};
+
+export function fetchTeamGoDevices(teamId: string) {
+  return apiGetJson<{ data: GoDeviceRow[] }>(`/api/teams/${encodeURIComponent(teamId)}/go-devices`).then(
+    (r) => r.data,
+  );
+}
+
+export type WorkplaceAlertPayload = {
+  title?: string;
+  body: string;
+  targetType: "device" | "all_devices" | "all_users";
+  targetDeviceId?: string;
+  playSound?: boolean;
+};
+
+export function postWorkplaceAlert(teamId: string, body: WorkplaceAlertPayload) {
+  return apiPostJson<{ data: { id: string; createdAt: string } }>(
+    `/api/teams/${encodeURIComponent(teamId)}/workplace-alerts`,
+    body,
+  ).then((r) => r.data);
+}
+
+export type GoWorkplaceAlert = {
+  id: string;
+  title: string;
+  body: string;
+  playSound: boolean;
+  createdAt: string;
+};
+
+export function fetchGoWorkplaceAlerts(hubToken: string, deviceId: string) {
+  const q = new URLSearchParams({ hubToken, deviceId });
+  return apiGetJson<{ data: { alerts: GoWorkplaceAlert[] } }>(`/api/public/go/alerts?${q}`).then((r) => r.data.alerts);
+}
+
+export function ackGoWorkplaceAlert(alertId: string, hubToken: string, deviceId: string) {
+  return apiPostJson<{ data: { success: boolean } }>(`/api/public/go/alerts/${encodeURIComponent(alertId)}/ack`, {
+    hubToken,
+    deviceId,
+  });
+}
+
 export type WebTeamInvite = {
   id: string;
   teamId: string;

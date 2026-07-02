@@ -7,6 +7,10 @@ import {
   normalizeWorkspaceCode,
   notifyGoLoginApprovers,
 } from "../lib/go-login-requests";
+import {
+  ackWorkplaceAlertForDevice,
+  pollWorkplaceAlertsForDevice,
+} from "../lib/workplace-alerts";
 
 const publicGoLinkRouter = new Hono();
 
@@ -145,6 +149,54 @@ publicGoLinkRouter.get("/status", async (c) => {
   } catch (err) {
     console.error("[go-link] GET /status failed:", err);
     return c.json({ error: { message: "Could not load link status", code: "INTERNAL" } }, 500);
+  }
+});
+
+publicGoLinkRouter.get("/alerts", async (c) => {
+  try {
+    const hubToken = c.req.query("hubToken")?.trim();
+    const deviceId = c.req.query("deviceId")?.trim();
+    if (!hubToken || !deviceId) {
+      return c.json({ error: { message: "hubToken and deviceId are required", code: "VALIDATION_ERROR" } }, 400);
+    }
+
+    const result = await pollWorkplaceAlertsForDevice(hubToken, deviceId);
+    if (!result.ok) {
+      if (result.code === "FORBIDDEN") {
+        return c.json({ error: { message: "Device not approved", code: "FORBIDDEN" } }, 403);
+      }
+      return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
+    }
+
+    return c.json({ data: { alerts: result.alerts } });
+  } catch (err) {
+    console.error("[go-link] GET /alerts failed:", err);
+    return c.json({ error: { message: "Could not load alerts", code: "INTERNAL" } }, 500);
+  }
+});
+
+publicGoLinkRouter.post("/alerts/:alertId/ack", async (c) => {
+  try {
+    const alertId = c.req.param("alertId")?.trim();
+    const body = await c.req.json().catch(() => null) as { hubToken?: string; deviceId?: string } | null;
+    const hubToken = body?.hubToken?.trim();
+    const deviceId = body?.deviceId?.trim();
+    if (!alertId || !hubToken || !deviceId) {
+      return c.json({ error: { message: "alertId, hubToken, and deviceId are required", code: "VALIDATION_ERROR" } }, 400);
+    }
+
+    const result = await ackWorkplaceAlertForDevice(alertId, hubToken, deviceId);
+    if (!result.ok) {
+      if (result.code === "FORBIDDEN") {
+        return c.json({ error: { message: "Device not approved", code: "FORBIDDEN" } }, 403);
+      }
+      return c.json({ error: { message: "Alert not found", code: "NOT_FOUND" } }, 404);
+    }
+
+    return c.json({ data: { success: true } });
+  } catch (err) {
+    console.error("[go-link] POST /alerts/:id/ack failed:", err);
+    return c.json({ error: { message: "Could not acknowledge alert", code: "INTERNAL" } }, 500);
   }
 });
 

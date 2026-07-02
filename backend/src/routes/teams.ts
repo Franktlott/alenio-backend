@@ -17,6 +17,11 @@ import {
   canManageGoLoginRequests,
 } from "../lib/go-login-requests";
 import {
+  canManageWorkplaceAlerts,
+  createWorkplaceAlert,
+  listApprovedGoDevices,
+} from "../lib/workplace-alerts";
+import {
   canInviteMembers,
   generateInviteToken,
   inviteExpiresAt,
@@ -864,6 +869,55 @@ teamsRouter.post("/:teamId/transfer-ownership", async (c) => {
   ]);
 
   return c.json({ data: { success: true } });
+});
+
+const workplaceAlertBodySchema = z.object({
+  title: z.string().trim().max(120).optional(),
+  body: z.string().trim().min(1).max(500),
+  targetType: z.enum(["device", "all_devices", "all_users"]),
+  targetDeviceId: z.string().trim().min(8).max(128).optional(),
+  playSound: z.boolean().optional(),
+});
+
+// GET /api/teams/:teamId/go-devices — approved Alenio Go devices
+teamsRouter.get("/:teamId/go-devices", async (c) => {
+  const user = c.get("user")!;
+  const { teamId } = c.req.param();
+
+  if (!(await canManageWorkplaceAlerts(teamId, user.id))) {
+    return c.json({ error: { message: "Forbidden", code: "FORBIDDEN" } }, 403);
+  }
+
+  const devices = await listApprovedGoDevices(teamId);
+  return c.json({ data: devices });
+});
+
+// POST /api/teams/:teamId/workplace-alerts — push alert to devices or workspace users
+teamsRouter.post("/:teamId/workplace-alerts", zValidator("json", workplaceAlertBodySchema), async (c) => {
+  const user = c.get("user")!;
+  const { teamId } = c.req.param();
+  const body = c.req.valid("json");
+
+  if (!(await canManageWorkplaceAlerts(teamId, user.id))) {
+    return c.json({ error: { message: "Forbidden", code: "FORBIDDEN" } }, 403);
+  }
+
+  const result = await createWorkplaceAlert(teamId, user.id, {
+    title: body.title ?? "Workplace alert",
+    body: body.body,
+    targetType: body.targetType,
+    targetDeviceId: body.targetDeviceId,
+    playSound: body.playSound,
+  });
+
+  if (!result.ok) {
+    if (result.code === "DEVICE_NOT_FOUND") {
+      return c.json({ error: { message: "Device not found or not approved", code: "NOT_FOUND" } }, 404);
+    }
+    return c.json({ error: { message: "Invalid alert", code: "VALIDATION_ERROR" } }, 400);
+  }
+
+  return c.json({ data: result.alert });
 });
 
 export { teamsRouter };

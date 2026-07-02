@@ -2441,6 +2441,82 @@ input {
   align-content: start;
 }
 
+.enterprise-alenio-go-alert {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.enterprise-alenio-go-alert-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+}
+
+.enterprise-alenio-go-alert-label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #334155;
+}
+
+.enterprise-alenio-go-alert-input,
+.enterprise-alenio-go-alert-textarea,
+.enterprise-alenio-go-alert-select {
+  width: 100%;
+  padding: 0.5625rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  font: inherit;
+  color: #0f172a;
+  background: #fff;
+}
+
+.enterprise-alenio-go-alert-textarea {
+  resize: vertical;
+  min-height: 72px;
+}
+
+.enterprise-alenio-go-alert-targets {
+  margin: 0.25rem 0 0;
+  padding: 0;
+  border: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
+}
+
+.enterprise-alenio-go-alert-targets legend {
+  width: 100%;
+  padding: 0;
+}
+
+.enterprise-alenio-go-alert-radio,
+.enterprise-alenio-go-alert-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: #334155;
+}
+
+.enterprise-alenio-go-alert-error {
+  margin: 0;
+  color: #b91c1c;
+  font-size: 0.875rem;
+}
+
+.enterprise-alenio-go-alert-success {
+  margin: 0;
+  color: #047857;
+  font-size: 0.875rem;
+}
+
+.enterprise-alenio-go-alert-push {
+  align-self: flex-start;
+  margin-top: 0.25rem;
+  border: none;
+  cursor: pointer;
+}
+
 .enterprise-alenio-go-approvals {
   margin: 0;
   min-height: 0;
@@ -3006,6 +3082,34 @@ input {
 .go-dash-alert-item svg:last-child {
   margin-left: auto;
   color: #94a3b8;
+}
+
+.go-dash-alert-item--banner {
+  cursor: default;
+  align-items: flex-start;
+}
+
+.go-dash-alert-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+.go-dash-alert-copy strong {
+  font-size: 0.8125rem;
+  color: #0f172a;
+}
+
+.go-dash-alert-copy span {
+  font-size: 0.8125rem;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+.go-dash-alerts--live {
+  border-color: #fecaca;
+  box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.08);
 }
 
 .go-dash-quick-title {
