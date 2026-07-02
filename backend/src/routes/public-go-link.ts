@@ -15,6 +15,7 @@ import {
 import {
   completePublicBriefing,
   getPublicBriefing,
+  getPublicBriefingDocument,
   listPublicBriefings,
 } from "../lib/briefings";
 
@@ -270,6 +271,35 @@ publicGoLinkRouter.get("/briefings/:briefingId", async (c) => {
   } catch (err) {
     console.error("[go-link] GET /briefings/:id failed:", err);
     return c.json({ error: { message: "Could not load briefing", code: "INTERNAL" } }, 500);
+  }
+});
+
+publicGoLinkRouter.get("/briefings/:briefingId/document", async (c) => {
+  try {
+    const briefingId = c.req.param("briefingId")?.trim();
+    const hubToken = c.req.query("hubToken")?.trim();
+    const deviceId = c.req.query("deviceId")?.trim();
+    if (!briefingId || !hubToken || !deviceId) {
+      return c.json({ error: { message: "briefingId, hubToken, and deviceId are required", code: "VALIDATION_ERROR" } }, 400);
+    }
+    const result = await getPublicBriefingDocument(hubToken, deviceId, briefingId);
+    if (!result.ok) {
+      if (result.code === "FORBIDDEN") return c.json({ error: { message: "Device not approved", code: "FORBIDDEN" } }, 403);
+      if (result.code === "NOT_FOUND" || result.code === "DOCUMENT_UNAVAILABLE") {
+        return c.json({ error: { message: "Document not found", code: "NOT_FOUND" } }, 404);
+      }
+      return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
+    }
+    return new Response(new Uint8Array(result.bytes), {
+      headers: {
+        "Content-Type": result.contentType,
+        "Cache-Control": "private, max-age=3600",
+        "Content-Disposition": `inline; filename="${result.filename.replace(/"/g, "")}"`,
+      },
+    });
+  } catch (err) {
+    console.error("[go-link] GET /briefings/:id/document failed:", err);
+    return c.json({ error: { message: "Could not load document", code: "INTERNAL" } }, 500);
   }
 });
 

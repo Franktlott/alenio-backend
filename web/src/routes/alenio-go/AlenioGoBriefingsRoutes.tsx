@@ -12,6 +12,7 @@ import {
   fetchTeamBriefings,
   postBriefingComplete,
   postTeamBriefing,
+  teamBriefingDocumentPath,
 } from "../../lib/api";
 import { useAlenioGoShell } from "./alenio-go-outlet-context";
 
@@ -120,6 +121,8 @@ function BriefingReviewPage() {
       <div className="go-backend-module-panel go-backend-panel-card">
         <BriefingReviewPanel
           briefing={briefing}
+          documentFetchPath={teamBriefingDocumentPath(teamId, briefing.id)}
+          useAuth
           busy={busy}
           error={error}
           onComplete={async (payload) => {

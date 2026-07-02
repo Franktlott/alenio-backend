@@ -27,6 +27,7 @@ import {
   createBriefing,
   deleteBriefingCompletion,
   getBriefingAdminStats,
+  getBriefingDocumentForUser,
   getBriefingForUser,
   listBriefingsForUser,
 } from "../lib/briefings";
@@ -973,6 +974,27 @@ teamsRouter.get("/:teamId/briefings/:briefingId", async (c) => {
     return c.json({ error: { message: "Forbidden", code: "FORBIDDEN" } }, 403);
   }
   return c.json({ data: { briefing: result.briefing, canManage: result.canManage } });
+});
+
+// GET /api/teams/:teamId/briefings/:briefingId/document
+teamsRouter.get("/:teamId/briefings/:briefingId/document", async (c) => {
+  const user = c.get("user")!;
+  const { teamId, briefingId } = c.req.param();
+  const result = await getBriefingDocumentForUser(teamId, briefingId, user.id);
+  if (!result.ok) {
+    if (result.code === "NOT_FOUND") return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
+    if (result.code === "DOCUMENT_UNAVAILABLE") {
+      return c.json({ error: { message: "Document unavailable", code: "NOT_FOUND" } }, 404);
+    }
+    return c.json({ error: { message: "Forbidden", code: "FORBIDDEN" } }, 403);
+  }
+  return new Response(new Uint8Array(result.bytes), {
+    headers: {
+      "Content-Type": result.contentType,
+      "Cache-Control": "private, max-age=3600",
+      "Content-Disposition": `inline; filename="${result.filename.replace(/"/g, "")}"`,
+    },
+  });
 });
 
 // GET /api/teams/:teamId/briefings/:briefingId/stats

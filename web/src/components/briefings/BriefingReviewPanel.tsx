@@ -5,6 +5,8 @@ import { BriefingSignaturePad } from "./BriefingSignaturePad";
 
 type Props = {
   briefing: BriefingRow;
+  documentFetchPath: string;
+  useAuth?: boolean;
   busy?: boolean;
   error?: string | null;
   onComplete: (payload: {
@@ -14,7 +16,7 @@ type Props = {
   }) => Promise<void>;
 };
 
-export function BriefingReviewPanel({ briefing, busy, error, onComplete }: Props) {
+export function BriefingReviewPanel({ briefing, documentFetchPath, useAuth, busy, error, onComplete }: Props) {
   const [initials, setInitials] = useState("");
   const [reviewerName, setReviewerName] = useState("");
   const [signatureData, setSignatureData] = useState<string | null>(null);
@@ -66,7 +68,7 @@ export function BriefingReviewPanel({ briefing, busy, error, onComplete }: Props
         <p className="enterprise-muted">{briefing.description}</p>
       </header>
 
-      <BriefingDocumentViewer briefing={briefing} />
+      <BriefingDocumentViewer briefing={briefing} documentFetchPath={documentFetchPath} useAuth={useAuth} />
 
       <form className="briefing-review-confirm" onSubmit={(e) => void submit(e)}>
         <p className="briefing-review-confirm-text">I confirm that I have reviewed and understand this briefing.</p>

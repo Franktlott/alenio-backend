@@ -461,6 +461,15 @@ export function deleteBriefingCompletion(teamId: string, briefingId: string, com
   ).then((r) => r.data);
 }
 
+export function goBriefingDocumentPath(hubToken: string, deviceId: string, briefingId: string): string {
+  const q = new URLSearchParams({ hubToken, deviceId });
+  return `/api/public/go/briefings/${encodeURIComponent(briefingId)}/document?${q}`;
+}
+
+export function teamBriefingDocumentPath(teamId: string, briefingId: string): string {
+  return `/api/teams/${encodeURIComponent(teamId)}/briefings/${encodeURIComponent(briefingId)}/document`;
+}
+
 export function fetchGoBriefings(hubToken: string, deviceId: string) {
   const q = new URLSearchParams({ hubToken, deviceId });
   return apiGetJson<{ data: { briefings: BriefingRow[] } }>(`/api/public/go/briefings?${q}`).then((r) => r.data.briefings);

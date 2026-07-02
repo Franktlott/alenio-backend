@@ -159,6 +159,53 @@ function parseObjectFromStorageUrl(url: string): { bucketId: string; objectPath:
   return null;
 }
 
+export async function readStorageObjectByUrl(
+  url: string,
+): Promise<{ bytes: Buffer; contentType: string } | null> {
+  const parsed = parseObjectFromStorageUrl(url.trim());
+  if (!parsed) return null;
+  if (!ensureFirebaseStorageInitialized()) return null;
+
+  let lastErr: unknown;
+  for (const bucketId of bucketCandidates()) {
+    try {
+      const file = getStorage().bucket(bucketId).file(parsed.objectPath);
+      const [bytes] = await file.download();
+      const [meta] = await file.getMetadata();
+      return {
+        bytes,
+        contentType: meta.contentType || "application/octet-stream",
+      };
+    } catch (e) {
+      lastErr = e;
+      if (isStorageNotFound(e)) continue;
+      throw new Error(formatStorageError(e));
+    }
+  }
+
+  if (lastErr && !isStorageNotFound(lastErr)) {
+    throw new Error(formatStorageError(lastErr));
+  }
+  return null;
+}
+
+export async function fetchRemoteDocumentBytes(
+  documentUrl: string,
+): Promise<{ bytes: Buffer; contentType: string }> {
+  const fromStorage = await readStorageObjectByUrl(documentUrl);
+  if (fromStorage) return fromStorage;
+
+  const res = await fetch(documentUrl);
+  if (!res.ok) {
+    throw new Error(`Document not found (${res.status})`);
+  }
+  const bytes = Buffer.from(await res.arrayBuffer());
+  return {
+    bytes,
+    contentType: res.headers.get("content-type") || "application/octet-stream",
+  };
+}
+
 /**
  * Best-effort delete when `url` points at an object in this backend's Storage bucket(s).
  * No-ops for OAuth / external URLs or unparseable links.

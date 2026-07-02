@@ -1,15 +1,27 @@
 import { useEffect, useRef, useState } from "react";
 import { getDocument, GlobalWorkerOptions, type PDFDocumentProxy } from "pdfjs-dist";
 import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
+import { getAccessToken } from "../../lib/auth-client";
+import { getWebApiBase } from "../../lib/api-base";
 
 GlobalWorkerOptions.workerSrc = pdfWorker;
 
 type Props = {
-  url: string;
+  fetchPath: string;
+  fallbackUrl: string;
   title: string;
+  useAuth?: boolean;
 };
 
-export function BriefingPdfViewer({ url, title }: Props) {
+function friendlyPdfError(err: unknown): string {
+  const message = err instanceof Error ? err.message : "Could not load this PDF.";
+  if (message === "Load failed" || message === "Failed to fetch" || message.startsWith("NetworkError")) {
+    return "Could not load this document. Check your connection and try again.";
+  }
+  return message;
+}
+
+export function BriefingPdfViewer({ fetchPath, fallbackUrl, title, useAuth }: Props) {
   const pagesRef = useRef<HTMLDivElement>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -29,7 +41,16 @@ export function BriefingPdfViewer({ url, title }: Props) {
       container.replaceChildren();
 
       try {
-        pdf = await getDocument({ url }).promise;
+        const headers: Record<string, string> = {};
+        if (useAuth) {
+          const token = getAccessToken();
+          if (token) headers.Authorization = `Bearer ${token}`;
+        }
+
+        pdf = await getDocument({
+          url: `${getWebApiBase()}${fetchPath}`,
+          httpHeaders: headers,
+        }).promise;
         if (cancelled) return;
 
         const totalPages = pdf.numPages;
@@ -74,7 +95,7 @@ export function BriefingPdfViewer({ url, title }: Props) {
         }
       } catch (err) {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Could not load this PDF.");
+          setError(friendlyPdfError(err));
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -87,7 +108,7 @@ export function BriefingPdfViewer({ url, title }: Props) {
       cancelled = true;
       void pdf?.destroy();
     };
-  }, [url, title]);
+  }, [fetchPath, title, useAuth]);
 
   return (
     <div className="briefing-doc-pdf">
@@ -95,7 +116,7 @@ export function BriefingPdfViewer({ url, title }: Props) {
       {error ? (
         <div className="briefing-doc-fallback">
           <p className="enterprise-muted">{error}</p>
-          <a href={url} target="_blank" rel="noopener noreferrer" className="enterprise-alenio-go-link-btn">
+          <a href={fallbackUrl} target="_blank" rel="noopener noreferrer" className="enterprise-alenio-go-link-btn">
             Open PDF in new tab
           </a>
         </div>

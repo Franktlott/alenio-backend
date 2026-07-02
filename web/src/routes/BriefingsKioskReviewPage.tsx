@@ -1,21 +1,42 @@
 import { Link, useParams } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { BriefingReviewPanel } from "../components/briefings/BriefingReviewPanel";
-import { fetchGoBriefing, postGoBriefingComplete } from "../lib/api";
+import { fetchGoBriefing, goBriefingDocumentPath, postGoBriefingComplete } from "../lib/api";
 import { getGoDeviceId } from "../lib/go-device";
 
 export function BriefingsKioskReviewPage() {
   const { hubToken = "", briefingId = "" } = useParams();
   const [briefing, setBriefing] = useState<Awaited<ReturnType<typeof fetchGoBriefing>> | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!hubToken || !briefingId) return;
+    setLoadError(null);
     void fetchGoBriefing(hubToken, getGoDeviceId(), briefingId)
-      .then(setBriefing)
-      .catch(() => setBriefing(null));
+      .then((row) => {
+        setBriefing(row);
+        setLoadError(null);
+      })
+      .catch((err) => {
+        setBriefing(null);
+        setLoadError(err instanceof Error ? err.message : "Could not load this briefing.");
+      });
   }, [hubToken, briefingId]);
+
+  if (loadError) {
+    return (
+      <div className="go-briefings-kiosk go-briefings-kiosk--review">
+        <p className="go-dash-error" role="alert">
+          {loadError}
+        </p>
+        <Link to={`/checklist/${hubToken}/briefings`} className="go-briefings-kiosk-back">
+          ← Briefings
+        </Link>
+      </div>
+    );
+  }
 
   if (!briefing) return <p className="go-dash-loading">Loading briefing…</p>;
 
@@ -28,6 +49,7 @@ export function BriefingsKioskReviewPage() {
       </header>
       <BriefingReviewPanel
         briefing={briefing}
+        documentFetchPath={goBriefingDocumentPath(hubToken, getGoDeviceId(), briefingId)}
         busy={busy}
         error={error}
         onComplete={async (payload) => {

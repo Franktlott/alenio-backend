@@ -1,6 +1,7 @@
 import { prisma } from "../prisma";
 import { findTeamByChecklistHubToken } from "./checklist-locations";
 import { canManageGoLoginRequests } from "./go-login-requests";
+import { fetchRemoteDocumentBytes } from "./firebase-storage";
 import { isGoDeviceApproved } from "./workplace-alerts";
 import { sendPushToUsers } from "./push";
 
@@ -396,5 +397,48 @@ export async function completePublicBriefing(
     return { ok: true as const, completion };
   } catch {
     return { ok: false as const, code: "ALREADY_COMPLETED" as const };
+  }
+}
+
+export async function getBriefingDocumentForUser(teamId: string, briefingId: string, userId: string) {
+  const member = await assertTeamMember(teamId, userId);
+  if (!member) return { ok: false as const, code: "FORBIDDEN" as const };
+
+  const briefing = await prisma.briefing.findFirst({ where: { id: briefingId, teamId } });
+  if (!briefing) return { ok: false as const, code: "NOT_FOUND" as const };
+
+  try {
+    const document = await fetchRemoteDocumentBytes(briefing.documentUrl);
+    return {
+      ok: true as const,
+      bytes: document.bytes,
+      contentType: briefing.contentType || document.contentType,
+      filename: briefing.documentFilename || "briefing-document",
+    };
+  } catch {
+    return { ok: false as const, code: "DOCUMENT_UNAVAILABLE" as const };
+  }
+}
+
+export async function getPublicBriefingDocument(hubToken: string, deviceId: string, briefingId: string) {
+  const team = await findTeamByChecklistHubToken(hubToken);
+  if (!team) return { ok: false as const, code: "NOT_FOUND" as const };
+
+  const reachable = await isGoDeviceApproved(team.id, deviceId);
+  if (!reachable) return { ok: false as const, code: "FORBIDDEN" as const };
+
+  const briefing = await prisma.briefing.findFirst({ where: { id: briefingId, teamId: team.id } });
+  if (!briefing) return { ok: false as const, code: "NOT_FOUND" as const };
+
+  try {
+    const document = await fetchRemoteDocumentBytes(briefing.documentUrl);
+    return {
+      ok: true as const,
+      bytes: document.bytes,
+      contentType: briefing.contentType || document.contentType,
+      filename: briefing.documentFilename || "briefing-document",
+    };
+  } catch {
+    return { ok: false as const, code: "DOCUMENT_UNAVAILABLE" as const };
   }
 }

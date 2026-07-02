@@ -1,21 +1,32 @@
 import type { BriefingRow } from "../../lib/api";
+import { getWebApiBase } from "../../lib/api-base";
 import { formatBriefingDate, isImageBriefing, isPdfBriefing } from "../../lib/briefings-display";
 import { BriefingPdfViewer } from "./BriefingPdfViewer";
 
 type Props = {
   briefing: BriefingRow;
+  documentFetchPath: string;
+  useAuth?: boolean;
 };
 
-export function BriefingDocumentViewer({ briefing }: Props) {
+export function BriefingDocumentViewer({ briefing, documentFetchPath, useAuth }: Props) {
   const { documentUrl, contentType, documentFilename } = briefing;
   const title = documentFilename || "Briefing document";
 
   if (isPdfBriefing(contentType, documentUrl)) {
-    return <BriefingPdfViewer url={documentUrl} title={title} />;
+    return (
+      <BriefingPdfViewer
+        fetchPath={documentFetchPath}
+        fallbackUrl={documentUrl}
+        title={title}
+        useAuth={useAuth}
+      />
+    );
   }
 
   if (isImageBriefing(contentType, documentUrl)) {
-    return <img className="briefing-doc-image" src={documentUrl} alt={title} />;
+    const imageSrc = useAuth ? documentUrl : `${getWebApiBase()}${documentFetchPath}`;
+    return <img className="briefing-doc-image" src={imageSrc} alt={title} />;
   }
 
   return (
