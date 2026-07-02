@@ -2429,7 +2429,9 @@ input {
 }
 
 .enterprise-alenio-go-page {
-  background: #f1f5f9;
+  padding: 0;
+  background: transparent;
+  overflow: hidden;
 }
 
 .enterprise-alenio-go-layout {
@@ -2638,6 +2640,838 @@ input {
 @media (max-width: 900px) {
   .enterprise-alenio-go-layout {
     grid-template-columns: 1fr;
+  }
+}
+
+/* Alenio Go enterprise console (/go) — matches frontline kiosk language */
+.go-backend {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: #eef2f7;
+  overflow: hidden;
+}
+
+.go-backend-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.go-backend-hero {
+  min-height: 240px;
+  padding-bottom: 4.75rem;
+}
+
+.go-backend-hero-bar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.go-backend-hero-brand {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.go-backend-hero-logo {
+  filter: brightness(0) invert(1);
+  max-height: 44px;
+}
+
+.go-backend-hero-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.1);
+  color: #e0e7ff;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.go-backend-hero-clock {
+  text-align: right;
+  color: #cbd5e1;
+  flex-shrink: 0;
+}
+
+.go-backend-hero-copy strong {
+  font-weight: 800;
+}
+
+.go-backend-stats {
+  position: absolute;
+  left: 1.25rem;
+  right: 1.25rem;
+  bottom: -2.25rem;
+}
+
+.go-backend-stat-main {
+  min-width: 0;
+}
+
+.go-backend-stat-code {
+  min-width: 0;
+}
+
+.go-backend-code-btn {
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 1.125rem;
+  font-weight: 800;
+  line-height: 1;
+  color: #34d399;
+  cursor: pointer;
+  letter-spacing: 0.06em;
+}
+
+.go-backend-code-btn:hover {
+  color: #6ee7b7;
+}
+
+.go-backend-body {
+  padding: 3.25rem 1.25rem 1.5rem;
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.go-backend-section {
+  margin-bottom: 1.25rem;
+}
+
+.go-backend-section-head {
+  margin-bottom: 0.875rem;
+}
+
+.go-backend-section-title {
+  margin: 0 0 0.25rem;
+  font-size: 1.0625rem;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.01em;
+}
+
+.go-backend-section-sub {
+  margin: 0;
+  font-size: 0.875rem;
+  color: #64748b;
+  line-height: 1.45;
+}
+
+.go-backend-tiles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.875rem;
+}
+
+.go-backend-tile {
+  min-height: 132px;
+}
+
+.go-backend-tile-badge {
+  position: absolute;
+  top: 0.875rem;
+  right: 0.875rem;
+  min-width: 1.375rem;
+  height: 1.375rem;
+  padding: 0 0.375rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.95);
+  color: #4338ca;
+  font-size: 0.6875rem;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15);
+}
+
+.go-backend-panels {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.875rem;
+  margin-bottom: 1.25rem;
+}
+
+.go-backend-panel {
+  min-width: 0;
+}
+
+.go-backend-panel-card {
+  margin: 0;
+  padding: 1.25rem;
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+}
+
+.go-backend-panel-card.enterprise-alenio-go-alert {
+  grid-column: auto;
+}
+
+.go-backend-panel-head {
+  margin-bottom: 1rem;
+}
+
+.go-backend-panel-title {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.01em;
+}
+
+.go-backend-panel-sub {
+  margin: 0.375rem 0 0;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  max-width: 36rem;
+}
+
+.go-backend-member-note {
+  margin: 0;
+  font-size: 0.9375rem;
+  line-height: 1.55;
+}
+
+.go-backend-panels--single {
+  grid-template-columns: 1fr;
+}
+
+.go-backend-quick {
+  padding: 1rem 0 0.5rem;
+}
+
+.go-backend-quick-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.go-backend-quick .go-dash-quick-card {
+  border: none;
+  cursor: pointer;
+  font: inherit;
+}
+
+@media (max-width: 1024px) {
+  .go-backend-tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .go-backend-panels {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .go-backend-tiles,
+  .go-backend-quick-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .go-backend-stats {
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+
+  .go-backend-hero-bar {
+    flex-direction: column;
+  }
+}
+
+/* Alenio Go admin module pages (/go/:module) */
+.go-backend--module {
+  background: #eef2f7;
+}
+
+.go-backend-module-hero {
+  padding: 1.25rem 1.25rem 1.5rem;
+  color: #fff;
+}
+
+.go-backend-module-hero--indigo {
+  background: linear-gradient(135deg, #312e81 0%, #4361ee 55%, #6366f1 100%);
+}
+
+.go-backend-module-hero--violet {
+  background: linear-gradient(135deg, #4c1d95 0%, #7c3aed 55%, #6366f1 100%);
+}
+
+.go-backend-module-hero--emerald {
+  background: linear-gradient(135deg, #064e3b 0%, #059669 55%, #0891b2 100%);
+}
+
+.go-backend-module-hero--cyan {
+  background: linear-gradient(135deg, #164e63 0%, #0891b2 55%, #6366f1 100%);
+}
+
+.go-backend-module-hero--amber {
+  background: linear-gradient(135deg, #78350f 0%, #d97706 55%, #6366f1 100%);
+}
+
+.go-backend-module-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  margin-bottom: 1rem;
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.go-backend-module-back:hover {
+  color: #fff;
+}
+
+.go-backend-module-kicker {
+  margin: 0 0 0.25rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.go-backend-module-title {
+  margin: 0 0 0.375rem;
+  font-size: clamp(1.375rem, 2.5vw, 1.75rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.go-backend-module-sub {
+  margin: 0;
+  max-width: 40rem;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.go-backend-module-body {
+  padding: 1.25rem;
+  max-width: 960px;
+  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.go-backend-module-panel {
+  padding: 1.25rem;
+}
+
+.go-backend-module-panel-badge-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 0.75rem;
+}
+
+.enterprise-alenio-go-alert--module {
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+}
+
+.go-backend-setup-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 0.9fr);
+  gap: 0.875rem;
+}
+
+.go-backend-setup-steps {
+  margin: 0 0 1.25rem;
+  padding-left: 1.25rem;
+  color: #334155;
+  line-height: 1.6;
+}
+
+.go-backend-setup-steps li + li {
+  margin-top: 0.75rem;
+}
+
+.go-backend-setup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.go-backend-setup-secondary {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #4361ee;
+  text-decoration: none;
+}
+
+.go-backend-setup-secondary:hover {
+  text-decoration: underline;
+}
+
+.go-backend-inline-code {
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-weight: 800;
+  color: #059669;
+  cursor: pointer;
+  letter-spacing: 0.04em;
+}
+
+.go-backend-setup-aside-title {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.go-backend-setup-aside-copy {
+  margin: 0 0 1rem;
+  line-height: 1.55;
+}
+
+.go-backend-code-btn--dark {
+  color: #059669;
+  font-size: 1rem;
+}
+
+.go-backend-coming-soon {
+  position: relative;
+  text-align: center;
+  padding: 2rem 1.5rem;
+}
+
+.go-backend-coming-soon-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  margin-bottom: 1rem;
+  padding: 0.375rem 0.625rem;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #4338ca;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.go-backend-coming-soon-title {
+  margin: 0 0 0.5rem;
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.go-backend-coming-soon-copy {
+  margin: 0 auto 0.75rem;
+  max-width: 28rem;
+  line-height: 1.55;
+}
+
+.go-backend-coming-soon-hint {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: #94a3b8;
+}
+
+@media (max-width: 768px) {
+  .go-backend-setup-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Briefings */
+.briefing-module-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 1rem;
+}
+
+.briefing-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.875rem;
+}
+
+.briefing-list--kiosk {
+  padding: 1rem 1.25rem 2rem;
+}
+
+.briefing-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.125rem 1.25rem;
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.05);
+}
+
+.briefing-list--kiosk .briefing-card {
+  padding: 1.25rem;
+  border-radius: 18px;
+}
+
+.briefing-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.625rem;
+  margin-bottom: 0.375rem;
+}
+
+.briefing-card-title {
+  margin: 0;
+  font-size: 1.0625rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.briefing-card-desc {
+  margin: 0 0 0.75rem;
+  color: #64748b;
+  line-height: 1.5;
+  font-size: 0.9375rem;
+}
+
+.briefing-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin: 0;
+}
+
+.briefing-card-meta div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.briefing-card-meta dt {
+  margin: 0;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #94a3b8;
+}
+
+.briefing-card-meta dd {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #334155;
+}
+
+.briefing-card-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.5rem;
+  min-width: 148px;
+}
+
+.briefing-card-btn {
+  text-align: center;
+  text-decoration: none;
+}
+
+.briefing-card-admin-link {
+  text-align: center;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #6366f1;
+  text-decoration: none;
+}
+
+.briefing-badge {
+  display: inline-flex;
+  padding: 0.25rem 0.625rem;
+  border-radius: 999px;
+  font-size: 0.6875rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.briefing-badge--reviewed {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.briefing-badge--overdue {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.briefing-badge--pending {
+  background: #eef2ff;
+  color: #4338ca;
+}
+
+.briefing-create-form,
+.briefing-review-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+}
+
+.briefing-file-input {
+  width: 100%;
+}
+
+.briefing-file-name {
+  margin: 0;
+  font-size: 0.8125rem;
+}
+
+.briefing-review-head h2 {
+  margin: 0 0 0.375rem;
+  font-size: 1.25rem;
+  font-weight: 800;
+}
+
+.briefing-doc-frame {
+  width: 100%;
+  min-height: 420px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #f8fafc;
+  margin-bottom: 1rem;
+}
+
+.briefing-doc-image {
+  width: 100%;
+  max-height: 520px;
+  object-fit: contain;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  margin-bottom: 1rem;
+}
+
+.briefing-doc-fallback {
+  display: grid;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  padding: 1rem;
+  border-radius: 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.briefing-review-confirm {
+  margin-top: 0.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid #e2e8f0;
+}
+
+.briefing-review-confirm-text {
+  margin: 0;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.briefing-initials-input {
+  max-width: 160px;
+  font-size: 1.125rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.briefing-complete-btn {
+  align-self: flex-start;
+  margin-top: 0.25rem;
+}
+
+.briefing-review-done {
+  display: grid;
+  gap: 0.25rem;
+  padding: 1rem;
+  border-radius: 12px;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #065f46;
+}
+
+.briefing-signature-canvas {
+  width: 100%;
+  max-width: 640px;
+  height: 180px;
+  border-radius: 12px;
+  border: 1px dashed #cbd5e1;
+  background: #fff;
+  touch-action: none;
+}
+
+.briefing-signature-clear {
+  margin-top: 0.5rem;
+  border: none;
+  background: none;
+  color: #6366f1;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.briefing-admin-stats {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.625rem;
+  margin-bottom: 1rem;
+}
+
+.briefing-admin-stat {
+  padding: 0.875rem;
+  border-radius: 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  text-align: center;
+}
+
+.briefing-admin-stat-value {
+  display: block;
+  font-size: 1.375rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.briefing-admin-stat-value--green {
+  color: #059669;
+}
+
+.briefing-admin-stat-value--amber {
+  color: #d97706;
+}
+
+.briefing-admin-stat-label {
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #94a3b8;
+}
+
+.briefing-admin-table-wrap {
+  overflow-x: auto;
+}
+
+.briefing-admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.briefing-admin-table th,
+.briefing-admin-table td {
+  padding: 0.625rem 0.5rem;
+  border-bottom: 1px solid #e2e8f0;
+  text-align: left;
+  vertical-align: top;
+}
+
+.briefing-admin-email {
+  display: block;
+  color: #64748b;
+  font-size: 0.8125rem;
+}
+
+.briefing-admin-tag {
+  display: inline-block;
+  margin-top: 0.25rem;
+  padding: 0.125rem 0.375rem;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #4338ca;
+  font-size: 0.6875rem;
+  font-weight: 700;
+}
+
+.briefing-admin-reset {
+  border: none;
+  background: none;
+  color: #b91c1c;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.go-briefings-kiosk {
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: #eef2f7;
+  display: flex;
+  flex-direction: column;
+}
+
+.go-briefings-kiosk-head {
+  padding: 1.25rem;
+  background: linear-gradient(135deg, #78350f 0%, #d97706 55%, #6366f1 100%);
+  color: #fff;
+}
+
+.go-briefings-kiosk-head h1 {
+  margin: 0.75rem 0 0.25rem;
+  font-size: 1.75rem;
+  font-weight: 800;
+}
+
+.go-briefings-kiosk-head p {
+  margin: 0;
+  opacity: 0.92;
+}
+
+.go-briefings-kiosk-back {
+  color: rgba(255, 255, 255, 0.9);
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.go-briefings-kiosk-logo {
+  filter: brightness(0) invert(1);
+  max-height: 40px;
+  margin-top: 0.75rem;
+}
+
+.go-briefings-kiosk--review {
+  padding: 1rem 1.25rem 2rem;
+}
+
+.go-briefings-kiosk--review .briefing-review {
+  background: #fff;
+  border-radius: 16px;
+  padding: 1.25rem;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+}
+
+@media (max-width: 768px) {
+  .briefing-admin-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .briefing-card-actions {
+    width: 100%;
   }
 }
 
@@ -2957,9 +3791,17 @@ input {
   background: linear-gradient(145deg, #d97706, #6366f1);
 }
 
+.go-dash-module-card--emerald {
+  background: linear-gradient(145deg, #059669, #0891b2);
+}
+
 .go-dash-module-card:not(.go-dash-module-card--inactive):hover {
   transform: translateY(-2px);
   box-shadow: 0 12px 28px rgba(67, 97, 238, 0.28);
+}
+
+.go-dash-module-card--emerald:not(.go-dash-module-card--inactive):hover {
+  box-shadow: 0 12px 28px rgba(5, 150, 105, 0.32);
 }
 
 .go-dash-module-card--inactive {
@@ -3265,6 +4107,19 @@ input {
   max-height: 100dvh;
   background: #eef2f7;
   overflow: hidden;
+}
+
+.go-dash-sound-hint {
+  margin: 0 1rem;
+  padding: 0.65rem 0.9rem;
+  border-radius: 10px;
+  background: rgba(67, 97, 238, 0.12);
+  border: 1px solid rgba(67, 97, 238, 0.28);
+  color: #1e3a8a;
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-align: center;
+  flex-shrink: 0;
 }
 
 .go-dash--kiosk .go-dash-scroll {

@@ -3,7 +3,15 @@ import { AuthGate } from "./components/AuthGate";
 import { DocumentTitle } from "./components/DocumentTitle";
 import { SessionIdleGuard } from "./components/SessionIdleGuard";
 import { AlenioGoLinkPage } from "./routes/AlenioGoLinkPage";
-import { AlenioGoPage } from "./routes/AlenioGoPage";
+import { AlenioGoLayout } from "./routes/alenio-go/AlenioGoLayout";
+import { AlenioGoHomePage } from "./routes/alenio-go/AlenioGoHomePage";
+import { AlenioGoAlertsModulePage } from "./routes/alenio-go/AlenioGoAlertsModulePage";
+import { AlenioGoDevicesModulePage } from "./routes/alenio-go/AlenioGoDevicesModulePage";
+import { AlenioGoSetupModulePage } from "./routes/alenio-go/AlenioGoSetupModulePage";
+import { AlenioGoComingSoonModulePage } from "./routes/alenio-go/AlenioGoComingSoonModulePage";
+import { AlenioGoBriefingsRoutes } from "./routes/alenio-go/AlenioGoBriefingsRoutes";
+import { BriefingsKioskPage } from "./routes/BriefingsKioskPage";
+import { BriefingsKioskReviewPage } from "./routes/BriefingsKioskReviewPage";
 import { ActivityPage } from "./routes/ActivityPage";
 import { BillingPage } from "./routes/BillingPage";
 import { ChatPage } from "./routes/ChatPage";
@@ -111,6 +119,8 @@ export default function App() {
         <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/verify" element={<VerifyPage />} />
         <Route path="/invite/:token" element={<InvitePage />} />
+        <Route path="/checklist/:hubToken/briefings/:briefingId" element={<BriefingsKioskReviewPage />} />
+        <Route path="/checklist/:hubToken/briefings" element={<BriefingsKioskPage />} />
         <Route path="/checklist/:hubToken/:checklistId" element={<Navigate to=".." replace />} />
         <Route path="/checklist/:hubToken" element={<WorkspaceChecklistHubPage />} />
         <Route path="/aleniogo" element={<AlenioGoLinkPage />} />
@@ -130,8 +140,15 @@ export default function App() {
           }
         >
           <Route path="/dashboard" element={<DashboardPage />} />
-          <Route path="/go" element={<AlenioGoPage />} />
-          <Route path="/go/*" element={<Navigate to="/go" replace />} />
+          <Route path="/go" element={<AlenioGoLayout />}>
+            <Route index element={<AlenioGoHomePage />} />
+            <Route path="alerts" element={<AlenioGoAlertsModulePage />} />
+            <Route path="devices" element={<AlenioGoDevicesModulePage />} />
+            <Route path="setup" element={<AlenioGoSetupModulePage />} />
+            <Route path="checklists" element={<AlenioGoComingSoonModulePage moduleId="checklists" />} />
+            <Route path="briefings/*" element={<AlenioGoBriefingsRoutes />} />
+            <Route path="walks" element={<AlenioGoComingSoonModulePage moduleId="walks" />} />
+          </Route>
           <Route path="/activity" element={<ActivityPage />} />
           <Route path="/chat" element={<ChatPage />} />
           <Route path="/billing" element={<BillingPage />} />

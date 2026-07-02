@@ -12,6 +12,11 @@ import {
   pollWorkplaceAlertsForDevice,
   recordGoDeviceCheckIn,
 } from "../lib/workplace-alerts";
+import {
+  completePublicBriefing,
+  getPublicBriefing,
+  listPublicBriefings,
+} from "../lib/briefings";
 
 const publicGoLinkRouter = new Hono();
 
@@ -218,6 +223,77 @@ publicGoLinkRouter.post("/alerts/:alertId/ack", async (c) => {
   } catch (err) {
     console.error("[go-link] POST /alerts/:id/ack failed:", err);
     return c.json({ error: { message: "Could not acknowledge alert", code: "INTERNAL" } }, 500);
+  }
+});
+
+const publicBriefingCompleteSchema = z.object({
+  hubToken: z.string().min(1).max(256),
+  deviceId: z.string().min(8).max(128),
+  initials: z.string().trim().max(8).optional(),
+  signatureData: z.string().max(500_000).optional().nullable(),
+  reviewerName: z.string().trim().max(120).optional().nullable(),
+});
+
+publicGoLinkRouter.get("/briefings", async (c) => {
+  try {
+    const hubToken = c.req.query("hubToken")?.trim();
+    const deviceId = c.req.query("deviceId")?.trim();
+    if (!hubToken || !deviceId) {
+      return c.json({ error: { message: "hubToken and deviceId are required", code: "VALIDATION_ERROR" } }, 400);
+    }
+    const result = await listPublicBriefings(hubToken, deviceId);
+    if (!result.ok) {
+      if (result.code === "FORBIDDEN") return c.json({ error: { message: "Device not approved", code: "FORBIDDEN" } }, 403);
+      return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
+    }
+    return c.json({ data: { briefings: result.briefings } });
+  } catch (err) {
+    console.error("[go-link] GET /briefings failed:", err);
+    return c.json({ error: { message: "Could not load briefings", code: "INTERNAL" } }, 500);
+  }
+});
+
+publicGoLinkRouter.get("/briefings/:briefingId", async (c) => {
+  try {
+    const briefingId = c.req.param("briefingId")?.trim();
+    const hubToken = c.req.query("hubToken")?.trim();
+    const deviceId = c.req.query("deviceId")?.trim();
+    if (!briefingId || !hubToken || !deviceId) {
+      return c.json({ error: { message: "briefingId, hubToken, and deviceId are required", code: "VALIDATION_ERROR" } }, 400);
+    }
+    const result = await getPublicBriefing(hubToken, deviceId, briefingId);
+    if (!result.ok) {
+      if (result.code === "FORBIDDEN") return c.json({ error: { message: "Device not approved", code: "FORBIDDEN" } }, 403);
+      return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
+    }
+    return c.json({ data: { briefing: result.briefing } });
+  } catch (err) {
+    console.error("[go-link] GET /briefings/:id failed:", err);
+    return c.json({ error: { message: "Could not load briefing", code: "INTERNAL" } }, 500);
+  }
+});
+
+publicGoLinkRouter.post("/briefings/:briefingId/complete", zValidator("json", publicBriefingCompleteSchema), async (c) => {
+  try {
+    const briefingId = c.req.param("briefingId")?.trim();
+    const { hubToken, deviceId, initials, signatureData, reviewerName } = c.req.valid("json");
+    const result = await completePublicBriefing(hubToken, deviceId, briefingId, {
+      initials,
+      signatureData,
+      reviewerName,
+    });
+    if (!result.ok) {
+      if (result.code === "FORBIDDEN") return c.json({ error: { message: "Device not approved", code: "FORBIDDEN" } }, 403);
+      if (result.code === "NOT_FOUND") return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
+      if (result.code === "ALREADY_COMPLETED") {
+        return c.json({ error: { message: "Already completed", code: "ALREADY_COMPLETED" } }, 409);
+      }
+      return c.json({ error: { message: "Initials or signature required", code: "VALIDATION_ERROR" } }, 400);
+    }
+    return c.json({ data: { success: true, completedAt: result.completion.completedAt.toISOString() } });
+  } catch (err) {
+    console.error("[go-link] POST /briefings/:id/complete failed:", err);
+    return c.json({ error: { message: "Could not complete briefing", code: "INTERNAL" } }, 500);
   }
 });
 

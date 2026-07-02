@@ -18,7 +18,13 @@ export type EnterpriseRouteHandle = {
 };
 
 /** Route-specific shell classes (BrowserRouter has no route `handle`; mirror App routes here). */
-function routeLayoutHandleFromPath(_pathname: string): EnterpriseRouteHandle {
+function routeLayoutHandleFromPath(pathname: string): EnterpriseRouteHandle {
+  if (pathname.startsWith("/go")) {
+    return {
+      enterpriseContentClassName: "enterprise-content-flush enterprise-content-go",
+      enterpriseMainClassName: "enterprise-app--go",
+    };
+  }
   return {
     enterpriseContentClassName: "enterprise-content-flush",
   };

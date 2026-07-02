@@ -5,7 +5,7 @@ export type GoDashModule = {
   active: boolean;
   href?: string;
   tone: "indigo" | "cyan" | "violet" | "amber";
-  icon: "tasks" | "checklists" | "walks" | "communications";
+  icon: "tasks" | "checklists" | "walks" | "briefings";
 };
 
 export type GoDashQuickAction = {
@@ -56,12 +56,12 @@ export const GO_DASH_KIOSK_MODULES: GoDashModule[] = [
     icon: "walks",
   },
   {
-    id: "communications",
-    title: "Communications",
-    subtitle: "Coming soon",
-    active: false,
+    id: "briefings",
+    title: "Briefings",
+    subtitle: "Review & initial",
+    active: true,
     tone: "amber",
-    icon: "communications",
+    icon: "briefings",
   },
 ];
 

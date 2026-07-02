@@ -1,27 +1,99 @@
-/** Short two-tone beep for Alenio Go workplace alerts (test / kiosk). */
-export function playGoAlertSound(): void {
-  if (typeof window === "undefined") return;
-  try {
-    const AudioCtx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!AudioCtx) return;
-    const ctx = new AudioCtx();
-    const playTone = (freq: number, start: number, duration: number) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = "sine";
-      osc.frequency.value = freq;
-      gain.gain.setValueAtTime(0.0001, start);
-      gain.gain.exponentialRampToValueAtTime(0.2, start + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start(start);
-      osc.stop(start + duration + 0.05);
-    };
-    playTone(880, ctx.currentTime, 0.22);
-    playTone(1175, ctx.currentTime + 0.28, 0.28);
-    window.setTimeout(() => void ctx.close(), 800);
-  } catch {
-    /* autoplay or audio unsupported */
+/** Shared audio context — must be resumed after a user gesture on iOS/iPadOS. */
+let audioCtx: AudioContext | null = null;
+
+function getAudioContext(): AudioContext | null {
+  if (typeof window === "undefined") return null;
+  const AudioCtor =
+    window.AudioContext ??
+    (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  if (!AudioCtor) return null;
+  if (!audioCtx || audioCtx.state === "closed") {
+    audioCtx = new AudioCtor();
   }
+  return audioCtx;
+}
+
+/** Call from a tap/click so later alert polls can play sound (required on iPad Safari). */
+export async function unlockGoAlertSound(): Promise<boolean> {
+  const ctx = getAudioContext();
+  if (!ctx) return false;
+  try {
+    if (ctx.state === "suspended") {
+      await ctx.resume();
+    }
+    if (ctx.state !== "running") return false;
+    const gain = ctx.createGain();
+    gain.gain.value = 0;
+    gain.connect(ctx.destination);
+    const osc = ctx.createOscillator();
+    osc.connect(gain);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.001);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function scheduleAlertBeep(
+  ctx: AudioContext,
+  master: GainNode,
+  freq: number,
+  start: number,
+  duration: number,
+  peakGain: number,
+) {
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = "square";
+  osc.frequency.value = freq;
+  gain.gain.setValueAtTime(0.0001, start);
+  gain.gain.exponentialRampToValueAtTime(peakGain, start + 0.006);
+  gain.gain.setValueAtTime(peakGain, start + duration - 0.015);
+  gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+  osc.connect(gain);
+  gain.connect(master);
+  osc.start(start);
+  osc.stop(start + duration + 0.02);
+}
+
+function playAlertPattern(ctx: AudioContext, startAt: number) {
+  const master = ctx.createGain();
+  master.gain.value = 1;
+  master.connect(ctx.destination);
+
+  const peak = 0.92;
+  const beepLen = 0.2;
+  const gap = 0.1;
+  const pattern = [880, 1320, 880, 1320, 1760, 1320, 1760, 1320];
+
+  let t = startAt;
+  for (const freq of pattern) {
+    scheduleAlertBeep(ctx, master, freq, t, beepLen, peak);
+    t += beepLen + gap;
+  }
+
+  t += 0.18;
+  for (const freq of pattern) {
+    scheduleAlertBeep(ctx, master, freq, t, beepLen, peak);
+    t += beepLen + gap;
+  }
+}
+
+/** Loud alternating beeps for Alenio Go workplace alerts (kiosk / tablet). */
+export function playGoAlertSound(): void {
+  void (async () => {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    try {
+      if (ctx.state === "suspended") {
+        await ctx.resume();
+      }
+      if (ctx.state !== "running") return;
+
+      playAlertPattern(ctx, ctx.currentTime);
+    } catch {
+      /* autoplay blocked or audio unsupported */
+    }
+  })();
 }

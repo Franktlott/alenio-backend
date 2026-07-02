@@ -22,6 +22,15 @@ import {
   listLinkedGoDevices,
 } from "../lib/workplace-alerts";
 import {
+  canManageBriefings,
+  completeBriefingForUser,
+  createBriefing,
+  deleteBriefingCompletion,
+  getBriefingAdminStats,
+  getBriefingForUser,
+  listBriefingsForUser,
+} from "../lib/briefings";
+import {
   canInviteMembers,
   generateInviteToken,
   inviteExpiresAt,
@@ -926,6 +935,108 @@ teamsRouter.post("/:teamId/workplace-alerts", zValidator("json", workplaceAlertB
   }
 
   return c.json({ data: result.alert });
+});
+
+const briefingBodySchema = z.object({
+  title: z.string().trim().min(1).max(200),
+  description: z.string().trim().min(1).max(2000),
+  documentUrl: z.string().url(),
+  documentFilename: z.string().trim().max(256).optional(),
+  contentType: z.string().trim().max(128).optional(),
+  dueAt: z.string().datetime().optional().nullable(),
+  requireSignature: z.boolean().optional(),
+  allowInitials: z.boolean().optional(),
+});
+
+const briefingCompleteSchema = z.object({
+  initials: z.string().trim().max(8).optional(),
+  signatureData: z.string().max(500_000).optional().nullable(),
+  reviewerName: z.string().trim().max(120).optional().nullable(),
+});
+
+// GET /api/teams/:teamId/briefings
+teamsRouter.get("/:teamId/briefings", async (c) => {
+  const user = c.get("user")!;
+  const { teamId } = c.req.param();
+  const result = await listBriefingsForUser(teamId, user.id);
+  if (!result.ok) return c.json({ error: { message: "Forbidden", code: "FORBIDDEN" } }, 403);
+  return c.json({ data: { briefings: result.briefings, canManage: result.canManage } });
+});
+
+// GET /api/teams/:teamId/briefings/:briefingId
+teamsRouter.get("/:teamId/briefings/:briefingId", async (c) => {
+  const user = c.get("user")!;
+  const { teamId, briefingId } = c.req.param();
+  const result = await getBriefingForUser(teamId, briefingId, user.id);
+  if (!result.ok) {
+    if (result.code === "NOT_FOUND") return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
+    return c.json({ error: { message: "Forbidden", code: "FORBIDDEN" } }, 403);
+  }
+  return c.json({ data: { briefing: result.briefing, canManage: result.canManage } });
+});
+
+// GET /api/teams/:teamId/briefings/:briefingId/stats
+teamsRouter.get("/:teamId/briefings/:briefingId/stats", async (c) => {
+  const user = c.get("user")!;
+  const { teamId, briefingId } = c.req.param();
+  const result = await getBriefingAdminStats(teamId, briefingId, user.id);
+  if (!result.ok) {
+    if (result.code === "NOT_FOUND") return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
+    return c.json({ error: { message: "Forbidden", code: "FORBIDDEN" } }, 403);
+  }
+  return c.json({ data: { briefing: result.briefing, stats: result.stats } });
+});
+
+// POST /api/teams/:teamId/briefings
+teamsRouter.post("/:teamId/briefings", zValidator("json", briefingBodySchema), async (c) => {
+  const user = c.get("user")!;
+  const { teamId } = c.req.param();
+  const body = c.req.valid("json");
+
+  if (!(await canManageBriefings(teamId, user.id))) {
+    return c.json({ error: { message: "Forbidden", code: "FORBIDDEN" } }, 403);
+  }
+
+  const result = await createBriefing(teamId, user.id, body);
+  if (!result.ok) {
+    if (result.code === "INVALID_FILE") {
+      return c.json({ error: { message: "Unsupported file type", code: "VALIDATION_ERROR" } }, 400);
+    }
+    return c.json({ error: { message: "Invalid briefing", code: "VALIDATION_ERROR" } }, 400);
+  }
+  return c.json({ data: result.briefing }, 201);
+});
+
+// POST /api/teams/:teamId/briefings/:briefingId/complete
+teamsRouter.post("/:teamId/briefings/:briefingId/complete", zValidator("json", briefingCompleteSchema), async (c) => {
+  const user = c.get("user")!;
+  const { teamId, briefingId } = c.req.param();
+  const body = c.req.valid("json");
+
+  const result = await completeBriefingForUser(teamId, briefingId, user.id, user.name ?? null, body);
+  if (!result.ok) {
+    if (result.code === "NOT_FOUND") return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
+    if (result.code === "ALREADY_COMPLETED") {
+      return c.json({ error: { message: "Already completed", code: "ALREADY_COMPLETED" } }, 409);
+    }
+    if (result.code === "SIGNATURE_REQUIRED" || result.code === "INITIALS_REQUIRED") {
+      return c.json({ error: { message: "Initials or signature required", code: "VALIDATION_ERROR" } }, 400);
+    }
+    return c.json({ error: { message: "Forbidden", code: "FORBIDDEN" } }, 403);
+  }
+  return c.json({ data: { success: true, completedAt: result.completion.completedAt.toISOString() } });
+});
+
+// DELETE /api/teams/:teamId/briefings/:briefingId/completions/:completionId
+teamsRouter.delete("/:teamId/briefings/:briefingId/completions/:completionId", async (c) => {
+  const user = c.get("user")!;
+  const { teamId, briefingId, completionId } = c.req.param();
+  const result = await deleteBriefingCompletion(teamId, briefingId, completionId, user.id);
+  if (!result.ok) {
+    if (result.code === "NOT_FOUND") return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
+    return c.json({ error: { message: "Forbidden", code: "FORBIDDEN" } }, 403);
+  }
+  return c.json({ data: { success: true } });
 });
 
 export { teamsRouter };

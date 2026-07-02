@@ -376,6 +376,135 @@ export function ackGoWorkplaceAlert(alertId: string, hubToken: string, deviceId:
   });
 }
 
+export type BriefingStatus = "not_started" | "reviewed" | "overdue";
+
+export type BriefingRow = {
+  id: string;
+  teamId: string;
+  title: string;
+  description: string;
+  documentUrl: string;
+  documentFilename: string | null;
+  contentType: string | null;
+  dueAt: string | null;
+  requireSignature: boolean;
+  allowInitials: boolean;
+  publishedAt: string;
+  createdByUserId: string;
+  createdAt: string;
+  status: BriefingStatus;
+  completedAt: string | null;
+};
+
+export type BriefingCreatePayload = {
+  title: string;
+  description: string;
+  documentUrl: string;
+  documentFilename?: string;
+  contentType?: string;
+  dueAt?: string | null;
+  requireSignature?: boolean;
+  allowInitials?: boolean;
+};
+
+export function fetchTeamBriefings(teamId: string) {
+  return apiGetJson<{ data: { briefings: BriefingRow[]; canManage: boolean } }>(
+    `/api/teams/${encodeURIComponent(teamId)}/briefings`,
+  ).then((r) => r.data);
+}
+
+export function fetchTeamBriefing(teamId: string, briefingId: string) {
+  return apiGetJson<{ data: { briefing: BriefingRow; canManage: boolean } }>(
+    `/api/teams/${encodeURIComponent(teamId)}/briefings/${encodeURIComponent(briefingId)}`,
+  ).then((r) => r.data);
+}
+
+export type BriefingAdminStats = {
+  totalAssigned: number;
+  reviewed: number;
+  pending: number;
+  overdue: number;
+  completionPct: number;
+  users: Array<{
+    completionId: string | null;
+    userId: string;
+    name: string;
+    email: string;
+    status: BriefingStatus;
+    completedAt: string | null;
+    initials: string | null;
+    source: "account";
+  }>;
+  kioskCompletions: Array<{
+    completionId: string;
+    userId: null;
+    name: string;
+    email: null;
+    status: BriefingStatus;
+    completedAt: string;
+    initials: string;
+    deviceId: string | null;
+    source: "kiosk";
+  }>;
+};
+
+export function fetchBriefingAdminStats(teamId: string, briefingId: string) {
+  return apiGetJson<{ data: { briefing: BriefingRow; stats: BriefingAdminStats } }>(
+    `/api/teams/${encodeURIComponent(teamId)}/briefings/${encodeURIComponent(briefingId)}/stats`,
+  ).then((r) => r.data);
+}
+
+export function postTeamBriefing(teamId: string, body: BriefingCreatePayload) {
+  return apiPostJson<{ data: BriefingRow }>(`/api/teams/${encodeURIComponent(teamId)}/briefings`, body).then(
+    (r) => r.data,
+  );
+}
+
+export function postBriefingComplete(
+  teamId: string,
+  briefingId: string,
+  body: { initials?: string; signatureData?: string | null; reviewerName?: string | null },
+) {
+  return apiPostJson<{ data: { success: boolean; completedAt: string } }>(
+    `/api/teams/${encodeURIComponent(teamId)}/briefings/${encodeURIComponent(briefingId)}/complete`,
+    body,
+  ).then((r) => r.data);
+}
+
+export function deleteBriefingCompletion(teamId: string, briefingId: string, completionId: string) {
+  return apiDeleteJson<{ data: { success: boolean } }>(
+    `/api/teams/${encodeURIComponent(teamId)}/briefings/${encodeURIComponent(briefingId)}/completions/${encodeURIComponent(completionId)}`,
+  ).then((r) => r.data);
+}
+
+export function fetchGoBriefings(hubToken: string, deviceId: string) {
+  const q = new URLSearchParams({ hubToken, deviceId });
+  return apiGetJson<{ data: { briefings: BriefingRow[] } }>(`/api/public/go/briefings?${q}`).then((r) => r.data.briefings);
+}
+
+export function fetchGoBriefing(hubToken: string, deviceId: string, briefingId: string) {
+  const q = new URLSearchParams({ hubToken, deviceId });
+  return apiGetJson<{ data: { briefing: BriefingRow } }>(
+    `/api/public/go/briefings/${encodeURIComponent(briefingId)}?${q}`,
+  ).then((r) => r.data.briefing);
+}
+
+export function postGoBriefingComplete(
+  briefingId: string,
+  body: {
+    hubToken: string;
+    deviceId: string;
+    initials?: string;
+    signatureData?: string | null;
+    reviewerName?: string | null;
+  },
+) {
+  return apiPostJson<{ data: { success: boolean; completedAt: string } }>(
+    `/api/public/go/briefings/${encodeURIComponent(briefingId)}/complete`,
+    body,
+  ).then((r) => r.data);
+}
+
 export type WebTeamInvite = {
   id: string;
   teamId: string;

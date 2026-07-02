@@ -5,6 +5,7 @@ type TargetKind = "device" | "all_devices" | "all_users";
 
 type Props = {
   teamId: string;
+  variant?: "default" | "backend" | "module";
 };
 
 function deviceOptionLabel(d: GoDeviceRow): string {
@@ -13,7 +14,7 @@ function deviceOptionLabel(d: GoDeviceRow): string {
   return `${name}${suffix} · ${d.deviceId.slice(0, 8)}…`;
 }
 
-export function WorkplaceAlertPanel({ teamId }: Props) {
+export function WorkplaceAlertPanel({ teamId, variant = "default" }: Props) {
   const [devices, setDevices] = useState<GoDeviceRow[]>([]);
   const [loadingDevices, setLoadingDevices] = useState(true);
   const [deviceLoadError, setDeviceLoadError] = useState<string | null>(null);
@@ -91,19 +92,32 @@ export function WorkplaceAlertPanel({ teamId }: Props) {
     }
   }
 
+  const isModule = variant === "module";
+
   return (
-    <section className="enterprise-card enterprise-alenio-go-alert" aria-labelledby="workplace-alert-title">
-      <header className="enterprise-alenio-go-approvals-head">
-        <div>
-          <p className="enterprise-alenio-go-kicker">Workplace alert</p>
-          <h2 id="workplace-alert-title" className="enterprise-card-title">
-            Push alert
-          </h2>
-          <p className="enterprise-muted enterprise-alenio-go-approvals-sub">
-            Send a test alert to a linked Alenio Go device or notify everyone in this workspace.
-          </p>
-        </div>
-      </header>
+    <section
+      className={
+        isModule
+          ? "enterprise-alenio-go-alert enterprise-alenio-go-alert--module"
+          : variant === "backend"
+            ? "go-backend-panel-card enterprise-alenio-go-alert"
+            : "enterprise-card enterprise-alenio-go-alert"
+      }
+      aria-labelledby={isModule ? undefined : "workplace-alert-title"}
+    >
+      {isModule ? null : (
+        <header className="enterprise-alenio-go-approvals-head">
+          <div>
+            <p className="enterprise-alenio-go-kicker">Workplace alert</p>
+            <h2 id="workplace-alert-title" className={variant === "backend" ? "go-backend-panel-title" : "enterprise-card-title"}>
+              Push alert
+            </h2>
+            <p className="enterprise-muted enterprise-alenio-go-approvals-sub">
+              Send a test alert to a linked Alenio Go device or notify everyone in this workspace.
+            </p>
+          </div>
+        </header>
+      )}
 
       <form className="enterprise-alenio-go-alert-form" onSubmit={(e) => void onPush(e)}>
         <label className="enterprise-alenio-go-alert-label" htmlFor="alert-title">

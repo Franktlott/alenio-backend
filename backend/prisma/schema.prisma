@@ -125,6 +125,7 @@ model Team {
   goLoginRequests GoLoginRequest[]
   workplaceAlerts WorkplaceAlert[]
   goDevicePresences GoDevicePresence[]
+  briefings Briefing[]
 }
 
 model TeamSubscription {
@@ -531,6 +532,47 @@ model GoDevicePresence {
 
   @@unique([teamId, deviceId])
   @@index([teamId, lastSeenAt])
+}
+
+model Briefing {
+  id               String    @id @default(cuid())
+  teamId           String
+  title            String
+  description      String
+  documentUrl      String
+  documentFilename String?
+  contentType      String?
+  dueAt            DateTime?
+  requireSignature Boolean   @default(false)
+  allowInitials    Boolean   @default(true)
+  publishedAt      DateTime  @default(now())
+  createdByUserId  String
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  team        Team                 @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  completions BriefingCompletion[]
+
+  @@index([teamId, publishedAt])
+}
+
+model BriefingCompletion {
+  id            String   @id @default(cuid())
+  briefingId    String
+  teamId        String
+  completionKey String
+  userId        String?
+  deviceId      String?
+  reviewerName  String?
+  initials      String
+  signatureData String?
+  documentUrl   String
+  completedAt   DateTime @default(now())
+
+  briefing Briefing @relation(fields: [briefingId], references: [id], onDelete: Cascade)
+
+  @@unique([briefingId, completionKey])
+  @@index([teamId, completedAt])
 }
 
 model TeamInvite {

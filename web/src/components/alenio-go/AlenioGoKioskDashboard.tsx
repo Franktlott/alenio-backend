@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AlenioGoLogo } from "../AlenioGoLogo";
 import { ackGoWorkplaceAlert, fetchGoWorkplaceAlerts, fetchPublicChecklistHub, postGoDeviceCheckIn, type GoWorkplaceAlert } from "../../lib/api";
-import { playGoAlertSound } from "../../lib/go-alert-sound";
+import { playGoAlertSound, unlockGoAlertSound } from "../../lib/go-alert-sound";
 import {
   formatGoDashClock,
   GO_DASH_KIOSK_MODULES,
@@ -63,6 +63,7 @@ export function AlenioGoKioskDashboard({ hubToken }: Props) {
   const [teamName, setTeamName] = useState("");
   const [teamImage, setTeamImage] = useState<string | null>(null);
   const [alerts, setAlerts] = useState<GoWorkplaceAlert[]>([]);
+  const [soundReady, setSoundReady] = useState(false);
   const handledAlertIds = useRef(new Set<string>());
 
   const handleIncomingAlerts = useCallback(
@@ -86,6 +87,22 @@ export function AlenioGoKioskDashboard({ hubToken }: Props) {
     },
     [hubToken],
   );
+
+  useEffect(() => {
+    const unlock = () => {
+      void unlockGoAlertSound().then((ok) => {
+        if (ok) setSoundReady(true);
+      });
+    };
+    window.addEventListener("pointerdown", unlock, { passive: true });
+    window.addEventListener("touchstart", unlock, { passive: true });
+    window.addEventListener("keydown", unlock);
+    return () => {
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("touchstart", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
+  }, []);
 
   useEffect(() => {
     if (!hubToken || loading || error) return;
@@ -113,7 +130,7 @@ export function AlenioGoKioskDashboard({ hubToken }: Props) {
     };
 
     poll();
-    const pollId = window.setInterval(poll, 10_000);
+    const pollId = window.setInterval(poll, 3_000);
     return () => {
       cancelled = true;
       window.clearInterval(checkInId);
@@ -186,6 +203,12 @@ export function AlenioGoKioskDashboard({ hubToken }: Props) {
     <div className="go-dash go-dash--kiosk" data-testid="alenio-go-kiosk-dashboard">
       <AlenioGoKioskTopBar teamName={teamName} />
 
+      {!soundReady ? (
+        <div className="go-dash-sound-hint" role="status">
+          Tap anywhere on the screen to enable alert sounds.
+        </div>
+      ) : null}
+
       <div className="go-dash-scroll">
         <section className="go-dash-hero" style={heroStyle}>
           <div className="go-dash-hero-copy">
@@ -221,13 +244,27 @@ export function AlenioGoKioskDashboard({ hubToken }: Props) {
         <div className="go-dash-body go-dash-body--kiosk">
           <div className="go-dash-modules">
             {GO_DASH_KIOSK_MODULES.slice(0, 3).map((m) => (
-              <GoDashModuleCard key={m.id} module={m} />
+              <GoDashModuleCard
+                key={m.id}
+                module={
+                  m.id === "briefings"
+                    ? { ...m, href: `/checklist/${hubToken}/briefings`, subtitle: "Review & initial" }
+                    : m
+                }
+              />
             ))}
           </div>
 
           <div className="go-dash-secondary-row">
             {GO_DASH_KIOSK_MODULES.slice(3).map((m) => (
-              <GoDashModuleCard key={m.id} module={m} />
+              <GoDashModuleCard
+                key={m.id}
+                module={
+                  m.id === "briefings"
+                    ? { ...m, href: `/checklist/${hubToken}/briefings`, subtitle: "Review & initial" }
+                    : m
+                }
+              />
             ))}
 
             <section className="go-dash-alerts go-dash-alerts--live" aria-labelledby="go-kiosk-alerts-title">
