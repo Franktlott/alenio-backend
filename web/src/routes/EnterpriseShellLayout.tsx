@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { DashboardTopBar } from "../components/DashboardTopBar";
+import { AlenioGoLogo } from "../components/AlenioGoLogo";
 import { EnterpriseLayout, type EnterpriseNavId } from "../components/EnterpriseLayout";
 import { NoTeamsEmptyState } from "../components/NoTeamsEmptyState";
 import { EnterpriseShellContext, type EnterpriseShellContextValue } from "../contexts/EnterpriseShellContext";
@@ -182,6 +183,16 @@ export function EnterpriseShellLayout() {
   }, [teams, selectedTeamId]);
 
   const topBarPageTitle = enterpriseNavTitle(activeNav);
+  const isGoRoute = location.pathname.startsWith("/go");
+  const activeTeamRow = teams?.find((t) => t.id === effectiveTeamId) ?? null;
+  const goRoleLabel =
+    activeTeamRow?.role === "owner"
+      ? "Owner"
+      : activeTeamRow?.role === "team_leader"
+        ? "Team Leader"
+        : activeTeamRow?.role === "admin"
+          ? "Admin"
+          : "Member";
   const hasNoTeams = teams !== null && teams.length === 0;
   const isProfileRoute = location.pathname.startsWith("/profile");
   const showNoTeamsEmptyState = hasNoTeams && !isProfileRoute;
@@ -267,6 +278,9 @@ export function EnterpriseShellLayout() {
             user={me ?? null}
             pageTitle={topBarPageTitle}
             selectedTeamId={teams?.some((t) => t.id === selectedTeamId) ? selectedTeamId : effectiveTeamId}
+            variant={isGoRoute ? "go" : "default"}
+            roleLabel={isGoRoute ? goRoleLabel : undefined}
+            brandHeader={isGoRoute ? <AlenioGoLogo variant="header" /> : undefined}
           />
         }
         mainClassName={mainClassName}
