@@ -56,7 +56,16 @@ export function BriefingAdminPanel({ stats: rawStats, busyKey, onReset }: Props)
                       type="button"
                       className="briefing-admin-reset"
                       disabled={busyKey === row.completionId}
-                      onClick={() => void onReset(row.completionId)}
+                      onClick={() => {
+                        if (
+                          !window.confirm(
+                            `Remove ${row.name}'s sign-off (${row.initials})? They will need to sign this briefing again.`,
+                          )
+                        ) {
+                          return;
+                        }
+                        void onReset(row.completionId);
+                      }}
                     >
                       Remove
                     </button>
