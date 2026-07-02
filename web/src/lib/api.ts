@@ -1904,6 +1904,31 @@ export function submitPublicChecklistLegacy(
   ).then((r) => r.data);
 }
 
+export type TeamChecklistLocationRow = {
+  id: string;
+  name: string;
+  description: string | null;
+  cardColor: string | null;
+  isActive: boolean;
+  stats: {
+    lastSubmittedAt: string | null;
+    todayCount: number;
+    recentPartialCount: number;
+  };
+};
+
+export type TeamChecklistLocationsPayload = {
+  planRequired: boolean;
+  hubToken: string | null;
+  locations: TeamChecklistLocationRow[];
+};
+
+export function fetchTeamChecklistLocations(teamId: string) {
+  return apiGetJson<{ data: TeamChecklistLocationsPayload }>(
+    `/api/teams/${encodeURIComponent(teamId)}/checklist-locations`,
+  ).then((r) => r.data);
+}
+
 export function workspaceChecklistHubUrl(hubToken: string): string {
   if (typeof window !== "undefined") {
     return `${window.location.origin}/checklist/${hubToken}`;

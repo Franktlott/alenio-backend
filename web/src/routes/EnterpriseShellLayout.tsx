@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { DashboardTopBar } from "../components/DashboardTopBar";
-import { AlenioGoLogo } from "../components/AlenioGoLogo";
+import { AlenioGoTopBar } from "../components/alenio-go/AlenioGoDashboard";
 import { EnterpriseLayout, type EnterpriseNavId } from "../components/EnterpriseLayout";
 import { NoTeamsEmptyState } from "../components/NoTeamsEmptyState";
 import { EnterpriseShellContext, type EnterpriseShellContextValue } from "../contexts/EnterpriseShellContext";
@@ -19,7 +19,13 @@ export type EnterpriseRouteHandle = {
 };
 
 /** Route-specific shell classes (BrowserRouter has no route `handle`; mirror App routes here). */
-function routeLayoutHandleFromPath(_pathname: string): EnterpriseRouteHandle {
+function routeLayoutHandleFromPath(pathname: string): EnterpriseRouteHandle {
+  if (pathname.startsWith("/go")) {
+    return {
+      enterpriseContentClassName: "enterprise-content-flush enterprise-content-go",
+      enterpriseMainClassName: "enterprise-app--go",
+    };
+  }
   return {
     enterpriseContentClassName: "enterprise-content-flush",
   };
@@ -184,15 +190,6 @@ export function EnterpriseShellLayout() {
 
   const topBarPageTitle = enterpriseNavTitle(activeNav);
   const isGoRoute = location.pathname.startsWith("/go");
-  const activeTeamRow = teams?.find((t) => t.id === effectiveTeamId) ?? null;
-  const goRoleLabel =
-    activeTeamRow?.role === "owner"
-      ? "Owner"
-      : activeTeamRow?.role === "team_leader"
-        ? "Team Leader"
-        : activeTeamRow?.role === "admin"
-          ? "Admin"
-          : "Member";
   const hasNoTeams = teams !== null && teams.length === 0;
   const isProfileRoute = location.pathname.startsWith("/profile");
   const showNoTeamsEmptyState = hasNoTeams && !isProfileRoute;
@@ -274,14 +271,20 @@ export function EnterpriseShellLayout() {
         user={me ?? null}
         onSignOutNavigate={(path) => navigate(path)}
         topBar={
-          <DashboardTopBar
-            user={me ?? null}
-            pageTitle={topBarPageTitle}
-            selectedTeamId={teams?.some((t) => t.id === selectedTeamId) ? selectedTeamId : effectiveTeamId}
-            variant={isGoRoute ? "go" : "default"}
-            roleLabel={isGoRoute ? goRoleLabel : undefined}
-            brandHeader={isGoRoute ? <AlenioGoLogo variant="header" /> : undefined}
-          />
+          isGoRoute ? (
+            <AlenioGoTopBar
+              user={me ?? null}
+              teams={teams ?? []}
+              selectedTeamId={teams?.some((t) => t.id === selectedTeamId) ? selectedTeamId : effectiveTeamId}
+              onTeamChange={setSelectedTeamId}
+            />
+          ) : (
+            <DashboardTopBar
+              user={me ?? null}
+              pageTitle={topBarPageTitle}
+              selectedTeamId={teams?.some((t) => t.id === selectedTeamId) ? selectedTeamId : effectiveTeamId}
+            />
+          )
         }
         mainClassName={mainClassName}
         contentClassName={contentClassName}
