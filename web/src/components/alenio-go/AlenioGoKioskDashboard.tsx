@@ -251,138 +251,141 @@ export function AlenioGoKioskDashboard({ hubToken }: Props) {
     <div className="go-dash go-dash--kiosk" data-testid="alenio-go-kiosk-dashboard">
       <AlenioGoKioskTopBar teamName={teamName} />
 
-      <section className="go-dash-hero" style={heroStyle}>
-        <div className="go-dash-hero-copy">
-          <h1>{greeting}!</h1>
-          <p>Here&apos;s what&apos;s ahead for {teamName} today.</p>
-        </div>
+      <div className="go-dash-scroll">
+        <section className="go-dash-hero" style={heroStyle}>
+          <div className="go-dash-hero-copy">
+            <h1>{greeting}!</h1>
+            <p>Here&apos;s what&apos;s ahead for {teamName} today.</p>
+          </div>
 
-        <div className="go-dash-stats-bar">
-          <div className="go-dash-progress">
-            <div className="go-dash-progress-ring" style={{ ["--pct" as string]: `${progressPct}` }}>
-              <span>{progressPct}%</span>
+          <div className="go-dash-stats-bar">
+            <div className="go-dash-progress">
+              <div className="go-dash-progress-ring" style={{ ["--pct" as string]: `${progressPct}` }}>
+                <span>{progressPct}%</span>
+              </div>
+              <div>
+                <strong>Today&apos;s progress</strong>
+                <span>{progressPct}% complete</span>
+              </div>
             </div>
-            <div>
-              <strong>Today&apos;s progress</strong>
-              <span>{progressPct}% complete</span>
+            <div className="go-dash-stat-col">
+              <span className="go-dash-stat-value go-dash-stat-value--indigo">{stats.remaining}</span>
+              <span className="go-dash-stat-label">Remaining items</span>
+            </div>
+            <div className="go-dash-stat-col">
+              <span className="go-dash-stat-value go-dash-stat-value--amber">{stats.incompleteChecklists}</span>
+              <span className="go-dash-stat-label">Checklists open</span>
+            </div>
+            <div className="go-dash-stat-col">
+              <span className="go-dash-stat-value go-dash-stat-value--green">{stats.completedTasks}</span>
+              <span className="go-dash-stat-label">Completed</span>
             </div>
           </div>
-          <div className="go-dash-stat-col">
-            <span className="go-dash-stat-value go-dash-stat-value--indigo">{stats.remaining}</span>
-            <span className="go-dash-stat-label">Remaining items</span>
-          </div>
-          <div className="go-dash-stat-col">
-            <span className="go-dash-stat-value go-dash-stat-value--amber">{stats.incompleteChecklists}</span>
-            <span className="go-dash-stat-label">Checklists open</span>
-          </div>
-          <div className="go-dash-stat-col">
-            <span className="go-dash-stat-value go-dash-stat-value--green">{stats.completedTasks}</span>
-            <span className="go-dash-stat-label">Completed</span>
-          </div>
-        </div>
-      </section>
+        </section>
 
-      <div className="go-dash-body">
-        <div className="go-dash-modules">
-          {modules.slice(0, 3).map((m) => (
-            <GoDashModuleCard key={m.id} module={m} />
-          ))}
-        </div>
+        <div className="go-dash-body go-dash-body--kiosk">
+          <div className="go-dash-modules">
+            {modules.slice(0, 3).map((m) => (
+              <GoDashModuleCard key={m.id} module={m} />
+            ))}
+          </div>
 
-        <div className="go-dash-secondary-row">
-          {modules.slice(3).map((m) => (
-            <GoDashModuleCard key={m.id} module={m} />
-          ))}
+          <div className="go-dash-secondary-row">
+            {modules.slice(3).map((m) => (
+              <GoDashModuleCard key={m.id} module={m} />
+            ))}
 
-          <section className="go-dash-alerts" aria-labelledby="go-kiosk-alerts-title">
-            <div className="go-dash-alerts-head">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-                <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-              </svg>
-              <h2 id="go-kiosk-alerts-title">Alerts</h2>
-            </div>
-            {alerts.length === 0 ? (
-              <p className="go-dash-alerts-empty">No alerts right now.</p>
+            <section className="go-dash-alerts" aria-labelledby="go-kiosk-alerts-title">
+              <div className="go-dash-alerts-head">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                  <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                  <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                </svg>
+                <h2 id="go-kiosk-alerts-title">Alerts</h2>
+              </div>
+              {alerts.length === 0 ? (
+                <p className="go-dash-alerts-empty">No alerts right now.</p>
+              ) : (
+                <ul className="go-dash-alerts-list">
+                  {alerts.map((a) => (
+                    <li key={a.id}>
+                      <Link to={a.href ?? "#"} className="go-dash-alert-item">
+                        <span className="go-dash-alert-dot" aria-hidden />
+                        <span>{a.label}</span>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                          <polyline points="9 18 15 12 9 6" />
+                        </svg>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          </div>
+
+          <section id="go-checklists" className="go-dash-checklists" aria-labelledby="go-checklists-title">
+            <h2 id="go-checklists-title" className="go-dash-checklists-title">
+              Today&apos;s checklists
+            </h2>
+            {checklists.length === 0 ? (
+              <p className="go-dash-checklists-empty">Your manager can add checklists from the workspace dashboard.</p>
             ) : (
-              <ul className="go-dash-alerts-list">
-                {alerts.map((a) => (
-                  <li key={a.id}>
-                    <Link to={a.href ?? "#"} className="go-dash-alert-item">
-                      <span className="go-dash-alert-dot" aria-hidden />
-                      <span>{a.label}</span>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-                        <polyline points="9 18 15 12 9 6" />
-                      </svg>
-                    </Link>
-                  </li>
-                ))}
+              <ul className="go-dash-checklist-grid">
+                {tiles.map((cl) => {
+                  const cardStyle = checklistCardColorStyles(cl.cardColor);
+                  return (
+                    <li key={cl.id}>
+                      <Link
+                        to={`/checklist/${hubToken}/${cl.id}`}
+                        className="go-dash-checklist-card"
+                        style={{
+                          background: cardStyle.background,
+                          borderColor: cardStyle.borderColor,
+                          boxShadow: `inset 4px 0 0 ${cardStyle.accent}`,
+                        }}
+                      >
+                        <h3 className="go-dash-checklist-card__title">{cl.name}</h3>
+                        <p className="go-dash-checklist-card__meta">
+                          {cl.taskCount} task{cl.taskCount === 1 ? "" : "s"}
+                        </p>
+                        <div className="go-dash-checklist-card__progress-wrap">
+                          <div className="go-dash-checklist-card__progress-head">
+                            <span>Progress</span>
+                            <span>{cl.percentComplete}%</span>
+                          </div>
+                          <div
+                            className="go-dash-checklist-card__progress-bar"
+                            role="progressbar"
+                            aria-valuenow={cl.percentComplete}
+                            aria-valuemin={0}
+                            aria-valuemax={100}
+                            aria-label={`${cl.name} progress`}
+                          >
+                            <span style={{ width: `${cl.percentComplete}%`, background: cardStyle.accent }} />
+                          </div>
+                        </div>
+                        <span className="go-dash-checklist-card__cta" style={{ color: cardStyle.accent }}>
+                          Open checklist →
+                        </span>
+                      </Link>
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </section>
         </div>
+      </div>
 
-        <section id="go-checklists" className="go-dash-checklists" aria-labelledby="go-checklists-title">
-          <h2 id="go-checklists-title" className="go-dash-checklists-title">
-            Today&apos;s checklists
-          </h2>
-          {checklists.length === 0 ? (
-            <p className="go-dash-checklists-empty">Your manager can add checklists from the workspace dashboard.</p>
-          ) : (
-            <ul className="go-dash-checklist-grid">
-              {tiles.map((cl) => {
-                const cardStyle = checklistCardColorStyles(cl.cardColor);
-                return (
-                  <li key={cl.id}>
-                    <Link
-                      to={`/checklist/${hubToken}/${cl.id}`}
-                      className="go-dash-checklist-card"
-                      style={{
-                        background: cardStyle.background,
-                        borderColor: cardStyle.borderColor,
-                        boxShadow: `inset 4px 0 0 ${cardStyle.accent}`,
-                      }}
-                    >
-                      <h3 className="go-dash-checklist-card__title">{cl.name}</h3>
-                      <p className="go-dash-checklist-card__meta">
-                        {cl.taskCount} task{cl.taskCount === 1 ? "" : "s"}
-                      </p>
-                      <div className="go-dash-checklist-card__progress-wrap">
-                        <div className="go-dash-checklist-card__progress-head">
-                          <span>Progress</span>
-                          <span>{cl.percentComplete}%</span>
-                        </div>
-                        <div
-                          className="go-dash-checklist-card__progress-bar"
-                          role="progressbar"
-                          aria-valuenow={cl.percentComplete}
-                          aria-valuemin={0}
-                          aria-valuemax={100}
-                          aria-label={`${cl.name} progress`}
-                        >
-                          <span style={{ width: `${cl.percentComplete}%`, background: cardStyle.accent }} />
-                        </div>
-                      </div>
-                      <span className="go-dash-checklist-card__cta" style={{ color: cardStyle.accent }}>
-                        Open checklist →
-                      </span>
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </section>
-
-        <section className="go-dash-quick" aria-labelledby="go-kiosk-quick-title">
+      <div className="go-dash-bottom-dock">
+        <section className="go-dash-quick go-dash-quick--dock" aria-labelledby="go-kiosk-quick-title">
           <h2 id="go-kiosk-quick-title" className="go-dash-quick-title">
             Quick actions
           </h2>
           <GoDashQuickActionsGrid actions={quickActions} />
         </section>
+        <GoDashFooter onEndSession={endSession} endLabel="Disconnect device" />
       </div>
-
-      <GoDashFooter onEndSession={endSession} endLabel="Disconnect device" />
     </div>
   );
 }
