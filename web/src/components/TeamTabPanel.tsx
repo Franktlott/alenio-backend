@@ -77,11 +77,39 @@ function rolePillClass(role: string): string {
 
 type RosterTone = "ok" | "warn" | "bad" | "muted";
 
-function formatRosterCheckInPrimary(days: number | null | undefined): string {
-  if (days == null) return "None";
+function formatDaysSinceLastCheckIn(days: number): string {
   if (days === 0) return "Today";
-  if (days === 1) return "1 day";
-  return `${days} days`;
+  if (days === 1) return "1 day ago";
+  return `${days} days ago`;
+}
+
+function rosterCheckInColumn(
+  compliance: MemberStandardsCompliance | undefined,
+  daysSinceCheckIn: number | null | undefined,
+  standards: WorkplaceStandards,
+): { tone: RosterTone; primary: string; secondary?: string } {
+  if (!standards.checkInRequired) {
+    return { tone: "muted", primary: "—" };
+  }
+  if (!compliance) {
+    return { tone: "muted", primary: "—" };
+  }
+  if (daysSinceCheckIn == null) {
+    return { tone: "bad", primary: "No check-in yet" };
+  }
+
+  const primary = formatDaysSinceLastCheckIn(daysSinceCheckIn);
+
+  if (compliance.checkInStatus === "on_track") {
+    return { tone: "ok", primary };
+  }
+  if (compliance.checkInStatus === "due_soon") {
+    return { tone: "warn", primary, secondary: "Due soon" };
+  }
+  if (compliance.checkInStatus === "overdue") {
+    return { tone: "bad", primary, secondary: "Overdue" };
+  }
+  return { tone: "muted", primary };
 }
 
 function rosterStandardsSummary(standards: WorkplaceStandards): string {
@@ -101,35 +129,6 @@ function rosterStandardsSummary(standards: WorkplaceStandards): string {
     parts.push("Goals optional");
   }
   return parts.join(" · ");
-}
-
-function rosterCheckInColumn(
-  compliance: MemberStandardsCompliance | undefined,
-  daysSinceCheckIn: number | null | undefined,
-  standards: WorkplaceStandards,
-): { tone: RosterTone; primary: string } {
-  if (!standards.checkInRequired) {
-    return { tone: "muted", primary: "—" };
-  }
-  if (!compliance) {
-    return { tone: "muted", primary: "—" };
-  }
-  if (compliance.checkInStatus === "on_track") {
-    return {
-      tone: "ok",
-      primary: formatRosterCheckInPrimary(daysSinceCheckIn),
-    };
-  }
-  if (compliance.checkInStatus === "due_soon") {
-    return { tone: "warn", primary: "Due soon" };
-  }
-  if (compliance.checkInStatus === "overdue") {
-    if (daysSinceCheckIn == null) {
-      return { tone: "bad", primary: "None" };
-    }
-    return { tone: "bad", primary: "Overdue" };
-  }
-  return { tone: "muted", primary: "—" };
 }
 
 function rosterGoalsColumn(
@@ -936,7 +935,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
               <div className="enterprise-team-roster-table">
                 <div className="enterprise-team-roster-table-head" aria-hidden>
                   <span>Member</span>
-                  <span>Check-in</span>
+                  <span title="Days since last published check-in">Last check-in</span>
                   <span>Goals</span>
                   <span>Overall</span>
                   <span className="enterprise-team-roster-table-head-spacer" />
@@ -982,7 +981,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
 
                         <span className="enterprise-team-roster-col enterprise-team-roster-col--check-in">
                           {checkIn ? (
-                            <RosterMetricCell tone={checkIn.tone} primary={checkIn.primary} />
+                            <RosterMetricCell tone={checkIn.tone} primary={checkIn.primary} secondary={checkIn.secondary} />
                           ) : (
                             <span className="enterprise-team-roster-metric-cell">…</span>
                           )}
@@ -1074,6 +1073,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
               overdueFollowUpTasks={memberStats?.[selectedMember.userId]?.overdueFollowUpTasks}
               workplaceStandards={workplaceStandards}
               standardsCompliance={memberStats?.[selectedMember.userId]?.standardsCompliance}
+              daysSinceLastCheckIn={memberStats?.[selectedMember.userId]?.daysSinceLastOneOnOne}
               canManageStandards={canManageOneOneTemplates}
               onManageStandards={() => setWorkplaceStandardsOpen(true)}
               onBack={() => setSelectedMemberId(null)}

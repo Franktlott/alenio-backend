@@ -14,7 +14,11 @@ import {
   type WorkplaceStandards,
 } from "../lib/workplace-standards";
 import { StandardsStatusKey } from "./StandardsStatusKey";
-import { oneOnOneDisplayDateMs, oneOnOnePublishedAt } from "../lib/one-on-one-dates";
+import { calendarDaysSinceDate } from "../lib/member-stats-display";
+import {
+  latestPublishedCheckInForStandards,
+  oneOnOnePublishedAt,
+} from "../lib/one-on-one-dates";
 
 type Props = {
   teamId: string;
@@ -26,6 +30,7 @@ type Props = {
   canCreateDevGoal?: boolean;
   workplaceStandards?: WorkplaceStandards;
   standardsCompliance?: MemberStandardsCompliance;
+  daysSinceLastCheckIn?: number | null;
   onManageStandards?: () => void;
   onOpenGrowthTab?: () => void;
 };
@@ -51,14 +56,7 @@ function lastUpdatedAt(goal: DevelopmentGoal): string {
 }
 
 function daysSinceDate(iso: string): number {
-  const then = new Date(iso);
-  const now = new Date();
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const startOfThen = new Date(then.getFullYear(), then.getMonth(), then.getDate());
-  return Math.max(
-    0,
-    Math.floor((startOfToday.getTime() - startOfThen.getTime()) / (1000 * 60 * 60 * 24)),
-  );
+  return calendarDaysSinceDate(iso);
 }
 
 function daysSinceText(days: number): string {
@@ -133,6 +131,7 @@ export function ProfileOverviewTab({
   canCreateDevGoal = false,
   workplaceStandards,
   standardsCompliance,
+  daysSinceLastCheckIn,
   onManageStandards,
   onOpenGrowthTab,
 }: Props) {
@@ -161,9 +160,7 @@ export function ProfileOverviewTab({
       const publishedMeetings = meetings.filter((meeting) => meeting.status !== "draft");
       setOneOnOneCount(publishedMeetings.length);
 
-      const latestMeeting = [...publishedMeetings].sort(
-        (a, b) => oneOnOneDisplayDateMs(b) - oneOnOneDisplayDateMs(a),
-      )[0];
+      const latestMeeting = latestPublishedCheckInForStandards(meetings, standards);
       setLastOneOnOneDate(latestMeeting ? oneOnOnePublishedAt(latestMeeting) : null);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Could not load overview.");
@@ -173,16 +170,16 @@ export function ProfileOverviewTab({
     } finally {
       setLoading(false);
     }
-  }, [memberUserId, teamId]);
+  }, [memberUserId, teamId, standards.requiredCheckInTemplateId]);
 
   useEffect(() => {
     void loadOverview();
   }, [loadOverview]);
 
-  const daysSinceOneOnOne = useMemo(
-    () => (lastOneOnOneDate ? daysSinceDate(lastOneOnOneDate) : null),
-    [lastOneOnOneDate],
-  );
+  const daysSinceOneOnOne = useMemo(() => {
+    if (daysSinceLastCheckIn != null) return daysSinceLastCheckIn;
+    return lastOneOnOneDate ? daysSinceDate(lastOneOnOneDate) : null;
+  }, [daysSinceLastCheckIn, lastOneOnOneDate]);
 
   const requiredGoals = standards.goalsRequired ? standards.minimumActiveGoals : 0;
   const goalsBelowRequired = standards.goalsRequired && activeGoals.length < requiredGoals;

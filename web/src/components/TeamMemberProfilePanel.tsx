@@ -25,6 +25,7 @@ type Props = {
   overdueFollowUpTasks?: number;
   workplaceStandards?: WorkplaceStandards;
   standardsCompliance?: MemberStandardsCompliance;
+  daysSinceLastCheckIn?: number | null;
   canManageStandards?: boolean;
   onManageStandards?: () => void;
   onBack: () => void;
@@ -47,6 +48,7 @@ export function TeamMemberProfilePanel({
   overdueFollowUpTasks,
   workplaceStandards,
   standardsCompliance,
+  daysSinceLastCheckIn,
   canManageStandards,
   onManageStandards,
   onBack,
@@ -136,6 +138,7 @@ export function TeamMemberProfilePanel({
             canCreateDevGoal={canCreateDevGoal}
             workplaceStandards={workplaceStandards}
             standardsCompliance={standardsCompliance}
+            daysSinceLastCheckIn={daysSinceLastCheckIn}
             onManageStandards={onManageStandards}
             onOpenGrowthTab={() => setActiveTab("Growth")}
           />

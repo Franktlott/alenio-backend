@@ -750,9 +750,9 @@ tasksRouter.get("/member-stats", async (c) => {
 
   const daysSinceCalendar = (then: Date): number => {
     const now = new Date();
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const startOfThen = new Date(then.getFullYear(), then.getMonth(), then.getDate());
-    return Math.max(0, Math.floor((startOfToday.getTime() - startOfThen.getTime()) / 86_400_000));
+    const startOfTodayUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+    const startOfThenUtc = Date.UTC(then.getUTCFullYear(), then.getUTCMonth(), then.getUTCDate());
+    return Math.max(0, Math.floor((startOfTodayUtc - startOfThenUtc) / 86_400_000));
   };
 
   for (const m of teamMembers) {

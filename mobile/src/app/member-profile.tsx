@@ -398,6 +398,7 @@ export default function MemberProfileScreen() {
               overdueFollowUpTasks={stats?.overdueFollowUpTasks}
               workplaceStandards={workplaceStandards}
               standardsCompliance={stats?.standardsCompliance}
+              daysSinceLastCheckIn={stats?.daysSinceLastOneOnOne}
             />
           ) : activeTab === "Growth" ? (
             <DevelopmentPlanTab

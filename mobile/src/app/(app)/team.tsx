@@ -883,7 +883,7 @@ export default function TeamScreen() {
                 <View style={{ alignItems: "flex-end", gap: 4 }}>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                     <Text style={{ fontSize: 10, fontWeight: "700", color: "#94A3B8", textTransform: "uppercase" }}>
-                      Check-in
+                      Last check-in
                     </Text>
                     <Text style={{ fontSize: 12, fontWeight: "700", color: "#0F172A" }}>
                       {formatDaysSinceCheckIn(stats?.daysSinceLastOneOnOne)}

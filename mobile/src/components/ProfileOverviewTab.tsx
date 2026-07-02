@@ -5,7 +5,8 @@ import {
   fetchOneOnOneMeetings,
   type DevelopmentGoal,
 } from "@/lib/member-profile-api";
-import { oneOnOneDisplayDateMs, oneOnOnePublishedAt } from "@/lib/one-on-one-dates";
+import { oneOnOnePublishedAt, latestPublishedCheckInForStandards } from "@/lib/one-on-one-dates";
+import { calendarDaysSinceDate } from "@/lib/member-stats-display";
 
 import {
   DEFAULT_WORKPLACE_STANDARDS,
@@ -24,6 +25,7 @@ type Props = {
   overdueFollowUpTasks?: number;
   workplaceStandards?: WorkplaceStandards;
   standardsCompliance?: MemberStandardsCompliance;
+  daysSinceLastCheckIn?: number | null;
 };
 
 function formatDateOnly(iso: string): string {
@@ -47,14 +49,7 @@ function lastUpdatedAt(goal: DevelopmentGoal): string {
 }
 
 function daysSinceDate(iso: string): number {
-  const then = new Date(iso);
-  const now = new Date();
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const startOfThen = new Date(then.getFullYear(), then.getMonth(), then.getDate());
-  return Math.max(
-    0,
-    Math.floor((startOfToday.getTime() - startOfThen.getTime()) / (1000 * 60 * 60 * 24)),
-  );
+  return calendarDaysSinceDate(iso);
 }
 
 function daysSinceText(days: number): string {
@@ -120,6 +115,7 @@ export function ProfileOverviewTab({
   overdueFollowUpTasks,
   workplaceStandards,
   standardsCompliance,
+  daysSinceLastCheckIn,
 }: Props) {
   const standards = workplaceStandards ?? DEFAULT_WORKPLACE_STANDARDS;
   const [loading, setLoading] = useState(true);
@@ -146,9 +142,7 @@ export function ProfileOverviewTab({
       const publishedMeetings = meetings.filter((meeting) => meeting.status !== "draft");
       setOneOnOneCount(publishedMeetings.length);
 
-      const latestMeeting = [...publishedMeetings].sort(
-        (a, b) => oneOnOneDisplayDateMs(b) - oneOnOneDisplayDateMs(a),
-      )[0];
+      const latestMeeting = latestPublishedCheckInForStandards(meetings, standards);
       setLastOneOnOneDate(latestMeeting ? oneOnOnePublishedAt(latestMeeting) : null);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Could not load overview.");
@@ -158,16 +152,16 @@ export function ProfileOverviewTab({
     } finally {
       setLoading(false);
     }
-  }, [memberUserId, teamId]);
+  }, [memberUserId, teamId, standards.requiredCheckInTemplateId]);
 
   useEffect(() => {
     void loadOverview();
   }, [loadOverview]);
 
-  const daysSinceOneOnOne = useMemo(
-    () => (lastOneOnOneDate ? daysSinceDate(lastOneOnOneDate) : null),
-    [lastOneOnOneDate],
-  );
+  const daysSinceOneOnOne = useMemo(() => {
+    if (daysSinceLastCheckIn != null) return daysSinceLastCheckIn;
+    return lastOneOnOneDate ? daysSinceDate(lastOneOnOneDate) : null;
+  }, [daysSinceLastCheckIn, lastOneOnOneDate]);
 
   const kpis = [
     { label: "Active goals", value: loading ? "—" : String(activeGoals.length) },
@@ -289,7 +283,7 @@ export function ProfileOverviewTab({
         {standardsCompliance ? (
           <>
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 10 }}>
-              {memberStandardsBadges(standardsCompliance).map((badge) => {
+              {memberStandardsBadges(standardsCompliance, daysSinceOneOnOne).map((badge) => {
                 const colors = standardsBadgeColors(badge.variant);
                 return (
                   <View
