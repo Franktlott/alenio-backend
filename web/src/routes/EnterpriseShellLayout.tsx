@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { DashboardTopBar } from "../components/DashboardTopBar";
-import { AlenioGoTopBar } from "../components/alenio-go/AlenioGoDashboard";
 import { EnterpriseLayout, type EnterpriseNavId } from "../components/EnterpriseLayout";
 import { NoTeamsEmptyState } from "../components/NoTeamsEmptyState";
 import { EnterpriseShellContext, type EnterpriseShellContextValue } from "../contexts/EnterpriseShellContext";
@@ -19,13 +18,7 @@ export type EnterpriseRouteHandle = {
 };
 
 /** Route-specific shell classes (BrowserRouter has no route `handle`; mirror App routes here). */
-function routeLayoutHandleFromPath(pathname: string): EnterpriseRouteHandle {
-  if (pathname.startsWith("/go")) {
-    return {
-      enterpriseContentClassName: "enterprise-content-flush enterprise-content-go",
-      enterpriseMainClassName: "enterprise-app--go",
-    };
-  }
+function routeLayoutHandleFromPath(_pathname: string): EnterpriseRouteHandle {
   return {
     enterpriseContentClassName: "enterprise-content-flush",
   };
@@ -33,7 +26,6 @@ function routeLayoutHandleFromPath(pathname: string): EnterpriseRouteHandle {
 
 function activeNavFromPath(pathname: string): EnterpriseNavId {
   if (pathname.startsWith("/chat")) return "chat";
-  if (pathname.startsWith("/go")) return "go";
   if (pathname.startsWith("/billing")) return "plan";
   if (pathname.startsWith("/team")) return "team";
   if (pathname.startsWith("/profile")) return "profile";
@@ -189,7 +181,6 @@ export function EnterpriseShellLayout() {
   }, [teams, selectedTeamId]);
 
   const topBarPageTitle = enterpriseNavTitle(activeNav);
-  const isGoRoute = location.pathname.startsWith("/go");
   const hasNoTeams = teams !== null && teams.length === 0;
   const isProfileRoute = location.pathname.startsWith("/profile");
   const showNoTeamsEmptyState = hasNoTeams && !isProfileRoute;
@@ -220,7 +211,6 @@ export function EnterpriseShellLayout() {
     }
     const isTeamGatedShellRoute =
       path.startsWith("/dashboard") ||
-      path.startsWith("/go") ||
       path.startsWith("/tasks/new");
     if (isTeamGatedShellRoute && !showActivityExecuteNav && path !== "/chat") {
       navigate("/chat", { replace: true });
@@ -271,20 +261,11 @@ export function EnterpriseShellLayout() {
         user={me ?? null}
         onSignOutNavigate={(path) => navigate(path)}
         topBar={
-          isGoRoute ? (
-            <AlenioGoTopBar
-              user={me ?? null}
-              teams={teams ?? []}
-              selectedTeamId={teams?.some((t) => t.id === selectedTeamId) ? selectedTeamId : effectiveTeamId}
-              onTeamChange={setSelectedTeamId}
-            />
-          ) : (
-            <DashboardTopBar
-              user={me ?? null}
-              pageTitle={topBarPageTitle}
-              selectedTeamId={teams?.some((t) => t.id === selectedTeamId) ? selectedTeamId : effectiveTeamId}
-            />
-          )
+          <DashboardTopBar
+            user={me ?? null}
+            pageTitle={topBarPageTitle}
+            selectedTeamId={teams?.some((t) => t.id === selectedTeamId) ? selectedTeamId : effectiveTeamId}
+          />
         }
         mainClassName={mainClassName}
         contentClassName={contentClassName}

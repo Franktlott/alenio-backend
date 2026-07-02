@@ -2,7 +2,6 @@ import type { CSSProperties, ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
-import { AlenioGoLogo } from "./AlenioGoLogo";
 import { AlenioWorkspaceLoading } from "./AlenioWorkspaceLoading";
 import { clearAccessToken, getAuthClient } from "../lib/auth-client";
 import {
@@ -12,7 +11,7 @@ import {
 } from "../lib/enterprise-selected-team";
 import type { WebMeUser, WebTeamRow } from "../lib/api";
 
-export type EnterpriseNavId = "activity" | "chat" | "execute" | "go" | "team" | "plan" | "profile";
+export type EnterpriseNavId = "activity" | "chat" | "execute" | "team" | "plan" | "profile";
 
 type Props = {
   activeNav: EnterpriseNavId;
@@ -273,15 +272,6 @@ export function EnterpriseLayout({
           <NavItem to="/chat" navId="chat" activeNav={activeNav} icon={<IconChat />} label="Chat" />
           {showActivityExecuteNav ? (
             <NavItem to="/dashboard" navId="execute" activeNav={activeNav} icon={<IconWorkspace />} label="Workspace" />
-          ) : null}
-          {showActivityExecuteNav ? (
-            <NavItem
-              to="/go"
-              navId="go"
-              activeNav={activeNav}
-              icon={<AlenioGoLogo />}
-              label="Alenio Go"
-            />
           ) : null}
           <NavItem to="/team" navId="team" activeNav={activeNav} icon={<IconTeam />} label="Team" />
           {showPlanNav ? (

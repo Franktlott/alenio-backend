@@ -546,7 +546,7 @@ export function senecaActionPath(actionId: SenecaActionId, teamId: string, taskI
     case "create_recognition":
       return `/chat?teamId=${encodeURIComponent(teamId)}`;
     case "build_checklist":
-      return `/go?teamId=${encodeURIComponent(teamId)}`;
+      return `/aleniogo`;
     case "view_overdue_tasks":
       return `/dashboard?teamId=${encodeURIComponent(teamId)}&overdue=1`;
     case "open_task":
