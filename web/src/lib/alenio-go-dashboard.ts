@@ -30,7 +30,23 @@ export function formatGoDashClock(now = new Date()): { time: string; date: strin
   };
 }
 
-export const GO_DASH_INACTIVE_MODULES: GoDashModule[] = [
+export const GO_DASH_KIOSK_MODULES: GoDashModule[] = [
+  {
+    id: "tasks",
+    title: "Tasks",
+    subtitle: "Requires Alenio account",
+    active: false,
+    tone: "indigo",
+    icon: "tasks",
+  },
+  {
+    id: "checklists",
+    title: "Checklists",
+    subtitle: "Coming soon",
+    active: false,
+    tone: "cyan",
+    icon: "checklists",
+  },
   {
     id: "walks",
     title: "Walks",
@@ -49,10 +65,13 @@ export const GO_DASH_INACTIVE_MODULES: GoDashModule[] = [
   },
 ];
 
+/** @deprecated Use GO_DASH_KIOSK_MODULES */
+export const GO_DASH_INACTIVE_MODULES = GO_DASH_KIOSK_MODULES.slice(2);
+
 export const GO_DASH_QUICK_ACTIONS: GoDashQuickAction[] = [
   { id: "photo", label: "Add Photo", active: false, tone: "indigo", icon: "camera" },
   { id: "note", label: "Add Note", active: false, tone: "emerald", icon: "note" },
   { id: "temp", label: "Temp Check", active: false, tone: "violet", icon: "temp" },
-  { id: "history", label: "View History", active: true, tone: "amber", icon: "history" },
+  { id: "history", label: "View History", active: false, tone: "amber", icon: "history" },
   { id: "more", label: "More", active: false, tone: "slate", icon: "more" },
 ];

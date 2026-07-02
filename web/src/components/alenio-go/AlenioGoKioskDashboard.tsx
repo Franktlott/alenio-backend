@@ -1,25 +1,15 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { AlenioGoLogo } from "../AlenioGoLogo";
 import { fetchPublicChecklistHub } from "../../lib/api";
 import {
   formatGoDashClock,
-  GO_DASH_INACTIVE_MODULES,
+  GO_DASH_KIOSK_MODULES,
   GO_DASH_QUICK_ACTIONS,
   greetingForHour,
-  type GoDashModule,
 } from "../../lib/alenio-go-dashboard";
-import { checklistCardColorStyles } from "../../lib/checklist-card-colors";
 import { clearGoLinkedWorkspace, saveGoLinkedWorkspace } from "../../lib/go-device";
-import { kioskProgressPercent, loadKioskProgress } from "../../lib/kiosk-checklist-progress";
 import { GoDashFooter, GoDashModuleCard, GoDashQuickActionsGrid } from "./go-dash-parts";
-
-type HubChecklist = {
-  id: string;
-  name: string;
-  cardColor: string | null;
-  taskCount: number;
-};
 
 type Props = {
   hubToken: string;
@@ -65,53 +55,12 @@ function AlenioGoKioskTopBar({ teamName }: { teamName: string }) {
   );
 }
 
-function computeChecklistStats(hubToken: string, checklists: HubChecklist[]) {
-  let totalTasks = 0;
-  let completedTasks = 0;
-  let incompleteChecklists = 0;
-
-  for (const cl of checklists) {
-    totalTasks += cl.taskCount;
-    const stored = loadKioskProgress(hubToken, cl.id);
-    const signed = stored ? Object.values(stored).filter((t) => t.signed).length : 0;
-    completedTasks += signed;
-    if (kioskProgressPercent(stored, cl.taskCount) < 100) incompleteChecklists += 1;
-  }
-
-  return {
-    totalTasks,
-    completedTasks,
-    remaining: Math.max(0, totalTasks - completedTasks),
-    incompleteChecklists,
-  };
-}
-
 export function AlenioGoKioskDashboard({ hubToken }: Props) {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [teamName, setTeamName] = useState("");
   const [teamImage, setTeamImage] = useState<string | null>(null);
-  const [checklists, setChecklists] = useState<HubChecklist[]>([]);
-  const [progressTick, setProgressTick] = useState(0);
-
-  useEffect(() => {
-    const onStorage = (e: StorageEvent) => {
-      if (e.key?.startsWith("alenio.kioskProgress:")) setProgressTick((n) => n + 1);
-    };
-    const refresh = () => setProgressTick((n) => n + 1);
-    const onVisibility = () => {
-      if (document.visibilityState === "visible") refresh();
-    };
-    window.addEventListener("storage", onStorage);
-    window.addEventListener("focus", refresh);
-    document.addEventListener("visibilitychange", onVisibility);
-    return () => {
-      window.removeEventListener("storage", onStorage);
-      window.removeEventListener("focus", refresh);
-      document.removeEventListener("visibilitychange", onVisibility);
-    };
-  }, []);
 
   useEffect(() => {
     if (!hubToken) {
@@ -127,9 +76,7 @@ export function AlenioGoKioskDashboard({ hubToken }: Props) {
         if (cancelled) return;
         setTeamName(data.team.name);
         setTeamImage(data.team.image);
-        setChecklists(data.checklists);
         saveGoLinkedWorkspace(hubToken, data.team.name);
-        setProgressTick((n) => n + 1);
       })
       .catch(() => {
         if (!cancelled) setError("Workspace not found.");
@@ -142,79 +89,7 @@ export function AlenioGoKioskDashboard({ hubToken }: Props) {
     };
   }, [hubToken]);
 
-  const stats = useMemo(() => {
-    void progressTick;
-    return computeChecklistStats(hubToken, checklists);
-  }, [hubToken, checklists, progressTick]);
-
-  const tiles = useMemo(() => {
-    void progressTick;
-    return checklists.map((cl) => {
-      const stored = loadKioskProgress(hubToken, cl.id);
-      const percentComplete = kioskProgressPercent(stored, cl.taskCount);
-      return { ...cl, percentComplete };
-    });
-  }, [checklists, hubToken, progressTick]);
-
   const greeting = greetingForHour(new Date().getHours());
-  const progressPct =
-    stats.totalTasks > 0 ? Math.round((stats.completedTasks / stats.totalTasks) * 100) : 0;
-
-  const modules = useMemo<GoDashModule[]>(() => {
-    const checklistCount = checklists.length;
-    const active: GoDashModule[] = [
-      {
-        id: "tasks",
-        title: "Tasks",
-        subtitle: "Requires Alenio account",
-        active: false,
-        tone: "indigo",
-        icon: "tasks",
-      },
-      {
-        id: "checklists",
-        title: "Checklists",
-        subtitle:
-          checklistCount > 0
-            ? `${checklistCount} to complete today`
-            : "No checklists yet",
-        active: checklistCount > 0,
-        href: "#go-checklists",
-        tone: "cyan",
-        icon: "checklists",
-      },
-    ];
-    return [...active, ...GO_DASH_INACTIVE_MODULES];
-  }, [checklists.length]);
-
-  const quickActions = useMemo(() => {
-    return GO_DASH_QUICK_ACTIONS.map((action) => {
-      if (action.id === "history" && checklists.length > 0) {
-        return { ...action, active: true, href: "#go-checklists" };
-      }
-      return action;
-    });
-  }, [checklists.length]);
-
-  const alerts = useMemo(() => {
-    const rows: { id: string; label: string; href?: string }[] = [];
-    for (const cl of tiles) {
-      if (cl.percentComplete > 0 && cl.percentComplete < 100) {
-        rows.push({
-          id: `progress-${cl.id}`,
-          label: `${cl.name} — ${cl.percentComplete}% complete`,
-          href: `/checklist/${hubToken}/${cl.id}`,
-        });
-      } else if (cl.percentComplete === 0 && cl.taskCount > 0) {
-        rows.push({
-          id: `pending-${cl.id}`,
-          label: `${cl.name} not started`,
-          href: `/checklist/${hubToken}/${cl.id}`,
-        });
-      }
-    }
-    return rows.slice(0, 4);
-  }, [tiles, hubToken]);
 
   function endSession() {
     clearGoLinkedWorkspace();
@@ -260,24 +135,24 @@ export function AlenioGoKioskDashboard({ hubToken }: Props) {
 
           <div className="go-dash-stats-bar">
             <div className="go-dash-progress">
-              <div className="go-dash-progress-ring" style={{ ["--pct" as string]: `${progressPct}` }}>
-                <span>{progressPct}%</span>
+              <div className="go-dash-progress-ring" style={{ ["--pct" as string]: "0" }}>
+                <span>0%</span>
               </div>
               <div>
                 <strong>Today&apos;s progress</strong>
-                <span>{progressPct}% complete</span>
+                <span>0% complete</span>
               </div>
             </div>
             <div className="go-dash-stat-col">
-              <span className="go-dash-stat-value go-dash-stat-value--indigo">{stats.remaining}</span>
+              <span className="go-dash-stat-value go-dash-stat-value--indigo">0</span>
               <span className="go-dash-stat-label">Remaining items</span>
             </div>
             <div className="go-dash-stat-col">
-              <span className="go-dash-stat-value go-dash-stat-value--amber">{stats.incompleteChecklists}</span>
-              <span className="go-dash-stat-label">Checklists open</span>
+              <span className="go-dash-stat-value go-dash-stat-value--amber">0</span>
+              <span className="go-dash-stat-label">Overdue</span>
             </div>
             <div className="go-dash-stat-col">
-              <span className="go-dash-stat-value go-dash-stat-value--green">{stats.completedTasks}</span>
+              <span className="go-dash-stat-value go-dash-stat-value--green">0</span>
               <span className="go-dash-stat-label">Completed</span>
             </div>
           </div>
@@ -285,13 +160,13 @@ export function AlenioGoKioskDashboard({ hubToken }: Props) {
 
         <div className="go-dash-body go-dash-body--kiosk">
           <div className="go-dash-modules">
-            {modules.slice(0, 3).map((m) => (
+            {GO_DASH_KIOSK_MODULES.slice(0, 3).map((m) => (
               <GoDashModuleCard key={m.id} module={m} />
             ))}
           </div>
 
           <div className="go-dash-secondary-row">
-            {modules.slice(3).map((m) => (
+            {GO_DASH_KIOSK_MODULES.slice(3).map((m) => (
               <GoDashModuleCard key={m.id} module={m} />
             ))}
 
@@ -303,77 +178,9 @@ export function AlenioGoKioskDashboard({ hubToken }: Props) {
                 </svg>
                 <h2 id="go-kiosk-alerts-title">Alerts</h2>
               </div>
-              {alerts.length === 0 ? (
-                <p className="go-dash-alerts-empty">No alerts right now.</p>
-              ) : (
-                <ul className="go-dash-alerts-list">
-                  {alerts.map((a) => (
-                    <li key={a.id}>
-                      <Link to={a.href ?? "#"} className="go-dash-alert-item">
-                        <span className="go-dash-alert-dot" aria-hidden />
-                        <span>{a.label}</span>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-                          <polyline points="9 18 15 12 9 6" />
-                        </svg>
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              )}
+              <p className="go-dash-alerts-empty">No alerts right now.</p>
             </section>
           </div>
-
-          <section id="go-checklists" className="go-dash-checklists" aria-labelledby="go-checklists-title">
-            <h2 id="go-checklists-title" className="go-dash-checklists-title">
-              Today&apos;s checklists
-            </h2>
-            {checklists.length === 0 ? (
-              <p className="go-dash-checklists-empty">Your manager can add checklists from the workspace dashboard.</p>
-            ) : (
-              <ul className="go-dash-checklist-grid">
-                {tiles.map((cl) => {
-                  const cardStyle = checklistCardColorStyles(cl.cardColor);
-                  return (
-                    <li key={cl.id}>
-                      <Link
-                        to={`/checklist/${hubToken}/${cl.id}`}
-                        className="go-dash-checklist-card"
-                        style={{
-                          background: cardStyle.background,
-                          borderColor: cardStyle.borderColor,
-                          boxShadow: `inset 4px 0 0 ${cardStyle.accent}`,
-                        }}
-                      >
-                        <h3 className="go-dash-checklist-card__title">{cl.name}</h3>
-                        <p className="go-dash-checklist-card__meta">
-                          {cl.taskCount} task{cl.taskCount === 1 ? "" : "s"}
-                        </p>
-                        <div className="go-dash-checklist-card__progress-wrap">
-                          <div className="go-dash-checklist-card__progress-head">
-                            <span>Progress</span>
-                            <span>{cl.percentComplete}%</span>
-                          </div>
-                          <div
-                            className="go-dash-checklist-card__progress-bar"
-                            role="progressbar"
-                            aria-valuenow={cl.percentComplete}
-                            aria-valuemin={0}
-                            aria-valuemax={100}
-                            aria-label={`${cl.name} progress`}
-                          >
-                            <span style={{ width: `${cl.percentComplete}%`, background: cardStyle.accent }} />
-                          </div>
-                        </div>
-                        <span className="go-dash-checklist-card__cta" style={{ color: cardStyle.accent }}>
-                          Open checklist →
-                        </span>
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </section>
         </div>
       </div>
 
@@ -382,7 +189,7 @@ export function AlenioGoKioskDashboard({ hubToken }: Props) {
           <h2 id="go-kiosk-quick-title" className="go-dash-quick-title">
             Quick actions
           </h2>
-          <GoDashQuickActionsGrid actions={quickActions} />
+          <GoDashQuickActionsGrid actions={GO_DASH_QUICK_ACTIONS} />
         </section>
         <GoDashFooter onEndSession={endSession} endLabel="Disconnect device" />
       </div>
