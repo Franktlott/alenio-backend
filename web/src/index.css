@@ -3262,6 +3262,63 @@ input {
   margin-bottom: 1rem;
 }
 
+.briefing-doc-pdf {
+  margin-bottom: 1rem;
+}
+
+.briefing-doc-pdf-status {
+  margin: 0 0 0.75rem;
+  font-size: 0.875rem;
+  color: #64748b;
+}
+
+.briefing-doc-pdf-pages {
+  max-height: min(65vh, 640px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #f8fafc;
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.go-briefings-kiosk--review .briefing-doc-pdf-pages {
+  max-height: min(58vh, 600px);
+}
+
+.briefing-doc-pdf-page-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.briefing-doc-pdf-page {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+}
+
+.briefing-doc-pdf-page-label {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.briefing-doc-pdf-hint {
+  margin: 0.5rem 0 0;
+  font-size: 0.8125rem;
+  color: #64748b;
+  text-align: center;
+}
+
 .briefing-doc-image {
   width: 100%;
   max-height: 520px;

@@ -1,5 +1,6 @@
 import type { BriefingRow } from "../../lib/api";
 import { formatBriefingDate, isImageBriefing, isPdfBriefing } from "../../lib/briefings-display";
+import { BriefingPdfViewer } from "./BriefingPdfViewer";
 
 type Props = {
   briefing: BriefingRow;
@@ -10,14 +11,7 @@ export function BriefingDocumentViewer({ briefing }: Props) {
   const title = documentFilename || "Briefing document";
 
   if (isPdfBriefing(contentType, documentUrl)) {
-    return (
-      <iframe
-        className="briefing-doc-frame"
-        src={documentUrl}
-        title={title}
-        aria-label={title}
-      />
-    );
+    return <BriefingPdfViewer url={documentUrl} title={title} />;
   }
 
   if (isImageBriefing(contentType, documentUrl)) {
