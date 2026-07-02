@@ -1,7 +1,7 @@
 import { prisma } from "../prisma";
 import { findTeamByChecklistHubToken } from "./checklist-locations";
 import { canManageGoLoginRequests } from "./go-login-requests";
-import { isGoDeviceReachable } from "./workplace-alerts";
+import { isGoDeviceApproved } from "./workplace-alerts";
 import { sendPushToUsers } from "./push";
 
 export type BriefingStatus = "not_started" | "reviewed" | "overdue";
@@ -66,6 +66,10 @@ export function buildCompletionKey(input: {
 }
 
 export { canManageGoLoginRequests as canManageBriefings };
+
+function isBriefingManagerRole(role: string): boolean {
+  return role === "owner" || role === "team_leader";
+}
 
 async function assertTeamMember(teamId: string, userId: string) {
   const member = await prisma.teamMember.findUnique({
@@ -164,7 +168,7 @@ export async function listBriefingsForUser(teamId: string, userId: string) {
 
   const [briefings, completions] = await Promise.all([
     prisma.briefing.findMany({
-      where: { teamId, publishedAt: { not: null } },
+      where: { teamId },
       orderBy: { publishedAt: "desc" },
     }),
     prisma.briefingCompletion.findMany({
@@ -185,7 +189,7 @@ export async function listBriefingsForUser(teamId: string, userId: string) {
         completionByBriefing.get(b.id) ?? null,
       ),
     ),
-    canManage: canManageGoLoginRequests(member.role),
+    canManage: isBriefingManagerRole(member.role),
   };
 }
 
@@ -207,7 +211,7 @@ export async function getBriefingForUser(teamId: string, briefingId: string, use
       briefingStatus(briefing.dueAt, completion?.completedAt ?? null),
       completion?.completedAt ?? null,
     ),
-    canManage: canManageGoLoginRequests(member.role),
+    canManage: isBriefingManagerRole(member.role),
   };
 }
 
@@ -259,7 +263,7 @@ export async function completeBriefingForUser(
 
 export async function getBriefingAdminStats(teamId: string, briefingId: string, userId: string) {
   const member = await assertTeamMember(teamId, userId);
-  if (!member || !canManageGoLoginRequests(member.role)) {
+  if (!member || !isBriefingManagerRole(member.role)) {
     return { ok: false as const, code: "FORBIDDEN" as const };
   }
 
@@ -340,7 +344,7 @@ export async function deleteBriefingCompletion(
   userId: string,
 ) {
   const member = await assertTeamMember(teamId, userId);
-  if (!member || !canManageGoLoginRequests(member.role)) {
+  if (!member || !isBriefingManagerRole(member.role)) {
     return { ok: false as const, code: "FORBIDDEN" as const };
   }
 
@@ -357,12 +361,12 @@ export async function listPublicBriefings(hubToken: string, deviceId: string) {
   const team = await findTeamByChecklistHubToken(hubToken);
   if (!team) return { ok: false as const, code: "NOT_FOUND" as const };
 
-  const reachable = await isGoDeviceReachable(team.id, deviceId);
+  const reachable = await isGoDeviceApproved(team.id, deviceId);
   if (!reachable) return { ok: false as const, code: "FORBIDDEN" as const };
 
   const [briefings, completions] = await Promise.all([
     prisma.briefing.findMany({
-      where: { teamId: team.id, publishedAt: { not: null } },
+      where: { teamId: team.id },
       orderBy: { publishedAt: "desc" },
     }),
     prisma.briefingCompletion.findMany({
@@ -391,7 +395,7 @@ export async function getPublicBriefing(hubToken: string, deviceId: string, brie
   const team = await findTeamByChecklistHubToken(hubToken);
   if (!team) return { ok: false as const, code: "NOT_FOUND" as const };
 
-  const reachable = await isGoDeviceReachable(team.id, deviceId);
+  const reachable = await isGoDeviceApproved(team.id, deviceId);
   if (!reachable) return { ok: false as const, code: "FORBIDDEN" as const };
 
   const briefing = await prisma.briefing.findFirst({ where: { id: briefingId, teamId: team.id } });
@@ -420,7 +424,7 @@ export async function completePublicBriefing(
   const team = await findTeamByChecklistHubToken(hubToken);
   if (!team) return { ok: false as const, code: "NOT_FOUND" as const };
 
-  const reachable = await isGoDeviceReachable(team.id, deviceId);
+  const reachable = await isGoDeviceApproved(team.id, deviceId);
   if (!reachable) return { ok: false as const, code: "FORBIDDEN" as const };
 
   const briefing = await prisma.briefing.findFirst({ where: { id: briefingId, teamId: team.id } });
