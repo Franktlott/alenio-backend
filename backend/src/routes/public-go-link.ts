@@ -16,113 +16,136 @@ const linkBodySchema = z.object({
   deviceLabel: z.string().max(120).optional(),
 });
 
-publicGoLinkRouter.post("/link", zValidator("json", linkBodySchema), async (c) => {
-  const { inviteCode, deviceId, deviceLabel } = c.req.valid("json");
-  const code = normalizeWorkspaceCode(inviteCode);
-
-  const team = await prisma.team.findUnique({
-    where: { inviteCode: code },
+async function findTeamByWorkspaceCode(code: string) {
+  const normalized = normalizeWorkspaceCode(code);
+  const exact = await prisma.team.findUnique({
+    where: { inviteCode: normalized },
     select: { id: true, name: true },
   });
-  if (!team) {
-    return c.json({ error: { message: "Invalid workspace code", code: "NOT_FOUND" } }, 404);
-  }
-
-  const hasPlan = await teamHasChecklistPlan(team.id);
-  if (!hasPlan) {
-    return c.json(
-      {
-        error: {
-          message: "Alenio Go requires a Team plan for this workspace",
-          code: "PLAN_REQUIRED",
-        },
-      },
-      403,
-    );
-  }
-
-  const label = deviceLabel?.trim() || "A device";
-  const existing = await prisma.goLoginRequest.findUnique({
-    where: { teamId_deviceId: { teamId: team.id, deviceId } },
+  if (exact) return exact;
+  return prisma.team.findFirst({
+    where: { inviteCode: { equals: code.trim(), mode: "insensitive" } },
+    select: { id: true, name: true },
   });
+}
 
-  if (existing?.status === "approved") {
-    const hubToken = await ensureTeamChecklistHubToken(team.id);
-    return c.json({
-      data: {
-        status: "approved" as const,
-        requestId: existing.id,
-        teamName: team.name,
-        hubToken,
-      },
+publicGoLinkRouter.post("/link", zValidator("json", linkBodySchema), async (c) => {
+  try {
+    const { inviteCode, deviceId, deviceLabel } = c.req.valid("json");
+
+    const team = await findTeamByWorkspaceCode(inviteCode);
+    if (!team) {
+      return c.json({ error: { message: "Invalid workspace code", code: "NOT_FOUND" } }, 404);
+    }
+
+    const hasPlan = await teamHasChecklistPlan(team.id);
+    if (!hasPlan) {
+      return c.json(
+        {
+          error: {
+            message: "Alenio Go requires a Team plan for this workspace",
+            code: "PLAN_REQUIRED",
+          },
+        },
+        403,
+      );
+    }
+
+    const label = deviceLabel?.trim() || "A device";
+    const existing = await prisma.goLoginRequest.findUnique({
+      where: { teamId_deviceId: { teamId: team.id, deviceId } },
     });
-  }
 
-  if (existing?.status === "pending") {
+    if (existing?.status === "approved") {
+      const hubToken = await ensureTeamChecklistHubToken(team.id);
+      return c.json({
+        data: {
+          status: "approved" as const,
+          requestId: existing.id,
+          teamName: team.name,
+          hubToken,
+        },
+      });
+    }
+
+    if (existing?.status === "pending") {
+      return c.json({
+        data: {
+          status: "pending" as const,
+          requestId: existing.id,
+          teamName: team.name,
+        },
+      });
+    }
+
+    let request;
+    if (existing) {
+      request = await prisma.goLoginRequest.update({
+        where: { id: existing.id },
+        data: { status: "pending", deviceLabel: label, approvedByUserId: null },
+      });
+    } else {
+      request = await prisma.goLoginRequest.create({
+        data: { teamId: team.id, deviceId, deviceLabel: label, status: "pending" },
+      });
+    }
+
+    try {
+      await notifyGoLoginApprovers(team.id, team.name, label, request.id);
+    } catch (notifyErr) {
+      console.error("[go-link] notify approvers failed (request still pending):", notifyErr);
+    }
+
     return c.json({
       data: {
         status: "pending" as const,
-        requestId: existing.id,
+        requestId: request.id,
         teamName: team.name,
       },
     });
+  } catch (err) {
+    console.error("[go-link] POST /link failed:", err);
+    return c.json({ error: { message: "Could not submit link request", code: "INTERNAL" } }, 500);
   }
-
-  let request;
-  if (existing) {
-    request = await prisma.goLoginRequest.update({
-      where: { id: existing.id },
-      data: { status: "pending", deviceLabel: label, approvedByUserId: null },
-    });
-  } else {
-    request = await prisma.goLoginRequest.create({
-      data: { teamId: team.id, deviceId, deviceLabel: label, status: "pending" },
-    });
-  }
-
-  await notifyGoLoginApprovers(team.id, team.name, label, request.id);
-
-  return c.json({
-    data: {
-      status: "pending" as const,
-      requestId: request.id,
-      teamName: team.name,
-    },
-  });
 });
 
 publicGoLinkRouter.get("/status", async (c) => {
-  const deviceId = c.req.query("deviceId")?.trim();
-  const requestId = c.req.query("requestId")?.trim();
-  if (!deviceId || !requestId) {
-    return c.json({ error: { message: "deviceId and requestId are required", code: "VALIDATION_ERROR" } }, 400);
-  }
+  try {
+    const deviceId = c.req.query("deviceId")?.trim();
+    const requestId = c.req.query("requestId")?.trim();
+    if (!deviceId || !requestId) {
+      return c.json({ error: { message: "deviceId and requestId are required", code: "VALIDATION_ERROR" } }, 400);
+    }
 
-  const request = await prisma.goLoginRequest.findUnique({
-    where: { id: requestId },
-    include: { team: { select: { name: true } } },
-  });
-  if (!request || request.deviceId !== deviceId) {
-    return c.json({ error: { message: "Link request not found", code: "NOT_FOUND" } }, 404);
-  }
+    const request = await prisma.goLoginRequest.findUnique({
+      where: { id: requestId },
+      include: { team: { select: { name: true } } },
+    });
+    if (!request || request.deviceId !== deviceId) {
+      return c.json({ error: { message: "Link request not found", code: "NOT_FOUND" } }, 404);
+    }
 
-  if (request.status === "approved") {
-    const hubToken = await ensureTeamChecklistHubToken(request.teamId);
+    if (request.status === "approved") {
+      const hubToken = await ensureTeamChecklistHubToken(request.teamId);
+      return c.json({
+        data: {
+          status: "approved" as const,
+          teamName: request.team.name,
+          hubToken,
+        },
+      });
+    }
+
     return c.json({
       data: {
-        status: "approved" as const,
+        status: request.status as "pending" | "rejected",
         teamName: request.team.name,
-        hubToken,
       },
     });
+  } catch (err) {
+    console.error("[go-link] GET /status failed:", err);
+    return c.json({ error: { message: "Could not load link status", code: "INTERNAL" } }, 500);
   }
-
-  return c.json({
-    data: {
-      status: request.status as "pending" | "rejected",
-      teamName: request.team.name,
-    },
-  });
 });
 
 export { publicGoLinkRouter };

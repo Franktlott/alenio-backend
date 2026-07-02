@@ -69,20 +69,22 @@ if (!isProduction) {
   syncPrismaSchemaOnStartup();
 }
 
-/** Dev-only safety net when db push was skipped; prod schema comes from preDeploy + prisma/schema.prisma. */
-const startupSchemaReady = isProduction
-  ? Promise.resolve()
-  : Promise.all([
-      ensureOneOnOneSchema(prisma),
-      ensureDevelopmentPlanSchema(prisma),
-      ensureTeamInviteSchema(prisma),
-      ensureRecurrenceSeriesSchema(prisma),
-      ensureUserTimezoneSchema(prisma),
-      ensureCalendarApprovalSchema(prisma),
-      ensureWorkplaceStandardsSchema(prisma),
-      ensureCalendarConnectionSchema(prisma),
-      ensureGoLoginSchema(prisma),
-    ]);
+/** Dev safety net + prod fallback when preDeploy db push missed a table. */
+const startupSchemaReady = Promise.all([
+  ...(isProduction
+    ? [ensureGoLoginSchema(prisma)]
+    : [
+        ensureOneOnOneSchema(prisma),
+        ensureDevelopmentPlanSchema(prisma),
+        ensureTeamInviteSchema(prisma),
+        ensureRecurrenceSeriesSchema(prisma),
+        ensureUserTimezoneSchema(prisma),
+        ensureCalendarApprovalSchema(prisma),
+        ensureWorkplaceStandardsSchema(prisma),
+        ensureCalendarConnectionSchema(prisma),
+        ensureGoLoginSchema(prisma),
+      ]),
+]);
 
 function isFastPublicPath(path: string): boolean {
   return path === "/health";
