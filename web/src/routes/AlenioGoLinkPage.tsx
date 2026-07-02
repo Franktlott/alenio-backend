@@ -123,7 +123,7 @@ export function AlenioGoLinkPage() {
               Connected to <strong>{linked.teamName}</strong>
             </p>
             <Link className="alenio-go-link-primary" to={`/checklist/${linked.hubToken}`}>
-              Open checklists
+              Open Alenio Go
             </Link>
             <button type="button" className="alenio-go-link-secondary" onClick={onUseDifferentWorkspace}>
               Link a different workspace

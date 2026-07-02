@@ -3155,6 +3155,125 @@ input {
   cursor: pointer;
 }
 
+.go-dash--kiosk {
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: #eef2f7;
+  overflow: auto;
+}
+
+.go-dash-loading,
+.go-dash-error {
+  margin: 2rem 1.25rem;
+  font-size: 0.9375rem;
+  color: #64748b;
+}
+
+.go-dash-error {
+  color: #b91c1c;
+}
+
+.go-dash-workspace-btn--static {
+  cursor: default;
+  pointer-events: none;
+}
+
+a.go-dash-alert-item {
+  text-decoration: none;
+}
+
+.go-dash-checklists {
+  margin-bottom: 1.25rem;
+}
+
+.go-dash-checklists-title {
+  margin: 0 0 0.875rem;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.go-dash-checklists-empty {
+  margin: 0;
+  padding: 1rem 1.125rem;
+  border-radius: 12px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  color: #64748b;
+  font-size: 0.875rem;
+}
+
+.go-dash-checklist-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 0.875rem;
+}
+
+.go-dash-checklist-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1rem 1.125rem;
+  border-radius: 14px;
+  border: 1px solid #e2e8f0;
+  text-decoration: none;
+  color: inherit;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.go-dash-checklist-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.1);
+}
+
+.go-dash-checklist-card__title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.go-dash-checklist-card__meta {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: #64748b;
+}
+
+.go-dash-checklist-card__progress-wrap {
+  margin-top: 0.25rem;
+}
+
+.go-dash-checklist-card__progress-head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: #64748b;
+  margin-bottom: 0.375rem;
+}
+
+.go-dash-checklist-card__progress-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.08);
+  overflow: hidden;
+}
+
+.go-dash-checklist-card__progress-bar span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.2s ease;
+}
+
+.go-dash-checklist-card__cta {
+  margin-top: 0.25rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
 @media (max-width: 960px) {
   .go-dash-modules {
     grid-template-columns: 1fr;
