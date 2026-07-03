@@ -3,6 +3,9 @@ import { clearGoLinkedWorkspace, defaultGoDeviceLabel, getGoDeviceId } from "./g
 
 export const GO_DEVICE_UNLINKED_MESSAGE = "This device was unlinked. Link again to continue.";
 
+/** How long the disconnect screen stays visible before returning to the link page. */
+export const GO_DEVICE_DISCONNECT_REDIRECT_MS = 3_800;
+
 export function isGoDeviceUnlinkedError(err: unknown): boolean {
   if (!(err instanceof Error)) return false;
   const msg = err.message.toLowerCase();

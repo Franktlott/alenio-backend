@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { fetchGoWorkplaceAlerts, postGoDeviceCheckIn } from "../../lib/api";
 import { clearGoLinkedWorkspace, defaultGoDeviceLabel, getGoDeviceId } from "../../lib/go-device";
-import { isGoDeviceUnlinkedError } from "../../lib/go-session";
+import { isGoDeviceUnlinkedError, GO_DEVICE_DISCONNECT_REDIRECT_MS } from "../../lib/go-session";
 import { GoDeviceUnlinkedScreen } from "./GoDeviceUnlinkedScreen";
 
 type Props = {
@@ -24,7 +24,7 @@ export function GoKioskSessionGate({ hubToken, children }: Props) {
   const revokeSession = useCallback(() => {
     setPhase("revoked");
     clearGoLinkedWorkspace();
-    window.setTimeout(redirectToLinkPage, 900);
+    window.setTimeout(redirectToLinkPage, GO_DEVICE_DISCONNECT_REDIRECT_MS);
   }, []);
 
   useEffect(() => {
