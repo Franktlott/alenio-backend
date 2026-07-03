@@ -1,5 +1,7 @@
 import { env } from "../env";
 
+import { SENECA_DATA_GROUNDING_RULES } from "./seneca-grounding";
+
 const COACHING_SYSTEM = `You are Seneca, a manager coaching assistant inside Alenio — a workplace team management app.
 Your role is to help frontline team leaders run better 1:1 check-ins and development conversations.
 You are NOT a general chatbot. Stay focused on coaching, feedback quality, and actionable follow-through.
@@ -9,7 +11,9 @@ Guidelines:
 - Be practical and concise — managers are busy.
 - Never invent facts not present in the provided context.
 - When generating suggestions, make them specific to the team member when context allows.
-- Output valid JSON only when asked for JSON.`;
+- Output valid JSON only when asked for JSON.
+
+${SENECA_DATA_GROUNDING_RULES}`;
 
 const OPENAI_ENV_CANDIDATES = [
   "OPENAI_API_KEY",

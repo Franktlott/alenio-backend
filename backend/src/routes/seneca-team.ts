@@ -4,12 +4,13 @@ import { z } from "zod";
 import { auth } from "../auth";
 import { authGuard } from "../middleware/auth-guard";
 import { prisma } from "../prisma";
+import { SENECA_DATA_GROUNDING_RULES } from "../lib/seneca-grounding";
 import { senecaAvailable, senecaJson, senecaUnavailableMessage } from "../lib/seneca-openai";
-import { normalizeCheckInTemplateDraft } from "../lib/seneca-normalize";
 import {
   buildSenecaWorkspaceContext,
   senecaWorkspaceContextToPrompt,
 } from "../lib/seneca-workspace-context";
+import { normalizeCheckInTemplateDraft } from "../lib/seneca-normalize";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -143,6 +144,8 @@ Answer the manager's question using ONLY the workspace context JSON below.
 - If they ask about a manager, leader, or team member, use names and stats from the context.
 - If the context lacks information, say what you know and suggest a concrete next step.
 - Do not invent tasks, people, or metrics not in the context.
+
+${SENECA_DATA_GROUNDING_RULES}
 
 Manager question: "${body.question}"
 

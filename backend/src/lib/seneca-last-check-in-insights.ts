@@ -127,11 +127,11 @@ export function buildRuleBasedLastCheckInInsights(source: LastCheckInInsightSour
   );
 
   for (const point of source.discussionPoints.slice(0, 4)) {
-    insights.push(`${point.label}: ${point.response}`);
+    insights.push(`Previously noted in last 1:1 — ${point.label}: ${point.response}`);
   }
 
   if (source.associateFeedback) {
-    insights.push(`Associate feedback shared: ${source.associateFeedback}`);
+    insights.push(`Previously shared in last 1:1 — associate feedback: ${source.associateFeedback}`);
   }
 
   if (source.leaderSummaryForAssociate && !isAssociateFacingLeaderText(source.leaderSummaryForAssociate)) {

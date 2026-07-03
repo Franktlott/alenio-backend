@@ -6,6 +6,11 @@ import { authGuard } from "../middleware/auth-guard";
 import { prisma } from "../prisma";
 import { buildSenecaRawContext, senecaContextToPrompt } from "../lib/seneca-context";
 import { mergeLastCheckInInsights } from "../lib/seneca-last-check-in-insights";
+import {
+  applyGroundedLastCheckInInsights,
+  groundingContextFromSenecaRaw,
+  SENECA_DATA_GROUNDING_RULES,
+} from "../lib/seneca-grounding";
 import { senecaAvailable, senecaJson, senecaText, senecaUnavailableMessage } from "../lib/seneca-openai";
 import {
   normalizeDevelopmentGoalDraft,
@@ -117,7 +122,10 @@ function finalizePrep(
 
   return attachLeaderPrepSteps(
     {
-      lastCheckInInsights: mergeLastCheckInInsights(aiInsights, ctx.lastCheckIn),
+      lastCheckInInsights: applyGroundedLastCheckInInsights(
+        mergeLastCheckInInsights(aiInsights, ctx.lastCheckIn),
+        groundingContextFromSenecaRaw(ctx),
+      ),
       openDevelopmentGoals: normalizeStringArray(prep.openDevelopmentGoals),
       openFollowUpTasks: normalizeStringArray(prep.openFollowUpTasks),
       recentWins: normalizeStringArray(prep.recentWins),
@@ -239,20 +247,22 @@ senecaRouter.post("/:memberUserId/seneca/prep", zValidator("json", prepBodySchem
     const prep = await senecaJson<Omit<SenecaPrepAi, "leaderPrepSteps">>(
       `Generate a pre-check-in prep brief for a manager about to meet with ${raw.memberName}.
 
-The manager needs retrospective INSIGHTS about the PREVIOUS published check-in — not instructions written for the associate.
+The manager needs retrospective INSIGHTS about the PREVIOUS published check-in � not instructions written for the associate.
 
 Use lastCheckIn and lastCheckInInsights in the context JSON. Focus on what was discussed, commitments, associate feedback, and open follow-ups.
 
+${SENECA_DATA_GROUNDING_RULES}
+
 Return JSON with keys:
-- lastCheckInInsights (string[]): 2-6 bullets for the MANAGER summarizing the previous check-in (what was discussed, wins, blockers, commitments, open follow-ups). Write about the associate in third person (e.g. "${raw.memberName} shared…"). Never copy associate-facing script or upcoming-meeting instructions.
+- lastCheckInInsights (string[]): 2-6 bullets for the MANAGER summarizing the previous check-in (what was discussed, wins, blockers, commitments, open follow-ups). Write about the associate in third person. Never copy associate-facing script or upcoming-meeting instructions. For anything not in alenioOverdueTasks or openFollowUps, use "on the last 1:1 it was noted" language — never present-tense overdue claims about external systems (Workday, LMS, etc.).
 - openDevelopmentGoals (string[]): skill names
-- openFollowUpTasks (string[]): task titles still open
+- openFollowUpTasks (string[]): task titles still open in Alenio
 - recentWins (string[])
 - completionPatterns (string|null)
-- suggestedTalkingPoints (string[]): 3-5 practical talking points for the UPCOMING conversation
+- suggestedTalkingPoints (string[]): 3-5 practical talking points for the UPCOMING conversation. Cite memberStats.overdueTasks and alenioOverdueTasks for current Alenio overdue work; for last-check-in notes about external items, suggest checking in rather than asserting current status.
 - suggestedCoachingQuestions (string[]): 3-5 open-ended coaching questions for the UPCOMING conversation
 
-Put templateLeaderPrep items in suggestedCoachingQuestions only — never in lastCheckInInsights.`,
+Put templateLeaderPrep items in suggestedCoachingQuestions only � never in lastCheckInInsights.`,
       senecaContextToPrompt(raw),
     );
     return c.json({
@@ -315,7 +325,7 @@ senecaRouter.post("/:memberUserId/seneca/assist", zValidator("json", assistBodyS
 
   const actionInstructions: Record<string, string> = {
     suggest_next_question: `Review the check-in template questions (currentCheckIn.templateFields) and the responses entered so far (currentCheckIn.responses). Suggest 3-5 additional open-ended coaching questions that build on what has already been asked and answered for ${memberLabel}. Do not repeat template questions unless a specific follow-up is warranted. Return JSON: { result: string (one short intro sentence), suggestions: string[] (3-5 additional questions) }`,
-    rewrite_feedback: `Review the full in-progress check-in in currentCheckIn (all template questions and responses). Draft Leader Comments for ${memberLabel} to read after the check-in. Write in ${managerLabel}'s first-person voice as the manager speaking directly to ${memberLabel}. Include: (1) a brief summary of what was discussed, (2) genuine thanks for their time and participation in the check-in, and (3) agreed priorities or a constructive way forward. Keep it warm, professional, and concise (2-4 short paragraphs). This is a draft the manager will edit — provide usable prose, not meta-commentary about the draft. Return JSON: { result: string (the full draft text), suggestions: string[] (0-3 optional alternate closing or next-step phrases) }`,
+    rewrite_feedback: `Review the full in-progress check-in in currentCheckIn (all template questions and responses). Draft Leader Comments for ${memberLabel} to read after the check-in. Write in ${managerLabel}'s first-person voice as the manager speaking directly to ${memberLabel}. Include: (1) a brief summary of what was discussed, (2) genuine thanks for their time and participation in the check-in, and (3) agreed priorities or a constructive way forward. Keep it warm, professional, and concise (2-4 short paragraphs). This is a draft the manager will edit � provide usable prose, not meta-commentary about the draft. Return JSON: { result: string (the full draft text), suggestions: string[] (0-3 optional alternate closing or next-step phrases) }`,
     notes_to_action_items:
       "Turn the current check-in notes into concrete action items. Return JSON: { result: string (summary), suggestions: string[] (action item bullets) }",
     create_follow_up_task:

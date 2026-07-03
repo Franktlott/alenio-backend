@@ -61,6 +61,8 @@ export type SenecaRawContext = {
   lastCheckInInsights: string[];
   activeDevelopmentGoals: Array<{ skill: string; steps: string[]; recentNote: string | null }>;
   openTasks: Array<{ title: string; status: string; dueDate: string | null }>;
+  /** Titles of open Alenio tasks past due — authoritative current overdue state */
+  alenioOverdueTasks: string[];
   recentWins: string[];
   completionPatterns: string | null;
   templateTitle: string | null;
@@ -120,6 +122,9 @@ export async function buildSenecaRawContext(
   ]);
 
   const memberTasks = assignments.map((a) => a.task);
+  const alenioOverdueTasks = memberTasks
+    .filter((t) => t.dueDate && t.dueDate < now)
+    .map((t) => t.title);
   let activeTasks = 0;
   let overdueTasks = 0;
   let completedThisMonth = 0;
@@ -245,6 +250,7 @@ export async function buildSenecaRawContext(
       status: t.status,
       dueDate: t.dueDate?.toISOString() ?? null,
     })),
+    alenioOverdueTasks,
     recentWins,
     completionPatterns,
     templateTitle: template?.title ?? null,
