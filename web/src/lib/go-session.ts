@@ -17,7 +17,7 @@ export function isGoDeviceUnlinkedError(err: unknown): boolean {
 export function disconnectGoDevice(): void {
   clearGoLinkedWorkspace();
   if (typeof window !== "undefined") {
-    window.location.replace("/aleniogo");
+    window.location.replace(`${window.location.origin}/aleniogo`);
   }
 }
 

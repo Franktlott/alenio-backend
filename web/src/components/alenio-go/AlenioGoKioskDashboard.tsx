@@ -10,7 +10,7 @@ import {
   greetingForHour,
 } from "../../lib/alenio-go-dashboard";
 import { clearGoLinkedWorkspace, getGoDeviceId, saveGoLinkedWorkspace } from "../../lib/go-device";
-import { handleGoDeviceSessionError, verifyGoDeviceCheckIn } from "../../lib/go-session";
+import { handleGoDeviceSessionError } from "../../lib/go-session";
 import { GoDashFooter, GoDashModuleCard, GoDashQuickActionsGrid } from "./go-dash-parts";
 
 type Props = {
@@ -106,42 +106,6 @@ export function AlenioGoKioskDashboard({ hubToken }: Props) {
   }, []);
 
   useEffect(() => {
-    if (!hubToken || loading || error) return;
-    const deviceId = getGoDeviceId();
-    let cancelled = false;
-
-    const checkIn = () => {
-      void verifyGoDeviceCheckIn(hubToken).catch((err) => {
-        if (!handleGoDeviceSessionError(err)) {
-          /* ignore transient check-in errors */
-        }
-      });
-    };
-
-    checkIn();
-    const checkInId = window.setInterval(checkIn, 60_000);
-
-    const poll = () => {
-      void fetchGoWorkplaceAlerts(hubToken, deviceId)
-        .then((rows) => {
-          if (!cancelled) handleIncomingAlerts(rows);
-        })
-        .catch((err) => {
-          if (handleGoDeviceSessionError(err)) return;
-          /* ignore poll errors */
-        });
-    };
-
-    poll();
-    const pollId = window.setInterval(poll, 3_000);
-    return () => {
-      cancelled = true;
-      window.clearInterval(checkInId);
-      window.clearInterval(pollId);
-    };
-  }, [hubToken, loading, error, handleIncomingAlerts]);
-
-  useEffect(() => {
     if (!hubToken) {
       setError("Invalid workspace link.");
       setLoading(false);
@@ -152,10 +116,8 @@ export function AlenioGoKioskDashboard({ hubToken }: Props) {
     setError(null);
     const deviceId = getGoDeviceId();
     void fetchPublicChecklistHub(hubToken, deviceId)
-      .then(async (data) => {
+      .then((data) => {
         if (cancelled) return;
-        const linked = await verifyGoDeviceCheckIn(hubToken);
-        if (cancelled || !linked) return;
         setTeamName(data.team.name);
         setTeamImage(data.team.image);
         saveGoLinkedWorkspace(hubToken, data.team.name);
@@ -172,6 +134,29 @@ export function AlenioGoKioskDashboard({ hubToken }: Props) {
       cancelled = true;
     };
   }, [hubToken]);
+
+  useEffect(() => {
+    if (!hubToken || loading || error) return;
+    const deviceId = getGoDeviceId();
+    let cancelled = false;
+
+    const poll = () => {
+      void fetchGoWorkplaceAlerts(hubToken, deviceId)
+        .then((rows) => {
+          if (!cancelled) handleIncomingAlerts(rows);
+        })
+        .catch(() => {
+          /* session gate handles unlink logout */
+        });
+    };
+
+    poll();
+    const pollId = window.setInterval(poll, 3_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(pollId);
+    };
+  }, [hubToken, loading, error, handleIncomingAlerts]);
 
   const greeting = greetingForHour(new Date().getHours());
 

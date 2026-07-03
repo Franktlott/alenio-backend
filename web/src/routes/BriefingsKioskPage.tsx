@@ -4,7 +4,7 @@ import { AlenioGoLogo } from "../components/AlenioGoLogo";
 import { BriefingList } from "../components/briefings/BriefingList";
 import { fetchGoBriefings, fetchPublicChecklistHub } from "../lib/api";
 import { getGoDeviceId, saveGoLinkedWorkspace } from "../lib/go-device";
-import { handleGoDeviceSessionError, verifyGoDeviceCheckIn } from "../lib/go-session";
+import { handleGoDeviceSessionError } from "../lib/go-session";
 
 export function BriefingsKioskPage() {
   const { hubToken = "" } = useParams();
@@ -21,9 +21,7 @@ export function BriefingsKioskPage() {
     }
     const deviceId = getGoDeviceId();
     void fetchPublicChecklistHub(hubToken, deviceId)
-      .then(async (data) => {
-        const linked = await verifyGoDeviceCheckIn(hubToken);
-        if (!linked) return;
+      .then((data) => {
         setTeamName(data.team.name);
         saveGoLinkedWorkspace(hubToken, data.team.name);
       })

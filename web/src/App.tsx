@@ -37,6 +37,7 @@ import { EnterprisePage } from "./routes/EnterprisePage";
 import { SecurityPage } from "./routes/SecurityPage";
 import { InvitePage } from "./routes/InvitePage";
 import { WorkspaceChecklistHubPage } from "./routes/WorkspaceChecklistHubPage";
+import { GoKioskSessionLayout } from "./routes/GoKioskSessionLayout";
 import { GetAppPage } from "./routes/GetAppPage";
 import { getActiveApiTarget, getWebEnvConfigError } from "./lib/env-config";
 
@@ -119,10 +120,12 @@ export default function App() {
         <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/verify" element={<VerifyPage />} />
         <Route path="/invite/:token" element={<InvitePage />} />
-        <Route path="/checklist/:hubToken/briefings/:briefingId" element={<BriefingsKioskReviewPage />} />
-        <Route path="/checklist/:hubToken/briefings" element={<BriefingsKioskPage />} />
-        <Route path="/checklist/:hubToken/:checklistId" element={<Navigate to=".." replace />} />
-        <Route path="/checklist/:hubToken" element={<WorkspaceChecklistHubPage />} />
+        <Route path="/checklist/:hubToken" element={<GoKioskSessionLayout />}>
+          <Route index element={<WorkspaceChecklistHubPage />} />
+          <Route path="briefings/:briefingId" element={<BriefingsKioskReviewPage />} />
+          <Route path="briefings" element={<BriefingsKioskPage />} />
+          <Route path=":checklistId" element={<Navigate to=".." replace />} />
+        </Route>
         <Route path="/aleniogo" element={<AlenioGoLinkPage />} />
         <Route path="/get-app" element={<GetAppPage />} />
         <Route path="/privacy" element={<PrivacyPolicyPage />} />
