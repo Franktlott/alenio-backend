@@ -106,6 +106,43 @@ export async function listLinkedGoDevices(teamId: string): Promise<LinkedGoDevic
   return [...byDeviceId.values()].sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
 }
 
+/** Revoke a linked Alenio Go device so it must request access again. */
+export async function revokeLinkedGoDevice(teamId: string, deviceId: string) {
+  const trimmed = deviceId.trim();
+  if (!trimmed) return { ok: false as const, code: "VALIDATION" as const };
+
+  const [loginRequest, presence] = await Promise.all([
+    prisma.goLoginRequest.findUnique({
+      where: { teamId_deviceId: { teamId, deviceId: trimmed } },
+      select: { id: true, status: true },
+    }),
+    prisma.goDevicePresence.findUnique({
+      where: { teamId_deviceId: { teamId, deviceId: trimmed } },
+      select: { id: true },
+    }),
+  ]);
+
+  if (!loginRequest && !presence) {
+    return { ok: false as const, code: "NOT_FOUND" as const };
+  }
+
+  await prisma.$transaction([
+    ...(loginRequest
+      ? [
+          prisma.goLoginRequest.update({
+            where: { id: loginRequest.id },
+            data: { status: "rejected", approvedByUserId: null },
+          }),
+        ]
+      : []),
+    ...(presence
+      ? [prisma.goDevicePresence.delete({ where: { teamId_deviceId: { teamId, deviceId: trimmed } } })]
+      : []),
+  ]);
+
+  return { ok: true as const };
+}
+
 /** @deprecated Use listLinkedGoDevices */
 export async function listApprovedGoDevices(teamId: string) {
   const rows = await listLinkedGoDevices(teamId);

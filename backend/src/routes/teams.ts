@@ -20,6 +20,7 @@ import {
   canManageWorkplaceAlerts,
   createWorkplaceAlert,
   listLinkedGoDevices,
+  revokeLinkedGoDevice,
 } from "../lib/workplace-alerts";
 import {
   canManageBriefings,
@@ -908,6 +909,26 @@ teamsRouter.get("/:teamId/go-devices", async (c) => {
       source: d.source,
     })),
   });
+});
+
+// DELETE /api/teams/:teamId/go-devices/:deviceId — revoke a linked Alenio Go device
+teamsRouter.delete("/:teamId/go-devices/:deviceId", async (c) => {
+  const user = c.get("user")!;
+  const { teamId, deviceId } = c.req.param();
+
+  if (!(await canManageWorkplaceAlerts(teamId, user.id))) {
+    return c.json({ error: { message: "Forbidden", code: "FORBIDDEN" } }, 403);
+  }
+
+  const result = await revokeLinkedGoDevice(teamId, deviceId);
+  if (!result.ok) {
+    if (result.code === "NOT_FOUND") {
+      return c.json({ error: { message: "Device not found", code: "NOT_FOUND" } }, 404);
+    }
+    return c.json({ error: { message: "Invalid device", code: "VALIDATION" } }, 400);
+  }
+
+  return c.json({ data: { success: true } });
 });
 
 // POST /api/teams/:teamId/workplace-alerts — push alert to devices or workspace users

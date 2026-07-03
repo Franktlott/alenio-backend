@@ -333,6 +333,12 @@ export function fetchTeamGoDevices(teamId: string) {
   );
 }
 
+export function revokeTeamGoDevice(teamId: string, deviceId: string) {
+  return apiDeleteJson<{ data: { success: boolean } }>(
+    `/api/teams/${encodeURIComponent(teamId)}/go-devices/${encodeURIComponent(deviceId)}`,
+  ).then((r) => r.data);
+}
+
 export function postGoDeviceCheckIn(hubToken: string, deviceId: string, deviceLabel?: string) {
   return apiPostJson<{ data: { success: boolean; approved: boolean } }>("/api/public/go/check-in", {
     hubToken,
