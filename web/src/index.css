@@ -3036,6 +3036,48 @@ input {
   letter-spacing: 0.04em;
 }
 
+.go-backend-setup-qr {
+  display: grid;
+  justify-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+  padding: 1rem;
+  border-radius: 14px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.go-backend-setup-qr-image {
+  display: block;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.go-backend-setup-qr-label {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #334155;
+  text-align: center;
+  line-height: 1.4;
+}
+
+.go-backend-setup-qr-url {
+  margin: 0;
+  font-size: 0.75rem;
+  color: #64748b;
+  text-align: center;
+  word-break: break-all;
+}
+
+.go-backend-setup-qr-loading,
+.go-backend-setup-qr-error {
+  margin: 0 0 1rem;
+  font-size: 0.8125rem;
+  color: #64748b;
+  text-align: center;
+}
+
 .go-backend-setup-aside-title {
   margin: 0 0 0.5rem;
   font-size: 1rem;

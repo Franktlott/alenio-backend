@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { AlenioGoLogo } from "../components/AlenioGoLogo";
 import { fetchGoLinkStatus, postGoWorkspaceLink } from "../lib/api";
 import { unlockGoAlertSound } from "../lib/go-alert-sound";
@@ -18,14 +18,16 @@ type Step = "linked" | "enter-code" | "pending" | "rejected";
 
 export function AlenioGoLinkPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const linked = loadGoLinkedWorkspace();
   const pending = loadGoPendingLink();
+  const prefilledCode = searchParams.get("code")?.trim().toUpperCase() ?? "";
   const [step, setStep] = useState<Step>(() => {
     if (linked) return "linked";
     if (pending) return "pending";
     return "enter-code";
   });
-  const [code, setCode] = useState("");
+  const [code, setCode] = useState(prefilledCode);
   const [teamName, setTeamName] = useState(linked?.teamName ?? pending?.teamName ?? "");
   const [requestId, setRequestId] = useState(pending?.requestId ?? "");
   const [error, setError] = useState<string | null>(null);

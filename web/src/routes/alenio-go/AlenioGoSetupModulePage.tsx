@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { GoBackendModuleShell } from "../../components/alenio-go/GoBackendModuleShell";
+import { GoDeviceLinkQrCode, buildGoDeviceLinkUrl } from "../../components/alenio-go/GoDeviceLinkQrCode";
 import { useAlenioGoShell } from "./alenio-go-outlet-context";
 
 export function AlenioGoSetupModulePage() {
@@ -72,16 +73,22 @@ export function AlenioGoSetupModulePage() {
             Devices you link will show the Alenio Go dashboard for <strong>{teamName}</strong>.
           </p>
           {inviteCode ? (
-            <dl className="enterprise-alenio-go-meta">
-              <div>
-                <dt>Workspace code</dt>
-                <dd>
-                  <button type="button" className="go-backend-code-btn go-backend-code-btn--dark" onClick={() => void copyCode()}>
-                    {copyOk ? "Copied!" : inviteCode}
-                  </button>
-                </dd>
-              </div>
-            </dl>
+            <>
+              <GoDeviceLinkQrCode
+                url={buildGoDeviceLinkUrl(inviteCode)}
+                label="Scan with the tablet camera to open the linking page"
+              />
+              <dl className="enterprise-alenio-go-meta">
+                <div>
+                  <dt>Workspace code</dt>
+                  <dd>
+                    <button type="button" className="go-backend-code-btn go-backend-code-btn--dark" onClick={() => void copyCode()}>
+                      {copyOk ? "Copied!" : inviteCode}
+                    </button>
+                  </dd>
+                </div>
+              </dl>
+            </>
           ) : null}
         </aside>
       </div>
