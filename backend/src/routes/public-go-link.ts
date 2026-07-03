@@ -9,6 +9,7 @@ import {
 } from "../lib/go-login-requests";
 import {
   ackWorkplaceAlertForDevice,
+  GO_DEVICE_UNLINKED_MESSAGE,
   pollWorkplaceAlertsForDevice,
   recordGoDeviceCheckIn,
 } from "../lib/workplace-alerts";
@@ -172,7 +173,13 @@ publicGoLinkRouter.post("/check-in", zValidator("json", checkInBodySchema), asyn
     if (!result.ok) {
       return c.json({ error: { message: "Workspace not found", code: "NOT_FOUND" } }, 404);
     }
-    return c.json({ data: { success: true, approved: result.approved } });
+    return c.json({
+      data: {
+        success: true,
+        approved: result.approved,
+        linkStatus: result.linkStatus,
+      },
+    });
   } catch (err) {
     console.error("[go-link] POST /check-in failed:", err);
     return c.json({ error: { message: "Could not register device", code: "INTERNAL" } }, 500);
@@ -189,8 +196,11 @@ publicGoLinkRouter.get("/alerts", async (c) => {
 
     const result = await pollWorkplaceAlertsForDevice(hubToken, deviceId);
     if (!result.ok) {
+      if (result.code === "DEVICE_UNLINKED") {
+        return c.json({ error: { message: GO_DEVICE_UNLINKED_MESSAGE, code: "DEVICE_UNLINKED" } }, 403);
+      }
       if (result.code === "FORBIDDEN") {
-        return c.json({ error: { message: "Device not approved", code: "FORBIDDEN" } }, 403);
+        return c.json({ error: { message: GO_DEVICE_UNLINKED_MESSAGE, code: "DEVICE_UNLINKED" } }, 403);
       }
       return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
     }
@@ -214,8 +224,8 @@ publicGoLinkRouter.post("/alerts/:alertId/ack", async (c) => {
 
     const result = await ackWorkplaceAlertForDevice(alertId, hubToken, deviceId);
     if (!result.ok) {
-      if (result.code === "FORBIDDEN") {
-        return c.json({ error: { message: "Device not approved", code: "FORBIDDEN" } }, 403);
+      if (result.code === "FORBIDDEN" || result.code === "DEVICE_UNLINKED") {
+        return c.json({ error: { message: GO_DEVICE_UNLINKED_MESSAGE, code: "DEVICE_UNLINKED" } }, 403);
       }
       return c.json({ error: { message: "Alert not found", code: "NOT_FOUND" } }, 404);
     }
@@ -244,7 +254,7 @@ publicGoLinkRouter.get("/briefings", async (c) => {
     }
     const result = await listPublicBriefings(hubToken, deviceId);
     if (!result.ok) {
-      if (result.code === "FORBIDDEN") return c.json({ error: { message: "Device not approved", code: "FORBIDDEN" } }, 403);
+      if (result.code === "FORBIDDEN" || result.code === "DEVICE_UNLINKED") return c.json({ error: { message: GO_DEVICE_UNLINKED_MESSAGE, code: "DEVICE_UNLINKED" } }, 403);
       return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
     }
     return c.json({ data: { briefings: result.briefings } });
@@ -264,7 +274,7 @@ publicGoLinkRouter.get("/briefings/:briefingId", async (c) => {
     }
     const result = await getPublicBriefing(hubToken, deviceId, briefingId);
     if (!result.ok) {
-      if (result.code === "FORBIDDEN") return c.json({ error: { message: "Device not approved", code: "FORBIDDEN" } }, 403);
+      if (result.code === "FORBIDDEN" || result.code === "DEVICE_UNLINKED") return c.json({ error: { message: GO_DEVICE_UNLINKED_MESSAGE, code: "DEVICE_UNLINKED" } }, 403);
       return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
     }
     return c.json({ data: { briefing: result.briefing } });
@@ -284,7 +294,7 @@ publicGoLinkRouter.get("/briefings/:briefingId/document", async (c) => {
     }
     const result = await getPublicBriefingDocument(hubToken, deviceId, briefingId);
     if (!result.ok) {
-      if (result.code === "FORBIDDEN") return c.json({ error: { message: "Device not approved", code: "FORBIDDEN" } }, 403);
+      if (result.code === "FORBIDDEN" || result.code === "DEVICE_UNLINKED") return c.json({ error: { message: GO_DEVICE_UNLINKED_MESSAGE, code: "DEVICE_UNLINKED" } }, 403);
       if (result.code === "NOT_FOUND" || result.code === "DOCUMENT_UNAVAILABLE") {
         return c.json({ error: { message: "Document not found", code: "NOT_FOUND" } }, 404);
       }
@@ -313,7 +323,7 @@ publicGoLinkRouter.post("/briefings/:briefingId/complete", zValidator("json", pu
       reviewerName,
     });
     if (!result.ok) {
-      if (result.code === "FORBIDDEN") return c.json({ error: { message: "Device not approved", code: "FORBIDDEN" } }, 403);
+      if (result.code === "FORBIDDEN" || result.code === "DEVICE_UNLINKED") return c.json({ error: { message: GO_DEVICE_UNLINKED_MESSAGE, code: "DEVICE_UNLINKED" } }, 403);
       if (result.code === "NOT_FOUND") return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
       if (result.code === "ALREADY_COMPLETED") {
         return c.json({ error: { message: "This name and initials were already recorded", code: "ALREADY_COMPLETED" } }, 409);

@@ -340,7 +340,9 @@ export function revokeTeamGoDevice(teamId: string, deviceId: string) {
 }
 
 export function postGoDeviceCheckIn(hubToken: string, deviceId: string, deviceLabel?: string) {
-  return apiPostJson<{ data: { success: boolean; approved: boolean } }>("/api/public/go/check-in", {
+  return apiPostJson<{
+    data: { success: boolean; approved: boolean; linkStatus?: "approved" | "pending" | "rejected" | "none" };
+  }>("/api/public/go/check-in", {
     hubToken,
     deviceId,
     deviceLabel,
@@ -2107,9 +2109,10 @@ export type PublicChecklistPayload = {
   items: ChecklistLocationItemRow[];
 };
 
-export function fetchPublicChecklistHub(hubToken: string) {
+export function fetchPublicChecklistHub(hubToken: string, deviceId?: string) {
+  const qs = deviceId ? `?deviceId=${encodeURIComponent(deviceId)}` : "";
   return apiGetJson<{ data: PublicChecklistHubPayload }>(
-    `/api/public/checklist-hubs/${encodeURIComponent(hubToken)}`,
+    `/api/public/checklist-hubs/${encodeURIComponent(hubToken)}${qs}`,
   ).then((r) => r.data);
 }
 

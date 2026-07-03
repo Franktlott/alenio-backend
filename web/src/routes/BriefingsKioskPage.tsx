@@ -2,8 +2,9 @@ import { Link, useParams } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { AlenioGoLogo } from "../components/AlenioGoLogo";
 import { BriefingList } from "../components/briefings/BriefingList";
-import { fetchGoBriefings, fetchPublicChecklistHub, postGoDeviceCheckIn } from "../lib/api";
-import { defaultGoDeviceLabel, getGoDeviceId, saveGoLinkedWorkspace } from "../lib/go-device";
+import { fetchGoBriefings, fetchPublicChecklistHub } from "../lib/api";
+import { getGoDeviceId, saveGoLinkedWorkspace } from "../lib/go-device";
+import { handleGoDeviceSessionError, verifyGoDeviceCheckIn } from "../lib/go-session";
 
 export function BriefingsKioskPage() {
   const { hubToken = "" } = useParams();
@@ -19,17 +20,24 @@ export function BriefingsKioskPage() {
       return;
     }
     const deviceId = getGoDeviceId();
-    void fetchPublicChecklistHub(hubToken)
-      .then((data) => {
+    void fetchPublicChecklistHub(hubToken, deviceId)
+      .then(async (data) => {
+        const linked = await verifyGoDeviceCheckIn(hubToken);
+        if (!linked) return;
         setTeamName(data.team.name);
         saveGoLinkedWorkspace(hubToken, data.team.name);
-        void postGoDeviceCheckIn(hubToken, deviceId, defaultGoDeviceLabel());
       })
-      .catch(() => setError("Workspace not found."));
+      .catch((err) => {
+        if (handleGoDeviceSessionError(err)) return;
+        setError("Workspace not found.");
+      });
 
     void fetchGoBriefings(hubToken, deviceId)
       .then(setBriefings)
-      .catch(() => setBriefings([]))
+      .catch((err) => {
+        if (handleGoDeviceSessionError(err)) return;
+        setBriefings([]);
+      })
       .finally(() => setLoading(false));
   }, [hubToken]);
 

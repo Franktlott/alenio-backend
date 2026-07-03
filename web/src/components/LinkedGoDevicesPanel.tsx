@@ -12,7 +12,7 @@ function deviceLabel(row: GoDeviceRow): string {
 }
 
 function lastSeenLabel(row: GoDeviceRow): string {
-  return row.source === "approved" ? `Approved ${formatApprovalDate(row.updatedAt)}` : `Last seen ${formatApprovalDate(row.updatedAt)}`;
+  return `Last active ${formatApprovalDate(row.updatedAt)}`;
 }
 
 export function LinkedGoDevicesPanel({ teamId, variant = "page" }: Props) {

@@ -10,6 +10,7 @@ import {
   validateSignedResponses,
   type ChecklistResponseItem,
 } from "../lib/checklist-locations";
+import { assertGoDeviceLinked, GO_DEVICE_UNLINKED_MESSAGE } from "../lib/workplace-alerts";
 
 const publicChecklistHubsRouter = new Hono();
 
@@ -19,6 +20,17 @@ publicChecklistHubsRouter.get("/:hubToken", async (c) => {
 
   const team = await findTeamByChecklistHubToken(hubToken);
   if (!team) return c.json({ error: { message: "Checklist page not found" } }, 404);
+
+  const deviceId = c.req.query("deviceId")?.trim();
+  if (deviceId) {
+    const linked = await assertGoDeviceLinked(team.id, deviceId);
+    if (!linked.ok) {
+      return c.json(
+        { error: { message: GO_DEVICE_UNLINKED_MESSAGE, code: linked.code } },
+        403,
+      );
+    }
+  }
 
   const hasPlan = await teamHasChecklistPlan(team.id);
   if (!hasPlan) return c.json({ error: { message: "Checklists are not available for this workspace" } }, 403);

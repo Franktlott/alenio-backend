@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AlenioGoLogo } from "../AlenioGoLogo";
-import { ackGoWorkplaceAlert, fetchGoWorkplaceAlerts, fetchPublicChecklistHub, postGoDeviceCheckIn, type GoWorkplaceAlert } from "../../lib/api";
+import { ackGoWorkplaceAlert, fetchGoWorkplaceAlerts, fetchPublicChecklistHub, type GoWorkplaceAlert } from "../../lib/api";
 import { playGoAlertSound, unlockGoAlertSound } from "../../lib/go-alert-sound";
 import {
   formatGoDashClock,
@@ -9,7 +9,8 @@ import {
   GO_DASH_QUICK_ACTIONS,
   greetingForHour,
 } from "../../lib/alenio-go-dashboard";
-import { clearGoLinkedWorkspace, defaultGoDeviceLabel, getGoDeviceId, saveGoLinkedWorkspace } from "../../lib/go-device";
+import { clearGoLinkedWorkspace, getGoDeviceId, saveGoLinkedWorkspace } from "../../lib/go-device";
+import { handleGoDeviceSessionError, verifyGoDeviceCheckIn } from "../../lib/go-session";
 import { GoDashFooter, GoDashModuleCard, GoDashQuickActionsGrid } from "./go-dash-parts";
 
 type Props = {
@@ -107,12 +108,13 @@ export function AlenioGoKioskDashboard({ hubToken }: Props) {
   useEffect(() => {
     if (!hubToken || loading || error) return;
     const deviceId = getGoDeviceId();
-    const label = defaultGoDeviceLabel();
     let cancelled = false;
 
     const checkIn = () => {
-      void postGoDeviceCheckIn(hubToken, deviceId, label).catch(() => {
-        /* ignore check-in errors */
+      void verifyGoDeviceCheckIn(hubToken).catch((err) => {
+        if (!handleGoDeviceSessionError(err)) {
+          /* ignore transient check-in errors */
+        }
       });
     };
 
@@ -124,7 +126,8 @@ export function AlenioGoKioskDashboard({ hubToken }: Props) {
         .then((rows) => {
           if (!cancelled) handleIncomingAlerts(rows);
         })
-        .catch(() => {
+        .catch((err) => {
+          if (handleGoDeviceSessionError(err)) return;
           /* ignore poll errors */
         });
     };
@@ -147,16 +150,20 @@ export function AlenioGoKioskDashboard({ hubToken }: Props) {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    void fetchPublicChecklistHub(hubToken)
-      .then((data) => {
+    const deviceId = getGoDeviceId();
+    void fetchPublicChecklistHub(hubToken, deviceId)
+      .then(async (data) => {
         if (cancelled) return;
+        const linked = await verifyGoDeviceCheckIn(hubToken);
+        if (cancelled || !linked) return;
         setTeamName(data.team.name);
         setTeamImage(data.team.image);
         saveGoLinkedWorkspace(hubToken, data.team.name);
-        void postGoDeviceCheckIn(hubToken, getGoDeviceId(), defaultGoDeviceLabel());
       })
-      .catch(() => {
-        if (!cancelled) setError("Workspace not found.");
+      .catch((err) => {
+        if (cancelled) return;
+        if (handleGoDeviceSessionError(err)) return;
+        setError("Workspace not found.");
       })
       .finally(() => {
         if (!cancelled) setLoading(false);

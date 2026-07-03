@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { BriefingReviewPanel } from "../components/briefings/BriefingReviewPanel";
 import { fetchGoBriefing, goBriefingDocumentPath, postGoBriefingComplete } from "../lib/api";
 import { getGoDeviceId } from "../lib/go-device";
+import { handleGoDeviceSessionError } from "../lib/go-session";
 
 export function BriefingsKioskReviewPage() {
   const { hubToken = "", briefingId = "" } = useParams();
@@ -21,6 +22,7 @@ export function BriefingsKioskReviewPage() {
       })
       .catch((err) => {
         setBriefing(null);
+        if (handleGoDeviceSessionError(err)) return;
         setLoadError(err instanceof Error ? err.message : "Could not load this briefing.");
       });
   }, [hubToken, briefingId]);
