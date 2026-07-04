@@ -1,4 +1,6 @@
 import { prisma } from "../prisma";
+import { findTeamByChecklistHubToken } from "./checklist-locations";
+import { isGoDeviceApproved } from "./workplace-alerts";
 
 export type WalkItemStatus = "pass" | "needs_attention" | "na";
 
@@ -397,6 +399,164 @@ export async function completeWalk(
       walkName: template.name,
       workplace: template.workplace,
       completedByUserId: userId,
+      completedByName,
+      scoringEnabled: template.scoringEnabled,
+      score,
+      totalReviewed: stats.totalReviewed,
+      passCount: stats.passCount,
+      needsAttentionCount: stats.needsAttentionCount,
+      naCount: stats.naCount,
+      photosCount: stats.photosCount,
+      finalNotes,
+      responses: parsed.responses,
+    },
+  });
+
+  return { ok: true as const, completion: serializeCompletionRow(completion) };
+}
+
+function goDeviceActorId(deviceId: string): string {
+  return `go-device:${deviceId.slice(0, 96)}`;
+}
+
+async function assertPublicGoWalkDevice(hubToken: string, deviceId: string) {
+  const team = await findTeamByChecklistHubToken(hubToken);
+  if (!team) return { ok: false as const, code: "NOT_FOUND" as const };
+  const reachable = await isGoDeviceApproved(team.id, deviceId);
+  if (!reachable) return { ok: false as const, code: "FORBIDDEN" as const };
+  return { ok: true as const, teamId: team.id };
+}
+
+export async function listPublicWalkTemplates(hubToken: string, deviceId: string) {
+  const ctx = await assertPublicGoWalkDevice(hubToken, deviceId);
+  if (!ctx.ok) return ctx;
+
+  const templates = await prisma.walkTemplate.findMany({
+    where: { teamId: ctx.teamId, isActive: true },
+    include: { items: { orderBy: { sortOrder: "asc" } } },
+    orderBy: { name: "asc" },
+  });
+
+  const counts = await prisma.walkCompletion.groupBy({
+    by: ["templateId"],
+    where: { teamId: ctx.teamId, templateId: { in: templates.map((t) => t.id) } },
+    _count: { _all: true },
+  });
+  const countMap = new Map(counts.map((c) => [c.templateId, c._count._all]));
+
+  return {
+    ok: true as const,
+    templates: templates.map((t) => serializeTemplateRow(t, countMap.get(t.id) ?? 0)),
+  };
+}
+
+export async function getPublicWalkTemplate(hubToken: string, deviceId: string, templateId: string) {
+  const ctx = await assertPublicGoWalkDevice(hubToken, deviceId);
+  if (!ctx.ok) return ctx;
+
+  const template = await prisma.walkTemplate.findFirst({
+    where: { id: templateId, teamId: ctx.teamId, isActive: true },
+    include: { items: { orderBy: { sortOrder: "asc" } } },
+  });
+  if (!template) return { ok: false as const, code: "NOT_FOUND" as const };
+
+  const completionCount = await prisma.walkCompletion.count({
+    where: { teamId: ctx.teamId, templateId },
+  });
+
+  return { ok: true as const, template: serializeTemplateRow(template, completionCount) };
+}
+
+export async function createPublicWalkTemplate(
+  hubToken: string,
+  deviceId: string,
+  input: CreateWalkTemplateInput,
+) {
+  const ctx = await assertPublicGoWalkDevice(hubToken, deviceId);
+  if (!ctx.ok) return ctx;
+
+  const name = input.name.trim().slice(0, 200);
+  const workplace = input.workplace.trim().slice(0, 200);
+  const items = parseItemLabels(input.items);
+  if (!name || !workplace || items.length === 0) {
+    return { ok: false as const, code: "VALIDATION" as const };
+  }
+
+  const template = await prisma.walkTemplate.create({
+    data: {
+      teamId: ctx.teamId,
+      name,
+      workplace,
+      scoringEnabled: input.scoringEnabled ?? true,
+      createdByUserId: goDeviceActorId(deviceId),
+      items: { create: items },
+    },
+    include: { items: { orderBy: { sortOrder: "asc" } } },
+  });
+
+  return { ok: true as const, template: serializeTemplateRow(template, 0) };
+}
+
+export async function listPublicWalkCompletions(hubToken: string, deviceId: string) {
+  const ctx = await assertPublicGoWalkDevice(hubToken, deviceId);
+  if (!ctx.ok) return ctx;
+
+  const completions = await prisma.walkCompletion.findMany({
+    where: { teamId: ctx.teamId },
+    orderBy: { completedAt: "desc" },
+    take: 100,
+  });
+
+  return { ok: true as const, completions: completions.map(serializeCompletionRow) };
+}
+
+export async function getPublicWalkCompletion(hubToken: string, deviceId: string, completionId: string) {
+  const ctx = await assertPublicGoWalkDevice(hubToken, deviceId);
+  if (!ctx.ok) return ctx;
+
+  const completion = await prisma.walkCompletion.findFirst({
+    where: { id: completionId, teamId: ctx.teamId },
+  });
+  if (!completion) return { ok: false as const, code: "NOT_FOUND" as const };
+
+  return { ok: true as const, completion: serializeCompletionRow(completion) };
+}
+
+export async function completePublicWalk(
+  hubToken: string,
+  deviceId: string,
+  templateId: string,
+  managerName: string | null,
+  input: CompleteWalkInput,
+) {
+  const ctx = await assertPublicGoWalkDevice(hubToken, deviceId);
+  if (!ctx.ok) return ctx;
+
+  const completedByName = (managerName ?? "Manager").trim().slice(0, 120) || "Manager";
+  const actorId = goDeviceActorId(deviceId);
+
+  const template = await prisma.walkTemplate.findFirst({
+    where: { id: templateId, teamId: ctx.teamId, isActive: true },
+    include: { items: { orderBy: { sortOrder: "asc" } } },
+  });
+  if (!template) return { ok: false as const, code: "NOT_FOUND" as const };
+  if (template.items.length === 0) return { ok: false as const, code: "VALIDATION" as const };
+
+  const parsed = normalizeResponses(template.items, input.responses);
+  if (!parsed.ok) return { ok: false as const, code: "VALIDATION" as const };
+
+  const stats = computeWalkStats(parsed.responses);
+  const score = computeWalkScore(template.scoringEnabled, stats.passCount, stats.needsAttentionCount);
+  const finalNotes =
+    typeof input.finalNotes === "string" ? input.finalNotes.trim().slice(0, 2000) || null : null;
+
+  const completion = await prisma.walkCompletion.create({
+    data: {
+      teamId: ctx.teamId,
+      templateId,
+      walkName: template.name,
+      workplace: template.workplace,
+      completedByUserId: actorId,
       completedByName,
       scoringEnabled: template.scoringEnabled,
       score,

@@ -21,11 +21,23 @@ type Props = {
   template: WalkTemplateRow;
   busy?: boolean;
   error?: string | null;
+  managerName?: string;
+  onManagerNameChange?: (name: string) => void;
+  requireManagerName?: boolean;
   onComplete: (payload: { responses: WalkItemResponse[]; finalNotes?: string | null }) => Promise<void>;
   onCancel: () => void;
 };
 
-export function WalkRunPanel({ template, busy, error, onComplete, onCancel }: Props) {
+export function WalkRunPanel({
+  template,
+  busy,
+  error,
+  managerName = "",
+  onManagerNameChange,
+  requireManagerName,
+  onComplete,
+  onCancel,
+}: Props) {
   const [responses, setResponses] = useState<DraftResponse[]>(() =>
     template.items.map((item) => ({
       itemId: item.id,
@@ -107,6 +119,10 @@ export function WalkRunPanel({ template, busy, error, onComplete, onCancel }: Pr
       setLocalErr("Review every observation item before completing the walk.");
       return;
     }
+    if (requireManagerName && !managerName.trim()) {
+      setLocalErr("Enter your name so this walk is recorded.");
+      return;
+    }
     const payload: WalkItemResponse[] = responses.map((row) => ({
       itemId: row.itemId,
       label: row.label,
@@ -132,6 +148,23 @@ export function WalkRunPanel({ template, busy, error, onComplete, onCancel }: Pr
           Exit walk
         </button>
       </header>
+
+      {requireManagerName ? (
+        <div className="walk-run-manager">
+          <label className="enterprise-alenio-go-alert-label" htmlFor="walk-manager-name">
+            Your name
+          </label>
+          <input
+            id="walk-manager-name"
+            className="enterprise-alenio-go-alert-input"
+            value={managerName}
+            onChange={(e) => onManagerNameChange?.(e.target.value)}
+            maxLength={120}
+            placeholder="e.g. Alex M."
+            required
+          />
+        </div>
+      ) : null}
 
       <ol className="walk-run-items">
         {responses.map((row, index) => (

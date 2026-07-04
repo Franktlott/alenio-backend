@@ -19,6 +19,14 @@ import {
   getPublicBriefingDocument,
   listPublicBriefings,
 } from "../lib/briefings";
+import {
+  completePublicWalk,
+  createPublicWalkTemplate,
+  getPublicWalkCompletion,
+  getPublicWalkTemplate,
+  listPublicWalkCompletions,
+  listPublicWalkTemplates,
+} from "../lib/walks";
 
 const publicGoLinkRouter = new Hono();
 
@@ -337,6 +345,148 @@ publicGoLinkRouter.post("/briefings/:briefingId/complete", zValidator("json", pu
   } catch (err) {
     console.error("[go-link] POST /briefings/:id/complete failed:", err);
     return c.json({ error: { message: "Could not complete briefing", code: "INTERNAL" } }, 500);
+  }
+});
+
+const publicWalkTemplateBodySchema = z.object({
+  hubToken: z.string().min(1).max(256),
+  deviceId: z.string().min(8).max(128),
+  name: z.string().trim().min(1).max(200),
+  workplace: z.string().trim().min(1).max(200),
+  scoringEnabled: z.boolean().optional(),
+  items: z
+    .array(z.object({ label: z.string().trim().min(1).max(280) }))
+    .min(1)
+    .max(80),
+});
+
+const publicWalkCompleteSchema = z.object({
+  hubToken: z.string().min(1).max(256),
+  deviceId: z.string().min(8).max(128),
+  managerName: z.string().trim().min(1).max(120),
+  responses: z
+    .array(
+      z.object({
+        itemId: z.string().min(1),
+        label: z.string().max(280),
+        status: z.enum(["pass", "needs_attention", "na"]),
+        notes: z.string().max(500).nullable().optional(),
+        photoUrl: z.string().url().max(2048).nullable().optional(),
+      }),
+    )
+    .min(1)
+    .max(80),
+  finalNotes: z.string().max(2000).nullable().optional(),
+});
+
+publicGoLinkRouter.get("/walks", async (c) => {
+  try {
+    const hubToken = c.req.query("hubToken")?.trim();
+    const deviceId = c.req.query("deviceId")?.trim();
+    if (!hubToken || !deviceId) {
+      return c.json({ error: { message: "hubToken and deviceId are required", code: "VALIDATION_ERROR" } }, 400);
+    }
+    const result = await listPublicWalkTemplates(hubToken, deviceId);
+    if (!result.ok) {
+      if (result.code === "FORBIDDEN") return c.json({ error: { message: GO_DEVICE_UNLINKED_MESSAGE, code: "DEVICE_UNLINKED" } }, 403);
+      return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
+    }
+    return c.json({ data: { templates: result.templates } });
+  } catch (err) {
+    console.error("[go-link] GET /walks failed:", err);
+    return c.json({ error: { message: "Could not load walks", code: "INTERNAL" } }, 500);
+  }
+});
+
+publicGoLinkRouter.post("/walks", zValidator("json", publicWalkTemplateBodySchema), async (c) => {
+  try {
+    const { hubToken, deviceId, name, workplace, scoringEnabled, items } = c.req.valid("json");
+    const result = await createPublicWalkTemplate(hubToken, deviceId, { name, workplace, scoringEnabled, items });
+    if (!result.ok) {
+      if (result.code === "FORBIDDEN") return c.json({ error: { message: GO_DEVICE_UNLINKED_MESSAGE, code: "DEVICE_UNLINKED" } }, 403);
+      if (result.code === "VALIDATION") return c.json({ error: { message: "Invalid walk template", code: "VALIDATION_ERROR" } }, 400);
+      return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
+    }
+    return c.json({ data: result.template }, 201);
+  } catch (err) {
+    console.error("[go-link] POST /walks failed:", err);
+    return c.json({ error: { message: "Could not create walk", code: "INTERNAL" } }, 500);
+  }
+});
+
+publicGoLinkRouter.get("/walks/completions", async (c) => {
+  try {
+    const hubToken = c.req.query("hubToken")?.trim();
+    const deviceId = c.req.query("deviceId")?.trim();
+    if (!hubToken || !deviceId) {
+      return c.json({ error: { message: "hubToken and deviceId are required", code: "VALIDATION_ERROR" } }, 400);
+    }
+    const result = await listPublicWalkCompletions(hubToken, deviceId);
+    if (!result.ok) {
+      if (result.code === "FORBIDDEN") return c.json({ error: { message: GO_DEVICE_UNLINKED_MESSAGE, code: "DEVICE_UNLINKED" } }, 403);
+      return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
+    }
+    return c.json({ data: { completions: result.completions } });
+  } catch (err) {
+    console.error("[go-link] GET /walks/completions failed:", err);
+    return c.json({ error: { message: "Could not load walk history", code: "INTERNAL" } }, 500);
+  }
+});
+
+publicGoLinkRouter.get("/walks/completions/:completionId", async (c) => {
+  try {
+    const completionId = c.req.param("completionId")?.trim();
+    const hubToken = c.req.query("hubToken")?.trim();
+    const deviceId = c.req.query("deviceId")?.trim();
+    if (!completionId || !hubToken || !deviceId) {
+      return c.json({ error: { message: "completionId, hubToken, and deviceId are required", code: "VALIDATION_ERROR" } }, 400);
+    }
+    const result = await getPublicWalkCompletion(hubToken, deviceId, completionId);
+    if (!result.ok) {
+      if (result.code === "FORBIDDEN") return c.json({ error: { message: GO_DEVICE_UNLINKED_MESSAGE, code: "DEVICE_UNLINKED" } }, 403);
+      return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
+    }
+    return c.json({ data: { completion: result.completion } });
+  } catch (err) {
+    console.error("[go-link] GET /walks/completions/:id failed:", err);
+    return c.json({ error: { message: "Could not load walk record", code: "INTERNAL" } }, 500);
+  }
+});
+
+publicGoLinkRouter.get("/walks/:walkId", async (c) => {
+  try {
+    const walkId = c.req.param("walkId")?.trim();
+    const hubToken = c.req.query("hubToken")?.trim();
+    const deviceId = c.req.query("deviceId")?.trim();
+    if (!walkId || !hubToken || !deviceId) {
+      return c.json({ error: { message: "walkId, hubToken, and deviceId are required", code: "VALIDATION_ERROR" } }, 400);
+    }
+    const result = await getPublicWalkTemplate(hubToken, deviceId, walkId);
+    if (!result.ok) {
+      if (result.code === "FORBIDDEN") return c.json({ error: { message: GO_DEVICE_UNLINKED_MESSAGE, code: "DEVICE_UNLINKED" } }, 403);
+      return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
+    }
+    return c.json({ data: { template: result.template } });
+  } catch (err) {
+    console.error("[go-link] GET /walks/:id failed:", err);
+    return c.json({ error: { message: "Could not load walk", code: "INTERNAL" } }, 500);
+  }
+});
+
+publicGoLinkRouter.post("/walks/:walkId/complete", zValidator("json", publicWalkCompleteSchema), async (c) => {
+  try {
+    const walkId = c.req.param("walkId")?.trim();
+    const { hubToken, deviceId, managerName, responses, finalNotes } = c.req.valid("json");
+    const result = await completePublicWalk(hubToken, deviceId, walkId, managerName, { responses, finalNotes });
+    if (!result.ok) {
+      if (result.code === "FORBIDDEN") return c.json({ error: { message: GO_DEVICE_UNLINKED_MESSAGE, code: "DEVICE_UNLINKED" } }, 403);
+      if (result.code === "NOT_FOUND") return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
+      return c.json({ error: { message: "Invalid walk completion", code: "VALIDATION_ERROR" } }, 400);
+    }
+    return c.json({ data: result.completion }, 201);
+  } catch (err) {
+    console.error("[go-link] POST /walks/:id/complete failed:", err);
+    return c.json({ error: { message: "Could not complete walk", code: "INTERNAL" } }, 500);
   }
 });
 

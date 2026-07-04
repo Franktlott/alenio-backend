@@ -690,6 +690,50 @@ export function postGoBriefingComplete(
   ).then((r) => r.data);
 }
 
+export function fetchGoWalkTemplates(hubToken: string, deviceId: string) {
+  const q = new URLSearchParams({ hubToken, deviceId });
+  return apiGetJson<{ data: { templates: WalkTemplateRow[] } }>(`/api/public/go/walks?${q}`).then(
+    (r) => r.data.templates,
+  );
+}
+
+export function fetchGoWalkTemplate(hubToken: string, deviceId: string, walkId: string) {
+  const q = new URLSearchParams({ hubToken, deviceId });
+  return apiGetJson<{ data: { template: WalkTemplateRow } }>(
+    `/api/public/go/walks/${encodeURIComponent(walkId)}?${q}`,
+  ).then((r) => r.data.template);
+}
+
+export function postGoWalkTemplate(
+  body: WalkTemplateCreatePayload & { hubToken: string; deviceId: string },
+) {
+  return apiPostJson<{ data: WalkTemplateRow }>(`/api/public/go/walks`, body).then((r) => r.data);
+}
+
+export function fetchGoWalkCompletions(hubToken: string, deviceId: string) {
+  const q = new URLSearchParams({ hubToken, deviceId });
+  return apiGetJson<{ data: { completions: WalkCompletionRow[] } }>(`/api/public/go/walks/completions?${q}`).then(
+    (r) => r.data.completions,
+  );
+}
+
+export function fetchGoWalkCompletion(hubToken: string, deviceId: string, completionId: string) {
+  const q = new URLSearchParams({ hubToken, deviceId });
+  return apiGetJson<{ data: { completion: WalkCompletionRow } }>(
+    `/api/public/go/walks/completions/${encodeURIComponent(completionId)}?${q}`,
+  ).then((r) => r.data.completion);
+}
+
+export function postGoWalkComplete(
+  walkId: string,
+  body: WalkCompletePayload & { hubToken: string; deviceId: string; managerName: string },
+) {
+  return apiPostJson<{ data: WalkCompletionRow }>(
+    `/api/public/go/walks/${encodeURIComponent(walkId)}/complete`,
+    body,
+  ).then((r) => r.data);
+}
+
 export type WebTeamInvite = {
   id: string;
   teamId: string;

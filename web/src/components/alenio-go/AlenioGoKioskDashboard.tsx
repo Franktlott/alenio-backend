@@ -66,8 +66,10 @@ function buildKioskModules(options: {
     if (module.id === "walks") {
       return {
         ...module,
-        count: 0,
-        countMessage: "Walks module coming soon",
+        active: true,
+        href: `/checklist/${options.hubToken}/walks`,
+        countMessage: "Manager observations & saved history",
+        ctaLabel: "Open walks",
       };
     }
 
@@ -326,9 +328,9 @@ export function AlenioGoKioskDashboard({ hubToken }: Props) {
               <span className="go-dash-stat-hint">Great job!</span>
             </div>
             <div className="go-dash-stat-col">
-              <span className="go-dash-stat-value go-dash-stat-value--cyan">0</span>
-              <span className="go-dash-stat-label">Walks due today</span>
-              <span className="go-dash-stat-hint">Keep it going!</span>
+              <span className="go-dash-stat-value go-dash-stat-value--violet">●</span>
+              <span className="go-dash-stat-label">Manager walks</span>
+              <span className="go-dash-stat-hint">Tap walks to open</span>
             </div>
           </div>
         </section>

@@ -4057,6 +4057,150 @@ input {
   }
 }
 
+.walk-run-manager {
+  margin-bottom: 1rem;
+}
+
+.go-walks-kiosk .go-kiosk-walks-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.go-kiosk-walks-tab {
+  flex: 1;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  background: #fff;
+  color: #64748b;
+  font-size: 0.875rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.go-kiosk-walks-tab--active {
+  border-color: #7c3aed;
+  background: #f5f3ff;
+  color: #5b21b6;
+}
+
+.go-kiosk-walks-list-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.go-kiosk-walks-list-head h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.go-kiosk-walks-create-btn {
+  display: inline-flex;
+  padding: 0.5rem 0.875rem;
+  border-radius: 10px;
+  background: #7c3aed;
+  color: #fff;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.go-kiosk-walks-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.go-kiosk-walks-card {
+  display: block;
+  padding: 1rem;
+  border-radius: 12px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  text-decoration: none;
+  color: inherit;
+}
+
+.go-kiosk-walks-card strong {
+  display: block;
+  color: #0f172a;
+  font-size: 1rem;
+}
+
+.go-kiosk-walks-card span {
+  display: block;
+  color: #64748b;
+  font-size: 0.8125rem;
+}
+
+.go-kiosk-walks-card-meta {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 0.35rem;
+}
+
+.go-kiosk-walks-card-cta {
+  display: inline-block;
+  margin-top: 0.5rem;
+  color: #6d28d9;
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+
+.go-kiosk-walks-empty {
+  padding: 1rem;
+  border-radius: 12px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  text-align: center;
+}
+
+.go-kiosk-walks-history {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+}
+
+.go-kiosk-walks-history-item {
+  display: block;
+  padding: 0.875rem;
+  border-radius: 10px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  text-decoration: none;
+  color: inherit;
+}
+
+.go-kiosk-walks-history-flag {
+  display: inline-block;
+  margin-top: 0.25rem;
+  color: #b45309;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.go-kiosk-walks-form-panel {
+  padding: 1rem;
+  border-radius: 12px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+}
+
+.go-walks-kiosk--run .go-briefings-kiosk-body {
+  max-width: 760px;
+  margin: 0 auto;
+}
+
 /* Briefings */
 .briefing-console {
   min-height: calc(100vh - 4rem);
