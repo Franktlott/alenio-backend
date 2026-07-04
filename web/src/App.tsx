@@ -13,7 +13,6 @@ import { AlenioGoWalksRoutes } from "./routes/alenio-go/AlenioGoWalksRoutes";
 import { BriefingsKioskPage } from "./routes/BriefingsKioskPage";
 import { BriefingsKioskReviewPage } from "./routes/BriefingsKioskReviewPage";
 import { WalksKioskPage } from "./routes/WalksKioskPage";
-import { WalksKioskCreatePage } from "./routes/WalksKioskCreatePage";
 import { WalksKioskRunPage } from "./routes/WalksKioskRunPage";
 import { WalksKioskHistoryPage } from "./routes/WalksKioskHistoryPage";
 import { ActivityPage } from "./routes/ActivityPage";
@@ -128,7 +127,6 @@ export default function App() {
           <Route index element={<WorkspaceChecklistHubPage />} />
           <Route path="briefings/:briefingId" element={<BriefingsKioskReviewPage />} />
           <Route path="briefings" element={<BriefingsKioskPage />} />
-          <Route path="walks/new" element={<WalksKioskCreatePage />} />
           <Route path="walks/history/:completionId" element={<WalksKioskHistoryPage />} />
           <Route path="walks/:walkId/run" element={<WalksKioskRunPage />} />
           <Route path="walks" element={<WalksKioskPage />} />

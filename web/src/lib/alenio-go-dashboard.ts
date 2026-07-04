@@ -77,12 +77,12 @@ export const GO_DASH_KIOSK_MODULES: GoDashModule[] = [
   {
     id: "walks",
     title: "Walks",
-    subtitle: "Store walks",
-    active: false,
+    subtitle: "Manager observations",
+    active: true,
     tone: "violet",
     icon: "walks",
-    ctaLabel: "View walks",
-    countMessage: "Coming soon",
+    ctaLabel: "Open walks",
+    countMessage: "Complete published walks",
   },
   {
     id: "tasks",

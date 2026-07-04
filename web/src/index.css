@@ -4085,16 +4085,8 @@ input {
   color: #5b21b6;
 }
 
-.go-kiosk-walks-list-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  margin-bottom: 0.75rem;
-}
-
-.go-kiosk-walks-list-head h2 {
-  margin: 0;
+.go-kiosk-walks-list-title {
+  margin: 0 0 0.75rem;
   font-size: 1rem;
 }
 

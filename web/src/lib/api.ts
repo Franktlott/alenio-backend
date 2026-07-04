@@ -704,12 +704,6 @@ export function fetchGoWalkTemplate(hubToken: string, deviceId: string, walkId: 
   ).then((r) => r.data.template);
 }
 
-export function postGoWalkTemplate(
-  body: WalkTemplateCreatePayload & { hubToken: string; deviceId: string },
-) {
-  return apiPostJson<{ data: WalkTemplateRow }>(`/api/public/go/walks`, body).then((r) => r.data);
-}
-
 export function fetchGoWalkCompletions(hubToken: string, deviceId: string) {
   const q = new URLSearchParams({ hubToken, deviceId });
   return apiGetJson<{ data: { completions: WalkCompletionRow[] } }>(`/api/public/go/walks/completions?${q}`).then(

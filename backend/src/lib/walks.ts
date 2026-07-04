@@ -467,36 +467,6 @@ export async function getPublicWalkTemplate(hubToken: string, deviceId: string, 
   return { ok: true as const, template: serializeTemplateRow(template, completionCount) };
 }
 
-export async function createPublicWalkTemplate(
-  hubToken: string,
-  deviceId: string,
-  input: CreateWalkTemplateInput,
-) {
-  const ctx = await assertPublicGoWalkDevice(hubToken, deviceId);
-  if (!ctx.ok) return ctx;
-
-  const name = input.name.trim().slice(0, 200);
-  const workplace = input.workplace.trim().slice(0, 200);
-  const items = parseItemLabels(input.items);
-  if (!name || !workplace || items.length === 0) {
-    return { ok: false as const, code: "VALIDATION" as const };
-  }
-
-  const template = await prisma.walkTemplate.create({
-    data: {
-      teamId: ctx.teamId,
-      name,
-      workplace,
-      scoringEnabled: input.scoringEnabled ?? true,
-      createdByUserId: goDeviceActorId(deviceId),
-      items: { create: items },
-    },
-    include: { items: { orderBy: { sortOrder: "asc" } } },
-  });
-
-  return { ok: true as const, template: serializeTemplateRow(template, 0) };
-}
-
 export async function listPublicWalkCompletions(hubToken: string, deviceId: string) {
   const ctx = await assertPublicGoWalkDevice(hubToken, deviceId);
   if (!ctx.ok) return ctx;

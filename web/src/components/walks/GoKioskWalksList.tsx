@@ -11,22 +11,17 @@ export function GoKioskWalksList({ templates, basePath }: Props) {
   if (templates.length === 0) {
     return (
       <div className="go-kiosk-walks-empty">
-        <p>No walks yet. Create a walk to start structured manager observations.</p>
-        <Link to={`${basePath}/new`} className="go-kiosk-walks-create-btn">
-          + Create Walk
-        </Link>
+        <p>No walks are available on this device yet.</p>
+        <p className="enterprise-muted">
+          Walk templates are set up in the Alenio Go console by your workspace leaders. Once published, they appear here for floor execution.
+        </p>
       </div>
     );
   }
 
   return (
     <div className="go-kiosk-walks-list-wrap">
-      <div className="go-kiosk-walks-list-head">
-        <h2>Walk templates</h2>
-        <Link to={`${basePath}/new`} className="go-kiosk-walks-create-btn">
-          + Create Walk
-        </Link>
-      </div>
+      <h2 className="go-kiosk-walks-list-title">Available walks</h2>
       <ul className="go-kiosk-walks-list">
         {templates.map((walk) => (
           <li key={walk.id}>

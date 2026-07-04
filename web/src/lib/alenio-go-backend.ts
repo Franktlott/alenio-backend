@@ -84,8 +84,13 @@ export function goBackendAdminTiles(options: {
   ];
 }
 
-export function goBackendQuickActions(options: { inviteCode?: string | null; linkedDeviceCount: number }) {
-  return [
+export function goBackendQuickActions(options: {
+  inviteCode?: string | null;
+  linkedDeviceCount: number;
+  walkTemplateCount?: number;
+  canManage?: boolean;
+}) {
+  const actions = [
     {
       id: "link",
       label: "Link a device",
@@ -108,4 +113,14 @@ export function goBackendQuickActions(options: { inviteCode?: string | null; lin
       active: true,
     },
   ];
+  if (options.canManage) {
+    actions.push({
+      id: "walks",
+      label: options.walkTemplateCount ? `${options.walkTemplateCount} walks` : "Open walks",
+      href: "/go/walks",
+      tone: "violet" as const,
+      active: true,
+    });
+  }
+  return actions;
 }

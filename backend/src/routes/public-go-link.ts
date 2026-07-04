@@ -21,7 +21,6 @@ import {
 } from "../lib/briefings";
 import {
   completePublicWalk,
-  createPublicWalkTemplate,
   getPublicWalkCompletion,
   getPublicWalkTemplate,
   listPublicWalkCompletions,
@@ -348,18 +347,6 @@ publicGoLinkRouter.post("/briefings/:briefingId/complete", zValidator("json", pu
   }
 });
 
-const publicWalkTemplateBodySchema = z.object({
-  hubToken: z.string().min(1).max(256),
-  deviceId: z.string().min(8).max(128),
-  name: z.string().trim().min(1).max(200),
-  workplace: z.string().trim().min(1).max(200),
-  scoringEnabled: z.boolean().optional(),
-  items: z
-    .array(z.object({ label: z.string().trim().min(1).max(280) }))
-    .min(1)
-    .max(80),
-});
-
 const publicWalkCompleteSchema = z.object({
   hubToken: z.string().min(1).max(256),
   deviceId: z.string().min(8).max(128),
@@ -395,22 +382,6 @@ publicGoLinkRouter.get("/walks", async (c) => {
   } catch (err) {
     console.error("[go-link] GET /walks failed:", err);
     return c.json({ error: { message: "Could not load walks", code: "INTERNAL" } }, 500);
-  }
-});
-
-publicGoLinkRouter.post("/walks", zValidator("json", publicWalkTemplateBodySchema), async (c) => {
-  try {
-    const { hubToken, deviceId, name, workplace, scoringEnabled, items } = c.req.valid("json");
-    const result = await createPublicWalkTemplate(hubToken, deviceId, { name, workplace, scoringEnabled, items });
-    if (!result.ok) {
-      if (result.code === "FORBIDDEN") return c.json({ error: { message: GO_DEVICE_UNLINKED_MESSAGE, code: "DEVICE_UNLINKED" } }, 403);
-      if (result.code === "VALIDATION") return c.json({ error: { message: "Invalid walk template", code: "VALIDATION_ERROR" } }, 400);
-      return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
-    }
-    return c.json({ data: result.template }, 201);
-  } catch (err) {
-    console.error("[go-link] POST /walks failed:", err);
-    return c.json({ error: { message: "Could not create walk", code: "INTERNAL" } }, 500);
   }
 });
 

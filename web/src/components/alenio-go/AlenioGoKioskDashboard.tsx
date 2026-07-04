@@ -68,7 +68,7 @@ function buildKioskModules(options: {
         ...module,
         active: true,
         href: `/checklist/${options.hubToken}/walks`,
-        countMessage: "Manager observations & saved history",
+        countMessage: "Complete published walks",
         ctaLabel: "Open walks",
       };
     }

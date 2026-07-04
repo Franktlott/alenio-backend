@@ -75,7 +75,7 @@ export function WalksKioskPage() {
           </div>
 
           <h1>Walks</h1>
-          <p>Create structured observations, complete walks on the floor, and review saved history.</p>
+          <p>Complete structured manager observations on the floor. Walk templates are set up in the Alenio Go console.</p>
         </header>
 
         <div className="go-kiosk-walks-tabs" role="tablist">
