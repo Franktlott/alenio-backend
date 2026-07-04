@@ -6,6 +6,9 @@ export type GoDashModule = {
   href?: string;
   tone: "indigo" | "cyan" | "violet" | "amber";
   icon: "tasks" | "checklists" | "walks" | "briefings";
+  count?: number | null;
+  countMessage?: string;
+  ctaLabel?: string;
 };
 
 export type GoDashQuickAction = {
@@ -30,31 +33,17 @@ export function formatGoDashClock(now = new Date()): { time: string; date: strin
   };
 }
 
+export function formatGoDashHeaderDate(now = new Date()): string {
+  return now.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
+}
+
+export function shiftLabelForHour(hour: number): string {
+  if (hour >= 5 && hour < 14) return "1st Shift";
+  if (hour >= 14 && hour < 22) return "2nd Shift";
+  return "3rd Shift";
+}
+
 export const GO_DASH_KIOSK_MODULES: GoDashModule[] = [
-  {
-    id: "tasks",
-    title: "Tasks",
-    subtitle: "Requires Alenio account",
-    active: false,
-    tone: "indigo",
-    icon: "tasks",
-  },
-  {
-    id: "checklists",
-    title: "Checklists",
-    subtitle: "Coming soon",
-    active: false,
-    tone: "cyan",
-    icon: "checklists",
-  },
-  {
-    id: "walks",
-    title: "Walks",
-    subtitle: "Coming soon",
-    active: false,
-    tone: "violet",
-    icon: "walks",
-  },
   {
     id: "briefings",
     title: "Briefings",
@@ -62,6 +51,38 @@ export const GO_DASH_KIOSK_MODULES: GoDashModule[] = [
     active: true,
     tone: "amber",
     icon: "briefings",
+    ctaLabel: "View briefings",
+    countMessage: "Nothing pending",
+  },
+  {
+    id: "checklists",
+    title: "Checklists",
+    subtitle: "Daily checklists",
+    active: false,
+    tone: "cyan",
+    icon: "checklists",
+    ctaLabel: "View checklists",
+    countMessage: "Coming soon",
+  },
+  {
+    id: "walks",
+    title: "Walks",
+    subtitle: "Store walks",
+    active: false,
+    tone: "violet",
+    icon: "walks",
+    ctaLabel: "View walks",
+    countMessage: "Coming soon",
+  },
+  {
+    id: "tasks",
+    title: "Tasks",
+    subtitle: "Requires Alenio account",
+    active: false,
+    tone: "indigo",
+    icon: "tasks",
+    ctaLabel: "View tasks",
+    countMessage: "Coming soon",
   },
 ];
 

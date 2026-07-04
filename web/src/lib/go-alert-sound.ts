@@ -97,3 +97,25 @@ export function playGoAlertSound(): void {
     }
   })();
 }
+
+/** One full alert pattern is ~5s; gap keeps repeats from overlapping. */
+const ALERT_LOOP_GAP_MS = 5_500;
+
+let alertLoopTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** Repeats the alert sound until stopGoAlertSoundLoop() is called. */
+export function startGoAlertSoundLoop(): void {
+  stopGoAlertSoundLoop();
+  const tick = () => {
+    playGoAlertSound();
+    alertLoopTimer = window.setTimeout(tick, ALERT_LOOP_GAP_MS);
+  };
+  tick();
+}
+
+export function stopGoAlertSoundLoop(): void {
+  if (alertLoopTimer !== null) {
+    window.clearTimeout(alertLoopTimer);
+    alertLoopTimer = null;
+  }
+}

@@ -1,5 +1,13 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import type { GoDashModule, GoDashQuickAction } from "../../lib/alenio-go-dashboard";
+import {
+  formatGoDashClock,
+  formatGoDashHeaderDate,
+} from "../../lib/alenio-go-dashboard";
+import type { GoWorkplaceAlert } from "../../lib/api";
+import { AlenioGoLogo } from "../AlenioGoLogo";
+import { GoKioskAlertBell } from "./GoKioskWorkplaceAlerts";
 
 export function ModuleIcon({ name }: { name: GoDashModule["icon"] }) {
   if (name === "tasks") {
@@ -33,6 +41,127 @@ export function ModuleIcon({ name }: { name: GoDashModule["icon"] }) {
       <line x1="16" y1="13" x2="8" y2="13" />
       <line x1="16" y1="17" x2="8" y2="17" />
     </svg>
+  );
+}
+
+export function GoDashKioskHeader({
+  teamName,
+  alerts = [],
+}: {
+  teamName: string;
+  alerts?: GoWorkplaceAlert[];
+}) {
+  const [clock, setClock] = useState(() => formatGoDashClock());
+
+  useEffect(() => {
+    const id = window.setInterval(() => setClock(formatGoDashClock()), 30_000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  const headerDate = formatGoDashHeaderDate();
+
+  return (
+    <header className="go-dash-topbar go-dash-topbar--store" data-testid="go-kiosk-topbar">
+      <div className="go-dash-topbar-logo">
+        <AlenioGoLogo variant="header" />
+      </div>
+
+      <div className="go-dash-topbar-center go-dash-topbar-center--store">
+        <strong className="go-dash-store-name">{teamName || "Workspace"}</strong>
+      </div>
+
+      <div className="go-dash-topbar-right go-dash-topbar-right--store">
+        <GoKioskAlertBell alerts={alerts} />
+        <div className="go-dash-header-clock" aria-live="polite">
+          <span className="go-dash-header-clock-time">{clock.time}</span>
+          <span className="go-dash-header-clock-date">{headerDate}</span>
+        </div>
+      </div>
+    </header>
+  );
+}
+
+function storeCardMetric(module: GoDashModule): string {
+  if (module.count == null) return "—";
+  return String(module.count);
+}
+
+export function GoDashStoreModuleCard({ module }: { module: GoDashModule }) {
+  const body = (
+    <>
+      {!module.active ? (
+        <span className="go-dash-store-card-soon">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden>
+            <rect x="3" y="11" width="18" height="11" rx="2" />
+            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+          </svg>
+          Coming soon
+        </span>
+      ) : null}
+      <div className="go-dash-store-card__head">
+        <div className="go-dash-store-card__icon" aria-hidden>
+          <ModuleIcon name={module.icon} />
+        </div>
+        <div className="go-dash-store-card__titles">
+          <h2 className="go-dash-store-card__title">{module.title}</h2>
+          <p className="go-dash-store-card__sub">{module.subtitle}</p>
+        </div>
+      </div>
+      <div className="go-dash-store-card__metric-wrap">
+        <span className="go-dash-store-card__metric">{storeCardMetric(module)}</span>
+        <p className="go-dash-store-card__message">{module.countMessage ?? module.subtitle}</p>
+      </div>
+      <span className="go-dash-store-card__cta">
+        {module.ctaLabel ?? `Open ${module.title.toLowerCase()}`}
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden>
+          <polyline points="9 18 15 12 9 6" />
+        </svg>
+      </span>
+    </>
+  );
+
+  const className = `go-dash-store-card go-dash-store-card--${module.tone}${module.active ? "" : " go-dash-store-card--inactive"}`;
+
+  if (module.active && module.href) {
+    const isHash = module.href.startsWith("#");
+    if (isHash) {
+      return (
+        <a href={module.href} className={className} data-testid={`go-dash-module-${module.id}`}>
+          {body}
+        </a>
+      );
+    }
+    return (
+      <Link to={module.href} className={className} data-testid={`go-dash-module-${module.id}`}>
+        {body}
+      </Link>
+    );
+  }
+
+  return (
+    <div className={className} aria-disabled data-testid={`go-dash-module-${module.id}`}>
+      {body}
+    </div>
+  );
+}
+
+export function GoDashModuleWheel({ modules }: { modules: GoDashModule[] }) {
+  const scrollable = modules.length > 4;
+
+  return (
+    <div
+      className={`go-dash-module-wheel${scrollable ? " go-dash-module-wheel--scrollable" : ""}`}
+      data-testid="go-dash-module-wheel"
+    >
+      <div className="go-dash-module-wheel-track" role="list">
+        {modules.map((module) => (
+          <div key={module.id} className="go-dash-module-wheel-item" role="listitem">
+            <GoDashStoreModuleCard module={module} />
+          </div>
+        ))}
+      </div>
+      {scrollable ? <p className="go-dash-module-wheel-hint">Swipe for more modules</p> : null}
+    </div>
   );
 }
 

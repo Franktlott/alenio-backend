@@ -4897,6 +4897,652 @@ input {
   font-size: 0.9375rem;
 }
 
+/* ── Store hub kiosk layout (tablet floor dashboard) ── */
+
+.go-dash--store {
+  background: #dfe6f3;
+}
+
+.go-dash--store .go-dash-scroll {
+  background: linear-gradient(180deg, #dfe6f3 0%, #d5ddeb 100%);
+}
+
+.go-dash-topbar--store {
+  padding: 0.75rem 1.25rem;
+}
+
+.go-dash-logo-mark {
+  width: 118px;
+  height: 32px;
+  color: #f8fafc;
+}
+
+.go-dash-topbar-center--store {
+  flex-direction: column;
+  align-items: center;
+  gap: 0.125rem;
+  text-align: center;
+}
+
+.go-dash-store-name {
+  font-size: 1rem;
+  font-weight: 800;
+  color: #f8fafc;
+  letter-spacing: -0.01em;
+}
+
+.go-dash-topbar-right--store {
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.625rem;
+}
+
+.go-kiosk-alert-bell-wrap {
+  position: relative;
+}
+
+.go-kiosk-alert-bell {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #f8fafc;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.go-kiosk-alert-bell-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: #ef4444;
+  color: #fff;
+  font-size: 0.625rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.go-kiosk-alert-panel {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  z-index: 50;
+  width: min(360px, 88vw);
+  max-height: min(420px, 60vh);
+  overflow: auto;
+  padding: 0.75rem;
+  border-radius: 14px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.2);
+}
+
+.go-kiosk-alert-panel-head {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  margin-bottom: 0.75rem;
+}
+
+.go-kiosk-alert-panel-title {
+  font-size: 0.9375rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.go-kiosk-alert-panel-sub {
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.go-kiosk-alert-panel-empty {
+  margin: 0;
+  font-size: 0.875rem;
+  color: #94a3b8;
+}
+
+.go-kiosk-alert-panel-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.go-kiosk-alert-panel-item {
+  display: flex;
+  gap: 0.625rem;
+  padding: 0.625rem 0;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.go-kiosk-alert-panel-item:last-child {
+  border-bottom: none;
+}
+
+.go-kiosk-alert-panel-dot {
+  width: 8px;
+  height: 8px;
+  margin-top: 0.35rem;
+  border-radius: 50%;
+  background: #ef4444;
+  flex-shrink: 0;
+}
+
+.go-kiosk-alert-panel-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+.go-kiosk-alert-panel-copy strong {
+  font-size: 0.8125rem;
+  color: #0f172a;
+}
+
+.go-kiosk-alert-panel-copy span {
+  font-size: 0.8125rem;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+.go-kiosk-alert-panel-time {
+  font-size: 0.6875rem;
+  color: #94a3b8;
+}
+
+.go-kiosk-alert-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+  background: rgba(15, 23, 42, 0.72);
+  backdrop-filter: blur(6px);
+  animation: go-kiosk-alert-modal-in 0.22s ease-out;
+}
+
+@keyframes go-kiosk-alert-modal-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.go-kiosk-alert-modal {
+  width: min(520px, 100%);
+  padding: 2rem 1.75rem 1.5rem;
+  border-radius: 20px;
+  border: 1px solid #fecaca;
+  background: linear-gradient(180deg, #fff 0%, #fff5f5 100%);
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.35);
+  text-align: center;
+  animation: go-kiosk-alert-modal-card-in 0.28s ease-out;
+}
+
+@keyframes go-kiosk-alert-modal-card-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.go-kiosk-alert-modal-icon {
+  width: 72px;
+  height: 72px;
+  margin: 0 auto 1rem;
+  border-radius: 50%;
+  background: #fee2e2;
+  color: #dc2626;
+  display: grid;
+  place-items: center;
+  animation: go-kiosk-alert-modal-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes go-kiosk-alert-modal-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.45);
+  }
+  50% {
+    box-shadow: 0 0 0 14px rgba(239, 68, 68, 0);
+  }
+}
+
+.go-kiosk-alert-modal-eyebrow {
+  margin: 0 0 0.375rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #b91c1c;
+}
+
+.go-kiosk-alert-modal-title {
+  margin: 0 0 0.75rem;
+  font-size: 1.5rem;
+  font-weight: 800;
+  line-height: 1.25;
+  color: #0f172a;
+}
+
+.go-kiosk-alert-modal-body {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+  line-height: 1.5;
+  color: #475569;
+}
+
+.go-kiosk-alert-modal-time {
+  display: block;
+  margin-bottom: 1.25rem;
+  font-size: 0.8125rem;
+  color: #94a3b8;
+}
+
+.go-kiosk-alert-modal-ack {
+  width: 100%;
+  padding: 0.875rem 1.25rem;
+  border: none;
+  border-radius: 12px;
+  background: #dc2626;
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.go-kiosk-alert-modal-ack:active {
+  transform: scale(0.98);
+}
+
+.go-kiosk-alert-modal-hint {
+  margin: 0.875rem 0 0;
+  font-size: 0.75rem;
+  color: #94a3b8;
+}
+
+.go-dash-header-clock {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.125rem;
+  text-align: right;
+}
+
+.go-dash-header-clock-time {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: #f8fafc;
+  line-height: 1.2;
+}
+
+.go-dash-header-clock-date {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  line-height: 1.2;
+}
+
+.go-dash-hero--store {
+  min-height: 210px;
+  padding: 1.5rem 1.25rem 5.75rem;
+}
+
+.go-dash-stats-bar--store {
+  grid-template-columns: 1.35fr repeat(4, minmax(0, 1fr));
+  gap: 0.5rem;
+  bottom: -2.35rem;
+  padding: 0.875rem 1rem;
+}
+
+.go-dash-stat-hint {
+  display: block;
+  margin-top: 0.125rem;
+  font-size: 0.625rem;
+  color: #64748b;
+  text-transform: none;
+  letter-spacing: 0;
+  line-height: 1.2;
+}
+
+.go-dash-stat-value--cyan {
+  color: #22d3ee;
+}
+
+.go-dash-body--store {
+  padding: 3.25rem 1.25rem 1.25rem;
+}
+
+.go-dash-module-wheel {
+  margin-bottom: 1rem;
+}
+
+.go-dash-module-wheel-track {
+  display: flex;
+  gap: 0.875rem;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 0.35rem;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(67, 97, 238, 0.45) transparent;
+}
+
+.go-dash-module-wheel-track::-webkit-scrollbar {
+  height: 6px;
+}
+
+.go-dash-module-wheel-track::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(67, 97, 238, 0.45);
+}
+
+.go-dash-module-wheel-item {
+  flex: 0 0 calc((100% - 2.625rem) / 4);
+  min-width: 210px;
+  scroll-snap-align: start;
+}
+
+.go-dash-module-wheel--scrollable .go-dash-module-wheel-item {
+  flex: 0 0 min(250px, 44vw);
+}
+
+.go-dash-module-wheel-hint {
+  margin: 0.35rem 0 0;
+  font-size: 0.75rem;
+  color: #64748b;
+  text-align: center;
+}
+
+.go-dash-store-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 220px;
+  height: 100%;
+  padding: 1rem;
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(248, 250, 252, 0.98) 0%, rgba(241, 245, 249, 0.96) 100%);
+  border: 1px solid rgba(148, 163, 184, 0.38);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.1);
+  text-decoration: none;
+  color: #0f172a;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.go-dash-store-card:not(.go-dash-store-card--inactive):hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 30px rgba(67, 97, 238, 0.18);
+}
+
+.go-dash-store-card--inactive {
+  opacity: 0.82;
+  cursor: not-allowed;
+}
+
+.go-dash-store-card-soon {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.08);
+  color: #64748b;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.go-dash-store-card {
+  position: relative;
+}
+
+.go-dash-store-card__head {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin-bottom: 0.875rem;
+}
+
+.go-dash-store-card__icon {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.go-dash-store-card__icon svg {
+  width: 22px;
+  height: 22px;
+}
+
+.go-dash-store-card--amber .go-dash-store-card__icon {
+  background: #ffedd5;
+  color: #c2410c;
+}
+
+.go-dash-store-card--cyan .go-dash-store-card__icon {
+  background: #cffafe;
+  color: #0e7490;
+}
+
+.go-dash-store-card--violet .go-dash-store-card__icon {
+  background: #ede9fe;
+  color: #6d28d9;
+}
+
+.go-dash-store-card--indigo .go-dash-store-card__icon {
+  background: #e0e7ff;
+  color: #4338ca;
+}
+
+.go-dash-store-card__titles {
+  min-width: 0;
+  padding-top: 0.125rem;
+}
+
+.go-dash-store-card__title {
+  margin: 0;
+  font-size: 1.0625rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.go-dash-store-card__sub {
+  margin: 0.125rem 0 0;
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.go-dash-store-card__metric-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0 0.75rem;
+}
+
+.go-dash-store-card__metric {
+  font-size: clamp(2rem, 4vw, 2.75rem);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.03em;
+}
+
+.go-dash-store-card--amber .go-dash-store-card__metric {
+  color: #c2410c;
+}
+
+.go-dash-store-card--cyan .go-dash-store-card__metric {
+  color: #0e7490;
+}
+
+.go-dash-store-card--violet .go-dash-store-card__metric {
+  color: #6d28d9;
+}
+
+.go-dash-store-card--indigo .go-dash-store-card__metric {
+  color: #4338ca;
+}
+
+.go-dash-store-card__message {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: #64748b;
+  line-height: 1.35;
+}
+
+.go-dash-store-card__cta {
+  margin-top: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  width: 100%;
+  padding: 0.7rem 0.875rem;
+  border-radius: 11px;
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.go-dash-store-card--amber .go-dash-store-card__cta {
+  background: #ffedd5;
+  color: #c2410c;
+}
+
+.go-dash-store-card--cyan .go-dash-store-card__cta {
+  background: #cffafe;
+  color: #0e7490;
+}
+
+.go-dash-store-card--violet .go-dash-store-card__cta {
+  background: #ede9fe;
+  color: #6d28d9;
+}
+
+.go-dash-store-card--indigo .go-dash-store-card__cta {
+  background: #e0e7ff;
+  color: #4338ca;
+}
+
+.go-dash-alerts-strip {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.875rem;
+  padding: 0.9rem 1rem;
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(248, 250, 252, 0.98) 0%, rgba(241, 245, 249, 0.96) 100%);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+}
+
+.go-dash-alerts-strip-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #0f172a;
+  white-space: nowrap;
+}
+
+.go-dash-alerts-strip-head h2 {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 800;
+}
+
+.go-dash-alerts-strip-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.625rem;
+  min-width: 0;
+}
+
+.go-dash-alerts-strip-empty {
+  margin: 0;
+  font-size: 0.875rem;
+  color: #64748b;
+}
+
+.go-dash-alerts-strip-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: #4361ee;
+  white-space: nowrap;
+}
+
+.go-dash-bottom-dock--store {
+  background: linear-gradient(180deg, #edf1f8 0%, #e4eaf4 100%);
+  border-top: 1px solid rgba(148, 163, 184, 0.35);
+  box-shadow: 0 -8px 24px rgba(15, 23, 42, 0.08);
+}
+
+.go-dash--store .go-dash-quick--dock {
+  background: transparent;
+}
+
+.go-dash--store .go-dash-quick-title {
+  color: #1e293b;
+}
+
+.go-dash--store .go-dash-quick-card {
+  background: rgba(248, 250, 252, 0.95);
+  border-color: rgba(148, 163, 184, 0.35);
+}
+
+@media (max-width: 1100px) {
+  .go-dash-stats-bar--store {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    position: relative;
+    left: auto;
+    right: auto;
+    bottom: auto;
+    margin-top: 1rem;
+  }
+
+  .go-dash-hero--store {
+    padding-bottom: 1.25rem;
+  }
+
+  .go-dash-module-wheel-item {
+    flex: 0 0 min(240px, 72vw);
+  }
+
+  .go-dash-alerts-strip {
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+  }
+
+  .go-dash-alerts-strip-link {
+    justify-self: start;
+  }
+}
+
 .go-dash-loading,
 .go-dash-error {
   margin: 2rem 1.25rem;
