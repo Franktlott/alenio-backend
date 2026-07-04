@@ -26,6 +26,16 @@ function AdminTileIcon({ name }: { name: Tile["icon"] }) {
       </svg>
     );
   }
+  if (name === "frontend") {
+    return (
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
+        <rect x="3" y="3" width="18" height="18" rx="2" />
+        <path d="M3 9h18" />
+        <circle cx="7" cy="6" r="1" />
+        <circle cx="10" cy="6" r="1" />
+      </svg>
+    );
+  }
   if (name === "checklists") {
     return (
       <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>

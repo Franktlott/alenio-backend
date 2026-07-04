@@ -10,6 +10,12 @@ import {
   validateSignedResponses,
   type ChecklistResponseItem,
 } from "../lib/checklist-locations";
+import {
+  parseGoFrontendSettings,
+  parseGoFrontendSettingsPatch,
+  resolveGoHeroImage,
+  serializeGoFrontendSettings,
+} from "../lib/go-frontend-settings";
 import { assertGoDeviceLinked, GO_DEVICE_UNLINKED_MESSAGE } from "../lib/workplace-alerts";
 
 const publicChecklistHubsRouter = new Hono();
@@ -35,9 +41,12 @@ publicChecklistHubsRouter.get("/:hubToken", async (c) => {
   const hasPlan = await teamHasChecklistPlan(team.id);
   if (!hasPlan) return c.json({ error: { message: "Checklists are not available for this workspace" } }, 403);
 
+  const goFrontendSettings = parseGoFrontendSettings(team.goFrontendSettings);
+  const heroImage = resolveGoHeroImage(team.image, goFrontendSettings);
+
   return c.json({
     data: {
-      team: { name: team.name, image: team.image },
+      team: { name: team.name, image: heroImage },
       checklists: team.checklistLocations.map((cl) => ({
         id: cl.id,
         name: cl.name,
@@ -60,10 +69,13 @@ publicChecklistHubsRouter.get("/:hubToken/checklists/:checklistId", async (c) =>
   const hasPlan = await teamHasChecklistPlan(row.team.id);
   if (!hasPlan) return c.json({ error: { message: "Checklists are not available for this workspace" } }, 403);
 
+  const goFrontendSettings = parseGoFrontendSettings(row.team.goFrontendSettings);
+  const heroImage = resolveGoHeroImage(row.team.image, goFrontendSettings);
+
   return c.json({
     data: {
       checklist: { id: row.location.id, name: row.location.name },
-      team: { name: row.team.name, image: row.team.image },
+      team: { name: row.team.name, image: heroImage },
       items: row.location.items.map((i) => ({
         id: i.id,
         title: i.title,

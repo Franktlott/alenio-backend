@@ -3043,6 +3043,80 @@ input {
   text-decoration: underline;
 }
 
+.go-frontend-settings-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.go-frontend-settings-preview-wrap {
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+}
+
+.go-frontend-settings-preview {
+  min-height: 180px;
+  padding: 1.25rem;
+  background: linear-gradient(135deg, #1e293b 0%, #334155 55%, #6366f1 100%);
+  background-size: cover;
+  background-position: center;
+  display: flex;
+  align-items: flex-end;
+}
+
+.go-frontend-settings-preview-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  color: #fff;
+}
+
+.go-frontend-settings-preview-copy strong {
+  font-size: 1.25rem;
+  font-weight: 800;
+}
+
+.go-frontend-settings-preview-copy span {
+  font-size: 0.8125rem;
+  opacity: 0.9;
+}
+
+.go-frontend-settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.go-frontend-settings-secondary-btn {
+  padding: 0.75rem 1rem;
+  border-radius: 10px;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #334155;
+  font-size: 0.875rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.go-frontend-settings-secondary-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.go-frontend-settings-saved {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #059669;
+}
+
+.go-frontend-settings-foot {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
 .go-backend-inline-code {
   margin: 0;
   padding: 0;

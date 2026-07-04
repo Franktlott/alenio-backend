@@ -51,6 +51,7 @@ import { ensureWorkplaceStandardsSchema } from "./lib/ensure-workplace-standards
 import { ensureGoLoginSchema } from "./lib/ensure-go-login-schema";
 import { ensureWorkplaceAlertsSchema } from "./lib/ensure-workplace-alerts-schema";
 import { ensureBriefingsSchema } from "./lib/ensure-briefings-schema";
+import { ensureGoFrontendSettingsSchema } from "./lib/ensure-go-frontend-settings-schema";
 import { ensureCalendarConnectionSchema } from "./lib/ensure-calendar-connection-schema";
 import { calendarConnectionsRouter } from "./routes/calendar-connections";
 import { developmentGoalsRouter } from "./routes/development-goals";
@@ -74,7 +75,7 @@ if (!isProduction) {
 /** Dev safety net + prod fallback when preDeploy db push missed a table. */
 const startupSchemaReady = Promise.all([
   ...(isProduction
-    ? [ensureGoLoginSchema(prisma), ensureWorkplaceAlertsSchema(prisma), ensureBriefingsSchema(prisma)]
+    ? [ensureGoLoginSchema(prisma), ensureWorkplaceAlertsSchema(prisma), ensureBriefingsSchema(prisma), ensureGoFrontendSettingsSchema(prisma)]
     : [
         ensureOneOnOneSchema(prisma),
         ensureDevelopmentPlanSchema(prisma),
@@ -87,6 +88,7 @@ const startupSchemaReady = Promise.all([
         ensureGoLoginSchema(prisma),
         ensureWorkplaceAlertsSchema(prisma),
         ensureBriefingsSchema(prisma),
+        ensureGoFrontendSettingsSchema(prisma),
       ]),
 ]);
 

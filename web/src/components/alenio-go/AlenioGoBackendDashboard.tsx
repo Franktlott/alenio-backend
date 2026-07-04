@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { AlenioGoLogo } from "../AlenioGoLogo";
-import { fetchTeamGoDevices } from "../../lib/api";
+import { fetchTeamGoDevices, fetchWebTeam } from "../../lib/api";
+import { resolveGoHeroImage } from "../../lib/go-frontend-settings";
 import { goBackendAdminTiles, goBackendGreeting, goBackendQuickActions } from "../../lib/alenio-go-backend";
 import { formatGoDashClock } from "../../lib/alenio-go-dashboard";
 import type { usePendingApprovals } from "../../hooks/usePendingApprovals";
@@ -31,6 +32,7 @@ export function AlenioGoBackendDashboard({
   approvals,
 }: Props) {
   const [linkedDeviceCount, setLinkedDeviceCount] = useState(0);
+  const [heroImage, setHeroImage] = useState<string | null>(teamImage ?? null);
   const [clock, setClock] = useState(() => formatGoDashClock());
   const [copyOk, setCopyOk] = useState(false);
 
@@ -38,6 +40,25 @@ export function AlenioGoBackendDashboard({
     const id = window.setInterval(() => setClock(formatGoDashClock()), 30_000);
     return () => window.clearInterval(id);
   }, []);
+
+  useEffect(() => {
+    if (!teamId) {
+      setHeroImage(teamImage ?? null);
+      return;
+    }
+    let cancelled = false;
+    void fetchWebTeam(teamId)
+      .then((team) => {
+        if (cancelled) return;
+        setHeroImage(resolveGoHeroImage(team.image, team.goFrontendSettings));
+      })
+      .catch(() => {
+        if (!cancelled) setHeroImage(teamImage ?? null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [teamId, teamImage]);
 
   useEffect(() => {
     if (!canManage || !teamId) {
@@ -77,9 +98,9 @@ export function AlenioGoBackendDashboard({
   );
   const quickActions = goBackendQuickActions({ inviteCode, linkedDeviceCount });
 
-  const heroStyle = teamImage
+  const heroStyle = heroImage
     ? {
-        backgroundImage: `linear-gradient(135deg, rgba(15,23,42,0.78), rgba(67,97,238,0.62)), url(${teamImage})`,
+        backgroundImage: `linear-gradient(135deg, rgba(15,23,42,0.78), rgba(67,97,238,0.62)), url(${heroImage})`,
       }
     : undefined;
 

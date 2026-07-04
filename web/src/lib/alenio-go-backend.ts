@@ -5,7 +5,7 @@ export type GoBackendAdminTile = {
   title: string;
   subtitle: string;
   tone: "indigo" | "cyan" | "violet" | "amber" | "emerald";
-  icon: "alerts" | "devices" | "setup" | "checklists" | "briefings" | "walks";
+  icon: "alerts" | "devices" | "setup" | "frontend" | "checklists" | "briefings" | "walks";
   active: boolean;
   href?: string;
   badge?: number;
@@ -49,6 +49,15 @@ export function goBackendAdminTiles(options: {
       icon: "setup",
       active: true,
       href: "/go/setup",
+    },
+    {
+      id: "frontend",
+      title: "Frontend settings",
+      subtitle: canManage ? "Customize the floor tablet look" : "Owner or leader access",
+      tone: "cyan",
+      icon: "frontend",
+      active: canManage,
+      href: canManage ? "/go/frontend" : undefined,
     },
     {
       id: "checklists",

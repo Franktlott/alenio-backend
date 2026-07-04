@@ -27,6 +27,11 @@ import {
   parseWorkplaceStandardsPatch,
   serializeWorkplaceStandards,
 } from "../lib/workplace-standards";
+import {
+  parseGoFrontendSettings,
+  parseGoFrontendSettingsPatch,
+  serializeGoFrontendSettings,
+} from "../lib/go-frontend-settings";
 
 const webRouter = new Hono();
 
@@ -185,7 +190,7 @@ webRouter.get("/api/teams/:id", async (c) => {
   const team = await prisma.team.findUnique({
     where: { id },
     select: {
-      id: true, name: true, image: true, createdAt: true, inviteCode: true, workplaceStandards: true,
+      id: true, name: true, image: true, createdAt: true, inviteCode: true, workplaceStandards: true, goFrontendSettings: true,
       _count: { select: { members: true, tasks: true } },
     },
   });
@@ -194,6 +199,7 @@ webRouter.get("/api/teams/:id", async (c) => {
     include: { user: { select: { id: true, name: true, email: true, image: true } } },
   });
   const workplaceStandards = parseWorkplaceStandards(team?.workplaceStandards);
+  const goFrontendSettings = parseGoFrontendSettings(team?.goFrontendSettings);
   let requiredCheckInTemplateTitle: string | null = null;
   if (workplaceStandards.requiredCheckInTemplateId) {
     const template = await prisma.oneOnOneTemplate.findFirst({
@@ -208,6 +214,7 @@ webRouter.get("/api/teams/:id", async (c) => {
       members,
       myRole: membership.role,
       workplaceStandards,
+      goFrontendSettings,
       requiredCheckInTemplateTitle,
     },
   });
@@ -227,15 +234,17 @@ webRouter.patch("/api/teams/:id", async (c) => {
     name?: string;
     image?: string | null;
     workplaceStandards?: unknown;
+    goFrontendSettings?: unknown;
   };
   const nameTrim = typeof body.name === "string" ? body.name.trim() : "";
   const hasImage = "image" in body;
   const hasWorkplaceStandards = body.workplaceStandards !== undefined;
+  const hasGoFrontendSettings = body.goFrontendSettings !== undefined;
   if (hasWorkplaceStandards && membership.role !== "owner") {
     return c.json({ error: { message: "Only the workspace owner can edit workplace standards" } }, 403);
   }
-  if (!nameTrim && !hasImage && !hasWorkplaceStandards) {
-    return c.json({ error: { message: "Name, image, or workplace standards is required" } }, 400);
+  if (!nameTrim && !hasImage && !hasWorkplaceStandards && !hasGoFrontendSettings) {
+    return c.json({ error: { message: "Name, image, workplace standards, or Alenio Go settings is required" } }, 400);
   }
 
   let parsedStandards: ReturnType<typeof parseWorkplaceStandardsPatch> | null = null;
@@ -255,6 +264,14 @@ webRouter.patch("/api/teams/:id", async (c) => {
     }
   }
 
+  let parsedGoFrontendSettings: ReturnType<typeof parseGoFrontendSettingsPatch> | null = null;
+  if (hasGoFrontendSettings) {
+    parsedGoFrontendSettings = parseGoFrontendSettingsPatch(body.goFrontendSettings);
+    if (!parsedGoFrontendSettings.ok) {
+      return c.json({ error: { message: parsedGoFrontendSettings.message } }, 400);
+    }
+  }
+
   if (nameTrim && (await isTeamDisplayNameTaken(nameTrim, id))) {
     return c.json(
       { error: { message: "Another workspace already uses this name. Pick a different name.", code: "TEAM_NAME_TAKEN" } },
@@ -271,8 +288,11 @@ webRouter.patch("/api/teams/:id", async (c) => {
         ...(parsedStandards?.ok
           ? { workplaceStandards: serializeWorkplaceStandards(parsedStandards.value) }
           : {}),
+        ...(parsedGoFrontendSettings?.ok
+          ? { goFrontendSettings: serializeGoFrontendSettings(parsedGoFrontendSettings.value) }
+          : {}),
       },
-      select: { id: true, name: true, image: true, inviteCode: true, workplaceStandards: true },
+      select: { id: true, name: true, image: true, inviteCode: true, workplaceStandards: true, goFrontendSettings: true },
     });
   } catch (err) {
     if (isPrismaUniqueOnName(err)) {
@@ -284,7 +304,8 @@ webRouter.patch("/api/teams/:id", async (c) => {
     throw err;
   }
   const workplaceStandards = parseWorkplaceStandards(team.workplaceStandards);
-  return c.json({ data: { ...team, workplaceStandards } });
+  const goFrontendSettings = parseGoFrontendSettings(team.goFrontendSettings);
+  return c.json({ data: { ...team, workplaceStandards, goFrontendSettings } });
 });
 
 // ── API: remove team member ───────────────────────────────────────────────────

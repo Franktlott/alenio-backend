@@ -122,6 +122,8 @@ model Team {
   checklistHubToken String? @unique
   /** JSON: per-workspace check-in and development goal expectations. */
   workplaceStandards String?
+  /** JSON: Alenio Go kiosk presentation settings (hero image, etc.). */
+  goFrontendSettings String?
   goLoginRequests GoLoginRequest[]
   workplaceAlerts WorkplaceAlert[]
   goDevicePresences GoDevicePresence[]

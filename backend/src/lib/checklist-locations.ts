@@ -42,6 +42,7 @@ export async function findTeamByChecklistHubToken(token: string) {
       id: true,
       name: true,
       image: true,
+      goFrontendSettings: true,
       checklistLocations: {
         where: { isActive: true },
         include: { items: { orderBy: { sortOrder: "asc" } } },
@@ -54,7 +55,7 @@ export async function findTeamByChecklistHubToken(token: string) {
 export async function findActiveChecklistInHub(hubToken: string, checklistId: string) {
   const team = await prisma.team.findFirst({
     where: { checklistHubToken: hubToken },
-    select: { id: true, name: true, image: true },
+    select: { id: true, name: true, image: true, goFrontendSettings: true },
   });
   if (!team) return null;
   const location = await prisma.checklistLocation.findFirst({

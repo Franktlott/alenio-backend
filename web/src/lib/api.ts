@@ -1270,6 +1270,7 @@ export type WebTeamDetail = {
   members: WebTeamMemberRow[];
   myRole: string;
   workplaceStandards?: import("./workplace-standards").WorkplaceStandards;
+  goFrontendSettings?: import("./go-frontend-settings").GoFrontendSettings;
   requiredCheckInTemplateTitle?: string | null;
 };
 
@@ -1320,6 +1321,17 @@ export function patchWebTeamWorkplaceStandards(
     data: { workplaceStandards: import("./workplace-standards").WorkplaceStandards };
   }>(`/web/api/teams/${encodeURIComponent(teamId)}`, { workplaceStandards }).then(
     (r) => r.data.workplaceStandards,
+  );
+}
+
+export function patchWebTeamGoFrontendSettings(
+  teamId: string,
+  goFrontendSettings: import("./go-frontend-settings").GoFrontendSettings,
+) {
+  return apiPatchJson<{
+    data: { goFrontendSettings: import("./go-frontend-settings").GoFrontendSettings };
+  }>(`/web/api/teams/${encodeURIComponent(teamId)}`, { goFrontendSettings }).then(
+    (r) => r.data.goFrontendSettings,
   );
 }
 

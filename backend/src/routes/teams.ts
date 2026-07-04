@@ -13,6 +13,11 @@ import {
   serializeWorkplaceStandards,
 } from "../lib/workplace-standards";
 import {
+  parseGoFrontendSettings,
+  parseGoFrontendSettingsPatch,
+  serializeGoFrontendSettings,
+} from "../lib/go-frontend-settings";
+import {
   approveGoLoginRequest,
   canManageGoLoginRequests,
 } from "../lib/go-login-requests";
@@ -243,7 +248,8 @@ teamsRouter.get("/:teamId", async (c) => {
   });
 
   const workplaceStandards = parseWorkplaceStandards(team?.workplaceStandards);
-  return c.json({ data: { ...team, role: membership.role, workplaceStandards } });
+  const goFrontendSettings = parseGoFrontendSettings(team?.goFrontendSettings);
+  return c.json({ data: { ...team, role: membership.role, workplaceStandards, goFrontendSettings } });
 });
 
 // PATCH /api/teams/:teamId - update team name
@@ -261,6 +267,7 @@ teamsRouter.patch("/:teamId", async (c) => {
 
   const nameTrim = typeof body.name === "string" ? body.name.trim() : "";
   const hasWorkplaceStandards = body.workplaceStandards !== undefined;
+  const hasGoFrontendSettings = body.goFrontendSettings !== undefined;
   if (hasWorkplaceStandards && membership.role !== "owner") {
     return c.json(
       { error: { message: "Only the workspace owner can edit workplace standards", code: "FORBIDDEN" } },
@@ -285,6 +292,14 @@ teamsRouter.patch("/:teamId", async (c) => {
     }
   }
 
+  let parsedGoFrontendSettings: ReturnType<typeof parseGoFrontendSettingsPatch> | null = null;
+  if (hasGoFrontendSettings) {
+    parsedGoFrontendSettings = parseGoFrontendSettingsPatch(body.goFrontendSettings);
+    if (!parsedGoFrontendSettings.ok) {
+      return c.json({ error: { message: parsedGoFrontendSettings.message, code: "VALIDATION_ERROR" } }, 400);
+    }
+  }
+
   if (nameTrim && (await isTeamDisplayNameTaken(nameTrim, teamId))) {
     return c.json(
       { error: { message: "Another workspace already uses this name. Pick a different name.", code: "TEAM_NAME_TAKEN" } },
@@ -302,6 +317,9 @@ teamsRouter.patch("/:teamId", async (c) => {
         ...(parsedStandards?.ok
           ? { workplaceStandards: serializeWorkplaceStandards(parsedStandards.value) }
           : {}),
+        ...(parsedGoFrontendSettings?.ok
+          ? { goFrontendSettings: serializeGoFrontendSettings(parsedGoFrontendSettings.value) }
+          : {}),
       },
     });
   } catch (err) {
@@ -315,7 +333,8 @@ teamsRouter.patch("/:teamId", async (c) => {
   }
 
   const workplaceStandards = parseWorkplaceStandards(team.workplaceStandards);
-  return c.json({ data: { ...team, workplaceStandards } });
+  const goFrontendSettings = parseGoFrontendSettings(team.goFrontendSettings);
+  return c.json({ data: { ...team, workplaceStandards, goFrontendSettings } });
 });
 
 // DELETE /api/teams/:teamId/leave - leave team (workspace owner cannot leave)
