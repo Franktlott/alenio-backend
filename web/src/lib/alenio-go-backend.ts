@@ -5,7 +5,7 @@ export type GoBackendAdminTile = {
   title: string;
   subtitle: string;
   tone: "indigo" | "cyan" | "violet" | "amber" | "emerald";
-  icon: "alerts" | "devices" | "setup" | "frontend" | "checklists" | "briefings" | "walks";
+  icon: "alerts" | "devices" | "frontend" | "checklists" | "briefings" | "walks";
   active: boolean;
   href?: string;
   badge?: number;
@@ -34,21 +34,12 @@ export function goBackendAdminTiles(options: {
     {
       id: "devices",
       title: "Devices & access",
-      subtitle: canManage ? "Approve tablets and join requests" : "View device access",
+      subtitle: canManage ? "Link iPads, approve tablets, and manage access" : "Link and view floor devices",
       tone: "violet",
       icon: "devices",
       active: true,
       href: "/go/devices",
       badge: canManage && pendingCount > 0 ? pendingCount : undefined,
-    },
-    {
-      id: "setup",
-      title: "Device setup",
-      subtitle: "Open the linking page for iPads",
-      tone: "emerald",
-      icon: "setup",
-      active: true,
-      href: "/go/setup",
     },
     {
       id: "frontend",
@@ -94,7 +85,7 @@ export function goBackendQuickActions(options: { inviteCode?: string | null; lin
     {
       id: "link",
       label: "Link a device",
-      href: "/go/setup",
+      href: "/go/devices",
       tone: "indigo" as const,
       active: true,
     },

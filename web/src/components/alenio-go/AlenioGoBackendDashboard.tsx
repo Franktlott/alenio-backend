@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { AlenioGoLogo } from "../AlenioGoLogo";
 import { fetchTeamGoDevices, fetchWebTeam } from "../../lib/api";
 import { resolveGoHeroImage } from "../../lib/go-frontend-settings";
+import { probeImageUrl } from "../../lib/image-probe";
 import { goBackendAdminTiles, goBackendGreeting, goBackendQuickActions } from "../../lib/alenio-go-backend";
 import { formatGoDashClock } from "../../lib/alenio-go-dashboard";
 import type { usePendingApprovals } from "../../hooks/usePendingApprovals";
@@ -33,9 +34,10 @@ export function AlenioGoBackendDashboard({
 }: Props) {
   const location = useLocation();
   const [linkedDeviceCount, setLinkedDeviceCount] = useState(0);
-  const [heroImage, setHeroImage] = useState<string | null>(teamImage ?? null);
+  const [heroImage, setHeroImage] = useState<string | null>(null);
   const [clock, setClock] = useState(() => formatGoDashClock());
   const [copyOk, setCopyOk] = useState(false);
+  const heroRequestRef = useRef(0);
 
   useEffect(() => {
     const id = window.setInterval(() => setClock(formatGoDashClock()), 30_000);
@@ -44,22 +46,30 @@ export function AlenioGoBackendDashboard({
 
   useEffect(() => {
     if (!teamId) {
-      setHeroImage(teamImage ?? null);
+      setHeroImage(null);
       return;
     }
     let cancelled = false;
+    const reqId = ++heroRequestRef.current;
     void fetchWebTeam(teamId)
-      .then((team) => {
-        if (cancelled) return;
-        setHeroImage(resolveGoHeroImage(team.image, team.goFrontendSettings));
+      .then(async (team) => {
+        if (cancelled || reqId !== heroRequestRef.current) return;
+        const candidate = resolveGoHeroImage(team.image, team.goFrontendSettings);
+        if (!candidate) {
+          setHeroImage(null);
+          return;
+        }
+        const ok = await probeImageUrl(candidate);
+        if (cancelled || reqId !== heroRequestRef.current) return;
+        setHeroImage(ok ? candidate : null);
       })
       .catch(() => {
-        if (!cancelled) setHeroImage(teamImage ?? null);
+        if (!cancelled && reqId === heroRequestRef.current) setHeroImage(null);
       });
     return () => {
       cancelled = true;
     };
-  }, [teamId, teamImage, location.pathname]);
+  }, [teamId, location.pathname]);
 
   useEffect(() => {
     if (!canManage || !teamId) {

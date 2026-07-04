@@ -15,6 +15,7 @@ import {
   type GoDashModule,
 } from "../../lib/alenio-go-dashboard";
 import { clearGoLinkedWorkspace, getGoDeviceId, saveGoLinkedWorkspace } from "../../lib/go-device";
+import { probeImageUrl } from "../../lib/image-probe";
 import { handleGoDeviceSessionError } from "../../lib/go-session";
 import {
   GoDashFooter,
@@ -78,12 +79,18 @@ function buildKioskModules(options: {
   });
 }
 
+async function resolveDisplayHeroImage(url: string | null | undefined): Promise<string | null> {
+  const trimmed = url?.trim();
+  if (!trimmed) return null;
+  return (await probeImageUrl(trimmed)) ? trimmed : null;
+}
+
 export function AlenioGoKioskDashboard({ hubToken }: Props) {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [teamName, setTeamName] = useState("");
-  const [teamImage, setTeamImage] = useState<string | null>(null);
+  const [heroImage, setHeroImage] = useState<string | null>(null);
   const [checklistCount, setChecklistCount] = useState(0);
   const [totalChecklistItems, setTotalChecklistItems] = useState(0);
   const [pendingBriefings, setPendingBriefings] = useState(0);
@@ -91,6 +98,7 @@ export function AlenioGoKioskDashboard({ hubToken }: Props) {
   const [activeAlert, setActiveAlert] = useState<GoWorkplaceAlert | null>(null);
   const handledAlertIds = useRef(new Set<string>());
   const alertQueueRef = useRef<GoWorkplaceAlert[]>([]);
+  const hubRequestRef = useRef(0);
 
   const kioskModules = useMemo(
     () =>
@@ -154,34 +162,43 @@ export function AlenioGoKioskDashboard({ hubToken }: Props) {
       return;
     }
     let cancelled = false;
-    setLoading(true);
-    setError(null);
     const deviceId = getGoDeviceId();
 
-    const refreshHub = () => {
+    const refreshHub = (initialLoad: boolean) => {
+      const reqId = ++hubRequestRef.current;
+      if (initialLoad) {
+        setLoading(true);
+        setError(null);
+        setHeroImage(null);
+      }
+
       void fetchPublicChecklistHub(hubToken, deviceId)
-        .then((data) => {
-          if (cancelled) return;
+        .then(async (data) => {
+          if (cancelled || reqId !== hubRequestRef.current) return;
+
+          const resolvedHero = await resolveDisplayHeroImage(data.team.image);
+          if (cancelled || reqId !== hubRequestRef.current) return;
+
           setTeamName(data.team.name);
-          setTeamImage(data.team.image);
+          setHeroImage(resolvedHero);
           setChecklistCount(data.checklists.length);
           setTotalChecklistItems(data.checklists.reduce((sum, row) => sum + row.taskCount, 0));
-          saveGoLinkedWorkspace(hubToken, data.team.name);
+          saveGoLinkedWorkspace(hubToken, data.team.name, resolvedHero);
         })
         .catch((err) => {
-          if (cancelled) return;
+          if (cancelled || reqId !== hubRequestRef.current) return;
           if (handleGoDeviceSessionError(err)) return;
           setError("Workspace not found.");
         })
         .finally(() => {
-          if (!cancelled) setLoading(false);
+          if (!cancelled && reqId === hubRequestRef.current && initialLoad) {
+            setLoading(false);
+          }
         });
     };
 
-    setLoading(true);
-    setError(null);
-    refreshHub();
-    const hubPollId = window.setInterval(refreshHub, 10_000);
+    refreshHub(true);
+    const hubPollId = window.setInterval(() => refreshHub(false), 10_000);
 
     void fetchGoBriefings(hubToken, deviceId)
       .then((rows) => {
@@ -231,9 +248,9 @@ export function AlenioGoKioskDashboard({ hubToken }: Props) {
     navigate("/aleniogo", { replace: true });
   }
 
-  const heroStyle = teamImage
+  const heroStyle = heroImage
     ? {
-        backgroundImage: `linear-gradient(135deg, rgba(15,23,42,0.76), rgba(67,97,238,0.52)), url(${teamImage})`,
+        backgroundImage: `linear-gradient(135deg, rgba(15,23,42,0.76), rgba(67,97,238,0.52)), url(${heroImage})`,
       }
     : undefined;
 

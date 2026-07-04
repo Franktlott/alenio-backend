@@ -23,7 +23,7 @@ export function BriefingsKioskPage() {
     void fetchPublicChecklistHub(hubToken, deviceId)
       .then((data) => {
         setTeamName(data.team.name);
-        saveGoLinkedWorkspace(hubToken, data.team.name);
+        saveGoLinkedWorkspace(hubToken, data.team.name, data.team.image);
       })
       .catch((err) => {
         if (handleGoDeviceSessionError(err)) return;

@@ -1,6 +1,7 @@
 const DEVICE_ID_KEY = "alenio.go.deviceId";
 const LINKED_HUB_KEY = "alenio.go.hubToken";
 const LINKED_TEAM_KEY = "alenio.go.teamName";
+const LINKED_HERO_KEY = "alenio.go.hubHeroImage";
 const PENDING_REQUEST_KEY = "alenio.go.pendingRequest";
 
 export function getGoDeviceId(): string {
@@ -37,15 +38,21 @@ export function loadGoLinkedWorkspace(): GoLinkedWorkspace | null {
   return { hubToken, teamName };
 }
 
-export function saveGoLinkedWorkspace(hubToken: string, teamName: string): void {
+export function saveGoLinkedWorkspace(hubToken: string, teamName: string, heroImage?: string | null): void {
   localStorage.setItem(LINKED_HUB_KEY, hubToken);
   localStorage.setItem(LINKED_TEAM_KEY, teamName);
   localStorage.removeItem(PENDING_REQUEST_KEY);
+  if (heroImage?.trim()) {
+    localStorage.setItem(LINKED_HERO_KEY, heroImage.trim());
+  } else {
+    localStorage.removeItem(LINKED_HERO_KEY);
+  }
 }
 
 export function clearGoLinkedWorkspace(): void {
   localStorage.removeItem(LINKED_HUB_KEY);
   localStorage.removeItem(LINKED_TEAM_KEY);
+  localStorage.removeItem(LINKED_HERO_KEY);
   localStorage.removeItem(PENDING_REQUEST_KEY);
 }
 

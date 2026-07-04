@@ -2132,8 +2132,9 @@ export type PublicChecklistPayload = {
 
 export function fetchPublicChecklistHub(hubToken: string, deviceId?: string) {
   const qs = deviceId ? `?deviceId=${encodeURIComponent(deviceId)}` : "";
-  return apiGetJson<{ data: PublicChecklistHubPayload }>(
+  return apiRequest<{ data: PublicChecklistHubPayload }>(
     `/api/public/checklist-hubs/${encodeURIComponent(hubToken)}${qs}`,
+    { method: "GET", cache: "no-store" },
   ).then((r) => r.data);
 }
 

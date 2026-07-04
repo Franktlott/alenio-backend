@@ -44,6 +44,8 @@ publicChecklistHubsRouter.get("/:hubToken", async (c) => {
   const goFrontendSettings = parseGoFrontendSettings(team.goFrontendSettings);
   const heroImage = resolveGoHeroImage(team.image, goFrontendSettings);
 
+  c.header("Cache-Control", "no-store");
+
   return c.json({
     data: {
       team: { name: team.name, image: heroImage },

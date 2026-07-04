@@ -1,21 +1,104 @@
+import { useState } from "react";
 import { GoBackendModuleShell } from "../../components/alenio-go/GoBackendModuleShell";
+import { GoDeviceLinkQrCode, buildGoDeviceLinkUrl } from "../../components/alenio-go/GoDeviceLinkQrCode";
 import { LinkedGoDevicesPanel } from "../../components/LinkedGoDevicesPanel";
 import { PendingApprovalsPanel } from "../../components/PendingApprovalsPanel";
 import { useAlenioGoShell } from "./alenio-go-outlet-context";
 
 export function AlenioGoDevicesModulePage() {
-  const { teamId, canManage, approvals } = useAlenioGoShell();
+  const { teamId, teamName, inviteCode, canManage, approvals } = useAlenioGoShell();
+  const [copyOk, setCopyOk] = useState(false);
+
+  async function copyCode() {
+    if (!inviteCode) return;
+    try {
+      await navigator.clipboard.writeText(inviteCode);
+      setCopyOk(true);
+      window.setTimeout(() => setCopyOk(false), 2000);
+    } catch {
+      /* ignore */
+    }
+  }
 
   return (
     <GoBackendModuleShell
       title="Devices & access"
       subtitle={
         canManage
-          ? "View linked tablets and approve new devices that enter your workspace code at alenio.app/aleniogo."
-          : "Ask your workspace owner or team leader to approve Alenio Go devices."
+          ? "Link iPads to your workspace, approve new tablets, and manage floor device access."
+          : "Link store devices with your workspace code — leaders approve access below."
       }
       tone="violet"
     >
+      <div className="go-backend-setup-grid">
+        <section className="go-backend-module-panel go-backend-panel-card go-backend-setup-card">
+          <h2 className="go-backend-devices-section-title">Link a device</h2>
+          <p className="go-backend-devices-section-sub enterprise-muted">
+            Connect iPads and shared floor devices — no personal login required on the tablet.
+          </p>
+          <ol className="go-backend-setup-steps">
+            <li>
+              <strong>Open the linking page</strong> on the tablet browser at{" "}
+              <a href="/aleniogo" className="enterprise-inline-link">
+                alenio.app/aleniogo
+              </a>
+              .
+            </li>
+            <li>
+              <strong>Enter your workspace code</strong>
+              {inviteCode ? (
+                <>
+                  {" "}
+                  (
+                  <button type="button" className="go-backend-inline-code" onClick={() => void copyCode()}>
+                    {copyOk ? "Copied!" : inviteCode}
+                  </button>
+                  )
+                </>
+              ) : (
+                " (available to workspace owners in Team settings)."
+              )}
+            </li>
+            <li>
+              <strong>Approve the device</strong> in Pending approval below once the tablet requests access.
+            </li>
+            <li>
+              <strong>Keep the dashboard open</strong> on the tablet so workplace alerts and check-ins stay connected.
+            </li>
+          </ol>
+          <div className="go-backend-setup-actions">
+            <a href="/aleniogo" target="_blank" rel="noopener noreferrer" className="enterprise-alenio-go-link-btn">
+              Open device linking page
+            </a>
+          </div>
+        </section>
+
+        <aside className="go-backend-module-panel go-backend-panel-card go-backend-setup-aside">
+          <h2 className="go-backend-setup-aside-title">Workspace</h2>
+          <p className="enterprise-muted go-backend-setup-aside-copy">
+            Devices you link will show the Alenio Go dashboard for <strong>{teamName}</strong>.
+          </p>
+          {inviteCode ? (
+            <>
+              <GoDeviceLinkQrCode
+                url={buildGoDeviceLinkUrl(inviteCode)}
+                label="Scan with the tablet camera to open the linking page"
+              />
+              <dl className="enterprise-alenio-go-meta">
+                <div>
+                  <dt>Workspace code</dt>
+                  <dd>
+                    <button type="button" className="go-backend-code-btn go-backend-code-btn--dark" onClick={() => void copyCode()}>
+                      {copyOk ? "Copied!" : inviteCode}
+                    </button>
+                  </dd>
+                </div>
+              </dl>
+            </>
+          ) : null}
+        </aside>
+      </div>
+
       {canManage && teamId ? (
         <>
           <div className="go-backend-module-panel go-backend-panel-card">
@@ -26,7 +109,7 @@ export function AlenioGoDevicesModulePage() {
             <LinkedGoDevicesPanel teamId={teamId} variant="page" />
           </div>
 
-          <div className="go-backend-module-panel go-backend-panel-card">
+          <div className="go-backend-module-panel go-backend-panel-card" id="go-device-approvals">
             <div className="go-backend-module-panel-badge-row">
               <h2 className="go-backend-devices-section-title">Pending approval</h2>
               {approvals.total > 0 ? (
@@ -54,11 +137,7 @@ export function AlenioGoDevicesModulePage() {
       ) : (
         <div className="go-backend-module-panel go-backend-panel-card">
           <p className="enterprise-muted go-backend-member-note">
-            Link a store device at{" "}
-            <a href="/aleniogo" className="enterprise-inline-link">
-              alenio.app/aleniogo
-            </a>{" "}
-            using your workspace code, then your leaders approve it here.
+            After linking a device, your workspace owner or team leader approves it in Pending approval above.
           </p>
         </div>
       )}
