@@ -34,8 +34,8 @@ function LinkedDevicesLayout() {
           : "Link store devices with your workspace code — leaders approve access in Link & access."
       }
       tone="violet"
+      toolbar={<GoLinkedDevicesSubnav tabs={tabs} />}
     >
-      <GoLinkedDevicesSubnav tabs={tabs} />
       <Outlet context={ctx} />
     </GoBackendModuleShell>
   );

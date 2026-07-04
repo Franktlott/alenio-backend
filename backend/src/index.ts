@@ -51,6 +51,7 @@ import { ensureWorkplaceStandardsSchema } from "./lib/ensure-workplace-standards
 import { ensureGoLoginSchema } from "./lib/ensure-go-login-schema";
 import { ensureWorkplaceAlertsSchema } from "./lib/ensure-workplace-alerts-schema";
 import { ensureBriefingsSchema } from "./lib/ensure-briefings-schema";
+import { ensureWalksSchema } from "./lib/ensure-walks-schema";
 import { ensureGoFrontendSettingsSchema } from "./lib/ensure-go-frontend-settings-schema";
 import { ensureCalendarConnectionSchema } from "./lib/ensure-calendar-connection-schema";
 import { calendarConnectionsRouter } from "./routes/calendar-connections";
@@ -62,6 +63,7 @@ import { publicChecklistHubsRouter } from "./routes/public-checklist-hubs";
 import { publicChecklistLocationsRouter } from "./routes/public-checklist-locations";
 import { publicGoLinkRouter } from "./routes/public-go-link";
 import { checklistLocationsRouter } from "./routes/checklist-locations";
+import { walksRouter } from "./routes/walks";
 import { isValidTimeZone } from "./lib/timezone";
 import { redeemPendingInvitesForUser } from "./lib/team-invites";
 
@@ -75,7 +77,7 @@ if (!isProduction) {
 /** Dev safety net + prod fallback when preDeploy db push missed a table. */
 const startupSchemaReady = Promise.all([
   ...(isProduction
-    ? [ensureGoLoginSchema(prisma), ensureWorkplaceAlertsSchema(prisma), ensureBriefingsSchema(prisma), ensureGoFrontendSettingsSchema(prisma)]
+    ? [ensureGoLoginSchema(prisma), ensureWorkplaceAlertsSchema(prisma), ensureBriefingsSchema(prisma), ensureWalksSchema(prisma), ensureGoFrontendSettingsSchema(prisma)]
     : [
         ensureOneOnOneSchema(prisma),
         ensureDevelopmentPlanSchema(prisma),
@@ -88,6 +90,7 @@ const startupSchemaReady = Promise.all([
         ensureGoLoginSchema(prisma),
         ensureWorkplaceAlertsSchema(prisma),
         ensureBriefingsSchema(prisma),
+        ensureWalksSchema(prisma),
         ensureGoFrontendSettingsSchema(prisma),
       ]),
 ]);
@@ -881,6 +884,7 @@ app.route("/api/teams/:teamId/messages", messagesRouter);
 app.route("/api/teams/:teamId/templates", templatesRouter);
 app.route("/api/teams/:teamId/subscription", subscriptionRouter);
 app.route("/api/teams/:teamId/checklist-locations", checklistLocationsRouter);
+app.route("/api/teams/:teamId/walks", walksRouter);
 app.route("/api/teams", teamsRouter);
 app.route("/api/public/checklist-hubs", publicChecklistHubsRouter);
 app.route("/api/public/checklist-locations", publicChecklistLocationsRouter);

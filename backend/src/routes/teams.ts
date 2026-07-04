@@ -36,6 +36,7 @@ import {
   getBriefingDocumentForUser,
   getBriefingForUser,
   listBriefingsForUser,
+  updateBriefing,
 } from "../lib/briefings";
 import {
   canInviteMembers,
@@ -995,6 +996,25 @@ const briefingCompleteSchema = z.object({
   reviewerName: z.string().trim().max(120).optional().nullable(),
 });
 
+const briefingUpdateSchema = z
+  .object({
+    dueAt: z.string().datetime().nullable().optional(),
+    title: z.string().trim().min(1).max(200).optional(),
+    description: z.string().trim().min(1).max(2000).optional(),
+    documentUrl: z.string().url().optional(),
+    documentFilename: z.string().trim().max(256).optional(),
+    contentType: z.string().trim().max(128).optional(),
+    requireSignature: z.boolean().optional(),
+    allowInitials: z.boolean().optional(),
+  })
+  .superRefine((body, ctx) => {
+    const hasDueAt = "dueAt" in body;
+    const hasOther = Object.keys(body).some((key) => key !== "dueAt");
+    if (!hasDueAt && !hasOther) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "No updates provided" });
+    }
+  });
+
 // GET /api/teams/:teamId/briefings
 teamsRouter.get("/:teamId/briefings", async (c) => {
   const user = c.get("user")!;
@@ -1067,6 +1087,46 @@ teamsRouter.post("/:teamId/briefings", zValidator("json", briefingBodySchema), a
     return c.json({ error: { message: "Invalid briefing", code: "VALIDATION_ERROR" } }, 400);
   }
   return c.json({ data: result.briefing }, 201);
+});
+
+// PATCH /api/teams/:teamId/briefings/:briefingId
+teamsRouter.patch("/:teamId/briefings/:briefingId", zValidator("json", briefingUpdateSchema), async (c) => {
+  const user = c.get("user")!;
+  const { teamId, briefingId } = c.req.param();
+  const body = c.req.valid("json");
+
+  const hasNonDueFields = Object.keys(body).some((key) => key !== "dueAt");
+  if (hasNonDueFields) {
+    const signedCount = await prisma.briefingCompletion.count({ where: { briefingId, teamId } });
+    if (signedCount > 0) {
+      return c.json(
+        {
+          error: {
+            message: "Only the due date can be changed after someone has signed this briefing.",
+            code: "BRIEFING_LOCKED",
+          },
+        },
+        409,
+      );
+    }
+    return c.json(
+      {
+        error: {
+          message: "Published briefings can only have the due date updated.",
+          code: "VALIDATION_ERROR",
+        },
+      },
+      400,
+    );
+  }
+
+  const result = await updateBriefing(teamId, briefingId, user.id, { dueAt: body.dueAt ?? null });
+  if (!result.ok) {
+    if (result.code === "NOT_FOUND") return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
+    if (result.code === "FORBIDDEN") return c.json({ error: { message: "Forbidden", code: "FORBIDDEN" } }, 403);
+    return c.json({ error: { message: "Invalid briefing update", code: "VALIDATION_ERROR" } }, 400);
+  }
+  return c.json({ data: { briefing: result.briefing } });
 });
 
 // POST /api/teams/:teamId/briefings/:briefingId/complete

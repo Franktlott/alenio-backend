@@ -515,6 +515,17 @@ export function postTeamBriefing(teamId: string, body: BriefingCreatePayload) {
   );
 }
 
+export type BriefingUpdatePayload = {
+  dueAt?: string | null;
+};
+
+export function patchTeamBriefing(teamId: string, briefingId: string, body: BriefingUpdatePayload) {
+  return apiPatchJson<{ data: { briefing: BriefingRow } }>(
+    `/api/teams/${encodeURIComponent(teamId)}/briefings/${encodeURIComponent(briefingId)}`,
+    body,
+  ).then((r) => r.data.briefing);
+}
+
 export function postBriefingComplete(
   teamId: string,
   briefingId: string,
@@ -529,6 +540,116 @@ export function postBriefingComplete(
 export function deleteBriefingCompletion(teamId: string, briefingId: string, completionId: string) {
   return apiDeleteJson<{ data: { success: boolean } }>(
     `/api/teams/${encodeURIComponent(teamId)}/briefings/${encodeURIComponent(briefingId)}/completions/${encodeURIComponent(completionId)}`,
+  ).then((r) => r.data);
+}
+
+export type WalkItemStatus = "pass" | "needs_attention" | "na";
+
+export type WalkTemplateItemRow = {
+  id: string;
+  label: string;
+  sortOrder: number;
+};
+
+export type WalkTemplateRow = {
+  id: string;
+  teamId: string;
+  name: string;
+  workplace: string;
+  scoringEnabled: boolean;
+  isActive: boolean;
+  createdByUserId: string;
+  createdAt: string;
+  updatedAt: string;
+  itemCount: number;
+  completionCount: number;
+  items: WalkTemplateItemRow[];
+};
+
+export type WalkItemResponse = {
+  itemId: string;
+  label: string;
+  status: WalkItemStatus;
+  notes?: string | null;
+  photoUrl?: string | null;
+};
+
+export type WalkCompletionRow = {
+  id: string;
+  teamId: string;
+  templateId: string;
+  walkName: string;
+  workplace: string;
+  completedByUserId: string;
+  completedByName: string;
+  completedAt: string;
+  scoringEnabled: boolean;
+  score: number | null;
+  totalReviewed: number;
+  passCount: number;
+  needsAttentionCount: number;
+  naCount: number;
+  photosCount: number;
+  finalNotes: string | null;
+  responses: WalkItemResponse[];
+};
+
+export type WalkTemplateCreatePayload = {
+  name: string;
+  workplace: string;
+  scoringEnabled?: boolean;
+  items: { label: string }[];
+};
+
+export type WalkTemplateUpdatePayload = Partial<WalkTemplateCreatePayload> & { isActive?: boolean };
+
+export type WalkCompletePayload = {
+  responses: WalkItemResponse[];
+  finalNotes?: string | null;
+};
+
+export function fetchTeamWalkTemplates(teamId: string) {
+  return apiGetJson<{ data: { templates: WalkTemplateRow[]; canManage: boolean } }>(
+    `/api/teams/${encodeURIComponent(teamId)}/walks`,
+  ).then((r) => r.data);
+}
+
+export function fetchTeamWalkTemplate(teamId: string, walkId: string) {
+  return apiGetJson<{ data: { template: WalkTemplateRow; canManage: boolean } }>(
+    `/api/teams/${encodeURIComponent(teamId)}/walks/${encodeURIComponent(walkId)}`,
+  ).then((r) => r.data);
+}
+
+export function postTeamWalkTemplate(teamId: string, body: WalkTemplateCreatePayload) {
+  return apiPostJson<{ data: WalkTemplateRow }>(`/api/teams/${encodeURIComponent(teamId)}/walks`, body).then(
+    (r) => r.data,
+  );
+}
+
+export function patchTeamWalkTemplate(teamId: string, walkId: string, body: WalkTemplateUpdatePayload) {
+  return apiPatchJson<{ data: WalkTemplateRow }>(
+    `/api/teams/${encodeURIComponent(teamId)}/walks/${encodeURIComponent(walkId)}`,
+    body,
+  ).then((r) => r.data);
+}
+
+export function fetchTeamWalkCompletions(teamId: string, templateId?: string) {
+  const q = templateId ? `?templateId=${encodeURIComponent(templateId)}` : "";
+  return apiGetJson<{ data: { completions: WalkCompletionRow[]; canManage: boolean } }>(
+    `/api/teams/${encodeURIComponent(teamId)}/walks/completions${q}`,
+  ).then((r) => r.data);
+}
+
+export function fetchTeamWalkCompletion(teamId: string, completionId: string) {
+  return apiGetJson<{ data: { completion: WalkCompletionRow; canManage: boolean } }>(
+    `/api/teams/${encodeURIComponent(teamId)}/walks/completions/${encodeURIComponent(completionId)}`,
+  ).then((r) => r.data);
+}
+
+export function postTeamWalkComplete(teamId: string, walkId: string, body: WalkCompletePayload) {
+  return apiPostJson<{ data: WalkCompletionRow }>(
+    `/api/teams/${encodeURIComponent(teamId)}/walks/${encodeURIComponent(walkId)}/complete`,
+    body,
   ).then((r) => r.data);
 }
 

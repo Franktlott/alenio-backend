@@ -6,10 +6,11 @@ type Props = {
   title: string;
   subtitle: string;
   tone: GoBackendAdminTile["tone"];
+  toolbar?: ReactNode;
   children: ReactNode;
 };
 
-export function GoBackendModuleShell({ title, subtitle, tone, children }: Props) {
+export function GoBackendModuleShell({ title, subtitle, tone, toolbar, children }: Props) {
   return (
     <div className={`go-backend go-backend--module go-backend-module--${tone}`} data-testid="go-backend-module">
       <header className={`go-backend-module-hero go-backend-module-hero--${tone}`}>
@@ -25,7 +26,10 @@ export function GoBackendModuleShell({ title, subtitle, tone, children }: Props)
           <p className="go-backend-module-sub">{subtitle}</p>
         </div>
       </header>
-      <div className="go-backend-module-body">{children}</div>
+      {toolbar ? <div className="go-backend-module-toolbar">{toolbar}</div> : null}
+      <div className="go-backend-scroll">
+        <div className="go-backend-module-body">{children}</div>
+      </div>
     </div>
   );
 }

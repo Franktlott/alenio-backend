@@ -3,6 +3,7 @@ import { useCallback, useRef, useState } from "react";
 import type { BriefingRow } from "../../lib/api";
 import { formatBriefingDateTime } from "../../lib/briefings-display";
 import { BriefingDocumentViewer } from "./BriefingDocumentViewer";
+import { BriefingDueDateEditor } from "./BriefingDueDateEditor";
 import { BriefingSignaturePad } from "./BriefingSignaturePad";
 import { BriefingStatusBadge } from "./BriefingStatusBadge";
 import { BriefingThankYouOverlay } from "./BriefingThankYouOverlay";
@@ -19,6 +20,8 @@ type Props = {
   signedCount?: number;
   canManage?: boolean;
   adminHref?: string;
+  teamId?: string;
+  onDueDateSaved?: (dueAt: string | null) => void;
   busy?: boolean;
   error?: string | null;
   onComplete: (payload: {
@@ -51,6 +54,8 @@ export function BriefingReviewPanel({
   signedCount,
   canManage,
   adminHref,
+  teamId,
+  onDueDateSaved,
   busy,
   error,
   onComplete,
@@ -240,7 +245,19 @@ export function BriefingReviewPanel({
               </div>
               <div>
                 <dt>Due</dt>
-                <dd>{formatBriefingDateTime(briefing.dueAt)}</dd>
+                <dd>
+                  {canManage && teamId ? (
+                    <BriefingDueDateEditor
+                      teamId={teamId}
+                      briefingId={briefing.id}
+                      dueAt={briefing.dueAt}
+                      signedCount={signedCount ?? 0}
+                      onSaved={onDueDateSaved}
+                    />
+                  ) : (
+                    formatBriefingDateTime(briefing.dueAt)
+                  )}
+                </dd>
               </div>
               <div>
                 <dt>Assigned to</dt>

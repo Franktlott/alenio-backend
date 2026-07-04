@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { GoBackendModuleShell } from "../../components/alenio-go/GoBackendModuleShell";
 import { BriefingAdminPanel } from "../../components/briefings/BriefingAdminPanel";
 import { BriefingCreateForm } from "../../components/briefings/BriefingCreateForm";
+import { BriefingDueDateEditor } from "../../components/briefings/BriefingDueDateEditor";
 import { BriefingWorkspace } from "../../components/briefings/BriefingWorkspace";
 import {
   deleteBriefingCompletion,
@@ -92,6 +93,13 @@ function BriefingAdminPage() {
       tone="amber"
     >
       <div className="go-backend-module-panel go-backend-panel-card">
+        <BriefingDueDateEditor
+          teamId={teamId}
+          briefingId={briefingId}
+          dueAt={data.briefing.dueAt}
+          signedCount={data.stats.signed}
+          onSaved={(dueAt) => setData((prev) => (prev ? { ...prev, briefing: { ...prev.briefing, dueAt } } : prev))}
+        />
         <BriefingAdminPanel
           stats={data.stats}
           busyKey={busyKey}

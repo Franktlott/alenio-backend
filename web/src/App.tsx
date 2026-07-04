@@ -9,6 +9,7 @@ import { AlenioGoAlertsModulePage } from "./routes/alenio-go/AlenioGoAlertsModul
 import { AlenioGoLinkedDevicesRoutes } from "./routes/alenio-go/AlenioGoLinkedDevicesRoutes";
 import { AlenioGoComingSoonModulePage } from "./routes/alenio-go/AlenioGoComingSoonModulePage";
 import { AlenioGoBriefingsRoutes } from "./routes/alenio-go/AlenioGoBriefingsRoutes";
+import { AlenioGoWalksRoutes } from "./routes/alenio-go/AlenioGoWalksRoutes";
 import { BriefingsKioskPage } from "./routes/BriefingsKioskPage";
 import { BriefingsKioskReviewPage } from "./routes/BriefingsKioskReviewPage";
 import { ActivityPage } from "./routes/ActivityPage";
@@ -151,7 +152,7 @@ export default function App() {
             <Route path="checklists" element={<AlenioGoComingSoonModulePage moduleId="checklists" />} />
             <Route path="temp-checks" element={<AlenioGoComingSoonModulePage moduleId="temp-checks" />} />
             <Route path="briefings/*" element={<AlenioGoBriefingsRoutes />} />
-            <Route path="walks" element={<AlenioGoComingSoonModulePage moduleId="walks" />} />
+            <Route path="walks/*" element={<AlenioGoWalksRoutes />} />
           </Route>
           <Route path="/activity" element={<ActivityPage />} />
           <Route path="/chat" element={<ChatPage />} />

@@ -73,7 +73,9 @@ export function goBackendAdminTiles(options: {
     {
       id: "walks",
       title: "Walks",
-      subtitle: "Store walks module",
+      subtitle: canManage
+        ? "Structured manager observations with saved walk history"
+        : "View completed walk records",
       tone: "violet",
       icon: "walks",
       active: true,

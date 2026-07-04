@@ -25,6 +25,10 @@ export type CompleteBriefingInput = {
   deviceId?: string | null;
 };
 
+export type UpdateBriefingInput = {
+  dueAt?: string | null;
+};
+
 const ALLOWED_DOC_TYPES = [
   "application/pdf",
   "image/jpeg",
@@ -159,6 +163,50 @@ export async function createBriefing(teamId: string, createdByUserId: string, in
   }
 
   return { ok: true as const, briefing };
+}
+
+export async function updateBriefing(
+  teamId: string,
+  briefingId: string,
+  userId: string,
+  input: UpdateBriefingInput,
+) {
+  const member = await assertTeamMember(teamId, userId);
+  if (!member || !isBriefingManagerRole(member.role)) {
+    return { ok: false as const, code: "FORBIDDEN" as const };
+  }
+
+  if (!("dueAt" in input)) {
+    return { ok: false as const, code: "VALIDATION" as const };
+  }
+
+  const briefing = await prisma.briefing.findFirst({ where: { id: briefingId, teamId } });
+  if (!briefing) return { ok: false as const, code: "NOT_FOUND" as const };
+
+  const signedCount = await prisma.briefingCompletion.count({ where: { briefingId, teamId } });
+
+  const dueAt =
+    input.dueAt === null || input.dueAt === undefined
+      ? null
+      : Number.isNaN(new Date(input.dueAt).getTime())
+        ? null
+        : new Date(input.dueAt);
+
+  const updated = await prisma.briefing.update({
+    where: { id: briefingId },
+    data: { dueAt },
+  });
+
+  const now = new Date();
+  return {
+    ok: true as const,
+    briefing: serializeBriefingRow(
+      updated,
+      briefingStatus(updated.dueAt, null, now),
+      null,
+      signedCount,
+    ),
+  };
 }
 
 export async function listBriefingsForUser(teamId: string, userId: string) {

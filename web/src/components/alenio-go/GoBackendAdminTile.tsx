@@ -52,7 +52,7 @@ function AdminTileIcon({ name }: { name: Tile["icon"] }) {
 }
 
 export function GoBackendAdminTile({ tile }: { tile: Tile }) {
-  const isComingSoonModule = tile.href?.startsWith("/go/") && ["checklists", "walks", "temp-checks"].includes(tile.id);
+  const isComingSoonModule = tile.href?.startsWith("/go/") && ["checklists", "temp-checks"].includes(tile.id);
 
   const body = (
     <>

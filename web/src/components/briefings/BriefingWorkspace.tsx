@@ -218,6 +218,13 @@ export function BriefingWorkspace({ teamId, teamName, canManage, initialBriefing
               memberCount={memberCount}
               signedCount={selected.signedCount}
               canManage={canManage}
+              teamId={teamId}
+              onDueDateSaved={(dueAt) => {
+                setBriefings((rows) =>
+                  rows.map((b) => (b.id === selected.id ? { ...b, dueAt } : b)),
+                );
+                load();
+              }}
               adminHref={canManage ? `/go/briefings/${selected.id}/admin` : undefined}
               busy={busy}
               error={error}

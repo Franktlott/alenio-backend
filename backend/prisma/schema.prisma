@@ -128,6 +128,8 @@ model Team {
   workplaceAlerts WorkplaceAlert[]
   goDevicePresences GoDevicePresence[]
   briefings Briefing[]
+  walkTemplates WalkTemplate[]
+  walkCompletions WalkCompletion[]
 }
 
 model TeamSubscription {
@@ -575,6 +577,60 @@ model BriefingCompletion {
 
   @@unique([briefingId, completionKey])
   @@index([teamId, completedAt])
+}
+
+model WalkTemplate {
+  id              String   @id @default(cuid())
+  teamId          String
+  name            String
+  workplace       String
+  scoringEnabled  Boolean  @default(true)
+  isActive        Boolean  @default(true)
+  createdByUserId String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  team        Team               @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  items       WalkTemplateItem[]
+  completions WalkCompletion[]
+
+  @@index([teamId, isActive])
+}
+
+model WalkTemplateItem {
+  id         String       @id @default(cuid())
+  templateId String
+  label      String
+  sortOrder  Int          @default(0)
+  template   WalkTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@index([templateId])
+}
+
+model WalkCompletion {
+  id                  String   @id @default(cuid())
+  teamId              String
+  templateId          String
+  walkName            String
+  workplace           String
+  completedByUserId   String
+  completedByName     String
+  completedAt         DateTime @default(now())
+  scoringEnabled      Boolean  @default(true)
+  score               Int?
+  totalReviewed       Int
+  passCount           Int
+  needsAttentionCount Int
+  naCount             Int
+  photosCount         Int      @default(0)
+  finalNotes          String?
+  responses           Json
+
+  team     Team         @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  template WalkTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@index([teamId, completedAt])
+  @@index([templateId, completedAt])
 }
 
 model TeamInvite {
