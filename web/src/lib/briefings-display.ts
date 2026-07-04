@@ -21,6 +21,48 @@ export function formatBriefingDate(iso: string | null): string {
   return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
 
+function isSameCalendarDay(a: Date, b: Date): boolean {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
+export function formatBriefingPublishedLabel(iso: string): string {
+  const published = new Date(iso);
+  if (isSameCalendarDay(published, new Date())) return "Published Today";
+  return `Published ${formatBriefingDate(iso)}`;
+}
+
+/** Briefings show a "New" badge for this many days after publish. */
+export const BRIEFING_NEW_BADGE_DAYS = 3;
+
+export function isBriefingWithinNewBadgeWindow(
+  publishedAt: string,
+  now: Date = new Date(),
+): boolean {
+  const published = new Date(publishedAt);
+  if (Number.isNaN(published.getTime())) return false;
+  const ageMs = now.getTime() - published.getTime();
+  if (ageMs < 0) return false;
+  return ageMs < BRIEFING_NEW_BADGE_DAYS * 24 * 60 * 60 * 1000;
+}
+
+export function estimateBriefingReadMinutes(description: string): number {
+  const words = description.trim().split(/\s+/).filter(Boolean).length;
+  return Math.max(1, Math.min(10, Math.ceil(words / 200) || 1));
+}
+
+export function briefingRequiresInitialsLabel(
+  allowInitials: boolean,
+  requireSignature: boolean,
+): string {
+  if (requireSignature) return "Requires signature";
+  if (allowInitials) return "Requires initials";
+  return "Review required";
+}
+
 export function formatBriefingDateTime(iso: string | null): string {
   if (!iso) return "—";
   return new Date(iso).toLocaleString(undefined, {

@@ -11,6 +11,8 @@ type Props = {
   briefing: BriefingRow;
   documentFetchPath: string;
   useAuth?: boolean;
+  alenioLoading?: boolean;
+  onDocumentLoadingChange?: (loading: boolean) => void;
   layout?: "stack" | "console";
   teamName?: string;
   memberCount?: number;
@@ -41,6 +43,8 @@ export function BriefingReviewPanel({
   briefing,
   documentFetchPath,
   useAuth,
+  alenioLoading,
+  onDocumentLoadingChange,
   layout = "stack",
   teamName,
   memberCount = 0,
@@ -219,6 +223,8 @@ export function BriefingReviewPanel({
                   briefing={briefing}
                   documentFetchPath={documentFetchPath}
                   useAuth={useAuth}
+                  alenioLoading={alenioLoading}
+                  onLoadingChange={onDocumentLoadingChange}
                 />
               ) : null}
             </section>
@@ -278,7 +284,13 @@ export function BriefingReviewPanel({
         <p className="enterprise-muted">{briefing.description}</p>
       </header>
 
-      <BriefingDocumentViewer briefing={briefing} documentFetchPath={documentFetchPath} useAuth={useAuth} />
+      <BriefingDocumentViewer
+        briefing={briefing}
+        documentFetchPath={documentFetchPath}
+        useAuth={useAuth}
+        alenioLoading={alenioLoading}
+        onLoadingChange={onDocumentLoadingChange}
+      />
 
       {acknowledgeForm}
     </div>

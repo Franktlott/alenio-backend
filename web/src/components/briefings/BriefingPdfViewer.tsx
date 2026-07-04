@@ -11,6 +11,8 @@ type Props = {
   fallbackUrl: string;
   title: string;
   useAuth?: boolean;
+  alenioLoading?: boolean;
+  onLoadingChange?: (loading: boolean) => void;
 };
 
 function friendlyPdfError(err: unknown): string {
@@ -21,7 +23,14 @@ function friendlyPdfError(err: unknown): string {
   return message;
 }
 
-export function BriefingPdfViewer({ fetchPath, fallbackUrl, title, useAuth }: Props) {
+export function BriefingPdfViewer({
+  fetchPath,
+  fallbackUrl,
+  title,
+  useAuth,
+  alenioLoading,
+  onLoadingChange,
+}: Props) {
   const pagesRef = useRef<HTMLDivElement>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -35,6 +44,7 @@ export function BriefingPdfViewer({ fetchPath, fallbackUrl, title, useAuth }: Pr
       setLoading(true);
       setError(null);
       setPageCount(0);
+      onLoadingChange?.(true);
 
       const container = pagesRef.current;
       if (!container) return;
@@ -98,7 +108,10 @@ export function BriefingPdfViewer({ fetchPath, fallbackUrl, title, useAuth }: Pr
           setError(friendlyPdfError(err));
         }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+          onLoadingChange?.(false);
+        }
       }
     }
 
@@ -108,11 +121,11 @@ export function BriefingPdfViewer({ fetchPath, fallbackUrl, title, useAuth }: Pr
       cancelled = true;
       void pdf?.destroy();
     };
-  }, [fetchPath, title, useAuth]);
+  }, [fetchPath, title, useAuth, onLoadingChange]);
 
   return (
     <div className="briefing-doc-pdf">
-      {loading ? <p className="briefing-doc-pdf-status">Loading document…</p> : null}
+      {!alenioLoading && loading ? <p className="briefing-doc-pdf-status">Loading document…</p> : null}
       {error ? (
         <div className="briefing-doc-fallback">
           <p className="enterprise-muted">{error}</p>
@@ -121,7 +134,12 @@ export function BriefingPdfViewer({ fetchPath, fallbackUrl, title, useAuth }: Pr
           </a>
         </div>
       ) : null}
-      <div ref={pagesRef} className="briefing-doc-pdf-pages" aria-busy={loading} aria-label={title} />
+      <div
+        ref={pagesRef}
+        className={`briefing-doc-pdf-pages${loading && alenioLoading ? " briefing-doc-pdf-pages--preload" : ""}`}
+        aria-busy={loading}
+        aria-label={title}
+      />
       {!loading && !error && pageCount > 1 ? (
         <p className="briefing-doc-pdf-hint">Scroll to read all {pageCount} pages before completing.</p>
       ) : null}
