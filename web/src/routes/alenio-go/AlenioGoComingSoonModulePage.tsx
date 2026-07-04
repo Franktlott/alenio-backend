@@ -21,6 +21,12 @@ const MODULE_COPY: Record<string, { title: string; subtitle: string; tone: GoBac
     tone: "violet",
     blurb: "Leader walks and follow-ups will connect to your team coaching workflow.",
   },
+  "temp-checks": {
+    title: "Temp checks",
+    subtitle: "Food safety temperature logs on the floor.",
+    tone: "emerald",
+    blurb: "Associates will log cooler, freezer, and hot-holding temps from Alenio Go tablets with clear pass/fail guidance.",
+  },
 };
 
 type Props = {

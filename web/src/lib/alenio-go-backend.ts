@@ -5,7 +5,7 @@ export type GoBackendAdminTile = {
   title: string;
   subtitle: string;
   tone: "indigo" | "cyan" | "violet" | "amber" | "emerald";
-  icon: "alerts" | "devices" | "frontend" | "checklists" | "briefings" | "walks";
+  icon: "alerts" | "devices" | "checklists" | "briefings" | "walks" | "temp";
   active: boolean;
   href?: string;
   badge?: number;
@@ -32,23 +32,16 @@ export function goBackendAdminTiles(options: {
       href: canManage ? "/go/alerts" : undefined,
     },
     {
-      id: "devices",
-      title: "Devices & access",
-      subtitle: canManage ? "Link iPads, approve tablets, and manage access" : "Link and view floor devices",
+      id: "linked-devices",
+      title: "Linked devices",
+      subtitle: canManage
+        ? "Link tablets, approve access, and customize the floor display"
+        : "Link and manage floor tablets",
       tone: "violet",
       icon: "devices",
       active: true,
       href: "/go/devices",
       badge: canManage && pendingCount > 0 ? pendingCount : undefined,
-    },
-    {
-      id: "frontend",
-      title: "Frontend settings",
-      subtitle: canManage ? "Customize the floor tablet look" : "Owner or leader access",
-      tone: "cyan",
-      icon: "frontend",
-      active: canManage,
-      href: canManage ? "/go/frontend" : undefined,
     },
     {
       id: "checklists",
@@ -58,6 +51,15 @@ export function goBackendAdminTiles(options: {
       icon: "checklists",
       active: true,
       href: "/go/checklists",
+    },
+    {
+      id: "temp-checks",
+      title: "Temp checks",
+      subtitle: "Food safety temperature logs",
+      tone: "emerald",
+      icon: "temp",
+      active: true,
+      href: "/go/temp-checks",
     },
     {
       id: "briefings",

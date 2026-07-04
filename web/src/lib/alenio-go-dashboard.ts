@@ -4,8 +4,8 @@ export type GoDashModule = {
   subtitle: string;
   active: boolean;
   href?: string;
-  tone: "indigo" | "cyan" | "violet" | "amber";
-  icon: "tasks" | "checklists" | "walks" | "briefings";
+  tone: "indigo" | "cyan" | "violet" | "amber" | "emerald";
+  icon: "tasks" | "checklists" | "walks" | "briefings" | "temp";
   count?: number | null;
   countMessage?: string;
   ctaLabel?: string;
@@ -62,6 +62,16 @@ export const GO_DASH_KIOSK_MODULES: GoDashModule[] = [
     tone: "cyan",
     icon: "checklists",
     ctaLabel: "View checklists",
+    countMessage: "Coming soon",
+  },
+  {
+    id: "temp-checks",
+    title: "Temp checks",
+    subtitle: "Food safety logs",
+    active: false,
+    tone: "emerald",
+    icon: "temp",
+    ctaLabel: "View temp checks",
     countMessage: "Coming soon",
   },
   {

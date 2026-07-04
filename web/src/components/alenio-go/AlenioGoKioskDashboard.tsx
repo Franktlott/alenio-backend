@@ -71,6 +71,14 @@ function buildKioskModules(options: {
       };
     }
 
+    if (module.id === "temp-checks") {
+      return {
+        ...module,
+        count: 0,
+        countMessage: "Temp checks coming soon",
+      };
+    }
+
     return {
       ...module,
       count: 0,

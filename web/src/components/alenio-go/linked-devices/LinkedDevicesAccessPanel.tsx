@@ -1,12 +1,20 @@
 import { useState } from "react";
-import { GoBackendModuleShell } from "../../components/alenio-go/GoBackendModuleShell";
-import { GoDeviceLinkQrCode, buildGoDeviceLinkUrl } from "../../components/alenio-go/GoDeviceLinkQrCode";
-import { LinkedGoDevicesPanel } from "../../components/LinkedGoDevicesPanel";
-import { PendingApprovalsPanel } from "../../components/PendingApprovalsPanel";
-import { useAlenioGoShell } from "./alenio-go-outlet-context";
+import { GoDeviceLinkQrCode, buildGoDeviceLinkUrl } from "../GoDeviceLinkQrCode";
+import { LinkedGoDevicesPanel } from "../../LinkedGoDevicesPanel";
+import { PendingApprovalsPanel } from "../../PendingApprovalsPanel";
+import type { usePendingApprovals } from "../../../hooks/usePendingApprovals";
 
-export function AlenioGoDevicesModulePage() {
-  const { teamId, teamName, inviteCode, canManage, approvals } = useAlenioGoShell();
+type ApprovalsState = ReturnType<typeof usePendingApprovals>;
+
+type Props = {
+  teamId: string | undefined;
+  teamName: string;
+  inviteCode?: string | null;
+  canManage: boolean;
+  approvals: ApprovalsState;
+};
+
+export function LinkedDevicesAccessPanel({ teamId, teamName, inviteCode, canManage, approvals }: Props) {
   const [copyOk, setCopyOk] = useState(false);
 
   async function copyCode() {
@@ -21,15 +29,7 @@ export function AlenioGoDevicesModulePage() {
   }
 
   return (
-    <GoBackendModuleShell
-      title="Devices & access"
-      subtitle={
-        canManage
-          ? "Link iPads to your workspace, approve new tablets, and manage floor device access."
-          : "Link store devices with your workspace code — leaders approve access below."
-      }
-      tone="violet"
-    >
+    <>
       <div className="go-backend-setup-grid">
         <section className="go-backend-module-panel go-backend-panel-card go-backend-setup-card">
           <h2 className="go-backend-devices-section-title">Link a device</h2>
@@ -141,6 +141,6 @@ export function AlenioGoDevicesModulePage() {
           </p>
         </div>
       )}
-    </GoBackendModuleShell>
+    </>
   );
 }

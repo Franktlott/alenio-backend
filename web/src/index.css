@@ -2971,6 +2971,51 @@ input {
   box-sizing: border-box;
 }
 
+.go-linked-devices-subnav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.go-linked-devices-subnav-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.55rem 1rem;
+  border-radius: 999px;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #475569;
+  font-size: 0.875rem;
+  font-weight: 700;
+  text-decoration: none;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.go-linked-devices-subnav-link:hover {
+  border-color: #a5b4fc;
+  color: #312e81;
+}
+
+.go-linked-devices-subnav-link--active {
+  border-color: #6366f1;
+  background: #eef2ff;
+  color: #312e81;
+}
+
+.go-linked-devices-subnav-badge {
+  min-width: 1.25rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  background: #f59e0b;
+  color: #fff;
+  font-size: 0.6875rem;
+  font-weight: 800;
+  line-height: 1.2;
+  text-align: center;
+}
+
 .go-backend-module-panel {
   padding: 1.25rem;
 }
@@ -5719,6 +5764,11 @@ input {
   color: #4338ca;
 }
 
+.go-dash-store-card--emerald .go-dash-store-card__icon {
+  background: #d1fae5;
+  color: #047857;
+}
+
 .go-dash-store-card__titles {
   min-width: 0;
   padding-top: 0.125rem;
@@ -5769,6 +5819,10 @@ input {
   color: #4338ca;
 }
 
+.go-dash-store-card--emerald .go-dash-store-card__metric {
+  color: #047857;
+}
+
 .go-dash-store-card__message {
   margin: 0;
   font-size: 0.8125rem;
@@ -5807,6 +5861,11 @@ input {
 .go-dash-store-card--indigo .go-dash-store-card__cta {
   background: #e0e7ff;
   color: #4338ca;
+}
+
+.go-dash-store-card--emerald .go-dash-store-card__cta {
+  background: #d1fae5;
+  color: #047857;
 }
 
 .go-dash-alerts-strip {
