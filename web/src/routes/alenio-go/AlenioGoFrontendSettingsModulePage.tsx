@@ -8,6 +8,7 @@ import {
   resolveGoHeroImage,
   type GoFrontendSettings,
 } from "../../lib/go-frontend-settings";
+import { probeImageUrl } from "../../lib/image-probe";
 import { useAlenioGoShell } from "./alenio-go-outlet-context";
 
 export function AlenioGoFrontendSettingsModulePage() {
@@ -19,6 +20,9 @@ export function AlenioGoFrontendSettingsModulePage() {
   const [photoBusy, setPhotoBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [previewImageFailed, setPreviewImageFailed] = useState(false);
+
+  const effectiveWorkspaceImage = workspaceImage ?? teamImage ?? null;
 
   const refreshTeam = useCallback(() => {
     if (!teamId) return Promise.resolve();
@@ -48,10 +52,14 @@ export function AlenioGoFrontendSettingsModulePage() {
   }, [load]);
 
   const previewImage = useMemo(
-    () => resolveGoHeroImage(workspaceImage, settings),
-    [workspaceImage, settings],
+    () => resolveGoHeroImage(effectiveWorkspaceImage, settings),
+    [effectiveWorkspaceImage, settings],
   );
   const usingWorkspacePhoto = isUsingWorkspaceHeroImage(settings);
+
+  useEffect(() => {
+    setPreviewImageFailed(false);
+  }, [previewImage]);
 
   if (!canManage) return <Navigate to="/go" replace />;
   if (!teamId) return null;
@@ -97,6 +105,13 @@ export function AlenioGoFrontendSettingsModulePage() {
   }
 
   async function onUseWorkspacePhoto() {
+    const workspaceUrl = effectiveWorkspaceImage?.trim();
+    if (!workspaceUrl || !(await probeImageUrl(workspaceUrl))) {
+      setError(
+        "Workspace photo is missing or unavailable. Open Team settings, upload your workspace photo, save, then try again.",
+      );
+      return;
+    }
     const next = { heroImageUrl: null };
     setSettings(next);
     await onSave(next);
@@ -127,18 +142,24 @@ export function AlenioGoFrontendSettingsModulePage() {
           <>
             <div className="go-frontend-settings-preview-wrap">
               <div
-                className="go-frontend-settings-preview"
-                style={
-                  previewImage
-                    ? {
-                        backgroundImage: `linear-gradient(135deg, rgba(15,23,42,0.76), rgba(67,97,238,0.52)), url(${previewImage})`,
-                      }
-                    : undefined
-                }
+                className={`go-frontend-settings-preview${previewImage && !previewImageFailed ? " go-frontend-settings-preview--has-image" : ""}`}
               >
+                {previewImage && !previewImageFailed ? (
+                  <img
+                    src={previewImage}
+                    alt=""
+                    className="go-frontend-settings-preview-img"
+                    onError={() => setPreviewImageFailed(true)}
+                  />
+                ) : null}
+                <div className="go-frontend-settings-preview-overlay" aria-hidden />
                 <div className="go-frontend-settings-preview-copy">
                   <strong>{teamName || "Workspace"}</strong>
-                  <span>Dashboard header preview</span>
+                  <span>
+                    {usingWorkspacePhoto && (!previewImage || previewImageFailed)
+                      ? "No workspace photo — add one in Team settings"
+                      : "Dashboard header preview"}
+                  </span>
                 </div>
               </div>
             </div>

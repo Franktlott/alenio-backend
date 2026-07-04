@@ -1535,8 +1535,17 @@ export async function uploadProfilePhoto(file: File): Promise<ChatUploadResult> 
   return parsed.data;
 }
 
-export function fetchWebTeam(teamId: string) {
-  return apiGetJson<{ data: WebTeamDetail }>(`/web/api/teams/${encodeURIComponent(teamId)}`).then((r) => r.data);
+export async function fetchWebTeam(teamId: string) {
+  const [webRes, mobileRes] = await Promise.all([
+    apiGetJson<{ data: WebTeamDetail }>(`/web/api/teams/${encodeURIComponent(teamId)}`),
+    apiGetJson<{ data: Array<{ id: string; image?: string | null }> }>("/api/teams").catch(() => null),
+  ]);
+  const mobileImage = mobileRes?.data?.find((t) => t.id === teamId)?.image;
+  const team = webRes.data;
+  return {
+    ...team,
+    image: team.image || mobileImage || null,
+  };
 }
 
 export type CreateWebTaskInput = {

@@ -3056,16 +3056,33 @@ input {
 }
 
 .go-frontend-settings-preview {
+  position: relative;
   min-height: 180px;
   padding: 1.25rem;
   background: linear-gradient(135deg, #1e293b 0%, #334155 55%, #6366f1 100%);
-  background-size: cover;
-  background-position: center;
   display: flex;
   align-items: flex-end;
+  overflow: hidden;
+}
+
+.go-frontend-settings-preview-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.go-frontend-settings-preview-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.76), rgba(67, 97, 238, 0.52));
+  pointer-events: none;
 }
 
 .go-frontend-settings-preview-copy {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
