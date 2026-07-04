@@ -157,23 +157,31 @@ export function AlenioGoKioskDashboard({ hubToken }: Props) {
     setLoading(true);
     setError(null);
     const deviceId = getGoDeviceId();
-    void fetchPublicChecklistHub(hubToken, deviceId)
-      .then((data) => {
-        if (cancelled) return;
-        setTeamName(data.team.name);
-        setTeamImage(data.team.image);
-        setChecklistCount(data.checklists.length);
-        setTotalChecklistItems(data.checklists.reduce((sum, row) => sum + row.taskCount, 0));
-        saveGoLinkedWorkspace(hubToken, data.team.name);
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        if (handleGoDeviceSessionError(err)) return;
-        setError("Workspace not found.");
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
+
+    const refreshHub = () => {
+      void fetchPublicChecklistHub(hubToken, deviceId)
+        .then((data) => {
+          if (cancelled) return;
+          setTeamName(data.team.name);
+          setTeamImage(data.team.image);
+          setChecklistCount(data.checklists.length);
+          setTotalChecklistItems(data.checklists.reduce((sum, row) => sum + row.taskCount, 0));
+          saveGoLinkedWorkspace(hubToken, data.team.name);
+        })
+        .catch((err) => {
+          if (cancelled) return;
+          if (handleGoDeviceSessionError(err)) return;
+          setError("Workspace not found.");
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
+    };
+
+    setLoading(true);
+    setError(null);
+    refreshHub();
+    const hubPollId = window.setInterval(refreshHub, 30_000);
 
     void fetchGoBriefings(hubToken, deviceId)
       .then((rows) => {
@@ -186,6 +194,7 @@ export function AlenioGoKioskDashboard({ hubToken }: Props) {
 
     return () => {
       cancelled = true;
+      window.clearInterval(hubPollId);
     };
   }, [hubToken]);
 

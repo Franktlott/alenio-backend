@@ -1,7 +1,7 @@
 import { Navigate } from "react-router-dom";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { GoBackendModuleShell } from "../../components/alenio-go/GoBackendModuleShell";
-import { fetchWebTeam, patchWebTeamGoFrontendSettings, uploadTeamPhoto } from "../../lib/api";
+import { fetchWebTeam, patchWebTeamGoFrontendSettings, uploadChatMedia } from "../../lib/api";
 import {
   DEFAULT_GO_FRONTEND_SETTINGS,
   isUsingWorkspaceHeroImage,
@@ -19,6 +19,16 @@ export function AlenioGoFrontendSettingsModulePage() {
   const [photoBusy, setPhotoBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const refreshTeam = useCallback(() => {
+    if (!teamId) return Promise.resolve();
+    return fetchWebTeam(teamId)
+      .then((team) => {
+        setWorkspaceImage(team.image ?? null);
+        setSettings(team.goFrontendSettings ?? DEFAULT_GO_FRONTEND_SETTINGS);
+      })
+      .catch(() => undefined);
+  }, [teamId]);
 
   const load = useCallback(() => {
     if (!teamId) return;
@@ -55,6 +65,7 @@ export function AlenioGoFrontendSettingsModulePage() {
       setSettings(savedSettings);
       setSaved(true);
       window.setTimeout(() => setSaved(false), 2200);
+      await refreshTeam();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save settings.");
     } finally {
@@ -72,7 +83,7 @@ export function AlenioGoFrontendSettingsModulePage() {
       setPhotoBusy(true);
       setError(null);
       try {
-        const uploaded = await uploadTeamPhoto(file, teamId!);
+        const uploaded = await uploadChatMedia(file);
         const next = { heroImageUrl: uploaded.url };
         setSettings(next);
         await onSave(next);

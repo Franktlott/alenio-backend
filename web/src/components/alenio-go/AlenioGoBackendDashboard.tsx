@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { AlenioGoLogo } from "../AlenioGoLogo";
 import { fetchTeamGoDevices, fetchWebTeam } from "../../lib/api";
 import { resolveGoHeroImage } from "../../lib/go-frontend-settings";
@@ -31,6 +31,7 @@ export function AlenioGoBackendDashboard({
   canManage,
   approvals,
 }: Props) {
+  const location = useLocation();
   const [linkedDeviceCount, setLinkedDeviceCount] = useState(0);
   const [heroImage, setHeroImage] = useState<string | null>(teamImage ?? null);
   const [clock, setClock] = useState(() => formatGoDashClock());
@@ -58,7 +59,7 @@ export function AlenioGoBackendDashboard({
     return () => {
       cancelled = true;
     };
-  }, [teamId, teamImage]);
+  }, [teamId, teamImage, location.pathname]);
 
   useEffect(() => {
     if (!canManage || !teamId) {

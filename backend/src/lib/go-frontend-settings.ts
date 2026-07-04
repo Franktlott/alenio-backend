@@ -23,8 +23,10 @@ export function parseGoFrontendSettings(raw: string | null | undefined): GoFront
   }
 }
 
-export function serializeGoFrontendSettings(settings: GoFrontendSettings): string {
-  return JSON.stringify(settings);
+export function serializeGoFrontendSettings(settings: GoFrontendSettings): string | null {
+  const hero = settings.heroImageUrl?.trim();
+  if (!hero) return null;
+  return JSON.stringify({ heroImageUrl: hero });
 }
 
 export function parseGoFrontendSettingsPatch(
