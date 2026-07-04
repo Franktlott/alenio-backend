@@ -7,7 +7,8 @@ import { LinkedDevicesDisplayPanel } from "../../components/alenio-go/linked-dev
 import { useAlenioGoShell } from "./alenio-go-outlet-context";
 
 function LinkedDevicesLayout() {
-  const { canManage, approvals } = useAlenioGoShell();
+  const ctx = useAlenioGoShell();
+  const { canManage, approvals } = ctx;
 
   const tabs = useMemo(() => {
     const items = [
@@ -35,7 +36,7 @@ function LinkedDevicesLayout() {
       tone="violet"
     >
       <GoLinkedDevicesSubnav tabs={tabs} />
-      <Outlet />
+      <Outlet context={ctx} />
     </GoBackendModuleShell>
   );
 }
