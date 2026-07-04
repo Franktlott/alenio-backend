@@ -7,7 +7,7 @@ import {
   fetchPublicChecklistHub,
   type GoWorkplaceAlert,
 } from "../../lib/api";
-import { unlockGoAlertSound, stopGoAlertSoundLoop } from "../../lib/go-alert-sound";
+import { stopGoAlertSoundLoop } from "../../lib/go-alert-sound";
 import {
   GO_DASH_KIOSK_MODULES,
   GO_DASH_QUICK_ACTIONS,
@@ -89,7 +89,6 @@ export function AlenioGoKioskDashboard({ hubToken }: Props) {
   const [pendingBriefings, setPendingBriefings] = useState(0);
   const [alerts, setAlerts] = useState<GoWorkplaceAlert[]>([]);
   const [activeAlert, setActiveAlert] = useState<GoWorkplaceAlert | null>(null);
-  const [soundReady, setSoundReady] = useState(false);
   const handledAlertIds = useRef(new Set<string>());
   const alertQueueRef = useRef<GoWorkplaceAlert[]>([]);
 
@@ -147,22 +146,6 @@ export function AlenioGoKioskDashboard({ hubToken }: Props) {
   );
 
   useEffect(() => () => stopGoAlertSoundLoop(), []);
-
-  useEffect(() => {
-    const unlock = () => {
-      void unlockGoAlertSound().then((ok) => {
-        if (ok) setSoundReady(true);
-      });
-    };
-    window.addEventListener("pointerdown", unlock, { passive: true });
-    window.addEventListener("touchstart", unlock, { passive: true });
-    window.addEventListener("keydown", unlock);
-    return () => {
-      window.removeEventListener("pointerdown", unlock);
-      window.removeEventListener("touchstart", unlock);
-      window.removeEventListener("keydown", unlock);
-    };
-  }, []);
 
   useEffect(() => {
     if (!hubToken) {
@@ -271,12 +254,6 @@ export function AlenioGoKioskDashboard({ hubToken }: Props) {
 
       {activeAlert ? (
         <GoKioskAlertModal alert={activeAlert} onAcknowledge={acknowledgeActiveAlert} />
-      ) : null}
-
-      {!soundReady ? (
-        <div className="go-dash-sound-hint" role="status">
-          Tap anywhere on the screen to enable alert sounds.
-        </div>
       ) : null}
 
       <div className="go-dash-scroll">

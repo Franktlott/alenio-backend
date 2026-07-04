@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { AlenioGoLogo } from "../components/AlenioGoLogo";
 import { fetchGoLinkStatus, postGoWorkspaceLink } from "../lib/api";
-import { unlockGoAlertSound } from "../lib/go-alert-sound";
+import { initGoAlertSound } from "../lib/go-alert-sound";
 import {
   clearGoLinkedWorkspace,
   clearGoPendingLink,
@@ -44,6 +44,10 @@ export function AlenioGoLinkPage() {
   );
 
   useEffect(() => {
+    initGoAlertSound();
+  }, []);
+
+  useEffect(() => {
     if (step !== "pending" || !requestId) return;
     const deviceId = getGoDeviceId();
     let cancelled = false;
@@ -72,7 +76,6 @@ export function AlenioGoLinkPage() {
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    void unlockGoAlertSound();
     const trimmed = code.trim();
     if (!trimmed) {
       setError("Enter your workspace code.");
@@ -126,11 +129,7 @@ export function AlenioGoLinkPage() {
             <p className="alenio-go-link-status alenio-go-link-status--ok">
               Connected to <strong>{linked.teamName}</strong>
             </p>
-            <Link
-              className="alenio-go-link-primary"
-              to={`/checklist/${linked.hubToken}`}
-              onClick={() => void unlockGoAlertSound()}
-            >
+            <Link className="alenio-go-link-primary" to={`/checklist/${linked.hubToken}`}>
               Open Alenio Go
             </Link>
             <button type="button" className="alenio-go-link-secondary" onClick={onUseDifferentWorkspace}>

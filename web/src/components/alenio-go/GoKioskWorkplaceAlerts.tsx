@@ -139,7 +139,7 @@ export function GoKioskAlertModal({ alert, onAcknowledge }: ModalProps) {
           Acknowledge alert
         </button>
         {alert.playSound ? (
-          <p className="go-kiosk-alert-modal-hint">Alert sound will repeat until acknowledged.</p>
+          <p className="go-kiosk-alert-modal-hint">Sound repeats until you acknowledge this alert.</p>
         ) : null}
       </div>
     </div>

@@ -35,6 +35,24 @@ export async function unlockGoAlertSound(): Promise<boolean> {
   }
 }
 
+let soundInitStarted = false;
+
+/** Prime alert audio on load and unlock silently on the next screen interaction. */
+export function initGoAlertSound(): void {
+  if (soundInitStarted || typeof window === "undefined") return;
+  soundInitStarted = true;
+
+  const tryUnlock = () => void unlockGoAlertSound();
+  tryUnlock();
+  window.setTimeout(tryUnlock, 400);
+  window.setTimeout(tryUnlock, 2_000);
+
+  const onGesture = () => void unlockGoAlertSound();
+  window.addEventListener("pointerdown", onGesture, { passive: true });
+  window.addEventListener("touchstart", onGesture, { passive: true });
+  window.addEventListener("keydown", onGesture);
+}
+
 function scheduleAlertBeep(
   ctx: AudioContext,
   master: GainNode,
