@@ -19,3 +19,12 @@ export function resolveGoHeroImage(
 export function isUsingWorkspaceHeroImage(settings: GoFrontendSettings | null | undefined): boolean {
   return !settings?.heroImageUrl?.trim();
 }
+
+export function goFrontendSettingsEqual(
+  a: GoFrontendSettings | null | undefined,
+  b: GoFrontendSettings | null | undefined,
+): boolean {
+  const heroA = a?.heroImageUrl?.trim() || null;
+  const heroB = b?.heroImageUrl?.trim() || null;
+  return heroA === heroB;
+}

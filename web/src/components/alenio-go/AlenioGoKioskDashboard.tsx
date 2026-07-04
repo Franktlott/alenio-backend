@@ -181,7 +181,7 @@ export function AlenioGoKioskDashboard({ hubToken }: Props) {
     setLoading(true);
     setError(null);
     refreshHub();
-    const hubPollId = window.setInterval(refreshHub, 30_000);
+    const hubPollId = window.setInterval(refreshHub, 10_000);
 
     void fetchGoBriefings(hubToken, deviceId)
       .then((rows) => {

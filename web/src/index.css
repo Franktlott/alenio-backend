@@ -3121,6 +3121,29 @@ input {
   cursor: not-allowed;
 }
 
+.go-frontend-settings-save-row {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.go-frontend-settings-save-btn {
+  padding: 0.8rem 1.25rem;
+  border-radius: 10px;
+  border: none;
+  background: linear-gradient(135deg, #312e81 0%, #4361ee 100%);
+  color: #fff;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 8px 18px rgba(67, 97, 238, 0.28);
+}
+
+.go-frontend-settings-save-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
 .go-frontend-settings-saved {
   margin: 0;
   font-size: 0.875rem;

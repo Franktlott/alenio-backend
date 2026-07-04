@@ -4,6 +4,7 @@ import { GoBackendModuleShell } from "../../components/alenio-go/GoBackendModule
 import { fetchWebTeam, patchWebTeamGoFrontendSettings, uploadChatMedia } from "../../lib/api";
 import {
   DEFAULT_GO_FRONTEND_SETTINGS,
+  goFrontendSettingsEqual,
   isUsingWorkspaceHeroImage,
   resolveGoHeroImage,
   type GoFrontendSettings,
@@ -13,7 +14,8 @@ import { useAlenioGoShell } from "./alenio-go-outlet-context";
 
 export function AlenioGoFrontendSettingsModulePage() {
   const { teamId, teamName, teamImage, canManage } = useAlenioGoShell();
-  const [settings, setSettings] = useState<GoFrontendSettings>(DEFAULT_GO_FRONTEND_SETTINGS);
+  const [savedSettings, setSavedSettings] = useState<GoFrontendSettings>(DEFAULT_GO_FRONTEND_SETTINGS);
+  const [draftSettings, setDraftSettings] = useState<GoFrontendSettings>(DEFAULT_GO_FRONTEND_SETTINGS);
   const [workspaceImage, setWorkspaceImage] = useState<string | null>(teamImage ?? null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -24,38 +26,38 @@ export function AlenioGoFrontendSettingsModulePage() {
 
   const effectiveWorkspaceImage = workspaceImage ?? teamImage ?? null;
 
+  const applyTeamSettings = useCallback((team: Awaited<ReturnType<typeof fetchWebTeam>>) => {
+    const next = team.goFrontendSettings ?? DEFAULT_GO_FRONTEND_SETTINGS;
+    setWorkspaceImage(team.image ?? null);
+    setSavedSettings(next);
+    setDraftSettings(next);
+  }, []);
+
   const refreshTeam = useCallback(() => {
     if (!teamId) return Promise.resolve();
-    return fetchWebTeam(teamId)
-      .then((team) => {
-        setWorkspaceImage(team.image ?? null);
-        setSettings(team.goFrontendSettings ?? DEFAULT_GO_FRONTEND_SETTINGS);
-      })
-      .catch(() => undefined);
-  }, [teamId]);
+    return fetchWebTeam(teamId).then(applyTeamSettings).catch(() => undefined);
+  }, [applyTeamSettings, teamId]);
 
   const load = useCallback(() => {
     if (!teamId) return;
     setLoading(true);
     setError(null);
     void fetchWebTeam(teamId)
-      .then((team) => {
-        setWorkspaceImage(team.image ?? null);
-        setSettings(team.goFrontendSettings ?? DEFAULT_GO_FRONTEND_SETTINGS);
-      })
+      .then(applyTeamSettings)
       .catch(() => setError("Could not load Alenio Go settings."))
       .finally(() => setLoading(false));
-  }, [teamId]);
+  }, [applyTeamSettings, teamId]);
 
   useEffect(() => {
     load();
   }, [load]);
 
   const previewImage = useMemo(
-    () => resolveGoHeroImage(effectiveWorkspaceImage, settings),
-    [effectiveWorkspaceImage, settings],
+    () => resolveGoHeroImage(effectiveWorkspaceImage, draftSettings),
+    [draftSettings, effectiveWorkspaceImage],
   );
-  const usingWorkspacePhoto = isUsingWorkspaceHeroImage(settings);
+  const usingWorkspacePhoto = isUsingWorkspaceHeroImage(draftSettings);
+  const hasUnsavedChanges = !goFrontendSettingsEqual(draftSettings, savedSettings);
 
   useEffect(() => {
     setPreviewImageFailed(false);
@@ -64,15 +66,16 @@ export function AlenioGoFrontendSettingsModulePage() {
   if (!canManage) return <Navigate to="/go" replace />;
   if (!teamId) return null;
 
-  async function onSave(nextSettings: GoFrontendSettings) {
+  async function persistSettings(nextSettings: GoFrontendSettings) {
     setSaving(true);
     setError(null);
     setSaved(false);
     try {
-      const savedSettings = await patchWebTeamGoFrontendSettings(teamId!, nextSettings);
-      setSettings(savedSettings);
+      const persisted = await patchWebTeamGoFrontendSettings(teamId!, nextSettings);
+      setSavedSettings(persisted);
+      setDraftSettings(persisted);
       setSaved(true);
-      window.setTimeout(() => setSaved(false), 2200);
+      window.setTimeout(() => setSaved(false), 3200);
       await refreshTeam();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save settings.");
@@ -90,11 +93,10 @@ export function AlenioGoFrontendSettingsModulePage() {
       if (!file) return;
       setPhotoBusy(true);
       setError(null);
+      setSaved(false);
       try {
         const uploaded = await uploadChatMedia(file);
-        const next = { heroImageUrl: uploaded.url };
-        setSettings(next);
-        await onSave(next);
+        setDraftSettings({ heroImageUrl: uploaded.url });
       } catch (err) {
         setError(err instanceof Error ? err.message : "Photo upload failed.");
       } finally {
@@ -112,9 +114,21 @@ export function AlenioGoFrontendSettingsModulePage() {
       );
       return;
     }
-    const next = { heroImageUrl: null };
-    setSettings(next);
-    await onSave(next);
+    setError(null);
+    setSaved(false);
+    setDraftSettings({ heroImageUrl: null });
+  }
+
+  async function onSaveToTablets() {
+    if (!hasUnsavedChanges || saving) return;
+    if (!usingWorkspacePhoto) {
+      const headerUrl = draftSettings.heroImageUrl?.trim();
+      if (!headerUrl || !(await probeImageUrl(headerUrl))) {
+        setError("Uploaded header image is unavailable. Please upload again.");
+        return;
+      }
+    }
+    await persistSettings(draftSettings);
   }
 
   const busy = saving || photoBusy;
@@ -134,7 +148,7 @@ export function AlenioGoFrontendSettingsModulePage() {
         ) : null}
         {saved ? (
           <p className="go-frontend-settings-saved" role="status">
-            Settings saved.
+            Saved — linked tablets will update within a few seconds.
           </p>
         ) : null}
 
@@ -156,9 +170,11 @@ export function AlenioGoFrontendSettingsModulePage() {
                 <div className="go-frontend-settings-preview-copy">
                   <strong>{teamName || "Workspace"}</strong>
                   <span>
-                    {usingWorkspacePhoto && (!previewImage || previewImageFailed)
-                      ? "No workspace photo — add one in Team settings"
-                      : "Dashboard header preview"}
+                    {hasUnsavedChanges
+                      ? "Preview — not live on tablets yet"
+                      : usingWorkspacePhoto && (!previewImage || previewImageFailed)
+                        ? "No workspace photo — add one in Team settings"
+                        : "Dashboard header preview"}
                   </span>
                 </div>
               </div>
@@ -186,7 +202,7 @@ export function AlenioGoFrontendSettingsModulePage() {
               <button
                 type="button"
                 className="go-frontend-settings-secondary-btn"
-                disabled={busy || usingWorkspacePhoto}
+                disabled={busy || (usingWorkspacePhoto && !hasUnsavedChanges)}
                 onClick={() => void onUseWorkspacePhoto()}
                 data-testid="go-frontend-use-workspace-photo"
               >
@@ -194,9 +210,23 @@ export function AlenioGoFrontendSettingsModulePage() {
               </button>
             </div>
 
+            {hasUnsavedChanges ? (
+              <div className="go-frontend-settings-save-row">
+                <button
+                  type="button"
+                  className="go-frontend-settings-save-btn"
+                  disabled={busy}
+                  onClick={() => void onSaveToTablets()}
+                  data-testid="go-frontend-save-header"
+                >
+                  {saving ? "Saving…" : "Save to tablets"}
+                </button>
+              </div>
+            ) : null}
+
             <p className="go-frontend-settings-foot enterprise-muted">
-              Workspace photo changes are managed in Team settings. This page only controls the Alenio Go tablet
-              experience.
+              Upload a header to preview it here, then save to push it to linked tablets. Workspace photo changes are
+              managed in Team settings.
             </p>
           </>
         ) : null}
