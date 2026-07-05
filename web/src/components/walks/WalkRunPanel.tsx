@@ -1,12 +1,10 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { WalkItemResponse, WalkItemStatus, WalkTemplateRow } from "../../lib/api";
 import { uploadChatMedia } from "../../lib/api";
 import {
   allWalkItemsReviewed,
   computeWalkDraftStats,
   getWalkTemplateSections,
-  walkStatusBadgeClass,
-  walkStatusLabel,
 } from "../../lib/walks-display";
 
 type DraftResponse = {
@@ -16,6 +14,15 @@ type DraftResponse = {
   notes: string;
   photoUrl: string | null;
   photoPreview?: string | null;
+};
+
+type FilterTab = "all" | "not_started" | "needs_attention" | "na" | "completed";
+
+type FlatItem = {
+  itemId: string;
+  label: string;
+  sectionTitle: string;
+  index: number;
 };
 
 type Props = {
@@ -29,6 +36,52 @@ type Props = {
   onCancel: () => void;
 };
 
+function estimateWalkMinutes(itemCount: number): number {
+  return Math.max(3, Math.min(30, Math.ceil(itemCount * 0.55)));
+}
+
+function filterLabel(tab: FilterTab): string {
+  if (tab === "all") return "All";
+  if (tab === "not_started") return "Not Started";
+  if (tab === "needs_attention") return "Needs Attention";
+  if (tab === "na") return "N/A";
+  return "Completed";
+}
+
+function matchesFilter(status: WalkItemStatus | undefined, tab: FilterTab): boolean {
+  if (tab === "all") return true;
+  if (tab === "not_started") return !status;
+  if (tab === "needs_attention") return status === "needs_attention";
+  if (tab === "na") return status === "na";
+  return Boolean(status);
+}
+
+function IconCheck() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden>
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  );
+}
+
+function IconAlert() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <circle cx="12" cy="12" r="10" />
+      <line x1="12" y1="8" x2="12" y2="12" />
+      <line x1="12" y1="16" x2="12.01" y2="16" />
+    </svg>
+  );
+}
+
+function IconMinus() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden>
+      <line x1="5" y1="12" x2="19" y2="12" />
+    </svg>
+  );
+}
+
 export function WalkRunPanel({
   template,
   busy,
@@ -41,6 +94,23 @@ export function WalkRunPanel({
 }: Props) {
   const sections = useMemo(() => getWalkTemplateSections(template), [template]);
   const templateItems = template.items ?? [];
+  const flatItems = useMemo(() => {
+    const rows: FlatItem[] = [];
+    let index = 0;
+    for (const section of sections) {
+      for (const item of section.items) {
+        index += 1;
+        rows.push({
+          itemId: item.id,
+          label: item.label,
+          sectionTitle: section.title,
+          index,
+        });
+      }
+    }
+    return rows;
+  }, [sections]);
+
   const [responses, setResponses] = useState<DraftResponse[]>(() =>
     templateItems.map((item) => ({
       itemId: item.id,
@@ -51,8 +121,13 @@ export function WalkRunPanel({
     })),
   );
   const [finalNotes, setFinalNotes] = useState("");
+  const [showFinalNotes, setShowFinalNotes] = useState(false);
   const [uploadingItemId, setUploadingItemId] = useState<string | null>(null);
   const [localErr, setLocalErr] = useState<string | null>(null);
+  const [activeFilter, setActiveFilter] = useState<FilterTab>("all");
+  const [focusIndex, setFocusIndex] = useState(0);
+  const [autosavedLabel, setAutosavedLabel] = useState("Ready to start");
+  const itemRefs = useRef<Record<string, HTMLElement | null>>({});
 
   const stats = useMemo(() => {
     const reviewed = responses
@@ -67,6 +142,35 @@ export function WalkRunPanel({
     return computeWalkDraftStats(reviewed);
   }, [responses]);
 
+  const filterCounts = useMemo(() => {
+    const counts: Record<FilterTab, number> = {
+      all: flatItems.length,
+      not_started: 0,
+      needs_attention: 0,
+      na: 0,
+      completed: 0,
+    };
+    for (const item of flatItems) {
+      const row = responses.find((r) => r.itemId === item.itemId);
+      if (!row?.status) counts.not_started += 1;
+      if (row?.status === "needs_attention") counts.needs_attention += 1;
+      if (row?.status === "na") counts.na += 1;
+      if (row?.status) counts.completed += 1;
+    }
+    return counts;
+  }, [flatItems, responses]);
+
+  const visibleItems = useMemo(
+    () =>
+      flatItems.filter((item) => {
+        const row = responses.find((r) => r.itemId === item.itemId);
+        return matchesFilter(row?.status, activeFilter);
+      }),
+    [flatItems, responses, activeFilter],
+  );
+
+  const progressPct =
+    templateItems.length === 0 ? 0 : Math.round((stats.totalReviewed / templateItems.length) * 100);
   const readyToComplete = allWalkItemsReviewed(
     templateItems.length,
     responses
@@ -79,6 +183,17 @@ export function WalkRunPanel({
         photoUrl: r.photoUrl,
       })),
   );
+  const estMinutes = estimateWalkMinutes(templateItems.length);
+  const walkTag = template.workplace.split(" ")[0] ?? "Walk";
+  const startedAt = useMemo(() => new Date(), []);
+
+  useEffect(() => {
+    setAutosavedLabel("Autosaved just now");
+  }, [responses, finalNotes]);
+
+  const scrollToItem = useCallback((itemId: string) => {
+    itemRefs.current[itemId]?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, []);
 
   function setStatus(itemId: string, status: WalkItemStatus) {
     setResponses((rows) => rows.map((row) => (row.itemId === itemId ? { ...row, status } : row)));
@@ -116,6 +231,30 @@ export function WalkRunPanel({
     );
   }
 
+  function goToRelative(step: number) {
+    const pool = activeFilter === "all" ? flatItems : visibleItems;
+    if (pool.length === 0) return;
+    const currentId = flatItems[focusIndex]?.itemId;
+    const poolIndex = Math.max(0, pool.findIndex((item) => item.itemId === currentId));
+    const nextIndex = Math.min(pool.length - 1, Math.max(0, poolIndex + step));
+    const target = pool[nextIndex];
+    if (!target) return;
+    const absoluteIndex = flatItems.findIndex((item) => item.itemId === target.itemId);
+    setFocusIndex(absoluteIndex >= 0 ? absoluteIndex : 0);
+    scrollToItem(target.itemId);
+  }
+
+  function goToNextUnreviewed() {
+    const next = flatItems.find((item) => !responses.find((r) => r.itemId === item.itemId)?.status);
+    if (next) {
+      const absoluteIndex = flatItems.findIndex((item) => item.itemId === next.itemId);
+      setFocusIndex(absoluteIndex);
+      scrollToItem(next.itemId);
+      return;
+    }
+    void submit();
+  }
+
   async function submit() {
     setLocalErr(null);
     if (!readyToComplete) {
@@ -140,172 +279,294 @@ export function WalkRunPanel({
   }
 
   return (
-    <div className="walk-run" data-testid="walk-run-panel">
-      <header className="walk-run-head">
-        <div>
-          <p className="walk-run-kicker">Manager observation</p>
-          <h2>{template.name}</h2>
-          <p className="enterprise-muted">{template.workplace}</p>
-        </div>
-        <button type="button" className="walk-run-cancel" onClick={onCancel} disabled={busy}>
-          Exit walk
-        </button>
-      </header>
-
-      {requireManagerName ? (
-        <div className="walk-run-manager">
-          <label className="enterprise-alenio-go-alert-label" htmlFor="walk-manager-name">
-            Your name
-          </label>
-          <input
-            id="walk-manager-name"
-            className="enterprise-alenio-go-alert-input"
-            value={managerName}
-            onChange={(e) => onManagerNameChange?.(e.target.value)}
-            maxLength={120}
-            placeholder="e.g. Alex M."
-            required
-          />
-        </div>
-      ) : null}
-
-      <div className="walk-run-sections">
-        {sections.map((section) => (
-          <section key={section.id} className="walk-run-section">
-            <header className="walk-run-section-head">
-              <h3>{section.title}</h3>
-              <span className="walk-run-section-count">
-                {section.items.length} observation{section.items.length === 1 ? "" : "s"}
-              </span>
-            </header>
-            <ol className="walk-run-items">
-              {section.items.map((item) => {
-                const row = responses.find((response) => response.itemId === item.id);
-                if (!row) return null;
-                const index = templateItems.findIndex((entry) => entry.id === item.id);
-                return (
-                  <li key={row.itemId} className="walk-run-item">
-                    <div className="walk-run-item-head">
-                      <span className="walk-run-item-index">{index + 1}</span>
-                      <strong>{row.label}</strong>
-                      {row.status ? (
-                        <span className={walkStatusBadgeClass(row.status)}>{walkStatusLabel(row.status)}</span>
-                      ) : null}
-                    </div>
-
-                    <div className="walk-run-status-row" role="group" aria-label={`Status for ${row.label}`}>
-                      {(["pass", "needs_attention", "na"] as WalkItemStatus[]).map((status) => (
-                        <button
-                          key={status}
-                          type="button"
-                          className={`walk-run-status-btn walk-run-status-btn--${status}${row.status === status ? " walk-run-status-btn--active" : ""}`}
-                          disabled={busy}
-                          onClick={() => setStatus(row.itemId, status)}
-                        >
-                          {walkStatusLabel(status)}
-                        </button>
-                      ))}
-                    </div>
-
-                    <label className="enterprise-alenio-go-alert-label" htmlFor={`walk-notes-${row.itemId}`}>
-                      Notes (optional)
-                    </label>
-                    <textarea
-                      id={`walk-notes-${row.itemId}`}
-                      className="enterprise-alenio-go-alert-textarea walk-run-notes"
-                      value={row.notes}
-                      onChange={(e) => setNotes(row.itemId, e.target.value)}
-                      rows={2}
-                      maxLength={500}
-                      placeholder="Add context for this observation"
-                    />
-
-                    <div className="walk-run-photo-row">
-                      {row.photoPreview ? (
-                        <div className="walk-run-photo-preview">
-                          <img src={row.photoPreview} alt="" />
-                          <button type="button" className="walk-run-photo-clear" onClick={() => clearPhoto(row.itemId)}>
-                            Remove photo
-                          </button>
-                        </div>
-                      ) : (
-                        <label className="walk-run-photo-upload">
-                          <input
-                            type="file"
-                            accept="image/*"
-                            disabled={busy || uploadingItemId === row.itemId}
-                            onChange={(e) => {
-                              const file = e.target.files?.[0] ?? null;
-                              e.target.value = "";
-                              void onPhotoSelected(row.itemId, file);
-                            }}
-                          />
-                          {uploadingItemId === row.itemId ? "Uploading…" : "Add photo (optional)"}
-                        </label>
-                      )}
-                    </div>
-                  </li>
-                );
-              })}
-            </ol>
-          </section>
-        ))}
-      </div>
-
-      <section className="walk-run-summary" aria-label="Walk completion summary">
-        <h3>Completion summary</h3>
-        <dl className="walk-run-summary-stats">
-          <div>
-            <dt>Items reviewed</dt>
-            <dd>{stats.totalReviewed} / {templateItems.length}</dd>
+    <div className="walk-run-page" data-testid="walk-run-panel">
+      <div className="walk-run-page-inner">
+        <header className="walk-run-page-header">
+          <div className="walk-run-page-header-main">
+            <button type="button" className="walk-run-page-back" onClick={onCancel} disabled={busy}>
+              ← Exit walk
+            </button>
+            <p className="walk-run-page-kicker">Manager observation walk</p>
+            <h1 className="walk-run-page-title">{template.name}</h1>
+            <p className="walk-run-page-meta">
+              <span>📍 {template.workplace}</span>
+              <span aria-hidden>•</span>
+              <span>🏷 {walkTag}</span>
+              <span aria-hidden>•</span>
+              <span>⏱ Est. {estMinutes} min</span>
+            </p>
           </div>
-          <div>
-            <dt>Pass</dt>
-            <dd className="walk-run-summary-pass">{stats.passCount}</dd>
+          <div className="walk-run-page-header-actions">
+            <button type="button" className="walk-run-page-actions-btn" onClick={onCancel} disabled={busy}>
+              Walk actions
+            </button>
           </div>
-          <div>
-            <dt>Needs Attention</dt>
-            <dd className="walk-run-summary-attention">{stats.needsAttentionCount}</dd>
-          </div>
-          <div>
-            <dt>N/A</dt>
-            <dd>{stats.naCount}</dd>
-          </div>
-          <div>
-            <dt>Photos added</dt>
-            <dd>{stats.photosCount}</dd>
-          </div>
-        </dl>
+        </header>
 
-        <label className="enterprise-alenio-go-alert-label" htmlFor="walk-final-notes">
-          Final notes (optional)
-        </label>
-        <textarea
-          id="walk-final-notes"
-          className="enterprise-alenio-go-alert-textarea"
-          value={finalNotes}
-          onChange={(e) => setFinalNotes(e.target.value)}
-          rows={3}
-          maxLength={2000}
-          placeholder="Overall observations, coaching notes, or next steps"
-        />
-
-        {localErr || error ? (
-          <p className="enterprise-alenio-go-alert-error" role="alert">
-            {localErr || error}
-          </p>
+        {requireManagerName ? (
+          <div className="walk-run-page-manager">
+            <label className="walk-run-page-manager-label" htmlFor="walk-manager-name">
+              Your name
+            </label>
+            <input
+              id="walk-manager-name"
+              className="walk-run-page-manager-input"
+              value={managerName}
+              onChange={(e) => onManagerNameChange?.(e.target.value)}
+              maxLength={120}
+              placeholder="e.g. Alex M."
+              required
+            />
+          </div>
         ) : null}
 
-        <button
-          type="button"
-          className="walk-run-complete-btn"
-          disabled={busy || !readyToComplete}
-          onClick={() => void submit()}
-          data-testid="walk-complete-btn"
-        >
-          {busy ? "Saving walk…" : "Complete Walk"}
-        </button>
-      </section>
+        <div className="walk-run-page-progress">
+          <div className="walk-run-page-progress-copy">
+            <span>
+              {stats.totalReviewed} of {templateItems.length} completed
+            </span>
+            <span>{progressPct}%</span>
+          </div>
+          <div className="walk-run-page-progress-track" aria-hidden>
+            <div className="walk-run-page-progress-fill" style={{ width: `${progressPct}%` }} />
+          </div>
+        </div>
+
+        <div className="walk-run-page-filters" role="tablist" aria-label="Filter observations">
+          {(["all", "not_started", "needs_attention", "na", "completed"] as FilterTab[]).map((tab) => (
+            <button
+              key={tab}
+              type="button"
+              role="tab"
+              aria-selected={activeFilter === tab}
+              className={`walk-run-page-filter${activeFilter === tab ? " walk-run-page-filter--active" : ""}`}
+              onClick={() => setActiveFilter(tab)}
+            >
+              {filterLabel(tab)} ({filterCounts[tab]})
+            </button>
+          ))}
+        </div>
+
+        <div className="walk-run-page-grid">
+          <main className="walk-run-page-checklist">
+            {visibleItems.length === 0 ? (
+              <p className="walk-run-page-empty">No observations match this filter.</p>
+            ) : (
+              <ul className="walk-run-page-items">
+                {visibleItems.map((item, visibleIndex) => {
+                  const row = responses.find((r) => r.itemId === item.itemId);
+                  if (!row) return null;
+                  const prev = visibleItems[visibleIndex - 1];
+                  const showSection = sections.length > 1 && item.sectionTitle !== prev?.sectionTitle;
+                  return (
+                    <li key={item.itemId}>
+                      {showSection && sections.length > 1 ? (
+                        <h3 className="walk-run-page-section-label">{item.sectionTitle}</h3>
+                      ) : null}
+                      <article
+                        ref={(el) => {
+                          itemRefs.current[item.itemId] = el;
+                        }}
+                        className={`walk-run-page-card${row.status ? ` walk-run-page-card--${row.status}` : ""}`}
+                      >
+                        <div className="walk-run-page-card-main">
+                          <span className="walk-run-page-card-index">{item.index}</span>
+                          <div className="walk-run-page-card-copy">
+                            <strong>{row.label}</strong>
+                            <p>Review this observation and record pass, needs attention, or N/A.</p>
+                            <div className="walk-run-page-card-tags">
+                              <span className="walk-run-page-card-pill">Required</span>
+                              {row.photoUrl ? <span className="walk-run-page-card-photo-flag">Photo added</span> : null}
+                            </div>
+                          </div>
+                          <div className="walk-run-page-card-status" role="group" aria-label={`Status for ${row.label}`}>
+                            <button
+                              type="button"
+                              className={`walk-run-page-status-btn walk-run-page-status-btn--pass${row.status === "pass" ? " walk-run-page-status-btn--active" : ""}`}
+                              disabled={busy}
+                              onClick={() => setStatus(row.itemId, "pass")}
+                            >
+                              <IconCheck />
+                              Pass
+                            </button>
+                            <button
+                              type="button"
+                              className={`walk-run-page-status-btn walk-run-page-status-btn--attention${row.status === "needs_attention" ? " walk-run-page-status-btn--active" : ""}`}
+                              disabled={busy}
+                              onClick={() => setStatus(row.itemId, "needs_attention")}
+                            >
+                              <IconAlert />
+                              Needs Attention
+                            </button>
+                            <button
+                              type="button"
+                              className={`walk-run-page-status-btn walk-run-page-status-btn--na${row.status === "na" ? " walk-run-page-status-btn--active" : ""}`}
+                              disabled={busy}
+                              onClick={() => setStatus(row.itemId, "na")}
+                            >
+                              <IconMinus />
+                              N/A
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="walk-run-page-card-extra">
+                          <textarea
+                            className="walk-run-page-notes"
+                            value={row.notes}
+                            onChange={(e) => setNotes(row.itemId, e.target.value)}
+                            rows={2}
+                            maxLength={500}
+                            placeholder="Add notes for this observation (optional)"
+                          />
+                          <div className="walk-run-page-photo">
+                            {row.photoPreview ? (
+                              <div className="walk-run-page-photo-preview">
+                                <img src={row.photoPreview} alt="" />
+                                <button type="button" onClick={() => clearPhoto(row.itemId)}>
+                                  Remove photo
+                                </button>
+                              </div>
+                            ) : (
+                              <label className="walk-run-page-photo-upload">
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  disabled={busy || uploadingItemId === row.itemId}
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0] ?? null;
+                                    e.target.value = "";
+                                    void onPhotoSelected(row.itemId, file);
+                                  }}
+                                />
+                                {uploadingItemId === row.itemId ? "Uploading…" : "Add photo"}
+                              </label>
+                            )}
+                          </div>
+                        </div>
+                      </article>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </main>
+
+          <aside className="walk-run-page-sidebar">
+            <section className="walk-run-page-side-card">
+              <h2>Walk Summary</h2>
+              <div className="walk-run-page-ring-wrap">
+                <svg className="walk-run-page-ring" viewBox="0 0 120 120" aria-hidden>
+                  <circle cx="60" cy="60" r="52" className="walk-run-page-ring-track" />
+                  <circle
+                    cx="60"
+                    cy="60"
+                    r="52"
+                    className="walk-run-page-ring-progress"
+                    style={{
+                      strokeDasharray: `${2 * Math.PI * 52}`,
+                      strokeDashoffset: `${2 * Math.PI * 52 * (1 - progressPct / 100)}`,
+                    }}
+                  />
+                </svg>
+                <strong className="walk-run-page-ring-value">{progressPct}%</strong>
+              </div>
+              <dl className="walk-run-page-side-stats">
+                <div>
+                  <dt>Completed</dt>
+                  <dd>
+                    {stats.totalReviewed} / {templateItems.length}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Remaining</dt>
+                  <dd>{Math.max(0, templateItems.length - stats.totalReviewed)}</dd>
+                </div>
+              </dl>
+            </section>
+
+            <section className="walk-run-page-side-card">
+              <h2>Results so far</h2>
+              <ul className="walk-run-page-results">
+                <li>
+                  <span className="walk-run-page-dot walk-run-page-dot--pass" aria-hidden />
+                  Pass <strong>{stats.passCount}</strong>
+                </li>
+                <li>
+                  <span className="walk-run-page-dot walk-run-page-dot--attention" aria-hidden />
+                  Needs Attention <strong>{stats.needsAttentionCount}</strong>
+                </li>
+                <li>
+                  <span className="walk-run-page-dot walk-run-page-dot--na" aria-hidden />
+                  N/A <strong>{stats.naCount}</strong>
+                </li>
+              </ul>
+            </section>
+
+            <section className="walk-run-page-side-card">
+              <button
+                type="button"
+                className="walk-run-page-notes-btn"
+                onClick={() => setShowFinalNotes((v) => !v)}
+              >
+                ✎ Add overall notes
+              </button>
+              {showFinalNotes ? (
+                <textarea
+                  className="walk-run-page-final-notes"
+                  value={finalNotes}
+                  onChange={(e) => setFinalNotes(e.target.value)}
+                  rows={4}
+                  maxLength={2000}
+                  placeholder="Overall observations, coaching notes, or next steps"
+                />
+              ) : null}
+            </section>
+
+            <section className="walk-run-page-side-card walk-run-page-side-info">
+              <h2>Walk Info</h2>
+              <ul>
+                <li>📍 {template.workplace}</li>
+                <li>🏷 {walkTag}</li>
+                <li>⏱ Est. {estMinutes} min</li>
+                <li>
+                  🗓 Started {startedAt.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+                </li>
+                <li>
+                  <span>Walk ID: {template.id.slice(0, 8).toUpperCase()}</span>
+                </li>
+              </ul>
+            </section>
+          </aside>
+        </div>
+      </div>
+
+      {localErr || error ? (
+        <p className="walk-run-page-error" role="alert">
+          {localErr || error}
+        </p>
+      ) : null}
+
+      <footer className="walk-run-page-footer">
+        <div className="walk-run-page-footer-inner">
+          <button type="button" className="walk-run-page-footer-secondary" disabled={busy} onClick={() => goToRelative(-1)}>
+            Previous
+          </button>
+          <p className="walk-run-page-footer-status">
+            <span className="walk-run-page-footer-dot" aria-hidden />
+            {autosavedLabel}
+          </p>
+          <button
+            type="button"
+            className="walk-run-page-footer-primary"
+            disabled={busy}
+            onClick={() => (readyToComplete ? void submit() : goToNextUnreviewed())}
+            data-testid="walk-complete-btn"
+          >
+            {busy ? "Saving walk…" : readyToComplete ? "Complete Walk" : "Next"}
+          </button>
+        </div>
+      </footer>
     </div>
   );
 }
