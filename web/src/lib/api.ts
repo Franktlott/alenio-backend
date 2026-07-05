@@ -645,9 +645,7 @@ export function patchTeamWalkTemplate(teamId: string, walkId: string, body: Walk
 }
 
 export function deleteTeamWalkTemplate(teamId: string, walkId: string) {
-  return apiDeleteJson<{ data: { success: boolean } }>(
-    `/api/teams/${encodeURIComponent(teamId)}/walks/${encodeURIComponent(walkId)}`,
-  ).then((r) => r.data);
+  return patchTeamWalkTemplate(teamId, walkId, { isActive: false }).then(() => ({ success: true }));
 }
 
 export function fetchTeamWalkCompletions(teamId: string, templateId?: string) {

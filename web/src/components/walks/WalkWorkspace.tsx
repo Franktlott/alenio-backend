@@ -55,8 +55,8 @@ export function WalkWorkspace({ teamId, canManage, initialWalkId, initialComplet
           return next;
         });
         if (initialWalkId === walk.id) navigate("/go/walks", { replace: true });
-      } catch {
-        window.alert("Could not delete walk. Please try again.");
+      } catch (err) {
+        window.alert(err instanceof Error ? err.message : "Could not delete walk. Please try again.");
       } finally {
         setDeletingWalkId(null);
       }
