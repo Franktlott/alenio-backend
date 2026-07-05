@@ -13,6 +13,7 @@ export async function ensureTempChecksSchema(prisma: PrismaClient): Promise<void
         "windowStartLocal" TEXT NOT NULL,
         "windowEndLocal" TEXT NOT NULL,
         "isActive" BOOLEAN NOT NULL DEFAULT true,
+        "isPublished" BOOLEAN NOT NULL DEFAULT false,
         "createdByUserId" TEXT NOT NULL,
         "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
         "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -85,6 +86,57 @@ export async function ensureTempChecksSchema(prisma: PrismaClient): Promise<void
         ALTER TABLE "TempCheckCorrectiveAction"
           ADD CONSTRAINT "TempCheckCorrectiveAction_itemId_fkey"
           FOREIGN KEY ("itemId") REFERENCES "TempCheckTemplateItem"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+      EXCEPTION WHEN duplicate_object THEN NULL;
+      END $$;
+    `);
+    await prisma.$executeRawUnsafe(`
+      DO $$ BEGIN
+        ALTER TABLE "TempCheckTemplate" ADD COLUMN "isPublished" BOOLEAN NOT NULL DEFAULT false;
+        UPDATE "TempCheckTemplate" SET "isPublished" = true;
+      EXCEPTION WHEN duplicate_column THEN NULL;
+      END $$;
+    `);
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "TempCheckCompletion" (
+        "id" TEXT NOT NULL,
+        "teamId" TEXT NOT NULL,
+        "templateId" TEXT NOT NULL,
+        "checkName" TEXT NOT NULL,
+        "dueTimeLocal" TEXT NOT NULL,
+        "windowStartLocal" TEXT NOT NULL,
+        "windowEndLocal" TEXT NOT NULL,
+        "completedByUserId" TEXT NOT NULL,
+        "completedByName" TEXT NOT NULL,
+        "completedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "deviceId" TEXT,
+        "totalItems" INTEGER NOT NULL,
+        "inRangeCount" INTEGER NOT NULL,
+        "outOfRangeCount" INTEGER NOT NULL,
+        "readings" JSONB NOT NULL,
+        CONSTRAINT "TempCheckCompletion_pkey" PRIMARY KEY ("id")
+      );
+    `);
+    await prisma.$executeRawUnsafe(`
+      CREATE INDEX IF NOT EXISTS "TempCheckCompletion_teamId_completedAt_idx"
+      ON "TempCheckCompletion"("teamId", "completedAt");
+    `);
+    await prisma.$executeRawUnsafe(`
+      CREATE INDEX IF NOT EXISTS "TempCheckCompletion_templateId_completedAt_idx"
+      ON "TempCheckCompletion"("templateId", "completedAt");
+    `);
+    await prisma.$executeRawUnsafe(`
+      DO $$ BEGIN
+        ALTER TABLE "TempCheckCompletion"
+          ADD CONSTRAINT "TempCheckCompletion_teamId_fkey"
+          FOREIGN KEY ("teamId") REFERENCES "Team"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+      EXCEPTION WHEN duplicate_object THEN NULL;
+      END $$;
+    `);
+    await prisma.$executeRawUnsafe(`
+      DO $$ BEGIN
+        ALTER TABLE "TempCheckCompletion"
+          ADD CONSTRAINT "TempCheckCompletion_templateId_fkey"
+          FOREIGN KEY ("templateId") REFERENCES "TempCheckTemplate"("id") ON DELETE CASCADE ON UPDATE CASCADE;
       EXCEPTION WHEN duplicate_object THEN NULL;
       END $$;
     `);

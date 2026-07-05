@@ -8,6 +8,8 @@ import {
   deleteTempCheckTemplate,
   getTempCheckTemplateForUser,
   listTempCheckTemplatesForUser,
+  publishTempCheckTemplate,
+  unpublishTempCheckTemplate,
   updateTempCheckTemplate,
 } from "../lib/temp-checks";
 
@@ -46,12 +48,46 @@ const tempCheckPatchSchema = z
     windowEndLocal: localTimeSchema.optional(),
     items: z.array(tempCheckItemSchema).min(1).max(40).optional(),
     isActive: z.boolean().optional(),
+    isPublished: z.boolean().optional(),
   })
   .superRefine((body, ctx) => {
-    if (Object.keys(body).length === 0) {
+    const hasUpdate =
+      body.name !== undefined ||
+      body.description !== undefined ||
+      body.dueTimeLocal !== undefined ||
+      body.windowStartLocal !== undefined ||
+      body.windowEndLocal !== undefined ||
+      body.items !== undefined ||
+      body.isActive !== undefined ||
+      body.isPublished !== undefined;
+    if (!hasUpdate) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "No updates provided" });
     }
   });
+
+tempChecksRouter.post("/:templateId/publish", async (c) => {
+  const user = c.get("user")!;
+  const { teamId, templateId } = c.req.param();
+  const result = await publishTempCheckTemplate(teamId, templateId, user.id);
+  if (!result.ok) {
+    if (result.code === "FORBIDDEN") return c.json({ error: { message: "Forbidden", code: "FORBIDDEN" } }, 403);
+    if (result.code === "NOT_FOUND") return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
+    return c.json({ error: { message: "Could not publish program", code: "VALIDATION_ERROR" } }, 400);
+  }
+  return c.json({ data: result.template });
+});
+
+tempChecksRouter.post("/:templateId/unpublish", async (c) => {
+  const user = c.get("user")!;
+  const { teamId, templateId } = c.req.param();
+  const result = await unpublishTempCheckTemplate(teamId, templateId, user.id);
+  if (!result.ok) {
+    if (result.code === "FORBIDDEN") return c.json({ error: { message: "Forbidden", code: "FORBIDDEN" } }, 403);
+    if (result.code === "NOT_FOUND") return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
+    return c.json({ error: { message: "Could not unpublish program", code: "VALIDATION_ERROR" } }, 400);
+  }
+  return c.json({ data: result.template });
+});
 
 tempChecksRouter.get("/", async (c) => {
   const user = c.get("user")!;

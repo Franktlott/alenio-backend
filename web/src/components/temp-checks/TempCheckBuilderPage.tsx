@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { useMemo, useState } from "react";
 import type { TempCheckTemplateCreatePayload } from "../../lib/api";
+import { TempCheckActionsDrawer } from "./TempCheckActionsDrawer";
 
 type ItemRow = {
   id: string;
@@ -60,82 +61,6 @@ function parseNumberInput(value: string): number | null {
   return Number.isFinite(num) ? num : null;
 }
 
-function ActionEditor({
-  label,
-  hint,
-  actions,
-  onChange,
-  compact = false,
-}: {
-  label: string;
-  hint: string;
-  actions: string[];
-  onChange: (next: string[]) => void;
-  compact?: boolean;
-}) {
-  const [draft, setDraft] = useState("");
-
-  return (
-    <div className={`temp-check-action-editor${compact ? " temp-check-action-editor--compact" : ""}`}>
-      {!compact ? (
-        <div className="temp-check-field-head">
-          <span className="temp-check-field-label">{label}</span>
-          <span className="temp-check-field-hint">{hint}</span>
-        </div>
-      ) : (
-        <p className="temp-check-action-editor-compact-label">{label}</p>
-      )}
-      <div className="temp-check-action-add">
-        <input
-          type="text"
-          value={draft}
-          placeholder={compact ? "Add corrective action" : "e.g. Discard product and re-check in 30 minutes"}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key !== "Enter") return;
-            e.preventDefault();
-            const next = draft.trim();
-            if (!next) return;
-            onChange([...actions, next]);
-            setDraft("");
-          }}
-        />
-        <button
-          type="button"
-          className="temp-check-btn-outline"
-          onClick={() => {
-            const next = draft.trim();
-            if (!next) return;
-            onChange([...actions, next]);
-            setDraft("");
-          }}
-        >
-          Add
-        </button>
-      </div>
-      {actions.length > 0 ? (
-        <ul className="temp-check-action-list">
-          {actions.map((action, index) => (
-            <li key={`${action}-${index}`}>
-              <span>{action}</span>
-              <button
-                type="button"
-                className="temp-check-icon-btn"
-                aria-label={`Remove ${action}`}
-                onClick={() => onChange(actions.filter((_, i) => i !== index))}
-              >
-                ×
-              </button>
-            </li>
-          ))}
-        </ul>
-      ) : compact ? null : (
-        <p className="temp-check-empty-hint">No corrective actions yet.</p>
-      )}
-    </div>
-  );
-}
-
 export function TempCheckBuilderPage({
   pageTitle,
   pageSubtitle,
@@ -152,9 +77,10 @@ export function TempCheckBuilderPage({
   const [windowEndLocal, setWindowEndLocal] = useState(initial?.windowEndLocal ?? "07:00");
   const [items, setItems] = useState<ItemRow[]>(() => itemsFromInitial(initial));
   const [localError, setLocalError] = useState<string | null>(null);
-  const [expandedItemIds, setExpandedItemIds] = useState<Set<string>>(() => new Set());
+  const [actionsItemId, setActionsItemId] = useState<string | null>(null);
 
   const itemCountLabel = useMemo(() => `${items.length} item${items.length === 1 ? "" : "s"}`, [items.length]);
+  const actionsItem = items.find((item) => item.id === actionsItemId) ?? null;
 
   function updateItem(id: string, patch: Partial<ItemRow>) {
     setItems((prev) => prev.map((row) => (row.id === id ? { ...row, ...patch } : row)));
@@ -169,15 +95,6 @@ export function TempCheckBuilderPage({
       const next = [...prev];
       const [row] = next.splice(index, 1);
       next.splice(target, 0, row!);
-      return next;
-    });
-  }
-
-  function toggleItemExpanded(id: string) {
-    setExpandedItemIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
       return next;
     });
   }
@@ -292,7 +209,12 @@ export function TempCheckBuilderPage({
 
           <section className="temp-check-builder-card temp-check-builder-card--wide">
             <div className="temp-check-builder-card-head temp-check-builder-card-head--compact">
-              <h2>Items to check</h2>
+              <div>
+                <h2>Items to check</h2>
+                <p className="temp-check-builder-card-copy temp-check-builder-card-copy--inline">
+                  Configure temperature ranges and out-of-range steps per item.
+                </p>
+              </div>
               <span className="temp-check-count-pill">{itemCountLabel}</span>
             </div>
 
@@ -301,12 +223,11 @@ export function TempCheckBuilderPage({
                 <span>Item</span>
                 <span>Min °F</span>
                 <span>Max °F</span>
-                <span>Out of range</span>
+                <span>Out-of-range steps</span>
                 <span />
               </div>
               <div className="temp-check-item-table-body">
                 {items.map((item, index) => {
-                  const expanded = expandedItemIds.has(item.id);
                   const actionCount = item.correctiveActions.length;
                   return (
                     <div key={item.id} className="temp-check-item-table-group">
@@ -342,10 +263,17 @@ export function TempCheckBuilderPage({
                         </label>
                         <button
                           type="button"
-                          className={`temp-check-item-actions-btn${expanded ? " temp-check-item-actions-btn--open" : ""}`}
-                          onClick={() => toggleItemExpanded(item.id)}
+                          className={`tc-builder-steps-btn${actionCount > 0 ? " tc-builder-steps-btn--set" : ""}`}
+                          onClick={() => setActionsItemId(item.id)}
                         >
-                          {actionCount > 0 ? `${actionCount} action${actionCount === 1 ? "" : "s"}` : "If out of range"}
+                          {actionCount > 0 ? (
+                            <>
+                              <span className="tc-builder-steps-count">{actionCount}</span>
+                              <span>steps</span>
+                            </>
+                          ) : (
+                            "Configure steps"
+                          )}
                         </button>
                         <div className="temp-check-item-table-controls">
                           <button type="button" className="temp-check-icon-btn temp-check-icon-btn--tiny" disabled={index === 0} onClick={() => moveItem(item.id, -1)} aria-label="Move up">
@@ -371,17 +299,6 @@ export function TempCheckBuilderPage({
                           </button>
                         </div>
                       </div>
-                      {expanded ? (
-                        <div className="temp-check-item-table-expand">
-                          <ActionEditor
-                            compact
-                            label="Corrective actions when outside min/max"
-                            hint=""
-                            actions={item.correctiveActions}
-                            onChange={(next) => updateItem(item.id, { correctiveActions: next })}
-                          />
-                        </div>
-                      ) : null}
                     </div>
                   );
                 })}
@@ -394,6 +311,18 @@ export function TempCheckBuilderPage({
           </section>
         </div>
       </div>
+
+      {actionsItem ? (
+        <TempCheckActionsDrawer
+          open
+          itemLabel={actionsItem.label}
+          tempMinF={actionsItem.tempMinF}
+          tempMaxF={actionsItem.tempMaxF}
+          actions={actionsItem.correctiveActions}
+          onChange={(next) => updateItem(actionsItem.id, { correctiveActions: next })}
+          onClose={() => setActionsItemId(null)}
+        />
+      ) : null}
     </div>
   );
 }

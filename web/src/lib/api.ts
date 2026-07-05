@@ -79,18 +79,38 @@ async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   if (!res.ok) {
-    const body = await readJson<{ error?: string | { message?: string }; message?: string }>(res);
-    const msg =
-      typeof body?.error === "string"
-        ? body.error
-        : typeof body?.error === "object" && body?.error?.message
-          ? body.error.message
-          : typeof body?.message === "string"
-            ? body.message
-            : res.status === 404
-              ? "Not found — this may not exist or you may not have access."
-              : `Request failed (${res.status})`;
-    throw new Error(msg);
+    const body = await readJson<
+      | Array<{ message?: string }>
+      | {
+          error?: string | { message?: string; issues?: Array<{ message?: string }> };
+          message?: string;
+        }
+    >(res);
+    let msg: string | undefined;
+    if (Array.isArray(body) && body[0]?.message) {
+      msg = body[0].message;
+    } else if (body && typeof body === "object" && !Array.isArray(body)) {
+      const errField = body.error;
+      if (errField && typeof errField === "object" && Array.isArray(errField.issues)) {
+        msg = errField.issues[0]?.message;
+      }
+      if (!msg) {
+        msg =
+          typeof errField === "string"
+            ? errField
+            : typeof errField === "object" && errField?.message
+              ? errField.message
+              : typeof body.message === "string"
+                ? body.message
+                : undefined;
+      }
+    }
+    throw new Error(
+      msg ??
+        (res.status === 404
+          ? "Not found — this may not exist or you may not have access."
+          : `Request failed (${res.status})`),
+    );
   }
   const parsed = await readJson<T>(res);
   return (parsed ?? {}) as T;
@@ -676,11 +696,52 @@ export type TempCheckTemplateRow = {
   windowStartLocal: string;
   windowEndLocal: string;
   isActive: boolean;
+  isPublished: boolean;
   createdByUserId: string;
   createdAt: string;
   updatedAt: string;
   itemCount: number;
   items: TempCheckTemplateItemRow[];
+  completionCount?: number;
+  windowOpen?: boolean;
+};
+
+export type TempCheckReadingRow = {
+  itemId: string;
+  label: string;
+  readingF: number;
+  inRange: boolean;
+  tempMinF: number | null;
+  tempMaxF: number | null;
+  correctiveAction: string | null;
+  notes: string | null;
+};
+
+export type TempCheckCompletionRow = {
+  id: string;
+  teamId: string;
+  templateId: string;
+  checkName: string;
+  dueTimeLocal: string;
+  windowStartLocal: string;
+  windowEndLocal: string;
+  completedByUserId: string;
+  completedByName: string;
+  completedAt: string;
+  deviceId: string | null;
+  totalItems: number;
+  inRangeCount: number;
+  outOfRangeCount: number;
+  readings: TempCheckReadingRow[];
+};
+
+export type TempCheckCompletePayload = {
+  readings: Array<{
+    itemId: string;
+    readingF: number;
+    correctiveAction?: string | null;
+    notes?: string | null;
+  }>;
 };
 
 export type TempCheckTemplateItemPayload = {
@@ -699,7 +760,10 @@ export type TempCheckTemplateCreatePayload = {
   items: TempCheckTemplateItemPayload[];
 };
 
-export type TempCheckTemplateUpdatePayload = Partial<TempCheckTemplateCreatePayload> & { isActive?: boolean };
+export type TempCheckTemplateUpdatePayload = Partial<TempCheckTemplateCreatePayload> & {
+  isActive?: boolean;
+  isPublished?: boolean;
+};
 
 export function fetchTeamTempCheckTemplates(teamId: string) {
   return apiGetJson<{ data: { templates: TempCheckTemplateRow[]; canManage: boolean } }>(
@@ -731,6 +795,62 @@ export function deleteTeamTempCheckTemplate(teamId: string, templateId: string) 
   return apiDeleteJson<{ data: TempCheckTemplateRow }>(
     `/api/teams/${encodeURIComponent(teamId)}/temp-checks/${encodeURIComponent(templateId)}`,
   ).then(() => ({ success: true }));
+}
+
+export function postTeamTempCheckPublish(teamId: string, templateId: string) {
+  return apiPostJson<{ data: TempCheckTemplateRow }>(
+    `/api/teams/${encodeURIComponent(teamId)}/temp-checks/${encodeURIComponent(templateId)}/publish`,
+    {},
+  ).then((r) => r.data);
+}
+
+export function postTeamTempCheckUnpublish(teamId: string, templateId: string) {
+  return apiPostJson<{ data: TempCheckTemplateRow }>(
+    `/api/teams/${encodeURIComponent(teamId)}/temp-checks/${encodeURIComponent(templateId)}/unpublish`,
+    {},
+  ).then((r) => r.data);
+}
+
+export function fetchGoTempCheckTemplates(hubToken: string, deviceId: string) {
+  const q = new URLSearchParams({ hubToken, deviceId });
+  return apiGetJson<{ data: { templates: TempCheckTemplateRow[] } }>(`/api/public/go/temp-checks?${q}`).then(
+    (r) => r.data.templates,
+  );
+}
+
+export function fetchGoTempCheckTemplate(hubToken: string, deviceId: string, templateId: string) {
+  const q = new URLSearchParams({ hubToken, deviceId });
+  return apiGetJson<{ data: { template: TempCheckTemplateRow } }>(
+    `/api/public/go/temp-checks/${encodeURIComponent(templateId)}?${q}`,
+  ).then((r) => r.data.template);
+}
+
+export function fetchGoTempCheckCompletions(hubToken: string, deviceId: string) {
+  const q = new URLSearchParams({ hubToken, deviceId });
+  return apiGetJson<{ data: { completions: TempCheckCompletionRow[] } }>(
+    `/api/public/go/temp-checks/completions?${q}`,
+  ).then((r) => r.data.completions);
+}
+
+export function fetchGoTempCheckCompletion(hubToken: string, deviceId: string, completionId: string) {
+  const q = new URLSearchParams({ hubToken, deviceId });
+  return apiGetJson<{ data: { completion: TempCheckCompletionRow } }>(
+    `/api/public/go/temp-checks/completions/${encodeURIComponent(completionId)}?${q}`,
+  ).then((r) => r.data.completion);
+}
+
+export function postGoTempCheckComplete(
+  templateId: string,
+  body: TempCheckCompletePayload & {
+    hubToken: string;
+    deviceId: string;
+    leaderUserId: string;
+  },
+) {
+  return apiPostJson<{ data: TempCheckCompletionRow }>(
+    `/api/public/go/temp-checks/${encodeURIComponent(templateId)}/complete`,
+    body,
+  ).then((r) => r.data);
 }
 
 export function fetchTeamWalkCompletions(teamId: string, templateId?: string) {

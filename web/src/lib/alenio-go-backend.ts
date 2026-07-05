@@ -55,7 +55,7 @@ export function goBackendAdminTiles(options: {
     {
       id: "temp-checks",
       title: "Temp checks",
-      subtitle: "Configure due times, windows, and corrective actions",
+      subtitle: "Temperature programs, schedules, and corrective actions",
       tone: "emerald",
       icon: "temp",
       active: true,

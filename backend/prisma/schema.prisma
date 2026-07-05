@@ -131,6 +131,7 @@ model Team {
   walkTemplates WalkTemplate[]
   walkCompletions WalkCompletion[]
   tempCheckTemplates TempCheckTemplate[]
+  tempCheckCompletions TempCheckCompletion[]
 }
 
 model TeamSubscription {
@@ -851,12 +852,14 @@ model TempCheckTemplate {
   windowStartLocal String
   windowEndLocal   String
   isActive         Boolean  @default(true)
+  isPublished      Boolean  @default(false)
   createdByUserId  String
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
   team             Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
   items            TempCheckTemplateItem[]
   correctiveActions TempCheckCorrectiveAction[]
+  completions      TempCheckCompletion[]
 
   @@index([teamId, isActive])
 }
@@ -885,5 +888,29 @@ model TempCheckCorrectiveAction {
 
   @@index([templateId])
   @@index([itemId])
+}
+
+model TempCheckCompletion {
+  id                String   @id @default(cuid())
+  teamId            String
+  templateId        String
+  checkName         String
+  dueTimeLocal      String
+  windowStartLocal  String
+  windowEndLocal    String
+  completedByUserId String
+  completedByName   String
+  completedAt       DateTime @default(now())
+  deviceId          String?
+  totalItems        Int
+  inRangeCount      Int
+  outOfRangeCount   Int
+  readings          Json
+
+  team     Team              @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  template TempCheckTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@index([teamId, completedAt])
+  @@index([templateId, completedAt])
 }
 

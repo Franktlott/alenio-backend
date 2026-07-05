@@ -11,6 +11,9 @@ import { AlenioGoComingSoonModulePage } from "./routes/alenio-go/AlenioGoComingS
 import { AlenioGoBriefingsRoutes } from "./routes/alenio-go/AlenioGoBriefingsRoutes";
 import { AlenioGoWalksRoutes } from "./routes/alenio-go/AlenioGoWalksRoutes";
 import { AlenioGoTempChecksRoutes } from "./routes/alenio-go/AlenioGoTempChecksRoutes";
+import { TempChecksKioskHistoryPage } from "./routes/TempChecksKioskHistoryPage";
+import { TempChecksKioskPage } from "./routes/TempChecksKioskPage";
+import { TempChecksKioskRunPage } from "./routes/TempChecksKioskRunPage";
 import { BriefingsKioskPage } from "./routes/BriefingsKioskPage";
 import { BriefingsKioskReviewPage } from "./routes/BriefingsKioskReviewPage";
 import { WalksKioskPage } from "./routes/WalksKioskPage";
@@ -131,6 +134,9 @@ export default function App() {
           <Route path="walks/history/:completionId" element={<WalksKioskHistoryPage />} />
           <Route path="walks/:walkId/run" element={<WalksKioskRunPage />} />
           <Route path="walks" element={<WalksKioskPage />} />
+          <Route path="temp-checks/history/:completionId" element={<TempChecksKioskHistoryPage />} />
+          <Route path="temp-checks/:templateId/run" element={<TempChecksKioskRunPage />} />
+          <Route path="temp-checks" element={<TempChecksKioskPage />} />
           <Route path=":checklistId" element={<Navigate to=".." replace />} />
         </Route>
         <Route path="/aleniogo" element={<AlenioGoLinkPage />} />

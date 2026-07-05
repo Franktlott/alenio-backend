@@ -1,5 +1,8 @@
 import { prisma } from "../prisma";
 import type { Prisma } from "@prisma/client";
+import { findTeamByChecklistHubToken } from "./checklist-locations";
+import { resolveVerifiedGoLeader } from "./go-leader-pin";
+import { isGoDeviceApproved } from "./workplace-alerts";
 
 export type TempCheckItemInput = {
   label: string;
@@ -17,7 +20,10 @@ export type TempCheckTemplateInput = {
   items: TempCheckItemInput[];
 };
 
-export type UpdateTempCheckTemplateInput = Partial<TempCheckTemplateInput> & { isActive?: boolean };
+export type UpdateTempCheckTemplateInput = Partial<TempCheckTemplateInput> & {
+  isActive?: boolean;
+  isPublished?: boolean;
+};
 
 const templateInclude = {
   items: {
@@ -169,6 +175,7 @@ function serializeTemplate(template: {
   windowStartLocal: string;
   windowEndLocal: string;
   isActive: boolean;
+  isPublished: boolean;
   createdByUserId: string;
   createdAt: Date;
   updatedAt: Date;
@@ -190,6 +197,7 @@ function serializeTemplate(template: {
     windowStartLocal: template.windowStartLocal,
     windowEndLocal: template.windowEndLocal,
     isActive: template.isActive,
+    isPublished: "isPublished" in template ? template.isPublished : true,
     createdByUserId: template.createdByUserId,
     createdAt: template.createdAt.toISOString(),
     updatedAt: template.updatedAt.toISOString(),
@@ -257,6 +265,7 @@ export async function createTempCheckTemplate(teamId: string, userId: string, in
         windowStartLocal: parsed.windowStartLocal,
         windowEndLocal: parsed.windowEndLocal,
         createdByUserId: userId,
+        isPublished: false,
       },
     });
     await persistTemplateChildren(tx, created.id, parsed);
@@ -284,6 +293,28 @@ export async function updateTempCheckTemplate(
     include: templateInclude,
   });
   if (!existing) return { ok: false as const, code: "NOT_FOUND" as const };
+
+  const metadataOnly =
+    input.isPublished !== undefined &&
+    input.isActive === undefined &&
+    input.name === undefined &&
+    input.description === undefined &&
+    input.dueTimeLocal === undefined &&
+    input.windowStartLocal === undefined &&
+    input.windowEndLocal === undefined &&
+    input.items === undefined;
+
+  if (metadataOnly) {
+    const template = await prisma.tempCheckTemplate.update({
+      where: { id: templateId },
+      data: {
+        ...(input.isPublished !== undefined ? { isPublished: input.isPublished } : {}),
+        ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
+      },
+      include: templateInclude,
+    });
+    return { ok: true as const, template: serializeTemplate(template) };
+  }
 
   const merged: TempCheckTemplateInput = {
     name: input.name ?? existing.name,
@@ -315,6 +346,7 @@ export async function updateTempCheckTemplate(
         windowStartLocal: parsed.windowStartLocal,
         windowEndLocal: parsed.windowEndLocal,
         ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
+        ...(input.isPublished !== undefined ? { isPublished: input.isPublished } : {}),
       },
     });
     if (input.items) {
@@ -332,6 +364,44 @@ export async function updateTempCheckTemplate(
 
 export async function deleteTempCheckTemplate(teamId: string, templateId: string, userId: string) {
   return updateTempCheckTemplate(teamId, templateId, userId, { isActive: false });
+}
+
+export async function publishTempCheckTemplate(teamId: string, templateId: string, userId: string) {
+  const member = await assertTeamMember(teamId, userId);
+  if (!member) return { ok: false as const, code: "FORBIDDEN" as const };
+  if (!canManageTempChecks(member.role)) return { ok: false as const, code: "FORBIDDEN" as const };
+
+  const existing = await prisma.tempCheckTemplate.findFirst({
+    where: { id: templateId, teamId, isActive: true },
+    include: templateInclude,
+  });
+  if (!existing) return { ok: false as const, code: "NOT_FOUND" as const };
+
+  const template = await prisma.tempCheckTemplate.update({
+    where: { id: templateId },
+    data: { isPublished: true },
+    include: templateInclude,
+  });
+  return { ok: true as const, template: serializeTemplate(template) };
+}
+
+export async function unpublishTempCheckTemplate(teamId: string, templateId: string, userId: string) {
+  const member = await assertTeamMember(teamId, userId);
+  if (!member) return { ok: false as const, code: "FORBIDDEN" as const };
+  if (!canManageTempChecks(member.role)) return { ok: false as const, code: "FORBIDDEN" as const };
+
+  const existing = await prisma.tempCheckTemplate.findFirst({
+    where: { id: templateId, teamId, isActive: true },
+    include: templateInclude,
+  });
+  if (!existing) return { ok: false as const, code: "NOT_FOUND" as const };
+
+  const template = await prisma.tempCheckTemplate.update({
+    where: { id: templateId },
+    data: { isPublished: false },
+    include: templateInclude,
+  });
+  return { ok: true as const, template: serializeTemplate(template) };
 }
 
 export function formatTempRange(tempMinF: number | null, tempMaxF: number | null): string {
@@ -377,4 +447,284 @@ export function isReadingInTempRange(readingF: number, tempMinF: number | null, 
   if (tempMinF != null && readingF < tempMinF) return false;
   if (tempMaxF != null && readingF > tempMaxF) return false;
   return true;
+}
+
+export type TempCheckReadingInput = {
+  itemId: string;
+  readingF: number;
+  correctiveAction?: string | null;
+  notes?: string | null;
+};
+
+export type TempCheckReadingRow = {
+  itemId: string;
+  label: string;
+  readingF: number;
+  inRange: boolean;
+  tempMinF: number | null;
+  tempMaxF: number | null;
+  correctiveAction: string | null;
+  notes: string | null;
+};
+
+export type CompleteTempCheckInput = {
+  readings: TempCheckReadingInput[];
+};
+
+function serializePublicTemplateRow(
+  template: {
+    id: string;
+    teamId: string;
+    name: string;
+    description: string | null;
+    dueTimeLocal: string;
+    windowStartLocal: string;
+    windowEndLocal: string;
+    isActive: boolean;
+    isPublished: boolean;
+    createdByUserId: string;
+    createdAt: Date;
+    updatedAt: Date;
+    items: {
+      id: string;
+      label: string;
+      tempMinF: number | null;
+      tempMaxF: number | null;
+      sortOrder: number;
+      correctiveActions: { id: string; label: string; sortOrder: number }[];
+    }[];
+  },
+  completionCount: number,
+) {
+  const serialized = serializeTemplate(template);
+  return {
+    ...serialized,
+    completionCount,
+    windowOpen: isWithinCheckScheduleWindow(new Date(), template.windowStartLocal, template.windowEndLocal),
+  };
+}
+
+function serializeCompletionRow(completion: {
+  id: string;
+  teamId: string;
+  templateId: string;
+  checkName: string;
+  dueTimeLocal: string;
+  windowStartLocal: string;
+  windowEndLocal: string;
+  completedByUserId: string;
+  completedByName: string;
+  completedAt: Date;
+  deviceId: string | null;
+  totalItems: number;
+  inRangeCount: number;
+  outOfRangeCount: number;
+  readings: unknown;
+}) {
+  return {
+    id: completion.id,
+    teamId: completion.teamId,
+    templateId: completion.templateId,
+    checkName: completion.checkName,
+    dueTimeLocal: completion.dueTimeLocal,
+    windowStartLocal: completion.windowStartLocal,
+    windowEndLocal: completion.windowEndLocal,
+    completedByUserId: completion.completedByUserId,
+    completedByName: completion.completedByName,
+    completedAt: completion.completedAt.toISOString(),
+    deviceId: completion.deviceId,
+    totalItems: completion.totalItems,
+    inRangeCount: completion.inRangeCount,
+    outOfRangeCount: completion.outOfRangeCount,
+    readings: completion.readings as TempCheckReadingRow[],
+  };
+}
+
+function parseReading(value: number): number | null {
+  if (!Number.isFinite(value)) return null;
+  const rounded = Math.round(value * 10) / 10;
+  if (rounded < -80 || rounded > 500) return null;
+  return rounded;
+}
+
+function normalizeReadings(
+  templateItems: {
+    id: string;
+    label: string;
+    tempMinF: number | null;
+    tempMaxF: number | null;
+    correctiveActions: { label: string }[];
+  }[],
+  raw: TempCheckReadingInput[],
+): { ok: true; readings: TempCheckReadingRow[] } | { ok: false; code: "VALIDATION" } {
+  if (raw.length !== templateItems.length) return { ok: false, code: "VALIDATION" };
+  const byId = new Map(raw.map((row) => [row.itemId, row]));
+  const readings: TempCheckReadingRow[] = [];
+
+  for (const item of templateItems) {
+    const row = byId.get(item.id);
+    if (!row) return { ok: false, code: "VALIDATION" };
+    const readingF = parseReading(row.readingF);
+    if (readingF == null) return { ok: false, code: "VALIDATION" };
+    const inRange = isReadingInTempRange(readingF, item.tempMinF, item.tempMaxF);
+    const correctiveAction =
+      typeof row.correctiveAction === "string" ? row.correctiveAction.trim().slice(0, 200) || null : null;
+    const notes = typeof row.notes === "string" ? row.notes.trim().slice(0, 500) || null : null;
+    if (!inRange) {
+      if (!correctiveAction) return { ok: false, code: "VALIDATION" };
+      const allowed = item.correctiveActions.map((a) => a.label.toLowerCase());
+      if (allowed.length > 0 && !allowed.includes(correctiveAction.toLowerCase())) {
+        return { ok: false, code: "VALIDATION" };
+      }
+    } else if (correctiveAction) {
+      return { ok: false, code: "VALIDATION" };
+    }
+    readings.push({
+      itemId: item.id,
+      label: item.label,
+      readingF,
+      inRange,
+      tempMinF: item.tempMinF,
+      tempMaxF: item.tempMaxF,
+      correctiveAction,
+      notes,
+    });
+  }
+
+  return { ok: true, readings };
+}
+
+async function assertPublicGoTempCheckDevice(hubToken: string, deviceId: string) {
+  const team = await findTeamByChecklistHubToken(hubToken);
+  if (!team) return { ok: false as const, code: "NOT_FOUND" as const };
+  const reachable = await isGoDeviceApproved(team.id, deviceId);
+  if (!reachable) return { ok: false as const, code: "FORBIDDEN" as const };
+  return { ok: true as const, teamId: team.id };
+}
+
+export async function listPublicTempCheckTemplates(hubToken: string, deviceId: string) {
+  const ctx = await assertPublicGoTempCheckDevice(hubToken, deviceId);
+  if (!ctx.ok) return ctx;
+
+  const templates = await prisma.tempCheckTemplate.findMany({
+    where: { teamId: ctx.teamId, isActive: true, isPublished: true },
+    include: templateInclude,
+    orderBy: [{ dueTimeLocal: "asc" }, { name: "asc" }],
+  });
+
+  let countMap = new Map<string, number>();
+  try {
+    const counts = await prisma.tempCheckCompletion.groupBy({
+      by: ["templateId"],
+      where: { teamId: ctx.teamId, templateId: { in: templates.map((t) => t.id) } },
+      _count: { _all: true },
+    });
+    countMap = new Map(counts.map((c) => [c.templateId, c._count._all]));
+  } catch {
+    countMap = new Map();
+  }
+
+  return {
+    ok: true as const,
+    templates: templates.map((t) => serializePublicTemplateRow(t, countMap.get(t.id) ?? 0)),
+  };
+}
+
+export async function getPublicTempCheckTemplate(hubToken: string, deviceId: string, templateId: string) {
+  const ctx = await assertPublicGoTempCheckDevice(hubToken, deviceId);
+  if (!ctx.ok) return ctx;
+
+  const template = await prisma.tempCheckTemplate.findFirst({
+    where: { id: templateId, teamId: ctx.teamId, isActive: true, isPublished: true },
+    include: templateInclude,
+  });
+  if (!template) return { ok: false as const, code: "NOT_FOUND" as const };
+
+  let completionCount = 0;
+  try {
+    completionCount = await prisma.tempCheckCompletion.count({
+      where: { teamId: ctx.teamId, templateId },
+    });
+  } catch {
+    completionCount = 0;
+  }
+
+  return { ok: true as const, template: serializePublicTemplateRow(template, completionCount) };
+}
+
+export async function listPublicTempCheckCompletions(hubToken: string, deviceId: string) {
+  const ctx = await assertPublicGoTempCheckDevice(hubToken, deviceId);
+  if (!ctx.ok) return ctx;
+
+  const completions = await prisma.tempCheckCompletion.findMany({
+    where: { teamId: ctx.teamId },
+    orderBy: { completedAt: "desc" },
+    take: 100,
+  });
+
+  return { ok: true as const, completions: completions.map(serializeCompletionRow) };
+}
+
+export async function getPublicTempCheckCompletion(hubToken: string, deviceId: string, completionId: string) {
+  const ctx = await assertPublicGoTempCheckDevice(hubToken, deviceId);
+  if (!ctx.ok) return ctx;
+
+  const completion = await prisma.tempCheckCompletion.findFirst({
+    where: { id: completionId, teamId: ctx.teamId },
+  });
+  if (!completion) return { ok: false as const, code: "NOT_FOUND" as const };
+
+  return { ok: true as const, completion: serializeCompletionRow(completion) };
+}
+
+export async function completePublicTempCheck(
+  hubToken: string,
+  deviceId: string,
+  templateId: string,
+  actor: { leaderUserId?: string | null },
+  input: CompleteTempCheckInput,
+) {
+  const ctx = await assertPublicGoTempCheckDevice(hubToken, deviceId);
+  if (!ctx.ok) return ctx;
+
+  if (!actor.leaderUserId?.trim()) return { ok: false as const, code: "VALIDATION" as const };
+  const leader = await resolveVerifiedGoLeader(prisma, ctx.teamId, actor.leaderUserId.trim());
+  if (!leader.ok) return { ok: false as const, code: "VALIDATION" as const };
+
+  const template = await prisma.tempCheckTemplate.findFirst({
+    where: { id: templateId, teamId: ctx.teamId, isActive: true, isPublished: true },
+    include: templateInclude,
+  });
+  if (!template) return { ok: false as const, code: "NOT_FOUND" as const };
+  if (template.items.length === 0) return { ok: false as const, code: "VALIDATION" as const };
+
+  if (!isWithinCheckScheduleWindow(new Date(), template.windowStartLocal, template.windowEndLocal)) {
+    return { ok: false as const, code: "OUTSIDE_WINDOW" as const };
+  }
+
+  const parsed = normalizeReadings(template.items, input.readings);
+  if (!parsed.ok) return { ok: false as const, code: "VALIDATION" as const };
+
+  const inRangeCount = parsed.readings.filter((r) => r.inRange).length;
+  const outOfRangeCount = parsed.readings.length - inRangeCount;
+
+  const completion = await prisma.tempCheckCompletion.create({
+    data: {
+      teamId: ctx.teamId,
+      templateId,
+      checkName: template.name,
+      dueTimeLocal: template.dueTimeLocal,
+      windowStartLocal: template.windowStartLocal,
+      windowEndLocal: template.windowEndLocal,
+      completedByUserId: leader.leader.userId,
+      completedByName: leader.leader.name,
+      deviceId: deviceId.slice(0, 128),
+      totalItems: parsed.readings.length,
+      inRangeCount,
+      outOfRangeCount,
+      readings: parsed.readings,
+    },
+  });
+
+  return { ok: true as const, completion: serializeCompletionRow(completion) };
 }

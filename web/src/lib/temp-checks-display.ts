@@ -29,3 +29,36 @@ export function formatTempCheckSaveError(err: unknown): string {
   if (err instanceof Error && err.message.trim()) return err.message;
   return "Could not save temp check. Please review the form and try again.";
 }
+
+function localTimeToMinutes(value: string): number {
+  const [hourRaw, minuteRaw] = value.split(":");
+  return Number(hourRaw) * 60 + Number(minuteRaw);
+}
+
+export function isTempCheckWindowOpen(
+  template: Pick<TempCheckTemplateRow, "windowStartLocal" | "windowEndLocal">,
+  at = new Date(),
+): boolean {
+  const nowMinutes = at.getHours() * 60 + at.getMinutes();
+  const start = localTimeToMinutes(template.windowStartLocal);
+  const end = localTimeToMinutes(template.windowEndLocal);
+  if (start <= end) return nowMinutes >= start && nowMinutes <= end;
+  return nowMinutes >= start || nowMinutes <= end;
+}
+
+export function formatTempCheckDateTime(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+export function isReadingInTempRange(readingF: number, tempMinF: number | null, tempMaxF: number | null): boolean {
+  if (tempMinF != null && readingF < tempMinF) return false;
+  if (tempMaxF != null && readingF > tempMaxF) return false;
+  return true;
+}
