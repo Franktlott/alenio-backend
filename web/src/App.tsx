@@ -10,16 +10,12 @@ import { AlenioGoLinkedDevicesRoutes } from "./routes/alenio-go/AlenioGoLinkedDe
 import { AlenioGoComingSoonModulePage } from "./routes/alenio-go/AlenioGoComingSoonModulePage";
 import { AlenioGoBriefingsRoutes } from "./routes/alenio-go/AlenioGoBriefingsRoutes";
 import { AlenioGoWalksRoutes } from "./routes/alenio-go/AlenioGoWalksRoutes";
-import { AlenioGoFoodSafetyRoutes } from "./routes/alenio-go/AlenioGoFoodSafetyRoutes";
+import { AlenioGoTempChecksRoutes } from "./routes/alenio-go/AlenioGoTempChecksRoutes";
 import { BriefingsKioskPage } from "./routes/BriefingsKioskPage";
 import { BriefingsKioskReviewPage } from "./routes/BriefingsKioskReviewPage";
 import { WalksKioskPage } from "./routes/WalksKioskPage";
 import { WalksKioskRunPage } from "./routes/WalksKioskRunPage";
 import { WalksKioskHistoryPage } from "./routes/WalksKioskHistoryPage";
-import { FoodSafetyKioskPage } from "./routes/FoodSafetyKioskPage";
-import { FoodSafetyKioskRunPage } from "./routes/FoodSafetyKioskRunPage";
-import { FoodSafetyKioskCoolingPage } from "./routes/FoodSafetyKioskCoolingPage";
-import { FoodSafetyKioskCalibrationPage } from "./routes/FoodSafetyKioskCalibrationPage";
 import { ActivityPage } from "./routes/ActivityPage";
 import { BillingPage } from "./routes/BillingPage";
 import { ChatPage } from "./routes/ChatPage";
@@ -135,10 +131,6 @@ export default function App() {
           <Route path="walks/history/:completionId" element={<WalksKioskHistoryPage />} />
           <Route path="walks/:walkId/run" element={<WalksKioskRunPage />} />
           <Route path="walks" element={<WalksKioskPage />} />
-          <Route path="food-safety/run/:templateId" element={<FoodSafetyKioskRunPage />} />
-          <Route path="food-safety/cooling" element={<FoodSafetyKioskCoolingPage />} />
-          <Route path="food-safety/calibration" element={<FoodSafetyKioskCalibrationPage />} />
-          <Route path="food-safety" element={<FoodSafetyKioskPage />} />
           <Route path=":checklistId" element={<Navigate to=".." replace />} />
         </Route>
         <Route path="/aleniogo" element={<AlenioGoLinkPage />} />
@@ -165,8 +157,7 @@ export default function App() {
             <Route path="setup" element={<Navigate to="/go/devices" replace />} />
             <Route path="frontend" element={<Navigate to="/go/devices/display" replace />} />
             <Route path="checklists" element={<AlenioGoComingSoonModulePage moduleId="checklists" />} />
-            <Route path="temp-checks" element={<Navigate to="/go/food-safety" replace />} />
-            <Route path="food-safety/*" element={<AlenioGoFoodSafetyRoutes />} />
+            <Route path="temp-checks/*" element={<AlenioGoTempChecksRoutes />} />
             <Route path="briefings/*" element={<AlenioGoBriefingsRoutes />} />
             <Route path="walks/*" element={<AlenioGoWalksRoutes />} />
           </Route>

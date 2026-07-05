@@ -652,6 +652,89 @@ export function deleteTeamWalkTemplate(teamId: string, walkId: string) {
   return patchTeamWalkTemplate(teamId, walkId, { isActive: false }).then(() => ({ success: true }));
 }
 
+export type TempCheckCorrectiveActionRow = {
+  id: string;
+  label: string;
+  sortOrder: number;
+};
+
+export type TempCheckTemplateItemRow = {
+  id: string;
+  label: string;
+  tempMinF: number | null;
+  tempMaxF: number | null;
+  sortOrder: number;
+  correctiveActions: TempCheckCorrectiveActionRow[];
+};
+
+export type TempCheckTemplateRow = {
+  id: string;
+  teamId: string;
+  name: string;
+  description: string | null;
+  dueTimeLocal: string;
+  windowStartLocal: string;
+  windowEndLocal: string;
+  isActive: boolean;
+  createdByUserId: string;
+  createdAt: string;
+  updatedAt: string;
+  itemCount: number;
+  items: TempCheckTemplateItemRow[];
+  outOfWindowActions: TempCheckCorrectiveActionRow[];
+};
+
+export type TempCheckTemplateItemPayload = {
+  label: string;
+  tempMinF?: number | null;
+  tempMaxF?: number | null;
+  correctiveActions?: string[];
+};
+
+export type TempCheckTemplateCreatePayload = {
+  name: string;
+  description?: string | null;
+  dueTimeLocal: string;
+  windowStartLocal: string;
+  windowEndLocal: string;
+  items: TempCheckTemplateItemPayload[];
+  outOfWindowActions?: string[];
+};
+
+export type TempCheckTemplateUpdatePayload = Partial<TempCheckTemplateCreatePayload> & { isActive?: boolean };
+
+export function fetchTeamTempCheckTemplates(teamId: string) {
+  return apiGetJson<{ data: { templates: TempCheckTemplateRow[]; canManage: boolean } }>(
+    `/api/teams/${encodeURIComponent(teamId)}/temp-checks`,
+  ).then((r) => r.data);
+}
+
+export function fetchTeamTempCheckTemplate(teamId: string, templateId: string) {
+  return apiGetJson<{ data: { template: TempCheckTemplateRow; canManage: boolean } }>(
+    `/api/teams/${encodeURIComponent(teamId)}/temp-checks/${encodeURIComponent(templateId)}`,
+  ).then((r) => r.data);
+}
+
+export function postTeamTempCheckTemplate(teamId: string, body: TempCheckTemplateCreatePayload) {
+  return apiPostJson<{ data: TempCheckTemplateRow }>(
+    `/api/teams/${encodeURIComponent(teamId)}/temp-checks`,
+    body,
+  ).then((r) => r.data);
+}
+
+export function patchTeamTempCheckTemplate(teamId: string, templateId: string, body: TempCheckTemplateUpdatePayload) {
+  return apiPatchJson<{ data: TempCheckTemplateRow }>(
+    `/api/teams/${encodeURIComponent(teamId)}/temp-checks/${encodeURIComponent(templateId)}`,
+    body,
+  ).then((r) => r.data);
+}
+
+export function deleteTeamTempCheckTemplate(teamId: string, templateId: string) {
+  return apiDeleteJson<{ data: TempCheckTemplateRow }>(
+    `/api/teams/${encodeURIComponent(teamId)}/temp-checks/${encodeURIComponent(templateId)}`,
+  ).then(() => ({ success: true }));
+}
+
 export function fetchTeamWalkCompletions(teamId: string, templateId?: string) {
   const q = templateId ? `?templateId=${encodeURIComponent(templateId)}` : "";
   return apiGetJson<{ data: { completions: WalkCompletionRow[]; canManage: boolean } }>(

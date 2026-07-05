@@ -1,15 +1,6 @@
 import { Link } from "react-router-dom";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-const WORKPLACE_OPTIONS = [
-  "Front of House",
-  "Back of House",
-  "Kitchen",
-  "Drive-Thru",
-  "Stockroom",
-  "Office",
-] as const;
-
 const CATEGORY_OPTIONS = [
   { value: "opening", label: "Opening", icon: "☀️" },
   { value: "closing", label: "Closing", icon: "🌙" },
@@ -19,6 +10,7 @@ const CATEGORY_OPTIONS = [
 ] as const;
 
 const TIME_OPTIONS = ["3 minutes", "5 minutes", "10 minutes", "15 minutes", "20 minutes"] as const;
+const DEFAULT_WALK_WORKPLACE = "All Areas";
 
 type ObservationRow = {
   id: string;
@@ -90,15 +82,7 @@ function sectionsFromInitial(initial?: Props["initial"]): SectionRow[] {
   if (initial?.items?.length) {
     return [newSection("Observations", initial.items.map((item) => newObservation(item.label)))];
   }
-  return [
-    newSection("Entrance & Lobby", [
-      newObservation("Entrance clean and presentable", "Floors, doors, and entry area are clean and free of debris."),
-    ]),
-    newSection("Dining Area", [
-      newObservation("Tables and seating ready", "Dining area is clean and set for guests."),
-      newObservation("Staff appearance and readiness", "Staff are in proper uniform and ready for guests."),
-    ]),
-  ];
+  return [newSection("Section 1", [newObservation()])];
 }
 
 function IconGrip() {
@@ -185,24 +169,19 @@ export function WalkBuilderPage({
   onSubmit,
   onCancel,
 }: Props) {
-  const [name, setName] = useState(initial?.name ?? "Opening Standards Walk");
-  const [workplace, setWorkplace] = useState(
-    initial?.workplace && WORKPLACE_OPTIONS.includes(initial.workplace as (typeof WORKPLACE_OPTIONS)[number])
-      ? initial.workplace
-      : initial?.workplace || "Front of House",
-  );
+  const [name, setName] = useState(initial?.name ?? "");
+  const workplace = initial?.workplace?.trim() || DEFAULT_WALK_WORKPLACE;
   const [category, setCategory] = useState<(typeof CATEGORY_OPTIONS)[number]["value"]>("opening");
   const [estimatedTime, setEstimatedTime] = useState<(typeof TIME_OPTIONS)[number]>("5 minutes");
-  const [description, setDescription] = useState(
-    initial
-      ? ""
-      : "Use this walk at the start of each shift to ensure our opening standards are met.",
-  );
+  const [description, setDescription] = useState("");
   const [tags, setTags] = useState("");
   const [scoringEnabled, setScoringEnabled] = useState(initial?.scoringEnabled ?? true);
   const [sections, setSections] = useState<SectionRow[]>(() => sectionsFromInitial(initial));
   const [localErr, setLocalErr] = useState<string | null>(null);
-  const [dragTarget, setDragTarget] = useState<{ sectionId: string; index: number } | null>(null);
+  const [dragTarget, setDragTarget] = useState<{
+    sectionId: string;
+    observationId: string;
+  } | null>(null);
   const [lastSavedAt] = useState<Date | null>(null);
   const baselineRef = useRef<string>("");
 
@@ -215,7 +194,6 @@ export function WalkBuilderPage({
     () => allObservations.filter((row) => row.label.trim()),
     [allObservations],
   );
-  const requiredCount = allObservations.filter((row) => row.required && row.label.trim()).length;
   const globalObservationIndex = useMemo(() => {
     const map = new Map<string, number>();
     let index = 0;
@@ -320,18 +298,32 @@ export function WalkBuilderPage({
     );
   };
 
-  const reorderObservations = (sectionId: string, from: number, to: number) => {
-    if (from === to || from < 0 || to < 0) return;
-    setSections((rows) =>
-      rows.map((section) => {
-        if (section.id !== sectionId) return section;
-        const observations = [...section.observations];
-        const [moved] = observations.splice(from, 1);
-        if (!moved) return section;
-        observations.splice(to, 0, moved);
-        return { ...section, observations };
-      }),
-    );
+  const moveObservation = (targetSectionId: string, targetIndex: number) => {
+    if (!dragTarget) return;
+    setSections((rows) => {
+      const next = rows.map((section) => ({
+        ...section,
+        observations: [...section.observations],
+      }));
+      const sourceSection = next.find((section) => section.id === dragTarget.sectionId);
+      const targetSection = next.find((section) => section.id === targetSectionId);
+      if (!sourceSection || !targetSection) return rows;
+
+      const sourceIndex = sourceSection.observations.findIndex((row) => row.id === dragTarget.observationId);
+      if (sourceIndex < 0) return rows;
+
+      const [moved] = sourceSection.observations.splice(sourceIndex, 1);
+      if (!moved) return rows;
+
+      const adjustedTargetIndex =
+        sourceSection.id === targetSection.id && sourceIndex < targetIndex ? targetIndex - 1 : targetIndex;
+      targetSection.observations.splice(
+        Math.max(0, Math.min(adjustedTargetIndex, targetSection.observations.length)),
+        0,
+        moved,
+      );
+      return next;
+    });
   };
 
   async function handleSave() {
@@ -345,8 +337,8 @@ export function WalkBuilderPage({
       }))
       .filter((section) => section.title && section.items.length > 0);
 
-    if (!name.trim() || !workplace.trim()) {
-      setLocalErr("Walk name and workplace are required.");
+    if (!name.trim()) {
+      setLocalErr("Walk name is required.");
       return;
     }
     const flatItems = payloadSections.flatMap((section) => section.items);
@@ -365,6 +357,37 @@ export function WalkBuilderPage({
   }
 
   const previewItems = filledObservations.length ? filledObservations : allObservations;
+  const detailsComplete = Boolean(name.trim());
+  const observationsComplete = sections.some(
+    (section) => section.title.trim() && section.observations.some((row) => row.label.trim()),
+  );
+  const reviewReady = detailsComplete && observationsComplete;
+  const processSteps = [
+    {
+      label: "Fill walk details",
+      helper: "Name, category, and timing",
+      complete: detailsComplete,
+      active: !detailsComplete,
+    },
+    {
+      label: "Add observations",
+      helper: "Group required checks into sections",
+      complete: observationsComplete,
+      active: detailsComplete && !observationsComplete,
+    },
+    {
+      label: "Review full walk",
+      helper: "Confirm preview and scoring",
+      complete: reviewReady,
+      active: reviewReady,
+    },
+    {
+      label: "Publish walk",
+      helper: "Save it for managers to run",
+      complete: false,
+      active: reviewReady,
+    },
+  ];
 
   return (
     <div className="walk-builder" data-testid="walk-builder-page">
@@ -397,53 +420,22 @@ export function WalkBuilderPage({
           </div>
         </header>
 
-        <div className="walk-builder-metrics" aria-label="Walk summary metrics">
-          <div className="walk-builder-metric-card">
-            <span className="walk-builder-metric-icon walk-builder-metric-icon--purple" aria-hidden>
-              ↻
-            </span>
-            <div>
-              <span className="walk-builder-metric-label">Used</span>
-              <strong className="walk-builder-metric-value">124 times</strong>
-            </div>
-          </div>
-          <div className="walk-builder-metric-card">
-            <span className="walk-builder-metric-icon walk-builder-metric-icon--green" aria-hidden>
-              ◎
-            </span>
-            <div>
-              <span className="walk-builder-metric-label">Average Score</span>
-              <strong className="walk-builder-metric-value">94%</strong>
-            </div>
-          </div>
-          <div className="walk-builder-metric-card">
-            <span className="walk-builder-metric-icon walk-builder-metric-icon--blue" aria-hidden>
-              ◷
-            </span>
-            <div>
-              <span className="walk-builder-metric-label">Last Completed</span>
-              <strong className="walk-builder-metric-value">Today, 9:42 AM</strong>
-            </div>
-          </div>
-          <div className="walk-builder-metric-card">
-            <span className="walk-builder-metric-icon walk-builder-metric-icon--amber" aria-hidden>
-              ☰
-            </span>
-            <div>
-              <span className="walk-builder-metric-label">Required Items</span>
-              <strong className="walk-builder-metric-value">{requiredCount || observations.length}</strong>
-            </div>
-          </div>
-          <div className="walk-builder-metric-card">
-            <span className="walk-builder-metric-icon walk-builder-metric-icon--purple" aria-hidden>
-              ⏱
-            </span>
-            <div>
-              <span className="walk-builder-metric-label">Est. Time</span>
-              <strong className="walk-builder-metric-value">{estimatedTime.replace(" minutes", " min")}</strong>
-            </div>
-          </div>
-        </div>
+        <ol className="walk-builder-process" aria-label="Create walk process">
+          {processSteps.map((step, index) => (
+            <li
+              key={step.label}
+              className={`walk-builder-process-step${
+                step.complete ? " walk-builder-process-step--complete" : ""
+              }${step.active ? " walk-builder-process-step--active" : ""}`}
+            >
+              <span className="walk-builder-process-number">{step.complete ? "✓" : index + 1}</span>
+              <span className="walk-builder-process-copy">
+                <strong>{step.label}</strong>
+                <span>{step.helper}</span>
+              </span>
+            </li>
+          ))}
+        </ol>
 
         <div className="walk-builder-grid">
           <div className="walk-builder-main">
@@ -466,26 +458,6 @@ export function WalkBuilderPage({
                     maxLength={80}
                   />
                   <span className="walk-builder-char-count">{name.length}/80</span>
-                </label>
-
-                <label className="walk-builder-field">
-                  <span className="walk-builder-label">
-                    Workplace / Location <span className="walk-builder-required">*</span>
-                  </span>
-                  <select
-                    className="walk-builder-input walk-builder-select"
-                    value={workplace}
-                    onChange={(e) => setWorkplace(e.target.value)}
-                  >
-                    {WORKPLACE_OPTIONS.map((opt) => (
-                      <option key={opt} value={opt}>
-                        {opt}
-                      </option>
-                    ))}
-                    {!WORKPLACE_OPTIONS.includes(workplace as (typeof WORKPLACE_OPTIONS)[number]) ? (
-                      <option value={workplace}>{workplace}</option>
-                    ) : null}
-                  </select>
                 </label>
 
                 <div className="walk-builder-field-row">
@@ -610,23 +582,26 @@ export function WalkBuilderPage({
                       </div>
                     </div>
 
-                    <ul className="walk-builder-obs-list">
+                    <ul
+                      className="walk-builder-obs-list"
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={() => {
+                        moveObservation(section.id, section.observations.length);
+                        setDragTarget(null);
+                      }}
+                    >
                       {section.observations.map((row, index) => (
                         <li
                           key={row.id}
                           className={`walk-builder-obs-row${
-                            dragTarget?.sectionId === section.id && dragTarget.index === index
+                            dragTarget?.observationId === row.id
                               ? " walk-builder-obs-row--dragging"
                               : ""
                           }`}
-                          draggable
-                          onDragStart={() => setDragTarget({ sectionId: section.id, index })}
-                          onDragEnd={() => setDragTarget(null)}
                           onDragOver={(e) => e.preventDefault()}
-                          onDrop={() => {
-                            if (dragTarget?.sectionId === section.id) {
-                              reorderObservations(section.id, dragTarget.index, index);
-                            }
+                          onDrop={(e) => {
+                            e.stopPropagation();
+                            moveObservation(section.id, index);
                             setDragTarget(null);
                           }}
                         >
@@ -634,7 +609,9 @@ export function WalkBuilderPage({
                             type="button"
                             className="walk-builder-obs-grip"
                             aria-label={`Reorder observation ${globalObservationIndex.get(row.id) ?? index + 1}`}
-                            onMouseDown={(e) => e.preventDefault()}
+                            draggable
+                            onDragStart={() => setDragTarget({ sectionId: section.id, observationId: row.id })}
+                            onDragEnd={() => setDragTarget(null)}
                           >
                             <IconGrip />
                           </button>
@@ -725,8 +702,6 @@ export function WalkBuilderPage({
               <div className="walk-builder-preview-body">
                 <h3 className="walk-builder-preview-walk-title">{name.trim() || "Untitled Walk"}</h3>
                 <p className="walk-builder-preview-meta">
-                  <span>{workplace}</span>
-                  <span aria-hidden>•</span>
                   <span>
                     {categoryMeta.icon} {categoryMeta.label}
                   </span>
@@ -794,7 +769,7 @@ export function WalkBuilderPage({
             )}
           </div>
           <p className="walk-builder-savebar-saved">
-            {lastSavedAt ? `Last saved: ${lastSavedAt.toLocaleTimeString()}` : "Last saved: 2 min ago"}
+            {lastSavedAt ? `Last saved: ${lastSavedAt.toLocaleTimeString()}` : "Not saved yet"}
           </p>
           <div className="walk-builder-savebar-actions">
             <button type="button" className="walk-builder-btn-secondary" disabled={busy} onClick={onCancel}>
