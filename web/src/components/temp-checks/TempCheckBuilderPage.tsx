@@ -27,7 +27,6 @@ type Props = {
       tempMaxF: number | null;
       correctiveActions: string[];
     }[];
-    outOfWindowActions: string[];
   };
   onSubmit: (payload: TempCheckTemplateCreatePayload) => Promise<void>;
   onCancel: () => void;
@@ -152,7 +151,6 @@ export function TempCheckBuilderPage({
   const [windowStartLocal, setWindowStartLocal] = useState(initial?.windowStartLocal ?? "06:00");
   const [windowEndLocal, setWindowEndLocal] = useState(initial?.windowEndLocal ?? "07:00");
   const [items, setItems] = useState<ItemRow[]>(() => itemsFromInitial(initial));
-  const [outOfWindowActions, setOutOfWindowActions] = useState<string[]>(initial?.outOfWindowActions ?? []);
   const [localError, setLocalError] = useState<string | null>(null);
   const [expandedItemIds, setExpandedItemIds] = useState<Set<string>>(() => new Set());
 
@@ -219,7 +217,6 @@ export function TempCheckBuilderPage({
       windowStartLocal,
       windowEndLocal,
       items: parsedItems,
-      outOfWindowActions,
     });
   }
 
@@ -274,7 +271,9 @@ export function TempCheckBuilderPage({
 
           <section className="temp-check-builder-card">
             <h2>Schedule</h2>
-            <p className="temp-check-builder-card-copy">Set when the check is due and the window it must be completed in.</p>
+            <p className="temp-check-builder-card-copy">
+              Checks can only be completed during this window. Submissions outside the schedule are blocked.
+            </p>
             <div className="temp-check-schedule-grid">
               <label className="temp-check-field">
                 <span>Due time</span>
@@ -289,12 +288,6 @@ export function TempCheckBuilderPage({
                 <input type="time" value={windowEndLocal} onChange={(e) => setWindowEndLocal(e.target.value)} />
               </label>
             </div>
-            <ActionEditor
-              label="Outside window actions"
-              hint="Required when a check is submitted after the window closes."
-              actions={outOfWindowActions}
-              onChange={setOutOfWindowActions}
-            />
           </section>
 
           <section className="temp-check-builder-card temp-check-builder-card--wide">
@@ -308,7 +301,7 @@ export function TempCheckBuilderPage({
                 <span>Item</span>
                 <span>Min °F</span>
                 <span>Max °F</span>
-                <span>Actions</span>
+                <span>Out of range</span>
                 <span />
               </div>
               <div className="temp-check-item-table-body">
@@ -352,7 +345,7 @@ export function TempCheckBuilderPage({
                           className={`temp-check-item-actions-btn${expanded ? " temp-check-item-actions-btn--open" : ""}`}
                           onClick={() => toggleItemExpanded(item.id)}
                         >
-                          {actionCount > 0 ? `${actionCount} action${actionCount === 1 ? "" : "s"}` : "Add actions"}
+                          {actionCount > 0 ? `${actionCount} action${actionCount === 1 ? "" : "s"}` : "If out of range"}
                         </button>
                         <div className="temp-check-item-table-controls">
                           <button type="button" className="temp-check-icon-btn temp-check-icon-btn--tiny" disabled={index === 0} onClick={() => moveItem(item.id, -1)} aria-label="Move up">
@@ -382,7 +375,7 @@ export function TempCheckBuilderPage({
                         <div className="temp-check-item-table-expand">
                           <ActionEditor
                             compact
-                            label="Out-of-range actions"
+                            label="Corrective actions when outside min/max"
                             hint=""
                             actions={item.correctiveActions}
                             onChange={(next) => updateItem(item.id, { correctiveActions: next })}

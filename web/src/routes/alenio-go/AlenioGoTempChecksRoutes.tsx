@@ -35,7 +35,7 @@ function TempChecksCreatePage() {
   return (
     <TempCheckBuilderPage
       pageTitle="Create temp check"
-      pageSubtitle="Set the due time, check window, probe items, and corrective actions for this food safety check."
+      pageSubtitle="Set the schedule window, probe items, temperature ranges, and corrective actions when readings are out of range."
       busy={busy}
       error={error}
       onCancel={() => navigate("/go/temp-checks")}
@@ -74,7 +74,6 @@ function TempChecksEditPage() {
       tempMaxF: number | null;
       correctiveActions: string[];
     }[];
-    outOfWindowActions: string[];
   } | null>(null);
 
   const load = useCallback(() => {
@@ -94,7 +93,6 @@ function TempChecksEditPage() {
             tempMaxF: item.tempMaxF,
             correctiveActions: item.correctiveActions.map((action) => action.label),
           })),
-          outOfWindowActions: data.template.outOfWindowActions.map((action) => action.label),
         });
       })
       .catch(() => setInitial(null))

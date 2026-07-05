@@ -182,23 +182,14 @@ export function TempCheckWorkspace({ teamId, canManage, initialTemplateId }: Pro
               ) : null}
 
               <section className="temp-check-detail-section">
-                <h3>Check window</h3>
+                <h3>Schedule</h3>
                 <p>
                   Due at <strong>{formatTempCheckTime(selectedTemplate.dueTimeLocal)}</strong> · Complete between{" "}
                   <strong>{formatTempCheckWindow(selectedTemplate)}</strong>
                 </p>
-                {selectedTemplate.outOfWindowActions.length > 0 ? (
-                  <div className="temp-check-detail-actions-block">
-                    <span className="temp-check-detail-label">Outside window actions</span>
-                    <ul>
-                      {selectedTemplate.outOfWindowActions.map((action) => (
-                        <li key={action.id}>{action.label}</li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : (
-                  <p className="enterprise-muted">No outside-window corrective actions configured.</p>
-                )}
+                <p className="enterprise-muted temp-check-detail-schedule-note">
+                  Checks cannot be started or submitted outside this schedule window.
+                </p>
               </section>
 
               <section className="temp-check-detail-section">
@@ -209,7 +200,7 @@ export function TempCheckWorkspace({ teamId, canManage, initialTemplateId }: Pro
                       <tr>
                         <th>Item</th>
                         <th>Range</th>
-                        <th>Actions</th>
+                        <th>If out of range</th>
                       </tr>
                     </thead>
                     <tbody>

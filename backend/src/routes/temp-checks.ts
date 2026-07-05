@@ -35,7 +35,6 @@ const tempCheckBodySchema = z.object({
   windowStartLocal: localTimeSchema,
   windowEndLocal: localTimeSchema,
   items: z.array(tempCheckItemSchema).min(1).max(40),
-  outOfWindowActions: z.array(z.string().trim().min(1).max(200)).max(12).optional(),
 });
 
 const tempCheckPatchSchema = z
@@ -46,7 +45,6 @@ const tempCheckPatchSchema = z
     windowStartLocal: localTimeSchema.optional(),
     windowEndLocal: localTimeSchema.optional(),
     items: z.array(tempCheckItemSchema).min(1).max(40).optional(),
-    outOfWindowActions: z.array(z.string().trim().min(1).max(200)).max(12).optional(),
     isActive: z.boolean().optional(),
   })
   .superRefine((body, ctx) => {

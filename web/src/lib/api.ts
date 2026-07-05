@@ -681,7 +681,6 @@ export type TempCheckTemplateRow = {
   updatedAt: string;
   itemCount: number;
   items: TempCheckTemplateItemRow[];
-  outOfWindowActions: TempCheckCorrectiveActionRow[];
 };
 
 export type TempCheckTemplateItemPayload = {
@@ -698,7 +697,6 @@ export type TempCheckTemplateCreatePayload = {
   windowStartLocal: string;
   windowEndLocal: string;
   items: TempCheckTemplateItemPayload[];
-  outOfWindowActions?: string[];
 };
 
 export type TempCheckTemplateUpdatePayload = Partial<TempCheckTemplateCreatePayload> & { isActive?: boolean };

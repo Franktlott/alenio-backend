@@ -15,7 +15,6 @@ export type TempCheckTemplateInput = {
   windowStartLocal: string;
   windowEndLocal: string;
   items: TempCheckItemInput[];
-  outOfWindowActions?: string[];
 };
 
 export type UpdateTempCheckTemplateInput = Partial<TempCheckTemplateInput> & { isActive?: boolean };
@@ -26,10 +25,6 @@ const templateInclude = {
     include: {
       correctiveActions: { orderBy: { sortOrder: "asc" as const } },
     },
-  },
-  correctiveActions: {
-    where: { itemId: null },
-    orderBy: { sortOrder: "asc" as const },
   },
 } as const;
 
@@ -121,7 +116,6 @@ function parseTemplateInput(input: TempCheckTemplateInput): { ok: true; parsed: 
       windowStartLocal,
       windowEndLocal,
       items: itemsParsed.items,
-      outOfWindowActions: parseActionLabels(input.outOfWindowActions),
     },
   };
 }
@@ -133,13 +127,12 @@ type ParsedTemplate = {
   windowStartLocal: string;
   windowEndLocal: string;
   items: ParsedItem[];
-  outOfWindowActions: string[];
 };
 
 async function persistTemplateChildren(
   tx: Prisma.TransactionClient,
   templateId: string,
-  parsed: Pick<ParsedTemplate, "items" | "outOfWindowActions">,
+  parsed: Pick<ParsedTemplate, "items">,
 ) {
   await tx.tempCheckCorrectiveAction.deleteMany({ where: { templateId } });
   await tx.tempCheckTemplateItem.deleteMany({ where: { templateId } });
@@ -165,17 +158,6 @@ async function persistTemplateChildren(
       });
     }
   }
-
-  if (parsed.outOfWindowActions.length > 0) {
-    await tx.tempCheckCorrectiveAction.createMany({
-      data: parsed.outOfWindowActions.map((label, sortOrder) => ({
-        templateId,
-        itemId: null,
-        label,
-        sortOrder,
-      })),
-    });
-  }
 }
 
 function serializeTemplate(template: {
@@ -198,7 +180,6 @@ function serializeTemplate(template: {
     sortOrder: number;
     correctiveActions: { id: string; label: string; sortOrder: number }[];
   }[];
-  correctiveActions: { id: string; label: string; sortOrder: number }[];
 }) {
   return {
     id: template.id,
@@ -224,11 +205,6 @@ function serializeTemplate(template: {
         label: action.label,
         sortOrder: action.sortOrder,
       })),
-    })),
-    outOfWindowActions: template.correctiveActions.map((action) => ({
-      id: action.id,
-      label: action.label,
-      sortOrder: action.sortOrder,
     })),
   };
 }
@@ -323,8 +299,6 @@ export async function updateTempCheckTemplate(
         tempMaxF: item.tempMaxF,
         correctiveActions: item.correctiveActions.map((a) => a.label),
       })),
-    outOfWindowActions:
-      input.outOfWindowActions ?? existing.correctiveActions.map((a) => a.label),
   };
 
   const parsedResult = parseTemplateInput(merged);
@@ -343,9 +317,10 @@ export async function updateTempCheckTemplate(
         ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
       },
     });
-    if (input.items || input.outOfWindowActions) {
+    if (input.items) {
       await persistTemplateChildren(tx, templateId, parsed);
     }
+    await tx.tempCheckCorrectiveAction.deleteMany({ where: { templateId, itemId: null } });
     return tx.tempCheckTemplate.findUniqueOrThrow({
       where: { id: templateId },
       include: templateInclude,
@@ -368,4 +343,38 @@ export function formatTempRange(tempMinF: number | null, tempMaxF: number | null
 
 export function formatTimeWindow(start: string, end: string): string {
   return `${start} – ${end}`;
+}
+
+function localTimeToMinutes(value: string): number {
+  const [hourRaw, minuteRaw] = value.split(":");
+  return Number(hourRaw) * 60 + Number(minuteRaw);
+}
+
+/** Checks whether a temp check can be started/submitted at the given instant. */
+export function isWithinCheckScheduleWindow(
+  at: Date,
+  windowStartLocal: string,
+  windowEndLocal: string,
+  timeZone?: string,
+): boolean {
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  const parts = formatter.formatToParts(at);
+  const hour = Number(parts.find((p) => p.type === "hour")?.value ?? "0");
+  const minute = Number(parts.find((p) => p.type === "minute")?.value ?? "0");
+  const nowMinutes = hour * 60 + minute;
+  const start = localTimeToMinutes(windowStartLocal);
+  const end = localTimeToMinutes(windowEndLocal);
+  if (start <= end) return nowMinutes >= start && nowMinutes <= end;
+  return nowMinutes >= start || nowMinutes <= end;
+}
+
+export function isReadingInTempRange(readingF: number, tempMinF: number | null, tempMaxF: number | null): boolean {
+  if (tempMinF != null && readingF < tempMinF) return false;
+  if (tempMaxF != null && readingF > tempMaxF) return false;
+  return true;
 }

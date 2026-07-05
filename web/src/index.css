@@ -34335,7 +34335,10 @@ button.enterprise-profile-legal-link {
   letter-spacing: 0.04em;
   color: var(--muted);
 }
-.temp-check-detail-actions-block ul,
+.temp-check-detail-schedule-note {
+  margin-top: 0.45rem;
+  font-size: 0.82rem;
+}
 .temp-check-detail-table-wrap {
   overflow-x: auto;
 }
