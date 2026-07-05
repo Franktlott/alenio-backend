@@ -26,6 +26,7 @@ import {
   listPublicWalkCompletions,
   listPublicWalkTemplates,
 } from "../lib/walks";
+import { verifyGoLeaderPin } from "../lib/go-leader-pin";
 
 const publicGoLinkRouter = new Hono();
 
@@ -347,23 +348,62 @@ publicGoLinkRouter.post("/briefings/:briefingId/complete", zValidator("json", pu
   }
 });
 
-const publicWalkCompleteSchema = z.object({
+const publicWalkCompleteSchema = z
+  .object({
+    hubToken: z.string().min(1).max(256),
+    deviceId: z.string().min(8).max(128),
+    managerName: z.string().trim().min(1).max(120).optional(),
+    leaderUserId: z.string().min(1).max(128).optional(),
+    responses: z
+      .array(
+        z.object({
+          itemId: z.string().min(1),
+          label: z.string().max(280),
+          status: z.enum(["pass", "needs_attention", "na"]),
+          notes: z.string().max(500).nullable().optional(),
+          photoUrl: z.string().url().max(2048).nullable().optional(),
+        }),
+      )
+      .min(1)
+      .max(80),
+    finalNotes: z.string().max(2000).nullable().optional(),
+  })
+  .refine((body) => Boolean(body.managerName?.trim() || body.leaderUserId?.trim()), {
+    message: "managerName or leaderUserId is required",
+  });
+
+const publicVerifyPinSchema = z.object({
   hubToken: z.string().min(1).max(256),
   deviceId: z.string().min(8).max(128),
-  managerName: z.string().trim().min(1).max(120),
-  responses: z
-    .array(
-      z.object({
-        itemId: z.string().min(1),
-        label: z.string().max(280),
-        status: z.enum(["pass", "needs_attention", "na"]),
-        notes: z.string().max(500).nullable().optional(),
-        photoUrl: z.string().url().max(2048).nullable().optional(),
-      }),
-    )
-    .min(1)
-    .max(80),
-  finalNotes: z.string().max(2000).nullable().optional(),
+  pin: z.string().regex(/^\d{4,8}$/),
+});
+
+publicGoLinkRouter.post("/verify-pin", zValidator("json", publicVerifyPinSchema), async (c) => {
+  try {
+    const { hubToken, deviceId, pin } = c.req.valid("json");
+    const result = await verifyGoLeaderPin(prisma, hubToken, deviceId, pin);
+    if (!result.ok) {
+      if (result.code === "FORBIDDEN") {
+        return c.json({ error: { message: GO_DEVICE_UNLINKED_MESSAGE, code: "DEVICE_UNLINKED" } }, 403);
+      }
+      if (result.code === "NOT_FOUND") {
+        return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
+      }
+      return c.json({ error: { message: "Invalid PIN", code: "INVALID_PIN" } }, 401);
+    }
+    return c.json({
+      data: {
+        leader: {
+          userId: result.leader.userId,
+          name: result.leader.name,
+          role: result.leader.role,
+        },
+      },
+    });
+  } catch (err) {
+    console.error("[go-link] POST /verify-pin failed:", err);
+    return c.json({ error: { message: "Could not verify PIN", code: "INTERNAL" } }, 500);
+  }
 });
 
 publicGoLinkRouter.get("/walks", async (c) => {
@@ -447,8 +487,14 @@ publicGoLinkRouter.get("/walks/:walkId", async (c) => {
 publicGoLinkRouter.post("/walks/:walkId/complete", zValidator("json", publicWalkCompleteSchema), async (c) => {
   try {
     const walkId = c.req.param("walkId")?.trim();
-    const { hubToken, deviceId, managerName, responses, finalNotes } = c.req.valid("json");
-    const result = await completePublicWalk(hubToken, deviceId, walkId, managerName, { responses, finalNotes });
+    const { hubToken, deviceId, managerName, leaderUserId, responses, finalNotes } = c.req.valid("json");
+    const result = await completePublicWalk(
+      hubToken,
+      deviceId,
+      walkId,
+      { managerName, leaderUserId },
+      { responses, finalNotes },
+    );
     if (!result.ok) {
       if (result.code === "FORBIDDEN") return c.json({ error: { message: GO_DEVICE_UNLINKED_MESSAGE, code: "DEVICE_UNLINKED" } }, 403);
       if (result.code === "NOT_FOUND") return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);

@@ -108,6 +108,10 @@ export async function apiPatchJson<T>(path: string, body: unknown): Promise<T> {
   return apiRequest<T>(path, { method: "PATCH", body: JSON.stringify(body) });
 }
 
+export async function apiPutJson<T>(path: string, body: unknown): Promise<T> {
+  return apiRequest<T>(path, { method: "PUT", body: JSON.stringify(body) });
+}
+
 export async function apiDeleteJson<T>(path: string): Promise<T> {
   return apiRequest<T>(path, { method: "DELETE" });
 }
@@ -735,12 +739,31 @@ export function fetchGoWalkCompletion(hubToken: string, deviceId: string, comple
 
 export function postGoWalkComplete(
   walkId: string,
-  body: WalkCompletePayload & { hubToken: string; deviceId: string; managerName: string },
+  body: WalkCompletePayload & {
+    hubToken: string;
+    deviceId: string;
+    managerName?: string;
+    leaderUserId?: string;
+  },
 ) {
   return apiPostJson<{ data: WalkCompletionRow }>(
     `/api/public/go/walks/${encodeURIComponent(walkId)}/complete`,
     body,
   ).then((r) => r.data);
+}
+
+export type GoVerifiedLeader = {
+  userId: string;
+  name: string;
+  role: "owner" | "team_leader";
+};
+
+export function postGoVerifyLeaderPin(hubToken: string, deviceId: string, pin: string) {
+  return apiPostJson<{ data: { leader: GoVerifiedLeader } }>(`/api/public/go/verify-pin`, {
+    hubToken,
+    deviceId,
+    pin,
+  }).then((r) => r.data.leader);
 }
 
 export type WebTeamInvite = {
@@ -1507,6 +1530,23 @@ export function patchWebTeamGoFrontendSettings(
   }>(`/web/api/teams/${encodeURIComponent(teamId)}`, { goFrontendSettings }).then(
     (r) => r.data.goFrontendSettings,
   );
+}
+
+export type GoLeaderPinStatus = {
+  hasPin: boolean;
+};
+
+export function fetchGoLeaderPinStatus(teamId: string) {
+  return apiGetJson<{ data: GoLeaderPinStatus }>(
+    `/api/teams/${encodeURIComponent(teamId)}/members/me/go-pin`,
+  ).then((r) => r.data);
+}
+
+export function putGoLeaderPin(teamId: string, pin: string) {
+  return apiPutJson<{ data: GoLeaderPinStatus }>(
+    `/api/teams/${encodeURIComponent(teamId)}/members/me/go-pin`,
+    { pin },
+  ).then((r) => r.data);
 }
 
 export type TeamMemberStatsRow = {

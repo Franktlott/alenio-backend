@@ -4,6 +4,7 @@ import { GoBackendModuleShell } from "../../components/alenio-go/GoBackendModule
 import { GoLinkedDevicesSubnav } from "../../components/alenio-go/linked-devices/GoLinkedDevicesSubnav";
 import { LinkedDevicesAccessPanel } from "../../components/alenio-go/linked-devices/LinkedDevicesAccessPanel";
 import { LinkedDevicesDisplayPanel } from "../../components/alenio-go/linked-devices/LinkedDevicesDisplayPanel";
+import { LinkedDevicesLeaderPinPanel } from "../../components/alenio-go/linked-devices/LinkedDevicesLeaderPinPanel";
 import { useAlenioGoShell } from "./alenio-go-outlet-context";
 
 function LinkedDevicesLayout() {
@@ -20,6 +21,7 @@ function LinkedDevicesLayout() {
       },
     ];
     if (canManage) {
+      items.push({ id: "pin", label: "Leader PIN", to: "/go/devices/pin" });
       items.push({ id: "display", label: "Tablet display", to: "/go/devices/display" });
     }
     return items;
@@ -61,11 +63,19 @@ function LinkedDevicesDisplayPage() {
   return <LinkedDevicesDisplayPanel teamId={teamId} teamName={teamName} teamImage={teamImage} />;
 }
 
+function LinkedDevicesLeaderPinPage() {
+  const { teamId, userName, canManage } = useAlenioGoShell();
+  if (!canManage) return <Navigate to="/go/devices" replace />;
+  if (!teamId) return null;
+  return <LinkedDevicesLeaderPinPanel teamId={teamId} leaderName={userName} />;
+}
+
 export function AlenioGoLinkedDevicesRoutes() {
   return (
     <Routes>
       <Route element={<LinkedDevicesLayout />}>
         <Route index element={<LinkedDevicesAccessPage />} />
+        <Route path="pin" element={<LinkedDevicesLeaderPinPage />} />
         <Route path="display" element={<LinkedDevicesDisplayPage />} />
       </Route>
     </Routes>

@@ -1,6 +1,7 @@
 import { prisma } from "../prisma";
 import type { Prisma } from "@prisma/client";
 import { findTeamByChecklistHubToken } from "./checklist-locations";
+import { resolveVerifiedGoLeader } from "./go-leader-pin";
 import { isGoDeviceApproved } from "./workplace-alerts";
 
 export type WalkItemStatus = "pass" | "needs_attention" | "na";
@@ -647,14 +648,26 @@ export async function completePublicWalk(
   hubToken: string,
   deviceId: string,
   templateId: string,
-  managerName: string | null,
+  actor: { managerName?: string | null; leaderUserId?: string | null },
   input: CompleteWalkInput,
 ) {
   const ctx = await assertPublicGoWalkDevice(hubToken, deviceId);
   if (!ctx.ok) return ctx;
 
-  const completedByName = (managerName ?? "Manager").trim().slice(0, 120) || "Manager";
-  const actorId = goDeviceActorId(deviceId);
+  let completedByUserId: string;
+  let completedByName: string;
+
+  if (actor.leaderUserId?.trim()) {
+    const leader = await resolveVerifiedGoLeader(prisma, ctx.teamId, actor.leaderUserId.trim());
+    if (!leader.ok) return { ok: false as const, code: "VALIDATION" as const };
+    completedByUserId = leader.leader.userId;
+    completedByName = leader.leader.name;
+  } else {
+    const name = (actor.managerName ?? "").trim();
+    if (!name) return { ok: false as const, code: "VALIDATION" as const };
+    completedByUserId = goDeviceActorId(deviceId);
+    completedByName = name.slice(0, 120);
+  }
 
   const template = await prisma.walkTemplate.findFirst({
     where: { id: templateId, teamId: ctx.teamId, isActive: true },
@@ -677,7 +690,7 @@ export async function completePublicWalk(
       templateId,
       walkName: template.name,
       workplace: template.workplace,
-      completedByUserId: actorId,
+      completedByUserId,
       completedByName,
       scoringEnabled: template.scoringEnabled,
       score,

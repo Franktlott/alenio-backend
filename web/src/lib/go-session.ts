@@ -1,5 +1,6 @@
 import { postGoDeviceCheckIn } from "./api";
 import { clearGoLinkedWorkspace, defaultGoDeviceLabel, getGoDeviceId } from "./go-device";
+import { clearAllGoLeaderSessions } from "./go-leader-session";
 
 export const GO_DEVICE_UNLINKED_MESSAGE = "This device was unlinked. Link again to continue.";
 
@@ -18,6 +19,7 @@ export function isGoDeviceUnlinkedError(err: unknown): boolean {
 
 /** Clear saved workspace link and return the tablet to the linking page. */
 export function disconnectGoDevice(): void {
+  clearAllGoLeaderSessions();
   clearGoLinkedWorkspace();
   if (typeof window !== "undefined") {
     window.location.replace(`${window.location.origin}/aleniogo`);

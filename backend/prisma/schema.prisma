@@ -148,6 +148,7 @@ model TeamSubscription {
 model TeamMember {
   id            String @id @default(cuid())
   role          String @default("member")
+  goPinHash     String?
   userId        String
   teamId        String
   user          User   @relation(fields: [userId], references: [id], onDelete: Cascade)

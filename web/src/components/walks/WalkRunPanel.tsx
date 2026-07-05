@@ -32,6 +32,8 @@ type Props = {
   managerName?: string;
   onManagerNameChange?: (name: string) => void;
   requireManagerName?: boolean;
+  verifiedLeaderName?: string | null;
+  onSignOutLeader?: () => void;
   onComplete: (payload: { responses: WalkItemResponse[]; finalNotes?: string | null }) => Promise<void>;
   onCancel: () => void;
 };
@@ -56,32 +58,6 @@ function matchesFilter(status: WalkItemStatus | undefined, tab: FilterTab): bool
   return Boolean(status);
 }
 
-function IconCheck() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden>
-      <polyline points="20 6 9 17 4 12" />
-    </svg>
-  );
-}
-
-function IconAlert() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-      <circle cx="12" cy="12" r="10" />
-      <line x1="12" y1="8" x2="12" y2="12" />
-      <line x1="12" y1="16" x2="12.01" y2="16" />
-    </svg>
-  );
-}
-
-function IconMinus() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden>
-      <line x1="5" y1="12" x2="19" y2="12" />
-    </svg>
-  );
-}
-
 export function WalkRunPanel({
   template,
   busy,
@@ -89,6 +65,8 @@ export function WalkRunPanel({
   managerName = "",
   onManagerNameChange,
   requireManagerName,
+  verifiedLeaderName,
+  onSignOutLeader,
   onComplete,
   onCancel,
 }: Props) {
@@ -122,6 +100,8 @@ export function WalkRunPanel({
   );
   const [finalNotes, setFinalNotes] = useState("");
   const [showFinalNotes, setShowFinalNotes] = useState(false);
+  const [sectionNotes, setSectionNotes] = useState<Record<string, string>>({});
+  const [openSectionNotes, setOpenSectionNotes] = useState<Record<string, boolean>>({});
   const [uploadingItemId, setUploadingItemId] = useState<string | null>(null);
   const [localErr, setLocalErr] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<FilterTab>("all");
@@ -189,7 +169,22 @@ export function WalkRunPanel({
 
   useEffect(() => {
     setAutosavedLabel("Autosaved just now");
-  }, [responses, finalNotes]);
+  }, [responses, finalNotes, sectionNotes]);
+
+  const visibleSections = useMemo(() => {
+    return sections
+      .map((section) => {
+        const items = section.items
+          .map((item) => flatItems.find((row) => row.itemId === item.id))
+          .filter(Boolean) as FlatItem[];
+        const filteredItems = items.filter((item) => {
+          const row = responses.find((r) => r.itemId === item.itemId);
+          return matchesFilter(row?.status, activeFilter);
+        });
+        return { section, items: filteredItems };
+      })
+      .filter((group) => group.items.length > 0);
+  }, [sections, flatItems, responses, activeFilter]);
 
   const scrollToItem = useCallback((itemId: string) => {
     itemRefs.current[itemId]?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -198,10 +193,6 @@ export function WalkRunPanel({
   function setStatus(itemId: string, status: WalkItemStatus) {
     setResponses((rows) => rows.map((row) => (row.itemId === itemId ? { ...row, status } : row)));
     setLocalErr(null);
-  }
-
-  function setNotes(itemId: string, notes: string) {
-    setResponses((rows) => rows.map((row) => (row.itemId === itemId ? { ...row, notes } : row)));
   }
 
   async function onPhotoSelected(itemId: string, file: File | null) {
@@ -221,14 +212,6 @@ export function WalkRunPanel({
     } finally {
       setUploadingItemId(null);
     }
-  }
-
-  function clearPhoto(itemId: string) {
-    setResponses((rows) =>
-      rows.map((row) =>
-        row.itemId === itemId ? { ...row, photoUrl: null, photoPreview: null } : row,
-      ),
-    );
   }
 
   function goToRelative(step: number) {
@@ -255,13 +238,27 @@ export function WalkRunPanel({
     void submit();
   }
 
+  function setSectionNote(sectionId: string, notes: string) {
+    setSectionNotes((prev) => ({ ...prev, [sectionId]: notes }));
+  }
+
+  function buildFinalNotes(): string | null {
+    const blocks: string[] = [];
+    if (finalNotes.trim()) blocks.push(finalNotes.trim());
+    for (const section of sections) {
+      const note = sectionNotes[section.id]?.trim();
+      if (note) blocks.push(`${section.title}: ${note}`);
+    }
+    return blocks.length > 0 ? blocks.join("\n\n") : null;
+  }
+
   async function submit() {
     setLocalErr(null);
     if (!readyToComplete) {
       setLocalErr("Review every observation item before completing the walk.");
       return;
     }
-    if (requireManagerName && !managerName.trim()) {
+    if (requireManagerName && !verifiedLeaderName?.trim() && !managerName.trim()) {
       setLocalErr("Enter your name so this walk is recorded.");
       return;
     }
@@ -274,13 +271,13 @@ export function WalkRunPanel({
     }));
     await onComplete({
       responses: payload,
-      finalNotes: finalNotes.trim() || null,
+      finalNotes: buildFinalNotes(),
     });
   }
 
   return (
     <div className="walk-run-page" data-testid="walk-run-panel">
-      <div className="walk-run-page-inner">
+      <div className="walk-run-page-top">
         <header className="walk-run-page-header">
           <div className="walk-run-page-header-main">
             <button type="button" className="walk-run-page-back" onClick={onCancel} disabled={busy}>
@@ -303,7 +300,19 @@ export function WalkRunPanel({
           </div>
         </header>
 
-        {requireManagerName ? (
+        {verifiedLeaderName?.trim() ? (
+          <div className="walk-run-page-manager walk-run-page-manager--leader">
+            <div className="walk-run-page-manager-leader">
+              <span className="walk-run-page-manager-leader-label">Signed in as</span>
+              <strong className="walk-run-page-manager-leader-name">{verifiedLeaderName}</strong>
+            </div>
+            {onSignOutLeader ? (
+              <button type="button" className="walk-run-page-manager-signout" onClick={onSignOutLeader} disabled={busy}>
+                Switch leader
+              </button>
+            ) : null}
+          </div>
+        ) : requireManagerName ? (
           <div className="walk-run-page-manager">
             <label className="walk-run-page-manager-label" htmlFor="walk-manager-name">
               Your name
@@ -320,18 +329,6 @@ export function WalkRunPanel({
           </div>
         ) : null}
 
-        <div className="walk-run-page-progress">
-          <div className="walk-run-page-progress-copy">
-            <span>
-              {stats.totalReviewed} of {templateItems.length} completed
-            </span>
-            <span>{progressPct}%</span>
-          </div>
-          <div className="walk-run-page-progress-track" aria-hidden>
-            <div className="walk-run-page-progress-fill" style={{ width: `${progressPct}%` }} />
-          </div>
-        </div>
-
         <div className="walk-run-page-filters" role="tablist" aria-label="Filter observations">
           {(["all", "not_started", "needs_attention", "na", "completed"] as FilterTab[]).map((tab) => (
             <button
@@ -346,89 +343,38 @@ export function WalkRunPanel({
             </button>
           ))}
         </div>
+      </div>
 
-        <div className="walk-run-page-grid">
-          <main className="walk-run-page-checklist">
-            {visibleItems.length === 0 ? (
+      <div className="walk-run-page-split">
+        <main className="walk-run-page-checklist">
+            {visibleSections.length === 0 ? (
               <p className="walk-run-page-empty">No observations match this filter.</p>
             ) : (
-              <ul className="walk-run-page-items">
-                {visibleItems.map((item, visibleIndex) => {
-                  const row = responses.find((r) => r.itemId === item.itemId);
-                  if (!row) return null;
-                  const prev = visibleItems[visibleIndex - 1];
-                  const showSection = sections.length > 1 && item.sectionTitle !== prev?.sectionTitle;
-                  return (
-                    <li key={item.itemId}>
-                      {showSection && sections.length > 1 ? (
-                        <h3 className="walk-run-page-section-label">{item.sectionTitle}</h3>
-                      ) : null}
-                      <article
-                        ref={(el) => {
-                          itemRefs.current[item.itemId] = el;
-                        }}
-                        className={`walk-run-page-card${row.status ? ` walk-run-page-card--${row.status}` : ""}`}
-                      >
-                        <div className="walk-run-page-card-main">
-                          <span className="walk-run-page-card-index">{item.index}</span>
-                          <div className="walk-run-page-card-copy">
-                            <strong>{row.label}</strong>
-                            <p>Review this observation and record pass, needs attention, or N/A.</p>
-                            <div className="walk-run-page-card-tags">
-                              <span className="walk-run-page-card-pill">Required</span>
-                              {row.photoUrl ? <span className="walk-run-page-card-photo-flag">Photo added</span> : null}
-                            </div>
-                          </div>
-                          <div className="walk-run-page-card-status" role="group" aria-label={`Status for ${row.label}`}>
-                            <button
-                              type="button"
-                              className={`walk-run-page-status-btn walk-run-page-status-btn--pass${row.status === "pass" ? " walk-run-page-status-btn--active" : ""}`}
-                              disabled={busy}
-                              onClick={() => setStatus(row.itemId, "pass")}
-                            >
-                              <IconCheck />
-                              Pass
-                            </button>
-                            <button
-                              type="button"
-                              className={`walk-run-page-status-btn walk-run-page-status-btn--attention${row.status === "needs_attention" ? " walk-run-page-status-btn--active" : ""}`}
-                              disabled={busy}
-                              onClick={() => setStatus(row.itemId, "needs_attention")}
-                            >
-                              <IconAlert />
-                              Needs Attention
-                            </button>
-                            <button
-                              type="button"
-                              className={`walk-run-page-status-btn walk-run-page-status-btn--na${row.status === "na" ? " walk-run-page-status-btn--active" : ""}`}
-                              disabled={busy}
-                              onClick={() => setStatus(row.itemId, "na")}
-                            >
-                              <IconMinus />
-                              N/A
-                            </button>
-                          </div>
-                        </div>
-
-                        <div className="walk-run-page-card-extra">
-                          <textarea
-                            className="walk-run-page-notes"
-                            value={row.notes}
-                            onChange={(e) => setNotes(row.itemId, e.target.value)}
-                            rows={2}
-                            maxLength={500}
-                            placeholder="Add notes for this observation (optional)"
-                          />
-                          <div className="walk-run-page-photo">
-                            {row.photoPreview ? (
-                              <div className="walk-run-page-photo-preview">
-                                <img src={row.photoPreview} alt="" />
-                                <button type="button" onClick={() => clearPhoto(row.itemId)}>
-                                  Remove photo
-                                </button>
-                              </div>
-                            ) : (
-                              <label className="walk-run-page-photo-upload">
+              <div className="walk-run-page-sections">
+                {visibleSections.map(({ section, items }) => (
+                  <section key={section.id} className="walk-run-page-section-block">
+                    {sections.length > 1 ? (
+                      <h3 className="walk-run-page-section-label">{section.title}</h3>
+                    ) : null}
+                    <ul className="walk-run-page-rows">
+                      {items.map((item) => {
+                        const row = responses.find((r) => r.itemId === item.itemId);
+                        if (!row) return null;
+                        return (
+                          <li
+                            key={item.itemId}
+                            ref={(el) => {
+                              itemRefs.current[item.itemId] = el;
+                            }}
+                            className={`walk-run-page-row${row.status ? ` walk-run-page-row--${row.status}` : ""}`}
+                          >
+                            <span className="walk-run-page-row-index">{item.index}</span>
+                            <span className="walk-run-page-row-label">{row.label}</span>
+                            <div className="walk-run-page-row-actions">
+                              <label
+                                className={`walk-run-page-row-photo${row.photoUrl ? " walk-run-page-row-photo--added" : ""}`}
+                                title="Add photo"
+                              >
                                 <input
                                   type="file"
                                   accept="image/*"
@@ -439,16 +385,70 @@ export function WalkRunPanel({
                                     void onPhotoSelected(row.itemId, file);
                                   }}
                                 />
-                                {uploadingItemId === row.itemId ? "Uploading…" : "Add photo"}
+                                📷
                               </label>
-                            )}
-                          </div>
-                        </div>
-                      </article>
-                    </li>
-                  );
-                })}
-              </ul>
+                              <div className="walk-run-page-row-status" role="group" aria-label={`Status for ${row.label}`}>
+                                <button
+                                  type="button"
+                                  className={`walk-run-page-row-btn walk-run-page-row-btn--pass${row.status === "pass" ? " walk-run-page-row-btn--active" : ""}`}
+                                  disabled={busy}
+                                  onClick={() => setStatus(row.itemId, "pass")}
+                                  title="Pass"
+                                >
+                                  Pass
+                                </button>
+                                <button
+                                  type="button"
+                                  className={`walk-run-page-row-btn walk-run-page-row-btn--attention${row.status === "needs_attention" ? " walk-run-page-row-btn--active" : ""}`}
+                                  disabled={busy}
+                                  onClick={() => setStatus(row.itemId, "needs_attention")}
+                                  title="Needs Attention"
+                                >
+                                  Needs Attn
+                                </button>
+                                <button
+                                  type="button"
+                                  className={`walk-run-page-row-btn walk-run-page-row-btn--na${row.status === "na" ? " walk-run-page-row-btn--active" : ""}`}
+                                  disabled={busy}
+                                  onClick={() => setStatus(row.itemId, "na")}
+                                  title="N/A"
+                                >
+                                  N/A
+                                </button>
+                              </div>
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                    <div className="walk-run-page-section-notes">
+                      <button
+                        type="button"
+                        className="walk-run-page-section-notes-toggle"
+                        onClick={() =>
+                          setOpenSectionNotes((prev) => ({
+                            ...prev,
+                            [section.id]: !prev[section.id],
+                          }))
+                        }
+                      >
+                        {openSectionNotes[section.id] ? "Hide section notes" : "Add section notes"}
+                        {sectionNotes[section.id]?.trim() ? " •" : ""}
+                      </button>
+                      {openSectionNotes[section.id] ? (
+                        <textarea
+                          className="walk-run-page-section-notes-input"
+                          value={sectionNotes[section.id] ?? ""}
+                          onChange={(e) => setSectionNote(section.id, e.target.value)}
+                          rows={2}
+                          maxLength={500}
+                          placeholder={`Notes for ${section.title} (optional)`}
+                        />
+                      ) : null}
+                    </div>
+                  </section>
+                ))}
+              </div>
             )}
           </main>
 
@@ -538,7 +538,6 @@ export function WalkRunPanel({
               </ul>
             </section>
           </aside>
-        </div>
       </div>
 
       {localErr || error ? (
