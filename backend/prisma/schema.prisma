@@ -591,20 +591,35 @@ model WalkTemplate {
   updatedAt       DateTime @updatedAt
 
   team        Team               @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  sections    WalkTemplateSection[]
   items       WalkTemplateItem[]
   completions WalkCompletion[]
 
   @@index([teamId, isActive])
 }
 
-model WalkTemplateItem {
-  id         String       @id @default(cuid())
+model WalkTemplateSection {
+  id         String             @id @default(cuid())
   templateId String
-  label      String
-  sortOrder  Int          @default(0)
-  template   WalkTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  title      String
+  sortOrder  Int                @default(0)
+  template   WalkTemplate       @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  items      WalkTemplateItem[]
 
   @@index([templateId])
+}
+
+model WalkTemplateItem {
+  id         String               @id @default(cuid())
+  templateId String
+  sectionId  String?
+  label      String
+  sortOrder  Int                  @default(0)
+  template   WalkTemplate         @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  section    WalkTemplateSection? @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+
+  @@index([templateId])
+  @@index([sectionId])
 }
 
 model WalkCompletion {

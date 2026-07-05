@@ -1,9 +1,9 @@
 import { Navigate, Route, Routes, useNavigate, useParams } from "react-router-dom";
 import { useCallback, useEffect, useState } from "react";
 import { GoBackendModuleShell } from "../../components/alenio-go/GoBackendModuleShell";
-import { WalkHistoryDetail } from "../../components/walks/WalkHistoryDetail";
+import { formatWalkSaveError, getWalkTemplateSections } from "../../lib/walks-display";
 import { WalkRunPanel } from "../../components/walks/WalkRunPanel";
-import { WalkTemplateForm } from "../../components/walks/WalkTemplateForm";
+import { WalkBuilderPage } from "../../components/walks/WalkBuilderPage";
 import { WalkWorkspace } from "../../components/walks/WalkWorkspace";
 import {
   fetchTeamWalkCompletion,
@@ -44,30 +44,25 @@ function WalksCreatePage() {
   if (!teamId) return null;
 
   return (
-    <GoBackendModuleShell
-      title="Create walk"
-      subtitle="Define observation items for structured manager walks on the floor."
-      tone="violet"
-    >
-      <div className="go-backend-module-panel go-backend-panel-card">
-        <WalkTemplateForm
-          busy={busy}
-          error={error}
-          onSubmit={async (payload) => {
-            setBusy(true);
-            setError(null);
-            try {
-              const created = await postTeamWalkTemplate(teamId, payload);
-              navigate(`/go/walks/${created.id}/run`);
-            } catch (err) {
-              setError(err instanceof Error ? err.message : "Could not create walk.");
-            } finally {
-              setBusy(false);
-            }
-          }}
-        />
-      </div>
-    </GoBackendModuleShell>
+    <WalkBuilderPage
+      pageTitle="Create Walk"
+      pageSubtitle="Create a reusable observation walk for managers to complete on the floor."
+      busy={busy}
+      error={error}
+      onCancel={() => navigate("/go/walks")}
+      onSubmit={async (payload) => {
+        setBusy(true);
+        setError(null);
+        try {
+          const created = await postTeamWalkTemplate(teamId, payload);
+          navigate(`/go/walks/${created.id}/run`);
+        } catch (err) {
+          setError(formatWalkSaveError(err));
+        } finally {
+          setBusy(false);
+        }
+      }}
+    />
   );
 }
 
@@ -94,7 +89,10 @@ function WalksEditPage() {
           name: data.template.name,
           workplace: data.template.workplace,
           scoringEnabled: data.template.scoringEnabled,
-          items: data.template.items.map((item) => ({ label: item.label })),
+          sections: getWalkTemplateSections(data.template).map((section) => ({
+            title: section.title,
+            items: section.items.map((item) => ({ label: item.label })),
+          })),
         });
       })
       .catch(() => setInitial(null))
@@ -111,32 +109,26 @@ function WalksEditPage() {
   if (!initial) return <p className="enterprise-muted">Walk not found.</p>;
 
   return (
-    <GoBackendModuleShell
-      title="Edit walk"
-      subtitle="Update observation items and scoring settings."
-      tone="violet"
-    >
-      <div className="go-backend-module-panel go-backend-panel-card">
-        <WalkTemplateForm
-          busy={busy}
-          error={error}
-          initial={initial}
-          submitLabel="Save changes"
-          onSubmit={async (payload) => {
-            setBusy(true);
-            setError(null);
-            try {
-              await patchTeamWalkTemplate(teamId, walkId, payload);
-              navigate(`/go/walks/${walkId}`);
-            } catch (err) {
-              setError(err instanceof Error ? err.message : "Could not update walk.");
-            } finally {
-              setBusy(false);
-            }
-          }}
-        />
-      </div>
-    </GoBackendModuleShell>
+    <WalkBuilderPage
+      pageTitle="Edit Walk"
+      pageSubtitle="Update observation items and scoring settings for this walk."
+      busy={busy}
+      error={error}
+      initial={initial}
+      onCancel={() => navigate(`/go/walks/${walkId}`)}
+      onSubmit={async (payload) => {
+        setBusy(true);
+        setError(null);
+        try {
+          await patchTeamWalkTemplate(teamId, walkId, payload);
+          navigate(`/go/walks/${walkId}`);
+        } catch (err) {
+          setError(formatWalkSaveError(err));
+        } finally {
+          setBusy(false);
+        }
+      }}
+    />
   );
 }
 

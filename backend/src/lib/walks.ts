@@ -1,4 +1,5 @@
 import { prisma } from "../prisma";
+import type { Prisma } from "@prisma/client";
 import { findTeamByChecklistHubToken } from "./checklist-locations";
 import { isGoDeviceApproved } from "./workplace-alerts";
 
@@ -14,11 +15,17 @@ export type WalkItemResponse = {
   followUpTaskId?: string | null;
 };
 
+export type WalkSectionInput = {
+  title: string;
+  items: { label: string }[];
+};
+
 export type CreateWalkTemplateInput = {
   name: string;
   workplace: string;
   scoringEnabled?: boolean;
-  items: { label: string }[];
+  items?: { label: string }[];
+  sections?: WalkSectionInput[];
 };
 
 export type UpdateWalkTemplateInput = {
@@ -27,6 +34,7 @@ export type UpdateWalkTemplateInput = {
   scoringEnabled?: boolean;
   isActive?: boolean;
   items?: { label: string }[];
+  sections?: WalkSectionInput[];
 };
 
 export type CompleteWalkInput = {
@@ -57,6 +65,120 @@ function parseItemLabels(raw: { label: string }[]): { label: string; sortOrder: 
       return { label, sortOrder: idx };
     })
     .filter((x): x is { label: string; sortOrder: number } => x !== null);
+}
+
+type ParsedWalkSection = {
+  title: string;
+  sortOrder: number;
+  items: { label: string; sortOrder: number }[];
+};
+
+function parseWalkSections(input: {
+  items?: { label: string }[];
+  sections?: WalkSectionInput[];
+}): { ok: true; sections: ParsedWalkSection[] } | { ok: false } {
+  const rawSections =
+    input.sections && input.sections.length > 0
+      ? input.sections
+      : input.items && input.items.length > 0
+        ? [{ title: "Observations", items: input.items }]
+        : null;
+
+  if (!rawSections) return { ok: false };
+
+  const sections: ParsedWalkSection[] = [];
+  let totalItems = 0;
+
+  for (let sectionIndex = 0; sectionIndex < rawSections.length; sectionIndex += 1) {
+    const title = rawSections[sectionIndex].title.trim().slice(0, 120);
+    if (!title) return { ok: false };
+    const items = parseItemLabels(rawSections[sectionIndex].items);
+    if (items.length === 0) continue;
+    totalItems += items.length;
+    sections.push({ title, sortOrder: sectionIndex, items });
+  }
+
+  if (sections.length === 0 || totalItems === 0 || totalItems > 80 || sections.length > 20) {
+    return { ok: false };
+  }
+
+  return { ok: true, sections };
+}
+
+const walkTemplateInclude = {
+  sections: {
+    orderBy: { sortOrder: "asc" as const },
+    include: { items: { orderBy: { sortOrder: "asc" as const } } },
+  },
+  items: { orderBy: { sortOrder: "asc" as const } },
+} as const;
+
+async function persistWalkSections(
+  tx: Prisma.TransactionClient,
+  templateId: string,
+  sections: ParsedWalkSection[],
+) {
+  await tx.walkTemplateItem.deleteMany({ where: { templateId } });
+  await tx.walkTemplateSection.deleteMany({ where: { templateId } });
+
+  for (const section of sections) {
+    const createdSection = await tx.walkTemplateSection.create({
+      data: {
+        templateId,
+        title: section.title,
+        sortOrder: section.sortOrder,
+      },
+    });
+    await tx.walkTemplateItem.createMany({
+      data: section.items.map((item) => ({
+        templateId,
+        sectionId: createdSection.id,
+        label: item.label,
+        sortOrder: item.sortOrder,
+      })),
+    });
+  }
+}
+
+function buildSerializedSections(template: {
+  sections?: {
+    id: string;
+    title: string;
+    sortOrder: number;
+    items: { id: string; label: string; sortOrder: number }[];
+  }[];
+  items: { id: string; label: string; sortOrder: number; sectionId?: string | null }[];
+}) {
+  if (template.sections && template.sections.length > 0) {
+    return template.sections.map((section) => ({
+      id: section.id,
+      title: section.title,
+      sortOrder: section.sortOrder,
+      items: section.items.map((item) => ({
+        id: item.id,
+        label: item.label,
+        sortOrder: item.sortOrder,
+        sectionId: section.id,
+      })),
+    }));
+  }
+
+  const legacyItems = template.items.filter((item) => !item.sectionId);
+  if (legacyItems.length === 0) return [];
+
+  return [
+    {
+      id: "legacy",
+      title: "Observations",
+      sortOrder: 0,
+      items: legacyItems.map((item) => ({
+        id: item.id,
+        label: item.label,
+        sortOrder: item.sortOrder,
+        sectionId: null as string | null,
+      })),
+    },
+  ];
 }
 
 function computeWalkStats(responses: WalkItemResponse[]) {
@@ -103,10 +225,19 @@ function serializeTemplateRow(
     createdByUserId: string;
     createdAt: Date;
     updatedAt: Date;
-    items: { id: string; label: string; sortOrder: number }[];
+    sections?: {
+      id: string;
+      title: string;
+      sortOrder: number;
+      items: { id: string; label: string; sortOrder: number }[];
+    }[];
+    items: { id: string; label: string; sortOrder: number; sectionId?: string | null }[];
   },
   completionCount = 0,
 ) {
+  const sections = buildSerializedSections(template);
+  const flatItems = sections.flatMap((section) => section.items);
+
   return {
     id: template.id,
     teamId: template.teamId,
@@ -117,13 +248,11 @@ function serializeTemplateRow(
     createdByUserId: template.createdByUserId,
     createdAt: template.createdAt.toISOString(),
     updatedAt: template.updatedAt.toISOString(),
-    itemCount: template.items.length,
+    itemCount: flatItems.length,
     completionCount,
-    items: template.items.map((item) => ({
-      id: item.id,
-      label: item.label,
-      sortOrder: item.sortOrder,
-    })),
+    sectionCount: sections.length,
+    sections,
+    items: flatItems,
   };
 }
 
@@ -203,7 +332,7 @@ export async function listWalkTemplatesForUser(teamId: string, userId: string) {
 
   const templates = await prisma.walkTemplate.findMany({
     where: { teamId, isActive: true },
-    include: { items: { orderBy: { sortOrder: "asc" } } },
+    include: walkTemplateInclude,
     orderBy: { name: "asc" },
   });
 
@@ -227,7 +356,7 @@ export async function getWalkTemplateForUser(teamId: string, templateId: string,
 
   const template = await prisma.walkTemplate.findFirst({
     where: { id: templateId, teamId, isActive: true },
-    include: { items: { orderBy: { sortOrder: "asc" } } },
+    include: walkTemplateInclude,
   });
   if (!template) return { ok: false as const, code: "NOT_FOUND" as const };
 
@@ -248,22 +377,29 @@ export async function createWalkTemplate(teamId: string, userId: string, input: 
 
   const name = input.name.trim().slice(0, 200);
   const workplace = input.workplace.trim().slice(0, 200);
-  const items = parseItemLabels(input.items);
-  if (!name || !workplace || items.length === 0) {
+  const parsed = parseWalkSections(input);
+  if (!name || !workplace || !parsed.ok) {
     return { ok: false as const, code: "VALIDATION" as const };
   }
 
-  const template = await prisma.walkTemplate.create({
-    data: {
-      teamId,
-      name,
-      workplace,
-      scoringEnabled: input.scoringEnabled ?? true,
-      createdByUserId: userId,
-      items: { create: items },
-    },
-    include: { items: { orderBy: { sortOrder: "asc" } } },
+  const template = await prisma.$transaction(async (tx) => {
+    const created = await tx.walkTemplate.create({
+      data: {
+        teamId,
+        name,
+        workplace,
+        scoringEnabled: input.scoringEnabled ?? true,
+        createdByUserId: userId,
+      },
+    });
+    await persistWalkSections(tx, created.id, parsed.sections);
+    return tx.walkTemplate.findFirst({
+      where: { id: created.id },
+      include: walkTemplateInclude,
+    });
   });
+
+  if (!template) return { ok: false as const, code: "VALIDATION" as const };
 
   return { ok: true as const, template: serializeTemplateRow(template, 0) };
 }
@@ -305,13 +441,13 @@ export async function updateWalkTemplate(
   try {
     await prisma.$transaction(async (tx) => {
       await tx.walkTemplate.update({ where: { id: templateId }, data });
-      if (input.items) {
-        const items = parseItemLabels(input.items);
-        if (items.length === 0) throw new Error("VALIDATION");
-        await tx.walkTemplateItem.deleteMany({ where: { templateId } });
-        await tx.walkTemplateItem.createMany({
-          data: items.map((item) => ({ templateId, label: item.label, sortOrder: item.sortOrder })),
+      if (input.items || input.sections) {
+        const parsed = parseWalkSections({
+          items: input.items,
+          sections: input.sections,
         });
+        if (!parsed.ok) throw new Error("VALIDATION");
+        await persistWalkSections(tx, templateId, parsed.sections);
       }
     });
   } catch (err) {
@@ -323,12 +459,27 @@ export async function updateWalkTemplate(
 
   const template = await prisma.walkTemplate.findFirst({
     where: { id: templateId, teamId },
-    include: { items: { orderBy: { sortOrder: "asc" } } },
+    include: walkTemplateInclude,
   });
   if (!template) return { ok: false as const, code: "NOT_FOUND" as const };
 
   const completionCount = await prisma.walkCompletion.count({ where: { teamId, templateId } });
   return { ok: true as const, template: serializeTemplateRow(template, completionCount) };
+}
+
+export async function deleteWalkTemplate(teamId: string, templateId: string, userId: string) {
+  const member = await assertTeamMember(teamId, userId);
+  if (!member || !isWalkManagerRole(member.role)) {
+    return { ok: false as const, code: "FORBIDDEN" as const };
+  }
+
+  const existing = await prisma.walkTemplate.findFirst({
+    where: { id: templateId, teamId, isActive: true },
+  });
+  if (!existing) return { ok: false as const, code: "NOT_FOUND" as const };
+
+  await prisma.walkTemplate.update({ where: { id: templateId }, data: { isActive: false } });
+  return { ok: true as const };
 }
 
 export async function listWalkCompletionsForUser(teamId: string, userId: string, templateId?: string) {
@@ -378,7 +529,7 @@ export async function completeWalk(
 
   const template = await prisma.walkTemplate.findFirst({
     where: { id: templateId, teamId, isActive: true },
-    include: { items: { orderBy: { sortOrder: "asc" } } },
+    include: walkTemplateInclude,
   });
   if (!template) return { ok: false as const, code: "NOT_FOUND" as const };
   if (template.items.length === 0) return { ok: false as const, code: "VALIDATION" as const };
@@ -433,7 +584,7 @@ export async function listPublicWalkTemplates(hubToken: string, deviceId: string
 
   const templates = await prisma.walkTemplate.findMany({
     where: { teamId: ctx.teamId, isActive: true },
-    include: { items: { orderBy: { sortOrder: "asc" } } },
+    include: walkTemplateInclude,
     orderBy: { name: "asc" },
   });
 
@@ -456,7 +607,7 @@ export async function getPublicWalkTemplate(hubToken: string, deviceId: string, 
 
   const template = await prisma.walkTemplate.findFirst({
     where: { id: templateId, teamId: ctx.teamId, isActive: true },
-    include: { items: { orderBy: { sortOrder: "asc" } } },
+    include: walkTemplateInclude,
   });
   if (!template) return { ok: false as const, code: "NOT_FOUND" as const };
 
@@ -507,7 +658,7 @@ export async function completePublicWalk(
 
   const template = await prisma.walkTemplate.findFirst({
     where: { id: templateId, teamId: ctx.teamId, isActive: true },
-    include: { items: { orderBy: { sortOrder: "asc" } } },
+    include: walkTemplateInclude,
   });
   if (!template) return { ok: false as const, code: "NOT_FOUND" as const };
   if (template.items.length === 0) return { ok: false as const, code: "VALIDATION" as const };

@@ -1,8 +1,8 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { WalkCompletionRow, WalkTemplateRow } from "../../lib/api";
-import { fetchTeamWalkCompletions, fetchTeamWalkTemplates } from "../../lib/api";
-import { formatWalkDateTime } from "../../lib/walks-display";
+import { deleteTeamWalkTemplate, fetchTeamWalkCompletions, fetchTeamWalkTemplates } from "../../lib/api";
+import { formatWalkDateTime, getWalkTemplateSections } from "../../lib/walks-display";
 import { WalkHistoryDetail } from "./WalkHistoryDetail";
 
 type Tab = "templates" | "history";
@@ -23,6 +23,46 @@ export function WalkWorkspace({ teamId, canManage, initialWalkId, initialComplet
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(initialWalkId ?? null);
   const [selectedCompletionId, setSelectedCompletionId] = useState<string | null>(initialCompletionId ?? null);
   const [search, setSearch] = useState("");
+  const [menuWalkId, setMenuWalkId] = useState<string | null>(null);
+  const [deletingWalkId, setDeletingWalkId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!menuWalkId) return;
+    const close = () => setMenuWalkId(null);
+    document.addEventListener("click", close);
+    return () => document.removeEventListener("click", close);
+  }, [menuWalkId]);
+
+  const handleDeleteWalk = useCallback(
+    async (walk: WalkTemplateRow) => {
+      setMenuWalkId(null);
+      if (
+        !window.confirm(
+          `Delete "${walk.name}"? Completed walk history will be kept, but this walk will no longer be available.`,
+        )
+      ) {
+        return;
+      }
+      setDeletingWalkId(walk.id);
+      try {
+        await deleteTeamWalkTemplate(teamId, walk.id);
+        setTemplates((prev) => {
+          const next = prev.filter((t) => t.id !== walk.id);
+          setSelectedTemplateId((selected) => {
+            if (selected !== walk.id) return selected;
+            return next[0]?.id ?? null;
+          });
+          return next;
+        });
+        if (initialWalkId === walk.id) navigate("/go/walks", { replace: true });
+      } catch {
+        window.alert("Could not delete walk. Please try again.");
+      } finally {
+        setDeletingWalkId(null);
+      }
+    },
+    [teamId, initialWalkId, navigate],
+  );
 
   const load = useCallback(() => {
     if (!teamId) return;
@@ -139,7 +179,10 @@ export function WalkWorkspace({ teamId, canManage, initialWalkId, initialComplet
             ) : (
               <ul className="walk-console-list">
                 {filteredTemplates.map((walk) => (
-                  <li key={walk.id}>
+                  <li
+                    key={walk.id}
+                    className={`walk-console-list-row${menuWalkId === walk.id ? " walk-console-list-row--menu-open" : ""}`}
+                  >
                     <button
                       type="button"
                       className={`walk-console-list-item${walk.id === selectedTemplateId ? " walk-console-list-item--selected" : ""}`}
@@ -151,6 +194,39 @@ export function WalkWorkspace({ teamId, canManage, initialWalkId, initialComplet
                         {walk.itemCount} items · {walk.completionCount} completed
                       </span>
                     </button>
+                    {canManage ? (
+                      <div className="enterprise-oneone-templates-more-wrap walk-console-list-kebab">
+                        <button
+                          type="button"
+                          className="enterprise-dev-plan-kebab"
+                          aria-label="Walk options"
+                          aria-expanded={menuWalkId === walk.id}
+                          disabled={deletingWalkId === walk.id}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setMenuWalkId((prev) => (prev === walk.id ? null : walk.id));
+                          }}
+                        >
+                          ⋮
+                        </button>
+                        {menuWalkId === walk.id ? (
+                          <div className="enterprise-oneone-templates-more-menu" role="menu">
+                            <button
+                              type="button"
+                              role="menuitem"
+                              className="enterprise-oneone-templates-more-item enterprise-oneone-templates-more-item--danger"
+                              disabled={deletingWalkId === walk.id}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void handleDeleteWalk(walk);
+                              }}
+                            >
+                              {deletingWalkId === walk.id ? "Deleting…" : "Delete walk"}
+                            </button>
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
                   </li>
                 ))}
               </ul>
@@ -206,6 +282,37 @@ export function WalkWorkspace({ teamId, canManage, initialWalkId, initialComplet
                       >
                         Start Walk
                       </button>
+                      <div className="enterprise-oneone-templates-more-wrap">
+                        <button
+                          type="button"
+                          className="enterprise-dev-plan-kebab walk-template-detail-kebab"
+                          aria-label="Walk options"
+                          aria-expanded={menuWalkId === selectedTemplate.id}
+                          disabled={deletingWalkId === selectedTemplate.id}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setMenuWalkId((prev) => (prev === selectedTemplate.id ? null : selectedTemplate.id));
+                          }}
+                        >
+                          ⋮
+                        </button>
+                        {menuWalkId === selectedTemplate.id ? (
+                          <div className="enterprise-oneone-templates-more-menu" role="menu">
+                            <button
+                              type="button"
+                              role="menuitem"
+                              className="enterprise-oneone-templates-more-item enterprise-oneone-templates-more-item--danger"
+                              disabled={deletingWalkId === selectedTemplate.id}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void handleDeleteWalk(selectedTemplate);
+                              }}
+                            >
+                              {deletingWalkId === selectedTemplate.id ? "Deleting…" : "Delete walk"}
+                            </button>
+                          </div>
+                        ) : null}
+                      </div>
                     </div>
                   ) : null}
                 </header>
@@ -227,14 +334,22 @@ export function WalkWorkspace({ teamId, canManage, initialWalkId, initialComplet
 
                 <section className="walk-template-detail-items">
                   <h3>Checklist</h3>
-                  <ol>
-                    {selectedTemplate.items.map((item, index) => (
-                      <li key={item.id}>
-                        <span className="walk-template-detail-index">{index + 1}</span>
-                        {item.label}
-                      </li>
-                    ))}
-                  </ol>
+                  {getWalkTemplateSections(selectedTemplate).map((section) => (
+                    <div key={section.id} className="walk-template-detail-section">
+                      <h4>{section.title}</h4>
+                      <ol>
+                        {section.items.map((item) => {
+                          const index = (selectedTemplate.items ?? []).findIndex((entry) => entry.id === item.id);
+                          return (
+                            <li key={item.id}>
+                              <span className="walk-template-detail-index">{index + 1}</span>
+                              {item.label}
+                            </li>
+                          );
+                        })}
+                      </ol>
+                    </div>
+                  ))}
                 </section>
 
                 {!canManage ? (

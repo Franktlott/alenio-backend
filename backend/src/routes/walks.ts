@@ -6,6 +6,7 @@ import { authGuard } from "../middleware/auth-guard";
 import {
   completeWalk,
   createWalkTemplate,
+  deleteWalkTemplate,
   getWalkCompletionForUser,
   getWalkTemplateForUser,
   listWalkCompletionsForUser,
@@ -23,15 +24,31 @@ walksRouter.use("*", authGuard);
 
 const walkItemStatusSchema = z.enum(["pass", "needs_attention", "na"]);
 
-const walkTemplateBodySchema = z.object({
-  name: z.string().trim().min(1).max(200),
-  workplace: z.string().trim().min(1).max(200),
-  scoringEnabled: z.boolean().optional(),
-  items: z
-    .array(z.object({ label: z.string().trim().min(1).max(280) }))
-    .min(1)
-    .max(80),
+const walkItemSchema = z.object({ label: z.string().trim().min(1).max(280) });
+
+const walkSectionSchema = z.object({
+  title: z.string().trim().min(1).max(120),
+  items: z.array(walkItemSchema).min(1).max(80),
 });
+
+const walkTemplateBodySchema = z
+  .object({
+    name: z.string().trim().min(1).max(200),
+    workplace: z.string().trim().min(1).max(200),
+    scoringEnabled: z.boolean().optional(),
+    items: z.array(walkItemSchema).min(1).max(80).optional(),
+    sections: z.array(walkSectionSchema).min(1).max(20).optional(),
+  })
+  .superRefine((body, ctx) => {
+    const hasItems = Boolean(body.items?.length);
+    const hasSections = Boolean(body.sections?.length);
+    if (!hasItems && !hasSections) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Provide at least one section or observation item",
+      });
+    }
+  });
 
 const walkTemplatePatchSchema = z
   .object({
@@ -39,11 +56,8 @@ const walkTemplatePatchSchema = z
     workplace: z.string().trim().min(1).max(200).optional(),
     scoringEnabled: z.boolean().optional(),
     isActive: z.boolean().optional(),
-    items: z
-      .array(z.object({ label: z.string().trim().min(1).max(280) }))
-      .min(1)
-      .max(80)
-      .optional(),
+    items: z.array(walkItemSchema).min(1).max(80).optional(),
+    sections: z.array(walkSectionSchema).min(1).max(20).optional(),
   })
   .superRefine((body, ctx) => {
     if (Object.keys(body).length === 0) {
@@ -121,6 +135,18 @@ walksRouter.get("/:walkId", async (c) => {
     return c.json({ error: { message: "Forbidden", code: "FORBIDDEN" } }, 403);
   }
   return c.json({ data: { template: result.template, canManage: result.canManage } });
+});
+
+// DELETE /api/teams/:teamId/walks/:walkId
+walksRouter.delete("/:walkId", async (c) => {
+  const user = c.get("user")!;
+  const { teamId, walkId } = c.req.param();
+  const result = await deleteWalkTemplate(teamId, walkId, user.id);
+  if (!result.ok) {
+    if (result.code === "NOT_FOUND") return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
+    return c.json({ error: { message: "Forbidden", code: "FORBIDDEN" } }, 403);
+  }
+  return c.json({ data: { success: true } });
 });
 
 // PATCH /api/teams/:teamId/walks/:walkId

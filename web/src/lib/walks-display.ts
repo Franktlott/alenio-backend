@@ -1,4 +1,38 @@
-import type { WalkCompletionRow, WalkItemResponse, WalkItemStatus } from "./api";
+import type { WalkCompletionRow, WalkItemResponse, WalkItemStatus, WalkTemplateRow } from "./api";
+
+export function getWalkTemplateSections(
+  template?: Pick<WalkTemplateRow, "sections" | "items"> | null,
+): WalkTemplateRow["sections"] {
+  if (!template) return [];
+  const sections = template.sections ?? [];
+  const items = template.items ?? [];
+  if (sections.length > 0) return sections;
+  if (items.length === 0) return [];
+  return [
+    {
+      id: "legacy",
+      title: "Observations",
+      sortOrder: 0,
+      items,
+    },
+  ];
+}
+
+export function formatWalkSaveError(err: unknown): string {
+  if (!(err instanceof Error)) return "Could not save walk. Please try again.";
+  const raw = err.message.trim();
+  if (!raw.startsWith("[")) return raw || "Could not save walk. Please try again.";
+  try {
+    const issues = JSON.parse(raw) as Array<{ path?: string[]; message?: string }>;
+    if (!Array.isArray(issues) || issues.length === 0) return "Could not save walk. Please check your entries.";
+    const first = issues[0];
+    if (first.path?.includes("items")) return "Add at least one observation item before saving.";
+    if (first.path?.includes("sections")) return "Add at least one section with observations before saving.";
+    return first.message || "Could not save walk. Please check your entries.";
+  } catch {
+    return raw || "Could not save walk. Please try again.";
+  }
+}
 
 export function walkStatusLabel(status: WalkItemStatus): string {
   if (status === "pass") return "Pass";

@@ -4,6 +4,7 @@ import { uploadChatMedia } from "../../lib/api";
 import {
   allWalkItemsReviewed,
   computeWalkDraftStats,
+  getWalkTemplateSections,
   walkStatusBadgeClass,
   walkStatusLabel,
 } from "../../lib/walks-display";
@@ -38,8 +39,10 @@ export function WalkRunPanel({
   onComplete,
   onCancel,
 }: Props) {
+  const sections = useMemo(() => getWalkTemplateSections(template), [template]);
+  const templateItems = template.items ?? [];
   const [responses, setResponses] = useState<DraftResponse[]>(() =>
-    template.items.map((item) => ({
+    templateItems.map((item) => ({
       itemId: item.id,
       label: item.label,
       notes: "",
@@ -65,7 +68,7 @@ export function WalkRunPanel({
   }, [responses]);
 
   const readyToComplete = allWalkItemsReviewed(
-    template.items.length,
+    templateItems.length,
     responses
       .filter((r) => r.status)
       .map((r) => ({
@@ -166,78 +169,95 @@ export function WalkRunPanel({
         </div>
       ) : null}
 
-      <ol className="walk-run-items">
-        {responses.map((row, index) => (
-          <li key={row.itemId} className="walk-run-item">
-            <div className="walk-run-item-head">
-              <span className="walk-run-item-index">{index + 1}</span>
-              <strong>{row.label}</strong>
-              {row.status ? (
-                <span className={walkStatusBadgeClass(row.status)}>{walkStatusLabel(row.status)}</span>
-              ) : null}
-            </div>
+      <div className="walk-run-sections">
+        {sections.map((section) => (
+          <section key={section.id} className="walk-run-section">
+            <header className="walk-run-section-head">
+              <h3>{section.title}</h3>
+              <span className="walk-run-section-count">
+                {section.items.length} observation{section.items.length === 1 ? "" : "s"}
+              </span>
+            </header>
+            <ol className="walk-run-items">
+              {section.items.map((item) => {
+                const row = responses.find((response) => response.itemId === item.id);
+                if (!row) return null;
+                const index = templateItems.findIndex((entry) => entry.id === item.id);
+                return (
+                  <li key={row.itemId} className="walk-run-item">
+                    <div className="walk-run-item-head">
+                      <span className="walk-run-item-index">{index + 1}</span>
+                      <strong>{row.label}</strong>
+                      {row.status ? (
+                        <span className={walkStatusBadgeClass(row.status)}>{walkStatusLabel(row.status)}</span>
+                      ) : null}
+                    </div>
 
-            <div className="walk-run-status-row" role="group" aria-label={`Status for ${row.label}`}>
-              {(["pass", "needs_attention", "na"] as WalkItemStatus[]).map((status) => (
-                <button
-                  key={status}
-                  type="button"
-                  className={`walk-run-status-btn walk-run-status-btn--${status}${row.status === status ? " walk-run-status-btn--active" : ""}`}
-                  disabled={busy}
-                  onClick={() => setStatus(row.itemId, status)}
-                >
-                  {walkStatusLabel(status)}
-                </button>
-              ))}
-            </div>
+                    <div className="walk-run-status-row" role="group" aria-label={`Status for ${row.label}`}>
+                      {(["pass", "needs_attention", "na"] as WalkItemStatus[]).map((status) => (
+                        <button
+                          key={status}
+                          type="button"
+                          className={`walk-run-status-btn walk-run-status-btn--${status}${row.status === status ? " walk-run-status-btn--active" : ""}`}
+                          disabled={busy}
+                          onClick={() => setStatus(row.itemId, status)}
+                        >
+                          {walkStatusLabel(status)}
+                        </button>
+                      ))}
+                    </div>
 
-            <label className="enterprise-alenio-go-alert-label" htmlFor={`walk-notes-${row.itemId}`}>
-              Notes (optional)
-            </label>
-            <textarea
-              id={`walk-notes-${row.itemId}`}
-              className="enterprise-alenio-go-alert-textarea walk-run-notes"
-              value={row.notes}
-              onChange={(e) => setNotes(row.itemId, e.target.value)}
-              rows={2}
-              maxLength={500}
-              placeholder="Add context for this observation"
-            />
+                    <label className="enterprise-alenio-go-alert-label" htmlFor={`walk-notes-${row.itemId}`}>
+                      Notes (optional)
+                    </label>
+                    <textarea
+                      id={`walk-notes-${row.itemId}`}
+                      className="enterprise-alenio-go-alert-textarea walk-run-notes"
+                      value={row.notes}
+                      onChange={(e) => setNotes(row.itemId, e.target.value)}
+                      rows={2}
+                      maxLength={500}
+                      placeholder="Add context for this observation"
+                    />
 
-            <div className="walk-run-photo-row">
-              {row.photoPreview ? (
-                <div className="walk-run-photo-preview">
-                  <img src={row.photoPreview} alt="" />
-                  <button type="button" className="walk-run-photo-clear" onClick={() => clearPhoto(row.itemId)}>
-                    Remove photo
-                  </button>
-                </div>
-              ) : (
-                <label className="walk-run-photo-upload">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    disabled={busy || uploadingItemId === row.itemId}
-                    onChange={(e) => {
-                      const file = e.target.files?.[0] ?? null;
-                      e.target.value = "";
-                      void onPhotoSelected(row.itemId, file);
-                    }}
-                  />
-                  {uploadingItemId === row.itemId ? "Uploading…" : "Add photo (optional)"}
-                </label>
-              )}
-            </div>
-          </li>
+                    <div className="walk-run-photo-row">
+                      {row.photoPreview ? (
+                        <div className="walk-run-photo-preview">
+                          <img src={row.photoPreview} alt="" />
+                          <button type="button" className="walk-run-photo-clear" onClick={() => clearPhoto(row.itemId)}>
+                            Remove photo
+                          </button>
+                        </div>
+                      ) : (
+                        <label className="walk-run-photo-upload">
+                          <input
+                            type="file"
+                            accept="image/*"
+                            disabled={busy || uploadingItemId === row.itemId}
+                            onChange={(e) => {
+                              const file = e.target.files?.[0] ?? null;
+                              e.target.value = "";
+                              void onPhotoSelected(row.itemId, file);
+                            }}
+                          />
+                          {uploadingItemId === row.itemId ? "Uploading…" : "Add photo (optional)"}
+                        </label>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ol>
+          </section>
         ))}
-      </ol>
+      </div>
 
       <section className="walk-run-summary" aria-label="Walk completion summary">
         <h3>Completion summary</h3>
         <dl className="walk-run-summary-stats">
           <div>
             <dt>Items reviewed</dt>
-            <dd>{stats.totalReviewed} / {template.items.length}</dd>
+            <dd>{stats.totalReviewed} / {templateItems.length}</dd>
           </div>
           <div>
             <dt>Pass</dt>

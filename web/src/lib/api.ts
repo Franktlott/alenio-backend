@@ -549,6 +549,14 @@ export type WalkTemplateItemRow = {
   id: string;
   label: string;
   sortOrder: number;
+  sectionId?: string | null;
+};
+
+export type WalkTemplateSectionRow = {
+  id: string;
+  title: string;
+  sortOrder: number;
+  items: WalkTemplateItemRow[];
 };
 
 export type WalkTemplateRow = {
@@ -563,6 +571,8 @@ export type WalkTemplateRow = {
   updatedAt: string;
   itemCount: number;
   completionCount: number;
+  sectionCount: number;
+  sections: WalkTemplateSectionRow[];
   items: WalkTemplateItemRow[];
 };
 
@@ -598,7 +608,8 @@ export type WalkTemplateCreatePayload = {
   name: string;
   workplace: string;
   scoringEnabled?: boolean;
-  items: { label: string }[];
+  items?: { label: string }[];
+  sections?: { title: string; items: { label: string }[] }[];
 };
 
 export type WalkTemplateUpdatePayload = Partial<WalkTemplateCreatePayload> & { isActive?: boolean };
@@ -630,6 +641,12 @@ export function patchTeamWalkTemplate(teamId: string, walkId: string, body: Walk
   return apiPatchJson<{ data: WalkTemplateRow }>(
     `/api/teams/${encodeURIComponent(teamId)}/walks/${encodeURIComponent(walkId)}`,
     body,
+  ).then((r) => r.data);
+}
+
+export function deleteTeamWalkTemplate(teamId: string, walkId: string) {
+  return apiDeleteJson<{ data: { success: boolean } }>(
+    `/api/teams/${encodeURIComponent(teamId)}/walks/${encodeURIComponent(walkId)}`,
   ).then((r) => r.data);
 }
 
