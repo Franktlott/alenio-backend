@@ -680,6 +680,7 @@ export type TempCheckCorrectiveActionRow = {
 
 export type TempCheckTemplateItemRow = {
   id: string;
+  equipmentId: string | null;
   label: string;
   tempMinF: number | null;
   tempMaxF: number | null;
@@ -746,9 +747,35 @@ export type TempCheckCompletePayload = {
 
 export type TempCheckTemplateItemPayload = {
   label: string;
+  equipmentId?: string | null;
   tempMinF?: number | null;
   tempMaxF?: number | null;
   correctiveActions?: string[];
+};
+
+export type TempCheckEquipmentRow = {
+  id: string;
+  teamId: string;
+  name: string;
+  tempMinF: number | null;
+  tempMaxF: number | null;
+  sortOrder: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  actionCount: number;
+  correctiveActions: TempCheckCorrectiveActionRow[];
+};
+
+export type TempCheckEquipmentPayload = {
+  name: string;
+  tempMinF?: number | null;
+  tempMaxF?: number | null;
+  correctiveActions?: string[];
+};
+
+export type TempCheckEquipmentUpdatePayload = Partial<TempCheckEquipmentPayload> & {
+  isActive?: boolean;
 };
 
 export type TempCheckTemplateCreatePayload = {
@@ -809,6 +836,38 @@ export function postTeamTempCheckUnpublish(teamId: string, templateId: string) {
     `/api/teams/${encodeURIComponent(teamId)}/temp-checks/${encodeURIComponent(templateId)}/unpublish`,
     {},
   ).then((r) => r.data);
+}
+
+export function fetchTeamTempCheckEquipment(teamId: string) {
+  return apiGetJson<{ data: { equipment: TempCheckEquipmentRow[]; canManage: boolean } }>(
+    `/api/teams/${encodeURIComponent(teamId)}/temp-checks/equipment`,
+  ).then((r) => r.data);
+}
+
+export function fetchTeamTempCheckEquipmentItem(teamId: string, equipmentId: string) {
+  return apiGetJson<{ data: { equipment: TempCheckEquipmentRow; canManage: boolean } }>(
+    `/api/teams/${encodeURIComponent(teamId)}/temp-checks/equipment/${encodeURIComponent(equipmentId)}`,
+  ).then((r) => r.data);
+}
+
+export function postTeamTempCheckEquipment(teamId: string, body: TempCheckEquipmentPayload) {
+  return apiPostJson<{ data: TempCheckEquipmentRow }>(
+    `/api/teams/${encodeURIComponent(teamId)}/temp-checks/equipment`,
+    body,
+  ).then((r) => r.data);
+}
+
+export function patchTeamTempCheckEquipment(teamId: string, equipmentId: string, body: TempCheckEquipmentUpdatePayload) {
+  return apiPatchJson<{ data: TempCheckEquipmentRow }>(
+    `/api/teams/${encodeURIComponent(teamId)}/temp-checks/equipment/${encodeURIComponent(equipmentId)}`,
+    body,
+  ).then((r) => r.data);
+}
+
+export function deleteTeamTempCheckEquipment(teamId: string, equipmentId: string) {
+  return apiDeleteJson<{ data: TempCheckEquipmentRow }>(
+    `/api/teams/${encodeURIComponent(teamId)}/temp-checks/equipment/${encodeURIComponent(equipmentId)}`,
+  ).then(() => ({ success: true }));
 }
 
 export function fetchGoTempCheckTemplates(hubToken: string, deviceId: string, timeZone?: string) {

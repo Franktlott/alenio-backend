@@ -1,10 +1,12 @@
 import { Link } from "react-router-dom";
-import { useMemo, useState } from "react";
-import type { TempCheckTemplateCreatePayload } from "../../lib/api";
+import { useEffect, useMemo, useState } from "react";
+import type { TempCheckEquipmentRow, TempCheckTemplateCreatePayload } from "../../lib/api";
+import { fetchTeamTempCheckEquipment } from "../../lib/api";
 import { TempCheckActionsDrawer } from "./TempCheckActionsDrawer";
 
 type ItemRow = {
   id: string;
+  equipmentId: string;
   label: string;
   tempMinF: string;
   tempMaxF: string;
@@ -12,6 +14,7 @@ type ItemRow = {
 };
 
 type Props = {
+  teamId: string;
   pageTitle: string;
   pageSubtitle: string;
   busy?: boolean;
@@ -23,6 +26,7 @@ type Props = {
     windowStartLocal: string;
     windowEndLocal: string;
     items: {
+      equipmentId?: string | null;
       label: string;
       tempMinF: number | null;
       tempMaxF: number | null;
@@ -36,6 +40,7 @@ type Props = {
 function newItem(): ItemRow {
   return {
     id: crypto.randomUUID(),
+    equipmentId: "",
     label: "",
     tempMinF: "",
     tempMaxF: "",
@@ -47,6 +52,7 @@ function itemsFromInitial(initial?: Props["initial"]): ItemRow[] {
   if (!initial?.items.length) return [newItem()];
   return initial.items.map((item) => ({
     id: crypto.randomUUID(),
+    equipmentId: item.equipmentId ?? "",
     label: item.label,
     tempMinF: item.tempMinF != null ? String(item.tempMinF) : "",
     tempMaxF: item.tempMaxF != null ? String(item.tempMaxF) : "",
@@ -62,6 +68,7 @@ function parseNumberInput(value: string): number | null {
 }
 
 export function TempCheckBuilderPage({
+  teamId,
   pageTitle,
   pageSubtitle,
   busy,
@@ -70,6 +77,7 @@ export function TempCheckBuilderPage({
   onSubmit,
   onCancel,
 }: Props) {
+  const [equipment, setEquipment] = useState<TempCheckEquipmentRow[]>([]);
   const [name, setName] = useState(initial?.name ?? "");
   const [description, setDescription] = useState(initial?.description ?? "");
   const [dueTimeLocal, setDueTimeLocal] = useState(initial?.dueTimeLocal ?? "06:00");
@@ -81,6 +89,29 @@ export function TempCheckBuilderPage({
 
   const itemCountLabel = useMemo(() => `${items.length} item${items.length === 1 ? "" : "s"}`, [items.length]);
   const actionsItem = items.find((item) => item.id === actionsItemId) ?? null;
+
+  useEffect(() => {
+    if (!teamId) return;
+    void fetchTeamTempCheckEquipment(teamId)
+      .then((data) => setEquipment(data.equipment))
+      .catch(() => setEquipment([]));
+  }, [teamId]);
+
+  function applyEquipment(itemId: string, equipmentId: string) {
+    if (!equipmentId) {
+      updateItem(itemId, { equipmentId: "" });
+      return;
+    }
+    const row = equipment.find((entry) => entry.id === equipmentId);
+    if (!row) return;
+    updateItem(itemId, {
+      equipmentId,
+      label: row.name,
+      tempMinF: row.tempMinF != null ? String(row.tempMinF) : "",
+      tempMaxF: row.tempMaxF != null ? String(row.tempMaxF) : "",
+      correctiveActions: row.correctiveActions.map((action) => action.label),
+    });
+  }
 
   function updateItem(id: string, patch: Partial<ItemRow>) {
     setItems((prev) => prev.map((row) => (row.id === id ? { ...row, ...patch } : row)));
@@ -115,6 +146,7 @@ export function TempCheckBuilderPage({
         if (tempMinF != null && tempMaxF != null && tempMinF > tempMaxF) return null;
         return {
           label,
+          equipmentId: item.equipmentId || null,
           tempMinF,
           tempMaxF,
           correctiveActions: item.correctiveActions,
@@ -212,7 +244,7 @@ export function TempCheckBuilderPage({
               <div>
                 <h2>Items to check</h2>
                 <p className="temp-check-builder-card-copy temp-check-builder-card-copy--inline">
-                  Configure temperature ranges and out-of-range steps per item.
+                  Select equipment standards to pull temperature ranges and corrective action steps.
                 </p>
               </div>
               <span className="temp-check-count-pill">{itemCountLabel}</span>
@@ -220,10 +252,11 @@ export function TempCheckBuilderPage({
 
             <div className="temp-check-item-table">
               <div className="temp-check-item-table-head" aria-hidden>
+                <span>Equipment</span>
                 <span>Item</span>
                 <span>Min °F</span>
                 <span>Max °F</span>
-                <span>Out-of-range steps</span>
+                <span className="temp-check-item-table-head-corrective">Corrective action steps</span>
                 <span />
               </div>
               <div className="temp-check-item-table-body">
@@ -232,6 +265,20 @@ export function TempCheckBuilderPage({
                   return (
                     <div key={item.id} className="temp-check-item-table-group">
                       <div className="temp-check-item-table-row">
+                        <label className="temp-check-item-table-field temp-check-item-table-field--equipment">
+                          <span className="sr-only">Equipment {index + 1}</span>
+                          <select
+                            value={item.equipmentId}
+                            onChange={(e) => applyEquipment(item.id, e.target.value)}
+                          >
+                            <option value="">Select equipment…</option>
+                            {equipment.map((row) => (
+                              <option key={row.id} value={row.id}>
+                                {row.name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
                         <label className="temp-check-item-table-field temp-check-item-table-field--name">
                           <span className="sr-only">Item {index + 1} name</span>
                           <input
@@ -264,15 +311,24 @@ export function TempCheckBuilderPage({
                         <button
                           type="button"
                           className={`tc-builder-steps-btn${actionCount > 0 ? " tc-builder-steps-btn--set" : ""}`}
+                          title="Configure corrective action steps when the reading is out of range"
+                          aria-label={
+                            actionCount > 0
+                              ? `${actionCount} corrective action step${actionCount === 1 ? "" : "s"} configured`
+                              : "Configure corrective action steps"
+                          }
                           onClick={() => setActionsItemId(item.id)}
                         >
                           {actionCount > 0 ? (
-                            <>
+                            <span className="tc-builder-steps-btn-label tc-builder-steps-btn-label--set">
                               <span className="tc-builder-steps-count">{actionCount}</span>
-                              <span>steps</span>
-                            </>
+                              <span>corrective steps</span>
+                            </span>
                           ) : (
-                            "Configure steps"
+                            <span className="tc-builder-steps-btn-label">
+                              <span>Corrective</span>
+                              <span>action steps</span>
+                            </span>
                           )}
                         </button>
                         <div className="temp-check-item-table-controls">

@@ -12,6 +12,13 @@ import {
   unpublishTempCheckTemplate,
   updateTempCheckTemplate,
 } from "../lib/temp-checks";
+import {
+  createTempCheckEquipment,
+  deleteTempCheckEquipment,
+  getTempCheckEquipmentForUser,
+  listTempCheckEquipmentForUser,
+  updateTempCheckEquipment,
+} from "../lib/temp-check-equipment";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -25,6 +32,7 @@ const localTimeSchema = z.string().trim().regex(/^([01]\d|2[0-3]):([0-5]\d)$/, "
 
 const tempCheckItemSchema = z.object({
   label: z.string().trim().min(1).max(200),
+  equipmentId: z.string().trim().min(1).nullable().optional(),
   tempMinF: z.number().nullable().optional(),
   tempMaxF: z.number().nullable().optional(),
   correctiveActions: z.array(z.string().trim().min(1).max(200)).max(12).optional(),
@@ -64,6 +72,89 @@ const tempCheckPatchSchema = z
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "No updates provided" });
     }
   });
+
+const tempCheckEquipmentBodySchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  tempMinF: z.number().nullable().optional(),
+  tempMaxF: z.number().nullable().optional(),
+  correctiveActions: z.array(z.string().trim().min(1).max(200)).max(12).optional(),
+});
+
+const tempCheckEquipmentPatchSchema = z
+  .object({
+    name: z.string().trim().min(1).max(200).optional(),
+    tempMinF: z.number().nullable().optional(),
+    tempMaxF: z.number().nullable().optional(),
+    correctiveActions: z.array(z.string().trim().min(1).max(200)).max(12).optional(),
+    isActive: z.boolean().optional(),
+  })
+  .superRefine((body, ctx) => {
+    const hasUpdate =
+      body.name !== undefined ||
+      body.tempMinF !== undefined ||
+      body.tempMaxF !== undefined ||
+      body.correctiveActions !== undefined ||
+      body.isActive !== undefined;
+    if (!hasUpdate) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "No updates provided" });
+    }
+  });
+
+tempChecksRouter.get("/equipment", async (c) => {
+  const user = c.get("user")!;
+  const { teamId } = c.req.param();
+  const result = await listTempCheckEquipmentForUser(teamId, user.id);
+  if (!result.ok) return c.json({ error: { message: "Forbidden", code: "FORBIDDEN" } }, 403);
+  return c.json({ data: { equipment: result.equipment, canManage: result.canManage } });
+});
+
+tempChecksRouter.post("/equipment", zValidator("json", tempCheckEquipmentBodySchema), async (c) => {
+  const user = c.get("user")!;
+  const { teamId } = c.req.param();
+  const body = c.req.valid("json");
+  const result = await createTempCheckEquipment(teamId, user.id, body);
+  if (!result.ok) {
+    if (result.code === "FORBIDDEN") return c.json({ error: { message: "Forbidden", code: "FORBIDDEN" } }, 403);
+    return c.json({ error: { message: "Invalid equipment standard", code: "VALIDATION_ERROR" } }, 400);
+  }
+  return c.json({ data: result.equipment }, 201);
+});
+
+tempChecksRouter.get("/equipment/:equipmentId", async (c) => {
+  const user = c.get("user")!;
+  const { teamId, equipmentId } = c.req.param();
+  const result = await getTempCheckEquipmentForUser(teamId, equipmentId, user.id);
+  if (!result.ok) {
+    if (result.code === "FORBIDDEN") return c.json({ error: { message: "Forbidden", code: "FORBIDDEN" } }, 403);
+    return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
+  }
+  return c.json({ data: { equipment: result.equipment, canManage: result.canManage } });
+});
+
+tempChecksRouter.patch("/equipment/:equipmentId", zValidator("json", tempCheckEquipmentPatchSchema), async (c) => {
+  const user = c.get("user")!;
+  const { teamId, equipmentId } = c.req.param();
+  const body = c.req.valid("json");
+  const result = await updateTempCheckEquipment(teamId, equipmentId, user.id, body);
+  if (!result.ok) {
+    if (result.code === "FORBIDDEN") return c.json({ error: { message: "Forbidden", code: "FORBIDDEN" } }, 403);
+    if (result.code === "NOT_FOUND") return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
+    return c.json({ error: { message: "Invalid equipment standard", code: "VALIDATION_ERROR" } }, 400);
+  }
+  return c.json({ data: result.equipment });
+});
+
+tempChecksRouter.delete("/equipment/:equipmentId", async (c) => {
+  const user = c.get("user")!;
+  const { teamId, equipmentId } = c.req.param();
+  const result = await deleteTempCheckEquipment(teamId, equipmentId, user.id);
+  if (!result.ok) {
+    if (result.code === "FORBIDDEN") return c.json({ error: { message: "Forbidden", code: "FORBIDDEN" } }, 403);
+    if (result.code === "NOT_FOUND") return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
+    return c.json({ error: { message: "Invalid equipment standard", code: "VALIDATION_ERROR" } }, 400);
+  }
+  return c.json({ data: result.equipment });
+});
 
 tempChecksRouter.post("/:templateId/publish", async (c) => {
   const user = c.get("user")!;
@@ -128,6 +219,12 @@ tempChecksRouter.patch("/:templateId", zValidator("json", tempCheckPatchSchema),
   if (!result.ok) {
     if (result.code === "FORBIDDEN") return c.json({ error: { message: "Forbidden", code: "FORBIDDEN" } }, 403);
     if (result.code === "NOT_FOUND") return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
+    if (result.code === "PUBLISHED_LOCKED") {
+      return c.json(
+        { error: { message: "Published programs cannot be edited. Unpublish first to make changes.", code: "PUBLISHED_LOCKED" } },
+        409,
+      );
+    }
     return c.json({ error: { message: "Invalid temp check template", code: "VALIDATION_ERROR" } }, 400);
   }
   return c.json({ data: result.template });

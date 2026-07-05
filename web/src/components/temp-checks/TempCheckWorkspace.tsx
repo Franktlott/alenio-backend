@@ -1,21 +1,28 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { TempCheckTemplateRow } from "../../lib/api";
-import { deleteTeamTempCheckTemplate, fetchTeamTempCheckTemplates, postTeamTempCheckPublish, postTeamTempCheckUnpublish } from "../../lib/api";
+import type { TempCheckEquipmentRow, TempCheckTemplateRow } from "../../lib/api";
 import {
-  computeProgramKpis,
+  deleteTeamTempCheckEquipment,
+  deleteTeamTempCheckTemplate,
+  fetchTeamTempCheckEquipment,
+  fetchTeamTempCheckTemplates,
+  postTeamTempCheckPublish,
+  postTeamTempCheckUnpublish,
+} from "../../lib/api";
+import {
   formatWindowDuration,
   inferItemCategory,
   inferProgramIcon,
   programStatusDotClass,
 } from "../../lib/temp-checks-program-helpers";
 import { formatTempCheckTime, formatTempCheckWindow, formatTempRange } from "../../lib/temp-checks-display";
-import { CheckBadgeIcon, ItemCategoryIcon, KpiIcon, ProgramIcon } from "./TempCheckProgramIcons";
+import { CheckBadgeIcon, ItemCategoryIcon, ProgramIcon } from "./TempCheckProgramIcons";
 
 type Props = {
   teamId: string;
   canManage: boolean;
   initialTemplateId?: string;
+  initialEquipmentId?: string;
 };
 
 const PROGRAM_SETTINGS = [
@@ -65,9 +72,11 @@ function ProgramOverflowMenu({
       </button>
       {open ? (
         <div className="tc-prog-overflow-menu" role="menu">
-          <Link to={`/go/temp-checks/${template.id}/edit`} className="tc-prog-overflow-item" role="menuitem" onClick={() => setOpen(false)}>
-            Edit
-          </Link>
+          {template.isPublished === false ? (
+            <Link to={`/go/temp-checks/${template.id}/edit`} className="tc-prog-overflow-item" role="menuitem" onClick={() => setOpen(false)}>
+              Edit
+            </Link>
+          ) : null}
           <button
             type="button"
             className="tc-prog-overflow-item"
@@ -97,34 +106,65 @@ function ProgramOverflowMenu({
   );
 }
 
-export function TempCheckWorkspace({ teamId, canManage, initialTemplateId }: Props) {
+export function TempCheckWorkspace({ teamId, canManage, initialTemplateId, initialEquipmentId }: Props) {
   const navigate = useNavigate();
   const [templates, setTemplates] = useState<TempCheckTemplateRow[]>([]);
+  const [equipment, setEquipment] = useState<TempCheckEquipmentRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(initialTemplateId ?? null);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(initialEquipmentId ? null : (initialTemplateId ?? null));
+  const [selectedEquipmentId, setSelectedEquipmentId] = useState<string | null>(initialEquipmentId ?? null);
   const [search, setSearch] = useState("");
+  const [equipmentSearch, setEquipmentSearch] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deletingEquipmentId, setDeletingEquipmentId] = useState<string | null>(null);
   const [publishBusyId, setPublishBusyId] = useState<string | null>(null);
 
   const load = useCallback(() => {
     if (!teamId) return;
     setLoading(true);
-    void fetchTeamTempCheckTemplates(teamId)
-      .then((data) => {
-        setTemplates(data.templates);
+    void Promise.all([fetchTeamTempCheckTemplates(teamId), fetchTeamTempCheckEquipment(teamId)])
+      .then(([templateData, equipmentData]) => {
+        setTemplates(templateData.templates);
+        setEquipment(equipmentData.equipment);
         setSelectedTemplateId((prev) => {
-          if (prev && data.templates.some((t) => t.id === prev)) return prev;
-          if (initialTemplateId && data.templates.some((t) => t.id === initialTemplateId)) return initialTemplateId;
-          return data.templates[0]?.id ?? null;
+          if (initialEquipmentId) return null;
+          if (prev && templateData.templates.some((t) => t.id === prev)) return prev;
+          if (initialTemplateId && templateData.templates.some((t) => t.id === initialTemplateId)) return initialTemplateId;
+          return templateData.templates[0]?.id ?? null;
+        });
+        setSelectedEquipmentId((prev) => {
+          if (initialTemplateId) return null;
+          if (prev && equipmentData.equipment.some((row) => row.id === prev)) return prev;
+          if (initialEquipmentId && equipmentData.equipment.some((row) => row.id === initialEquipmentId)) return initialEquipmentId;
+          return null;
         });
       })
-      .catch(() => setTemplates([]))
+      .catch(() => {
+        setTemplates([]);
+        setEquipment([]);
+      })
       .finally(() => setLoading(false));
-  }, [teamId, initialTemplateId]);
+  }, [teamId, initialTemplateId, initialEquipmentId]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    if (!initialTemplateId) return;
+    if (templates.some((t) => t.id === initialTemplateId)) {
+      setSelectedTemplateId(initialTemplateId);
+      setSelectedEquipmentId(null);
+    }
+  }, [initialTemplateId, templates]);
+
+  useEffect(() => {
+    if (!initialEquipmentId) return;
+    if (equipment.some((row) => row.id === initialEquipmentId)) {
+      setSelectedEquipmentId(initialEquipmentId);
+      setSelectedTemplateId(null);
+    }
+  }, [initialEquipmentId, equipment]);
 
   const filteredTemplates = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -137,8 +177,14 @@ export function TempCheckWorkspace({ teamId, canManage, initialTemplateId }: Pro
     );
   }, [templates, search]);
 
+  const filteredEquipment = useMemo(() => {
+    const q = equipmentSearch.trim().toLowerCase();
+    if (!q) return equipment;
+    return equipment.filter((row) => row.name.toLowerCase().includes(q));
+  }, [equipment, equipmentSearch]);
+
   const selectedTemplate = templates.find((t) => t.id === selectedTemplateId) ?? null;
-  const kpis = useMemo(() => computeProgramKpis(templates), [templates]);
+  const selectedEquipment = equipment.find((row) => row.id === selectedEquipmentId) ?? null;
   const windowDuration = selectedTemplate
     ? formatWindowDuration(selectedTemplate.windowStartLocal, selectedTemplate.windowEndLocal)
     : "";
@@ -186,6 +232,24 @@ export function TempCheckWorkspace({ teamId, canManage, initialTemplateId }: Pro
     }
   }
 
+  async function handleDeleteEquipment(row: TempCheckEquipmentRow) {
+    if (!window.confirm(`Delete "${row.name}"? Programs already built keep their saved items, but new programs will no longer pull this standard.`)) return;
+    setDeletingEquipmentId(row.id);
+    try {
+      await deleteTeamTempCheckEquipment(teamId, row.id);
+      setEquipment((prev) => {
+        const next = prev.filter((item) => item.id !== row.id);
+        setSelectedEquipmentId((selected) => (selected === row.id ? (next[0]?.id ?? null) : selected));
+        return next;
+      });
+      if (initialEquipmentId === row.id) navigate("/go/temp-checks", { replace: true });
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : "Could not delete equipment.");
+    } finally {
+      setDeletingEquipmentId(null);
+    }
+  }
+
   const selectedTone = selectedTemplate ? inferProgramIcon(selectedTemplate.name) : "default";
 
   return (
@@ -209,54 +273,6 @@ export function TempCheckWorkspace({ teamId, canManage, initialTemplateId }: Pro
         ) : null}
       </header>
 
-      <section className="tc-prog-kpis" aria-label="Program summary">
-        <article className="tc-prog-kpi tc-prog-kpi--green">
-          <span className="tc-prog-kpi-icon">
-            <KpiIcon kind="programs" />
-          </span>
-          <div>
-            <span className="tc-prog-kpi-value">{kpis.activePrograms}</span>
-            <span className="tc-prog-kpi-label">Active Programs</span>
-          </div>
-        </article>
-        <article className="tc-prog-kpi tc-prog-kpi--blue">
-          <span className="tc-prog-kpi-icon">
-            <KpiIcon kind="due" />
-          </span>
-          <div>
-            <span className="tc-prog-kpi-value">{kpis.nextDueTime}</span>
-            <span className="tc-prog-kpi-label">{kpis.nextDueLabel}</span>
-          </div>
-        </article>
-        <article className="tc-prog-kpi tc-prog-kpi--purple">
-          <span className="tc-prog-kpi-icon">
-            <KpiIcon kind="items" />
-          </span>
-          <div>
-            <span className="tc-prog-kpi-value">{kpis.totalTempItems}</span>
-            <span className="tc-prog-kpi-label">Total Temp Items</span>
-          </div>
-        </article>
-        <article className="tc-prog-kpi tc-prog-kpi--orange">
-          <span className="tc-prog-kpi-icon">
-            <KpiIcon kind="locations" />
-          </span>
-          <div>
-            <span className="tc-prog-kpi-value">All</span>
-            <span className="tc-prog-kpi-label">Locations Using</span>
-          </div>
-        </article>
-        <article className="tc-prog-kpi tc-prog-kpi--green">
-          <span className="tc-prog-kpi-icon">
-            <KpiIcon kind="completion" />
-          </span>
-          <div>
-            <span className="tc-prog-kpi-value">—</span>
-            <span className="tc-prog-kpi-label">Completion (30 days)</span>
-          </div>
-        </article>
-      </section>
-
       <div className="tc-prog-layout">
         <aside className="tc-prog-sidebar">
           <h2 className="tc-prog-sidebar-title">Temperature Programs</h2>
@@ -274,7 +290,7 @@ export function TempCheckWorkspace({ teamId, canManage, initialTemplateId }: Pro
             />
           </label>
 
-          {loading ? (
+          {loading && templates.length === 0 ? (
             <p className="tc-prog-empty">Loading programs…</p>
           ) : filteredTemplates.length === 0 ? (
             <div className="tc-prog-empty">
@@ -297,6 +313,7 @@ export function TempCheckWorkspace({ teamId, canManage, initialTemplateId }: Pro
                       className={`tc-prog-card${active ? " tc-prog-card--active" : ""}`}
                       onClick={() => {
                         setSelectedTemplateId(template.id);
+                        setSelectedEquipmentId(null);
                         navigate(`/go/temp-checks/${template.id}`);
                       }}
                     >
@@ -310,8 +327,12 @@ export function TempCheckWorkspace({ teamId, canManage, initialTemplateId }: Pro
                           {formatTempCheckTime(template.dueTimeLocal)} · Daily
                         </span>
                       </span>
-                      <span className="tc-prog-card-pill">
-                        {template.isPublished === false ? "Draft" : `${template.itemCount} items`}
+                      <span
+                        className={`tc-prog-card-pill${
+                          template.isPublished === false ? " tc-prog-card-pill--draft" : " tc-prog-card-pill--live"
+                        }`}
+                      >
+                        {template.isPublished === false ? "Draft" : "Live"}
                       </span>
                       <ProgramOverflowMenu
                         template={template}
@@ -325,13 +346,168 @@ export function TempCheckWorkspace({ teamId, canManage, initialTemplateId }: Pro
               })}
             </ul>
           )}
+
+          <section className="tc-prog-sidebar-section tc-prog-sidebar-section--equipment">
+            <div className="tc-prog-sidebar-section-head">
+              <h2 className="tc-prog-sidebar-title">Equipment Standards</h2>
+              {canManage ? (
+                <Link to="/go/temp-checks/equipment/new" className="tc-prog-sidebar-add" aria-label="Add equipment">
+                  +
+                </Link>
+              ) : null}
+            </div>
+            <p className="tc-prog-sidebar-copy">Temperature ranges and corrective actions used when building programs.</p>
+            <label className="tc-prog-search">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                <circle cx="11" cy="11" r="7" />
+                <path d="M20 20l-3-3" />
+              </svg>
+              <input
+                type="search"
+                value={equipmentSearch}
+                placeholder="Search equipment..."
+                onChange={(e) => setEquipmentSearch(e.target.value)}
+                aria-label="Search equipment"
+              />
+            </label>
+
+            {loading && equipment.length === 0 ? (
+              <p className="tc-prog-empty">Loading equipment…</p>
+            ) : filteredEquipment.length === 0 ? (
+              <div className="tc-prog-empty">
+                <p>{equipment.length === 0 ? "No equipment standards yet." : "No equipment matches your search."}</p>
+                {canManage && equipment.length === 0 ? (
+                  <Link to="/go/temp-checks/equipment/new" className="tc-prog-btn-primary tc-prog-btn-primary--small">
+                    + Add equipment
+                  </Link>
+                ) : null}
+              </div>
+            ) : (
+              <ul className="tc-prog-list tc-prog-list--equipment">
+                {filteredEquipment.map((row) => {
+                  const active = selectedEquipmentId === row.id;
+                  return (
+                    <li key={row.id}>
+                      <button
+                        type="button"
+                        className={`tc-prog-card tc-prog-card--equipment${active ? " tc-prog-card--active" : ""}`}
+                        onClick={() => {
+                          setSelectedEquipmentId(row.id);
+                          setSelectedTemplateId(null);
+                          navigate(`/go/temp-checks/equipment/${row.id}`);
+                        }}
+                      >
+                        <span className="tc-prog-card-icon tc-prog-card-icon--cooler">
+                          <ItemCategoryIcon />
+                        </span>
+                        <span className="tc-prog-card-body">
+                          <span className="tc-prog-card-name">{row.name}</span>
+                          <span className="tc-prog-card-schedule">{formatTempRange(row.tempMinF, row.tempMaxF)}</span>
+                        </span>
+                        <span className="tc-prog-card-pill tc-prog-card-pill--equipment">
+                          {row.actionCount} step{row.actionCount === 1 ? "" : "s"}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
         </aside>
 
         <main className="tc-prog-detail">
-          {!selectedTemplate ? (
+          {selectedEquipment ? (
+            <div className="tc-prog-detail-panel">
+              <header className="tc-prog-detail-head">
+                <div className="tc-prog-detail-head-main">
+                  <span className="tc-prog-detail-icon tc-prog-detail-icon--cooler">
+                    <ItemCategoryIcon />
+                  </span>
+                  <div>
+                    <div className="tc-prog-detail-title-row">
+                      <h2>{selectedEquipment.name}</h2>
+                      <span className="tc-prog-status-badge tc-prog-status-badge--live">Standard</span>
+                    </div>
+                    <div className="tc-prog-detail-meta">
+                      <span>{formatTempRange(selectedEquipment.tempMinF, selectedEquipment.tempMaxF)}</span>
+                      <span className="tc-prog-meta-sep" aria-hidden>·</span>
+                      <span>{selectedEquipment.actionCount} corrective step{selectedEquipment.actionCount === 1 ? "" : "s"}</span>
+                      <span className="tc-prog-meta-sep" aria-hidden>·</span>
+                      <span className="tc-prog-deploy-hint">Used when building temperature programs</span>
+                    </div>
+                  </div>
+                </div>
+                {canManage ? (
+                  <div className="tc-prog-detail-actions">
+                    <Link to={`/go/temp-checks/equipment/${selectedEquipment.id}/edit`} className="tc-prog-btn-ghost">
+                      Edit
+                    </Link>
+                    <button
+                      type="button"
+                      className="tc-prog-btn-ghost tc-prog-btn-ghost--danger"
+                      disabled={deletingEquipmentId === selectedEquipment.id}
+                      onClick={() => void handleDeleteEquipment(selectedEquipment)}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                ) : null}
+              </header>
+
+              <div className="tc-prog-info-grid">
+                <section className="tc-prog-info-card">
+                  <h3>Temperature standard</h3>
+                  <dl>
+                    <div>
+                      <dt>Range</dt>
+                      <dd>{formatTempRange(selectedEquipment.tempMinF, selectedEquipment.tempMaxF)}</dd>
+                    </div>
+                    <div>
+                      <dt>Min °F</dt>
+                      <dd>{selectedEquipment.tempMinF ?? "—"}</dd>
+                    </div>
+                    <div>
+                      <dt>Max °F</dt>
+                      <dd>{selectedEquipment.tempMaxF ?? "—"}</dd>
+                    </div>
+                  </dl>
+                </section>
+                <section className="tc-prog-info-card">
+                  <h3>Usage</h3>
+                  <dl>
+                    <div>
+                      <dt>Programs</dt>
+                      <dd>Selected when building check items</dd>
+                    </div>
+                    <div>
+                      <dt>Corrective steps</dt>
+                      <dd>{selectedEquipment.actionCount} configured</dd>
+                    </div>
+                  </dl>
+                </section>
+              </div>
+
+              <section className="tc-prog-items-section">
+                <h3>Corrective action steps</h3>
+                {selectedEquipment.correctiveActions.length > 0 ? (
+                  <ol className="tc-equipment-step-list">
+                    {selectedEquipment.correctiveActions.map((action, index) => (
+                      <li key={action.id}>
+                        <span className="tc-equipment-step-index">{index + 1}</span>
+                        <span>{action.label}</span>
+                      </li>
+                    ))}
+                  </ol>
+                ) : (
+                  <p className="enterprise-muted">No corrective steps configured yet.</p>
+                )}
+              </section>
+            </div>
+          ) : !selectedTemplate ? (
             <div className="tc-prog-detail-empty">
-              <h2>Select a temperature program</h2>
-              <p>Choose a program on the left to review schedule, items, and corrective actions.</p>
+              <h2>Select a program or equipment standard</h2>
+              <p>Choose a temperature program or equipment standard on the left to review details.</p>
             </div>
           ) : (
             <div className="tc-prog-detail-panel">
@@ -344,15 +520,23 @@ export function TempCheckWorkspace({ teamId, canManage, initialTemplateId }: Pro
                     <div className="tc-prog-detail-title-row">
                       <h2>{selectedTemplate.name}</h2>
                       {selectedTemplate.isPublished !== false ? (
-                        <span className="tc-prog-badge-active">Published</span>
+                        <span className="tc-prog-status-badge tc-prog-status-badge--live">Live</span>
                       ) : (
-                        <span className="tc-prog-badge-draft">Draft</span>
+                        <span className="tc-prog-status-badge tc-prog-status-badge--draft">Draft</span>
                       )}
                     </div>
                     <div className="tc-prog-detail-meta">
                       <span>{formatTempCheckTime(selectedTemplate.dueTimeLocal)}</span>
+                      <span className="tc-prog-meta-sep" aria-hidden>·</span>
                       <span>Window {formatTempCheckWindow(selectedTemplate)}</span>
-                      <span>{selectedTemplate.itemCount} Temperature Items</span>
+                      <span className="tc-prog-meta-sep" aria-hidden>·</span>
+                      <span>{selectedTemplate.itemCount} items</span>
+                      <span className="tc-prog-meta-sep" aria-hidden>·</span>
+                      <span className="tc-prog-deploy-hint">
+                        {selectedTemplate.isPublished !== false
+                          ? "Deployed to linked tablets · unpublish to edit"
+                          : "Not deployed to floor devices"}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -361,25 +545,35 @@ export function TempCheckWorkspace({ teamId, canManage, initialTemplateId }: Pro
                     {selectedTemplate.isPublished !== false ? (
                       <button
                         type="button"
-                        className="tc-prog-btn-ghost"
+                        className="tc-prog-btn-offline"
                         disabled={publishBusyId === selectedTemplate.id}
                         onClick={() => void handleUnpublish(selectedTemplate)}
                       >
-                        Unpublish
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                          <path d="M18 6L6 18M6 6l12 12" />
+                        </svg>
+                        {publishBusyId === selectedTemplate.id ? "Taking offline…" : "Unpublish"}
                       </button>
                     ) : (
                       <button
                         type="button"
-                        className="tc-prog-btn-publish"
+                        className="tc-prog-btn-deploy"
                         disabled={publishBusyId === selectedTemplate.id}
                         onClick={() => void handlePublish(selectedTemplate)}
                       >
-                        {publishBusyId === selectedTemplate.id ? "Publishing…" : "Publish to tablets"}
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                          <path d="M12 3v12M7 8l5-5 5 5" />
+                          <path d="M5 21h14" />
+                        </svg>
+                        {publishBusyId === selectedTemplate.id ? "Publishing…" : "Publish"}
                       </button>
                     )}
-                    <Link to={`/go/temp-checks/${selectedTemplate.id}/edit`} className="tc-prog-btn-ghost">
-                      Edit
-                    </Link>
+                    <span className="tc-prog-action-divider" aria-hidden />
+                    {selectedTemplate.isPublished === false ? (
+                      <Link to={`/go/temp-checks/${selectedTemplate.id}/edit`} className="tc-prog-btn-ghost">
+                        Edit
+                      </Link>
+                    ) : null}
                     <button
                       type="button"
                       className="tc-prog-btn-ghost"
@@ -398,25 +592,6 @@ export function TempCheckWorkspace({ teamId, canManage, initialTemplateId }: Pro
                   </div>
                 ) : null}
               </header>
-
-              {selectedTemplate.isPublished === false ? (
-                <div className="tc-prog-publish-banner" role="status">
-                  <div>
-                    <strong>Draft — not on floor tablets yet</strong>
-                    <p>Publish this program when you are ready for leaders to run it on Alenio Go kiosks.</p>
-                  </div>
-                  {canManage ? (
-                    <button
-                      type="button"
-                      className="tc-prog-btn-publish tc-prog-btn-publish--compact"
-                      disabled={publishBusyId === selectedTemplate.id}
-                      onClick={() => void handlePublish(selectedTemplate)}
-                    >
-                      {publishBusyId === selectedTemplate.id ? "Publishing…" : "Publish"}
-                    </button>
-                  ) : null}
-                </div>
-              ) : null}
 
               <div className="tc-prog-info-grid">
                 <section className="tc-prog-info-card">
@@ -445,7 +620,7 @@ export function TempCheckWorkspace({ teamId, canManage, initialTemplateId }: Pro
                     </div>
                     <div>
                       <dt>Devices</dt>
-                      <dd>{selectedTemplate.isPublished === false ? "Draft — not published" : "Published to linked tablets"}</dd>
+                      <dd>{selectedTemplate.isPublished === false ? "Not deployed" : "Live on tablets"}</dd>
                     </div>
                   </dl>
                   <button type="button" className="tc-prog-link-btn" disabled>
@@ -519,7 +694,7 @@ export function TempCheckWorkspace({ teamId, canManage, initialTemplateId }: Pro
                           <span className="tc-prog-steps-pill tc-prog-steps-pill--empty">Not set</span>
                         )}
                       </div>
-                      {canManage ? (
+                      {canManage && selectedTemplate.isPublished === false ? (
                         <Link to={`/go/temp-checks/${selectedTemplate.id}/edit`} className="tc-prog-item-menu" aria-label={`Edit ${item.label}`}>
                           ⋯
                         </Link>
@@ -527,7 +702,7 @@ export function TempCheckWorkspace({ teamId, canManage, initialTemplateId }: Pro
                     </article>
                   ))}
                 </div>
-                {canManage ? (
+                {canManage && selectedTemplate.isPublished === false ? (
                   <Link to={`/go/temp-checks/${selectedTemplate.id}/edit`} className="tc-prog-add-item">
                     + Add Temperature Item
                   </Link>

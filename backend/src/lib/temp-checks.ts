@@ -7,6 +7,7 @@ import { isGoDeviceApproved } from "./workplace-alerts";
 
 export type TempCheckItemInput = {
   label: string;
+  equipmentId?: string | null;
   tempMinF?: number | null;
   tempMaxF?: number | null;
   correctiveActions?: string[];
@@ -88,6 +89,7 @@ function parseItems(raw: TempCheckItemInput[]): { ok: true; items: ParsedItem[] 
     if (tempMinF != null && tempMaxF != null && tempMinF > tempMaxF) return { ok: false };
     items.push({
       label,
+      equipmentId: raw[i]!.equipmentId?.trim() || null,
       tempMinF,
       tempMaxF,
       sortOrder: i,
@@ -99,6 +101,7 @@ function parseItems(raw: TempCheckItemInput[]): { ok: true; items: ParsedItem[] 
 
 type ParsedItem = {
   label: string;
+  equipmentId: string | null;
   tempMinF: number | null;
   tempMaxF: number | null;
   sortOrder: number;
@@ -148,6 +151,7 @@ async function persistTemplateChildren(
     const createdItem = await tx.tempCheckTemplateItem.create({
       data: {
         templateId,
+        equipmentId: item.equipmentId,
         label: item.label,
         tempMinF: item.tempMinF,
         tempMaxF: item.tempMaxF,
@@ -182,6 +186,7 @@ function serializeTemplate(template: {
   updatedAt: Date;
   items: {
     id: string;
+    equipmentId: string | null;
     label: string;
     tempMinF: number | null;
     tempMaxF: number | null;
@@ -205,6 +210,7 @@ function serializeTemplate(template: {
     itemCount: template.items.length,
     items: template.items.map((item) => ({
       id: item.id,
+      equipmentId: item.equipmentId ?? null,
       label: item.label,
       tempMinF: item.tempMinF,
       tempMaxF: item.tempMaxF,
@@ -295,6 +301,18 @@ export async function updateTempCheckTemplate(
   });
   if (!existing) return { ok: false as const, code: "NOT_FOUND" as const };
 
+  const isContentUpdate =
+    input.name !== undefined ||
+    input.description !== undefined ||
+    input.dueTimeLocal !== undefined ||
+    input.windowStartLocal !== undefined ||
+    input.windowEndLocal !== undefined ||
+    input.items !== undefined;
+
+  if (existing.isPublished && isContentUpdate) {
+    return { ok: false as const, code: "PUBLISHED_LOCKED" as const };
+  }
+
   const metadataOnly =
     input.isPublished !== undefined &&
     input.isActive === undefined &&
@@ -327,6 +345,7 @@ export async function updateTempCheckTemplate(
       input.items ??
       existing.items.map((item) => ({
         label: item.label,
+        equipmentId: item.equipmentId,
         tempMinF: item.tempMinF,
         tempMaxF: item.tempMaxF,
         correctiveActions: item.correctiveActions.map((a) => a.label),

@@ -140,6 +140,71 @@ export async function ensureTempChecksSchema(prisma: PrismaClient): Promise<void
       EXCEPTION WHEN duplicate_object THEN NULL;
       END $$;
     `);
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "TempCheckEquipment" (
+        "id" TEXT NOT NULL,
+        "teamId" TEXT NOT NULL,
+        "name" TEXT NOT NULL,
+        "tempMinF" DOUBLE PRECISION,
+        "tempMaxF" DOUBLE PRECISION,
+        "sortOrder" INTEGER NOT NULL DEFAULT 0,
+        "isActive" BOOLEAN NOT NULL DEFAULT true,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "TempCheckEquipment_pkey" PRIMARY KEY ("id")
+      );
+    `);
+    await prisma.$executeRawUnsafe(`
+      CREATE INDEX IF NOT EXISTS "TempCheckEquipment_teamId_isActive_idx"
+      ON "TempCheckEquipment"("teamId", "isActive");
+    `);
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "TempCheckEquipmentCorrectiveAction" (
+        "id" TEXT NOT NULL,
+        "equipmentId" TEXT NOT NULL,
+        "label" TEXT NOT NULL,
+        "sortOrder" INTEGER NOT NULL DEFAULT 0,
+        CONSTRAINT "TempCheckEquipmentCorrectiveAction_pkey" PRIMARY KEY ("id")
+      );
+    `);
+    await prisma.$executeRawUnsafe(`
+      CREATE INDEX IF NOT EXISTS "TempCheckEquipmentCorrectiveAction_equipmentId_idx"
+      ON "TempCheckEquipmentCorrectiveAction"("equipmentId");
+    `);
+    await prisma.$executeRawUnsafe(`
+      DO $$ BEGIN
+        ALTER TABLE "TempCheckEquipment"
+          ADD CONSTRAINT "TempCheckEquipment_teamId_fkey"
+          FOREIGN KEY ("teamId") REFERENCES "Team"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+      EXCEPTION WHEN duplicate_object THEN NULL;
+      END $$;
+    `);
+    await prisma.$executeRawUnsafe(`
+      DO $$ BEGIN
+        ALTER TABLE "TempCheckEquipmentCorrectiveAction"
+          ADD CONSTRAINT "TempCheckEquipmentCorrectiveAction_equipmentId_fkey"
+          FOREIGN KEY ("equipmentId") REFERENCES "TempCheckEquipment"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+      EXCEPTION WHEN duplicate_object THEN NULL;
+      END $$;
+    `);
+    await prisma.$executeRawUnsafe(`
+      DO $$ BEGIN
+        ALTER TABLE "TempCheckTemplateItem" ADD COLUMN "equipmentId" TEXT;
+      EXCEPTION WHEN duplicate_column THEN NULL;
+      END $$;
+    `);
+    await prisma.$executeRawUnsafe(`
+      DO $$ BEGIN
+        ALTER TABLE "TempCheckTemplateItem"
+          ADD CONSTRAINT "TempCheckTemplateItem_equipmentId_fkey"
+          FOREIGN KEY ("equipmentId") REFERENCES "TempCheckEquipment"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+      EXCEPTION WHEN duplicate_object THEN NULL;
+      END $$;
+    `);
+    await prisma.$executeRawUnsafe(`
+      CREATE INDEX IF NOT EXISTS "TempCheckTemplateItem_equipmentId_idx"
+      ON "TempCheckTemplateItem"("equipmentId");
+    `);
     console.log("[startup] Temp check schema ensured");
   } catch (err) {
     console.error("[startup] ensureTempChecksSchema failed:", err);

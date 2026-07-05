@@ -132,6 +132,7 @@ model Team {
   walkCompletions WalkCompletion[]
   tempCheckTemplates TempCheckTemplate[]
   tempCheckCompletions TempCheckCompletion[]
+  tempCheckEquipment TempCheckEquipment[]
 }
 
 model TeamSubscription {
@@ -865,16 +866,46 @@ model TempCheckTemplate {
 }
 
 model TempCheckTemplateItem {
-  id         String  @id @default(cuid())
-  templateId String
-  label      String
-  tempMinF   Float?
-  tempMaxF   Float?
-  sortOrder  Int     @default(0)
-  template   TempCheckTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  id          String  @id @default(cuid())
+  templateId  String
+  equipmentId String?
+  label       String
+  tempMinF    Float?
+  tempMaxF    Float?
+  sortOrder   Int     @default(0)
+  template    TempCheckTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  equipment   TempCheckEquipment? @relation(fields: [equipmentId], references: [id], onDelete: SetNull)
   correctiveActions TempCheckCorrectiveAction[]
 
   @@index([templateId])
+  @@index([equipmentId])
+}
+
+model TempCheckEquipment {
+  id        String   @id @default(cuid())
+  teamId    String
+  name      String
+  tempMinF  Float?
+  tempMaxF  Float?
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  correctiveActions TempCheckEquipmentCorrectiveAction[]
+  templateItems TempCheckTemplateItem[]
+
+  @@index([teamId, isActive])
+}
+
+model TempCheckEquipmentCorrectiveAction {
+  id          String @id @default(cuid())
+  equipmentId String
+  label       String
+  sortOrder   Int    @default(0)
+  equipment   TempCheckEquipment @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+
+  @@index([equipmentId])
 }
 
 model TempCheckCorrectiveAction {
