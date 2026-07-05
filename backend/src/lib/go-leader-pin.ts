@@ -51,6 +51,46 @@ export async function getGoLeaderPinStatus(
   return { ok: true, hasPin: Boolean(member.goPinHash) };
 }
 
+export async function verifyOwnGoLeaderPin(
+  prisma: PrismaClient,
+  teamId: string,
+  userId: string,
+  pin: string,
+): Promise<
+  | { ok: true; leader: VerifiedGoLeader }
+  | { ok: false; code: "NOT_MEMBER" | "NO_PIN" | "INVALID_PIN" }
+> {
+  const normalized = normalizeGoLeaderPin(pin);
+  if (!isValidGoLeaderPin(normalized)) return { ok: false, code: "INVALID_PIN" };
+
+  const member = await prisma.teamMember.findUnique({
+    where: { userId_teamId: { userId, teamId } },
+    select: {
+      userId: true,
+      role: true,
+      goPinHash: true,
+      user: { select: { name: true } },
+    },
+  });
+  if (!member) return { ok: false, code: "NOT_MEMBER" };
+  if (!member.goPinHash) return { ok: false, code: "NO_PIN" };
+  if (member.role !== "owner" && member.role !== "team_leader") {
+    return { ok: false, code: "NOT_MEMBER" };
+  }
+
+  const valid = await bcrypt.compare(normalized, member.goPinHash);
+  if (!valid) return { ok: false, code: "INVALID_PIN" };
+
+  return {
+    ok: true,
+    leader: {
+      userId: member.userId,
+      name: member.user.name.trim().slice(0, 120) || "Leader",
+      role: member.role === "owner" ? "owner" : "team_leader",
+    },
+  };
+}
+
 export async function verifyGoLeaderPin(
   prisma: PrismaClient,
   hubToken: string,

@@ -1,9 +1,11 @@
 import { Navigate, Route, Routes, useNavigate, useParams } from "react-router-dom";
 import { useCallback, useEffect, useState } from "react";
+import { GoWalkLeaderStartFlow, type WalkStartLeader } from "../../components/alenio-go/GoWalkLeaderStartFlow";
 import { GoBackendModuleShell } from "../../components/alenio-go/GoBackendModuleShell";
 import { formatWalkSaveError, getWalkTemplateSections } from "../../lib/walks-display";
 import { WalkRunPanel } from "../../components/walks/WalkRunPanel";
 import { WalkBuilderPage } from "../../components/walks/WalkBuilderPage";
+import { WalkHistoryDetail } from "../../components/walks/WalkHistoryDetail";
 import { WalkWorkspace } from "../../components/walks/WalkWorkspace";
 import {
   fetchTeamWalkCompletion,
@@ -139,6 +141,7 @@ function WalksRunPage() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [leader, setLeader] = useState<WalkStartLeader | null>(null);
   const [template, setTemplate] = useState<Awaited<ReturnType<typeof fetchTeamWalkTemplate>>["template"] | null>(
     null,
   );
@@ -157,12 +160,25 @@ function WalksRunPage() {
   if (loading) return <p className="enterprise-muted">Loading walk…</p>;
   if (!template) return <p className="enterprise-muted">Walk not found.</p>;
 
+  if (!leader) {
+    return (
+      <GoWalkLeaderStartFlow
+        template={template}
+        teamId={teamId}
+        onCancel={() => navigate(`/go/walks/${walkId}`)}
+        onReady={setLeader}
+      />
+    );
+  }
+
   return (
     <div className="walk-console walk-console--run">
       <WalkRunPanel
         template={template}
         busy={busy}
         error={error}
+        verifiedLeaderName={leader.name}
+        onSignOutLeader={() => setLeader(null)}
         onCancel={() => navigate(`/go/walks/${walkId}`)}
         onComplete={async (payload) => {
           setBusy(true);

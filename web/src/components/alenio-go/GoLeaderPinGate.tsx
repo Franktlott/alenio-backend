@@ -4,8 +4,15 @@ import { getGoDeviceId } from "../../lib/go-device";
 import { saveGoLeaderSession, type GoLeaderSession } from "../../lib/go-leader-session";
 import { handleGoDeviceSessionError } from "../../lib/go-session";
 
+type VerifiedLeader = {
+  userId: string;
+  name: string;
+  role: string;
+};
+
 type Props = {
-  hubToken: string;
+  hubToken?: string;
+  verifyPin?: (pin: string) => Promise<VerifiedLeader>;
   title?: string;
   subtitle?: string;
   onVerified: (session: GoLeaderSession) => void;
@@ -18,7 +25,7 @@ function normalizePin(value: string): string {
   return value.replace(/\D/g, "").slice(0, 8);
 }
 
-export function GoLeaderPinGate({ hubToken, title, subtitle, onVerified, onCancel }: Props) {
+export function GoLeaderPinGate({ hubToken, verifyPin, title, subtitle, onVerified, onCancel }: Props) {
   const [pin, setPin] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -31,17 +38,25 @@ export function GoLeaderPinGate({ hubToken, title, subtitle, onVerified, onCance
     setBusy(true);
     setError(null);
     try {
-      const leader = await postGoVerifyLeaderPin(hubToken, getGoDeviceId(), currentPin);
-      saveGoLeaderSession(hubToken, leader);
+      const leader = verifyPin
+        ? await verifyPin(currentPin)
+        : await postGoVerifyLeaderPin(hubToken!, getGoDeviceId(), currentPin);
+      if (hubToken) {
+        saveGoLeaderSession(hubToken, {
+          userId: leader.userId,
+          name: leader.name,
+          role: leader.role as GoLeaderSession["role"],
+        });
+      }
       onVerified({
-        hubToken,
+        hubToken: hubToken ?? "",
         userId: leader.userId,
         name: leader.name,
-        role: leader.role,
+        role: leader.role as GoLeaderSession["role"],
         verifiedAt: Date.now(),
       });
     } catch (err) {
-      if (handleGoDeviceSessionError(err)) return;
+      if (hubToken && handleGoDeviceSessionError(err)) return;
       setPin("");
       setError(err instanceof Error ? err.message : "Invalid PIN. Try again.");
     } finally {

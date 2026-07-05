@@ -4,7 +4,7 @@ import { z } from "zod";
 import { prisma } from "../prisma";
 import { authGuard } from "../middleware/auth-guard";
 import { canManageGoLoginRequests } from "../lib/go-login-requests";
-import { getGoLeaderPinStatus, setGoLeaderPin } from "../lib/go-leader-pin";
+import { getGoLeaderPinStatus, setGoLeaderPin, verifyOwnGoLeaderPin } from "../lib/go-leader-pin";
 
 const goLeaderPinRouter = new Hono();
 
@@ -65,6 +65,46 @@ goLeaderPinRouter.put("/go-pin", zValidator("json", goLeaderPinBodySchema), asyn
   } catch (err) {
     console.error("[go-leader-pin] PUT /go-pin failed:", err);
     return c.json({ error: { message: "Could not save PIN", code: "INTERNAL" } }, 500);
+  }
+});
+
+// POST /api/teams/:teamId/members/me/go-pin/verify
+goLeaderPinRouter.post("/go-pin/verify", zValidator("json", goLeaderPinBodySchema), async (c) => {
+  try {
+    const user = c.get("user")!;
+    const teamId = c.req.param("teamId")?.trim();
+    if (!teamId) {
+      return c.json({ error: { message: "teamId is required", code: "VALIDATION_ERROR" } }, 400);
+    }
+    const { pin } = c.req.valid("json");
+
+    if (!(await canManageGoLoginRequests(teamId, user.id))) {
+      return c.json({ error: { message: "Forbidden", code: "FORBIDDEN" } }, 403);
+    }
+
+    const result = await verifyOwnGoLeaderPin(prisma, teamId, user.id, pin);
+    if (!result.ok) {
+      if (result.code === "NOT_MEMBER") {
+        return c.json({ error: { message: "Team membership not found", code: "NOT_FOUND" } }, 404);
+      }
+      if (result.code === "NO_PIN") {
+        return c.json({ error: { message: "Create your Alenio Go PIN first.", code: "NO_PIN" } }, 400);
+      }
+      return c.json({ error: { message: "Invalid PIN", code: "INVALID_PIN" } }, 401);
+    }
+
+    return c.json({
+      data: {
+        leader: {
+          userId: result.leader.userId,
+          name: result.leader.name,
+          role: result.leader.role,
+        },
+      },
+    });
+  } catch (err) {
+    console.error("[go-leader-pin] POST /go-pin/verify failed:", err);
+    return c.json({ error: { message: "Could not verify PIN", code: "INTERNAL" } }, 500);
   }
 });
 

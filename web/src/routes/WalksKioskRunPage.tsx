@@ -1,23 +1,17 @@
 import { useNavigate, useParams } from "react-router-dom";
 import { useEffect, useState } from "react";
-import { GoLeaderPinGate } from "../components/alenio-go/GoLeaderPinGate";
+import { GoWalkLeaderStartFlow, type WalkStartLeader } from "../components/alenio-go/GoWalkLeaderStartFlow";
 import { WalkRunPanel } from "../components/walks/WalkRunPanel";
 import { fetchGoWalkTemplate, postGoWalkComplete } from "../lib/api";
 import { getGoDeviceId } from "../lib/go-device";
-import {
-  clearGoLeaderSession,
-  loadGoLeaderSession,
-  type GoLeaderSession,
-} from "../lib/go-leader-session";
+import { clearGoLeaderSession } from "../lib/go-leader-session";
 import { handleGoDeviceSessionError } from "../lib/go-session";
 
 export function WalksKioskRunPage() {
   const { hubToken = "", walkId = "" } = useParams();
   const navigate = useNavigate();
   const [template, setTemplate] = useState<Awaited<ReturnType<typeof fetchGoWalkTemplate>> | null>(null);
-  const [leaderSession, setLeaderSession] = useState<GoLeaderSession | null>(() =>
-    hubToken ? loadGoLeaderSession(hubToken) : null,
-  );
+  const [leader, setLeader] = useState<WalkStartLeader | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -38,7 +32,7 @@ export function WalksKioskRunPage() {
 
   function signOutLeader() {
     clearGoLeaderSession(hubToken);
-    setLeaderSession(null);
+    setLeader(null);
   }
 
   return (
@@ -50,13 +44,12 @@ export function WalksKioskRunPage() {
           <p className="go-dash-error" role="alert">
             {error || "Walk not found."}
           </p>
-        ) : !leaderSession ? (
-          <GoLeaderPinGate
+        ) : !leader ? (
+          <GoWalkLeaderStartFlow
             hubToken={hubToken}
-            title="Sign in to start this walk"
-            subtitle="Enter your Alenio Go PIN so this walk is recorded under your name."
+            template={template}
             onCancel={() => navigate(basePath)}
-            onVerified={setLeaderSession}
+            onReady={setLeader}
           />
         ) : (
           <WalkRunPanel
@@ -64,7 +57,7 @@ export function WalksKioskRunPage() {
             busy={busy}
             error={error}
             requireManagerName
-            verifiedLeaderName={leaderSession.name}
+            verifiedLeaderName={leader.name}
             onSignOutLeader={signOutLeader}
             onCancel={() => navigate(basePath)}
             onComplete={async (payload) => {
@@ -74,7 +67,7 @@ export function WalksKioskRunPage() {
                 const completion = await postGoWalkComplete(walkId, {
                   hubToken,
                   deviceId: getGoDeviceId(),
-                  leaderUserId: leaderSession.userId,
+                  leaderUserId: leader.userId,
                   ...payload,
                 });
                 navigate(`${basePath}/history/${completion.id}`);

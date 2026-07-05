@@ -1542,6 +1542,13 @@ export function fetchGoLeaderPinStatus(teamId: string) {
   ).then((r) => r.data);
 }
 
+export function postTeamVerifyGoLeaderPin(teamId: string, pin: string) {
+  return apiPostJson<{ data: { leader: GoVerifiedLeader } }>(
+    `/api/teams/${encodeURIComponent(teamId)}/members/me/go-pin/verify`,
+    { pin },
+  ).then((r) => r.data.leader);
+}
+
 export function putGoLeaderPin(teamId: string, pin: string) {
   return apiPutJson<{ data: GoLeaderPinStatus }>(
     `/api/teams/${encodeURIComponent(teamId)}/members/me/go-pin`,
