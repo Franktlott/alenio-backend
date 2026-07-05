@@ -73,11 +73,13 @@ function buildKioskModules(options: {
       };
     }
 
-    if (module.id === "temp-checks") {
+    if (module.id === "food-safety") {
       return {
         ...module,
-        count: 0,
-        countMessage: "Temp checks coming soon",
+        active: true,
+        href: `/checklist/${options.hubToken}/food-safety`,
+        countMessage: "Complete due food safety checks",
+        ctaLabel: "Open food safety",
       };
     }
 

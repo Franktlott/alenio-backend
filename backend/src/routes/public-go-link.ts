@@ -27,6 +27,18 @@ import {
   listPublicWalkTemplates,
 } from "../lib/walks";
 import { verifyGoLeaderPin } from "../lib/go-leader-pin";
+import {
+  addPublicHaccpCoolingReading,
+  completePublicHaccpRun,
+  completePublicHaccpRunItem,
+  createPublicHaccpCorrectiveAction,
+  createPublicHaccpCoolingLog,
+  createPublicHaccpProbeCalibration,
+  getPublicFoodSafetyDashboard,
+  getPublicHaccpRun,
+  listPublicHaccpCoolingLogs,
+  startPublicHaccpRun,
+} from "../lib/haccp";
 
 const publicGoLinkRouter = new Hono();
 
@@ -504,6 +516,257 @@ publicGoLinkRouter.post("/walks/:walkId/complete", zValidator("json", publicWalk
   } catch (err) {
     console.error("[go-link] POST /walks/:id/complete failed:", err);
     return c.json({ error: { message: "Could not complete walk", code: "INTERNAL" } }, 500);
+  }
+});
+
+publicGoLinkRouter.get("/food-safety/dashboard", async (c) => {
+  try {
+    const hubToken = c.req.query("hubToken")?.trim();
+    const deviceId = c.req.query("deviceId")?.trim();
+    if (!hubToken || !deviceId) {
+      return c.json({ error: { message: "hubToken and deviceId are required", code: "VALIDATION_ERROR" } }, 400);
+    }
+    const result = await getPublicFoodSafetyDashboard(hubToken, deviceId);
+    if (!result.ok) {
+      if (result.code === "FORBIDDEN") return c.json({ error: { message: GO_DEVICE_UNLINKED_MESSAGE, code: "DEVICE_UNLINKED" } }, 403);
+      return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
+    }
+    return c.json({ data: { dashboard: result.dashboard } });
+  } catch (err) {
+    console.error("[go-link] GET /food-safety/dashboard failed:", err);
+    return c.json({ error: { message: "Could not load food safety dashboard", code: "INTERNAL" } }, 500);
+  }
+});
+
+publicGoLinkRouter.post("/food-safety/templates/:templateId/start", async (c) => {
+  try {
+    const templateId = c.req.param("templateId")?.trim();
+    const body = await c.req.json();
+    const parsed = z
+      .object({
+        hubToken: z.string().min(1),
+        deviceId: z.string().min(8),
+        actorName: z.string().trim().min(1).max(120),
+        leaderUserId: z.string().optional().nullable(),
+      })
+      .safeParse(body);
+    if (!parsed.success || !templateId) {
+      return c.json({ error: { message: "Invalid request", code: "VALIDATION_ERROR" } }, 400);
+    }
+    const result = await startPublicHaccpRun(
+      parsed.data.hubToken,
+      parsed.data.deviceId,
+      templateId,
+      parsed.data.actorName,
+      parsed.data.leaderUserId,
+    );
+    if (!result.ok) {
+      if (result.code === "FORBIDDEN") return c.json({ error: { message: GO_DEVICE_UNLINKED_MESSAGE, code: "DEVICE_UNLINKED" } }, 403);
+      return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
+    }
+    return c.json({ data: { run: result.run } }, 201);
+  } catch (err) {
+    console.error("[go-link] POST /food-safety/templates/:id/start failed:", err);
+    return c.json({ error: { message: "Could not start temp check", code: "INTERNAL" } }, 500);
+  }
+});
+
+publicGoLinkRouter.get("/food-safety/runs/:runId", async (c) => {
+  try {
+    const runId = c.req.param("runId")?.trim();
+    const hubToken = c.req.query("hubToken")?.trim();
+    const deviceId = c.req.query("deviceId")?.trim();
+    if (!runId || !hubToken || !deviceId) {
+      return c.json({ error: { message: "runId, hubToken, and deviceId are required", code: "VALIDATION_ERROR" } }, 400);
+    }
+    const result = await getPublicHaccpRun(hubToken, deviceId, runId);
+    if (!result.ok) {
+      if (result.code === "FORBIDDEN") return c.json({ error: { message: GO_DEVICE_UNLINKED_MESSAGE, code: "DEVICE_UNLINKED" } }, 403);
+      return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
+    }
+    return c.json({ data: { run: result.run } });
+  } catch (err) {
+    console.error("[go-link] GET /food-safety/runs/:id failed:", err);
+    return c.json({ error: { message: "Could not load run", code: "INTERNAL" } }, 500);
+  }
+});
+
+publicGoLinkRouter.post("/food-safety/runs/:runId/items/:itemId", async (c) => {
+  try {
+    const runId = c.req.param("runId")?.trim();
+    const itemId = c.req.param("itemId")?.trim();
+    const body = await c.req.json();
+    const parsed = z
+      .object({
+        hubToken: z.string().min(1),
+        deviceId: z.string().min(8),
+        actorName: z.string().trim().min(1).max(120),
+        readingF: z.number().nullable().optional(),
+        status: z.enum(["pass", "needs_attention", "na"]),
+        entryMethod: z.enum(["manual", "bluetooth"]).optional(),
+        notes: z.string().max(500).nullable().optional(),
+        photoUrl: z.string().url().max(2048).nullable().optional(),
+      })
+      .safeParse(body);
+    if (!parsed.success || !runId || !itemId) {
+      return c.json({ error: { message: "Invalid request", code: "VALIDATION_ERROR" } }, 400);
+    }
+    const result = await completePublicHaccpRunItem(parsed.data.hubToken, parsed.data.deviceId, runId, itemId, {
+      readingF: parsed.data.readingF,
+      status: parsed.data.status,
+      entryMethod: parsed.data.entryMethod,
+      notes: parsed.data.notes,
+      photoUrl: parsed.data.photoUrl,
+      actorName: parsed.data.actorName,
+    });
+    if (!result.ok) return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
+    return c.json({ data: result });
+  } catch (err) {
+    console.error("[go-link] POST /food-safety/runs/:id/items/:itemId failed:", err);
+    return c.json({ error: { message: "Could not save item", code: "INTERNAL" } }, 500);
+  }
+});
+
+publicGoLinkRouter.post("/food-safety/runs/:runId/complete", async (c) => {
+  try {
+    const runId = c.req.param("runId")?.trim();
+    const body = await c.req.json();
+    const parsed = z
+      .object({
+        hubToken: z.string().min(1),
+        deviceId: z.string().min(8),
+        actorName: z.string().trim().min(1).max(120),
+      })
+      .safeParse(body);
+    if (!parsed.success || !runId) {
+      return c.json({ error: { message: "Invalid request", code: "VALIDATION_ERROR" } }, 400);
+    }
+    const result = await completePublicHaccpRun(
+      parsed.data.hubToken,
+      parsed.data.deviceId,
+      runId,
+      parsed.data.actorName,
+    );
+    if (!result.ok) {
+      if (result.code === "VALIDATION") return c.json({ error: { message: "Incomplete run", code: "VALIDATION_ERROR" } }, 400);
+      return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
+    }
+    return c.json({ data: { run: result.run } });
+  } catch (err) {
+    console.error("[go-link] POST /food-safety/runs/:id/complete failed:", err);
+    return c.json({ error: { message: "Could not complete run", code: "INTERNAL" } }, 500);
+  }
+});
+
+publicGoLinkRouter.post("/food-safety/corrective-actions", async (c) => {
+  try {
+    const body = await c.req.json();
+    const parsed = z
+      .object({
+        hubToken: z.string().min(1),
+        deviceId: z.string().min(8),
+        runId: z.string().optional().nullable(),
+        runItemId: z.string().optional().nullable(),
+        coolingLogId: z.string().optional().nullable(),
+        actionType: z.enum(["discarded", "moved_cooler", "rapid_chilled", "maintenance", "rechecked_passed", "other"]),
+        notes: z.string().max(500).nullable().optional(),
+        photoUrl: z.string().url().max(2048).nullable().optional(),
+        performedByName: z.string().trim().min(1).max(120),
+        performedByUserId: z.string().optional().nullable(),
+      })
+      .safeParse(body);
+    if (!parsed.success) return c.json({ error: { message: "Invalid request", code: "VALIDATION_ERROR" } }, 400);
+    const result = await createPublicHaccpCorrectiveAction(parsed.data.hubToken, parsed.data.deviceId, parsed.data);
+    return c.json({ data: result.action }, 201);
+  } catch (err) {
+    console.error("[go-link] POST /food-safety/corrective-actions failed:", err);
+    return c.json({ error: { message: "Could not save corrective action", code: "INTERNAL" } }, 500);
+  }
+});
+
+publicGoLinkRouter.get("/food-safety/cooling-logs", async (c) => {
+  try {
+    const hubToken = c.req.query("hubToken")?.trim();
+    const deviceId = c.req.query("deviceId")?.trim();
+    if (!hubToken || !deviceId) {
+      return c.json({ error: { message: "hubToken and deviceId are required", code: "VALIDATION_ERROR" } }, 400);
+    }
+    const result = await listPublicHaccpCoolingLogs(hubToken, deviceId);
+    if (!result.ok) {
+      if (result.code === "FORBIDDEN") return c.json({ error: { message: GO_DEVICE_UNLINKED_MESSAGE, code: "DEVICE_UNLINKED" } }, 403);
+      return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
+    }
+    return c.json({ data: { logs: result.logs } });
+  } catch (err) {
+    console.error("[go-link] GET /food-safety/cooling-logs failed:", err);
+    return c.json({ error: { message: "Could not load cooling logs", code: "INTERNAL" } }, 500);
+  }
+});
+
+publicGoLinkRouter.post("/food-safety/cooling-logs", async (c) => {
+  try {
+    const body = await c.req.json();
+    const parsed = z
+      .object({
+        hubToken: z.string().min(1),
+        deviceId: z.string().min(8),
+        itemName: z.string().trim().min(1).max(200),
+        firstTempF: z.number(),
+        createdByName: z.string().trim().min(1).max(120),
+      })
+      .safeParse(body);
+    if (!parsed.success) return c.json({ error: { message: "Invalid request", code: "VALIDATION_ERROR" } }, 400);
+    const result = await createPublicHaccpCoolingLog(parsed.data.hubToken, parsed.data.deviceId, parsed.data);
+    return c.json({ data: result.log }, 201);
+  } catch (err) {
+    console.error("[go-link] POST /food-safety/cooling-logs failed:", err);
+    return c.json({ error: { message: "Could not create cooling log", code: "INTERNAL" } }, 500);
+  }
+});
+
+publicGoLinkRouter.post("/food-safety/cooling-logs/:logId/readings", async (c) => {
+  try {
+    const logId = c.req.param("logId")?.trim();
+    const body = await c.req.json();
+    const parsed = z
+      .object({
+        hubToken: z.string().min(1),
+        deviceId: z.string().min(8),
+        tempF: z.number(),
+        actorName: z.string().trim().min(1).max(120),
+      })
+      .safeParse(body);
+    if (!parsed.success || !logId) return c.json({ error: { message: "Invalid request", code: "VALIDATION_ERROR" } }, 400);
+    const result = await addPublicHaccpCoolingReading(parsed.data.hubToken, parsed.data.deviceId, logId, {
+      tempF: parsed.data.tempF,
+      actorName: parsed.data.actorName,
+    });
+    if (!result.ok) return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
+    return c.json({ data: result });
+  } catch (err) {
+    console.error("[go-link] POST /food-safety/cooling-logs/:id/readings failed:", err);
+    return c.json({ error: { message: "Could not save reading", code: "INTERNAL" } }, 500);
+  }
+});
+
+publicGoLinkRouter.post("/food-safety/probe-calibrations", async (c) => {
+  try {
+    const body = await c.req.json();
+    const parsed = z
+      .object({
+        hubToken: z.string().min(1),
+        deviceId: z.string().min(8),
+        actualTempF: z.number(),
+        performedByName: z.string().trim().min(1).max(120),
+        performedByUserId: z.string().optional().nullable(),
+      })
+      .safeParse(body);
+    if (!parsed.success) return c.json({ error: { message: "Invalid request", code: "VALIDATION_ERROR" } }, 400);
+    const result = await createPublicHaccpProbeCalibration(parsed.data.hubToken, parsed.data.deviceId, parsed.data);
+    return c.json({ data: result.calibration }, 201);
+  } catch (err) {
+    console.error("[go-link] POST /food-safety/probe-calibrations failed:", err);
+    return c.json({ error: { message: "Could not save calibration", code: "INTERNAL" } }, 500);
   }
 });
 

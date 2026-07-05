@@ -53,13 +53,13 @@ export function goBackendAdminTiles(options: {
       href: "/go/checklists",
     },
     {
-      id: "temp-checks",
-      title: "Temp checks",
-      subtitle: "Food safety temperature logs",
+      id: "food-safety",
+      title: "Food Safety",
+      subtitle: "Guided HACCP execution hub",
       tone: "emerald",
       icon: "temp",
       active: true,
-      href: "/go/temp-checks",
+      href: "/go/food-safety",
     },
     {
       id: "briefings",

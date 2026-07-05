@@ -130,6 +130,13 @@ model Team {
   briefings Briefing[]
   walkTemplates WalkTemplate[]
   walkCompletions WalkCompletion[]
+  haccpTemplates HaccpTemplate[]
+  haccpSchedules HaccpSchedule[]
+  haccpRuns HaccpRun[]
+  haccpCorrectiveActions HaccpCorrectiveAction[]
+  haccpCoolingLogs HaccpCoolingLog[]
+  haccpProbeCalibrations HaccpProbeCalibration[]
+  haccpAuditEvents HaccpAuditEvent[]
 }
 
 model TeamSubscription {
@@ -839,4 +846,168 @@ model ChecklistLocationSubmission {
   location      ChecklistLocation @relation(fields: [locationId], references: [id], onDelete: Cascade)
 
   @@index([locationId, submittedAt])
+}
+
+model HaccpTemplate {
+  id              String   @id @default(cuid())
+  teamId          String
+  name            String
+  kind            String   @default("custom")
+  workplace       String   @default("Kitchen")
+  frequency       String   @default("daily")
+  windowStart     String?
+  windowEnd       String?
+  dueLabel        String?
+  photoRequired   Boolean  @default(false)
+  noteRequired    Boolean  @default(false)
+  bluetoothMode   String   @default("preferred")
+  isActive        Boolean  @default(true)
+  createdByUserId String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  team            Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  items           HaccpTemplateItem[]
+  schedules       HaccpSchedule[]
+  runs            HaccpRun[]
+
+  @@index([teamId, isActive])
+}
+
+model HaccpTemplateItem {
+  id         String        @id @default(cuid())
+  templateId String
+  label      String
+  minTempF   Float?
+  maxTempF   Float?
+  allowNa    Boolean       @default(false)
+  sortOrder  Int           @default(0)
+  template   HaccpTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@index([templateId])
+}
+
+model HaccpSchedule {
+  id          String        @id @default(cuid())
+  teamId      String
+  templateId  String
+  weekday     Int?
+  windowStart String
+  windowEnd   String
+  dueLabel    String?
+  isActive    Boolean       @default(true)
+  team        Team          @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  template    HaccpTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@index([teamId, templateId])
+}
+
+model HaccpRun {
+  id                String         @id @default(cuid())
+  teamId            String
+  templateId        String
+  templateName      String
+  kind              String
+  status            String         @default("in_progress")
+  windowStart       String?
+  windowEnd         String?
+  dueLabel          String?
+  dueAt             DateTime?
+  startedAt         DateTime       @default(now())
+  completedAt       DateTime?
+  completedByUserId   String?
+  completedByName   String?
+  deviceId          String?
+  itemsTotal        Int            @default(0)
+  itemsCompleted    Int            @default(0)
+  team              Team           @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  template          HaccpTemplate  @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  items             HaccpRunItem[]
+
+  @@index([teamId, startedAt])
+}
+
+model HaccpRunItem {
+  id             String    @id @default(cuid())
+  runId          String
+  templateItemId String?
+  label          String
+  minTempF       Float?
+  maxTempF       Float?
+  allowNa        Boolean   @default(false)
+  readingF       Float?
+  status         String?
+  entryMethod    String?
+  notes          String?
+  photoUrl       String?
+  sortOrder      Int       @default(0)
+  completedAt    DateTime?
+  run            HaccpRun  @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId])
+}
+
+model HaccpCorrectiveAction {
+  id                String    @id @default(cuid())
+  teamId            String
+  runId             String?
+  runItemId         String?
+  coolingLogId      String?
+  actionType        String
+  notes             String?
+  photoUrl          String?
+  status            String    @default("open")
+  performedByUserId String?
+  performedByName   String
+  createdAt         DateTime  @default(now())
+  resolvedAt        DateTime?
+  team              Team      @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@index([teamId, status])
+}
+
+model HaccpCoolingLog {
+  id               String   @id @default(cuid())
+  teamId           String
+  itemName         String
+  status           String   @default("active")
+  startTime        DateTime @default(now())
+  firstTempF       Float
+  nextReadingDueAt DateTime
+  readings         Json     @default("[]")
+  createdByName    String
+  deviceId         String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  team             Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@index([teamId, status])
+}
+
+model HaccpProbeCalibration {
+  id                String   @id @default(cuid())
+  teamId            String
+  targetTempF       Float    @default(32)
+  actualTempF       Float
+  passed            Boolean
+  performedByUserId String?
+  performedByName   String
+  deviceId          String?
+  nextDueAt         DateTime
+  createdAt         DateTime @default(now())
+  team              Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@index([teamId, createdAt])
+}
+
+model HaccpAuditEvent {
+  id        String   @id @default(cuid())
+  teamId    String
+  eventType String
+  message   String
+  metadata  Json?
+  actorName String?
+  createdAt DateTime @default(now())
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@index([teamId, createdAt])
 }
