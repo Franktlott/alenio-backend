@@ -6,6 +6,7 @@ import { fetchGoTempCheckTemplate, postGoTempCheckComplete } from "../lib/api";
 import { getGoDeviceId } from "../lib/go-device";
 import { clearGoLeaderSession } from "../lib/go-leader-session";
 import { handleGoDeviceSessionError } from "../lib/go-session";
+import { getKioskTimeZone } from "../lib/temp-checks-display";
 
 export function TempChecksKioskRunPage() {
   const { hubToken = "", templateId = "" } = useParams();
@@ -20,7 +21,7 @@ export function TempChecksKioskRunPage() {
   useEffect(() => {
     if (!hubToken || !templateId) return;
     setLoading(true);
-    void fetchGoTempCheckTemplate(hubToken, getGoDeviceId(), templateId)
+    void fetchGoTempCheckTemplate(hubToken, getGoDeviceId(), templateId, getKioskTimeZone())
       .then(setTemplate)
       .catch((err) => {
         if (handleGoDeviceSessionError(err)) return;
@@ -67,6 +68,7 @@ export function TempChecksKioskRunPage() {
                   hubToken,
                   deviceId: getGoDeviceId(),
                   leaderUserId: leader.userId,
+                  timeZone: getKioskTimeZone(),
                   ...payload,
                 });
                 navigate(`${basePath}/history/${completion.id}`);

@@ -2,6 +2,7 @@ import { prisma } from "../prisma";
 import type { Prisma } from "@prisma/client";
 import { findTeamByChecklistHubToken } from "./checklist-locations";
 import { resolveVerifiedGoLeader } from "./go-leader-pin";
+import { resolveTimeZone } from "./timezone";
 import { isGoDeviceApproved } from "./workplace-alerts";
 
 export type TempCheckItemInput = {
@@ -469,6 +470,7 @@ export type TempCheckReadingRow = {
 
 export type CompleteTempCheckInput = {
   readings: TempCheckReadingInput[];
+  timeZone?: string | null;
 };
 
 function serializePublicTemplateRow(
@@ -495,12 +497,14 @@ function serializePublicTemplateRow(
     }[];
   },
   completionCount: number,
+  timeZone?: string | null,
 ) {
   const serialized = serializeTemplate(template);
+  const tz = resolveTimeZone(timeZone);
   return {
     ...serialized,
     completionCount,
-    windowOpen: isWithinCheckScheduleWindow(new Date(), template.windowStartLocal, template.windowEndLocal),
+    windowOpen: isWithinCheckScheduleWindow(new Date(), template.windowStartLocal, template.windowEndLocal, tz),
   };
 }
 
@@ -602,7 +606,7 @@ async function assertPublicGoTempCheckDevice(hubToken: string, deviceId: string)
   return { ok: true as const, teamId: team.id };
 }
 
-export async function listPublicTempCheckTemplates(hubToken: string, deviceId: string) {
+export async function listPublicTempCheckTemplates(hubToken: string, deviceId: string, timeZone?: string | null) {
   const ctx = await assertPublicGoTempCheckDevice(hubToken, deviceId);
   if (!ctx.ok) return ctx;
 
@@ -626,11 +630,16 @@ export async function listPublicTempCheckTemplates(hubToken: string, deviceId: s
 
   return {
     ok: true as const,
-    templates: templates.map((t) => serializePublicTemplateRow(t, countMap.get(t.id) ?? 0)),
+    templates: templates.map((t) => serializePublicTemplateRow(t, countMap.get(t.id) ?? 0, timeZone)),
   };
 }
 
-export async function getPublicTempCheckTemplate(hubToken: string, deviceId: string, templateId: string) {
+export async function getPublicTempCheckTemplate(
+  hubToken: string,
+  deviceId: string,
+  templateId: string,
+  timeZone?: string | null,
+) {
   const ctx = await assertPublicGoTempCheckDevice(hubToken, deviceId);
   if (!ctx.ok) return ctx;
 
@@ -649,7 +658,7 @@ export async function getPublicTempCheckTemplate(hubToken: string, deviceId: str
     completionCount = 0;
   }
 
-  return { ok: true as const, template: serializePublicTemplateRow(template, completionCount) };
+  return { ok: true as const, template: serializePublicTemplateRow(template, completionCount, timeZone) };
 }
 
 export async function listPublicTempCheckCompletions(hubToken: string, deviceId: string) {
@@ -698,7 +707,12 @@ export async function completePublicTempCheck(
   if (!template) return { ok: false as const, code: "NOT_FOUND" as const };
   if (template.items.length === 0) return { ok: false as const, code: "VALIDATION" as const };
 
-  if (!isWithinCheckScheduleWindow(new Date(), template.windowStartLocal, template.windowEndLocal)) {
+  if (!isWithinCheckScheduleWindow(
+    new Date(),
+    template.windowStartLocal,
+    template.windowEndLocal,
+    resolveTimeZone(input.timeZone),
+  )) {
     return { ok: false as const, code: "OUTSIDE_WINDOW" as const };
   }
 

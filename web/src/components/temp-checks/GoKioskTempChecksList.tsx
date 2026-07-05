@@ -24,7 +24,7 @@ export function GoKioskTempChecksList({ templates, basePath }: Props) {
       <h2 className="go-kiosk-walks-list-title">Available programs</h2>
       <ul className="go-kiosk-walks-list go-tc-kiosk-list">
         {templates.map((program) => {
-          const open = program.windowOpen ?? isTempCheckWindowOpen(program);
+          const open = isTempCheckWindowOpen(program);
           return (
             <li key={program.id}>
               {open ? (

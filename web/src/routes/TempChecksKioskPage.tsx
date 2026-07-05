@@ -5,6 +5,7 @@ import { GoKioskTempChecksHistory, GoKioskTempChecksList } from "../components/t
 import { fetchGoTempCheckCompletions, fetchGoTempCheckTemplates, fetchPublicChecklistHub } from "../lib/api";
 import { getGoDeviceId, saveGoLinkedWorkspace } from "../lib/go-device";
 import { handleGoDeviceSessionError } from "../lib/go-session";
+import { getKioskTimeZone } from "../lib/temp-checks-display";
 
 type Tab = "programs" | "history";
 
@@ -26,6 +27,7 @@ export function TempChecksKioskPage() {
       return;
     }
     const deviceId = getGoDeviceId();
+    const timeZone = getKioskTimeZone();
     void fetchPublicChecklistHub(hubToken, deviceId)
       .then((data) => {
         setTeamName(data.team.name);
@@ -36,7 +38,10 @@ export function TempChecksKioskPage() {
         setError("Workspace not found.");
       });
 
-    void Promise.all([fetchGoTempCheckTemplates(hubToken, deviceId), fetchGoTempCheckCompletions(hubToken, deviceId)])
+    void Promise.all([
+      fetchGoTempCheckTemplates(hubToken, deviceId, timeZone),
+      fetchGoTempCheckCompletions(hubToken, deviceId),
+    ])
       .then(([programRows, historyRows]) => {
         setTemplates(programRows);
         setCompletions(historyRows);

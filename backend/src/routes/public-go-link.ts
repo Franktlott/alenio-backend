@@ -394,6 +394,7 @@ const publicTempCheckCompleteSchema = z.object({
     )
     .min(1)
     .max(40),
+  timeZone: z.string().min(1).max(64).optional(),
 });
 
 const publicVerifyPinSchema = z.object({
@@ -538,7 +539,8 @@ publicGoLinkRouter.get("/temp-checks", async (c) => {
     if (!hubToken || !deviceId) {
       return c.json({ error: { message: "hubToken and deviceId are required", code: "VALIDATION_ERROR" } }, 400);
     }
-    const result = await listPublicTempCheckTemplates(hubToken, deviceId);
+    const timeZone = c.req.query("timeZone")?.trim() || undefined;
+    const result = await listPublicTempCheckTemplates(hubToken, deviceId, timeZone);
     if (!result.ok) {
       if (result.code === "FORBIDDEN") return c.json({ error: { message: GO_DEVICE_UNLINKED_MESSAGE, code: "DEVICE_UNLINKED" } }, 403);
       return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
@@ -597,7 +599,8 @@ publicGoLinkRouter.get("/temp-checks/:templateId", async (c) => {
     if (!templateId || !hubToken || !deviceId) {
       return c.json({ error: { message: "templateId, hubToken, and deviceId are required", code: "VALIDATION_ERROR" } }, 400);
     }
-    const result = await getPublicTempCheckTemplate(hubToken, deviceId, templateId);
+    const timeZone = c.req.query("timeZone")?.trim() || undefined;
+    const result = await getPublicTempCheckTemplate(hubToken, deviceId, templateId, timeZone);
     if (!result.ok) {
       if (result.code === "FORBIDDEN") return c.json({ error: { message: GO_DEVICE_UNLINKED_MESSAGE, code: "DEVICE_UNLINKED" } }, 403);
       return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
@@ -612,8 +615,8 @@ publicGoLinkRouter.get("/temp-checks/:templateId", async (c) => {
 publicGoLinkRouter.post("/temp-checks/:templateId/complete", zValidator("json", publicTempCheckCompleteSchema), async (c) => {
   try {
     const templateId = c.req.param("templateId")?.trim();
-    const { hubToken, deviceId, leaderUserId, readings } = c.req.valid("json");
-    const result = await completePublicTempCheck(hubToken, deviceId, templateId, { leaderUserId }, { readings });
+    const { hubToken, deviceId, leaderUserId, readings, timeZone } = c.req.valid("json");
+    const result = await completePublicTempCheck(hubToken, deviceId, templateId, { leaderUserId }, { readings, timeZone });
     if (!result.ok) {
       if (result.code === "FORBIDDEN") return c.json({ error: { message: GO_DEVICE_UNLINKED_MESSAGE, code: "DEVICE_UNLINKED" } }, 403);
       if (result.code === "NOT_FOUND") return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);

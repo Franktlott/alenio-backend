@@ -35,11 +35,31 @@ function localTimeToMinutes(value: string): number {
   return Number(hourRaw) * 60 + Number(minuteRaw);
 }
 
+export function getKioskTimeZone(): string {
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (tz?.trim()) return tz;
+  } catch {
+    /* use fallback */
+  }
+  return "America/New_York";
+}
+
 export function isTempCheckWindowOpen(
   template: Pick<TempCheckTemplateRow, "windowStartLocal" | "windowEndLocal">,
   at = new Date(),
+  timeZone = getKioskTimeZone(),
 ): boolean {
-  const nowMinutes = at.getHours() * 60 + at.getMinutes();
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  const parts = formatter.formatToParts(at);
+  const hour = Number(parts.find((p) => p.type === "hour")?.value ?? "0");
+  const minute = Number(parts.find((p) => p.type === "minute")?.value ?? "0");
+  const nowMinutes = hour * 60 + minute;
   const start = localTimeToMinutes(template.windowStartLocal);
   const end = localTimeToMinutes(template.windowEndLocal);
   if (start <= end) return nowMinutes >= start && nowMinutes <= end;

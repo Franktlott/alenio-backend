@@ -811,15 +811,17 @@ export function postTeamTempCheckUnpublish(teamId: string, templateId: string) {
   ).then((r) => r.data);
 }
 
-export function fetchGoTempCheckTemplates(hubToken: string, deviceId: string) {
+export function fetchGoTempCheckTemplates(hubToken: string, deviceId: string, timeZone?: string) {
   const q = new URLSearchParams({ hubToken, deviceId });
+  if (timeZone?.trim()) q.set("timeZone", timeZone.trim());
   return apiGetJson<{ data: { templates: TempCheckTemplateRow[] } }>(`/api/public/go/temp-checks?${q}`).then(
     (r) => r.data.templates,
   );
 }
 
-export function fetchGoTempCheckTemplate(hubToken: string, deviceId: string, templateId: string) {
+export function fetchGoTempCheckTemplate(hubToken: string, deviceId: string, templateId: string, timeZone?: string) {
   const q = new URLSearchParams({ hubToken, deviceId });
+  if (timeZone?.trim()) q.set("timeZone", timeZone.trim());
   return apiGetJson<{ data: { template: TempCheckTemplateRow } }>(
     `/api/public/go/temp-checks/${encodeURIComponent(templateId)}?${q}`,
   ).then((r) => r.data.template);
@@ -845,6 +847,7 @@ export function postGoTempCheckComplete(
     hubToken: string;
     deviceId: string;
     leaderUserId: string;
+    timeZone?: string;
   },
 ) {
   return apiPostJson<{ data: TempCheckCompletionRow }>(
