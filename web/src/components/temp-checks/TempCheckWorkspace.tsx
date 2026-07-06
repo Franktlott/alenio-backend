@@ -15,8 +15,9 @@ import {
   inferProgramIcon,
   programStatusDotClass,
 } from "../../lib/temp-checks-program-helpers";
-import { formatTempCheckTime, formatTempCheckWindow, formatTempRange } from "../../lib/temp-checks-display";
+import { formatTempCheckTime, formatTempCheckWindow, formatTempRange, normalizeBranchActions } from "../../lib/temp-checks-display";
 import { CheckBadgeIcon, ItemCategoryIcon, ProgramIcon } from "./TempCheckProgramIcons";
+import { TempCheckBranchFlow } from "./TempCheckBranchFlow";
 
 type Props = {
   teamId: string;
@@ -27,7 +28,7 @@ type Props = {
 
 const PROGRAM_SETTINGS = [
   "Required for all locations",
-  "Require initials",
+  "Out-of-range options",
   "Per-item corrective actions",
   "Bluetooth probe required",
 ] as const;
@@ -489,19 +490,23 @@ export function TempCheckWorkspace({ teamId, canManage, initialTemplateId, initi
               </div>
 
               <section className="tc-prog-items-section">
-                <h3>Corrective action steps</h3>
-                {selectedEquipment.correctiveActions.length > 0 ? (
-                  <ol className="tc-equipment-step-list">
-                    {selectedEquipment.correctiveActions.map((action, index) => (
-                      <li key={action.id}>
-                        <span className="tc-equipment-step-index">{index + 1}</span>
-                        <span>{action.label}</span>
-                      </li>
-                    ))}
-                  </ol>
-                ) : (
-                  <p className="enterprise-muted">No corrective steps configured yet.</p>
-                )}
+                <TempCheckBranchFlow
+                  tempMinF={selectedEquipment.tempMinF}
+                  tempMaxF={selectedEquipment.tempMaxF}
+                  inRangeSettings={{
+                    autoCloseWhenInRange: selectedEquipment.autoCloseWhenInRange !== false,
+                  }}
+                  actions={normalizeBranchActions(
+                    selectedEquipment.correctiveActions.map((action) => ({
+                      label: action.label,
+                      actionType: action.actionType === "retemp" ? "retemp" : "close",
+                      checklistItems: action.checklistItems ?? [],
+                      requireInitials: action.requireInitials,
+                      requireNote: action.requireNote,
+                      requirePhoto: action.requirePhoto,
+                    })),
+                  )}
+                />
               </section>
             </div>
           ) : !selectedTemplate ? (

@@ -23,7 +23,7 @@ import { subscriptionRouter } from "./routes/subscription";
 import { activityRouter } from "./routes/activity";
 import { topicsRouter } from "./routes/topics";
 import { adminRouter } from "./routes/admin";
-import { adminMobileRouter } from "./routes/admin-mobile";
+import { adminApiRouter } from "./routes/admin-api";
 import { webRouter } from "./routes/web-app";
 import { handleStripeWebhook } from "./routes/stripe-webhook";
 import { pollsRouter } from "./routes/polls";
@@ -910,7 +910,8 @@ app.route("/api/og-preview", ogPreviewRouter);
 app.route("/api/feedback", feedbackRouter);
 app.route("/api/video", videoRouter);
 app.route("/admin", adminRouter);
-app.route("/api/admin-mobile", adminMobileRouter);
+app.route("/api/admin", adminApiRouter);
+app.route("/api/admin-mobile", adminApiRouter);
 app.route("/web", webRouter);
 
 // ── Auto-cleanup job ────────────────────────────────────────────

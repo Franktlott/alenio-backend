@@ -4,13 +4,20 @@ import { findTeamByChecklistHubToken } from "./checklist-locations";
 import { resolveVerifiedGoLeader } from "./go-leader-pin";
 import { resolveTimeZone } from "./timezone";
 import { isGoDeviceApproved } from "./workplace-alerts";
+import {
+  type CorrectiveActionInput,
+  hasRecheckChecklist,
+  parseChecklistItemsFromJson,
+  parseCorrectiveActions,
+  type ParsedCorrectiveAction,
+} from "./temp-check-actions";
 
 export type TempCheckItemInput = {
   label: string;
   equipmentId?: string | null;
   tempMinF?: number | null;
   tempMaxF?: number | null;
-  correctiveActions?: string[];
+  correctiveActions?: CorrectiveActionInput[];
 };
 
 export type TempCheckTemplateInput = {
@@ -64,18 +71,8 @@ function parseTemp(value: number | null | undefined): number | null {
   return Math.round(value * 10) / 10;
 }
 
-function parseActionLabels(raw: string[] | undefined): string[] {
-  if (!raw?.length) return [];
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const row of raw) {
-    const label = row.trim().slice(0, 200);
-    if (!label || seen.has(label.toLowerCase())) continue;
-    seen.add(label.toLowerCase());
-    out.push(label);
-    if (out.length >= 12) break;
-  }
-  return out;
+function parseActionLabels(raw: CorrectiveActionInput[] | undefined): ParsedCorrectiveAction[] {
+  return parseCorrectiveActions(raw);
 }
 
 function parseItems(raw: TempCheckItemInput[]): { ok: true; items: ParsedItem[] } | { ok: false } {
@@ -87,13 +84,15 @@ function parseItems(raw: TempCheckItemInput[]): { ok: true; items: ParsedItem[] 
     const tempMinF = parseTemp(raw[i]!.tempMinF);
     const tempMaxF = parseTemp(raw[i]!.tempMaxF);
     if (tempMinF != null && tempMaxF != null && tempMinF > tempMaxF) return { ok: false };
+    const correctiveActions = parseActionLabels(raw[i]!.correctiveActions);
+    if (correctiveActions.length > 0 && !hasRecheckChecklist(correctiveActions)) return { ok: false };
     items.push({
       label,
       equipmentId: raw[i]!.equipmentId?.trim() || null,
       tempMinF,
       tempMaxF,
       sortOrder: i,
-      correctiveActions: parseActionLabels(raw[i]!.correctiveActions),
+      correctiveActions,
     });
   }
   return { ok: true, items };
@@ -105,7 +104,7 @@ type ParsedItem = {
   tempMinF: number | null;
   tempMaxF: number | null;
   sortOrder: number;
-  correctiveActions: string[];
+  correctiveActions: ParsedCorrectiveAction[];
 };
 
 function parseTemplateInput(input: TempCheckTemplateInput): { ok: true; parsed: ParsedTemplate } | { ok: false } {
@@ -160,10 +159,12 @@ async function persistTemplateChildren(
     });
     if (item.correctiveActions.length > 0) {
       await tx.tempCheckCorrectiveAction.createMany({
-        data: item.correctiveActions.map((label, sortOrder) => ({
+        data: item.correctiveActions.map((action, sortOrder) => ({
           templateId,
           itemId: createdItem.id,
-          label,
+          label: action.label,
+          actionType: action.actionType,
+          checklistItems: action.checklistItems,
           sortOrder,
         })),
       });
@@ -191,7 +192,7 @@ function serializeTemplate(template: {
     tempMinF: number | null;
     tempMaxF: number | null;
     sortOrder: number;
-    correctiveActions: { id: string; label: string; sortOrder: number }[];
+    correctiveActions: { id: string; label: string; actionType: string; checklistItems: unknown; sortOrder: number }[];
   }[];
 }) {
   return {
@@ -218,6 +219,8 @@ function serializeTemplate(template: {
       correctiveActions: item.correctiveActions.map((action) => ({
         id: action.id,
         label: action.label,
+        actionType: action.actionType === "retemp" ? "retemp" : "close",
+        checklistItems: parseChecklistItemsFromJson(action.checklistItems),
         sortOrder: action.sortOrder,
       })),
     })),
@@ -348,7 +351,11 @@ export async function updateTempCheckTemplate(
         equipmentId: item.equipmentId,
         tempMinF: item.tempMinF,
         tempMaxF: item.tempMaxF,
-        correctiveActions: item.correctiveActions.map((a) => a.label),
+        correctiveActions: item.correctiveActions.map((a) => ({
+          label: a.label,
+          actionType: a.actionType === "retemp" ? "retemp" : "close",
+          checklistItems: parseChecklistItemsFromJson(a.checklistItems),
+        })),
       })),
   };
 
@@ -473,6 +480,8 @@ export type TempCheckReadingInput = {
   itemId: string;
   readingF: number;
   correctiveAction?: string | null;
+  correctiveSteps?: string[] | null;
+  branchChecklists?: Array<{ actionLabel: string; completedItems: string[] }> | null;
   notes?: string | null;
 };
 
@@ -484,6 +493,8 @@ export type TempCheckReadingRow = {
   tempMinF: number | null;
   tempMaxF: number | null;
   correctiveAction: string | null;
+  correctiveSteps: string[];
+  branchChecklists: Array<{ actionLabel: string; completedItems: string[] }>;
   notes: string | null;
 };
 
@@ -512,7 +523,7 @@ function serializePublicTemplateRow(
       tempMinF: number | null;
       tempMaxF: number | null;
       sortOrder: number;
-      correctiveActions: { id: string; label: string; sortOrder: number }[];
+      correctiveActions: { id: string; label: string; actionType: string; checklistItems: unknown; sortOrder: number }[];
     }[];
   },
   completionCount: number,
@@ -576,7 +587,7 @@ function normalizeReadings(
     label: string;
     tempMinF: number | null;
     tempMaxF: number | null;
-    correctiveActions: { label: string }[];
+    correctiveActions: { label: string; actionType: string }[];
   }[],
   raw: TempCheckReadingInput[],
 ): { ok: true; readings: TempCheckReadingRow[] } | { ok: false; code: "VALIDATION" } {
@@ -593,15 +604,55 @@ function normalizeReadings(
     const correctiveAction =
       typeof row.correctiveAction === "string" ? row.correctiveAction.trim().slice(0, 200) || null : null;
     const notes = typeof row.notes === "string" ? row.notes.trim().slice(0, 500) || null : null;
+    const correctiveSteps = Array.isArray(row.correctiveSteps)
+      ? row.correctiveSteps
+          .map((step) => (typeof step === "string" ? step.trim().slice(0, 200) : ""))
+          .filter(Boolean)
+          .slice(0, 12)
+      : [];
+    const branchChecklists = Array.isArray(row.branchChecklists)
+      ? row.branchChecklists
+          .map((entry) => {
+            if (!entry || typeof entry !== "object") return null;
+            const actionLabel =
+              "actionLabel" in entry && typeof entry.actionLabel === "string"
+                ? entry.actionLabel.trim().slice(0, 200)
+                : "";
+            const completedItems = Array.isArray(entry.completedItems)
+              ? entry.completedItems
+                  .map((item) => (typeof item === "string" ? item.trim().slice(0, 200) : ""))
+                  .filter(Boolean)
+                  .slice(0, 20)
+              : [];
+            if (!actionLabel) return null;
+            return { actionLabel, completedItems };
+          })
+          .filter((entry): entry is { actionLabel: string; completedItems: string[] } => entry != null)
+          .slice(0, 12)
+      : [];
+    const allowedLabels = item.correctiveActions.map((a) => a.label.toLowerCase());
+    const closeLabels = item.correctiveActions
+      .filter((a) => a.actionType !== "retemp")
+      .map((a) => a.label.toLowerCase());
+
+    for (const step of correctiveSteps) {
+      if (allowedLabels.length > 0 && !allowedLabels.includes(step.toLowerCase())) {
+        return { ok: false, code: "VALIDATION" };
+      }
+    }
+
     if (!inRange) {
       if (!correctiveAction) return { ok: false, code: "VALIDATION" };
-      const allowed = item.correctiveActions.map((a) => a.label.toLowerCase());
-      if (allowed.length > 0 && !allowed.includes(correctiveAction.toLowerCase())) {
+      if (allowedLabels.length > 0 && !allowedLabels.includes(correctiveAction.toLowerCase())) {
+        return { ok: false, code: "VALIDATION" };
+      }
+      if (closeLabels.length > 0 && !closeLabels.includes(correctiveAction.toLowerCase())) {
         return { ok: false, code: "VALIDATION" };
       }
     } else if (correctiveAction) {
       return { ok: false, code: "VALIDATION" };
     }
+
     readings.push({
       itemId: item.id,
       label: item.label,
@@ -610,6 +661,8 @@ function normalizeReadings(
       tempMinF: item.tempMinF,
       tempMaxF: item.tempMaxF,
       correctiveAction,
+      correctiveSteps,
+      branchChecklists,
       notes,
     });
   }

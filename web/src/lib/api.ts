@@ -32,6 +32,66 @@ function mapNetworkError(err: unknown): Error {
   return new Error("Could not reach the API.");
 }
 
+type ZodIssueLike = {
+  path?: unknown[];
+  message?: string;
+  expected?: string;
+  code?: string;
+};
+
+function humanizeZodIssues(issues: ZodIssueLike[]): string | undefined {
+  const correctiveObjectIssue = issues.find(
+    (issue) =>
+      issue.code === "invalid_type" &&
+      issue.expected === "string" &&
+      Array.isArray(issue.path) &&
+      issue.path[0] === "correctiveActions",
+  );
+  if (correctiveObjectIssue) {
+    return "The server needs a quick update before this equipment flow can be saved. Wait a minute, then try Publish again.";
+  }
+  const messages = issues.map((issue) => issue.message?.trim()).filter(Boolean);
+  return messages.length > 0 ? messages.join(" ") : undefined;
+}
+
+function parseZodErrorMessage(message: string): string | undefined {
+  const trimmed = message.trim();
+  if (!trimmed.startsWith("[")) return undefined;
+  try {
+    const issues = JSON.parse(trimmed) as ZodIssueLike[];
+    if (!Array.isArray(issues)) return undefined;
+    return humanizeZodIssues(issues);
+  } catch {
+    return undefined;
+  }
+}
+
+function parseApiErrorMessage(body: unknown): string | undefined {
+  if (Array.isArray(body)) {
+    const issues = body as ZodIssueLike[];
+    if (issues[0]?.message) return humanizeZodIssues(issues) ?? issues[0].message;
+    return undefined;
+  }
+  if (!body || typeof body !== "object") return undefined;
+
+  const record = body as {
+    error?: string | { message?: string; issues?: ZodIssueLike[] };
+    message?: string;
+  };
+  const errField = record.error;
+  if (errField && typeof errField === "object") {
+    if (Array.isArray(errField.issues) && errField.issues.length > 0) {
+      return humanizeZodIssues(errField.issues) ?? errField.issues[0]?.message;
+    }
+    if (typeof errField.message === "string") {
+      return parseZodErrorMessage(errField.message) ?? errField.message;
+    }
+  }
+  if (typeof errField === "string") return errField;
+  if (typeof record.message === "string") return record.message;
+  return undefined;
+}
+
 async function readJson<T>(res: Response): Promise<T | null> {
   if (res.status === 204 || res.status === 205) return null;
   try {
@@ -79,32 +139,8 @@ async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   if (!res.ok) {
-    const body = await readJson<
-      | Array<{ message?: string }>
-      | {
-          error?: string | { message?: string; issues?: Array<{ message?: string }> };
-          message?: string;
-        }
-    >(res);
-    let msg: string | undefined;
-    if (Array.isArray(body) && body[0]?.message) {
-      msg = body[0].message;
-    } else if (body && typeof body === "object" && !Array.isArray(body)) {
-      const errField = body.error;
-      if (errField && typeof errField === "object" && Array.isArray(errField.issues)) {
-        msg = errField.issues[0]?.message;
-      }
-      if (!msg) {
-        msg =
-          typeof errField === "string"
-            ? errField
-            : typeof errField === "object" && errField?.message
-              ? errField.message
-              : typeof body.message === "string"
-                ? body.message
-                : undefined;
-      }
-    }
+    const body = await readJson<unknown>(res);
+    const msg = parseApiErrorMessage(body);
     throw new Error(
       msg ??
         (res.status === 404
@@ -672,9 +708,16 @@ export function deleteTeamWalkTemplate(teamId: string, walkId: string) {
   return patchTeamWalkTemplate(teamId, walkId, { isActive: false }).then(() => ({ success: true }));
 }
 
+export type TempCheckActionType = "close" | "retemp";
+
 export type TempCheckCorrectiveActionRow = {
   id: string;
   label: string;
+  actionType?: TempCheckActionType;
+  checklistItems?: string[];
+  requireInitials?: boolean;
+  requireNote?: boolean;
+  requirePhoto?: boolean;
   sortOrder: number;
 };
 
@@ -715,6 +758,8 @@ export type TempCheckReadingRow = {
   tempMinF: number | null;
   tempMaxF: number | null;
   correctiveAction: string | null;
+  correctiveSteps?: string[];
+  branchChecklists?: Array<{ actionLabel: string; completedItems: string[] }>;
   notes: string | null;
 };
 
@@ -741,6 +786,8 @@ export type TempCheckCompletePayload = {
     itemId: string;
     readingF: number;
     correctiveAction?: string | null;
+    correctiveSteps?: string[];
+    branchChecklists?: Array<{ actionLabel: string; completedItems: string[] }>;
     notes?: string | null;
   }>;
 };
@@ -750,7 +797,7 @@ export type TempCheckTemplateItemPayload = {
   equipmentId?: string | null;
   tempMinF?: number | null;
   tempMaxF?: number | null;
-  correctiveActions?: string[];
+  correctiveActions?: Array<string | { label: string; actionType?: TempCheckActionType; checklistItems?: string[] }>;
 };
 
 export type TempCheckEquipmentRow = {
@@ -759,6 +806,20 @@ export type TempCheckEquipmentRow = {
   name: string;
   tempMinF: number | null;
   tempMaxF: number | null;
+  equipmentType: string | null;
+  locationGroup: string | null;
+  checkWindowStart: string | null;
+  checkWindowEnd: string | null;
+  checkFrequency: string | null;
+  allowedRoles: string[];
+  flowConfig: unknown | null;
+  flowStatus: string;
+  flowIsComplete: boolean;
+  autoCloseWhenInRange: boolean;
+  requireInitialsBeforeClose: boolean;
+  retakeWaitMinutes: number;
+  maxRetakes: number;
+  requireManagerNoteAfterFinalRetake: boolean;
   sortOrder: number;
   isActive: boolean;
   createdAt: string;
@@ -771,7 +832,31 @@ export type TempCheckEquipmentPayload = {
   name: string;
   tempMinF?: number | null;
   tempMaxF?: number | null;
-  correctiveActions?: string[];
+  equipmentType?: string | null;
+  locationGroup?: string | null;
+  checkWindowStart?: string | null;
+  checkWindowEnd?: string | null;
+  checkFrequency?: string | null;
+  allowedRoles?: string[];
+  flowConfig?: unknown;
+  flowStatus?: string;
+  flowIsComplete?: boolean;
+  autoCloseWhenInRange?: boolean;
+  requireInitialsBeforeClose?: boolean;
+  retakeWaitMinutes?: number;
+  maxRetakes?: number;
+  requireManagerNoteAfterFinalRetake?: boolean;
+  correctiveActions?: Array<
+    | string
+    | {
+        label: string;
+        actionType?: TempCheckActionType;
+        checklistItems?: string[];
+        requireInitials?: boolean;
+        requireNote?: boolean;
+        requirePhoto?: boolean;
+      }
+  >;
 };
 
 export type TempCheckEquipmentUpdatePayload = Partial<TempCheckEquipmentPayload> & {

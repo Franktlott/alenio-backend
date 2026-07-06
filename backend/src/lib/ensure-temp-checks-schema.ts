@@ -205,6 +205,138 @@ export async function ensureTempChecksSchema(prisma: PrismaClient): Promise<void
       CREATE INDEX IF NOT EXISTS "TempCheckTemplateItem_equipmentId_idx"
       ON "TempCheckTemplateItem"("equipmentId");
     `);
+    await prisma.$executeRawUnsafe(`
+      DO $$ BEGIN
+        ALTER TABLE "TempCheckEquipmentCorrectiveAction" ADD COLUMN "actionType" TEXT NOT NULL DEFAULT 'close';
+      EXCEPTION WHEN duplicate_column THEN NULL;
+      END $$;
+    `);
+    await prisma.$executeRawUnsafe(`
+      DO $$ BEGIN
+        ALTER TABLE "TempCheckCorrectiveAction" ADD COLUMN "actionType" TEXT NOT NULL DEFAULT 'close';
+      EXCEPTION WHEN duplicate_column THEN NULL;
+      END $$;
+    `);
+    await prisma.$executeRawUnsafe(`
+      DO $$ BEGIN
+        ALTER TABLE "TempCheckEquipmentCorrectiveAction" ADD COLUMN "checklistItems" JSONB NOT NULL DEFAULT '[]';
+      EXCEPTION WHEN duplicate_column THEN NULL;
+      END $$;
+    `);
+    await prisma.$executeRawUnsafe(`
+      DO $$ BEGIN
+        ALTER TABLE "TempCheckCorrectiveAction" ADD COLUMN "checklistItems" JSONB NOT NULL DEFAULT '[]';
+      EXCEPTION WHEN duplicate_column THEN NULL;
+      END $$;
+    `);
+    await prisma.$executeRawUnsafe(`
+      DO $$ BEGIN
+        ALTER TABLE "TempCheckEquipment" ADD COLUMN "autoCloseWhenInRange" BOOLEAN NOT NULL DEFAULT true;
+      EXCEPTION WHEN duplicate_column THEN NULL;
+      END $$;
+    `);
+    await prisma.$executeRawUnsafe(`
+      DO $$ BEGIN
+        ALTER TABLE "TempCheckEquipment" ADD COLUMN "requireInitialsBeforeClose" BOOLEAN NOT NULL DEFAULT false;
+      EXCEPTION WHEN duplicate_column THEN NULL;
+      END $$;
+    `);
+    await prisma.$executeRawUnsafe(`
+      DO $$ BEGIN
+        ALTER TABLE "TempCheckEquipment" ADD COLUMN "retakeWaitMinutes" INTEGER NOT NULL DEFAULT 15;
+      EXCEPTION WHEN duplicate_column THEN NULL;
+      END $$;
+    `);
+    await prisma.$executeRawUnsafe(`
+      DO $$ BEGIN
+        ALTER TABLE "TempCheckEquipment" ADD COLUMN "maxRetakes" INTEGER NOT NULL DEFAULT 2;
+      EXCEPTION WHEN duplicate_column THEN NULL;
+      END $$;
+    `);
+    await prisma.$executeRawUnsafe(`
+      DO $$ BEGIN
+        ALTER TABLE "TempCheckEquipment" ADD COLUMN "requireManagerNoteAfterFinalRetake" BOOLEAN NOT NULL DEFAULT false;
+      EXCEPTION WHEN duplicate_column THEN NULL;
+      END $$;
+    `);
+    await prisma.$executeRawUnsafe(`
+      DO $$ BEGIN
+        ALTER TABLE "TempCheckEquipmentCorrectiveAction" ADD COLUMN "requireInitials" BOOLEAN NOT NULL DEFAULT true;
+      EXCEPTION WHEN duplicate_column THEN NULL;
+      END $$;
+    `);
+    await prisma.$executeRawUnsafe(`
+      DO $$ BEGIN
+        ALTER TABLE "TempCheckEquipmentCorrectiveAction" ADD COLUMN "requireNote" BOOLEAN NOT NULL DEFAULT false;
+      EXCEPTION WHEN duplicate_column THEN NULL;
+      END $$;
+    `);
+    await prisma.$executeRawUnsafe(`
+      DO $$ BEGIN
+        ALTER TABLE "TempCheckEquipmentCorrectiveAction" ADD COLUMN "requirePhoto" BOOLEAN NOT NULL DEFAULT false;
+      EXCEPTION WHEN duplicate_column THEN NULL;
+      END $$;
+    `);
+    await prisma.$executeRawUnsafe(`
+      UPDATE "TempCheckEquipment" SET "requireInitialsBeforeClose" = false WHERE "requireInitialsBeforeClose" = true;
+    `);
+    await prisma.$executeRawUnsafe(`
+      UPDATE "TempCheckEquipmentCorrectiveAction" SET "requireInitials" = false WHERE "requireInitials" = true;
+    `);
+    await prisma.$executeRawUnsafe(`
+      DO $$ BEGIN
+        ALTER TABLE "TempCheckEquipment" ADD COLUMN "equipmentType" TEXT;
+      EXCEPTION WHEN duplicate_column THEN NULL;
+      END $$;
+    `);
+    await prisma.$executeRawUnsafe(`
+      DO $$ BEGIN
+        ALTER TABLE "TempCheckEquipment" ADD COLUMN "locationGroup" TEXT;
+      EXCEPTION WHEN duplicate_column THEN NULL;
+      END $$;
+    `);
+    await prisma.$executeRawUnsafe(`
+      DO $$ BEGIN
+        ALTER TABLE "TempCheckEquipment" ADD COLUMN "checkWindowStart" TEXT;
+      EXCEPTION WHEN duplicate_column THEN NULL;
+      END $$;
+    `);
+    await prisma.$executeRawUnsafe(`
+      DO $$ BEGIN
+        ALTER TABLE "TempCheckEquipment" ADD COLUMN "checkWindowEnd" TEXT;
+      EXCEPTION WHEN duplicate_column THEN NULL;
+      END $$;
+    `);
+    await prisma.$executeRawUnsafe(`
+      DO $$ BEGIN
+        ALTER TABLE "TempCheckEquipment" ADD COLUMN "checkFrequency" TEXT;
+      EXCEPTION WHEN duplicate_column THEN NULL;
+      END $$;
+    `);
+    await prisma.$executeRawUnsafe(`
+      DO $$ BEGIN
+        ALTER TABLE "TempCheckEquipment" ADD COLUMN "allowedRoles" JSONB NOT NULL DEFAULT '["team_leader"]';
+      EXCEPTION WHEN duplicate_column THEN NULL;
+      END $$;
+    `);
+    await prisma.$executeRawUnsafe(`
+      DO $$ BEGIN
+        ALTER TABLE "TempCheckEquipment" ADD COLUMN "flowConfig" JSONB;
+      EXCEPTION WHEN duplicate_column THEN NULL;
+      END $$;
+    `);
+    await prisma.$executeRawUnsafe(`
+      DO $$ BEGIN
+        ALTER TABLE "TempCheckEquipment" ADD COLUMN "flowStatus" TEXT NOT NULL DEFAULT 'draft';
+      EXCEPTION WHEN duplicate_column THEN NULL;
+      END $$;
+    `);
+    await prisma.$executeRawUnsafe(`
+      DO $$ BEGIN
+        ALTER TABLE "TempCheckEquipment" ADD COLUMN "flowIsComplete" BOOLEAN NOT NULL DEFAULT false;
+      EXCEPTION WHEN duplicate_column THEN NULL;
+      END $$;
+    `);
     console.log("[startup] Temp check schema ensured");
   } catch (err) {
     console.error("[startup] ensureTempChecksSchema failed:", err);

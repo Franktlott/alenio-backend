@@ -389,6 +389,17 @@ const publicTempCheckCompleteSchema = z.object({
         itemId: z.string().min(1),
         readingF: z.number(),
         correctiveAction: z.string().max(200).nullable().optional(),
+        correctiveSteps: z.array(z.string().max(200)).max(12).nullable().optional(),
+        branchChecklists: z
+          .array(
+            z.object({
+              actionLabel: z.string().max(200),
+              completedItems: z.array(z.string().max(200)).max(20),
+            }),
+          )
+          .max(12)
+          .nullable()
+          .optional(),
         notes: z.string().max(500).nullable().optional(),
       }),
     )

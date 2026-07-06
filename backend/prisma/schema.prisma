@@ -887,6 +887,20 @@ model TempCheckEquipment {
   name      String
   tempMinF  Float?
   tempMaxF  Float?
+  equipmentType      String?
+  locationGroup      String?
+  checkWindowStart   String?
+  checkWindowEnd     String?
+  checkFrequency     String?
+  allowedRoles       Json     @default("[]")
+  flowConfig         Json?
+  flowStatus         String   @default("draft")
+  flowIsComplete     Boolean  @default(false)
+  autoCloseWhenInRange       Boolean @default(true)
+  requireInitialsBeforeClose Boolean @default(false)
+  retakeWaitMinutes          Int     @default(15)
+  maxRetakes                 Int     @default(2)
+  requireManagerNoteAfterFinalRetake Boolean @default(false)
   sortOrder Int      @default(0)
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
@@ -899,23 +913,30 @@ model TempCheckEquipment {
 }
 
 model TempCheckEquipmentCorrectiveAction {
-  id          String @id @default(cuid())
-  equipmentId String
-  label       String
-  sortOrder   Int    @default(0)
-  equipment   TempCheckEquipment @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  id             String @id @default(cuid())
+  equipmentId    String
+  label          String
+  actionType     String @default("close")
+  checklistItems Json   @default("[]")
+  requireInitials  Boolean @default(true)
+  requireNote      Boolean @default(false)
+  requirePhoto     Boolean @default(false)
+  sortOrder      Int    @default(0)
+  equipment      TempCheckEquipment @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
 
   @@index([equipmentId])
 }
 
 model TempCheckCorrectiveAction {
-  id         String  @id @default(cuid())
-  templateId String
-  itemId     String?
-  label      String
-  sortOrder  Int     @default(0)
-  template   TempCheckTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
-  item       TempCheckTemplateItem? @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  id             String  @id @default(cuid())
+  templateId     String
+  itemId         String?
+  label          String
+  actionType     String  @default("close")
+  checklistItems Json    @default("[]")
+  sortOrder      Int     @default(0)
+  template       TempCheckTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  item           TempCheckTemplateItem? @relation(fields: [itemId], references: [id], onDelete: Cascade)
 
   @@index([templateId])
   @@index([itemId])

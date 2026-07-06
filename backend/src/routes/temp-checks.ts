@@ -12,6 +12,7 @@ import {
   unpublishTempCheckTemplate,
   updateTempCheckTemplate,
 } from "../lib/temp-checks";
+import { prismaRouteError } from "../lib/prisma-errors";
 import {
   createTempCheckEquipment,
   deleteTempCheckEquipment,
@@ -30,12 +31,28 @@ tempChecksRouter.use("*", authGuard);
 
 const localTimeSchema = z.string().trim().regex(/^([01]\d|2[0-3]):([0-5]\d)$/, "Use HH:mm format");
 
+const tempCheckActionTypeSchema = z.enum(["close", "retemp"]);
+
+const checklistItemsSchema = z.array(z.string().trim().min(1).max(200)).max(20);
+
+const tempCheckCorrectiveActionSchema = z.union([
+  z.object({
+    label: z.string().trim().min(1).max(200),
+    actionType: tempCheckActionTypeSchema.optional(),
+    checklistItems: checklistItemsSchema.optional(),
+    requireInitials: z.boolean().optional(),
+    requireNote: z.boolean().optional(),
+    requirePhoto: z.boolean().optional(),
+  }),
+  z.string().trim().min(1).max(200),
+]);
+
 const tempCheckItemSchema = z.object({
   label: z.string().trim().min(1).max(200),
   equipmentId: z.string().trim().min(1).nullable().optional(),
   tempMinF: z.number().nullable().optional(),
   tempMaxF: z.number().nullable().optional(),
-  correctiveActions: z.array(z.string().trim().min(1).max(200)).max(12).optional(),
+  correctiveActions: z.array(tempCheckCorrectiveActionSchema).max(12).optional(),
 });
 
 const tempCheckBodySchema = z.object({
@@ -77,7 +94,21 @@ const tempCheckEquipmentBodySchema = z.object({
   name: z.string().trim().min(1).max(200),
   tempMinF: z.number().nullable().optional(),
   tempMaxF: z.number().nullable().optional(),
-  correctiveActions: z.array(z.string().trim().min(1).max(200)).max(12).optional(),
+  equipmentType: z.string().trim().max(50).nullable().optional(),
+  locationGroup: z.string().trim().max(200).nullable().optional(),
+  checkWindowStart: z.string().trim().max(10).nullable().optional(),
+  checkWindowEnd: z.string().trim().max(10).nullable().optional(),
+  checkFrequency: z.string().trim().max(100).nullable().optional(),
+  allowedRoles: z.array(z.string().trim().max(50)).max(10).optional(),
+  flowConfig: z.unknown().optional(),
+  flowStatus: z.enum(["draft", "published"]).optional(),
+  flowIsComplete: z.boolean().optional(),
+  autoCloseWhenInRange: z.boolean().optional(),
+  requireInitialsBeforeClose: z.boolean().optional(),
+  retakeWaitMinutes: z.number().int().min(0).max(120).optional(),
+  maxRetakes: z.number().int().min(1).max(10).optional(),
+  requireManagerNoteAfterFinalRetake: z.boolean().optional(),
+  correctiveActions: z.array(tempCheckCorrectiveActionSchema).max(12).optional(),
 });
 
 const tempCheckEquipmentPatchSchema = z
@@ -85,7 +116,21 @@ const tempCheckEquipmentPatchSchema = z
     name: z.string().trim().min(1).max(200).optional(),
     tempMinF: z.number().nullable().optional(),
     tempMaxF: z.number().nullable().optional(),
-    correctiveActions: z.array(z.string().trim().min(1).max(200)).max(12).optional(),
+    equipmentType: z.string().trim().max(50).nullable().optional(),
+    locationGroup: z.string().trim().max(200).nullable().optional(),
+    checkWindowStart: z.string().trim().max(10).nullable().optional(),
+    checkWindowEnd: z.string().trim().max(10).nullable().optional(),
+    checkFrequency: z.string().trim().max(100).nullable().optional(),
+    allowedRoles: z.array(z.string().trim().max(50)).max(10).optional(),
+    flowConfig: z.unknown().optional(),
+    flowStatus: z.enum(["draft", "published"]).optional(),
+    flowIsComplete: z.boolean().optional(),
+    autoCloseWhenInRange: z.boolean().optional(),
+    requireInitialsBeforeClose: z.boolean().optional(),
+    retakeWaitMinutes: z.number().int().min(0).max(120).optional(),
+    maxRetakes: z.number().int().min(1).max(10).optional(),
+    requireManagerNoteAfterFinalRetake: z.boolean().optional(),
+    correctiveActions: z.array(tempCheckCorrectiveActionSchema).max(12).optional(),
     isActive: z.boolean().optional(),
   })
   .superRefine((body, ctx) => {
@@ -93,6 +138,20 @@ const tempCheckEquipmentPatchSchema = z
       body.name !== undefined ||
       body.tempMinF !== undefined ||
       body.tempMaxF !== undefined ||
+      body.equipmentType !== undefined ||
+      body.locationGroup !== undefined ||
+      body.checkWindowStart !== undefined ||
+      body.checkWindowEnd !== undefined ||
+      body.checkFrequency !== undefined ||
+      body.allowedRoles !== undefined ||
+      body.flowConfig !== undefined ||
+      body.flowStatus !== undefined ||
+      body.flowIsComplete !== undefined ||
+      body.autoCloseWhenInRange !== undefined ||
+      body.requireInitialsBeforeClose !== undefined ||
+      body.retakeWaitMinutes !== undefined ||
+      body.maxRetakes !== undefined ||
+      body.requireManagerNoteAfterFinalRetake !== undefined ||
       body.correctiveActions !== undefined ||
       body.isActive !== undefined;
     if (!hasUpdate) {
@@ -112,12 +171,16 @@ tempChecksRouter.post("/equipment", zValidator("json", tempCheckEquipmentBodySch
   const user = c.get("user")!;
   const { teamId } = c.req.param();
   const body = c.req.valid("json");
-  const result = await createTempCheckEquipment(teamId, user.id, body);
-  if (!result.ok) {
-    if (result.code === "FORBIDDEN") return c.json({ error: { message: "Forbidden", code: "FORBIDDEN" } }, 403);
-    return c.json({ error: { message: "Invalid equipment standard", code: "VALIDATION_ERROR" } }, 400);
+  try {
+    const result = await createTempCheckEquipment(teamId, user.id, body);
+    if (!result.ok) {
+      if (result.code === "FORBIDDEN") return c.json({ error: { message: "Forbidden", code: "FORBIDDEN" } }, 403);
+      return c.json({ error: { message: "Invalid equipment standard", code: "VALIDATION_ERROR" } }, 400);
+    }
+    return c.json({ data: result.equipment }, 201);
+  } catch (err) {
+    return prismaRouteError(c, err, "[temp-checks] POST /equipment failed");
   }
-  return c.json({ data: result.equipment }, 201);
 });
 
 tempChecksRouter.get("/equipment/:equipmentId", async (c) => {

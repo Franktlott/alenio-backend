@@ -2,7 +2,14 @@ import { Link } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import type { TempCheckEquipmentRow, TempCheckTemplateCreatePayload } from "../../lib/api";
 import { fetchTeamTempCheckEquipment } from "../../lib/api";
-import { TempCheckActionsDrawer } from "./TempCheckActionsDrawer";
+import { TempCheckBranchFlow } from "./TempCheckBranchFlow";
+import {
+  buildRecheckBranchActions,
+  extractCorrectiveSteps,
+  hasCorrectiveStepsForRecheck,
+  normalizeBranchActions,
+  type TempCheckBranchAction,
+} from "../../lib/temp-checks-display";
 
 type ItemRow = {
   id: string;
@@ -10,7 +17,7 @@ type ItemRow = {
   label: string;
   tempMinF: string;
   tempMaxF: string;
-  correctiveActions: string[];
+  correctiveActions: TempCheckBranchAction[];
 };
 
 type Props = {
@@ -30,7 +37,7 @@ type Props = {
       label: string;
       tempMinF: number | null;
       tempMaxF: number | null;
-      correctiveActions: string[];
+      correctiveActions: Array<string | TempCheckBranchAction>;
     }[];
   };
   onSubmit: (payload: TempCheckTemplateCreatePayload) => Promise<void>;
@@ -56,7 +63,7 @@ function itemsFromInitial(initial?: Props["initial"]): ItemRow[] {
     label: item.label,
     tempMinF: item.tempMinF != null ? String(item.tempMinF) : "",
     tempMaxF: item.tempMaxF != null ? String(item.tempMaxF) : "",
-    correctiveActions: item.correctiveActions.map((label) => label),
+    correctiveActions: normalizeBranchActions(item.correctiveActions),
   }));
 }
 
@@ -88,7 +95,6 @@ export function TempCheckBuilderPage({
   const [actionsItemId, setActionsItemId] = useState<string | null>(null);
 
   const itemCountLabel = useMemo(() => `${items.length} item${items.length === 1 ? "" : "s"}`, [items.length]);
-  const actionsItem = items.find((item) => item.id === actionsItemId) ?? null;
 
   useEffect(() => {
     if (!teamId) return;
@@ -109,7 +115,16 @@ export function TempCheckBuilderPage({
       label: row.name,
       tempMinF: row.tempMinF != null ? String(row.tempMinF) : "",
       tempMaxF: row.tempMaxF != null ? String(row.tempMaxF) : "",
-      correctiveActions: row.correctiveActions.map((action) => action.label),
+      correctiveActions: buildRecheckBranchActions(extractCorrectiveSteps(
+        row.correctiveActions.map((action) => ({
+          label: action.label,
+          actionType: action.actionType === "retemp" ? "retemp" : "close",
+          checklistItems: action.checklistItems ?? [],
+          requireInitials: false,
+          requireNote: action.requireNote,
+          requirePhoto: action.requirePhoto,
+        })),
+      )),
     });
   }
 
@@ -144,18 +159,27 @@ export function TempCheckBuilderPage({
         const tempMinF = parseNumberInput(item.tempMinF);
         const tempMaxF = parseNumberInput(item.tempMaxF);
         if (tempMinF != null && tempMaxF != null && tempMinF > tempMaxF) return null;
+        if (item.correctiveActions.length > 0 && !hasCorrectiveStepsForRecheck(item.correctiveActions)) return null;
+        const cleanedActions = item.correctiveActions
+          .map((action) => ({
+            ...action,
+            label: action.label.trim(),
+            checklistItems: action.checklistItems.map((entry) => entry.trim()).filter(Boolean),
+            requireInitials: false,
+          }))
+          .filter((action) => action.label);
         return {
           label,
           equipmentId: item.equipmentId || null,
           tempMinF,
           tempMaxF,
-          correctiveActions: item.correctiveActions,
+          correctiveActions: cleanedActions,
         };
       })
       .filter((item): item is NonNullable<typeof item> => item !== null);
 
     if (parsedItems.length === 0) {
-      setLocalError("Add at least one item to check.");
+      setLocalError("Add at least one item to check. Each out-of-range item needs corrective steps before recheck.");
       return;
     }
 
@@ -256,14 +280,15 @@ export function TempCheckBuilderPage({
                 <span>Item</span>
                 <span>Min °F</span>
                 <span>Max °F</span>
-                <span className="temp-check-item-table-head-corrective">Corrective action steps</span>
+                <span className="temp-check-item-table-head-corrective">Branch flow</span>
                 <span />
               </div>
               <div className="temp-check-item-table-body">
                 {items.map((item, index) => {
                   const actionCount = item.correctiveActions.length;
+                  const flowOpen = actionsItemId === item.id;
                   return (
-                    <div key={item.id} className="temp-check-item-table-group">
+                    <div key={item.id} className={`temp-check-item-table-group${flowOpen ? " temp-check-item-table-group--flow-open" : ""}`}>
                       <div className="temp-check-item-table-row">
                         <label className="temp-check-item-table-field temp-check-item-table-field--equipment">
                           <span className="sr-only">Equipment {index + 1}</span>
@@ -310,24 +335,21 @@ export function TempCheckBuilderPage({
                         </label>
                         <button
                           type="button"
-                          className={`tc-builder-steps-btn${actionCount > 0 ? " tc-builder-steps-btn--set" : ""}`}
-                          title="Configure corrective action steps when the reading is out of range"
-                          aria-label={
-                            actionCount > 0
-                              ? `${actionCount} corrective action step${actionCount === 1 ? "" : "s"} configured`
-                              : "Configure corrective action steps"
-                          }
-                          onClick={() => setActionsItemId(item.id)}
+                          className={`tc-builder-steps-btn${flowOpen || actionCount > 0 ? " tc-builder-steps-btn--set" : ""}`}
+                          title="Edit branch flow for this item"
+                          aria-label={flowOpen ? "Close branch flow" : "Edit branch flow"}
+                          aria-expanded={flowOpen}
+                          onClick={() => setActionsItemId(flowOpen ? null : item.id)}
                         >
                           {actionCount > 0 ? (
                             <span className="tc-builder-steps-btn-label tc-builder-steps-btn-label--set">
                               <span className="tc-builder-steps-count">{actionCount}</span>
-                              <span>corrective steps</span>
+                              <span>branch steps</span>
                             </span>
                           ) : (
                             <span className="tc-builder-steps-btn-label">
-                              <span>Corrective</span>
-                              <span>action steps</span>
+                              <span>Edit</span>
+                              <span>flow</span>
                             </span>
                           )}
                         </button>
@@ -355,6 +377,17 @@ export function TempCheckBuilderPage({
                           </button>
                         </div>
                       </div>
+                      {flowOpen ? (
+                        <div className="tc-builder-item-flow">
+                          <TempCheckBranchFlow
+                            editable
+                            tempMinF={parseNumberInput(item.tempMinF)}
+                            tempMaxF={parseNumberInput(item.tempMaxF)}
+                            actions={item.correctiveActions}
+                            onChange={(next) => updateItem(item.id, { correctiveActions: next })}
+                          />
+                        </div>
+                      ) : null}
                     </div>
                   );
                 })}
@@ -367,18 +400,6 @@ export function TempCheckBuilderPage({
           </section>
         </div>
       </div>
-
-      {actionsItem ? (
-        <TempCheckActionsDrawer
-          open
-          itemLabel={actionsItem.label}
-          tempMinF={actionsItem.tempMinF}
-          tempMaxF={actionsItem.tempMaxF}
-          actions={actionsItem.correctiveActions}
-          onChange={(next) => updateItem(actionsItem.id, { correctiveActions: next })}
-          onClose={() => setActionsItemId(null)}
-        />
-      ) : null}
     </div>
   );
 }

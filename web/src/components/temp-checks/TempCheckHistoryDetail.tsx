@@ -34,6 +34,9 @@ export function TempCheckHistoryDetail({ completion }: Props) {
               <span>
                 {row.readingF}°F · Target {formatTempRange(row.tempMinF, row.tempMaxF)}
               </span>
+              {row.correctiveSteps && row.correctiveSteps.length > 0 ? (
+                <span className="go-tc-history-retemps">Retemps: {row.correctiveSteps.join(" → ")}</span>
+              ) : null}
             </div>
             <span>{row.inRange ? "In range" : row.correctiveAction}</span>
           </li>

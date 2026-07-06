@@ -1,7 +1,7 @@
 import { Navigate, Route, Routes, useNavigate, useParams } from "react-router-dom";
 import { useCallback, useEffect, useState } from "react";
 import { TempCheckBuilderPage } from "../../components/temp-checks/TempCheckBuilderPage";
-import { TempCheckEquipmentBuilderPage } from "../../components/temp-checks/TempCheckEquipmentBuilderPage";
+import { EquipmentCheckFlowWizard } from "../../components/temp-checks/EquipmentCheckFlowWizard";
 import { TempCheckWorkspace } from "../../components/temp-checks/TempCheckWorkspace";
 import {
   fetchTeamTempCheckEquipmentItem,
@@ -10,8 +10,10 @@ import {
   patchTeamTempCheckTemplate,
   postTeamTempCheckEquipment,
   postTeamTempCheckTemplate,
+  type TempCheckEquipmentPayload,
 } from "../../lib/api";
 import { formatTempCheckSaveError } from "../../lib/temp-checks-display";
+import type { EquipmentCheckFlowConfig } from "../../lib/equipment-check-flow";
 import { useAlenioGoShell } from "./alenio-go-outlet-context";
 
 function TempChecksWorkspaceLayout() {
@@ -79,22 +81,15 @@ function TempChecksEditPage() {
       label: string;
       tempMinF: number | null;
       tempMaxF: number | null;
-      correctiveActions: string[];
+      correctiveActions: Array<string | { label: string; actionType?: "close" | "retemp"; checklistItems?: string[] }>;
     }[];
   } | null>(null);
-  const [publishedLocked, setPublishedLocked] = useState(false);
 
   const load = useCallback(() => {
     if (!teamId || !templateId) return;
     setLoading(true);
     void fetchTeamTempCheckTemplate(teamId, templateId)
       .then((data) => {
-        if (data.template.isPublished !== false) {
-          setPublishedLocked(true);
-          setInitial(null);
-          return;
-        }
-        setPublishedLocked(false);
         setInitial({
           name: data.template.name,
           description: data.template.description ?? "",
@@ -106,7 +101,11 @@ function TempChecksEditPage() {
             label: item.label,
             tempMinF: item.tempMinF,
             tempMaxF: item.tempMaxF,
-            correctiveActions: item.correctiveActions.map((action) => action.label),
+            correctiveActions: item.correctiveActions.map((action) => ({
+              label: action.label,
+              actionType: action.actionType === "retemp" ? "retemp" : "close",
+              checklistItems: action.checklistItems ?? [],
+            })),
           })),
         });
       })
@@ -120,15 +119,14 @@ function TempChecksEditPage() {
 
   if (!canManage) return <Navigate to="/go/temp-checks" replace />;
   if (!teamId) return null;
-  if (loading) return <p className="enterprise-muted">Loading temp check…</p>;
-  if (publishedLocked) return <Navigate to={`/go/temp-checks/${templateId}`} replace />;
-  if (!initial) return <p className="enterprise-muted">Temp check not found.</p>;
+  if (loading) return <p className="enterprise-muted">Loading program…</p>;
+  if (!initial) return <p className="enterprise-muted">Program not found.</p>;
 
   return (
     <TempCheckBuilderPage
       teamId={teamId}
       pageTitle="Edit temp check"
-      pageSubtitle="Update schedule, items, temperature windows, and corrective actions."
+      pageSubtitle="Update schedule, items, and corrective workflows."
       busy={busy}
       error={error}
       initial={initial}
@@ -159,17 +157,17 @@ function TempChecksEquipmentCreatePage() {
   if (!teamId) return null;
 
   return (
-    <TempCheckEquipmentBuilderPage
-      pageTitle="Add equipment standard"
-      pageSubtitle="Set the temperature range and corrective action steps leaders follow when this equipment is out of range."
+    <EquipmentCheckFlowWizard
+      pageTitle="Equipment Check Flow Wizard"
+      pageSubtitle="Build a complete pass/fail workflow for this equipment standard."
       busy={busy}
       error={error}
       onCancel={() => navigate("/go/temp-checks")}
-      onSubmit={async (payload) => {
+      onSubmit={async (payload, publish) => {
         setBusy(true);
         setError(null);
         try {
-          const created = await postTeamTempCheckEquipment(teamId, payload);
+          const created = await postTeamTempCheckEquipment(teamId, payload as TempCheckEquipmentPayload);
           navigate(`/go/temp-checks/equipment/${created.id}`);
         } catch (err) {
           setError(formatTempCheckSaveError(err));
@@ -188,12 +186,7 @@ function TempChecksEquipmentEditPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [initial, setInitial] = useState<{
-    name: string;
-    tempMinF: number | null;
-    tempMaxF: number | null;
-    correctiveActions: string[];
-  } | null>(null);
+  const [initial, setInitial] = useState<Parameters<typeof EquipmentCheckFlowWizard>[0]["initial"]>(undefined);
 
   const load = useCallback(() => {
     if (!teamId || !equipmentId) return;
@@ -204,10 +197,24 @@ function TempChecksEquipmentEditPage() {
           name: data.equipment.name,
           tempMinF: data.equipment.tempMinF,
           tempMaxF: data.equipment.tempMaxF,
-          correctiveActions: data.equipment.correctiveActions.map((action) => action.label),
+          autoCloseWhenInRange: data.equipment.autoCloseWhenInRange !== false,
+          equipmentType: data.equipment.equipmentType,
+          locationGroup: data.equipment.locationGroup,
+          checkWindowStart: data.equipment.checkWindowStart,
+          checkWindowEnd: data.equipment.checkWindowEnd,
+          checkFrequency: data.equipment.checkFrequency,
+          allowedRoles: data.equipment.allowedRoles,
+          flowConfig: data.equipment.flowConfig as EquipmentCheckFlowConfig | null,
+          correctiveActions: data.equipment.correctiveActions.map((action) => ({
+            label: action.label,
+            actionType: action.actionType === "retemp" ? "retemp" : "close",
+            checklistItems: action.checklistItems ?? [],
+            requireNote: action.requireNote,
+            requirePhoto: action.requirePhoto,
+          })),
         });
       })
-      .catch(() => setInitial(null))
+      .catch(() => setInitial(undefined))
       .finally(() => setLoading(false));
   }, [teamId, equipmentId]);
 
@@ -221,18 +228,18 @@ function TempChecksEquipmentEditPage() {
   if (!initial) return <p className="enterprise-muted">Equipment not found.</p>;
 
   return (
-    <TempCheckEquipmentBuilderPage
-      pageTitle="Edit equipment standard"
-      pageSubtitle="Update temperature standards and corrective action steps for this equipment."
+    <EquipmentCheckFlowWizard
+      pageTitle="Equipment Check Flow Wizard"
+      pageSubtitle="Update the complete pass/fail workflow for this equipment."
       busy={busy}
       error={error}
       initial={initial}
       onCancel={() => navigate(`/go/temp-checks/equipment/${equipmentId}`)}
-      onSubmit={async (payload) => {
+      onSubmit={async (payload, publish) => {
         setBusy(true);
         setError(null);
         try {
-          await patchTeamTempCheckEquipment(teamId, equipmentId, payload);
+          await patchTeamTempCheckEquipment(teamId, equipmentId, payload as TempCheckEquipmentPayload);
           navigate(`/go/temp-checks/equipment/${equipmentId}`);
         } catch (err) {
           setError(formatTempCheckSaveError(err));
@@ -247,15 +254,13 @@ function TempChecksEquipmentEditPage() {
 export function AlenioGoTempChecksRoutes() {
   return (
     <Routes>
+      <Route index element={<TempChecksWorkspaceLayout />} />
       <Route path="new" element={<TempChecksCreatePage />} />
+      <Route path=":templateId/edit" element={<TempChecksEditPage />} />
+      <Route path=":templateId" element={<TempChecksWorkspaceLayout />} />
       <Route path="equipment/new" element={<TempChecksEquipmentCreatePage />} />
       <Route path="equipment/:equipmentId/edit" element={<TempChecksEquipmentEditPage />} />
-      <Route path=":templateId/edit" element={<TempChecksEditPage />} />
-      <Route element={<TempChecksWorkspaceLayout />}>
-        <Route index element={null} />
-        <Route path="equipment/:equipmentId" element={null} />
-        <Route path=":templateId" element={null} />
-      </Route>
+      <Route path="equipment/:equipmentId" element={<TempChecksWorkspaceLayout />} />
     </Routes>
   );
 }
