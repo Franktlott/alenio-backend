@@ -1,6 +1,8 @@
-import { prisma } from "../prisma";
-import { findTeamByChecklistHubToken } from "./checklist-locations";
+import { parseGoFrontendSettings } from "./go-frontend-settings";
+import { resolveGoAlertSoundUrl } from "./go-alert-sounds";
+import { findTeamByGoHubToken } from "./go-hub";
 import { canManageGoLoginRequests } from "./go-login-requests";
+import { prisma } from "../prisma";
 import { sendPushToUsers } from "./push";
 
 export type WorkplaceAlertTarget = "device" | "all_devices" | "all_users";
@@ -43,7 +45,7 @@ export async function recordGoDeviceCheckIn(
   deviceId: string,
   deviceLabel?: string | null,
 ) {
-  const team = await findTeamByChecklistHubToken(hubToken);
+  const team = await findTeamByGoHubToken(hubToken);
   if (!team) return { ok: false as const, code: "NOT_FOUND" as const };
 
   const trimmedDeviceId = deviceId.trim();
@@ -236,7 +238,7 @@ export async function isGoDeviceApproved(teamId: string, deviceId: string): Prom
 }
 
 export async function pollWorkplaceAlertsForDevice(hubToken: string, deviceId: string) {
-  const team = await findTeamByChecklistHubToken(hubToken);
+  const team = await findTeamByGoHubToken(hubToken);
   if (!team) return { ok: false as const, code: "NOT_FOUND" as const };
 
   const approved = await isGoDeviceReachable(team.id, deviceId);
@@ -259,11 +261,20 @@ export async function pollWorkplaceAlertsForDevice(hubToken: string, deviceId: s
     },
   });
 
-  return { ok: true as const, alerts };
+  const goSettings = parseGoFrontendSettings(team.goFrontendSettings);
+  const workspaceSoundUrl = resolveGoAlertSoundUrl(goSettings);
+
+  return {
+    ok: true as const,
+    alerts: alerts.map((alert) => ({
+      ...alert,
+      soundUrl: alert.playSound ? workspaceSoundUrl : null,
+    })),
+  };
 }
 
 export async function ackWorkplaceAlertForDevice(alertId: string, hubToken: string, deviceId: string) {
-  const team = await findTeamByChecklistHubToken(hubToken);
+  const team = await findTeamByGoHubToken(hubToken);
   if (!team) return { ok: false as const, code: "NOT_FOUND" as const };
 
   const approved = await isGoDeviceReachable(team.id, deviceId);

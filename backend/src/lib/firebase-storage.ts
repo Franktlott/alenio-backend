@@ -230,7 +230,7 @@ export async function deleteStorageObjectByUrlIfOwned(url: string | null | undef
   }
 }
 
-export type UploadSlot = "generic" | "profile" | "team";
+export type UploadSlot = "generic" | "profile" | "team" | "go_alert_sound";
 
 export async function uploadFileToFirebaseStorage(params: {
   userId: string;
@@ -249,6 +249,9 @@ export async function uploadFileToFirebaseStorage(params: {
   if (slot === "team" && !teamId?.trim()) {
     throw new Error("teamId is required for team photo uploads");
   }
+  if (slot === "go_alert_sound" && !teamId?.trim()) {
+    throw new Error("teamId is required for alert sound uploads");
+  }
 
   const safeName = sanitizeFilename(file.name || "upload");
   const objectId = crypto.randomUUID();
@@ -257,6 +260,8 @@ export async function uploadFileToFirebaseStorage(params: {
     storagePath = `users/${userId}/profile/avatar`;
   } else if (slot === "team") {
     storagePath = `teams/${teamId!.trim()}/photo`;
+  } else if (slot === "go_alert_sound") {
+    storagePath = `teams/${teamId!.trim()}/alert-sounds/${Date.now()}-${objectId}-${safeName}`;
   } else {
     storagePath = `users/${userId}/uploads/${Date.now()}-${objectId}-${safeName}`;
   }

@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ackGoWorkplaceAlert,
-  fetchGoBriefings,
   fetchGoWorkplaceAlerts,
   fetchPublicChecklistHub,
   type GoWorkplaceAlert,
@@ -23,62 +22,18 @@ import {
   GoDashModuleWheel,
   GoDashQuickActionsGrid,
 } from "./go-dash-parts";
-import { GoKioskAlertModal } from "./GoKioskWorkplaceAlerts";
+import { GoKioskAlertModal, GoAlertSoundUnlockBanner } from "./GoKioskWorkplaceAlerts";
 
 type Props = {
   hubToken: string;
 };
 
-function buildKioskModules(options: {
-  hubToken: string;
-  pendingBriefings: number;
-  checklistCount: number;
-  totalChecklistItems: number;
-}): GoDashModule[] {
-  return GO_DASH_KIOSK_MODULES.map((module) => {
-    if (module.id === "briefings") {
-      const count = options.pendingBriefings;
-      return {
-        ...module,
-        active: true,
-        href: `/checklist/${options.hubToken}/briefings`,
-        count,
-        countMessage:
-          count > 0
-            ? `${count} awaiting your initials`
-            : "You're all caught up",
-        ctaLabel: "View briefings",
-      };
-    }
-
-    if (module.id === "checklists") {
-      const count = options.checklistCount;
-      return {
-        ...module,
-        count: count > 0 ? count : 0,
-        countMessage:
-          count > 0
-            ? `${options.totalChecklistItems} items across ${count} checklist${count !== 1 ? "s" : ""}`
-            : "Coming soon on this device",
-      };
-    }
-
-    if (module.id === "walks") {
-      return {
-        ...module,
-        active: true,
-        href: `/checklist/${options.hubToken}/walks`,
-        countMessage: "Complete published walks",
-        ctaLabel: "Open walks",
-      };
-    }
-
-    return {
-      ...module,
-      count: 0,
-      countMessage: "Requires an Alenio account",
-    };
-  });
+function buildKioskModules(): GoDashModule[] {
+  return GO_DASH_KIOSK_MODULES.map((module) => ({
+    ...module,
+    count: 0,
+    countMessage: module.active ? module.countMessage : "Coming soon",
+  }));
 }
 
 async function resolveDisplayHeroImage(url: string | null | undefined): Promise<string | null> {
@@ -93,25 +48,13 @@ export function AlenioGoKioskDashboard({ hubToken }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [teamName, setTeamName] = useState("");
   const [heroImage, setHeroImage] = useState<string | null>(null);
-  const [checklistCount, setChecklistCount] = useState(0);
-  const [totalChecklistItems, setTotalChecklistItems] = useState(0);
-  const [pendingBriefings, setPendingBriefings] = useState(0);
   const [alerts, setAlerts] = useState<GoWorkplaceAlert[]>([]);
   const [activeAlert, setActiveAlert] = useState<GoWorkplaceAlert | null>(null);
   const handledAlertIds = useRef(new Set<string>());
   const alertQueueRef = useRef<GoWorkplaceAlert[]>([]);
   const hubRequestRef = useRef(0);
 
-  const kioskModules = useMemo(
-    () =>
-      buildKioskModules({
-        hubToken,
-        pendingBriefings,
-        checklistCount,
-        totalChecklistItems,
-      }),
-    [hubToken, pendingBriefings, checklistCount, totalChecklistItems],
-  );
+  const kioskModules = useMemo(() => buildKioskModules(), []);
 
   const enqueueAlertsForModal = useCallback((incoming: GoWorkplaceAlert[]) => {
     if (incoming.length === 0) return;
@@ -183,8 +126,6 @@ export function AlenioGoKioskDashboard({ hubToken }: Props) {
 
           setTeamName(data.team.name);
           setHeroImage(resolvedHero);
-          setChecklistCount(data.checklists.length);
-          setTotalChecklistItems(data.checklists.reduce((sum, row) => sum + row.taskCount, 0));
           saveGoLinkedWorkspace(hubToken, data.team.name, resolvedHero);
         })
         .catch((err) => {
@@ -201,15 +142,6 @@ export function AlenioGoKioskDashboard({ hubToken }: Props) {
 
     refreshHub(true);
     const hubPollId = window.setInterval(() => refreshHub(false), 10_000);
-
-    void fetchGoBriefings(hubToken, deviceId)
-      .then((rows) => {
-        if (cancelled) return;
-        setPendingBriefings(rows.filter((row) => row.status !== "reviewed").length);
-      })
-      .catch(() => {
-        if (!cancelled) setPendingBriefings(0);
-      });
 
     return () => {
       cancelled = true;
@@ -241,9 +173,6 @@ export function AlenioGoKioskDashboard({ hubToken }: Props) {
   }, [hubToken, loading, error, handleIncomingAlerts]);
 
   const greeting = greetingForHour(new Date().getHours());
-  const progressPct = totalChecklistItems > 0 ? 0 : 0;
-  const remainingItems = totalChecklistItems;
-  const overdueItems = 0;
 
   function endSession() {
     clearGoLinkedWorkspace();
@@ -277,8 +206,10 @@ export function AlenioGoKioskDashboard({ hubToken }: Props) {
   }
 
   return (
-      <div className="go-dash go-dash--kiosk go-dash--store" data-testid="alenio-go-kiosk-dashboard">
+    <div className="go-dash go-dash--kiosk go-dash--store" data-testid="alenio-go-kiosk-dashboard">
       <GoDashKioskHeader teamName={teamName} alerts={alerts} />
+
+      <GoAlertSoundUnlockBanner />
 
       {activeAlert ? (
         <GoKioskAlertModal alert={activeAlert} onAcknowledge={acknowledgeActiveAlert} />
@@ -293,36 +224,33 @@ export function AlenioGoKioskDashboard({ hubToken }: Props) {
 
           <div className="go-dash-stats-bar go-dash-stats-bar--store">
             <div className="go-dash-progress">
-              <div className="go-dash-progress-ring" style={{ ["--pct" as string]: String(progressPct) }}>
-                <span>{progressPct}%</span>
+              <div className="go-dash-progress-ring" style={{ ["--pct" as string]: "0" }}>
+                <span>0%</span>
               </div>
               <div>
                 <strong>Today&apos;s progress</strong>
-                <span>
-                  {progressPct}% complete
-                  {totalChecklistItems > 0 ? ` · ${totalChecklistItems} checklist items` : ""}
-                </span>
+                <span>More modules coming soon</span>
               </div>
             </div>
             <div className="go-dash-stat-col">
-              <span className="go-dash-stat-value go-dash-stat-value--indigo">{remainingItems}</span>
-              <span className="go-dash-stat-label">Remaining items</span>
-              <span className="go-dash-stat-hint">{remainingItems > 0 ? "Lots to do!" : "All clear"}</span>
+              <span className="go-dash-stat-value go-dash-stat-value--indigo">0</span>
+              <span className="go-dash-stat-label">Active modules</span>
+              <span className="go-dash-stat-hint">Alerts are live today</span>
             </div>
             <div className="go-dash-stat-col">
-              <span className="go-dash-stat-value go-dash-stat-value--amber">{overdueItems}</span>
-              <span className="go-dash-stat-label">Overdue items</span>
-              <span className="go-dash-stat-hint">{overdueItems > 0 ? "Needs attention" : "On track"}</span>
+              <span className="go-dash-stat-value go-dash-stat-value--amber">—</span>
+              <span className="go-dash-stat-label">Briefings</span>
+              <span className="go-dash-stat-hint">Coming soon</span>
             </div>
             <div className="go-dash-stat-col">
-              <span className="go-dash-stat-value go-dash-stat-value--green">0</span>
-              <span className="go-dash-stat-label">Completed</span>
-              <span className="go-dash-stat-hint">Great job!</span>
+              <span className="go-dash-stat-value go-dash-stat-value--green">—</span>
+              <span className="go-dash-stat-label">Checklists</span>
+              <span className="go-dash-stat-hint">Coming soon</span>
             </div>
             <div className="go-dash-stat-col">
-              <span className="go-dash-stat-value go-dash-stat-value--violet">●</span>
-              <span className="go-dash-stat-label">Manager walks</span>
-              <span className="go-dash-stat-hint">Tap walks to open</span>
+              <span className="go-dash-stat-value go-dash-stat-value--violet">—</span>
+              <span className="go-dash-stat-label">Walks</span>
+              <span className="go-dash-stat-hint">Coming soon</span>
             </div>
           </div>
         </section>
@@ -339,7 +267,7 @@ export function AlenioGoKioskDashboard({ hubToken }: Props) {
           </h2>
           <GoDashQuickActionsGrid actions={GO_DASH_QUICK_ACTIONS} />
         </section>
-        <GoDashFooter onEndSession={endSession} endLabel="Disconnect device" />
+        <GoDashFooter onEndSession={endSession} endLabel="Disconnect device" showAlertSoundStatus />
       </div>
     </div>
   );

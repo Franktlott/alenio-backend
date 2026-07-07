@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { AlenioGoLogo } from "../AlenioGoLogo";
-import { fetchTeamGoDevices, fetchTeamWalkTemplates, fetchWebTeam } from "../../lib/api";
+import { fetchTeamGoDevices, fetchWebTeam } from "../../lib/api";
 import { resolveGoHeroImage } from "../../lib/go-frontend-settings";
 import { probeImageUrl } from "../../lib/image-probe";
 import { goBackendAdminTiles, goBackendGreeting, goBackendQuickActions } from "../../lib/alenio-go-backend";
@@ -34,7 +34,6 @@ export function AlenioGoBackendDashboard({
 }: Props) {
   const location = useLocation();
   const [linkedDeviceCount, setLinkedDeviceCount] = useState(0);
-  const [walkTemplateCount, setWalkTemplateCount] = useState(0);
   const [heroImage, setHeroImage] = useState<string | null>(null);
   const [clock, setClock] = useState(() => formatGoDashClock());
   const [copyOk, setCopyOk] = useState(false);
@@ -98,24 +97,6 @@ export function AlenioGoBackendDashboard({
     };
   }, [canManage, teamId]);
 
-  useEffect(() => {
-    if (!canManage || !teamId) {
-      setWalkTemplateCount(0);
-      return;
-    }
-    let cancelled = false;
-    void fetchTeamWalkTemplates(teamId)
-      .then((data) => {
-        if (!cancelled) setWalkTemplateCount(data.templates.length);
-      })
-      .catch(() => {
-        if (!cancelled) setWalkTemplateCount(0);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [canManage, teamId]);
-
   const firstName = userName?.trim().split(/\s+/)[0] ?? "there";
   const greeting = goBackendGreeting();
   const tiles = useMemo(
@@ -129,7 +110,6 @@ export function AlenioGoBackendDashboard({
   const quickActions = goBackendQuickActions({
     inviteCode,
     linkedDeviceCount,
-    walkTemplateCount,
     canManage,
   });
 

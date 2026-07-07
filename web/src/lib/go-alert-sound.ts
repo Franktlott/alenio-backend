@@ -1,139 +1,146 @@
-/** Shared audio context — must be resumed after a user gesture on iOS/iPadOS. */
-let audioCtx: AudioContext | null = null;
+/** Kiosk alert audio — uses workspace sound files (requires user gesture on iPad). */
+let soundUnlocked = false;
+let pendingSoundLoop = false;
+let pendingSoundUrl: string | null = null;
+const unlockListeners = new Set<() => void>();
 
-function getAudioContext(): AudioContext | null {
-  if (typeof window === "undefined") return null;
-  const AudioCtor =
-    window.AudioContext ??
-    (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-  if (!AudioCtor) return null;
-  if (!audioCtx || audioCtx.state === "closed") {
-    audioCtx = new AudioCtor();
-  }
-  return audioCtx;
+const ALERT_SOUND_PREF_KEY = "alenio.go.alertSoundEnabled";
+
+let alertLoopAudio: HTMLAudioElement | null = null;
+let alertLoopGeneration = 0;
+let loadedSoundUrl: string | null = null;
+
+export function hasGoAlertSoundPreference(): boolean {
+  if (typeof window === "undefined") return false;
+  return localStorage.getItem(ALERT_SOUND_PREF_KEY) === "1";
 }
 
-/** Call from a tap/click so later alert polls can play sound (required on iPad Safari). */
-export async function unlockGoAlertSound(): Promise<boolean> {
-  const ctx = getAudioContext();
-  if (!ctx) return false;
-  try {
-    if (ctx.state === "suspended") {
-      await ctx.resume();
+function persistGoAlertSoundPreference(): void {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(ALERT_SOUND_PREF_KEY, "1");
+}
+
+function notifyUnlocked() {
+  for (const listener of unlockListeners) {
+    listener();
+  }
+}
+
+function resolveSoundUrl(url: string): string {
+  if (typeof window === "undefined") return url;
+  if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("blob:")) return url;
+  if (url.startsWith("/")) return `${window.location.origin}${url}`;
+  return url;
+}
+
+function getLoopAudio(soundUrl: string): HTMLAudioElement {
+  const resolved = resolveSoundUrl(soundUrl);
+  if (!alertLoopAudio || loadedSoundUrl !== resolved) {
+    if (alertLoopAudio) {
+      alertLoopAudio.pause();
+      alertLoopAudio.src = "";
     }
-    if (ctx.state !== "running") return false;
-    const gain = ctx.createGain();
-    gain.gain.value = 0;
-    gain.connect(ctx.destination);
-    const osc = ctx.createOscillator();
-    osc.connect(gain);
-    osc.start();
-    osc.stop(ctx.currentTime + 0.001);
+    alertLoopAudio = new Audio(resolved);
+    alertLoopAudio.preload = "auto";
+    loadedSoundUrl = resolved;
+  }
+  return alertLoopAudio;
+}
+
+function markUnlocked() {
+  if (soundUnlocked) return;
+  soundUnlocked = true;
+  persistGoAlertSoundPreference();
+  notifyUnlocked();
+  if (pendingSoundLoop && pendingSoundUrl) {
+    const url = pendingSoundUrl;
+    pendingSoundLoop = false;
+    pendingSoundUrl = null;
+    startGoAlertSoundLoopInternal(url);
+  }
+}
+
+/** Synchronous unlock — call directly from click/touch handlers (required on iPad Safari). */
+export function unlockGoAlertSoundFromGesture(): boolean {
+  if (soundUnlocked) return true;
+  if (typeof window === "undefined") return false;
+
+  try {
+    markUnlocked();
     return true;
   } catch {
     return false;
   }
 }
 
+export function isGoAlertSoundUnlocked(): boolean {
+  return soundUnlocked;
+}
+
+export function onGoAlertSoundUnlocked(listener: () => void): () => void {
+  unlockListeners.add(listener);
+  if (soundUnlocked) listener();
+  return () => unlockListeners.delete(listener);
+}
+
+/** Call from a tap/click so later alert polls can play sound (required on iPad Safari). */
+export async function unlockGoAlertSound(): Promise<boolean> {
+  if (soundUnlocked) return true;
+  return unlockGoAlertSoundFromGesture();
+}
+
 let soundInitStarted = false;
 
-/** Prime alert audio on load and unlock silently on the next screen interaction. */
+/** Unlock on the next deliberate screen interaction anywhere on the kiosk. */
 export function initGoAlertSound(): void {
   if (soundInitStarted || typeof window === "undefined") return;
   soundInitStarted = true;
 
-  const tryUnlock = () => void unlockGoAlertSound();
-  tryUnlock();
-  window.setTimeout(tryUnlock, 400);
-  window.setTimeout(tryUnlock, 2_000);
+  const onGesture = () => {
+    if (soundUnlocked) return;
+    unlockGoAlertSoundFromGesture();
+  };
 
-  const onGesture = () => void unlockGoAlertSound();
-  window.addEventListener("pointerdown", onGesture, { passive: true });
-  window.addEventListener("touchstart", onGesture, { passive: true });
-  window.addEventListener("keydown", onGesture);
+  window.addEventListener("pointerup", onGesture, { passive: true, capture: true });
+  window.addEventListener("touchend", onGesture, { passive: true, capture: true });
 }
 
-function scheduleAlertBeep(
-  ctx: AudioContext,
-  master: GainNode,
-  freq: number,
-  start: number,
-  duration: number,
-  peakGain: number,
-) {
-  const osc = ctx.createOscillator();
-  const gain = ctx.createGain();
-  osc.type = "square";
-  osc.frequency.value = freq;
-  gain.gain.setValueAtTime(0.0001, start);
-  gain.gain.exponentialRampToValueAtTime(peakGain, start + 0.006);
-  gain.gain.setValueAtTime(peakGain, start + duration - 0.015);
-  gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
-  osc.connect(gain);
-  gain.connect(master);
-  osc.start(start);
-  osc.stop(start + duration + 0.02);
+function startGoAlertSoundLoopInternal(soundUrl: string): void {
+  stopGoAlertSoundLoop();
+  if (!soundUrl.trim()) return;
+
+  alertLoopGeneration += 1;
+  const audio = getLoopAudio(soundUrl);
+  audio.loop = true;
+  audio.currentTime = 0;
+
+  void audio.play().catch(() => undefined);
+  alertLoopAudio = audio;
 }
-
-function playAlertPattern(ctx: AudioContext, startAt: number) {
-  const master = ctx.createGain();
-  master.gain.value = 1;
-  master.connect(ctx.destination);
-
-  const peak = 0.92;
-  const beepLen = 0.2;
-  const gap = 0.1;
-  const pattern = [880, 1320, 880, 1320, 1760, 1320, 1760, 1320];
-
-  let t = startAt;
-  for (const freq of pattern) {
-    scheduleAlertBeep(ctx, master, freq, t, beepLen, peak);
-    t += beepLen + gap;
-  }
-
-  t += 0.18;
-  for (const freq of pattern) {
-    scheduleAlertBeep(ctx, master, freq, t, beepLen, peak);
-    t += beepLen + gap;
-  }
-}
-
-/** Loud alternating beeps for Alenio Go workplace alerts (kiosk / tablet). */
-export function playGoAlertSound(): void {
-  void (async () => {
-    const ctx = getAudioContext();
-    if (!ctx) return;
-    try {
-      if (ctx.state === "suspended") {
-        await ctx.resume();
-      }
-      if (ctx.state !== "running") return;
-
-      playAlertPattern(ctx, ctx.currentTime);
-    } catch {
-      /* autoplay blocked or audio unsupported */
-    }
-  })();
-}
-
-/** One full alert pattern is ~5s; gap keeps repeats from overlapping. */
-const ALERT_LOOP_GAP_MS = 5_500;
-
-let alertLoopTimer: ReturnType<typeof setTimeout> | null = null;
 
 /** Repeats the alert sound until stopGoAlertSoundLoop() is called. */
-export function startGoAlertSoundLoop(): void {
-  stopGoAlertSoundLoop();
-  const tick = () => {
-    playGoAlertSound();
-    alertLoopTimer = window.setTimeout(tick, ALERT_LOOP_GAP_MS);
-  };
-  tick();
+export function startGoAlertSoundLoop(soundUrl: string): void {
+  if (!soundUrl.trim()) return;
+  if (!soundUnlocked) {
+    pendingSoundLoop = true;
+    pendingSoundUrl = soundUrl;
+    return;
+  }
+  startGoAlertSoundLoopInternal(soundUrl);
 }
 
 export function stopGoAlertSoundLoop(): void {
-  if (alertLoopTimer !== null) {
-    window.clearTimeout(alertLoopTimer);
-    alertLoopTimer = null;
+  pendingSoundLoop = false;
+  pendingSoundUrl = null;
+  alertLoopGeneration += 1;
+  if (alertLoopAudio) {
+    alertLoopAudio.pause();
+    alertLoopAudio.currentTime = 0;
+    alertLoopAudio.loop = false;
   }
+}
+
+/** @deprecated Use startGoAlertSoundLoop(soundUrl) */
+export function playGoAlertSound(): void {
+  /* legacy no-op */
 }

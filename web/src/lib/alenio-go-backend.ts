@@ -87,7 +87,6 @@ export function goBackendAdminTiles(options: {
 export function goBackendQuickActions(options: {
   inviteCode?: string | null;
   linkedDeviceCount: number;
-  walkTemplateCount?: number;
   canManage?: boolean;
 }) {
   const actions = [
@@ -113,14 +112,5 @@ export function goBackendQuickActions(options: {
       active: true,
     },
   ];
-  if (options.canManage) {
-    actions.push({
-      id: "walks",
-      label: options.walkTemplateCount ? `${options.walkTemplateCount} walks` : "Open walks",
-      href: "/go/walks",
-      tone: "violet" as const,
-      active: true,
-    });
-  }
   return actions;
 }

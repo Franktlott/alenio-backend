@@ -8,14 +8,6 @@ import { AlenioGoHomePage } from "./routes/alenio-go/AlenioGoHomePage";
 import { AlenioGoAlertsModulePage } from "./routes/alenio-go/AlenioGoAlertsModulePage";
 import { AlenioGoLinkedDevicesRoutes } from "./routes/alenio-go/AlenioGoLinkedDevicesRoutes";
 import { AlenioGoComingSoonModulePage } from "./routes/alenio-go/AlenioGoComingSoonModulePage";
-import { AlenioGoBriefingsRoutes } from "./routes/alenio-go/AlenioGoBriefingsRoutes";
-import { AlenioGoWalksRoutes } from "./routes/alenio-go/AlenioGoWalksRoutes";
-import { AlenioGoTempChecksRoutes } from "./routes/alenio-go/AlenioGoTempChecksRoutes";
-import { BriefingsKioskPage } from "./routes/BriefingsKioskPage";
-import { BriefingsKioskReviewPage } from "./routes/BriefingsKioskReviewPage";
-import { WalksKioskPage } from "./routes/WalksKioskPage";
-import { WalksKioskRunPage } from "./routes/WalksKioskRunPage";
-import { WalksKioskHistoryPage } from "./routes/WalksKioskHistoryPage";
 import { ActivityPage } from "./routes/ActivityPage";
 import { BillingPage } from "./routes/BillingPage";
 import { ChatPage } from "./routes/ChatPage";
@@ -126,11 +118,6 @@ export default function App() {
         <Route path="/invite/:token" element={<InvitePage />} />
         <Route path="/checklist/:hubToken" element={<GoKioskSessionLayout />}>
           <Route index element={<WorkspaceChecklistHubPage />} />
-          <Route path="briefings/:briefingId" element={<BriefingsKioskReviewPage />} />
-          <Route path="briefings" element={<BriefingsKioskPage />} />
-          <Route path="walks/history/:completionId" element={<WalksKioskHistoryPage />} />
-          <Route path="walks/:walkId/run" element={<WalksKioskRunPage />} />
-          <Route path="walks" element={<WalksKioskPage />} />
           <Route path=":checklistId" element={<Navigate to=".." replace />} />
         </Route>
         <Route path="/aleniogo" element={<AlenioGoLinkPage />} />
@@ -157,9 +144,9 @@ export default function App() {
             <Route path="setup" element={<Navigate to="/go/devices" replace />} />
             <Route path="frontend" element={<Navigate to="/go/devices/display" replace />} />
             <Route path="checklists" element={<AlenioGoComingSoonModulePage moduleId="checklists" />} />
-            <Route path="temp-checks/*" element={<AlenioGoTempChecksRoutes />} />
-            <Route path="briefings/*" element={<AlenioGoBriefingsRoutes />} />
-            <Route path="walks/*" element={<AlenioGoWalksRoutes />} />
+            <Route path="temp-checks" element={<AlenioGoComingSoonModulePage moduleId="temp-checks" />} />
+            <Route path="briefings/*" element={<AlenioGoComingSoonModulePage moduleId="briefings" />} />
+            <Route path="walks/*" element={<AlenioGoComingSoonModulePage moduleId="walks" />} />
           </Route>
           <Route path="/activity" element={<ActivityPage />} />
           <Route path="/chat" element={<ChatPage />} />

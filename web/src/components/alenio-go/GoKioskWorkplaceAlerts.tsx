@@ -1,6 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import type { GoWorkplaceAlert } from "../../lib/api";
-import { startGoAlertSoundLoop, stopGoAlertSoundLoop } from "../../lib/go-alert-sound";
+import {
+  hasGoAlertSoundPreference,
+  isGoAlertSoundUnlocked,
+  onGoAlertSoundUnlocked,
+  startGoAlertSoundLoop,
+  stopGoAlertSoundLoop,
+  unlockGoAlertSound,
+  unlockGoAlertSoundFromGesture,
+} from "../../lib/go-alert-sound";
 
 function formatAlertTime(iso: string): string {
   try {
@@ -93,16 +101,106 @@ type ModalProps = {
   onAcknowledge: () => void;
 };
 
-export function GoKioskAlertModal({ alert, onAcknowledge }: ModalProps) {
-  useEffect(() => {
-    if (!alert.playSound) return;
-    startGoAlertSoundLoop();
-    return () => stopGoAlertSoundLoop();
-  }, [alert.id, alert.playSound]);
+export function GoAlertSoundUnlockBanner() {
+  const [state, setState] = useState<"idle" | "enabling" | "error" | "done">(() => {
+    if (isGoAlertSoundUnlocked() || hasGoAlertSoundPreference()) return "done";
+    return "idle";
+  });
 
-  function handleAcknowledge() {
+  useEffect(() => onGoAlertSoundUnlocked(() => setState("done")), []);
+
+  if (state === "done") return null;
+
+  function enableSound() {
+    setState("enabling");
+    const ok = unlockGoAlertSoundFromGesture();
+    if (ok) {
+      setState("done");
+      return;
+    }
+    void unlockGoAlertSound().then((asyncOk) => setState(asyncOk ? "done" : "error"));
+  }
+
+  return (
+    <section className="go-alert-sound-setup" aria-labelledby="go-alert-sound-setup-title">
+      <div className="go-alert-sound-setup-card">
+        <div className="go-alert-sound-setup-icon" aria-hidden>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
+            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+            <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+          </svg>
+        </div>
+        <div className="go-alert-sound-setup-copy">
+          <p className="go-alert-sound-setup-kicker">Device setup</p>
+          <h2 id="go-alert-sound-setup-title" className="go-alert-sound-setup-title">
+            Enable alert audio
+          </h2>
+          <p className="go-alert-sound-setup-sub">
+            Turn on once so workplace alerts can play sound on this tablet.
+          </p>
+        </div>
+        <button
+          type="button"
+          className="go-alert-sound-setup-btn"
+          disabled={state === "enabling"}
+          onPointerUp={(event) => {
+            event.preventDefault();
+            enableSound();
+          }}
+          data-testid="go-alert-sound-unlock"
+        >
+          {state === "enabling" ? "Enabling…" : state === "error" ? "Try again" : "Enable audio"}
+        </button>
+      </div>
+      {state === "error" ? (
+        <p className="go-alert-sound-setup-error" role="alert">
+          Could not enable audio. Raise the device volume and tap Enable audio again.
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
+export function GoKioskAlertModal({ alert, onAcknowledge }: ModalProps) {
+  const [soundBlocked, setSoundBlocked] = useState(false);
+
+  useEffect(() => {
+    if (!alert.playSound || !alert.soundUrl) {
+      setSoundBlocked(false);
+      return;
+    }
+    startGoAlertSoundLoop(alert.soundUrl);
+    setSoundBlocked(!isGoAlertSoundUnlocked());
+    return () => stopGoAlertSoundLoop();
+  }, [alert.id, alert.playSound, alert.soundUrl]);
+
+  useEffect(() => {
+    if (!alert.playSound || !alert.soundUrl) return;
+    return onGoAlertSoundUnlocked(() => {
+      setSoundBlocked(false);
+      startGoAlertSoundLoop(alert.soundUrl!);
+    });
+  }, [alert.id, alert.playSound, alert.soundUrl]);
+
+  function handleAcknowledge(event: React.MouseEvent<HTMLButtonElement>) {
+    event.stopPropagation();
     stopGoAlertSoundLoop();
     onAcknowledge();
+  }
+
+  function handleUnlockSound() {
+    if (!soundBlocked) return;
+
+    if (unlockGoAlertSoundFromGesture()) {
+      setSoundBlocked(false);
+      if (alert.playSound && alert.soundUrl) startGoAlertSoundLoop(alert.soundUrl);
+      return;
+    }
+    void unlockGoAlertSound().then((ok) => {
+      if (!ok) return;
+      setSoundBlocked(false);
+      if (alert.playSound && alert.soundUrl) startGoAlertSoundLoop(alert.soundUrl);
+    });
   }
 
   return (
@@ -112,8 +210,15 @@ export function GoKioskAlertModal({ alert, onAcknowledge }: ModalProps) {
       aria-modal="true"
       aria-labelledby="go-kiosk-alert-modal-title"
       data-testid="go-kiosk-alert-modal"
+      onPointerUp={(event) => {
+        if (event.target !== event.currentTarget) return;
+        handleUnlockSound();
+      }}
     >
-      <div className="go-kiosk-alert-modal">
+      <div
+        className="go-kiosk-alert-modal"
+        onPointerUp={(event) => event.stopPropagation()}
+      >
         <div className="go-kiosk-alert-modal-icon" aria-hidden>
           <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
@@ -134,12 +239,17 @@ export function GoKioskAlertModal({ alert, onAcknowledge }: ModalProps) {
           type="button"
           className="go-kiosk-alert-modal-ack"
           onClick={handleAcknowledge}
+          onPointerUp={(event) => event.stopPropagation()}
           data-testid="go-kiosk-alert-acknowledge"
         >
           Acknowledge alert
         </button>
         {alert.playSound ? (
-          <p className="go-kiosk-alert-modal-hint">Sound repeats until you acknowledge this alert.</p>
+          <p className="go-kiosk-alert-modal-hint">
+            {soundBlocked
+              ? "Tap anywhere on this alert to enable sound. It repeats until you acknowledge."
+              : "Sound repeats until you acknowledge this alert."}
+          </p>
         ) : null}
       </div>
     </div>

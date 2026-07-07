@@ -429,6 +429,7 @@ export type GoWorkplaceAlert = {
   title: string;
   body: string;
   playSound: boolean;
+  soundUrl: string | null;
   createdAt: string;
 };
 
@@ -442,742 +443,6 @@ export function ackGoWorkplaceAlert(alertId: string, hubToken: string, deviceId:
     hubToken,
     deviceId,
   });
-}
-
-export type BriefingStatus = "not_started" | "reviewed" | "overdue";
-
-export type BriefingRow = {
-  id: string;
-  teamId: string;
-  title: string;
-  description: string;
-  documentUrl: string;
-  documentFilename: string | null;
-  contentType: string | null;
-  dueAt: string | null;
-  requireSignature: boolean;
-  allowInitials: boolean;
-  publishedAt: string;
-  createdByUserId: string;
-  createdAt: string;
-  status: BriefingStatus;
-  completedAt: string | null;
-  signedCount?: number;
-};
-
-export type BriefingCreatePayload = {
-  title: string;
-  description: string;
-  documentUrl: string;
-  documentFilename?: string;
-  contentType?: string;
-  dueAt?: string | null;
-  requireSignature?: boolean;
-  allowInitials?: boolean;
-};
-
-export function fetchTeamBriefings(teamId: string) {
-  return apiGetJson<{ data: { briefings: BriefingRow[]; canManage: boolean } }>(
-    `/api/teams/${encodeURIComponent(teamId)}/briefings`,
-  ).then((r) => r.data);
-}
-
-export function fetchTeamBriefing(teamId: string, briefingId: string) {
-  return apiGetJson<{ data: { briefing: BriefingRow; canManage: boolean } }>(
-    `/api/teams/${encodeURIComponent(teamId)}/briefings/${encodeURIComponent(briefingId)}`,
-  ).then((r) => r.data);
-}
-
-export type BriefingAdminStats = {
-  signed: number;
-  overdue: boolean;
-  completions: Array<{
-    completionId: string;
-    name: string;
-    completedAt: string;
-    initials: string;
-    deviceId: string | null;
-    source: "web" | "kiosk";
-  }>;
-};
-
-type LegacyBriefingAdminRow = {
-  completionId: string | null;
-  name: string;
-  status?: string;
-  completedAt: string | null;
-  initials: string | null;
-  deviceId?: string | null;
-};
-
-type LegacyBriefingAdminStats = {
-  users?: LegacyBriefingAdminRow[];
-  kioskCompletions?: LegacyBriefingAdminRow[];
-  reviewed?: number;
-  overdue?: number | boolean;
-  signed?: number;
-  completions?: BriefingAdminStats["completions"];
-};
-
-export function normalizeBriefingAdminStats(raw: LegacyBriefingAdminStats | BriefingAdminStats): BriefingAdminStats {
-  if (Array.isArray(raw.completions)) {
-    return {
-      signed: typeof raw.signed === "number" ? raw.signed : raw.completions.length,
-      overdue: raw.overdue === true,
-      completions: raw.completions,
-    };
-  }
-
-  const users = Array.isArray(raw.users) ? raw.users : [];
-  const kiosk = Array.isArray(raw.kioskCompletions) ? raw.kioskCompletions : [];
-  const completions: BriefingAdminStats["completions"] = [
-    ...users
-      .filter((row) => row.completionId && row.status === "reviewed")
-      .map((row) => ({
-        completionId: row.completionId!,
-        name: row.name,
-        completedAt: row.completedAt ?? new Date().toISOString(),
-        initials: row.initials ?? "—",
-        deviceId: null,
-        source: "web" as const,
-      })),
-    ...kiosk
-      .filter((row) => row.completionId)
-      .map((row) => ({
-        completionId: row.completionId!,
-        name: row.name,
-        completedAt: row.completedAt ?? new Date().toISOString(),
-        initials: row.initials ?? "—",
-        deviceId: row.deviceId ?? null,
-        source: "kiosk" as const,
-      })),
-  ];
-
-  return {
-    signed: completions.length,
-    overdue: raw.overdue === true,
-    completions,
-  };
-}
-
-export function fetchBriefingAdminStats(teamId: string, briefingId: string) {
-  return apiGetJson<{ data: { briefing: BriefingRow; stats: LegacyBriefingAdminStats | BriefingAdminStats } }>(
-    `/api/teams/${encodeURIComponent(teamId)}/briefings/${encodeURIComponent(briefingId)}/stats`,
-  ).then((r) => ({
-    briefing: r.data.briefing,
-    stats: normalizeBriefingAdminStats(r.data.stats),
-  }));
-}
-
-export function postTeamBriefing(teamId: string, body: BriefingCreatePayload) {
-  return apiPostJson<{ data: BriefingRow }>(`/api/teams/${encodeURIComponent(teamId)}/briefings`, body).then(
-    (r) => r.data,
-  );
-}
-
-export type BriefingUpdatePayload = {
-  dueAt?: string | null;
-};
-
-export function patchTeamBriefing(teamId: string, briefingId: string, body: BriefingUpdatePayload) {
-  return apiPatchJson<{ data: { briefing: BriefingRow } }>(
-    `/api/teams/${encodeURIComponent(teamId)}/briefings/${encodeURIComponent(briefingId)}`,
-    body,
-  ).then((r) => r.data.briefing);
-}
-
-export function postBriefingComplete(
-  teamId: string,
-  briefingId: string,
-  body: { initials?: string; signatureData?: string | null; reviewerName?: string | null },
-) {
-  return apiPostJson<{ data: { success: boolean; completedAt: string } }>(
-    `/api/teams/${encodeURIComponent(teamId)}/briefings/${encodeURIComponent(briefingId)}/complete`,
-    body,
-  ).then((r) => r.data);
-}
-
-export function deleteBriefingCompletion(teamId: string, briefingId: string, completionId: string) {
-  return apiDeleteJson<{ data: { success: boolean } }>(
-    `/api/teams/${encodeURIComponent(teamId)}/briefings/${encodeURIComponent(briefingId)}/completions/${encodeURIComponent(completionId)}`,
-  ).then((r) => r.data);
-}
-
-export type WalkItemStatus = "pass" | "needs_attention" | "na";
-
-export type WalkTemplateItemRow = {
-  id: string;
-  label: string;
-  sortOrder: number;
-  sectionId?: string | null;
-};
-
-export type WalkTemplateSectionRow = {
-  id: string;
-  title: string;
-  sortOrder: number;
-  items: WalkTemplateItemRow[];
-};
-
-export type WalkTemplateRow = {
-  id: string;
-  teamId: string;
-  name: string;
-  workplace: string;
-  scoringEnabled: boolean;
-  isActive: boolean;
-  createdByUserId: string;
-  createdAt: string;
-  updatedAt: string;
-  itemCount: number;
-  completionCount: number;
-  sectionCount: number;
-  sections: WalkTemplateSectionRow[];
-  items: WalkTemplateItemRow[];
-};
-
-export type WalkItemResponse = {
-  itemId: string;
-  label: string;
-  status: WalkItemStatus;
-  notes?: string | null;
-  photoUrl?: string | null;
-};
-
-export type WalkCompletionRow = {
-  id: string;
-  teamId: string;
-  templateId: string;
-  walkName: string;
-  workplace: string;
-  completedByUserId: string;
-  completedByName: string;
-  completedAt: string;
-  scoringEnabled: boolean;
-  score: number | null;
-  totalReviewed: number;
-  passCount: number;
-  needsAttentionCount: number;
-  naCount: number;
-  photosCount: number;
-  finalNotes: string | null;
-  responses: WalkItemResponse[];
-};
-
-export type WalkTemplateCreatePayload = {
-  name: string;
-  workplace: string;
-  scoringEnabled?: boolean;
-  items?: { label: string }[];
-  sections?: { title: string; items: { label: string }[] }[];
-};
-
-export type WalkTemplateUpdatePayload = Partial<WalkTemplateCreatePayload> & { isActive?: boolean };
-
-export type WalkCompletePayload = {
-  responses: WalkItemResponse[];
-  finalNotes?: string | null;
-};
-
-export function fetchTeamWalkTemplates(teamId: string) {
-  return apiGetJson<{ data: { templates: WalkTemplateRow[]; canManage: boolean } }>(
-    `/api/teams/${encodeURIComponent(teamId)}/walks`,
-  ).then((r) => r.data);
-}
-
-export function fetchTeamWalkTemplate(teamId: string, walkId: string) {
-  return apiGetJson<{ data: { template: WalkTemplateRow; canManage: boolean } }>(
-    `/api/teams/${encodeURIComponent(teamId)}/walks/${encodeURIComponent(walkId)}`,
-  ).then((r) => r.data);
-}
-
-export function postTeamWalkTemplate(teamId: string, body: WalkTemplateCreatePayload) {
-  return apiPostJson<{ data: WalkTemplateRow }>(`/api/teams/${encodeURIComponent(teamId)}/walks`, body).then(
-    (r) => r.data,
-  );
-}
-
-export function patchTeamWalkTemplate(teamId: string, walkId: string, body: WalkTemplateUpdatePayload) {
-  return apiPatchJson<{ data: WalkTemplateRow }>(
-    `/api/teams/${encodeURIComponent(teamId)}/walks/${encodeURIComponent(walkId)}`,
-    body,
-  ).then((r) => r.data);
-}
-
-export function deleteTeamWalkTemplate(teamId: string, walkId: string) {
-  return patchTeamWalkTemplate(teamId, walkId, { isActive: false }).then(() => ({ success: true }));
-}
-
-export function fetchTeamWalkCompletions(teamId: string, templateId?: string) {
-  const q = templateId ? `?templateId=${encodeURIComponent(templateId)}` : "";
-  return apiGetJson<{ data: { completions: WalkCompletionRow[]; canManage: boolean } }>(
-    `/api/teams/${encodeURIComponent(teamId)}/walks/completions${q}`,
-  ).then((r) => r.data);
-}
-
-export function fetchTeamWalkCompletion(teamId: string, completionId: string) {
-  return apiGetJson<{ data: { completion: WalkCompletionRow; canManage: boolean } }>(
-    `/api/teams/${encodeURIComponent(teamId)}/walks/completions/${encodeURIComponent(completionId)}`,
-  ).then((r) => r.data);
-}
-
-export function postTeamWalkComplete(teamId: string, walkId: string, body: WalkCompletePayload) {
-  return apiPostJson<{ data: WalkCompletionRow }>(
-    `/api/teams/${encodeURIComponent(teamId)}/walks/${encodeURIComponent(walkId)}/complete`,
-    body,
-  ).then((r) => r.data);
-}
-
-// ── Temperature programs (admin configuration) ────────────────────────────────
-
-export type TempProgramStatus = "draft" | "active" | "archived";
-
-export type TempProgramSummaryRow = {
-  id: string;
-  companyId: string;
-  teamId: string;
-  programFamilyId: string;
-  name: string;
-  description: string | null;
-  status: TempProgramStatus;
-  versionNumber: number;
-  isLocked: boolean;
-  createdBy: string;
-  createdAt: string;
-  updatedAt: string;
-};
-
-export type TempProgramValidation = {
-  isValid: boolean;
-  errors: string[];
-  warnings: string[];
-};
-
-export type TempCorrectiveRuleRow = {
-  id: string;
-  checkItemId: string;
-  correctiveActionTemplateId: string;
-  conditionType: string;
-  isDefault: boolean;
-  sortOrder: number;
-  isActive: boolean;
-  template: {
-    id: string;
-    name: string;
-    actionType: string;
-    requiresRecheck: boolean;
-    recheckDelayMinutes: number | null;
-  } | null;
-};
-
-export type TempCheckItemRow = {
-  id: string;
-  programId: string;
-  equipmentId: string;
-  teamId: string;
-  name: string;
-  instruction: string | null;
-  productName: string | null;
-  tempUnit: "F" | "C";
-  minTemp: number | null;
-  maxTemp: number | null;
-  targetTemp: number | null;
-  checkType: string;
-  allowNa: boolean;
-  requireCommentIfNa: boolean;
-  requirePhoto: boolean;
-  manualEntryAllowed: boolean;
-  bluetoothProbeAllowed: boolean;
-  bluetoothProbeRequired: boolean;
-  sortOrder: number;
-  isActive: boolean;
-  correctiveActionRules: TempCorrectiveRuleRow[];
-};
-
-export type TempEquipmentItemRow = {
-  id: string;
-  programId: string;
-  equipmentGroupId: string;
-  teamId: string;
-  name: string;
-  description: string | null;
-  equipmentType: string | null;
-  locationHint: string | null;
-  sortOrder: number;
-  isRequired: boolean;
-  isActive: boolean;
-  checkItems: TempCheckItemRow[];
-};
-
-export type TempEquipmentGroupRow = {
-  id: string;
-  programId: string;
-  teamId: string;
-  name: string;
-  description: string | null;
-  sortOrder: number;
-  isActive: boolean;
-  equipment: TempEquipmentItemRow[];
-};
-
-export type TempScheduleRow = {
-  id: string;
-  programId: string;
-  teamId: string;
-  name: string;
-  scheduleType: string;
-  specificTimes: unknown;
-  intervalHours: number | null;
-  windowBeforeMinutes: number;
-  windowAfterMinutes: number;
-  daysOfWeek: unknown;
-  timezone: string | null;
-  isActive: boolean;
-};
-
-export type TempAssignmentRow = {
-  id: string;
-  programId: string;
-  teamId: string;
-  assignmentType: string;
-  assignmentTargetId: string;
-  effectiveStartDate: string | null;
-  effectiveEndDate: string | null;
-  isActive: boolean;
-};
-
-export type TempCorrectiveTemplateRow = {
-  id: string;
-  programId: string;
-  teamId: string;
-  name: string;
-  description: string | null;
-  actionType: string;
-  requiresRecheck: boolean;
-  recheckDelayMinutes: number | null;
-  requiresComment: boolean;
-  requiresPhoto: boolean;
-  requiresManagerApproval: boolean;
-  closeAfterAction: boolean;
-  sortOrder: number;
-  isActive: boolean;
-};
-
-export type TempProgramDetailRow = TempProgramSummaryRow & {
-  groups: TempEquipmentGroupRow[];
-  schedules: TempScheduleRow[];
-  assignments: TempAssignmentRow[];
-  correctiveActionTemplates: TempCorrectiveTemplateRow[];
-};
-
-const tempProgramsBase = (teamId: string) =>
-  `/api/teams/${encodeURIComponent(teamId)}/temperature-programs`;
-
-export function fetchTeamTemperaturePrograms(teamId: string) {
-  return apiGetJson<{ data: { programs: TempProgramSummaryRow[]; canManage: boolean } }>(
-    tempProgramsBase(teamId),
-  ).then((r) => r.data);
-}
-
-export function fetchTeamTemperatureProgram(teamId: string, programId: string) {
-  return apiGetJson<{ data: { program: TempProgramDetailRow; canManage: boolean } }>(
-    `${tempProgramsBase(teamId)}/${encodeURIComponent(programId)}`,
-  ).then((r) => r.data);
-}
-
-export function postTeamTemperatureProgram(teamId: string, body: { name: string; description?: string | null }) {
-  return apiPostJson<{ data: TempProgramSummaryRow }>(tempProgramsBase(teamId), body).then((r) => r.data);
-}
-
-export function patchTeamTemperatureProgram(
-  teamId: string,
-  programId: string,
-  body: { name?: string; description?: string | null },
-) {
-  return apiPatchJson<{ data: TempProgramDetailRow }>(
-    `${tempProgramsBase(teamId)}/${encodeURIComponent(programId)}`,
-    body,
-  ).then((r) => r.data);
-}
-
-export function postTeamTemperatureProgramValidate(teamId: string, programId: string) {
-  return apiPostJson<{ data: { validation: TempProgramValidation; canManage: boolean } }>(
-    `${tempProgramsBase(teamId)}/${encodeURIComponent(programId)}/validate`,
-    {},
-  ).then((r) => r.data);
-}
-
-export function postTeamTemperatureProgramActivate(teamId: string, programId: string) {
-  return apiPostJson<{ data: { program: TempProgramSummaryRow; validation: TempProgramValidation } }>(
-    `${tempProgramsBase(teamId)}/${encodeURIComponent(programId)}/activate`,
-    {},
-  ).then((r) => r.data);
-}
-
-export function postTeamTemperatureProgramArchive(teamId: string, programId: string) {
-  return apiPostJson<{ data: { program: TempProgramSummaryRow } }>(
-    `${tempProgramsBase(teamId)}/${encodeURIComponent(programId)}/archive`,
-    {},
-  ).then((r) => r.data);
-}
-
-export function postTeamTemperatureProgramNewDraft(teamId: string, programId: string) {
-  return apiPostJson<{ data: { program: TempProgramDetailRow } }>(
-    `${tempProgramsBase(teamId)}/${encodeURIComponent(programId)}/new-draft-version`,
-    {},
-  ).then((r) => r.data);
-}
-
-export function postTeamTemperatureProgramSeedDemo(teamId: string) {
-  return apiPostJson<{ data: { program: TempProgramDetailRow; created: boolean } }>(
-    `${tempProgramsBase(teamId)}/seed-demo`,
-    {},
-  ).then((r) => r.data);
-}
-
-export function postTeamTemperatureEquipmentGroup(
-  teamId: string,
-  programId: string,
-  body: { name: string; description?: string | null },
-) {
-  return apiPostJson<{ data: { group: TempEquipmentGroupRow } }>(
-    `${tempProgramsBase(teamId)}/${encodeURIComponent(programId)}/equipment-groups`,
-    body,
-  ).then((r) => r.data);
-}
-
-export function postTeamTemperatureEquipment(
-  teamId: string,
-  programId: string,
-  body: {
-    equipmentGroupId: string;
-    name: string;
-    description?: string | null;
-    equipmentType?: string | null;
-    locationHint?: string | null;
-  },
-) {
-  return apiPostJson<{ data: { equipment: TempEquipmentItemRow } }>(
-    `${tempProgramsBase(teamId)}/${encodeURIComponent(programId)}/equipment`,
-    body,
-  ).then((r) => r.data);
-}
-
-export function postTeamTemperatureCheckItem(
-  teamId: string,
-  programId: string,
-  body: {
-    equipmentId: string;
-    name: string;
-    checkType: string;
-    tempUnit?: "F" | "C";
-    minTemp?: number | null;
-    maxTemp?: number | null;
-    instruction?: string | null;
-    productName?: string | null;
-  },
-) {
-  return apiPostJson<{ data: { checkItem: TempCheckItemRow } }>(
-    `${tempProgramsBase(teamId)}/${encodeURIComponent(programId)}/check-items`,
-    body,
-  ).then((r) => r.data);
-}
-
-export function postTeamTemperatureSchedule(
-  teamId: string,
-  programId: string,
-  body: {
-    name: string;
-    scheduleType: string;
-    specificTimes?: string[];
-    intervalHours?: number | null;
-    windowBeforeMinutes?: number;
-    windowAfterMinutes?: number;
-    daysOfWeek?: number[];
-    timezone?: string | null;
-  },
-) {
-  return apiPostJson<{ data: { schedule: TempScheduleRow } }>(
-    `${tempProgramsBase(teamId)}/${encodeURIComponent(programId)}/schedules`,
-    body,
-  ).then((r) => r.data);
-}
-
-export function postTeamTemperatureAssignment(
-  teamId: string,
-  programId: string,
-  body: {
-    assignmentType: string;
-    assignmentTargetId: string;
-  },
-) {
-  return apiPostJson<{ data: { assignment: TempAssignmentRow } }>(
-    `${tempProgramsBase(teamId)}/${encodeURIComponent(programId)}/assignments`,
-    body,
-  ).then((r) => r.data);
-}
-
-export function postTeamTemperatureCorrectiveTemplate(
-  teamId: string,
-  programId: string,
-  body: {
-    name: string;
-    actionType: string;
-    description?: string | null;
-    requiresRecheck?: boolean;
-    recheckDelayMinutes?: number | null;
-  },
-) {
-  return apiPostJson<{ data: { template: TempCorrectiveTemplateRow } }>(
-    `${tempProgramsBase(teamId)}/${encodeURIComponent(programId)}/corrective-actions`,
-    body,
-  ).then((r) => r.data);
-}
-
-export function postTeamTemperatureCorrectiveRule(
-  teamId: string,
-  programId: string,
-  body: {
-    checkItemId: string;
-    correctiveActionTemplateId: string;
-    conditionType: string;
-    isDefault?: boolean;
-  },
-) {
-  return apiPostJson<{ data: { rule: TempCorrectiveRuleRow } }>(
-    `${tempProgramsBase(teamId)}/${encodeURIComponent(programId)}/corrective-action-rules`,
-    body,
-  ).then((r) => r.data);
-}
-
-export function deleteTeamTemperatureEquipmentGroup(teamId: string, programId: string, groupId: string) {
-  return apiDeleteJson<{ data: { group: TempEquipmentGroupRow } }>(
-    `${tempProgramsBase(teamId)}/${encodeURIComponent(programId)}/equipment-groups/${encodeURIComponent(groupId)}`,
-  );
-}
-
-export function deleteTeamTemperatureEquipment(teamId: string, programId: string, equipmentId: string) {
-  return apiDeleteJson<{ data: { equipment: TempEquipmentItemRow } }>(
-    `${tempProgramsBase(teamId)}/${encodeURIComponent(programId)}/equipment/${encodeURIComponent(equipmentId)}`,
-  );
-}
-
-export function deleteTeamTemperatureCheckItem(teamId: string, programId: string, checkItemId: string) {
-  return apiDeleteJson<{ data: { checkItem: TempCheckItemRow } }>(
-    `${tempProgramsBase(teamId)}/${encodeURIComponent(programId)}/check-items/${encodeURIComponent(checkItemId)}`,
-  );
-}
-
-export function deleteTeamTemperatureSchedule(teamId: string, programId: string, scheduleId: string) {
-  return apiDeleteJson<{ data: { schedule: TempScheduleRow } }>(
-    `${tempProgramsBase(teamId)}/${encodeURIComponent(programId)}/schedules/${encodeURIComponent(scheduleId)}`,
-  );
-}
-
-export function deleteTeamTemperatureAssignment(teamId: string, programId: string, assignmentId: string) {
-  return apiDeleteJson<{ data: { assignment: TempAssignmentRow } }>(
-    `${tempProgramsBase(teamId)}/${encodeURIComponent(programId)}/assignments/${encodeURIComponent(assignmentId)}`,
-  );
-}
-
-export function deleteTeamTemperatureCorrectiveTemplate(teamId: string, programId: string, templateId: string) {
-  return apiDeleteJson<{ data: { template: TempCorrectiveTemplateRow } }>(
-    `${tempProgramsBase(teamId)}/${encodeURIComponent(programId)}/corrective-actions/${encodeURIComponent(templateId)}`,
-  );
-}
-
-export function goBriefingDocumentPath(hubToken: string, deviceId: string, briefingId: string): string {
-  const q = new URLSearchParams({ hubToken, deviceId });
-  return `/api/public/go/briefings/${encodeURIComponent(briefingId)}/document?${q}`;
-}
-
-export function teamBriefingDocumentPath(teamId: string, briefingId: string): string {
-  return `/api/teams/${encodeURIComponent(teamId)}/briefings/${encodeURIComponent(briefingId)}/document`;
-}
-
-export function fetchGoBriefings(hubToken: string, deviceId: string) {
-  const q = new URLSearchParams({ hubToken, deviceId });
-  return apiGetJson<{ data: { briefings: BriefingRow[] } }>(`/api/public/go/briefings?${q}`).then((r) => r.data.briefings);
-}
-
-export function fetchGoBriefing(hubToken: string, deviceId: string, briefingId: string) {
-  const q = new URLSearchParams({ hubToken, deviceId });
-  return apiGetJson<{ data: { briefing: BriefingRow } }>(
-    `/api/public/go/briefings/${encodeURIComponent(briefingId)}?${q}`,
-  ).then((r) => r.data.briefing);
-}
-
-export function postGoBriefingComplete(
-  briefingId: string,
-  body: {
-    hubToken: string;
-    deviceId: string;
-    initials?: string;
-    signatureData?: string | null;
-    reviewerName?: string | null;
-  },
-) {
-  return apiPostJson<{ data: { success: boolean; completedAt: string } }>(
-    `/api/public/go/briefings/${encodeURIComponent(briefingId)}/complete`,
-    body,
-  ).then((r) => r.data);
-}
-
-export function fetchGoWalkTemplates(hubToken: string, deviceId: string) {
-  const q = new URLSearchParams({ hubToken, deviceId });
-  return apiGetJson<{ data: { templates: WalkTemplateRow[] } }>(`/api/public/go/walks?${q}`).then(
-    (r) => r.data.templates,
-  );
-}
-
-export function fetchGoWalkTemplate(hubToken: string, deviceId: string, walkId: string) {
-  const q = new URLSearchParams({ hubToken, deviceId });
-  return apiGetJson<{ data: { template: WalkTemplateRow } }>(
-    `/api/public/go/walks/${encodeURIComponent(walkId)}?${q}`,
-  ).then((r) => r.data.template);
-}
-
-export function fetchGoWalkCompletions(hubToken: string, deviceId: string) {
-  const q = new URLSearchParams({ hubToken, deviceId });
-  return apiGetJson<{ data: { completions: WalkCompletionRow[] } }>(`/api/public/go/walks/completions?${q}`).then(
-    (r) => r.data.completions,
-  );
-}
-
-export function fetchGoWalkCompletion(hubToken: string, deviceId: string, completionId: string) {
-  const q = new URLSearchParams({ hubToken, deviceId });
-  return apiGetJson<{ data: { completion: WalkCompletionRow } }>(
-    `/api/public/go/walks/completions/${encodeURIComponent(completionId)}?${q}`,
-  ).then((r) => r.data.completion);
-}
-
-export function postGoWalkComplete(
-  walkId: string,
-  body: WalkCompletePayload & {
-    hubToken: string;
-    deviceId: string;
-    managerName?: string;
-    leaderUserId?: string;
-  },
-) {
-  return apiPostJson<{ data: WalkCompletionRow }>(
-    `/api/public/go/walks/${encodeURIComponent(walkId)}/complete`,
-    body,
-  ).then((r) => r.data);
-}
-
-export type GoVerifiedLeader = {
-  userId: string;
-  name: string;
-  role: "owner" | "team_leader";
-};
-
-export function postGoVerifyLeaderPin(hubToken: string, deviceId: string, pin: string) {
-  return apiPostJson<{ data: { leader: GoVerifiedLeader } }>(`/api/public/go/verify-pin`, {
-    hubToken,
-    deviceId,
-    pin,
-  }).then((r) => r.data.leader);
 }
 
 export type WebTeamInvite = {
@@ -1438,6 +703,50 @@ export type ChatUploadResult = {
 
 /** Same as mobile `POST /api/upload` — Firebase Storage when configured. */
 export async function uploadChatMedia(file: File): Promise<ChatUploadResult> {
+  return uploadMediaFile(file);
+}
+
+/** Upload a custom workplace alert sound for a workspace. */
+export async function uploadGoAlertSound(teamId: string, file: File): Promise<ChatUploadResult> {
+  assertProductionApiConfigured();
+  const baseUrl = apiBaseUrl();
+  async function doUpload(token: string | null) {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("purpose", "go_alert_sound");
+    formData.append("teamId", teamId);
+    const h = new Headers();
+    if (token) h.set("Authorization", `Bearer ${token}`);
+    try {
+      return await fetch(`${baseUrl}/api/upload`, { method: "POST", body: formData, headers: h });
+    } catch (e) {
+      throw mapNetworkError(e);
+    }
+  }
+
+  let token = getAccessToken();
+  let res = await doUpload(token);
+
+  if (res.status === 401) {
+    const recovered = await refreshSessionTokens();
+    if (recovered) {
+      token = getAccessToken();
+      res = await doUpload(token);
+    } else {
+      clearAccessToken();
+    }
+  }
+
+  if (!res.ok) {
+    const body = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
+    throw new Error(body?.error?.message ?? "Upload failed");
+  }
+
+  const json = (await res.json()) as { data: ChatUploadResult };
+  return json.data;
+}
+
+async function uploadMediaFile(file: File): Promise<ChatUploadResult> {
   assertProductionApiConfigured();
   const baseUrl = apiBaseUrl();
   async function doUpload(token: string | null) {
@@ -1954,13 +1263,6 @@ export function fetchGoLeaderPinStatus(teamId: string) {
   return apiGetJson<{ data: GoLeaderPinStatus }>(
     `/api/teams/${encodeURIComponent(teamId)}/members/me/go-pin`,
   ).then((r) => r.data);
-}
-
-export function postTeamVerifyGoLeaderPin(teamId: string, pin: string) {
-  return apiPostJson<{ data: { leader: GoVerifiedLeader } }>(
-    `/api/teams/${encodeURIComponent(teamId)}/members/me/go-pin/verify`,
-    { pin },
-  ).then((r) => r.data.leader);
 }
 
 export function putGoLeaderPin(teamId: string, pin: string) {
@@ -2746,23 +2048,9 @@ export function deleteDevelopmentGoal(teamId: string, memberUserId: string, goal
   });
 }
 
-export type ChecklistLocationItemRow = {
-  id: string;
-  title: string;
-  note?: string | null;
-  category: string | null;
-  sortOrder: number;
-};
-
 export type PublicChecklistHubPayload = {
   team: { name: string; image: string | null };
-  checklists: { id: string; name: string; cardColor: string | null; taskCount: number; categories: (string | null)[] }[];
-};
-
-export type PublicChecklistPayload = {
-  checklist: { id: string; name: string };
-  team?: { name: string; image: string | null };
-  items: ChecklistLocationItemRow[];
+  checklists: [];
 };
 
 export function fetchPublicChecklistHub(hubToken: string, deviceId?: string) {
@@ -2773,82 +2061,11 @@ export function fetchPublicChecklistHub(hubToken: string, deviceId?: string) {
   ).then((r) => r.data);
 }
 
-export function fetchPublicChecklistByHub(hubToken: string, checklistId: string) {
-  return apiGetJson<{ data: PublicChecklistPayload }>(
-    `/api/public/checklist-hubs/${encodeURIComponent(hubToken)}/checklists/${encodeURIComponent(checklistId)}`,
-  ).then((r) => r.data);
-}
-
-/** @deprecated Legacy single-checklist token URL */
-export function fetchPublicChecklistByToken(token: string) {
-  return apiGetJson<{ data: { location: { name: string }; team?: { name: string; image: string | null }; items: ChecklistLocationItemRow[] } }>(
-    `/api/public/checklist-locations/${encodeURIComponent(token)}`,
-  ).then((r) => ({
-    checklist: { id: "", name: r.data.location.name },
-    team: r.data.team,
-    items: r.data.items,
-  }));
-}
-
-export function submitPublicChecklist(
-  hubToken: string,
-  checklistId: string,
-  body: { submitterName?: string; responses: { itemId: string; checked: boolean; signerName?: string; signedAt?: string }[] },
-) {
-  return apiPostJson<{ data: { id: string; submittedAt: string; isComplete: boolean } }>(
-    `/api/public/checklist-hubs/${encodeURIComponent(hubToken)}/checklists/${encodeURIComponent(checklistId)}/submissions`,
-    body,
-  ).then((r) => r.data);
-}
-
-/** @deprecated Legacy single-checklist token submit */
-export function submitPublicChecklistLegacy(
-  token: string,
-  body: { submitterName?: string; responses: { itemId: string; checked: boolean; signerName?: string; signedAt?: string }[] },
-) {
-  return apiPostJson<{ data: { id: string; submittedAt: string; isComplete: boolean } }>(
-    `/api/public/checklist-locations/${encodeURIComponent(token)}/submissions`,
-    body,
-  ).then((r) => r.data);
-}
-
-export type TeamChecklistLocationRow = {
-  id: string;
-  name: string;
-  description: string | null;
-  cardColor: string | null;
-  isActive: boolean;
-  stats: {
-    lastSubmittedAt: string | null;
-    todayCount: number;
-    recentPartialCount: number;
-  };
-};
-
-export type TeamChecklistLocationsPayload = {
-  planRequired: boolean;
-  hubToken: string | null;
-  locations: TeamChecklistLocationRow[];
-};
-
-export function fetchTeamChecklistLocations(teamId: string) {
-  return apiGetJson<{ data: TeamChecklistLocationsPayload }>(
-    `/api/teams/${encodeURIComponent(teamId)}/checklist-locations`,
-  ).then((r) => r.data);
-}
-
 export function workspaceChecklistHubUrl(hubToken: string): string {
   if (typeof window !== "undefined") {
     return `${window.location.origin}/checklist/${hubToken}`;
   }
   return `/checklist/${hubToken}`;
-}
-
-export function workspaceChecklistUrl(hubToken: string, checklistId: string): string {
-  if (typeof window !== "undefined") {
-    return `${window.location.origin}/checklist/${hubToken}/${checklistId}`;
-  }
-  return `/checklist/${hubToken}/${checklistId}`;
 }
 
 /** @deprecated Use workspaceChecklistHubUrl */

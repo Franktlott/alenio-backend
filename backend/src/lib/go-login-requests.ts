@@ -1,6 +1,6 @@
 import { prisma } from "../prisma";
 import { sendPushToUsers } from "./push";
-import { ensureTeamChecklistHubToken } from "./checklist-locations";
+import { ensureTeamGoHubToken } from "./go-hub";
 
 export function normalizeWorkspaceCode(code: string): string {
   return code.trim().toUpperCase();
@@ -46,7 +46,7 @@ export async function getGoLoginHubTokenForRequest(teamId: string, requestId: st
   if (!request || request.teamId !== teamId || request.status !== "approved") {
     return null;
   }
-  const hubToken = await ensureTeamChecklistHubToken(teamId);
+  const hubToken = await ensureTeamGoHubToken(teamId);
   return { hubToken, teamName: request.team.name };
 }
 
@@ -62,7 +62,7 @@ export async function approveGoLoginRequest(teamId: string, requestId: string, a
     return { ok: false as const, code: "CONFLICT" as const };
   }
 
-  const hubToken = await ensureTeamChecklistHubToken(teamId);
+  const hubToken = await ensureTeamGoHubToken(teamId);
   await prisma.goLoginRequest.update({
     where: { id: requestId },
     data: { status: "approved", approvedByUserId: approverUserId },

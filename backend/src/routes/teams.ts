@@ -28,17 +28,6 @@ import {
   revokeLinkedGoDevice,
 } from "../lib/workplace-alerts";
 import {
-  canManageBriefings,
-  completeBriefingForUser,
-  createBriefing,
-  deleteBriefingCompletion,
-  getBriefingAdminStats,
-  getBriefingDocumentForUser,
-  getBriefingForUser,
-  listBriefingsForUser,
-  updateBriefing,
-} from "../lib/briefings";
-import {
   canInviteMembers,
   generateInviteToken,
   inviteExpiresAt,
@@ -296,7 +285,12 @@ teamsRouter.patch("/:teamId", async (c) => {
 
   let parsedGoFrontendSettings: ReturnType<typeof parseGoFrontendSettingsPatch> | null = null;
   if (hasGoFrontendSettings) {
-    parsedGoFrontendSettings = parseGoFrontendSettingsPatch(body.goFrontendSettings);
+    const existingTeam = await prisma.team.findUnique({
+      where: { id: teamId },
+      select: { goFrontendSettings: true },
+    });
+    const currentGoSettings = parseGoFrontendSettings(existingTeam?.goFrontendSettings);
+    parsedGoFrontendSettings = parseGoFrontendSettingsPatch(body.goFrontendSettings, currentGoSettings);
     if (!parsedGoFrontendSettings.ok) {
       return c.json({ error: { message: parsedGoFrontendSettings.message, code: "VALIDATION_ERROR" } }, 400);
     }
@@ -978,188 +972,6 @@ teamsRouter.post("/:teamId/workplace-alerts", zValidator("json", workplaceAlertB
   }
 
   return c.json({ data: result.alert });
-});
-
-const briefingBodySchema = z.object({
-  title: z.string().trim().min(1).max(200),
-  description: z.string().trim().min(1).max(2000),
-  documentUrl: z.string().url(),
-  documentFilename: z.string().trim().max(256).optional(),
-  contentType: z.string().trim().max(128).optional(),
-  dueAt: z.string().datetime().optional().nullable(),
-  requireSignature: z.boolean().optional(),
-  allowInitials: z.boolean().optional(),
-});
-
-const briefingCompleteSchema = z.object({
-  initials: z.string().trim().max(8).optional(),
-  signatureData: z.string().max(500_000).optional().nullable(),
-  reviewerName: z.string().trim().max(120).optional().nullable(),
-});
-
-const briefingUpdateSchema = z
-  .object({
-    dueAt: z.string().datetime().nullable().optional(),
-    title: z.string().trim().min(1).max(200).optional(),
-    description: z.string().trim().min(1).max(2000).optional(),
-    documentUrl: z.string().url().optional(),
-    documentFilename: z.string().trim().max(256).optional(),
-    contentType: z.string().trim().max(128).optional(),
-    requireSignature: z.boolean().optional(),
-    allowInitials: z.boolean().optional(),
-  })
-  .superRefine((body, ctx) => {
-    const hasDueAt = "dueAt" in body;
-    const hasOther = Object.keys(body).some((key) => key !== "dueAt");
-    if (!hasDueAt && !hasOther) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "No updates provided" });
-    }
-  });
-
-// GET /api/teams/:teamId/briefings
-teamsRouter.get("/:teamId/briefings", async (c) => {
-  const user = c.get("user")!;
-  const { teamId } = c.req.param();
-  const result = await listBriefingsForUser(teamId, user.id);
-  if (!result.ok) return c.json({ error: { message: "Forbidden", code: "FORBIDDEN" } }, 403);
-  return c.json({ data: { briefings: result.briefings, canManage: result.canManage } });
-});
-
-// GET /api/teams/:teamId/briefings/:briefingId
-teamsRouter.get("/:teamId/briefings/:briefingId", async (c) => {
-  const user = c.get("user")!;
-  const { teamId, briefingId } = c.req.param();
-  const result = await getBriefingForUser(teamId, briefingId, user.id);
-  if (!result.ok) {
-    if (result.code === "NOT_FOUND") return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
-    return c.json({ error: { message: "Forbidden", code: "FORBIDDEN" } }, 403);
-  }
-  return c.json({ data: { briefing: result.briefing, canManage: result.canManage } });
-});
-
-// GET /api/teams/:teamId/briefings/:briefingId/document
-teamsRouter.get("/:teamId/briefings/:briefingId/document", async (c) => {
-  const user = c.get("user")!;
-  const { teamId, briefingId } = c.req.param();
-  const result = await getBriefingDocumentForUser(teamId, briefingId, user.id);
-  if (!result.ok) {
-    if (result.code === "NOT_FOUND") return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
-    if (result.code === "DOCUMENT_UNAVAILABLE") {
-      return c.json({ error: { message: "Document unavailable", code: "NOT_FOUND" } }, 404);
-    }
-    return c.json({ error: { message: "Forbidden", code: "FORBIDDEN" } }, 403);
-  }
-  return new Response(new Uint8Array(result.bytes), {
-    headers: {
-      "Content-Type": result.contentType,
-      "Cache-Control": "private, max-age=3600",
-      "Content-Disposition": `inline; filename="${result.filename.replace(/"/g, "")}"`,
-    },
-  });
-});
-
-// GET /api/teams/:teamId/briefings/:briefingId/stats
-teamsRouter.get("/:teamId/briefings/:briefingId/stats", async (c) => {
-  const user = c.get("user")!;
-  const { teamId, briefingId } = c.req.param();
-  const result = await getBriefingAdminStats(teamId, briefingId, user.id);
-  if (!result.ok) {
-    if (result.code === "NOT_FOUND") return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
-    return c.json({ error: { message: "Forbidden", code: "FORBIDDEN" } }, 403);
-  }
-  return c.json({ data: { briefing: result.briefing, stats: result.stats } });
-});
-
-// POST /api/teams/:teamId/briefings
-teamsRouter.post("/:teamId/briefings", zValidator("json", briefingBodySchema), async (c) => {
-  const user = c.get("user")!;
-  const { teamId } = c.req.param();
-  const body = c.req.valid("json");
-
-  if (!(await canManageBriefings(teamId, user.id))) {
-    return c.json({ error: { message: "Forbidden", code: "FORBIDDEN" } }, 403);
-  }
-
-  const result = await createBriefing(teamId, user.id, body);
-  if (!result.ok) {
-    if (result.code === "INVALID_FILE") {
-      return c.json({ error: { message: "Unsupported file type", code: "VALIDATION_ERROR" } }, 400);
-    }
-    return c.json({ error: { message: "Invalid briefing", code: "VALIDATION_ERROR" } }, 400);
-  }
-  return c.json({ data: result.briefing }, 201);
-});
-
-// PATCH /api/teams/:teamId/briefings/:briefingId
-teamsRouter.patch("/:teamId/briefings/:briefingId", zValidator("json", briefingUpdateSchema), async (c) => {
-  const user = c.get("user")!;
-  const { teamId, briefingId } = c.req.param();
-  const body = c.req.valid("json");
-
-  const hasNonDueFields = Object.keys(body).some((key) => key !== "dueAt");
-  if (hasNonDueFields) {
-    const signedCount = await prisma.briefingCompletion.count({ where: { briefingId, teamId } });
-    if (signedCount > 0) {
-      return c.json(
-        {
-          error: {
-            message: "Only the due date can be changed after someone has signed this briefing.",
-            code: "BRIEFING_LOCKED",
-          },
-        },
-        409,
-      );
-    }
-    return c.json(
-      {
-        error: {
-          message: "Published briefings can only have the due date updated.",
-          code: "VALIDATION_ERROR",
-        },
-      },
-      400,
-    );
-  }
-
-  const result = await updateBriefing(teamId, briefingId, user.id, { dueAt: body.dueAt ?? null });
-  if (!result.ok) {
-    if (result.code === "NOT_FOUND") return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
-    if (result.code === "FORBIDDEN") return c.json({ error: { message: "Forbidden", code: "FORBIDDEN" } }, 403);
-    return c.json({ error: { message: "Invalid briefing update", code: "VALIDATION_ERROR" } }, 400);
-  }
-  return c.json({ data: { briefing: result.briefing } });
-});
-
-// POST /api/teams/:teamId/briefings/:briefingId/complete
-teamsRouter.post("/:teamId/briefings/:briefingId/complete", zValidator("json", briefingCompleteSchema), async (c) => {
-  const user = c.get("user")!;
-  const { teamId, briefingId } = c.req.param();
-  const body = c.req.valid("json");
-
-  const result = await completeBriefingForUser(teamId, briefingId, user.id, user.name ?? null, body);
-  if (!result.ok) {
-    if (result.code === "NOT_FOUND") return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
-    if (result.code === "ALREADY_COMPLETED") {
-      return c.json({ error: { message: "This name and initials were already recorded", code: "ALREADY_COMPLETED" } }, 409);
-    }
-    if (result.code === "SIGNATURE_REQUIRED" || result.code === "INITIALS_REQUIRED" || result.code === "NAME_REQUIRED") {
-      return c.json({ error: { message: "Name, initials, or signature required", code: "VALIDATION_ERROR" } }, 400);
-    }
-    return c.json({ error: { message: "Forbidden", code: "FORBIDDEN" } }, 403);
-  }
-  return c.json({ data: { success: true, completedAt: result.completion.completedAt.toISOString() } });
-});
-
-// DELETE /api/teams/:teamId/briefings/:briefingId/completions/:completionId
-teamsRouter.delete("/:teamId/briefings/:briefingId/completions/:completionId", async (c) => {
-  const user = c.get("user")!;
-  const { teamId, briefingId, completionId } = c.req.param();
-  const result = await deleteBriefingCompletion(teamId, briefingId, completionId, user.id);
-  if (!result.ok) {
-    if (result.code === "NOT_FOUND") return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
-    return c.json({ error: { message: "Forbidden", code: "FORBIDDEN" } }, 403);
-  }
-  return c.json({ data: { success: true } });
 });
 
 export { teamsRouter };

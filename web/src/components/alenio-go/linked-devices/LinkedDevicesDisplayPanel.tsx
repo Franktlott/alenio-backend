@@ -4,6 +4,7 @@ import {
   DEFAULT_GO_FRONTEND_SETTINGS,
   goFrontendSettingsEqual,
   isUsingWorkspaceHeroImage,
+  normalizeGoFrontendSettings,
   resolveGoHeroImage,
   type GoFrontendSettings,
 } from "../../../lib/go-frontend-settings";
@@ -29,7 +30,7 @@ export function LinkedDevicesDisplayPanel({ teamId, teamName, teamImage }: Props
   const effectiveWorkspaceImage = workspaceImage ?? teamImage ?? null;
 
   const applyTeamSettings = useCallback((team: Awaited<ReturnType<typeof fetchWebTeam>>) => {
-    const next = team.goFrontendSettings ?? DEFAULT_GO_FRONTEND_SETTINGS;
+    const next = normalizeGoFrontendSettings(team.goFrontendSettings ?? DEFAULT_GO_FRONTEND_SETTINGS);
     setWorkspaceImage(team.image ?? null);
     setSavedSettings(next);
     setDraftSettings(next);
@@ -93,7 +94,7 @@ export function LinkedDevicesDisplayPanel({ teamId, teamName, teamImage }: Props
       setSaved(false);
       try {
         const uploaded = await uploadChatMedia(file);
-        setDraftSettings({ heroImageUrl: uploaded.url });
+        setDraftSettings((current) => ({ ...current, heroImageUrl: uploaded.url }));
       } catch (err) {
         setError(err instanceof Error ? err.message : "Photo upload failed.");
       } finally {
@@ -113,7 +114,7 @@ export function LinkedDevicesDisplayPanel({ teamId, teamName, teamImage }: Props
     }
     setError(null);
     setSaved(false);
-    setDraftSettings({ heroImageUrl: null });
+    setDraftSettings((current) => ({ ...current, heroImageUrl: null }));
   }
 
   async function onSaveToTablets() {

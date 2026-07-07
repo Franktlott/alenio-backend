@@ -1,6 +1,6 @@
 import bcrypt from "bcryptjs";
 import type { PrismaClient } from "@prisma/client";
-import { findTeamByChecklistHubToken } from "./checklist-locations";
+import { findTeamByGoHubToken } from "./go-hub";
 import { isGoDeviceApproved } from "./workplace-alerts";
 
 const PIN_PATTERN = /^\d{4,8}$/;
@@ -103,7 +103,7 @@ export async function verifyGoLeaderPin(
   const normalized = normalizeGoLeaderPin(pin);
   if (!isValidGoLeaderPin(normalized)) return { ok: false, code: "INVALID_PIN" };
 
-  const team = await findTeamByChecklistHubToken(hubToken);
+  const team = await findTeamByGoHubToken(hubToken);
   if (!team) return { ok: false, code: "NOT_FOUND" };
 
   const reachable = await isGoDeviceApproved(team.id, deviceId);

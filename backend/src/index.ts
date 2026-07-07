@@ -51,11 +51,8 @@ import { ensureCalendarApprovalSchema } from "./lib/ensure-calendar-approval-sch
 import { ensureWorkplaceStandardsSchema } from "./lib/ensure-workplace-standards-schema";
 import { ensureGoLoginSchema } from "./lib/ensure-go-login-schema";
 import { ensureWorkplaceAlertsSchema } from "./lib/ensure-workplace-alerts-schema";
-import { ensureBriefingsSchema } from "./lib/ensure-briefings-schema";
-import { ensureWalksSchema } from "./lib/ensure-walks-schema";
 import { ensureGoFrontendSettingsSchema } from "./lib/ensure-go-frontend-settings-schema";
 import { ensureGoLeaderPinSchema } from "./lib/ensure-go-leader-pin-schema";
-import { ensureTemperatureProgramsSchema } from "./lib/ensure-temperature-programs-schema";
 import { ensureCalendarConnectionSchema } from "./lib/ensure-calendar-connection-schema";
 import { calendarConnectionsRouter } from "./routes/calendar-connections";
 import { developmentGoalsRouter } from "./routes/development-goals";
@@ -63,11 +60,7 @@ import { senecaRouter } from "./routes/seneca";
 import { senecaTeamRouter } from "./routes/seneca-team";
 import { teamInvitesPublicRouter } from "./routes/team-invites";
 import { publicChecklistHubsRouter } from "./routes/public-checklist-hubs";
-import { publicChecklistLocationsRouter } from "./routes/public-checklist-locations";
 import { publicGoLinkRouter } from "./routes/public-go-link";
-import { checklistLocationsRouter } from "./routes/checklist-locations";
-import { walksRouter } from "./routes/walks";
-import { temperatureProgramsRouter } from "./routes/temperature-programs";
 import { isValidTimeZone } from "./lib/timezone";
 import { redeemPendingInvitesForUser } from "./lib/team-invites";
 
@@ -81,7 +74,7 @@ if (!isProduction) {
 /** Dev safety net + prod fallback when preDeploy db push missed a table. */
 const startupSchemaReady = Promise.all([
   ...(isProduction
-    ? [ensureGoLoginSchema(prisma), ensureWorkplaceAlertsSchema(prisma), ensureBriefingsSchema(prisma), ensureWalksSchema(prisma), ensureGoFrontendSettingsSchema(prisma), ensureGoLeaderPinSchema(prisma), ensureTemperatureProgramsSchema(prisma)]
+    ? [ensureGoLoginSchema(prisma), ensureWorkplaceAlertsSchema(prisma), ensureGoFrontendSettingsSchema(prisma), ensureGoLeaderPinSchema(prisma)]
     : [
         ensureOneOnOneSchema(prisma),
         ensureDevelopmentPlanSchema(prisma),
@@ -93,11 +86,8 @@ const startupSchemaReady = Promise.all([
         ensureCalendarConnectionSchema(prisma),
         ensureGoLoginSchema(prisma),
         ensureWorkplaceAlertsSchema(prisma),
-        ensureBriefingsSchema(prisma),
-        ensureWalksSchema(prisma),
         ensureGoFrontendSettingsSchema(prisma),
         ensureGoLeaderPinSchema(prisma),
-        ensureTemperatureProgramsSchema(prisma),
       ]),
 ]);
 
@@ -370,6 +360,32 @@ app.get("/static/:filename", async (c) => {
 });
 
 const MAX_UPLOAD_BYTES = 12 * 1024 * 1024;
+const MAX_ALERT_SOUND_BYTES = 5 * 1024 * 1024;
+const ALERT_SOUND_MIME_TYPES = new Set([
+  "audio/mpeg",
+  "audio/mp3",
+  "audio/wav",
+  "audio/x-wav",
+  "audio/ogg",
+  "audio/mp4",
+  "audio/aac",
+  "audio/webm",
+]);
+
+type UploadPurpose = "profile" | "team" | "go_alert_sound" | "generic";
+
+function parseUploadPurpose(purposeRaw: string): UploadPurpose {
+  if (purposeRaw === "profile" || purposeRaw === "team" || purposeRaw === "go_alert_sound") {
+    return purposeRaw;
+  }
+  return "generic";
+}
+
+function isAllowedAlertSoundFile(file: File): boolean {
+  const type = file.type.trim().toLowerCase();
+  if (ALERT_SOUND_MIME_TYPES.has(type)) return true;
+  return /\.(mp3|wav|ogg|m4a|aac|webm)$/i.test(file.name || "");
+}
 
 function fileFromBase64Json(payload: {
   data?: unknown;
@@ -390,7 +406,7 @@ function fileFromBase64Json(payload: {
 }
 
 type UploadParseResult =
-  | { ok: true; file: File; purpose: "profile" | "team" | "generic"; teamId: string }
+  | { ok: true; file: File; purpose: UploadPurpose; teamId: string }
   | { ok: false; status: 400 | 413; message: string; code: string };
 
 type UploadContext = {
@@ -443,7 +459,7 @@ async function parseJsonBase64Upload(c: UploadContext): Promise<UploadParseResul
     };
   }
 
-  const purpose = purposeRaw === "profile" || purposeRaw === "team" ? purposeRaw : "generic";
+  const purpose = parseUploadPurpose(purposeRaw);
   return { ok: true, file, purpose, teamId: teamIdRaw };
 }
 
@@ -476,7 +492,7 @@ async function parseMultipartUpload(c: UploadContext): Promise<UploadParseResult
 
   const purposeRaw = body["purpose"] != null ? String(body["purpose"]).trim() : "";
   const teamIdRaw = body["teamId"] != null ? String(body["teamId"]).trim() : "";
-  const purpose = purposeRaw === "profile" || purposeRaw === "team" ? purposeRaw : "generic";
+  const purpose = parseUploadPurpose(purposeRaw);
   return { ok: true, file: raw, purpose, teamId: teamIdRaw };
 }
 
@@ -522,6 +538,43 @@ async function handleFileUpload(c: {
         { error: { message: "teamId is required for team photo uploads", code: "VALIDATION_ERROR" } },
         400,
       );
+    }
+    if (purpose === "go_alert_sound" && !teamIdRaw) {
+      return c.json(
+        { error: { message: "teamId is required for alert sound uploads", code: "VALIDATION_ERROR" } },
+        400,
+      );
+    }
+
+    if (purpose === "go_alert_sound" && teamIdRaw) {
+      const membership = await prisma.teamMember.findUnique({
+        where: { userId_teamId: { userId: user.id, teamId: teamIdRaw } },
+      });
+      if (!membership || !["owner", "team_leader"].includes(membership.role)) {
+        return c.json(
+          { error: { message: "Only workspace owners and team leaders can upload alert sounds", code: "FORBIDDEN" } },
+          403,
+        );
+      }
+      if (!isAllowedAlertSoundFile(file)) {
+        return c.json(
+          { error: { message: "Upload an MP3, WAV, OGG, or M4A audio file", code: "VALIDATION_ERROR" } },
+          400,
+        );
+      }
+      if (file.size > MAX_ALERT_SOUND_BYTES) {
+        return c.json(
+          { error: { message: "Alert sound must be 5 MB or smaller", code: "PAYLOAD_TOO_LARGE" } },
+          413,
+        );
+      }
+      const uploaded = await uploadFileToFirebaseStorage({
+        userId: user.id,
+        file,
+        slot: "go_alert_sound",
+        teamId: teamIdRaw,
+      });
+      return c.json({ data: uploaded });
     }
 
     if (purpose === "team" && teamIdRaw) {
@@ -890,12 +943,8 @@ app.route("/api/teams/:teamId/tasks", tasksRouter);
 app.route("/api/teams/:teamId/messages", messagesRouter);
 app.route("/api/teams/:teamId/templates", templatesRouter);
 app.route("/api/teams/:teamId/subscription", subscriptionRouter);
-app.route("/api/teams/:teamId/checklist-locations", checklistLocationsRouter);
-app.route("/api/teams/:teamId/walks", walksRouter);
-app.route("/api/teams/:teamId/temperature-programs", temperatureProgramsRouter);
 app.route("/api/teams", teamsRouter);
 app.route("/api/public/checklist-hubs", publicChecklistHubsRouter);
-app.route("/api/public/checklist-locations", publicChecklistLocationsRouter);
 app.route("/api/public/go", publicGoLinkRouter);
 app.route("/api/team-invites", teamInvitesPublicRouter);
 app.route("/api/tasks/mine", myTasksRouter);

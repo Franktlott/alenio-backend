@@ -6,6 +6,12 @@ import {
   formatGoDashHeaderDate,
 } from "../../lib/alenio-go-dashboard";
 import type { GoWorkplaceAlert } from "../../lib/api";
+import {
+  hasGoAlertSoundPreference,
+  isGoAlertSoundUnlocked,
+  onGoAlertSoundUnlocked,
+  unlockGoAlertSoundFromGesture,
+} from "../../lib/go-alert-sound";
 import { AlenioGoLogo } from "../AlenioGoLogo";
 import { GoKioskAlertBell } from "./GoKioskWorkplaceAlerts";
 
@@ -97,13 +103,15 @@ export function GoDashStoreModuleCard({ module }: { module: GoDashModule }) {
   const body = (
     <>
       {!module.active ? (
-        <span className="go-dash-store-card-soon">
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden>
-            <rect x="3" y="11" width="18" height="11" rx="2" />
-            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-          </svg>
-          Coming soon
-        </span>
+        <div className="go-dash-store-card__soon-row">
+          <span className="go-dash-store-card-soon">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden>
+              <rect x="3" y="11" width="18" height="11" rx="2" />
+              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            </svg>
+            Coming soon
+          </span>
+        </div>
       ) : null}
       <div className="go-dash-store-card__head">
         <div className="go-dash-store-card__icon" aria-hidden>
@@ -176,13 +184,15 @@ export function GoDashModuleCard({ module }: { module: GoDashModule }) {
   const body = (
     <>
       {module.active ? null : (
-        <span className="go-dash-card-soon">
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden>
-            <rect x="3" y="11" width="18" height="11" rx="2" />
-            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-          </svg>
-          Coming soon
-        </span>
+        <div className="go-dash-card-soon-row">
+          <span className="go-dash-card-soon">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden>
+              <rect x="3" y="11" width="18" height="11" rx="2" />
+              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            </svg>
+            Coming soon
+          </span>
+        </div>
       )}
       <div className="go-dash-card-icon">
         <ModuleIcon name={module.icon} />
@@ -315,16 +325,53 @@ export function GoDashQuickActionsGrid({ actions }: { actions: GoDashQuickAction
 export function GoDashFooter({
   onEndSession,
   endLabel = "End session",
+  showAlertSoundStatus = false,
 }: {
   onEndSession: () => void;
   endLabel?: string;
+  showAlertSoundStatus?: boolean;
 }) {
+  const [soundReady, setSoundReady] = useState(isGoAlertSoundUnlocked());
+
+  useEffect(() => onGoAlertSoundUnlocked(() => setSoundReady(true)), []);
+
+  const soundStatus = (() => {
+    if (!showAlertSoundStatus || soundReady) {
+      return { tone: "ok" as const, message: "All systems operational" };
+    }
+    if (hasGoAlertSoundPreference()) {
+      return { tone: "warn" as const, message: "Sound paused — tap once" };
+    }
+    return { tone: "warn" as const, message: "Sound not enabled yet" };
+  })();
+
+  function enableSoundFromFooter() {
+    if (soundReady) return;
+    unlockGoAlertSoundFromGesture();
+    if (isGoAlertSoundUnlocked()) setSoundReady(true);
+  }
+
+  const statusBody = (
+    <>
+      <span className="go-dash-footer-dot" aria-hidden />
+      {soundStatus.message}
+    </>
+  );
+
   return (
     <footer className="go-dash-footer">
-      <div className="go-dash-footer-status">
-        <span className="go-dash-footer-dot" aria-hidden />
-        All systems operational
-      </div>
+      {soundStatus.tone === "warn" ? (
+        <button
+          type="button"
+          className={`go-dash-footer-status go-dash-footer-status--${soundStatus.tone}`}
+          onPointerUp={enableSoundFromFooter}
+          data-testid="go-dash-footer-sound-status"
+        >
+          {statusBody}
+        </button>
+      ) : (
+        <div className={`go-dash-footer-status go-dash-footer-status--${soundStatus.tone}`}>{statusBody}</div>
+      )}
       <button type="button" className="go-dash-footer-end" onClick={onEndSession}>
         {endLabel}
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
