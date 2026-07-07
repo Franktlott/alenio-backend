@@ -55,7 +55,7 @@ export function goBackendAdminTiles(options: {
     {
       id: "temp-checks",
       title: "Temp checks",
-      subtitle: "Temperature programs, schedules, and corrective actions",
+      subtitle: "Food safety temperature logs on the floor",
       tone: "emerald",
       icon: "temp",
       active: true,

@@ -26,13 +26,6 @@ import {
   listPublicWalkCompletions,
   listPublicWalkTemplates,
 } from "../lib/walks";
-import {
-  completePublicTempCheck,
-  getPublicTempCheckCompletion,
-  getPublicTempCheckTemplate,
-  listPublicTempCheckCompletions,
-  listPublicTempCheckTemplates,
-} from "../lib/temp-checks";
 import { verifyGoLeaderPin } from "../lib/go-leader-pin";
 
 const publicGoLinkRouter = new Hono();
@@ -379,35 +372,6 @@ const publicWalkCompleteSchema = z
     message: "managerName or leaderUserId is required",
   });
 
-const publicTempCheckCompleteSchema = z.object({
-  hubToken: z.string().min(1).max(256),
-  deviceId: z.string().min(8).max(128),
-  leaderUserId: z.string().min(1).max(128),
-  readings: z
-    .array(
-      z.object({
-        itemId: z.string().min(1),
-        readingF: z.number(),
-        correctiveAction: z.string().max(200).nullable().optional(),
-        correctiveSteps: z.array(z.string().max(200)).max(12).nullable().optional(),
-        branchChecklists: z
-          .array(
-            z.object({
-              actionLabel: z.string().max(200),
-              completedItems: z.array(z.string().max(200)).max(20),
-            }),
-          )
-          .max(12)
-          .nullable()
-          .optional(),
-        notes: z.string().max(500).nullable().optional(),
-      }),
-    )
-    .min(1)
-    .max(40),
-  timeZone: z.string().min(1).max(64).optional(),
-});
-
 const publicVerifyPinSchema = z.object({
   hubToken: z.string().min(1).max(256),
   deviceId: z.string().min(8).max(128),
@@ -540,106 +504,6 @@ publicGoLinkRouter.post("/walks/:walkId/complete", zValidator("json", publicWalk
   } catch (err) {
     console.error("[go-link] POST /walks/:id/complete failed:", err);
     return c.json({ error: { message: "Could not complete walk", code: "INTERNAL" } }, 500);
-  }
-});
-
-publicGoLinkRouter.get("/temp-checks", async (c) => {
-  try {
-    const hubToken = c.req.query("hubToken")?.trim();
-    const deviceId = c.req.query("deviceId")?.trim();
-    if (!hubToken || !deviceId) {
-      return c.json({ error: { message: "hubToken and deviceId are required", code: "VALIDATION_ERROR" } }, 400);
-    }
-    const timeZone = c.req.query("timeZone")?.trim() || undefined;
-    const result = await listPublicTempCheckTemplates(hubToken, deviceId, timeZone);
-    if (!result.ok) {
-      if (result.code === "FORBIDDEN") return c.json({ error: { message: GO_DEVICE_UNLINKED_MESSAGE, code: "DEVICE_UNLINKED" } }, 403);
-      return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
-    }
-    return c.json({ data: { templates: result.templates } });
-  } catch (err) {
-    console.error("[go-link] GET /temp-checks failed:", err);
-    return c.json({ error: { message: "Could not load temp checks", code: "INTERNAL" } }, 500);
-  }
-});
-
-publicGoLinkRouter.get("/temp-checks/completions", async (c) => {
-  try {
-    const hubToken = c.req.query("hubToken")?.trim();
-    const deviceId = c.req.query("deviceId")?.trim();
-    if (!hubToken || !deviceId) {
-      return c.json({ error: { message: "hubToken and deviceId are required", code: "VALIDATION_ERROR" } }, 400);
-    }
-    const result = await listPublicTempCheckCompletions(hubToken, deviceId);
-    if (!result.ok) {
-      if (result.code === "FORBIDDEN") return c.json({ error: { message: GO_DEVICE_UNLINKED_MESSAGE, code: "DEVICE_UNLINKED" } }, 403);
-      return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
-    }
-    return c.json({ data: { completions: result.completions } });
-  } catch (err) {
-    console.error("[go-link] GET /temp-checks/completions failed:", err);
-    return c.json({ error: { message: "Could not load temp check history", code: "INTERNAL" } }, 500);
-  }
-});
-
-publicGoLinkRouter.get("/temp-checks/completions/:completionId", async (c) => {
-  try {
-    const completionId = c.req.param("completionId")?.trim();
-    const hubToken = c.req.query("hubToken")?.trim();
-    const deviceId = c.req.query("deviceId")?.trim();
-    if (!completionId || !hubToken || !deviceId) {
-      return c.json({ error: { message: "completionId, hubToken, and deviceId are required", code: "VALIDATION_ERROR" } }, 400);
-    }
-    const result = await getPublicTempCheckCompletion(hubToken, deviceId, completionId);
-    if (!result.ok) {
-      if (result.code === "FORBIDDEN") return c.json({ error: { message: GO_DEVICE_UNLINKED_MESSAGE, code: "DEVICE_UNLINKED" } }, 403);
-      return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
-    }
-    return c.json({ data: { completion: result.completion } });
-  } catch (err) {
-    console.error("[go-link] GET /temp-checks/completions/:id failed:", err);
-    return c.json({ error: { message: "Could not load temp check record", code: "INTERNAL" } }, 500);
-  }
-});
-
-publicGoLinkRouter.get("/temp-checks/:templateId", async (c) => {
-  try {
-    const templateId = c.req.param("templateId")?.trim();
-    const hubToken = c.req.query("hubToken")?.trim();
-    const deviceId = c.req.query("deviceId")?.trim();
-    if (!templateId || !hubToken || !deviceId) {
-      return c.json({ error: { message: "templateId, hubToken, and deviceId are required", code: "VALIDATION_ERROR" } }, 400);
-    }
-    const timeZone = c.req.query("timeZone")?.trim() || undefined;
-    const result = await getPublicTempCheckTemplate(hubToken, deviceId, templateId, timeZone);
-    if (!result.ok) {
-      if (result.code === "FORBIDDEN") return c.json({ error: { message: GO_DEVICE_UNLINKED_MESSAGE, code: "DEVICE_UNLINKED" } }, 403);
-      return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
-    }
-    return c.json({ data: { template: result.template } });
-  } catch (err) {
-    console.error("[go-link] GET /temp-checks/:id failed:", err);
-    return c.json({ error: { message: "Could not load temp check", code: "INTERNAL" } }, 500);
-  }
-});
-
-publicGoLinkRouter.post("/temp-checks/:templateId/complete", zValidator("json", publicTempCheckCompleteSchema), async (c) => {
-  try {
-    const templateId = c.req.param("templateId")?.trim();
-    const { hubToken, deviceId, leaderUserId, readings, timeZone } = c.req.valid("json");
-    const result = await completePublicTempCheck(hubToken, deviceId, templateId, { leaderUserId }, { readings, timeZone });
-    if (!result.ok) {
-      if (result.code === "FORBIDDEN") return c.json({ error: { message: GO_DEVICE_UNLINKED_MESSAGE, code: "DEVICE_UNLINKED" } }, 403);
-      if (result.code === "NOT_FOUND") return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
-      if (result.code === "OUTSIDE_WINDOW") {
-        return c.json({ error: { message: "This temp check is outside its scheduled window.", code: "OUTSIDE_WINDOW" } }, 400);
-      }
-      return c.json({ error: { message: "Invalid temp check completion", code: "VALIDATION_ERROR" } }, 400);
-    }
-    return c.json({ data: result.completion }, 201);
-  } catch (err) {
-    console.error("[go-link] POST /temp-checks/:id/complete failed:", err);
-    return c.json({ error: { message: "Could not complete temp check", code: "INTERNAL" } }, 500);
   }
 });
 

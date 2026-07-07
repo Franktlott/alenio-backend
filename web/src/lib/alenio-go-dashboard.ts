@@ -68,11 +68,11 @@ export const GO_DASH_KIOSK_MODULES: GoDashModule[] = [
     id: "temp-checks",
     title: "Temp checks",
     subtitle: "Food safety logs",
-    active: true,
+    active: false,
     tone: "emerald",
     icon: "temp",
     ctaLabel: "Open temp checks",
-    countMessage: "Complete scheduled readings",
+    countMessage: "Coming soon",
   },
   {
     id: "walks",

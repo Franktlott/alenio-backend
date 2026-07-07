@@ -55,7 +55,7 @@ import { ensureBriefingsSchema } from "./lib/ensure-briefings-schema";
 import { ensureWalksSchema } from "./lib/ensure-walks-schema";
 import { ensureGoFrontendSettingsSchema } from "./lib/ensure-go-frontend-settings-schema";
 import { ensureGoLeaderPinSchema } from "./lib/ensure-go-leader-pin-schema";
-import { ensureTempChecksSchema } from "./lib/ensure-temp-checks-schema";
+import { ensureTemperatureProgramsSchema } from "./lib/ensure-temperature-programs-schema";
 import { ensureCalendarConnectionSchema } from "./lib/ensure-calendar-connection-schema";
 import { calendarConnectionsRouter } from "./routes/calendar-connections";
 import { developmentGoalsRouter } from "./routes/development-goals";
@@ -67,7 +67,7 @@ import { publicChecklistLocationsRouter } from "./routes/public-checklist-locati
 import { publicGoLinkRouter } from "./routes/public-go-link";
 import { checklistLocationsRouter } from "./routes/checklist-locations";
 import { walksRouter } from "./routes/walks";
-import { tempChecksRouter } from "./routes/temp-checks";
+import { temperatureProgramsRouter } from "./routes/temperature-programs";
 import { isValidTimeZone } from "./lib/timezone";
 import { redeemPendingInvitesForUser } from "./lib/team-invites";
 
@@ -81,7 +81,7 @@ if (!isProduction) {
 /** Dev safety net + prod fallback when preDeploy db push missed a table. */
 const startupSchemaReady = Promise.all([
   ...(isProduction
-    ? [ensureGoLoginSchema(prisma), ensureWorkplaceAlertsSchema(prisma), ensureBriefingsSchema(prisma), ensureWalksSchema(prisma), ensureGoFrontendSettingsSchema(prisma), ensureGoLeaderPinSchema(prisma), ensureTempChecksSchema(prisma)]
+    ? [ensureGoLoginSchema(prisma), ensureWorkplaceAlertsSchema(prisma), ensureBriefingsSchema(prisma), ensureWalksSchema(prisma), ensureGoFrontendSettingsSchema(prisma), ensureGoLeaderPinSchema(prisma), ensureTemperatureProgramsSchema(prisma)]
     : [
         ensureOneOnOneSchema(prisma),
         ensureDevelopmentPlanSchema(prisma),
@@ -97,7 +97,7 @@ const startupSchemaReady = Promise.all([
         ensureWalksSchema(prisma),
         ensureGoFrontendSettingsSchema(prisma),
         ensureGoLeaderPinSchema(prisma),
-        ensureTempChecksSchema(prisma),
+        ensureTemperatureProgramsSchema(prisma),
       ]),
 ]);
 
@@ -892,7 +892,7 @@ app.route("/api/teams/:teamId/templates", templatesRouter);
 app.route("/api/teams/:teamId/subscription", subscriptionRouter);
 app.route("/api/teams/:teamId/checklist-locations", checklistLocationsRouter);
 app.route("/api/teams/:teamId/walks", walksRouter);
-app.route("/api/teams/:teamId/temp-checks", tempChecksRouter);
+app.route("/api/teams/:teamId/temperature-programs", temperatureProgramsRouter);
 app.route("/api/teams", teamsRouter);
 app.route("/api/public/checklist-hubs", publicChecklistHubsRouter);
 app.route("/api/public/checklist-locations", publicChecklistLocationsRouter);

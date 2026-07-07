@@ -12,7 +12,7 @@ export function prismaRouteError(c: Context, err: unknown, logLabel: string) {
       {
         error: {
           message:
-            "Check-in database tables are not set up yet. Redeploy the backend — it will sync the database automatically.",
+            "Database tables are not set up yet. Redeploy the backend — it will sync the database automatically.",
           code: "DB_NOT_READY",
         },
       },

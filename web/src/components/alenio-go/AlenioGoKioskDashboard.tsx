@@ -73,16 +73,6 @@ function buildKioskModules(options: {
       };
     }
 
-    if (module.id === "temp-checks") {
-      return {
-        ...module,
-        active: true,
-        href: `/checklist/${options.hubToken}/temp-checks`,
-        countMessage: "Complete scheduled readings",
-        ctaLabel: "Open temp checks",
-      };
-    }
-
     return {
       ...module,
       count: 0,

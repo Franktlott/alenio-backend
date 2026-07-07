@@ -130,9 +130,14 @@ model Team {
   briefings Briefing[]
   walkTemplates WalkTemplate[]
   walkCompletions WalkCompletion[]
-  tempCheckTemplates TempCheckTemplate[]
-  tempCheckCompletions TempCheckCompletion[]
-  tempCheckEquipment TempCheckEquipment[]
+  tempPrograms TempProgram[]
+  tempEquipmentGroups TempEquipmentGroup[]
+  tempEquipmentItems TempEquipmentItem[]
+  tempCheckItems TempCheckItem[]
+  tempCheckSchedules TempCheckSchedule[]
+  tempProgramAssignments TempProgramAssignment[]
+  tempCorrectiveActionTemplates TempCorrectiveActionTemplate[]
+  tempCorrectiveActionRules TempCorrectiveActionRule[]
 }
 
 model TeamSubscription {
@@ -844,125 +849,204 @@ model ChecklistLocationSubmission {
   @@index([locationId, submittedAt])
 }
 
-model TempCheckTemplate {
+// ── Temperature programs (admin configuration) ───────────────────────────────
+// company_id in product docs maps to teamId (workspace scope).
+
+model TempProgram {
+  id              String   @id @default(cuid())
+  programFamilyId String
+  teamId          String
+  name            String
+  description     String?
+  status          String   @default("draft") // draft | active | archived
+  versionNumber   Int      @default(1)
+  isLocked        Boolean  @default(false)
+  createdByUserId String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  team                    Team                         @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  equipmentGroups         TempEquipmentGroup[]
+  equipmentItems          TempEquipmentItem[]
+  checkItems              TempCheckItem[]
+  schedules               TempCheckSchedule[]
+  assignments             TempProgramAssignment[]
+  correctiveTemplates     TempCorrectiveActionTemplate[]
+  correctiveRules         TempCorrectiveActionRule[]
+
+  @@unique([programFamilyId, versionNumber])
+  @@index([teamId, status])
+  @@index([teamId, programFamilyId])
+  @@index([programFamilyId])
+}
+
+model TempEquipmentGroup {
+  id          String   @id @default(cuid())
+  programId   String
+  teamId      String
+  name        String
+  description String?
+  sortOrder   Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  program        TempProgram         @relation(fields: [programId], references: [id], onDelete: Cascade)
+  team           Team                @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  equipmentItems TempEquipmentItem[]
+
+  @@index([programId, isActive])
+  @@index([teamId])
+}
+
+model TempEquipmentItem {
   id               String   @id @default(cuid())
+  programId        String
+  equipmentGroupId String
   teamId           String
   name             String
   description      String?
-  dueTimeLocal     String
-  windowStartLocal String
-  windowEndLocal   String
+  equipmentType    String?
+  locationHint     String?
+  sortOrder        Int      @default(0)
+  isRequired       Boolean  @default(true)
   isActive         Boolean  @default(true)
-  isPublished      Boolean  @default(false)
-  createdByUserId  String
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
-  team             Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  items            TempCheckTemplateItem[]
-  correctiveActions TempCheckCorrectiveAction[]
-  completions      TempCheckCompletion[]
 
-  @@index([teamId, isActive])
+  program        TempProgram       @relation(fields: [programId], references: [id], onDelete: Cascade)
+  equipmentGroup TempEquipmentGroup @relation(fields: [equipmentGroupId], references: [id], onDelete: Cascade)
+  team           Team              @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  checkItems     TempCheckItem[]
+
+  @@index([programId, isActive])
+  @@index([equipmentGroupId, isActive])
+  @@index([teamId])
 }
 
-model TempCheckTemplateItem {
-  id          String  @id @default(cuid())
-  templateId  String
-  equipmentId String?
-  label       String
-  tempMinF    Float?
-  tempMaxF    Float?
-  sortOrder   Int     @default(0)
-  template    TempCheckTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
-  equipment   TempCheckEquipment? @relation(fields: [equipmentId], references: [id], onDelete: SetNull)
-  correctiveActions TempCheckCorrectiveAction[]
+model TempCheckItem {
+  id                     String   @id @default(cuid())
+  programId              String
+  equipmentId            String
+  teamId                 String
+  name                   String
+  instruction            String?
+  productName            String?
+  tempUnit               String   @default("F") // F | C
+  minTemp                Float?
+  maxTemp                Float?
+  targetTemp             Float?
+  checkType              String   // hot_holding | cold_holding | freezer | product | water_bottle | equipment_surface
+  allowNa                Boolean  @default(false)
+  requireCommentIfNa     Boolean  @default(false)
+  requirePhoto           Boolean  @default(false)
+  manualEntryAllowed     Boolean  @default(true)
+  bluetoothProbeAllowed  Boolean  @default(false)
+  bluetoothProbeRequired Boolean  @default(false)
+  sortOrder              Int      @default(0)
+  isActive               Boolean  @default(true)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
 
-  @@index([templateId])
-  @@index([equipmentId])
+  program         TempProgram                @relation(fields: [programId], references: [id], onDelete: Cascade)
+  equipment       TempEquipmentItem          @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  team            Team                       @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  correctiveRules TempCorrectiveActionRule[]
+
+  @@index([programId, isActive])
+  @@index([equipmentId, isActive])
+  @@index([teamId])
 }
 
-model TempCheckEquipment {
-  id        String   @id @default(cuid())
-  teamId    String
-  name      String
-  tempMinF  Float?
-  tempMaxF  Float?
-  equipmentType      String?
-  locationGroup      String?
-  checkWindowStart   String?
-  checkWindowEnd     String?
-  checkFrequency     String?
-  allowedRoles       Json     @default("[]")
-  flowConfig         Json?
-  flowStatus         String   @default("draft")
-  flowIsComplete     Boolean  @default(false)
-  autoCloseWhenInRange       Boolean @default(true)
-  requireInitialsBeforeClose Boolean @default(false)
-  retakeWaitMinutes          Int     @default(15)
-  maxRetakes                 Int     @default(2)
-  requireManagerNoteAfterFinalRetake Boolean @default(false)
-  sortOrder Int      @default(0)
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  correctiveActions TempCheckEquipmentCorrectiveAction[]
-  templateItems TempCheckTemplateItem[]
+model TempCheckSchedule {
+  id                  String   @id @default(cuid())
+  programId           String
+  teamId              String
+  name                String
+  scheduleType        String   // specific_times | interval | opening | closing
+  specificTimes       Json     @default("[]")
+  intervalHours       Int?
+  windowBeforeMinutes Int      @default(0)
+  windowAfterMinutes  Int      @default(0)
+  daysOfWeek          Json     @default("[]")
+  timezone            String?
+  isActive            Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
-  @@index([teamId, isActive])
+  program TempProgram @relation(fields: [programId], references: [id], onDelete: Cascade)
+  team    Team        @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@index([programId, isActive])
+  @@index([teamId])
 }
 
-model TempCheckEquipmentCorrectiveAction {
-  id             String @id @default(cuid())
-  equipmentId    String
-  label          String
-  actionType     String @default("close")
-  checklistItems Json   @default("[]")
-  requireInitials  Boolean @default(true)
-  requireNote      Boolean @default(false)
-  requirePhoto     Boolean @default(false)
-  sortOrder      Int    @default(0)
-  equipment      TempCheckEquipment @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+model TempProgramAssignment {
+  id                 String    @id @default(cuid())
+  programId          String
+  teamId             String
+  assignmentType     String    // company | region | district | workplace
+  assignmentTargetId String
+  effectiveStartDate DateTime?
+  effectiveEndDate   DateTime?
+  isActive           Boolean   @default(true)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
-  @@index([equipmentId])
+  program TempProgram @relation(fields: [programId], references: [id], onDelete: Cascade)
+  team    Team        @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@index([programId, isActive])
+  @@index([teamId, assignmentType, assignmentTargetId])
 }
 
-model TempCheckCorrectiveAction {
-  id             String  @id @default(cuid())
-  templateId     String
-  itemId         String?
-  label          String
-  actionType     String  @default("close")
-  checklistItems Json    @default("[]")
-  sortOrder      Int     @default(0)
-  template       TempCheckTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
-  item           TempCheckTemplateItem? @relation(fields: [itemId], references: [id], onDelete: Cascade)
+model TempCorrectiveActionTemplate {
+  id                      String   @id @default(cuid())
+  teamId                  String
+  programId               String
+  name                    String
+  description             String?
+  actionType              String   // discard_product | reheat_product | move_product | call_manager | maintenance_ticket | retake_temperature | other
+  requiresRecheck         Boolean  @default(false)
+  recheckDelayMinutes     Int?
+  requiresComment         Boolean  @default(false)
+  requiresPhoto           Boolean  @default(false)
+  requiresManagerApproval Boolean  @default(false)
+  closeAfterAction        Boolean  @default(false)
+  sortOrder               Int      @default(0)
+  isActive                Boolean  @default(true)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
 
-  @@index([templateId])
-  @@index([itemId])
+  program TempProgram                @relation(fields: [programId], references: [id], onDelete: Cascade)
+  team    Team                       @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  rules   TempCorrectiveActionRule[]
+
+  @@index([programId, isActive])
+  @@index([teamId])
 }
 
-model TempCheckCompletion {
-  id                String   @id @default(cuid())
-  teamId            String
-  templateId        String
-  checkName         String
-  dueTimeLocal      String
-  windowStartLocal  String
-  windowEndLocal    String
-  completedByUserId String
-  completedByName   String
-  completedAt       DateTime @default(now())
-  deviceId          String?
-  totalItems        Int
-  inRangeCount      Int
-  outOfRangeCount   Int
-  readings          Json
+model TempCorrectiveActionRule {
+  id                         String   @id @default(cuid())
+  teamId                     String
+  programId                  String
+  checkItemId                String
+  correctiveActionTemplateId String
+  conditionType              String   // below_min | above_max | no_reading | equipment_unavailable
+  isDefault                  Boolean  @default(false)
+  sortOrder                  Int      @default(0)
+  isActive                   Boolean  @default(true)
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
 
-  team     Team              @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  template TempCheckTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  program                  TempProgram                  @relation(fields: [programId], references: [id], onDelete: Cascade)
+  team                     Team                         @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  checkItem                TempCheckItem                @relation(fields: [checkItemId], references: [id], onDelete: Cascade)
+  correctiveActionTemplate TempCorrectiveActionTemplate @relation(fields: [correctiveActionTemplateId], references: [id], onDelete: Cascade)
 
-  @@index([teamId, completedAt])
-  @@index([templateId, completedAt])
+  @@unique([checkItemId, correctiveActionTemplateId, conditionType])
+  @@index([programId, isActive])
+  @@index([checkItemId, isActive])
+  @@index([teamId])
 }
 

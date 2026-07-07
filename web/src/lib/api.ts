@@ -708,298 +708,6 @@ export function deleteTeamWalkTemplate(teamId: string, walkId: string) {
   return patchTeamWalkTemplate(teamId, walkId, { isActive: false }).then(() => ({ success: true }));
 }
 
-export type TempCheckActionType = "close" | "retemp";
-
-export type TempCheckCorrectiveActionRow = {
-  id: string;
-  label: string;
-  actionType?: TempCheckActionType;
-  checklistItems?: string[];
-  requireInitials?: boolean;
-  requireNote?: boolean;
-  requirePhoto?: boolean;
-  sortOrder: number;
-};
-
-export type TempCheckTemplateItemRow = {
-  id: string;
-  equipmentId: string | null;
-  label: string;
-  tempMinF: number | null;
-  tempMaxF: number | null;
-  sortOrder: number;
-  correctiveActions: TempCheckCorrectiveActionRow[];
-};
-
-export type TempCheckTemplateRow = {
-  id: string;
-  teamId: string;
-  name: string;
-  description: string | null;
-  dueTimeLocal: string;
-  windowStartLocal: string;
-  windowEndLocal: string;
-  isActive: boolean;
-  isPublished: boolean;
-  createdByUserId: string;
-  createdAt: string;
-  updatedAt: string;
-  itemCount: number;
-  items: TempCheckTemplateItemRow[];
-  completionCount?: number;
-  windowOpen?: boolean;
-};
-
-export type TempCheckReadingRow = {
-  itemId: string;
-  label: string;
-  readingF: number;
-  inRange: boolean;
-  tempMinF: number | null;
-  tempMaxF: number | null;
-  correctiveAction: string | null;
-  correctiveSteps?: string[];
-  branchChecklists?: Array<{ actionLabel: string; completedItems: string[] }>;
-  notes: string | null;
-};
-
-export type TempCheckCompletionRow = {
-  id: string;
-  teamId: string;
-  templateId: string;
-  checkName: string;
-  dueTimeLocal: string;
-  windowStartLocal: string;
-  windowEndLocal: string;
-  completedByUserId: string;
-  completedByName: string;
-  completedAt: string;
-  deviceId: string | null;
-  totalItems: number;
-  inRangeCount: number;
-  outOfRangeCount: number;
-  readings: TempCheckReadingRow[];
-};
-
-export type TempCheckCompletePayload = {
-  readings: Array<{
-    itemId: string;
-    readingF: number;
-    correctiveAction?: string | null;
-    correctiveSteps?: string[];
-    branchChecklists?: Array<{ actionLabel: string; completedItems: string[] }>;
-    notes?: string | null;
-  }>;
-};
-
-export type TempCheckTemplateItemPayload = {
-  label: string;
-  equipmentId?: string | null;
-  tempMinF?: number | null;
-  tempMaxF?: number | null;
-  correctiveActions?: Array<string | { label: string; actionType?: TempCheckActionType; checklistItems?: string[] }>;
-};
-
-export type TempCheckEquipmentRow = {
-  id: string;
-  teamId: string;
-  name: string;
-  tempMinF: number | null;
-  tempMaxF: number | null;
-  equipmentType: string | null;
-  locationGroup: string | null;
-  checkWindowStart: string | null;
-  checkWindowEnd: string | null;
-  checkFrequency: string | null;
-  allowedRoles: string[];
-  flowConfig: unknown | null;
-  flowStatus: string;
-  flowIsComplete: boolean;
-  autoCloseWhenInRange: boolean;
-  requireInitialsBeforeClose: boolean;
-  retakeWaitMinutes: number;
-  maxRetakes: number;
-  requireManagerNoteAfterFinalRetake: boolean;
-  sortOrder: number;
-  isActive: boolean;
-  createdAt: string;
-  updatedAt: string;
-  actionCount: number;
-  correctiveActions: TempCheckCorrectiveActionRow[];
-};
-
-export type TempCheckEquipmentPayload = {
-  name: string;
-  tempMinF?: number | null;
-  tempMaxF?: number | null;
-  equipmentType?: string | null;
-  locationGroup?: string | null;
-  checkWindowStart?: string | null;
-  checkWindowEnd?: string | null;
-  checkFrequency?: string | null;
-  allowedRoles?: string[];
-  flowConfig?: unknown;
-  flowStatus?: string;
-  flowIsComplete?: boolean;
-  autoCloseWhenInRange?: boolean;
-  requireInitialsBeforeClose?: boolean;
-  retakeWaitMinutes?: number;
-  maxRetakes?: number;
-  requireManagerNoteAfterFinalRetake?: boolean;
-  correctiveActions?: Array<
-    | string
-    | {
-        label: string;
-        actionType?: TempCheckActionType;
-        checklistItems?: string[];
-        requireInitials?: boolean;
-        requireNote?: boolean;
-        requirePhoto?: boolean;
-      }
-  >;
-};
-
-export type TempCheckEquipmentUpdatePayload = Partial<TempCheckEquipmentPayload> & {
-  isActive?: boolean;
-};
-
-export type TempCheckTemplateCreatePayload = {
-  name: string;
-  description?: string | null;
-  dueTimeLocal: string;
-  windowStartLocal: string;
-  windowEndLocal: string;
-  items: TempCheckTemplateItemPayload[];
-};
-
-export type TempCheckTemplateUpdatePayload = Partial<TempCheckTemplateCreatePayload> & {
-  isActive?: boolean;
-  isPublished?: boolean;
-};
-
-export function fetchTeamTempCheckTemplates(teamId: string) {
-  return apiGetJson<{ data: { templates: TempCheckTemplateRow[]; canManage: boolean } }>(
-    `/api/teams/${encodeURIComponent(teamId)}/temp-checks`,
-  ).then((r) => r.data);
-}
-
-export function fetchTeamTempCheckTemplate(teamId: string, templateId: string) {
-  return apiGetJson<{ data: { template: TempCheckTemplateRow; canManage: boolean } }>(
-    `/api/teams/${encodeURIComponent(teamId)}/temp-checks/${encodeURIComponent(templateId)}`,
-  ).then((r) => r.data);
-}
-
-export function postTeamTempCheckTemplate(teamId: string, body: TempCheckTemplateCreatePayload) {
-  return apiPostJson<{ data: TempCheckTemplateRow }>(
-    `/api/teams/${encodeURIComponent(teamId)}/temp-checks`,
-    body,
-  ).then((r) => r.data);
-}
-
-export function patchTeamTempCheckTemplate(teamId: string, templateId: string, body: TempCheckTemplateUpdatePayload) {
-  return apiPatchJson<{ data: TempCheckTemplateRow }>(
-    `/api/teams/${encodeURIComponent(teamId)}/temp-checks/${encodeURIComponent(templateId)}`,
-    body,
-  ).then((r) => r.data);
-}
-
-export function deleteTeamTempCheckTemplate(teamId: string, templateId: string) {
-  return apiDeleteJson<{ data: TempCheckTemplateRow }>(
-    `/api/teams/${encodeURIComponent(teamId)}/temp-checks/${encodeURIComponent(templateId)}`,
-  ).then(() => ({ success: true }));
-}
-
-export function postTeamTempCheckPublish(teamId: string, templateId: string) {
-  return apiPostJson<{ data: TempCheckTemplateRow }>(
-    `/api/teams/${encodeURIComponent(teamId)}/temp-checks/${encodeURIComponent(templateId)}/publish`,
-    {},
-  ).then((r) => r.data);
-}
-
-export function postTeamTempCheckUnpublish(teamId: string, templateId: string) {
-  return apiPostJson<{ data: TempCheckTemplateRow }>(
-    `/api/teams/${encodeURIComponent(teamId)}/temp-checks/${encodeURIComponent(templateId)}/unpublish`,
-    {},
-  ).then((r) => r.data);
-}
-
-export function fetchTeamTempCheckEquipment(teamId: string) {
-  return apiGetJson<{ data: { equipment: TempCheckEquipmentRow[]; canManage: boolean } }>(
-    `/api/teams/${encodeURIComponent(teamId)}/temp-checks/equipment`,
-  ).then((r) => r.data);
-}
-
-export function fetchTeamTempCheckEquipmentItem(teamId: string, equipmentId: string) {
-  return apiGetJson<{ data: { equipment: TempCheckEquipmentRow; canManage: boolean } }>(
-    `/api/teams/${encodeURIComponent(teamId)}/temp-checks/equipment/${encodeURIComponent(equipmentId)}`,
-  ).then((r) => r.data);
-}
-
-export function postTeamTempCheckEquipment(teamId: string, body: TempCheckEquipmentPayload) {
-  return apiPostJson<{ data: TempCheckEquipmentRow }>(
-    `/api/teams/${encodeURIComponent(teamId)}/temp-checks/equipment`,
-    body,
-  ).then((r) => r.data);
-}
-
-export function patchTeamTempCheckEquipment(teamId: string, equipmentId: string, body: TempCheckEquipmentUpdatePayload) {
-  return apiPatchJson<{ data: TempCheckEquipmentRow }>(
-    `/api/teams/${encodeURIComponent(teamId)}/temp-checks/equipment/${encodeURIComponent(equipmentId)}`,
-    body,
-  ).then((r) => r.data);
-}
-
-export function deleteTeamTempCheckEquipment(teamId: string, equipmentId: string) {
-  return apiDeleteJson<{ data: TempCheckEquipmentRow }>(
-    `/api/teams/${encodeURIComponent(teamId)}/temp-checks/equipment/${encodeURIComponent(equipmentId)}`,
-  ).then(() => ({ success: true }));
-}
-
-export function fetchGoTempCheckTemplates(hubToken: string, deviceId: string, timeZone?: string) {
-  const q = new URLSearchParams({ hubToken, deviceId });
-  if (timeZone?.trim()) q.set("timeZone", timeZone.trim());
-  return apiGetJson<{ data: { templates: TempCheckTemplateRow[] } }>(`/api/public/go/temp-checks?${q}`).then(
-    (r) => r.data.templates,
-  );
-}
-
-export function fetchGoTempCheckTemplate(hubToken: string, deviceId: string, templateId: string, timeZone?: string) {
-  const q = new URLSearchParams({ hubToken, deviceId });
-  if (timeZone?.trim()) q.set("timeZone", timeZone.trim());
-  return apiGetJson<{ data: { template: TempCheckTemplateRow } }>(
-    `/api/public/go/temp-checks/${encodeURIComponent(templateId)}?${q}`,
-  ).then((r) => r.data.template);
-}
-
-export function fetchGoTempCheckCompletions(hubToken: string, deviceId: string) {
-  const q = new URLSearchParams({ hubToken, deviceId });
-  return apiGetJson<{ data: { completions: TempCheckCompletionRow[] } }>(
-    `/api/public/go/temp-checks/completions?${q}`,
-  ).then((r) => r.data.completions);
-}
-
-export function fetchGoTempCheckCompletion(hubToken: string, deviceId: string, completionId: string) {
-  const q = new URLSearchParams({ hubToken, deviceId });
-  return apiGetJson<{ data: { completion: TempCheckCompletionRow } }>(
-    `/api/public/go/temp-checks/completions/${encodeURIComponent(completionId)}?${q}`,
-  ).then((r) => r.data.completion);
-}
-
-export function postGoTempCheckComplete(
-  templateId: string,
-  body: TempCheckCompletePayload & {
-    hubToken: string;
-    deviceId: string;
-    leaderUserId: string;
-    timeZone?: string;
-  },
-) {
-  return apiPostJson<{ data: TempCheckCompletionRow }>(
-    `/api/public/go/temp-checks/${encodeURIComponent(templateId)}/complete`,
-    body,
-  ).then((r) => r.data);
-}
-
 export function fetchTeamWalkCompletions(teamId: string, templateId?: string) {
   const q = templateId ? `?templateId=${encodeURIComponent(templateId)}` : "";
   return apiGetJson<{ data: { completions: WalkCompletionRow[]; canManage: boolean } }>(
@@ -1018,6 +726,364 @@ export function postTeamWalkComplete(teamId: string, walkId: string, body: WalkC
     `/api/teams/${encodeURIComponent(teamId)}/walks/${encodeURIComponent(walkId)}/complete`,
     body,
   ).then((r) => r.data);
+}
+
+// ── Temperature programs (admin configuration) ────────────────────────────────
+
+export type TempProgramStatus = "draft" | "active" | "archived";
+
+export type TempProgramSummaryRow = {
+  id: string;
+  companyId: string;
+  teamId: string;
+  programFamilyId: string;
+  name: string;
+  description: string | null;
+  status: TempProgramStatus;
+  versionNumber: number;
+  isLocked: boolean;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type TempProgramValidation = {
+  isValid: boolean;
+  errors: string[];
+  warnings: string[];
+};
+
+export type TempCorrectiveRuleRow = {
+  id: string;
+  checkItemId: string;
+  correctiveActionTemplateId: string;
+  conditionType: string;
+  isDefault: boolean;
+  sortOrder: number;
+  isActive: boolean;
+  template: {
+    id: string;
+    name: string;
+    actionType: string;
+    requiresRecheck: boolean;
+    recheckDelayMinutes: number | null;
+  } | null;
+};
+
+export type TempCheckItemRow = {
+  id: string;
+  programId: string;
+  equipmentId: string;
+  teamId: string;
+  name: string;
+  instruction: string | null;
+  productName: string | null;
+  tempUnit: "F" | "C";
+  minTemp: number | null;
+  maxTemp: number | null;
+  targetTemp: number | null;
+  checkType: string;
+  allowNa: boolean;
+  requireCommentIfNa: boolean;
+  requirePhoto: boolean;
+  manualEntryAllowed: boolean;
+  bluetoothProbeAllowed: boolean;
+  bluetoothProbeRequired: boolean;
+  sortOrder: number;
+  isActive: boolean;
+  correctiveActionRules: TempCorrectiveRuleRow[];
+};
+
+export type TempEquipmentItemRow = {
+  id: string;
+  programId: string;
+  equipmentGroupId: string;
+  teamId: string;
+  name: string;
+  description: string | null;
+  equipmentType: string | null;
+  locationHint: string | null;
+  sortOrder: number;
+  isRequired: boolean;
+  isActive: boolean;
+  checkItems: TempCheckItemRow[];
+};
+
+export type TempEquipmentGroupRow = {
+  id: string;
+  programId: string;
+  teamId: string;
+  name: string;
+  description: string | null;
+  sortOrder: number;
+  isActive: boolean;
+  equipment: TempEquipmentItemRow[];
+};
+
+export type TempScheduleRow = {
+  id: string;
+  programId: string;
+  teamId: string;
+  name: string;
+  scheduleType: string;
+  specificTimes: unknown;
+  intervalHours: number | null;
+  windowBeforeMinutes: number;
+  windowAfterMinutes: number;
+  daysOfWeek: unknown;
+  timezone: string | null;
+  isActive: boolean;
+};
+
+export type TempAssignmentRow = {
+  id: string;
+  programId: string;
+  teamId: string;
+  assignmentType: string;
+  assignmentTargetId: string;
+  effectiveStartDate: string | null;
+  effectiveEndDate: string | null;
+  isActive: boolean;
+};
+
+export type TempCorrectiveTemplateRow = {
+  id: string;
+  programId: string;
+  teamId: string;
+  name: string;
+  description: string | null;
+  actionType: string;
+  requiresRecheck: boolean;
+  recheckDelayMinutes: number | null;
+  requiresComment: boolean;
+  requiresPhoto: boolean;
+  requiresManagerApproval: boolean;
+  closeAfterAction: boolean;
+  sortOrder: number;
+  isActive: boolean;
+};
+
+export type TempProgramDetailRow = TempProgramSummaryRow & {
+  groups: TempEquipmentGroupRow[];
+  schedules: TempScheduleRow[];
+  assignments: TempAssignmentRow[];
+  correctiveActionTemplates: TempCorrectiveTemplateRow[];
+};
+
+const tempProgramsBase = (teamId: string) =>
+  `/api/teams/${encodeURIComponent(teamId)}/temperature-programs`;
+
+export function fetchTeamTemperaturePrograms(teamId: string) {
+  return apiGetJson<{ data: { programs: TempProgramSummaryRow[]; canManage: boolean } }>(
+    tempProgramsBase(teamId),
+  ).then((r) => r.data);
+}
+
+export function fetchTeamTemperatureProgram(teamId: string, programId: string) {
+  return apiGetJson<{ data: { program: TempProgramDetailRow; canManage: boolean } }>(
+    `${tempProgramsBase(teamId)}/${encodeURIComponent(programId)}`,
+  ).then((r) => r.data);
+}
+
+export function postTeamTemperatureProgram(teamId: string, body: { name: string; description?: string | null }) {
+  return apiPostJson<{ data: TempProgramSummaryRow }>(tempProgramsBase(teamId), body).then((r) => r.data);
+}
+
+export function patchTeamTemperatureProgram(
+  teamId: string,
+  programId: string,
+  body: { name?: string; description?: string | null },
+) {
+  return apiPatchJson<{ data: TempProgramDetailRow }>(
+    `${tempProgramsBase(teamId)}/${encodeURIComponent(programId)}`,
+    body,
+  ).then((r) => r.data);
+}
+
+export function postTeamTemperatureProgramValidate(teamId: string, programId: string) {
+  return apiPostJson<{ data: { validation: TempProgramValidation; canManage: boolean } }>(
+    `${tempProgramsBase(teamId)}/${encodeURIComponent(programId)}/validate`,
+    {},
+  ).then((r) => r.data);
+}
+
+export function postTeamTemperatureProgramActivate(teamId: string, programId: string) {
+  return apiPostJson<{ data: { program: TempProgramSummaryRow; validation: TempProgramValidation } }>(
+    `${tempProgramsBase(teamId)}/${encodeURIComponent(programId)}/activate`,
+    {},
+  ).then((r) => r.data);
+}
+
+export function postTeamTemperatureProgramArchive(teamId: string, programId: string) {
+  return apiPostJson<{ data: { program: TempProgramSummaryRow } }>(
+    `${tempProgramsBase(teamId)}/${encodeURIComponent(programId)}/archive`,
+    {},
+  ).then((r) => r.data);
+}
+
+export function postTeamTemperatureProgramNewDraft(teamId: string, programId: string) {
+  return apiPostJson<{ data: { program: TempProgramDetailRow } }>(
+    `${tempProgramsBase(teamId)}/${encodeURIComponent(programId)}/new-draft-version`,
+    {},
+  ).then((r) => r.data);
+}
+
+export function postTeamTemperatureProgramSeedDemo(teamId: string) {
+  return apiPostJson<{ data: { program: TempProgramDetailRow; created: boolean } }>(
+    `${tempProgramsBase(teamId)}/seed-demo`,
+    {},
+  ).then((r) => r.data);
+}
+
+export function postTeamTemperatureEquipmentGroup(
+  teamId: string,
+  programId: string,
+  body: { name: string; description?: string | null },
+) {
+  return apiPostJson<{ data: { group: TempEquipmentGroupRow } }>(
+    `${tempProgramsBase(teamId)}/${encodeURIComponent(programId)}/equipment-groups`,
+    body,
+  ).then((r) => r.data);
+}
+
+export function postTeamTemperatureEquipment(
+  teamId: string,
+  programId: string,
+  body: {
+    equipmentGroupId: string;
+    name: string;
+    description?: string | null;
+    equipmentType?: string | null;
+    locationHint?: string | null;
+  },
+) {
+  return apiPostJson<{ data: { equipment: TempEquipmentItemRow } }>(
+    `${tempProgramsBase(teamId)}/${encodeURIComponent(programId)}/equipment`,
+    body,
+  ).then((r) => r.data);
+}
+
+export function postTeamTemperatureCheckItem(
+  teamId: string,
+  programId: string,
+  body: {
+    equipmentId: string;
+    name: string;
+    checkType: string;
+    tempUnit?: "F" | "C";
+    minTemp?: number | null;
+    maxTemp?: number | null;
+    instruction?: string | null;
+    productName?: string | null;
+  },
+) {
+  return apiPostJson<{ data: { checkItem: TempCheckItemRow } }>(
+    `${tempProgramsBase(teamId)}/${encodeURIComponent(programId)}/check-items`,
+    body,
+  ).then((r) => r.data);
+}
+
+export function postTeamTemperatureSchedule(
+  teamId: string,
+  programId: string,
+  body: {
+    name: string;
+    scheduleType: string;
+    specificTimes?: string[];
+    intervalHours?: number | null;
+    windowBeforeMinutes?: number;
+    windowAfterMinutes?: number;
+    daysOfWeek?: number[];
+    timezone?: string | null;
+  },
+) {
+  return apiPostJson<{ data: { schedule: TempScheduleRow } }>(
+    `${tempProgramsBase(teamId)}/${encodeURIComponent(programId)}/schedules`,
+    body,
+  ).then((r) => r.data);
+}
+
+export function postTeamTemperatureAssignment(
+  teamId: string,
+  programId: string,
+  body: {
+    assignmentType: string;
+    assignmentTargetId: string;
+  },
+) {
+  return apiPostJson<{ data: { assignment: TempAssignmentRow } }>(
+    `${tempProgramsBase(teamId)}/${encodeURIComponent(programId)}/assignments`,
+    body,
+  ).then((r) => r.data);
+}
+
+export function postTeamTemperatureCorrectiveTemplate(
+  teamId: string,
+  programId: string,
+  body: {
+    name: string;
+    actionType: string;
+    description?: string | null;
+    requiresRecheck?: boolean;
+    recheckDelayMinutes?: number | null;
+  },
+) {
+  return apiPostJson<{ data: { template: TempCorrectiveTemplateRow } }>(
+    `${tempProgramsBase(teamId)}/${encodeURIComponent(programId)}/corrective-actions`,
+    body,
+  ).then((r) => r.data);
+}
+
+export function postTeamTemperatureCorrectiveRule(
+  teamId: string,
+  programId: string,
+  body: {
+    checkItemId: string;
+    correctiveActionTemplateId: string;
+    conditionType: string;
+    isDefault?: boolean;
+  },
+) {
+  return apiPostJson<{ data: { rule: TempCorrectiveRuleRow } }>(
+    `${tempProgramsBase(teamId)}/${encodeURIComponent(programId)}/corrective-action-rules`,
+    body,
+  ).then((r) => r.data);
+}
+
+export function deleteTeamTemperatureEquipmentGroup(teamId: string, programId: string, groupId: string) {
+  return apiDeleteJson<{ data: { group: TempEquipmentGroupRow } }>(
+    `${tempProgramsBase(teamId)}/${encodeURIComponent(programId)}/equipment-groups/${encodeURIComponent(groupId)}`,
+  );
+}
+
+export function deleteTeamTemperatureEquipment(teamId: string, programId: string, equipmentId: string) {
+  return apiDeleteJson<{ data: { equipment: TempEquipmentItemRow } }>(
+    `${tempProgramsBase(teamId)}/${encodeURIComponent(programId)}/equipment/${encodeURIComponent(equipmentId)}`,
+  );
+}
+
+export function deleteTeamTemperatureCheckItem(teamId: string, programId: string, checkItemId: string) {
+  return apiDeleteJson<{ data: { checkItem: TempCheckItemRow } }>(
+    `${tempProgramsBase(teamId)}/${encodeURIComponent(programId)}/check-items/${encodeURIComponent(checkItemId)}`,
+  );
+}
+
+export function deleteTeamTemperatureSchedule(teamId: string, programId: string, scheduleId: string) {
+  return apiDeleteJson<{ data: { schedule: TempScheduleRow } }>(
+    `${tempProgramsBase(teamId)}/${encodeURIComponent(programId)}/schedules/${encodeURIComponent(scheduleId)}`,
+  );
+}
+
+export function deleteTeamTemperatureAssignment(teamId: string, programId: string, assignmentId: string) {
+  return apiDeleteJson<{ data: { assignment: TempAssignmentRow } }>(
+    `${tempProgramsBase(teamId)}/${encodeURIComponent(programId)}/assignments/${encodeURIComponent(assignmentId)}`,
+  );
+}
+
+export function deleteTeamTemperatureCorrectiveTemplate(teamId: string, programId: string, templateId: string) {
+  return apiDeleteJson<{ data: { template: TempCorrectiveTemplateRow } }>(
+    `${tempProgramsBase(teamId)}/${encodeURIComponent(programId)}/corrective-actions/${encodeURIComponent(templateId)}`,
+  );
 }
 
 export function goBriefingDocumentPath(hubToken: string, deviceId: string, briefingId: string): string {
