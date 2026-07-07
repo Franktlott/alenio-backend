@@ -2051,6 +2051,7 @@ export function deleteDevelopmentGoal(teamId: string, memberUserId: string, goal
 export type PublicChecklistHubPayload = {
   team: { name: string; image: string | null };
   checklists: [];
+  alertSoundUrl?: string;
 };
 
 export function fetchPublicChecklistHub(hubToken: string, deviceId?: string) {

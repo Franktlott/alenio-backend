@@ -2,6 +2,7 @@
 let soundUnlocked = false;
 let pendingSoundLoop = false;
 let pendingSoundUrl: string | null = null;
+let workspaceAlertSoundUrl: string | null = null;
 const unlockListeners = new Set<() => void>();
 
 const ALERT_SOUND_PREF_KEY = "alenio.go.alertSoundEnabled";
@@ -47,26 +48,46 @@ function getLoopAudio(soundUrl: string): HTMLAudioElement {
   return alertLoopAudio;
 }
 
-function markUnlocked() {
+function primeAlertAudio(soundUrl: string): void {
+  const audio = getLoopAudio(soundUrl);
+  audio.loop = false;
+  audio.volume = 1;
+  audio.currentTime = 0;
+  void audio
+    .play()
+    .then(() => {
+      audio.pause();
+      audio.currentTime = 0;
+    })
+    .catch(() => undefined);
+}
+
+export function setGoAlertSoundWorkspaceUrl(url: string | null | undefined): void {
+  workspaceAlertSoundUrl = url?.trim() || null;
+}
+
+function markUnlocked(soundUrl?: string | null) {
   if (soundUnlocked) return;
   soundUnlocked = true;
   persistGoAlertSoundPreference();
   notifyUnlocked();
-  if (pendingSoundLoop && pendingSoundUrl) {
-    const url = pendingSoundUrl;
+  if (pendingSoundLoop) {
+    const url = pendingSoundUrl ?? soundUrl ?? workspaceAlertSoundUrl;
     pendingSoundLoop = false;
     pendingSoundUrl = null;
-    startGoAlertSoundLoopInternal(url);
+    if (url) startGoAlertSoundLoopInternal(url);
   }
 }
 
 /** Synchronous unlock — call directly from click/touch handlers (required on iPad Safari). */
-export function unlockGoAlertSoundFromGesture(): boolean {
+export function unlockGoAlertSoundFromGesture(soundUrl?: string | null): boolean {
   if (soundUnlocked) return true;
   if (typeof window === "undefined") return false;
 
+  const url = soundUrl?.trim() || workspaceAlertSoundUrl;
   try {
-    markUnlocked();
+    if (url) primeAlertAudio(url);
+    markUnlocked(url);
     return true;
   } catch {
     return false;
@@ -84,9 +105,9 @@ export function onGoAlertSoundUnlocked(listener: () => void): () => void {
 }
 
 /** Call from a tap/click so later alert polls can play sound (required on iPad Safari). */
-export async function unlockGoAlertSound(): Promise<boolean> {
+export async function unlockGoAlertSound(soundUrl?: string | null): Promise<boolean> {
   if (soundUnlocked) return true;
-  return unlockGoAlertSoundFromGesture();
+  return unlockGoAlertSoundFromGesture(soundUrl);
 }
 
 let soundInitStarted = false;
@@ -98,7 +119,7 @@ export function initGoAlertSound(): void {
 
   const onGesture = () => {
     if (soundUnlocked) return;
-    unlockGoAlertSoundFromGesture();
+    unlockGoAlertSoundFromGesture(workspaceAlertSoundUrl);
   };
 
   window.addEventListener("pointerup", onGesture, { passive: true, capture: true });
@@ -113,9 +134,8 @@ function startGoAlertSoundLoopInternal(soundUrl: string): void {
   const audio = getLoopAudio(soundUrl);
   audio.loop = true;
   audio.currentTime = 0;
-
-  void audio.play().catch(() => undefined);
   alertLoopAudio = audio;
+  void audio.play().catch(() => undefined);
 }
 
 /** Repeats the alert sound until stopGoAlertSoundLoop() is called. */

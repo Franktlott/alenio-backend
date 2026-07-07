@@ -37,10 +37,15 @@ export function parseGoFrontendSettings(raw: string | null | undefined): GoFront
   if (!raw) return { ...DEFAULT_GO_FRONTEND_SETTINGS };
   try {
     const parsed = JSON.parse(raw) as Partial<GoFrontendSettings>;
+    const alertSoundUrl = parseHeroImageUrl(parsed.alertSoundUrl);
+    let alertSoundPreset = parseAlertSoundPreset(parsed.alertSoundPreset);
+    if (alertSoundUrl && alertSoundPreset !== "custom") {
+      alertSoundPreset = "custom";
+    }
     return {
       heroImageUrl: parseHeroImageUrl(parsed.heroImageUrl),
-      alertSoundPreset: parseAlertSoundPreset(parsed.alertSoundPreset),
-      alertSoundUrl: parseHeroImageUrl(parsed.alertSoundUrl),
+      alertSoundPreset,
+      alertSoundUrl,
     };
   } catch {
     return { ...DEFAULT_GO_FRONTEND_SETTINGS };

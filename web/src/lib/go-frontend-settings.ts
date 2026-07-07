@@ -45,9 +45,14 @@ export function goFrontendSettingsEqual(
 export function normalizeGoFrontendSettings(
   settings: Partial<GoFrontendSettings> | null | undefined,
 ): GoFrontendSettings {
+  const alertSoundUrl = settings?.alertSoundUrl?.trim() || null;
+  let alertSoundPreset = settings?.alertSoundPreset ?? DEFAULT_GO_ALERT_SOUND_PRESET;
+  if (alertSoundUrl && alertSoundPreset !== "custom") {
+    alertSoundPreset = "custom";
+  }
   return {
     heroImageUrl: settings?.heroImageUrl?.trim() || null,
-    alertSoundPreset: settings?.alertSoundPreset ?? DEFAULT_GO_ALERT_SOUND_PRESET,
-    alertSoundUrl: settings?.alertSoundUrl?.trim() || null,
+    alertSoundPreset,
+    alertSoundUrl,
   };
 }

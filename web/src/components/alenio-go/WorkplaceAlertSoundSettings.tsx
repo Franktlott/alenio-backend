@@ -82,11 +82,17 @@ export function WorkplaceAlertSoundSettings({ teamId }: Props) {
       setSaved(false);
       try {
         const uploaded = await uploadGoAlertSound(teamId, file);
-        setDraftSettings((current) => ({
-          ...current,
+        const nextSettings = normalizeGoFrontendSettings({
+          ...savedSettings,
           alertSoundPreset: "custom",
           alertSoundUrl: uploaded.url,
-        }));
+        });
+        const persisted = await patchWebTeamGoFrontendSettings(teamId, nextSettings);
+        const next = normalizeGoFrontendSettings(persisted);
+        setSavedSettings(next);
+        setDraftSettings(next);
+        setSaved(true);
+        window.setTimeout(() => setSaved(false), 3200);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Could not upload alert sound.");
       } finally {
@@ -188,7 +194,7 @@ export function WorkplaceAlertSoundSettings({ teamId }: Props) {
           </button>
           {draftSettings.alertSoundUrl ? (
             <div className="go-alert-sound-settings-custom-meta">
-              <span className="enterprise-muted">Custom sound ready for linked tablets.</span>
+              <span className="enterprise-muted">Saved for linked tablets.</span>
               <button
                 type="button"
                 className="go-alert-sound-settings-preview"

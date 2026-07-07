@@ -169,8 +169,12 @@ export function GoKioskAlertModal({ alert, onAcknowledge }: ModalProps) {
       setSoundBlocked(false);
       return;
     }
+    if (!isGoAlertSoundUnlocked()) {
+      setSoundBlocked(true);
+      return;
+    }
     startGoAlertSoundLoop(alert.soundUrl);
-    setSoundBlocked(!isGoAlertSoundUnlocked());
+    setSoundBlocked(false);
     return () => stopGoAlertSoundLoop();
   }, [alert.id, alert.playSound, alert.soundUrl]);
 
@@ -191,12 +195,12 @@ export function GoKioskAlertModal({ alert, onAcknowledge }: ModalProps) {
   function handleUnlockSound() {
     if (!soundBlocked) return;
 
-    if (unlockGoAlertSoundFromGesture()) {
+    if (unlockGoAlertSoundFromGesture(alert.soundUrl)) {
       setSoundBlocked(false);
       if (alert.playSound && alert.soundUrl) startGoAlertSoundLoop(alert.soundUrl);
       return;
     }
-    void unlockGoAlertSound().then((ok) => {
+    void unlockGoAlertSound(alert.soundUrl).then((ok) => {
       if (!ok) return;
       setSoundBlocked(false);
       if (alert.playSound && alert.soundUrl) startGoAlertSoundLoop(alert.soundUrl);

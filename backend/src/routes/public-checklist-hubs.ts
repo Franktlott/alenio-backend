@@ -3,6 +3,7 @@ import {
   parseGoFrontendSettings,
   resolveGoHeroImage,
 } from "../lib/go-frontend-settings";
+import { resolveGoAlertSoundUrl } from "../lib/go-alert-sounds";
 import { findTeamByGoHubToken } from "../lib/go-hub";
 import { assertGoDeviceLinked, GO_DEVICE_UNLINKED_MESSAGE } from "../lib/workplace-alerts";
 
@@ -28,6 +29,7 @@ publicChecklistHubsRouter.get("/:hubToken", async (c) => {
 
   const goFrontendSettings = parseGoFrontendSettings(team.goFrontendSettings);
   const heroImage = resolveGoHeroImage(team.image, goFrontendSettings);
+  const alertSoundUrl = resolveGoAlertSoundUrl(goFrontendSettings);
 
   c.header("Cache-Control", "no-store");
 
@@ -35,6 +37,7 @@ publicChecklistHubsRouter.get("/:hubToken", async (c) => {
     data: {
       team: { name: team.name, image: heroImage },
       checklists: [],
+      alertSoundUrl,
     },
   });
 });
