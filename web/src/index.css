@@ -2529,103 +2529,40 @@ input {
   margin-bottom: 0.25rem;
 }
 
-.go-alert-sound-settings-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 0.75rem;
-}
-
-.go-alert-sound-settings-option {
+.go-alert-sound-settings-upload-row {
   display: flex;
-  align-items: stretch;
-  gap: 0.5rem;
-  padding: 0.75rem;
-  border-radius: 12px;
-  border: 1px solid rgba(148, 163, 184, 0.35);
-  background: rgba(248, 250, 252, 0.95);
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
 }
 
-.go-alert-sound-settings-option--active {
-  border-color: rgba(67, 97, 238, 0.55);
-  box-shadow: 0 0 0 1px rgba(67, 97, 238, 0.18);
-  background: rgba(67, 97, 238, 0.06);
-}
-
-.go-alert-sound-settings-option-main {
-  flex: 1;
-  border: none;
-  background: none;
-  padding: 0;
+.go-alert-sound-settings-status {
   margin: 0;
-  text-align: left;
-  cursor: pointer;
-  font: inherit;
+  font-size: 0.875rem;
 }
 
-.go-alert-sound-settings-option-label {
-  display: block;
-  font-size: 0.9375rem;
-  font-weight: 700;
-  color: #0f172a;
-}
-
-.go-alert-sound-settings-option-desc {
-  display: block;
-  margin-top: 0.25rem;
-  font-size: 0.8125rem;
-  color: #64748b;
-  line-height: 1.35;
+.go-alert-sound-settings-upload {
+  align-self: flex-start;
 }
 
 .go-alert-sound-settings-preview {
-  flex-shrink: 0;
-  align-self: center;
   border: none;
   background: rgba(67, 97, 238, 0.12);
   color: #1e3a8a;
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
   font-weight: 700;
-  padding: 0.375rem 0.625rem;
+  padding: 0.5rem 0.875rem;
   border-radius: 999px;
   cursor: pointer;
 }
 
-.go-alert-sound-settings-preview:hover {
+.go-alert-sound-settings-preview:hover:not(:disabled) {
   background: rgba(67, 97, 238, 0.18);
 }
 
-.go-alert-sound-settings-custom {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.go-alert-sound-settings-custom-meta {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-}
-
-.go-alert-sound-settings-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-}
-
-.go-alert-sound-settings-reset {
-  border: none;
-  background: none;
-  color: #64748b;
-  font-size: 0.875rem;
-  font-weight: 600;
-  cursor: pointer;
-  padding: 0;
-}
-
-.go-alert-sound-settings-reset:hover {
-  color: #0f172a;
+.go-alert-sound-settings-preview:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .enterprise-alenio-go-approvals {

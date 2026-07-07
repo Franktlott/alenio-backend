@@ -1,18 +1,9 @@
-import {
-  DEFAULT_GO_ALERT_SOUND_PRESET,
-  type GoAlertSoundSelection,
-} from "./go-alert-sounds";
-
 export type GoFrontendSettings = {
   heroImageUrl: string | null;
-  alertSoundPreset: GoAlertSoundSelection;
-  alertSoundUrl: string | null;
 };
 
 export const DEFAULT_GO_FRONTEND_SETTINGS: GoFrontendSettings = {
   heroImageUrl: null,
-  alertSoundPreset: DEFAULT_GO_ALERT_SOUND_PRESET,
-  alertSoundUrl: null,
 };
 
 export function resolveGoHeroImage(
@@ -35,24 +26,13 @@ export function goFrontendSettingsEqual(
 ): boolean {
   const heroA = a?.heroImageUrl?.trim() || null;
   const heroB = b?.heroImageUrl?.trim() || null;
-  const presetA = a?.alertSoundPreset ?? DEFAULT_GO_ALERT_SOUND_PRESET;
-  const presetB = b?.alertSoundPreset ?? DEFAULT_GO_ALERT_SOUND_PRESET;
-  const soundA = a?.alertSoundUrl?.trim() || null;
-  const soundB = b?.alertSoundUrl?.trim() || null;
-  return heroA === heroB && presetA === presetB && soundA === soundB;
+  return heroA === heroB;
 }
 
 export function normalizeGoFrontendSettings(
   settings: Partial<GoFrontendSettings> | null | undefined,
 ): GoFrontendSettings {
-  const alertSoundUrl = settings?.alertSoundUrl?.trim() || null;
-  let alertSoundPreset = settings?.alertSoundPreset ?? DEFAULT_GO_ALERT_SOUND_PRESET;
-  if (alertSoundUrl && alertSoundPreset !== "custom") {
-    alertSoundPreset = "custom";
-  }
   return {
     heroImageUrl: settings?.heroImageUrl?.trim() || null,
-    alertSoundPreset,
-    alertSoundUrl,
   };
 }

@@ -29,7 +29,7 @@ publicChecklistHubsRouter.get("/:hubToken", async (c) => {
 
   const goFrontendSettings = parseGoFrontendSettings(team.goFrontendSettings);
   const heroImage = resolveGoHeroImage(team.image, goFrontendSettings);
-  const alertSoundUrl = resolveGoAlertSoundUrl(goFrontendSettings);
+  const alertSoundUrl = resolveGoAlertSoundUrl();
 
   c.header("Cache-Control", "no-store");
 

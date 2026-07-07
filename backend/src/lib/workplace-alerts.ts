@@ -1,4 +1,3 @@
-import { parseGoFrontendSettings } from "./go-frontend-settings";
 import { resolveGoAlertSoundUrl } from "./go-alert-sounds";
 import { findTeamByGoHubToken } from "./go-hub";
 import { canManageGoLoginRequests } from "./go-login-requests";
@@ -261,8 +260,7 @@ export async function pollWorkplaceAlertsForDevice(hubToken: string, deviceId: s
     },
   });
 
-  const goSettings = parseGoFrontendSettings(team.goFrontendSettings);
-  const workspaceSoundUrl = resolveGoAlertSoundUrl(goSettings);
+  const workspaceSoundUrl = resolveGoAlertSoundUrl();
 
   return {
     ok: true as const,

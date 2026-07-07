@@ -6,6 +6,7 @@ import {
   fetchPublicChecklistHub,
   type GoWorkplaceAlert,
 } from "../../lib/api";
+import { ALENIO_ALERT_SOUND_PATH } from "../../lib/go-alert-sounds";
 import { stopGoAlertSoundLoop, setGoAlertSoundWorkspaceUrl } from "../../lib/go-alert-sound";
 import {
   GO_DASH_KIOSK_MODULES,
@@ -126,7 +127,7 @@ export function AlenioGoKioskDashboard({ hubToken }: Props) {
 
           setTeamName(data.team.name);
           setHeroImage(resolvedHero);
-          setGoAlertSoundWorkspaceUrl(data.alertSoundUrl ?? null);
+          setGoAlertSoundWorkspaceUrl(ALENIO_ALERT_SOUND_PATH);
           saveGoLinkedWorkspace(hubToken, data.team.name, resolvedHero);
         })
         .catch((err) => {
