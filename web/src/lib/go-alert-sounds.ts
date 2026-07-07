@@ -5,6 +5,14 @@ export function resolveGoAlertSoundUrl(): string {
   return ALENIO_ALERT_SOUND_PATH;
 }
 
+export function resolveWorkplaceAlertSoundUrl(alert: {
+  playSound: boolean;
+  soundUrl?: string | null;
+}): string | null {
+  if (!alert.playSound) return null;
+  return alert.soundUrl?.trim() || ALENIO_ALERT_SOUND_PATH;
+}
+
 export function resolveAbsoluteGoAlertSoundUrl(url: string = ALENIO_ALERT_SOUND_PATH): string {
   if (typeof window === "undefined") return url;
   if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("blob:")) return url;

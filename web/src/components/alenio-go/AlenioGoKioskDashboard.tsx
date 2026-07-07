@@ -6,7 +6,7 @@ import {
   fetchPublicChecklistHub,
   type GoWorkplaceAlert,
 } from "../../lib/api";
-import { ALENIO_ALERT_SOUND_PATH } from "../../lib/go-alert-sounds";
+import { ALENIO_ALERT_SOUND_PATH, resolveWorkplaceAlertSoundUrl } from "../../lib/go-alert-sounds";
 import { stopGoAlertSoundLoop, setGoAlertSoundWorkspaceUrl } from "../../lib/go-alert-sound";
 import {
   GO_DASH_KIOSK_MODULES,
@@ -85,7 +85,10 @@ export function AlenioGoKioskDashboard({ hubToken }: Props) {
       for (const alert of incoming) {
         if (handledAlertIds.current.has(alert.id)) continue;
         handledAlertIds.current.add(alert.id);
-        fresh.push(alert);
+        fresh.push({
+          ...alert,
+          soundUrl: resolveWorkplaceAlertSoundUrl(alert),
+        });
         void ackGoWorkplaceAlert(alert.id, hubToken, deviceId);
       }
       if (fresh.length > 0) {

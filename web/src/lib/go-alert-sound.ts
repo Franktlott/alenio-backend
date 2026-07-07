@@ -1,8 +1,10 @@
+import { ALENIO_ALERT_SOUND_PATH } from "./go-alert-sounds";
+
 /** Kiosk alert audio — uses workspace sound files (requires user gesture on iPad). */
 let soundUnlocked = false;
 let pendingSoundLoop = false;
 let pendingSoundUrl: string | null = null;
-let workspaceAlertSoundUrl: string | null = null;
+let workspaceAlertSoundUrl: string | null = ALENIO_ALERT_SOUND_PATH;
 const unlockListeners = new Set<() => void>();
 
 const ALERT_SOUND_PREF_KEY = "alenio.go.alertSoundEnabled";
@@ -51,6 +53,7 @@ function getLoopAudio(soundUrl: string): HTMLAudioElement {
 function primeAlertAudio(soundUrl: string): void {
   const audio = getLoopAudio(soundUrl);
   audio.loop = false;
+  audio.muted = true;
   audio.volume = 1;
   audio.currentTime = 0;
   void audio
@@ -58,12 +61,19 @@ function primeAlertAudio(soundUrl: string): void {
     .then(() => {
       audio.pause();
       audio.currentTime = 0;
+      audio.muted = false;
     })
-    .catch(() => undefined);
+    .catch(() => {
+      audio.muted = false;
+    });
 }
 
 export function setGoAlertSoundWorkspaceUrl(url: string | null | undefined): void {
-  workspaceAlertSoundUrl = url?.trim() || null;
+  workspaceAlertSoundUrl = url?.trim() || ALENIO_ALERT_SOUND_PATH;
+}
+
+export function getGoAlertSoundWorkspaceUrl(): string {
+  return workspaceAlertSoundUrl || ALENIO_ALERT_SOUND_PATH;
 }
 
 function markUnlocked(soundUrl?: string | null) {
@@ -72,7 +82,7 @@ function markUnlocked(soundUrl?: string | null) {
   persistGoAlertSoundPreference();
   notifyUnlocked();
   if (pendingSoundLoop) {
-    const url = pendingSoundUrl ?? soundUrl ?? workspaceAlertSoundUrl;
+    const url = pendingSoundUrl ?? soundUrl ?? getGoAlertSoundWorkspaceUrl();
     pendingSoundLoop = false;
     pendingSoundUrl = null;
     if (url) startGoAlertSoundLoopInternal(url);
@@ -84,9 +94,9 @@ export function unlockGoAlertSoundFromGesture(soundUrl?: string | null): boolean
   if (soundUnlocked) return true;
   if (typeof window === "undefined") return false;
 
-  const url = soundUrl?.trim() || workspaceAlertSoundUrl;
+  const url = soundUrl?.trim() || getGoAlertSoundWorkspaceUrl();
   try {
-    if (url) primeAlertAudio(url);
+    primeAlertAudio(url);
     markUnlocked(url);
     return true;
   } catch {
@@ -116,10 +126,11 @@ let soundInitStarted = false;
 export function initGoAlertSound(): void {
   if (soundInitStarted || typeof window === "undefined") return;
   soundInitStarted = true;
+  workspaceAlertSoundUrl = workspaceAlertSoundUrl || ALENIO_ALERT_SOUND_PATH;
 
   const onGesture = () => {
     if (soundUnlocked) return;
-    unlockGoAlertSoundFromGesture(workspaceAlertSoundUrl);
+    unlockGoAlertSoundFromGesture(getGoAlertSoundWorkspaceUrl());
   };
 
   window.addEventListener("pointerup", onGesture, { passive: true, capture: true });
@@ -133,20 +144,22 @@ function startGoAlertSoundLoopInternal(soundUrl: string): void {
   alertLoopGeneration += 1;
   const audio = getLoopAudio(soundUrl);
   audio.loop = true;
+  audio.muted = false;
   audio.currentTime = 0;
   alertLoopAudio = audio;
   void audio.play().catch(() => undefined);
 }
 
 /** Repeats the alert sound until stopGoAlertSoundLoop() is called. */
-export function startGoAlertSoundLoop(soundUrl: string): void {
-  if (!soundUrl.trim()) return;
+export function startGoAlertSoundLoop(soundUrl?: string | null): void {
+  const url = soundUrl?.trim() || getGoAlertSoundWorkspaceUrl();
+  if (!url) return;
   if (!soundUnlocked) {
     pendingSoundLoop = true;
-    pendingSoundUrl = soundUrl;
+    pendingSoundUrl = url;
     return;
   }
-  startGoAlertSoundLoopInternal(soundUrl);
+  startGoAlertSoundLoopInternal(url);
 }
 
 export function stopGoAlertSoundLoop(): void {
@@ -157,6 +170,7 @@ export function stopGoAlertSoundLoop(): void {
     alertLoopAudio.pause();
     alertLoopAudio.currentTime = 0;
     alertLoopAudio.loop = false;
+    alertLoopAudio.muted = false;
   }
 }
 

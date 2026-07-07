@@ -6,6 +6,7 @@ import {
   formatGoDashHeaderDate,
 } from "../../lib/alenio-go-dashboard";
 import type { GoWorkplaceAlert } from "../../lib/api";
+import { ALENIO_ALERT_SOUND_PATH } from "../../lib/go-alert-sounds";
 import {
   hasGoAlertSoundPreference,
   isGoAlertSoundUnlocked,
@@ -347,7 +348,7 @@ export function GoDashFooter({
 
   function enableSoundFromFooter() {
     if (soundReady) return;
-    unlockGoAlertSoundFromGesture();
+    unlockGoAlertSoundFromGesture(ALENIO_ALERT_SOUND_PATH);
     if (isGoAlertSoundUnlocked()) setSoundReady(true);
   }
 

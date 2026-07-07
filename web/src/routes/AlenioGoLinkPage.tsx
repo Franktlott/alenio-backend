@@ -2,7 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { AlenioGoLogo } from "../components/AlenioGoLogo";
 import { fetchGoLinkStatus, postGoWorkspaceLink } from "../lib/api";
-import { initGoAlertSound, unlockGoAlertSoundFromGesture } from "../lib/go-alert-sound";
+import { initGoAlertSound, setGoAlertSoundWorkspaceUrl, unlockGoAlertSoundFromGesture } from "../lib/go-alert-sound";
+import { ALENIO_ALERT_SOUND_PATH } from "../lib/go-alert-sounds";
 import {
   clearGoLinkedWorkspace,
   clearGoPendingLink,
@@ -35,7 +36,7 @@ export function AlenioGoLinkPage() {
 
   const finishApproval = useCallback(
     (hubToken: string, name: string) => {
-      void unlockGoAlertSoundFromGesture();
+      void unlockGoAlertSoundFromGesture(ALENIO_ALERT_SOUND_PATH);
       saveGoLinkedWorkspace(hubToken, name);
       clearGoPendingLink();
       setTeamName(name);
@@ -45,6 +46,7 @@ export function AlenioGoLinkPage() {
   );
 
   useEffect(() => {
+    setGoAlertSoundWorkspaceUrl(ALENIO_ALERT_SOUND_PATH);
     initGoAlertSound();
   }, []);
 
@@ -84,7 +86,7 @@ export function AlenioGoLinkPage() {
     }
     setBusy(true);
     setError(null);
-    void unlockGoAlertSoundFromGesture();
+    void unlockGoAlertSoundFromGesture(ALENIO_ALERT_SOUND_PATH);
     try {
       const data = await postGoWorkspaceLink({
         inviteCode: trimmed,
@@ -134,7 +136,7 @@ export function AlenioGoLinkPage() {
             <Link
               className="alenio-go-link-primary"
               to={`/checklist/${linked.hubToken}`}
-              onClick={() => void unlockGoAlertSoundFromGesture()}
+              onClick={() => void unlockGoAlertSoundFromGesture(ALENIO_ALERT_SOUND_PATH)}
             >
               Open Alenio Go
             </Link>

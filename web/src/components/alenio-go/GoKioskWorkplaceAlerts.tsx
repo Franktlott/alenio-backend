@@ -9,6 +9,7 @@ import {
   unlockGoAlertSound,
   unlockGoAlertSoundFromGesture,
 } from "../../lib/go-alert-sound";
+import { ALENIO_ALERT_SOUND_PATH, resolveWorkplaceAlertSoundUrl } from "../../lib/go-alert-sounds";
 
 function formatAlertTime(iso: string): string {
   try {
@@ -113,12 +114,12 @@ export function GoAlertSoundUnlockBanner() {
 
   function enableSound() {
     setState("enabling");
-    const ok = unlockGoAlertSoundFromGesture();
+    const ok = unlockGoAlertSoundFromGesture(ALENIO_ALERT_SOUND_PATH);
     if (ok) {
       setState("done");
       return;
     }
-    void unlockGoAlertSound().then((asyncOk) => setState(asyncOk ? "done" : "error"));
+    void unlockGoAlertSound(ALENIO_ALERT_SOUND_PATH).then((asyncOk) => setState(asyncOk ? "done" : "error"));
   }
 
   return (
@@ -163,28 +164,30 @@ export function GoAlertSoundUnlockBanner() {
 
 export function GoKioskAlertModal({ alert, onAcknowledge }: ModalProps) {
   const [soundBlocked, setSoundBlocked] = useState(false);
+  const soundUrl = resolveWorkplaceAlertSoundUrl(alert);
 
   useEffect(() => {
-    if (!alert.playSound || !alert.soundUrl) {
+    if (!soundUrl) {
       setSoundBlocked(false);
       return;
     }
     if (!isGoAlertSoundUnlocked()) {
       setSoundBlocked(true);
+      startGoAlertSoundLoop(soundUrl);
       return;
     }
-    startGoAlertSoundLoop(alert.soundUrl);
+    startGoAlertSoundLoop(soundUrl);
     setSoundBlocked(false);
     return () => stopGoAlertSoundLoop();
-  }, [alert.id, alert.playSound, alert.soundUrl]);
+  }, [alert.id, alert.playSound, alert.soundUrl, soundUrl]);
 
   useEffect(() => {
-    if (!alert.playSound || !alert.soundUrl) return;
+    if (!soundUrl) return;
     return onGoAlertSoundUnlocked(() => {
       setSoundBlocked(false);
-      startGoAlertSoundLoop(alert.soundUrl!);
+      startGoAlertSoundLoop(soundUrl);
     });
-  }, [alert.id, alert.playSound, alert.soundUrl]);
+  }, [alert.id, alert.playSound, alert.soundUrl, soundUrl]);
 
   function handleAcknowledge(event: React.MouseEvent<HTMLButtonElement>) {
     event.stopPropagation();
@@ -195,15 +198,15 @@ export function GoKioskAlertModal({ alert, onAcknowledge }: ModalProps) {
   function handleUnlockSound() {
     if (!soundBlocked) return;
 
-    if (unlockGoAlertSoundFromGesture(alert.soundUrl)) {
+    if (unlockGoAlertSoundFromGesture(soundUrl)) {
       setSoundBlocked(false);
-      if (alert.playSound && alert.soundUrl) startGoAlertSoundLoop(alert.soundUrl);
+      if (soundUrl) startGoAlertSoundLoop(soundUrl);
       return;
     }
-    void unlockGoAlertSound(alert.soundUrl).then((ok) => {
+    void unlockGoAlertSound(soundUrl).then((ok) => {
       if (!ok) return;
       setSoundBlocked(false);
-      if (alert.playSound && alert.soundUrl) startGoAlertSoundLoop(alert.soundUrl);
+      if (soundUrl) startGoAlertSoundLoop(soundUrl);
     });
   }
 

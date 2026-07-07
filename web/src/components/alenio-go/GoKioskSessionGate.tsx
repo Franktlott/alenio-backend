@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { fetchGoWorkplaceAlerts, postGoDeviceCheckIn } from "../../lib/api";
 import { clearGoLinkedWorkspace, defaultGoDeviceLabel, getGoDeviceId } from "../../lib/go-device";
-import { initGoAlertSound } from "../../lib/go-alert-sound";
+import { initGoAlertSound, setGoAlertSoundWorkspaceUrl } from "../../lib/go-alert-sound";
+import { ALENIO_ALERT_SOUND_PATH } from "../../lib/go-alert-sounds";
 import { isGoDeviceUnlinkedError, GO_DEVICE_DISCONNECT_REDIRECT_MS } from "../../lib/go-session";
 import { GoDeviceUnlinkedScreen } from "./GoDeviceUnlinkedScreen";
 
@@ -29,6 +30,7 @@ export function GoKioskSessionGate({ hubToken, children }: Props) {
   }, []);
 
   useEffect(() => {
+    setGoAlertSoundWorkspaceUrl(ALENIO_ALERT_SOUND_PATH);
     initGoAlertSound();
   }, []);
 
