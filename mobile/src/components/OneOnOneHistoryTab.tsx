@@ -13,7 +13,7 @@ import {
 } from "react-native";
 import { toast } from "burnt";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Plus, X, ChevronLeft, MoreVertical, Check } from "lucide-react-native";
+import { Plus, X, ChevronLeft, MoreVertical, Check, CalendarCheck } from "lucide-react-native";
 import {
   createOneOnOneMeeting,
   deleteOneOnOneMeeting,
@@ -128,6 +128,74 @@ function groupFields(fields: OneOnOneTemplateField[]) {
     }
   }
   return groups;
+}
+
+function CheckInEmptyState({
+  memberName,
+  canCreate,
+  error,
+  onStart,
+}: {
+  memberName: string;
+  canCreate: boolean;
+  error?: string | null;
+  onStart?: () => void;
+}) {
+  return (
+    <View
+      style={{
+        backgroundColor: "#F8FAFC",
+        borderRadius: 16,
+        padding: 28,
+        alignItems: "center",
+        borderWidth: 1,
+        borderColor: "#E2E8F0",
+        borderStyle: "dashed",
+      }}
+    >
+      <View
+        style={{
+          width: 56,
+          height: 56,
+          borderRadius: 28,
+          backgroundColor: "#EEF2FF",
+          alignItems: "center",
+          justifyContent: "center",
+          marginBottom: 16,
+        }}
+      >
+        <CalendarCheck size={28} color="#4361EE" />
+      </View>
+      <Text style={{ fontSize: 17, fontWeight: "800", color: "#0F172A", textAlign: "center" }}>
+        {error ? "Could not load check-ins" : "No check-ins yet"}
+      </Text>
+      <Text style={{ fontSize: 14, color: "#64748B", textAlign: "center", lineHeight: 21, marginTop: 8, maxWidth: 300 }}>
+        {error
+          ? error
+          : canCreate
+            ? `Run a structured check-in with ${memberName}. Pick a template, capture notes, and add follow-up tasks.`
+            : `When a leader publishes a check-in with ${memberName}, it will appear here.`}
+      </Text>
+      {canCreate && onStart && !error ? (
+        <Pressable
+          onPress={onStart}
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 6,
+            backgroundColor: "#4361EE",
+            borderRadius: 12,
+            paddingHorizontal: 18,
+            paddingVertical: 12,
+            marginTop: 20,
+          }}
+        >
+          <Plus size={16} color="white" />
+          <Text style={{ fontSize: 14, fontWeight: "700", color: "white" }}>Start first check-in</Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
 }
 
 export function OneOnOneHistoryTab({
@@ -833,7 +901,11 @@ export function OneOnOneHistoryTab({
       {loadingTemplates ? (
         <ActivityIndicator color="#4361EE" style={{ marginVertical: 24 }} />
       ) : templates.length === 0 ? (
-        <Text style={{ fontSize: 13, color: "#94A3B8", marginTop: 8 }}>{err ?? "No templates available."}</Text>
+        <CheckInEmptyState
+          memberName={memberName}
+          canCreate={false}
+          error={err ?? "No check-in templates yet. Ask your workspace owner to create templates on the web Team page."}
+        />
       ) : (
         <View style={{ gap: 10, marginTop: 8 }}>
           {templates.map((t) => (
@@ -864,31 +936,27 @@ export function OneOnOneHistoryTab({
 
   return (
     <View style={{ gap: 16 }}>
-      <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" }}>
-        <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 18, fontWeight: "800", color: "#0F172A" }}>Check-in history</Text>
-          <Text style={{ fontSize: 13, color: "#64748B", marginTop: 2 }}>
-            Meetings with {memberName}
-          </Text>
+      {meetings.length > 0 ? (
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "flex-end" }}>
+          {canCreate ? (
+            <Pressable
+              onPress={() => void startCreate()}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 4,
+                backgroundColor: "#4361EE",
+                borderRadius: 10,
+                paddingHorizontal: 12,
+                paddingVertical: 8,
+              }}
+            >
+              <Plus size={16} color="white" />
+              <Text style={{ fontSize: 13, fontWeight: "700", color: "white" }}>New check-in</Text>
+            </Pressable>
+          ) : null}
         </View>
-        {canCreate ? (
-          <Pressable
-            onPress={() => void startCreate()}
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 4,
-              backgroundColor: "#4361EE",
-              borderRadius: 10,
-              paddingHorizontal: 12,
-              paddingVertical: 8,
-            }}
-          >
-            <Plus size={16} color="white" />
-            <Text style={{ fontSize: 13, fontWeight: "700", color: "white" }}>New check-in</Text>
-          </Pressable>
-        ) : null}
-      </View>
+      ) : null}
 
       {!canCreate && !canModify ? (
         <View
@@ -908,12 +976,13 @@ export function OneOnOneHistoryTab({
 
       {loadingMeetings ? (
         <ActivityIndicator color="#4361EE" style={{ marginVertical: 24 }} />
-      ) : err && meetings.length === 0 ? (
-        <Text style={{ fontSize: 13, color: "#DC2626" }}>{err}</Text>
       ) : meetings.length === 0 ? (
-        <Text style={{ fontSize: 13, color: "#94A3B8" }}>
-          {canCreate ? "No check-ins yet. Tap New check-in to start one." : "No check-ins recorded."}
-        </Text>
+        <CheckInEmptyState
+          memberName={memberName}
+          canCreate={canCreate}
+          error={err}
+          onStart={canCreate ? () => void startCreate() : undefined}
+        />
       ) : (
         <View style={{ gap: 10 }}>
           {[...meetings]

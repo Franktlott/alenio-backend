@@ -1,4 +1,11 @@
-const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL?.replace(/\/$/, "") ?? "";
+import { getBackendUrl } from "./backend-url";
+
+let backendUrl = "";
+try {
+  backendUrl = getBackendUrl();
+} catch {
+  backendUrl = "";
+}
 
 export function resolveUserImageUrl(image?: string | null): string | null {
   if (!image?.trim()) return null;

@@ -18,10 +18,12 @@ import { MessageCircle, Users, Hash, ChevronLeft, Plus } from "lucide-react-nati
 import { router, useLocalSearchParams } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { toast } from "burnt";
+import { fetchLatestTeamMessagePreview } from "@/lib/chat-message-pagination";
 import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
 import { useUnreadStore } from "@/lib/state/unread-store";
 import type { Team } from "@/lib/types";
+import { resolveUserImageUrl } from "@/lib/user-avatar";
 import { SafeKeyboardAvoidingView } from "@/lib/safe-keyboard-controller";
 
 const TOPIC_COLORS = ["#4361EE", "#7C3AED", "#10B981", "#F59E0B", "#EF4444", "#EC4899"];
@@ -112,7 +114,7 @@ export default function TeamChannelsScreen() {
 
   const { data: teamGeneralMessages = [] } = useQuery({
     queryKey: ["messages", teamId, "general", "preview"],
-    queryFn: () => api.get<any[]>(`/api/teams/${teamId}/messages?topicId=general&limit=1`),
+    queryFn: () => fetchLatestTeamMessagePreview(teamId),
     enabled: !!teamId,
     refetchInterval: 10000,
   });
@@ -134,6 +136,7 @@ export default function TeamChannelsScreen() {
   const memberCount = members.length;
   const topThreeMembers = members.slice(0, 3).map((m) => ({ image: m.user.image ?? null, name: m.user.name ?? null }));
   const lastGeneralMessage = teamGeneralMessages[0];
+  const teamPhotoUrl = resolveUserImageUrl(teamDetail?.image);
 
   // Determine if the current user is owner/admin of the team
   const currentMember = members.find((m) => m.user.id === session?.user?.id);
@@ -213,9 +216,17 @@ export default function TeamChannelsScreen() {
         >
           <View style={{ height: 3, backgroundColor: "#4361EE" }} />
           <View style={{ flexDirection: "row", alignItems: "center", padding: 16, gap: 12 }}>
-            <View style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: "#EEF2FF", alignItems: "center", justifyContent: "center" }}>
-              <MessageCircle size={22} color="#4361EE" />
-            </View>
+            {teamPhotoUrl ? (
+              <Image
+                source={{ uri: teamPhotoUrl }}
+                style={{ width: 48, height: 48, borderRadius: 14, borderWidth: 2, borderColor: "#E2E8F0" }}
+                resizeMode="cover"
+              />
+            ) : (
+              <View style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: "#EEF2FF", alignItems: "center", justifyContent: "center" }}>
+                <MessageCircle size={22} color="#4361EE" />
+              </View>
+            )}
             <View style={{ flex: 1 }}>
               <Text style={{ fontSize: 16, fontWeight: "700", color: "#0F172A" }}>Team Chat</Text>
               <Text style={{ fontSize: 13, color: "#6B7280", marginTop: 1 }}>Primary team space</Text>

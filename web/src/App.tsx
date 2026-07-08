@@ -7,7 +7,7 @@ import { AlenioGoLayout } from "./routes/alenio-go/AlenioGoLayout";
 import { AlenioGoHomePage } from "./routes/alenio-go/AlenioGoHomePage";
 import { AlenioGoAlertsModulePage } from "./routes/alenio-go/AlenioGoAlertsModulePage";
 import { AlenioGoLinkedDevicesRoutes } from "./routes/alenio-go/AlenioGoLinkedDevicesRoutes";
-import { AlenioGoComingSoonModulePage } from "./routes/alenio-go/AlenioGoComingSoonModulePage";
+import { AlenioGoModuleSettingsPage } from "./routes/alenio-go/AlenioGoModuleSettingsPage";
 import { ActivityPage } from "./routes/ActivityPage";
 import { BillingPage } from "./routes/BillingPage";
 import { ChatPage } from "./routes/ChatPage";
@@ -143,10 +143,10 @@ export default function App() {
             <Route path="devices/*" element={<AlenioGoLinkedDevicesRoutes />} />
             <Route path="setup" element={<Navigate to="/go/devices" replace />} />
             <Route path="frontend" element={<Navigate to="/go/devices/display" replace />} />
-            <Route path="checklists" element={<AlenioGoComingSoonModulePage moduleId="checklists" />} />
-            <Route path="temp-checks" element={<AlenioGoComingSoonModulePage moduleId="temp-checks" />} />
-            <Route path="briefings/*" element={<AlenioGoComingSoonModulePage moduleId="briefings" />} />
-            <Route path="walks/*" element={<AlenioGoComingSoonModulePage moduleId="walks" />} />
+            <Route path="checklists" element={<AlenioGoModuleSettingsPage moduleKey="checklists" />} />
+            <Route path="temp-checks" element={<AlenioGoModuleSettingsPage moduleKey="temp-checks" />} />
+            <Route path="briefings/*" element={<AlenioGoModuleSettingsPage moduleKey="briefings" />} />
+            <Route path="walks/*" element={<AlenioGoModuleSettingsPage moduleKey="walks" />} />
           </Route>
           <Route path="/activity" element={<ActivityPage />} />
           <Route path="/chat" element={<ChatPage />} />

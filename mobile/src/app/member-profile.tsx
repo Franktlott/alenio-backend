@@ -17,7 +17,8 @@ import {
   MoreVertical,
   UserMinus,
   Crown,
-  ChevronRight,
+  Shield,
+  X,
 } from "lucide-react-native";
 import { toast } from "burnt";
 import { api } from "@/lib/api/api";
@@ -30,6 +31,11 @@ import { ProfileOverviewTab } from "@/components/ProfileOverviewTab";
 import { DevelopmentPlanTab } from "@/components/DevelopmentPlanTab";
 import { OneOnOneHistoryTab } from "@/components/OneOnOneHistoryTab";
 import { mergeWorkplaceStandards, type MemberStatsPayload } from "@/lib/workplace-standards";
+import {
+  ProfileCard,
+  ProfileDivider,
+  ProfileSection,
+} from "@/components/profile/ProfileEnterpriseUI";
 
 const PROFILE_TABS = ["Overview", "Growth", "Check-In"] as const;
 const PAGE_BG = "#F3F5FC";
@@ -43,12 +49,54 @@ function roleLabel(role: TeamRole): string {
     case "owner":
       return "Owner";
     case "team_leader":
-      return "Team Leader";
+      return "Team leader";
     case "admin":
       return "Admin";
     default:
       return "Member";
   }
+}
+
+function ManageActionRow({
+  icon: Icon,
+  title,
+  subtitle,
+  destructive,
+  onPress,
+  trailing,
+  testID,
+}: {
+  icon: typeof Crown;
+  title: string;
+  subtitle: string;
+  destructive?: boolean;
+  onPress: () => void;
+  trailing?: React.ReactNode;
+  testID?: string;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      testID={testID}
+      style={({ pressed }) => (pressed ? { backgroundColor: "#F8FAFC" } : undefined)}
+    >
+      <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 14, gap: 12 }}>
+        <Icon size={18} color={destructive ? "#DC2626" : "#475569"} strokeWidth={2} />
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text
+            style={{ fontSize: 14, fontWeight: "600", color: destructive ? "#DC2626" : "#0F172A" }}
+            numberOfLines={1}
+          >
+            {title}
+          </Text>
+          <Text style={{ fontSize: 12, color: destructive ? "#F87171" : "#64748B", marginTop: 2, lineHeight: 16 }}>
+            {subtitle}
+          </Text>
+        </View>
+        {trailing}
+      </View>
+    </Pressable>
+  );
 }
 
 function parseTab(value: string | string[] | undefined): ProfileTab {
@@ -146,18 +194,6 @@ export default function MemberProfileScreen() {
     onError: (err: Error) => toast({ title: err.message || "Could not update role", preset: "error" }),
   });
 
-  const transferOwnershipMutation = useMutation({
-    mutationFn: (userId: string) =>
-      api.post(`/api/teams/${teamId}/transfer-ownership`, { userId }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["team", teamId] });
-      setManageOpen(false);
-      toast({ title: "Ownership transferred", preset: "done" });
-      router.back();
-    },
-    onError: () => toast({ title: "Transfer failed", preset: "error" }),
-  });
-
   const handleRemove = (m: TeamMember) => {
     Alert.alert("Remove Member", `Remove ${m.user.name} from the team?`, [
       { text: "Cancel", style: "cancel" },
@@ -201,6 +237,21 @@ export default function MemberProfileScreen() {
       </SafeAreaView>
     );
   }
+
+  if (!isPaid && !canManage) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: PAGE_BG, alignItems: "center", justifyContent: "center", paddingHorizontal: 24 }}>
+        <Text style={{ color: "#64748B", textAlign: "center", lineHeight: 22 }}>
+          Growth plans and check-in history require Team access for this workplace.
+        </Text>
+        <Pressable onPress={() => router.back()} style={{ marginTop: 16 }}>
+          <Text style={{ color: "#4361EE", fontWeight: "700" }}>Go back</Text>
+        </Pressable>
+      </SafeAreaView>
+    );
+  }
+
+  const showDevelopmentTabs = isPaid;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: PAGE_BG }} edges={["top", "bottom"]}>
@@ -348,6 +399,7 @@ export default function MemberProfileScreen() {
         </View>
 
         <View style={{ paddingHorizontal: 12, paddingBottom: 10 }}>
+          {showDevelopmentTabs ? (
           <View
             style={{
               flexDirection: "row",
@@ -387,8 +439,45 @@ export default function MemberProfileScreen() {
               </Pressable>
             ))}
           </View>
+          ) : (
+            <View
+              style={{
+                backgroundColor: "#FFFFFF",
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: PAGE_BORDER,
+                overflow: "hidden",
+              }}
+            >
+              <View style={{ paddingHorizontal: 14, paddingVertical: 12, backgroundColor: "#F8FAFC", borderBottomWidth: 1, borderBottomColor: PAGE_BORDER }}>
+                <Text style={{ fontSize: 11, fontWeight: "700", color: "#64748B", letterSpacing: 1, textTransform: "uppercase" }}>
+                  Workplace access
+                </Text>
+                <Text style={{ fontSize: 13, color: "#64748B", lineHeight: 19, marginTop: 6 }}>
+                  Growth plans and check-in history require Team access. Use member settings to update role or remove
+                  access.
+                </Text>
+              </View>
+              {canManage && !isDemo ? (
+                <Pressable
+                  onPress={() => setManageOpen(true)}
+                  style={{
+                    margin: 12,
+                    backgroundColor: "#0F172A",
+                    borderRadius: 10,
+                    paddingVertical: 12,
+                    alignItems: "center",
+                  }}
+                  testID="member-profile-manage-cta"
+                >
+                  <Text style={{ color: "white", fontSize: 14, fontWeight: "700" }}>Member settings</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          )}
         </View>
 
+        {showDevelopmentTabs ? (
         <View style={{ paddingHorizontal: 12, paddingTop: 2 }}>
           {activeTab === "Overview" ? (
             <ProfileOverviewTab
@@ -421,197 +510,160 @@ export default function MemberProfileScreen() {
             />
           )}
         </View>
+        ) : null}
       </ScrollView>
 
       <Modal visible={manageOpen} transparent animationType="slide" onRequestClose={() => setManageOpen(false)}>
         <Pressable
-          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "flex-end" }}
+          style={{ flex: 1, backgroundColor: "rgba(15, 23, 42, 0.4)", justifyContent: "flex-end" }}
           onPress={() => setManageOpen(false)}
         >
           <Pressable onPress={(e) => e.stopPropagation?.()}>
             <View
               style={{
-                backgroundColor: "white",
-                borderTopLeftRadius: 24,
-                borderTopRightRadius: 24,
-                paddingBottom: Math.max(16, insets.bottom),
-                paddingTop: 12,
-                paddingHorizontal: 16,
+                backgroundColor: "#FFFFFF",
+                borderTopLeftRadius: 20,
+                borderTopRightRadius: 20,
+                overflow: "hidden",
+                maxHeight: "78%",
+                shadowColor: "#0F172A",
+                shadowOpacity: 0.16,
+                shadowRadius: 20,
+                shadowOffset: { width: 0, height: -4 },
+                elevation: 8,
               }}
             >
               <View
                 style={{
-                  width: 36,
-                  height: 4,
-                  borderRadius: 2,
-                  backgroundColor: "#E2E8F0",
-                  alignSelf: "center",
-                  marginBottom: 16,
-                }}
-              />
-              <Text style={{ fontSize: 16, fontWeight: "700", color: "#0F172A", marginBottom: 16 }}>
-                Manage member
-              </Text>
-
-              {myRole === "owner" && member.role !== "owner" ? (
-                member.role === "team_leader" ? (
-                  <Pressable
-                    onPress={() => {
-                      Alert.alert(
-                        "Remove Team Leader",
-                        `Remove team leader role from ${member.user.name}? They will become a regular member.`,
-                        [
-                          { text: "Cancel", style: "cancel" },
-                          {
-                            text: "Remove",
-                            onPress: () =>
-                              setRoleMutation.mutate({
-                                userId: member.userId,
-                                role: "member",
-                              }),
-                          },
-                        ],
-                      );
-                    }}
-                    disabled={setRoleMutation.isPending}
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      gap: 6,
-                      paddingVertical: 12,
-                      borderRadius: 10,
-                      borderWidth: 1.5,
-                      borderColor: "#EDE9FE",
-                      marginBottom: 12,
-                      opacity: setRoleMutation.isPending ? 0.6 : 1,
-                    }}
-                    testID="demote-team-leader"
-                  >
-                    {setRoleMutation.isPending ? (
-                      <ActivityIndicator size="small" color="#7C3AED" />
-                    ) : (
-                      <Crown size={14} color="#7C3AED" />
-                    )}
-                    <Text style={{ fontSize: 13, fontWeight: "600", color: "#7C3AED" }}>
-                      {setRoleMutation.isPending ? "Saving…" : "Remove Team Leader"}
-                    </Text>
-                  </Pressable>
-                ) : member.role === "member" ? (
-                  <View style={{ flexDirection: "row", gap: 8, marginBottom: 12 }}>
-                    <Pressable
-                      onPress={() => handleRemove(member)}
-                      disabled={setRoleMutation.isPending}
-                      style={{
-                        flex: 1,
-                        flexDirection: "row",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        gap: 6,
-                        paddingVertical: 12,
-                        borderRadius: 10,
-                        borderWidth: 1.5,
-                        borderColor: "#FECACA",
-                        opacity: setRoleMutation.isPending ? 0.6 : 1,
-                      }}
-                    >
-                      <UserMinus size={14} color="#EF4444" />
-                      <Text style={{ fontSize: 13, fontWeight: "600", color: "#EF4444" }}>Remove</Text>
-                    </Pressable>
-                    <Pressable
-                      onPress={() => {
-                        Alert.alert(
-                          "Make Team Leader",
-                          `Give ${member.user.name} team leader access?`,
-                          [
-                            { text: "Cancel", style: "cancel" },
-                            {
-                              text: "Confirm",
-                              onPress: () =>
-                                setRoleMutation.mutate({
-                                  userId: member.userId,
-                                  role: "team_leader",
-                                }),
-                            },
-                          ],
-                        );
-                      }}
-                      disabled={setRoleMutation.isPending}
-                      style={{
-                        flex: 1,
-                        flexDirection: "row",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        gap: 6,
-                        paddingVertical: 12,
-                        borderRadius: 10,
-                        borderWidth: 1.5,
-                        borderColor: "#EDE9FE",
-                        opacity: setRoleMutation.isPending ? 0.6 : 1,
-                      }}
-                      testID="promote-team-leader"
-                    >
-                      {setRoleMutation.isPending ? (
-                        <ActivityIndicator size="small" color="#7C3AED" />
-                      ) : (
-                        <Crown size={14} color="#7C3AED" />
-                      )}
-                      <Text style={{ fontSize: 13, fontWeight: "600", color: "#7C3AED" }}>Set Leader</Text>
-                    </Pressable>
-                  </View>
-                ) : null
-              ) : null}
-
-              {myRole === "owner" && member.userId !== myId && member.role !== "owner" ? (
-                <Pressable
-                  onPress={() => {
-                    Alert.alert(
-                      "Transfer Ownership",
-                      `Give full ownership of this team to ${member.user.name}? You will become a regular member.`,
-                      [
-                        { text: "Cancel", style: "cancel" },
-                        {
-                          text: "Transfer",
-                          style: "destructive",
-                          onPress: () => transferOwnershipMutation.mutate(member.userId),
-                        },
-                      ],
-                    );
-                  }}
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 10,
-                    marginBottom: 12,
-                    backgroundColor: "#FFF7ED",
-                    borderRadius: 14,
-                    padding: 14,
-                    borderWidth: 1,
-                    borderColor: "#FED7AA",
-                  }}
-                >
-                  <Crown size={18} color="#F97316" />
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 14, fontWeight: "700", color: "#C2410C" }}>Transfer Ownership</Text>
-                    <Text style={{ fontSize: 12, color: "#9A3412", marginTop: 1 }}>
-                      Make {member.user.name} the new owner
-                    </Text>
-                  </View>
-                  <ChevronRight size={16} color="#F97316" />
-                </Pressable>
-              ) : null}
-
-              <Pressable
-                onPress={() => setManageOpen(false)}
-                style={{
-                  paddingVertical: 14,
-                  borderRadius: 12,
-                  backgroundColor: "#F1F5F9",
-                  alignItems: "center",
+                  paddingHorizontal: 16,
+                  paddingTop: 12,
+                  paddingBottom: 14,
+                  borderBottomWidth: 1,
+                  borderBottomColor: "#E2E8F0",
+                  backgroundColor: "#F8FAFC",
                 }}
               >
-                <Text style={{ fontWeight: "700", color: "#64748B" }}>Close</Text>
-              </Pressable>
+                <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: "#CBD5E1", alignSelf: "center", marginBottom: 14 }} />
+                <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={{ fontSize: 17, fontWeight: "700", color: "#0F172A" }}>Member settings</Text>
+                    <Text style={{ fontSize: 13, color: "#64748B", marginTop: 3 }} numberOfLines={1}>
+                      {displayName}
+                    </Text>
+                    <View
+                      style={{
+                        alignSelf: "flex-start",
+                        marginTop: 8,
+                        paddingHorizontal: 8,
+                        paddingVertical: 3,
+                        borderRadius: 999,
+                        backgroundColor: "#EEF2FF",
+                        borderWidth: 1,
+                        borderColor: "#C7D2FE",
+                      }}
+                    >
+                      <Text style={{ fontSize: 10, fontWeight: "700", letterSpacing: 0.4, color: "#4338CA" }}>
+                        {roleLabel(member.role).toUpperCase()}
+                      </Text>
+                    </View>
+                  </View>
+                  <Pressable onPress={() => setManageOpen(false)} hitSlop={12} testID="member-settings-close" style={{ paddingTop: 2 }}>
+                    <X size={20} color="#64748B" />
+                  </Pressable>
+                </View>
+              </View>
+
+              <View style={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8 }}>
+                <ProfileSection title="Actions">
+                  <ProfileCard>
+                    {myRole === "owner" && member.role === "team_leader" ? (
+                      <>
+                        <ManageActionRow
+                          icon={Shield}
+                          title="Remove team leader access"
+                          subtitle="Return this person to a standard member role"
+                          trailing={setRoleMutation.isPending ? <ActivityIndicator size="small" color="#6366F1" /> : undefined}
+                          onPress={() => {
+                            Alert.alert(
+                              "Remove team leader access",
+                              `Remove team leader access from ${member.user.name}? They will become a regular member.`,
+                              [
+                                { text: "Cancel", style: "cancel" },
+                                {
+                                  text: "Confirm",
+                                  onPress: () => setRoleMutation.mutate({ userId: member.userId, role: "member" }),
+                                },
+                              ],
+                            );
+                          }}
+                          testID="demote-team-leader"
+                        />
+                        <ProfileDivider inset />
+                      </>
+                    ) : null}
+
+                    {myRole === "owner" && member.role === "member" ? (
+                      <>
+                        <ManageActionRow
+                          icon={Crown}
+                          title="Promote to team leader"
+                          subtitle="Grant leadership access for this workplace"
+                          trailing={setRoleMutation.isPending ? <ActivityIndicator size="small" color="#6366F1" /> : undefined}
+                          onPress={() => {
+                            Alert.alert(
+                              "Promote to team leader",
+                              `Give ${member.user.name} team leader access for this workplace?`,
+                              [
+                                { text: "Cancel", style: "cancel" },
+                                {
+                                  text: "Confirm",
+                                  onPress: () => setRoleMutation.mutate({ userId: member.userId, role: "team_leader" }),
+                                },
+                              ],
+                            );
+                          }}
+                          testID="promote-team-leader"
+                        />
+                        <ProfileDivider inset />
+                      </>
+                    ) : null}
+
+                    {(myRole === "owner" || myRole === "team_leader") && member.role !== "owner" ? (
+                      <ManageActionRow
+                        icon={UserMinus}
+                        title="Remove from workplace"
+                        subtitle="Revoke access to this workplace immediately"
+                        destructive
+                        onPress={() => handleRemove(member)}
+                        testID="remove-member"
+                      />
+                    ) : null}
+                  </ProfileCard>
+                </ProfileSection>
+              </View>
+
+              <View
+                style={{
+                  paddingHorizontal: 16,
+                  paddingTop: 12,
+                  paddingBottom: Math.max(16, insets.bottom),
+                  borderTopWidth: 1,
+                  borderTopColor: "#EEF2F6",
+                  backgroundColor: "#FFFFFF",
+                }}
+              >
+                <Pressable
+                  onPress={() => setManageOpen(false)}
+                  style={{
+                    paddingVertical: 12,
+                    borderRadius: 10,
+                    backgroundColor: "#0F172A",
+                    alignItems: "center",
+                  }}
+                >
+                  <Text style={{ fontWeight: "700", color: "#FFFFFF", fontSize: 14 }}>Done</Text>
+                </Pressable>
+              </View>
             </View>
           </Pressable>
         </Pressable>

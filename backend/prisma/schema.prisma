@@ -130,6 +130,70 @@ model Team {
   briefings Briefing[]
   walkTemplates WalkTemplate[]
   walkCompletions WalkCompletion[]
+  workspaceModules WorkspaceModule[]
+  moduleTestSessions ModuleTestSession[]
+}
+
+/// Per-workspace lifecycle + operating mode for an Alenio module.
+/// status: "inactive" | "active". operatingMode: "testing" | "live" | null (null when inactive).
+model WorkspaceModule {
+  id                     String    @id @default(cuid())
+  teamId                 String
+  /// Future-proofing for multi-workspace companies. Mirrors teamId today.
+  companyId              String?
+  moduleKey              String
+  moduleName             String
+  status                 String    @default("inactive")
+  operatingMode          String?
+  setupProgressPercent   Int       @default(0)
+  setupCompletedAt       DateTime?
+  activatedAt            DateTime?
+  activatedByUserId      String?
+  liveStartedAt          DateTime?
+  liveStartedByUserId    String?
+  testingStartedAt       DateTime?
+  testingStartedByUserId String?
+  // Testing access controls
+  requireTestCode            Boolean   @default(false)
+  testAccessCode             String?
+  testCodeExpiresAt          DateTime?
+  /// JSON string array of workplace ids allowed to see the module while testing.
+  allowedTestingWorkplaceIds String?
+  /// JSON string array of user ids allowed to see the module while testing.
+  allowedTestingUserIds      String?
+  /// JSON string array of roles allowed to see the module while testing.
+  allowedTestingRoles        String?
+  createdAt              DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, moduleKey])
+  @@index([teamId])
+}
+
+/// Admin-only record of a testing session for a module (feeds the Testing Sessions view).
+/// Execution/completion records created while a module is in testing mode should reference
+/// testSessionId and set isTest = true; live records set isTest = false.
+model ModuleTestSession {
+  id               String    @id @default(cuid())
+  teamId           String
+  moduleKey        String
+  testedByUserId   String?
+  testerName       String?
+  workplaceId      String?
+  workplaceName    String?
+  startedAt        DateTime  @default(now())
+  completedAt      DateTime?
+  durationSeconds  Int?
+  completedSteps   Int       @default(0)
+  failedSteps      Int       @default(0)
+  notes            String?
+  createdAt        DateTime  @default(now())
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@index([teamId, moduleKey])
 }
 
 model TeamSubscription {

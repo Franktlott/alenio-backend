@@ -1,31 +1,23 @@
-import { Redirect } from 'expo-router';
-import { useQuery } from '@tanstack/react-query';
-import { ActivityIndicator, View } from 'react-native';
-import { useSession } from '@/lib/auth/use-session';
-import { fetchMeUser, ME_QUERY_KEY } from '@/lib/auth/me-query';
+import { router } from "expo-router";
+import { ActivityIndicator, View } from "react-native";
+import { useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { AUTH_READY_QUERY_KEY, useMobileAuthReady } from "@/lib/auth/use-session";
 
-/** Gate: session + `/api/me` must succeed before entering `(app)` (matches root `Stack.Protected`). */
+/** Cold-start gate: root layout navigates into `(app)` once auth-ready is set. */
 export default function Index() {
-  const { data: session, isLoading: sessionLoading } = useSession();
-  const { data: me, isPending: mePending, isFetching: meFetching } = useQuery({
-    queryKey: ME_QUERY_KEY,
-    queryFn: fetchMeUser,
-    enabled: !!session?.user,
-    staleTime: 5 * 60 * 1000,
-  });
+  const queryClient = useQueryClient();
+  const { data: authReady } = useMobileAuthReady();
+  const bootstrapped = queryClient.getQueryState(AUTH_READY_QUERY_KEY)?.dataUpdatedAt != null;
 
-  const waitingForSession = sessionLoading;
-  /** Until `/api/me` returns a user id, root guard stays false — keep spinner (RQ v5-safe). */
-  const waitingForProfile = !!session?.user && !me?.id && (mePending || meFetching);
+  useEffect(() => {
+    if (!bootstrapped || !!authReady?.me?.id) return;
+    router.replace("/welcome");
+  }, [authReady?.me?.id, bootstrapped]);
 
-  if (waitingForSession || waitingForProfile) {
-    return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F8FAFC' }}>
-        <ActivityIndicator size="large" color="#4361EE" />
-      </View>
-    );
-  }
-
-  if (session?.user && me?.id) return <Redirect href="/(app)/chat" />;
-  return <Redirect href="/sign-in" />;
+  return (
+    <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#F8FAFC" }}>
+      <ActivityIndicator size="large" color="#4361EE" />
+    </View>
+  );
 }

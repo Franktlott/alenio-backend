@@ -25,8 +25,8 @@ import {
   Camera,
   Trash2,
   ChevronLeft,
+  ChevronRight,
   QrCode,
-  Lock,
 } from "lucide-react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -34,11 +34,13 @@ import * as Clipboard from "expo-clipboard";
 import * as ImagePicker from "expo-image-picker";
 import { uploadFile } from "@/lib/upload";
 import { api } from "@/lib/api/api";
-import { formatOverdueFollowUpTasksDisplay, formatDaysSinceCheckIn } from "@/lib/member-stats-display";
+import { formatOverdueFollowUpTasksDisplay, formatDaysSinceCheckIn, computeTeamCompliancePercentages, formatTeamCompliancePercent, teamComplianceColor } from "@/lib/member-stats-display";
 import {
   memberStandardsBadges,
   standardsBadgeColors,
+  mergeWorkplaceStandards,
   type MemberStatsPayload,
+  type StandardsBadgeDisplay,
 } from "@/lib/workplace-standards";
 import { StandardsStatusKey } from "@/components/StandardsStatusKey";
 import { useTeamStore } from "@/lib/state/team-store";
@@ -74,6 +76,60 @@ type JoinRequest = {
 // Line chart component
 // ------------------------------------------------------------------
 const yTicks = [60, 80, 100];
+
+function memberRoleLabel(role: TeamMember["role"]): string {
+  if (role === "owner") return "Owner";
+  if (role === "team_leader") return "Team Leader";
+  return "Member";
+}
+
+function MemberMetricColumn({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={{ flex: 1, alignItems: "center", justifyContent: "center", minWidth: 0, gap: 2 }}>
+      <Text style={{ fontSize: 9, color: "#94A3B8", textAlign: "center" }}>{label}</Text>
+      <Text
+        style={{ fontSize: 11, fontWeight: "700", color: "#0F172A", textAlign: "center", lineHeight: 14 }}
+        numberOfLines={2}
+      >
+        {value}
+      </Text>
+    </View>
+  );
+}
+
+function MemberStatusColumn({ badge }: { badge: StandardsBadgeDisplay | null }) {
+  if (!badge) {
+    return (
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", minWidth: 0, gap: 2 }}>
+        <Text style={{ fontSize: 9, color: "#94A3B8", textAlign: "center" }}>Status</Text>
+        <Text style={{ fontSize: 11, fontWeight: "700", color: "#94A3B8", textAlign: "center" }}>—</Text>
+      </View>
+    );
+  }
+
+  const colors = standardsBadgeColors(badge.variant);
+  return (
+    <View style={{ flex: 1, alignItems: "center", justifyContent: "center", minWidth: 0, gap: 2 }}>
+      <Text style={{ fontSize: 9, color: "#94A3B8", textAlign: "center" }}>Status</Text>
+      <View
+        style={{
+          backgroundColor: colors.bg,
+          paddingHorizontal: 6,
+          paddingVertical: 2,
+          borderRadius: 999,
+          maxWidth: "100%",
+        }}
+      >
+        <Text
+          style={{ fontSize: 9, fontWeight: "700", color: colors.text, textAlign: "center", lineHeight: 12 }}
+          numberOfLines={2}
+        >
+          {badge.label}
+        </Text>
+      </View>
+    </View>
+  );
+}
 
 function PerformanceChart({ data, dark }: { data: Array<{ label: string; completionPct: number | null }>; dark?: boolean }) {
   const screenW = Dimensions.get("window").width;
@@ -224,6 +280,7 @@ function PerformanceChart({ data, dark }: { data: Array<{ label: string; complet
 // ------------------------------------------------------------------
 export default function TeamScreen() {
   const insets = useSafeAreaInsets();
+  const TAB_BAR_CLEARANCE = insets.bottom + 84;
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
   const hasHydrated = useTeamStore((s) => s._hasHydrated);
   const { data: session } = useSession();
@@ -246,6 +303,13 @@ export default function TeamScreen() {
     if (!myId || targetUserId === myId) return true;
     if (targetRole === "owner") return false;
     return myRole === "owner" || myRole === "team_leader";
+  };
+  const canManageMember = (targetUserId: string, targetRole: string) => {
+    if (isDemo) return false;
+    if (!myRole || (myRole !== "owner" && myRole !== "team_leader")) return false;
+    if (targetRole === "owner") return false;
+    if (myRole === "team_leader" && targetRole !== "member") return false;
+    return targetUserId !== myId;
   };
 
   const [uploadingTeamImage, setUploadingTeamImage] = useState(false);
@@ -421,9 +485,10 @@ export default function TeamScreen() {
     queryKey: ["member-stats", activeTeamId],
     queryFn: () =>
       api.get<MemberStatsPayload>(`/api/teams/${activeTeamId}/tasks/member-stats`),
-    enabled: !!activeTeamId,
+    enabled: !!activeTeamId && isPaid,
   });
   const memberStats = memberStatsPayload?.stats;
+  const workplaceStandards = mergeWorkplaceStandards(memberStatsPayload?.workplaceStandards);
 
   const { data: teamTasksData } = useQuery({
     queryKey: ["team-overview-tasks", activeTeamId],
@@ -499,6 +564,11 @@ export default function TeamScreen() {
   const sortedMembers = [...members].sort((a, b) =>
     (a.user.name ?? "").localeCompare(b.user.name ?? "")
   );
+  const teamCompliance = computeTeamCompliancePercentages({
+    memberUserIds: members.filter((m) => m.role !== "owner").map((m) => m.userId),
+    memberStats,
+    workplaceStandards,
+  });
 
   // ------------------------------------------------------------------
   // Guard states
@@ -623,9 +693,8 @@ export default function TeamScreen() {
         </View>
       </LinearGradient>
 
-      <View>
-
-        {/* ── Team info card ── */}
+      <View style={{ flex: 1, paddingBottom: TAB_BAR_CLEARANCE }}>
+        {/* ── Team info card (fixed) ── */}
         <View style={{
           marginHorizontal: 12,
           marginTop: 12,
@@ -717,21 +786,18 @@ export default function TeamScreen() {
           </View>
           </LinearGradient>
         </View>
-      </View>
 
-      <View>
         {/* ── 2. AT A GLANCE CARD (paid only, unified) ──────────────── */}
         {isPaid ? (
           <View
             style={{
               backgroundColor: "white",
-              borderRadius: 20,
+              borderRadius: 16,
               marginHorizontal: 12,
-              marginTop: 10,
-              paddingTop: 16,
-              paddingBottom: 16,
-              paddingLeft: 16,
-              paddingRight: 20,
+              marginTop: 8,
+              paddingTop: 10,
+              paddingBottom: 8,
+              paddingHorizontal: 14,
               shadowColor: "#000",
               shadowOpacity: 0.06,
               shadowRadius: 12,
@@ -739,11 +805,11 @@ export default function TeamScreen() {
               elevation: 3,
             }}
           >
-            <Text style={{ fontSize: 22, fontWeight: "800", color: "#0F172A", marginBottom: 12 }}>
+            <Text style={{ fontSize: 16, fontWeight: "800", color: "#0F172A", marginBottom: 6 }}>
               Team Overview
             </Text>
 
-            <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 8 }}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 6 }}>
               {(
                 [
                   { key: "open" as const, value: totalOpen, label: "Open", color: "#10B981" },
@@ -753,8 +819,8 @@ export default function TeamScreen() {
               ).map(({ key, value, label, color }) => {
                 const statContent = (
                   <>
-                    <Text style={{ fontSize: 30, fontWeight: "900", color }}>{value}</Text>
-                    <Text numberOfLines={1} style={{ fontSize: 11, color: "#64748B", marginTop: 2, textAlign: "center" }}>
+                    <Text style={{ fontSize: 20, fontWeight: "900", color, lineHeight: 22 }}>{value}</Text>
+                    <Text numberOfLines={1} style={{ fontSize: 10, color: "#64748B", marginTop: 1, textAlign: "center" }}>
                       {label}
                     </Text>
                   </>
@@ -764,7 +830,7 @@ export default function TeamScreen() {
                   return (
                     <Pressable
                       key={key}
-                      style={{ flex: 1, alignItems: "center", paddingVertical: 8 }}
+                      style={{ flex: 1, alignItems: "center", paddingVertical: 2 }}
                       onPress={() => setOverviewTasksSheet(key)}
                       testID={`team-overview-${key}`}
                     >
@@ -774,17 +840,43 @@ export default function TeamScreen() {
                 }
 
                 return (
-                  <View key={key} style={{ flex: 1, alignItems: "center", paddingVertical: 8 }}>
+                  <View key={key} style={{ flex: 1, alignItems: "center", paddingVertical: 2 }}>
                     {statContent}
                   </View>
                 );
               })}
             </View>
 
+            <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 6, marginTop: 4 }}>
+              {(
+                [
+                  {
+                    key: "checkIn",
+                    value: formatTeamCompliancePercent(teamCompliance.checkInCompliancePct),
+                    label: "Check-in compliance",
+                    color: teamComplianceColor(teamCompliance.checkInCompliancePct),
+                  },
+                  {
+                    key: "devPlan",
+                    value: formatTeamCompliancePercent(teamCompliance.developmentPlanCompliancePct),
+                    label: "Development plan compliance",
+                    color: teamComplianceColor(teamCompliance.developmentPlanCompliancePct),
+                  },
+                ] as const
+              ).map(({ key, value, label, color }) => (
+                <View key={key} style={{ flex: 1, alignItems: "center", paddingVertical: 2 }}>
+                  <Text style={{ fontSize: 20, fontWeight: "900", color, lineHeight: 22 }}>{value}</Text>
+                  <Text numberOfLines={2} style={{ fontSize: 10, color: "#64748B", marginTop: 1, textAlign: "center", lineHeight: 13 }}>
+                    {label}
+                  </Text>
+                </View>
+              ))}
+            </View>
+
             {isOwner ? (
               <Text
                 numberOfLines={1}
-                style={{ fontSize: 10, color: "#94A3B8", marginTop: 8 }}
+                style={{ fontSize: 9, color: "#94A3B8", marginTop: 2 }}
               >
                 Tap a number to view tasks
               </Text>
@@ -796,8 +888,11 @@ export default function TeamScreen() {
         {/* ── 4. TEAM MEMBERS CARD ──────────────────────────────────── */}
         <View
           style={{
+            flex: 1,
+            minHeight: 0,
             marginHorizontal: 12,
             marginTop: 8,
+            marginBottom: 4,
             borderRadius: 20,
             backgroundColor: "white",
             overflow: "hidden",
@@ -812,18 +907,25 @@ export default function TeamScreen() {
           <View
             style={{
               flexDirection: "row",
-              alignItems: "center",
+              alignItems: "flex-start",
               justifyContent: "space-between",
               paddingHorizontal: 16,
-              paddingVertical: 14,
+              paddingTop: 16,
+              paddingBottom: 12,
+              gap: 12,
             }}
           >
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-              <Text style={{ fontSize: 16, fontWeight: "700", color: "#0F172A" }}>Team Members</Text>
-              <StandardsStatusKey />
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <Text style={{ fontSize: 18, fontWeight: "700", color: "#0F172A" }}>Team Members</Text>
+                {isPaid ? <StandardsStatusKey /> : null}
+              </View>
+              <Text style={{ fontSize: 13, color: "#94A3B8", marginTop: 4 }}>
+                See your team's activity at a glance.
+              </Text>
             </View>
             {isOwner && !isDemo ? (
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexShrink: 0 }}>
                 <PendingJoinRequestsChip count={pendingApprovalCount} onPress={() => setJoinRequestsOpen(true)} />
                 <PendingInvitesChip count={pendingInvites.length} onPress={() => setPendingInvitesOpen(true)} />
                 <Pressable
@@ -835,7 +937,9 @@ export default function TeamScreen() {
                     flexDirection: "row",
                     alignItems: "center",
                     gap: 6,
-                    backgroundColor: "#EEF2FF",
+                    backgroundColor: "white",
+                    borderWidth: 1,
+                    borderColor: "#BFDBFE",
                     paddingHorizontal: 12,
                     paddingVertical: 8,
                     borderRadius: 10,
@@ -849,11 +953,11 @@ export default function TeamScreen() {
             ) : null}
           </View>
 
-          {/* Member rows */}
+          {/* Member cards (scrollable) */}
           <ScrollView
+            style={{ flex: 1 }}
             showsVerticalScrollIndicator={false}
-            style={{ maxHeight: 236 }}
-            contentContainerStyle={{ paddingBottom: insets.bottom + 96 }}
+            contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 12, gap: 8 }}
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" colors={["#4361EE"]} />
             }
@@ -866,124 +970,210 @@ export default function TeamScreen() {
             const complianceBadges = compliance
               ? memberStandardsBadges(compliance, stats?.daysSinceLastOneOnOne)
               : [];
+            const primaryBadge = complianceBadges[0] ?? null;
             const isCurrentUser = item.userId === myId;
-            const canView = canViewMemberProfile(item.userId, item.role);
-            const rowStyle = {
+            const hasProfilePermission = canViewMemberProfile(item.userId, item.role);
+            const canOpenProfile = isPaid && hasProfilePermission;
+            const canOpenManagement = !isPaid && canManageMember(item.userId, item.role);
+            const isPressable = canOpenProfile || canOpenManagement;
+            const isOwnerMember = item.role === "owner";
+            const cardStyle = {
               flexDirection: "row" as const,
               alignItems: "center" as const,
-              paddingHorizontal: 14,
-              paddingVertical: 10,
-              borderTopWidth: 1,
-              borderTopColor: "#F1F5F9",
-              backgroundColor: isCurrentUser ? "#F1F5F9" : "white",
-              opacity: canView ? 1 : 0.72,
+              paddingHorizontal: 10,
+              paddingVertical: 8,
+              borderRadius: 14,
+              borderWidth: 1,
+              borderColor: "#E2E8F0",
+              backgroundColor: "white",
+              shadowColor: "#000",
+              shadowOpacity: 0.03,
+              shadowRadius: 4,
+              shadowOffset: { width: 0, height: 1 },
+              elevation: 1,
+              position: "relative" as const,
             };
-            const rowContent = (
+            const cardContent = isPaid ? (
               <>
-                {/* Avatar */}
-                <View
-                  style={{
-                    width: 38,
-                    height: 38,
-                    borderRadius: 19,
-                    backgroundColor: "#4361EE",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    overflow: "hidden",
-                    marginRight: 10,
-                  }}
-                >
-                  {item.user.image ? (
-                    <Image source={{ uri: item.user.image }} style={{ width: 38, height: 38 }} resizeMode="cover" />
-                  ) : (
-                    <Text style={{ color: "white", fontWeight: "700", fontSize: 14 }}>
-                      {item.user.name?.[0]?.toUpperCase() ?? "?"}
-                    </Text>
-                  )}
-                </View>
-
-                {/* Name */}
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 14, fontWeight: "700", color: "#0F172A" }}>
-                    {item.user.name}{isCurrentUser ? " (you)" : ""}
-                  </Text>
-                  <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 1 }}>
-                    {item.role === "owner" ? "Owner" : item.role === "team_leader" ? "Team Leader" : "Member"}
-                  </Text>
-                </View>
-
-                {/* Metrics */}
-                <View style={{ alignItems: "flex-end", gap: 4 }}>
+                {/* Profile */}
+                <View style={{ width: 138, marginRight: 8, flexShrink: 0 }}>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                    <Text style={{ fontSize: 10, fontWeight: "700", color: "#94A3B8", textTransform: "uppercase" }}>
-                      Last check-in
-                    </Text>
-                    <Text style={{ fontSize: 12, fontWeight: "700", color: "#0F172A" }}>
-                      {formatDaysSinceCheckIn(stats?.daysSinceLastOneOnOne)}
-                    </Text>
-                  </View>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                    <Text style={{ fontSize: 10, fontWeight: "700", color: "#94A3B8", textTransform: "uppercase" }}>
-                      Goals
-                    </Text>
-                    <Text style={{ fontSize: 12, fontWeight: "700", color: "#0F172A" }}>
-                      {compliance?.goalsDisplay ?? "—"}
-                    </Text>
-                  </View>
-                  {complianceBadges.length > 0 ? (
-                    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 4, justifyContent: "flex-end" }}>
-                      {complianceBadges.map((badge) => {
-                        const colors = standardsBadgeColors(badge.variant);
-                        return (
-                          <View
-                            key={badge.key}
-                            accessibilityLabel={badge.title}
-                            style={{
-                              backgroundColor: colors.bg,
-                              paddingHorizontal: 8,
-                              paddingVertical: 3,
-                              borderRadius: 999,
-                            }}
-                          >
-                            <Text style={{ fontSize: 9, fontWeight: "800", color: colors.text, letterSpacing: 0.4 }}>
-                              {badge.label.toUpperCase()}
-                            </Text>
-                          </View>
-                        );
-                      })}
-                    </View>
-                  ) : null}
-                  {canView && followUpDisplay ? (
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                      <AlertCircle size={12} color="#EF4444" />
-                      <Text
-                        style={{ fontSize: 12, fontWeight: "700", color: "#EF4444" }}
-                        accessibilityLabel={followUpDisplay.title}
+                    <View style={{ position: "relative" }}>
+                      <View
+                        style={{
+                          width: 36,
+                          height: 36,
+                          borderRadius: 18,
+                          backgroundColor: "#4361EE",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          overflow: "hidden",
+                        }}
                       >
-                        {followUpDisplay.value}
-                      </Text>
+                        {item.user.image ? (
+                          <Image source={{ uri: item.user.image }} style={{ width: 36, height: 36 }} resizeMode="cover" />
+                        ) : (
+                          <Text style={{ color: "white", fontWeight: "700", fontSize: 14 }}>
+                            {item.user.name?.[0]?.toUpperCase() ?? "?"}
+                          </Text>
+                        )}
+                      </View>
+                      {isOwnerMember ? (
+                        <View
+                          style={{
+                            position: "absolute",
+                            bottom: -2,
+                            right: -2,
+                            width: 14,
+                            height: 14,
+                            borderRadius: 7,
+                            backgroundColor: "white",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            borderWidth: 1.5,
+                            borderColor: "#E2E8F0",
+                          }}
+                        >
+                          <Crown size={8} color="#4361EE" />
+                        </View>
+                      ) : null}
                     </View>
-                  ) : null}
-                  {!canView ? (
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text
+                        style={{ fontSize: 12, fontWeight: "700", color: "#0F172A", lineHeight: 15 }}
+                      >
+                        {item.user.name}
+                        {isCurrentUser ? " (you)" : ""}
+                      </Text>
+                      <View
+                        style={{
+                          alignSelf: "flex-start",
+                          marginTop: 2,
+                          paddingHorizontal: 6,
+                          paddingVertical: 2,
+                          borderRadius: 999,
+                          backgroundColor: isOwnerMember ? "#EEF2FF" : "#F1F5F9",
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 9,
+                            fontWeight: "700",
+                            color: isOwnerMember ? "#4361EE" : "#64748B",
+                          }}
+                        >
+                          {memberRoleLabel(item.role)}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                </View>
+
+                <View style={{ width: 1, alignSelf: "stretch", backgroundColor: "#E2E8F0", marginRight: 6 }} />
+                <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 2 }}>
+                  <MemberMetricColumn
+                    label="Last check-in"
+                    value={formatDaysSinceCheckIn(stats?.daysSinceLastOneOnOne)}
+                  />
+                  <MemberMetricColumn
+                    label="Goals"
+                    value={compliance?.goalsDisplay ?? "—"}
+                  />
+                  <MemberStatusColumn badge={primaryBadge} />
+                </View>
+
+                {hasProfilePermission && followUpDisplay ? (
+                  <View
+                    style={{
+                      position: "absolute",
+                      top: 8,
+                      right: 8,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 4,
+                    }}
+                  >
+                    <AlertCircle size={12} color="#EF4444" />
+                    <Text
+                      style={{ fontSize: 10, fontWeight: "700", color: "#EF4444" }}
+                      accessibilityLabel={followUpDisplay.title}
+                    >
+                      {followUpDisplay.value}
+                    </Text>
+                  </View>
+                ) : null}
+              </>
+            ) : (
+              <>
+                <View style={{ position: "relative", marginRight: 10 }}>
+                  <View
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 18,
+                      backgroundColor: "#4361EE",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      overflow: "hidden",
+                    }}
+                  >
+                    {item.user.image ? (
+                      <Image source={{ uri: item.user.image }} style={{ width: 36, height: 36 }} resizeMode="cover" />
+                    ) : (
+                      <Text style={{ color: "white", fontWeight: "700", fontSize: 14 }}>
+                        {item.user.name?.[0]?.toUpperCase() ?? "?"}
+                      </Text>
+                    )}
+                  </View>
+                  {isOwnerMember ? (
                     <View
                       style={{
-                        marginTop: 4,
-                        width: 28,
-                        height: 28,
-                        borderRadius: 14,
-                        backgroundColor: "#F1F5F9",
+                        position: "absolute",
+                        bottom: -2,
+                        right: -2,
+                        width: 18,
+                        height: 18,
+                        borderRadius: 9,
+                        backgroundColor: "white",
                         alignItems: "center",
                         justifyContent: "center",
+                        borderWidth: 1.5,
+                        borderColor: "#E2E8F0",
                       }}
-                      accessibilityLabel="Profile locked"
                     >
-                      <Lock size={14} color="#94A3B8" />
+                      <Crown size={10} color="#4361EE" />
                     </View>
                   ) : null}
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 14, fontWeight: "700", color: "#0F172A", lineHeight: 18 }}>
+                    {item.user.name}
+                    {isCurrentUser ? " (you)" : ""}
+                  </Text>
+                  <View
+                    style={{
+                      alignSelf: "flex-start",
+                      marginTop: 4,
+                      paddingHorizontal: 8,
+                      paddingVertical: 3,
+                      borderRadius: 999,
+                      backgroundColor: isOwnerMember ? "#EEF2FF" : "#F1F5F9",
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 10,
+                        fontWeight: "700",
+                        color: isOwnerMember ? "#4361EE" : "#64748B",
+                      }}
+                    >
+                      {memberRoleLabel(item.role)}
+                    </Text>
+                  </View>
                 </View>
               </>
             );
-            return canView ? (
+            return isPressable ? (
               <Pressable
                 key={item.id}
                 onPress={() =>
@@ -993,13 +1183,13 @@ export default function TeamScreen() {
                   })
                 }
                 testID={`member-row-${item.userId}`}
-                style={rowStyle}
+                style={cardStyle}
               >
-                {rowContent}
+                {cardContent}
               </Pressable>
             ) : (
-              <View key={item.id} testID={`member-row-${item.userId}`} style={rowStyle}>
-                {rowContent}
+              <View key={item.id} testID={`member-row-${item.userId}`} style={cardStyle}>
+                {cardContent}
               </View>
             );
           })}
@@ -1012,38 +1202,81 @@ export default function TeamScreen() {
           </ScrollView>
         </View>
 
-        {isOwner && !isDemo ? (
+        {isPaid && isOwner && !isDemo ? (
           <View
             style={{
               marginHorizontal: 12,
-              marginTop: 8,
-              marginBottom: 8,
-              borderRadius: 12,
+              marginTop: 4,
+              flexShrink: 0,
               backgroundColor: "#EEF2FF",
-              padding: 10,
+              paddingHorizontal: 14,
+              paddingVertical: 12,
               flexDirection: "row",
               alignItems: "center",
               gap: 8,
+              borderRadius: 14,
+              borderWidth: 1,
+              borderColor: "#BFDBFE",
             }}
           >
             <Crown size={14} color="#4361EE" />
             <Text style={{ fontSize: 12, color: "#4361EE", fontWeight: "600", flex: 1 }}>
               Tap a member to view their profile, growth plan, and check-in history.
             </Text>
+            <ChevronRight size={16} color="#4361EE" />
           </View>
-        ) : !isDemo ? (
+        ) : isPaid && !isDemo ? (
           <View
             style={{
               marginHorizontal: 12,
-              marginTop: 8,
-              marginBottom: 8,
-              borderRadius: 12,
+              marginTop: 4,
+              flexShrink: 0,
               backgroundColor: "#F8FAFC",
-              padding: 10,
+              paddingHorizontal: 14,
+              paddingVertical: 12,
+              borderRadius: 14,
+              borderWidth: 1,
+              borderColor: "#E2E8F0",
             }}
           >
             <Text style={{ fontSize: 12, color: "#64748B", fontWeight: "600" }}>
               Tap your name to view your profile, growth plan, and check-in history.
+            </Text>
+          </View>
+        ) : !isPaid && (isOwner || myRole === "team_leader") && !isDemo ? (
+          <View
+            style={{
+              marginHorizontal: 12,
+              marginTop: 4,
+              flexShrink: 0,
+              backgroundColor: "#F8FAFC",
+              paddingHorizontal: 14,
+              paddingVertical: 12,
+              borderRadius: 14,
+              borderWidth: 1,
+              borderColor: "#E2E8F0",
+            }}
+          >
+            <Text style={{ fontSize: 12, color: "#64748B", fontWeight: "600" }}>
+              Tap a member to change their role or remove them from the workplace.
+            </Text>
+          </View>
+        ) : !isPaid && !isDemo ? (
+          <View
+            style={{
+              marginHorizontal: 12,
+              marginTop: 4,
+              flexShrink: 0,
+              backgroundColor: "#F8FAFC",
+              paddingHorizontal: 14,
+              paddingVertical: 12,
+              borderRadius: 14,
+              borderWidth: 1,
+              borderColor: "#E2E8F0",
+            }}
+          >
+            <Text style={{ fontSize: 12, color: "#64748B", fontWeight: "600" }}>
+              Team access is required to view growth plans and check-in history. Open Workplace Access to upgrade.
             </Text>
           </View>
         ) : null}

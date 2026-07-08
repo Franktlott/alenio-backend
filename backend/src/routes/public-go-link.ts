@@ -13,6 +13,10 @@ import {
   pollWorkplaceAlertsForDevice,
   recordGoDeviceCheckIn,
 } from "../lib/workplace-alerts";
+import {
+  listKioskModulesForDevice,
+  verifyModuleTestCode,
+} from "../lib/workspace-modules";
 
 const publicGoLinkRouter = new Hono();
 
@@ -228,6 +232,46 @@ publicGoLinkRouter.post("/alerts/:alertId/ack", async (c) => {
   } catch (err) {
     console.error("[go-link] POST /alerts/:id/ack failed:", err);
     return c.json({ error: { message: "Could not acknowledge alert", code: "INTERNAL" } }, 500);
+  }
+});
+
+// GET /api/public/go/modules — active modules a floor device should show
+publicGoLinkRouter.get("/modules", async (c) => {
+  try {
+    const hubToken = c.req.query("hubToken")?.trim();
+    if (!hubToken) {
+      return c.json({ error: { message: "hubToken is required", code: "VALIDATION_ERROR" } }, 400);
+    }
+    const result = await listKioskModulesForDevice(hubToken);
+    if (!result.ok) {
+      return c.json({ error: { message: "Workspace not found", code: "NOT_FOUND" } }, 404);
+    }
+    return c.json({ data: { modules: result.modules } });
+  } catch (err) {
+    console.error("[go-link] GET /modules failed:", err);
+    return c.json({ error: { message: "Could not load modules", code: "INTERNAL" } }, 500);
+  }
+});
+
+const verifyTestCodeSchema = z.object({
+  hubToken: z.string().min(1).max(256),
+  deviceId: z.string().min(8).max(128),
+  code: z.string().min(1).max(64),
+});
+
+// POST /api/public/go/modules/:moduleKey/verify-test-code
+publicGoLinkRouter.post("/modules/:moduleKey/verify-test-code", zValidator("json", verifyTestCodeSchema), async (c) => {
+  try {
+    const moduleKey = c.req.param("moduleKey");
+    const { hubToken, code } = c.req.valid("json");
+    const result = await verifyModuleTestCode(hubToken, moduleKey, code);
+    if (!result.ok) {
+      return c.json({ error: { message: "Invalid Test Access Code", code: "INVALID_TEST_CODE" } }, 403);
+    }
+    return c.json({ data: { success: true } });
+  } catch (err) {
+    console.error("[go-link] POST /modules/:moduleKey/verify-test-code failed:", err);
+    return c.json({ error: { message: "Could not verify code", code: "INTERNAL" } }, 500);
   }
 });
 

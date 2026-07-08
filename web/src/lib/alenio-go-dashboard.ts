@@ -9,6 +9,10 @@ export type GoDashModule = {
   count?: number | null;
   countMessage?: string;
   ctaLabel?: string;
+  /** Operating mode when this is a lifecycle-managed module shown on a floor device. */
+  operatingMode?: "testing" | "live" | null;
+  /** Whether opening this module requires a test access code (testing mode only). */
+  requireTestCode?: boolean;
 };
 
 export type GoDashQuickAction = {

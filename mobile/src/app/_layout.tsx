@@ -8,13 +8,13 @@ import { useColorScheme } from '@/lib/useColorScheme';
 import { QueryClient, QueryClientProvider, focusManager, useQuery } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeKeyboardProvider } from '@/lib/safe-keyboard-controller';
-import { useSession } from '@/lib/auth/use-session';
+import { useSession, AUTH_READY_QUERY_KEY, bootstrapMobileAuth, useMobileAuthReady } from '@/lib/auth/use-session';
 import { useEffect, useRef, useState } from 'react';
 import * as Notifications from 'expo-notifications';
 import * as Haptics from 'expo-haptics';
 import { registerForPushNotificationsAsync } from '@/lib/notifications';
-import { fetchMeUser, ME_QUERY_KEY } from '@/lib/auth/me-query';
-import { ensureSessionFreshOnForeground } from '@/lib/auth/auth-client';
+import { ensureSessionFreshOnForeground, agentDebugLog } from '@/lib/auth/auth-client';
+import { navigateToMobileHomeWithRetry } from '@/lib/auth/auth-entry';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -103,22 +103,39 @@ function CustomSplash({ isReady, onDone }: { isReady: boolean; onDone: () => voi
 
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
-  const { data: session, isLoading } = useSession();
+  const { isLoading: sessionLoading } = useSession();
   const notificationListener = useRef<Notifications.EventSubscription | null>(null);
   const [showSplash, setShowSplash] = useState(true);
   const [animDone, setAnimDone] = useState(false);
   const [sessionSettled, setSessionSettled] = useState(false);
+  const coldStartBootstrapped = useRef(false);
 
-  // Fetch full user profile to check admin status
-  const { data: me } = useQuery({
-    queryKey: ME_QUERY_KEY,
-    queryFn: fetchMeUser,
-    enabled: !!session?.user,
-    staleTime: 5 * 60 * 1000,
-  });
+  const { data: authReady } = useMobileAuthReady();
 
-  const hasBackendSession = !!session?.user && !!me?.id;
+  const me = authReady?.me;
+  const session = authReady?.session;
+  const hasBackendSession = !!authReady?.me?.id;
   const isAdmin = me?.isAdmin === true;
+
+  // Cold start: populate auth-ready once (sign-in/logout write directly via setQueryData).
+  useEffect(() => {
+    if (coldStartBootstrapped.current) return;
+    coldStartBootstrapped.current = true;
+    if (queryClient.getQueryState(AUTH_READY_QUERY_KEY)?.dataUpdatedAt) return;
+    let active = true;
+    void bootstrapMobileAuth().then((data) => {
+      if (!active) return;
+      queryClient.setQueryData(AUTH_READY_QUERY_KEY, data, { updatedAt: Date.now() });
+      agentDebugLog("cold start bootstrap", {
+        runId: "auth-simplify-v4",
+        hypothesisId: "H15",
+        hasUser: !!data?.me?.id,
+      });
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     SplashScreen.hideAsync();
@@ -131,11 +148,11 @@ function RootLayoutNav() {
   // before allowing the splash to fade. This prevents a white screen on Android
   // where the Stack.Protected redirect hasn't rendered yet.
   useEffect(() => {
-    if (!isLoading && !sessionSettled) {
+    if (!sessionLoading && !sessionSettled) {
       const t = setTimeout(() => setSessionSettled(true), 300);
       return () => clearTimeout(t);
     }
-  }, [isLoading, sessionSettled]);
+  }, [sessionLoading, sessionSettled]);
 
   // Rotate JWT when returning from background if expiry is soon (consumer-app style persistence).
   useEffect(() => {
@@ -145,12 +162,18 @@ function RootLayoutNav() {
     return () => sub.remove();
   }, []);
 
-  // Redirect admin users to admin section once their profile loads
+  // Enter the app once atomic auth-ready is set (cold start, sign-in, or account switch).
   useEffect(() => {
-    if (hasBackendSession && isAdmin) {
-      router.replace("/(admin)");
-    }
-  }, [hasBackendSession, isAdmin]);
+    const userId = authReady?.me?.id ?? null;
+    if (!hasBackendSession || !userId) return;
+    agentDebugLog("layout navigating on session ready", {
+      runId: "auth-simplify-v4",
+      hypothesisId: "H4",
+      isAdmin,
+      userIdPrefix: userId.slice(0, 8),
+    });
+    return navigateToMobileHomeWithRetry(isAdmin);
+  }, [hasBackendSession, isAdmin, authReady?.me?.id]);
 
   useEffect(() => {
     if (!hasBackendSession) return;
@@ -214,11 +237,26 @@ function RootLayoutNav() {
     <View style={{ flex: 1 }}>
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
         <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="index" />
           <Stack.Protected guard={hasBackendSession}>
             <Stack.Screen name="(app)" />
             <Stack.Screen name="(admin)" />
-            <Stack.Screen name="onboarding" />
-            <Stack.Screen name="create-task" />
+            <Stack.Screen
+              name="onboarding"
+              options={{
+                presentation: "transparentModal",
+                animation: "fade",
+                headerShown: false,
+              }}
+            />
+            <Stack.Screen
+              name="create-task"
+              options={{
+                presentation: "transparentModal",
+                animation: "slide_from_bottom",
+                headerShown: false,
+              }}
+            />
             <Stack.Screen name="create-event" />
             <Stack.Screen name="task-detail" />
             <Stack.Screen name="member-profile" />
@@ -261,15 +299,15 @@ function RootLayoutNav() {
             <Stack.Screen
               name="feedback"
               options={{
-                presentation: 'formSheet',
-                sheetAllowedDetents: [0.75],
-                sheetGrabberVisible: true,
+                presentation: "transparentModal",
+                animation: "fade",
                 headerShown: false,
               }}
             />
             <Stack.Screen name="notifications" />
           </Stack.Protected>
           <Stack.Protected guard={!hasBackendSession}>
+            <Stack.Screen name="welcome" />
             <Stack.Screen name="sign-in" />
             <Stack.Screen name="sign-up" />
             <Stack.Screen name="forgot-password" />

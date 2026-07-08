@@ -12,6 +12,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Search, X, Check, Users } from "lucide-react-native";
 import { router } from "expo-router";
+import { toast } from "burnt";
 import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
 import { useTeamStore } from "@/lib/state/team-store";
@@ -41,7 +42,7 @@ export default function CreateGroupScreen() {
   });
 
   const createGroupMutation = useMutation({
-    mutationFn: (payload: { name: string; participantIds: string[] }) =>
+    mutationFn: (payload: { name: string; participantIds: string[]; teamId?: string }) =>
       api.post<Conversation>("/api/dms/create-group", payload),
     onSuccess: (conv) => {
       queryClient.invalidateQueries({ queryKey: ["dms"] });
@@ -53,6 +54,9 @@ export default function CreateGroupScreen() {
           isGroup: "true",
         },
       });
+    },
+    onError: (err: Error) => {
+      toast({ title: err.message || "Could not create group", preset: "error" });
     },
   });
 
@@ -80,10 +84,11 @@ export default function CreateGroupScreen() {
   const canCreate = groupName.trim().length > 0 && selectedUsers.length >= 1;
 
   const handleCreate = () => {
-    if (!canCreate) return;
+    if (!canCreate || !activeTeamId) return;
     createGroupMutation.mutate({
       name: groupName.trim(),
       participantIds: selectedUsers.map((u) => u.id),
+      teamId: activeTeamId,
     });
   };
 

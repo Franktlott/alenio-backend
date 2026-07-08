@@ -43,44 +43,6 @@ export function goBackendAdminTiles(options: {
       href: "/go/devices",
       badge: canManage && pendingCount > 0 ? pendingCount : undefined,
     },
-    {
-      id: "checklists",
-      title: "Checklists",
-      subtitle: "Floor checklists module",
-      tone: "cyan",
-      icon: "checklists",
-      active: true,
-      href: "/go/checklists",
-    },
-    {
-      id: "temp-checks",
-      title: "Temp checks",
-      subtitle: "Food safety temperature logs on the floor",
-      tone: "emerald",
-      icon: "temp",
-      active: true,
-      href: "/go/temp-checks",
-    },
-    {
-      id: "briefings",
-      title: "Briefings",
-      subtitle: "Review & initial documents",
-      tone: "amber",
-      icon: "briefings",
-      active: true,
-      href: "/go/briefings",
-    },
-    {
-      id: "walks",
-      title: "Walks",
-      subtitle: canManage
-        ? "Structured manager observations with saved walk history"
-        : "View completed walk records",
-      tone: "violet",
-      icon: "walks",
-      active: true,
-      href: "/go/walks",
-    },
   ];
 }
 

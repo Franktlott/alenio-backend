@@ -18,6 +18,9 @@ import {
 } from "react-native";
 
 const SCREEN_HEIGHT = Dimensions.get("window").height;
+const EVENT_MODAL_MAX_HEIGHT = Math.round(SCREEN_HEIGHT * 0.92);
+const MEETING_ASSIGNEE_SHEET_MAX_HEIGHT = Math.round(SCREEN_HEIGHT * 0.62);
+const MEETING_DURATION_SHEET_MAX_HEIGHT = Math.round(SCREEN_HEIGHT * 0.55);
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams, Redirect, useFocusEffect } from "expo-router";
 import { Plus, User, Users, ArrowUpDown, ChevronLeft, ChevronRight, ChevronDown, X, CalendarDays, CheckSquare, Calendar, Check, UserRound, Video, VideoOff, Clock, Lock, Globe, ClipboardList } from "lucide-react-native";
@@ -26,6 +29,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { calendarMondayColumnIndex } from "@/lib/calendar-grid";
 import { useSession } from "@/lib/auth/use-session";
+import { api } from "@/lib/api/api";
 import { useTeamStore } from "@/lib/state/team-store";
 import { useSubscriptionStore } from "@/lib/state/subscription-store";
 import { useTaskStore } from "@/lib/state/task-store";
@@ -839,6 +843,24 @@ export default function TasksScreen() {
   const nonOwnerMembers: TeamMember[] = (teamData?.members ?? []).filter(
     (m) => m.role !== "owner"
   );
+
+  const meetingAssigneeOptions = React.useMemo(
+    () =>
+      [...(teamData?.members ?? [])].sort((a, b) =>
+        (a.user.name?.trim() || "").localeCompare(b.user.name?.trim() || "", undefined, { sensitivity: "base" }),
+      ),
+    [teamData?.members],
+  );
+  const allMeetingAssigneeIds = React.useMemo(
+    () => meetingAssigneeOptions.map((m) => m.userId),
+    [meetingAssigneeOptions],
+  );
+  const allMeetingAssigneesSelected =
+    allMeetingAssigneeIds.length > 0 && allMeetingAssigneeIds.every((id) => meetingAssigneeIds.includes(id));
+
+  const toggleAllMeetingAssignees = () => {
+    setMeetingAssigneeIds(allMeetingAssigneesSelected ? [] : allMeetingAssigneeIds);
+  };
 
   const { data: calendarEvents = [] } = useQuery({
     queryKey: ["calendar-events", activeTeamId],
@@ -1909,7 +1931,16 @@ export default function TasksScreen() {
       <Modal visible={showEventModal} transparent animationType="slide" onRequestClose={() => { setShowEventModal(false); setEditingEvent(null); setConfirmDeleteEvent(false); }}>
         <SafeKeyboardAvoidingView style={{ flex: 1, justifyContent: "flex-end" }}>
           <Pressable style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.5)" }} onPress={() => { setShowEventModal(false); setEditingEvent(null); setConfirmDeleteEvent(false); }} />
-          <Pressable style={{ backgroundColor: "white", borderTopLeftRadius: 24, borderTopRightRadius: 24 }} onPress={(e) => e.stopPropagation()}>
+          <Pressable
+            style={{
+              backgroundColor: "white",
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+              maxHeight: EVENT_MODAL_MAX_HEIGHT,
+              overflow: "hidden",
+            }}
+            onPress={(e) => e.stopPropagation()}
+          >
             <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: "#E2E8F0", alignSelf: "center", marginTop: 8, marginBottom: 16 }} />
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 20, paddingHorizontal: 20 }}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
@@ -1964,10 +1995,13 @@ export default function TasksScreen() {
             ) : null}
 
             <ScrollView
-              style={{ paddingHorizontal: 20 }}
-              showsVerticalScrollIndicator={false}
+              style={{
+                paddingHorizontal: 20,
+                maxHeight: EVENT_MODAL_MAX_HEIGHT - (confirmDeleteEvent ? 220 : 88),
+              }}
+              showsVerticalScrollIndicator
               keyboardShouldPersistTaps="handled"
-              contentContainerStyle={{ paddingBottom: 40 }}
+              contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
             >
               <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748B", marginBottom: 6 }}>Title</Text>
               <TextInput
@@ -2075,7 +2109,7 @@ export default function TasksScreen() {
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748B", marginBottom: 6 }}>Duration</Text>
-                      <Pressable onPress={() => { setShowDurationPicker(!showDurationPicker); setShowStartTimePicker(false); }} style={{ borderWidth: 1.5, borderColor: "#7C3AED", borderRadius: 12, paddingHorizontal: 10, paddingVertical: 10, flexDirection: "row", alignItems: "center", backgroundColor: showDurationPicker ? "#7C3AED22" : "#7C3AED0D" }}>
+                      <Pressable onPress={() => { setShowStartTimePicker(false); setShowDurationPicker(true); }} style={{ borderWidth: 1.5, borderColor: "#7C3AED", borderRadius: 12, paddingHorizontal: 10, paddingVertical: 10, flexDirection: "row", alignItems: "center", backgroundColor: showDurationPicker ? "#7C3AED22" : "#7C3AED0D" }}>
                         <Clock size={13} color="#7C3AED" />
                         <Text style={{ fontSize: 12, fontWeight: "500", color: "#7C3AED", marginLeft: 6 }}>
                           {formatVideoMeetingDuration(meetingDurationMinutes)}
@@ -2111,46 +2145,22 @@ export default function TasksScreen() {
                       />
                     </View>
                   ) : null}
-                  {showDurationPicker ? (
-                    <View style={{ backgroundColor: "#F8FAFC", borderRadius: 14, marginTop: 8, borderWidth: 1, borderColor: "#E2E8F0", maxHeight: 240 }}>
-                      <View style={{ flexDirection: "row", justifyContent: "space-between", paddingHorizontal: 16, paddingTop: 10, paddingBottom: 4 }}>
-                        <Text style={{ fontSize: 13, fontWeight: "600", color: "#64748B" }}>Duration</Text>
-                        <Pressable onPress={() => setShowDurationPicker(false)}><Text style={{ fontSize: 13, fontWeight: "700", color: "#7C3AED" }}>Done</Text></Pressable>
-                      </View>
-                      <ScrollView style={{ paddingHorizontal: 8, paddingBottom: 8 }}>
-                        {VIDEO_MEETING_DURATION_OPTIONS.map((minutes) => (
-                          <Pressable
-                            key={minutes}
-                            onPress={() => {
-                              setMeetingDurationMinutes(minutes);
-                              setShowDurationPicker(false);
-                            }}
-                            style={{
-                              paddingVertical: 12,
-                              paddingHorizontal: 12,
-                              borderRadius: 10,
-                              backgroundColor: meetingDurationMinutes === minutes ? "#EEF2FF" : "transparent",
-                            }}
-                          >
-                            <Text style={{ fontSize: 14, fontWeight: meetingDurationMinutes === minutes ? "700" : "500", color: meetingDurationMinutes === minutes ? "#4361EE" : "#0F172A" }}>
-                              {formatVideoMeetingDuration(minutes)}
-                            </Text>
-                          </Pressable>
-                        ))}
-                      </ScrollView>
-                    </View>
-                  ) : null}
 
                   {eventIsHidden ? (
                     <>
                       <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748B", marginTop: 12, marginBottom: 8 }}>
                         Assign Members (optional)
                       </Text>
-                      <Text style={{ fontSize: 11, color: "#94A3B8", marginBottom: 8 }}>
-                        If none selected, this private meeting is visible to everyone invited by the creator.
+                      <Text style={{ fontSize: 11, color: "#94A3B8", marginBottom: 8, lineHeight: 16 }}>
+                        Choose who can see this private meeting. Select all to include everyone on the team. If none are
+                        selected, only you will see it.
                       </Text>
                       <Pressable
-                        onPress={() => setShowMeetingAssigneeDropdown((prev) => !prev)}
+                        onPress={() => {
+                          setShowStartTimePicker(false);
+                          setShowDurationPicker(false);
+                          setShowMeetingAssigneeDropdown(true);
+                        }}
                         style={{
                           borderWidth: 1.5,
                           borderColor: "#E2E8F0",
@@ -2166,47 +2176,12 @@ export default function TasksScreen() {
                         <Text style={{ fontSize: 13, color: "#334155", fontWeight: "500", flex: 1 }} numberOfLines={1}>
                           {meetingAssigneeIds.length === 0
                             ? "Select attendees"
-                            : `${meetingAssigneeIds.length} attendee${meetingAssigneeIds.length === 1 ? "" : "s"} selected`}
+                            : allMeetingAssigneesSelected
+                              ? "All team members"
+                              : `${meetingAssigneeIds.length} attendee${meetingAssigneeIds.length === 1 ? "" : "s"} selected`}
                         </Text>
-                        <ChevronDown
-                          size={16}
-                          color="#64748B"
-                          style={{ transform: [{ rotate: showMeetingAssigneeDropdown ? "180deg" : "0deg" }] }}
-                        />
+                        <ChevronDown size={16} color="#64748B" />
                       </Pressable>
-                      {showMeetingAssigneeDropdown ? (
-                        <View style={{ marginTop: 8, borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 12, backgroundColor: "#FFFFFF" }}>
-                          {(teamData?.members ?? []).map((member, idx) => {
-                            const selected = meetingAssigneeIds.includes(member.userId);
-                            return (
-                              <Pressable
-                                key={member.userId}
-                                onPress={() =>
-                                  setMeetingAssigneeIds((prev) =>
-                                    prev.includes(member.userId)
-                                      ? prev.filter((id) => id !== member.userId)
-                                      : [...prev, member.userId]
-                                  )
-                                }
-                                style={{
-                                  paddingHorizontal: 12,
-                                  paddingVertical: 11,
-                                  flexDirection: "row",
-                                  alignItems: "center",
-                                  justifyContent: "space-between",
-                                  borderBottomWidth: idx === (teamData?.members ?? []).length - 1 ? 0 : 1,
-                                  borderBottomColor: "#F1F5F9",
-                                }}
-                              >
-                                <Text style={{ fontSize: 13, color: "#334155", fontWeight: selected ? "700" : "500" }}>
-                                  {member.user.name}
-                                </Text>
-                                {selected ? <Check size={16} color="#4361EE" /> : <View style={{ width: 16, height: 16 }} />}
-                              </Pressable>
-                            );
-                          })}
-                        </View>
-                      ) : null}
                     </>
                   ) : null}
                 </View>
@@ -2277,6 +2252,177 @@ export default function TasksScreen() {
             </ScrollView>
           </Pressable>
         </SafeKeyboardAvoidingView>
+      </Modal>
+
+      <Modal
+        visible={showMeetingAssigneeDropdown}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowMeetingAssigneeDropdown(false)}
+      >
+        <Pressable
+          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.35)", justifyContent: "flex-end" }}
+          onPress={() => setShowMeetingAssigneeDropdown(false)}
+        >
+          <Pressable onPress={(e) => e.stopPropagation()}>
+            <View
+              style={{
+                backgroundColor: "white",
+                borderTopLeftRadius: 20,
+                borderTopRightRadius: 20,
+                maxHeight: MEETING_ASSIGNEE_SHEET_MAX_HEIGHT,
+                paddingBottom: insets.bottom + 12,
+                overflow: "hidden",
+              }}
+            >
+              <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: "#E2E8F0", alignSelf: "center", marginTop: 10, marginBottom: 14 }} />
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, marginBottom: 8 }}>
+                <Text style={{ fontSize: 17, fontWeight: "700", color: "#0F172A" }}>Assign members</Text>
+                <Pressable
+                  onPress={() => setShowMeetingAssigneeDropdown(false)}
+                  style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "#F1F5F9", alignItems: "center", justifyContent: "center" }}
+                >
+                  <X size={16} color="#64748B" />
+                </Pressable>
+              </View>
+              <Text style={{ fontSize: 12, color: "#94A3B8", paddingHorizontal: 20, marginBottom: 12, lineHeight: 18 }}>
+                Choose who can see this private meeting. Select all to include everyone on the team.
+              </Text>
+              <Pressable
+                onPress={toggleAllMeetingAssignees}
+                style={{
+                  marginHorizontal: 20,
+                  marginBottom: 8,
+                  paddingHorizontal: 12,
+                  paddingVertical: 11,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  borderRadius: 12,
+                  backgroundColor: "#F8FAFC",
+                  borderWidth: 1,
+                  borderColor: "#E2E8F0",
+                }}
+              >
+                <Text style={{ fontSize: 13, color: "#4361EE", fontWeight: "700" }}>
+                  {allMeetingAssigneesSelected ? "Deselect all" : "Select all"}
+                </Text>
+                {allMeetingAssigneesSelected ? <Check size={16} color="#4361EE" /> : null}
+              </Pressable>
+              <ScrollView
+                style={{ maxHeight: MEETING_ASSIGNEE_SHEET_MAX_HEIGHT - 210 }}
+                contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 8 }}
+                showsVerticalScrollIndicator
+                keyboardShouldPersistTaps="handled"
+              >
+                {meetingAssigneeOptions.map((member, idx) => {
+                  const selected = meetingAssigneeIds.includes(member.userId);
+                  return (
+                    <Pressable
+                      key={member.userId}
+                      onPress={() =>
+                        setMeetingAssigneeIds((prev) =>
+                          prev.includes(member.userId)
+                            ? prev.filter((id) => id !== member.userId)
+                            : [...prev, member.userId],
+                        )
+                      }
+                      style={{
+                        paddingVertical: 12,
+                        flexDirection: "row",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        borderBottomWidth: idx === meetingAssigneeOptions.length - 1 ? 0 : 1,
+                        borderBottomColor: "#F1F5F9",
+                      }}
+                    >
+                      <Text style={{ fontSize: 15, color: "#334155", fontWeight: selected ? "700" : "500" }}>
+                        {member.user.name}
+                      </Text>
+                      {selected ? <Check size={16} color="#4361EE" /> : <View style={{ width: 16, height: 16 }} />}
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+              <TouchableOpacity
+                onPress={() => setShowMeetingAssigneeDropdown(false)}
+                style={{
+                  marginHorizontal: 20,
+                  marginTop: 8,
+                  backgroundColor: "#4361EE",
+                  borderRadius: 14,
+                  paddingVertical: 14,
+                  alignItems: "center",
+                }}
+              >
+                <Text style={{ color: "white", fontSize: 15, fontWeight: "700" }}>Done</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal visible={showDurationPicker} transparent animationType="slide" onRequestClose={() => setShowDurationPicker(false)}>
+        <Pressable
+          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.35)", justifyContent: "flex-end" }}
+          onPress={() => setShowDurationPicker(false)}
+        >
+          <Pressable onPress={(e) => e.stopPropagation()}>
+            <View
+              style={{
+                backgroundColor: "white",
+                borderTopLeftRadius: 20,
+                borderTopRightRadius: 20,
+                maxHeight: MEETING_DURATION_SHEET_MAX_HEIGHT,
+                paddingBottom: insets.bottom + 12,
+                overflow: "hidden",
+              }}
+            >
+              <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: "#E2E8F0", alignSelf: "center", marginTop: 10, marginBottom: 14 }} />
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, marginBottom: 8 }}>
+                <Text style={{ fontSize: 17, fontWeight: "700", color: "#0F172A" }}>Duration</Text>
+                <Pressable
+                  onPress={() => setShowDurationPicker(false)}
+                  style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "#F1F5F9", alignItems: "center", justifyContent: "center" }}
+                >
+                  <X size={16} color="#64748B" />
+                </Pressable>
+              </View>
+              <ScrollView
+                style={{ maxHeight: MEETING_DURATION_SHEET_MAX_HEIGHT - 120 }}
+                contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 8 }}
+                showsVerticalScrollIndicator
+                keyboardShouldPersistTaps="handled"
+              >
+                {VIDEO_MEETING_DURATION_OPTIONS.map((minutes, idx) => (
+                  <Pressable
+                    key={minutes}
+                    onPress={() => {
+                      setMeetingDurationMinutes(minutes);
+                      setShowDurationPicker(false);
+                    }}
+                    style={{
+                      paddingVertical: 14,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      borderBottomWidth: idx === VIDEO_MEETING_DURATION_OPTIONS.length - 1 ? 0 : 1,
+                      borderBottomColor: "#F1F5F9",
+                      backgroundColor: meetingDurationMinutes === minutes ? "#EEF2FF" : "transparent",
+                      borderRadius: meetingDurationMinutes === minutes ? 10 : 0,
+                      paddingHorizontal: meetingDurationMinutes === minutes ? 12 : 0,
+                    }}
+                  >
+                    <Text style={{ fontSize: 15, fontWeight: meetingDurationMinutes === minutes ? "700" : "500", color: meetingDurationMinutes === minutes ? "#4361EE" : "#0F172A" }}>
+                      {formatVideoMeetingDuration(minutes)}
+                    </Text>
+                    {meetingDurationMinutes === minutes ? <Check size={16} color="#4361EE" /> : null}
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </View>
+          </Pressable>
+        </Pressable>
       </Modal>
 
       {/* Milestone Celebration Modal */}

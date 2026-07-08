@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Eye, EyeOff } from "lucide-react-native";
 import {
   View,
@@ -11,26 +11,20 @@ import {
   Image,
   ScrollView,
 } from "react-native";
-import { authClient, clearAccessToken, getAccessToken, getAuthHeaders, setAccessTokenFromAuthData } from "@/lib/auth/auth-client";
+import { agentDebugLog, authClient, clearAccessToken, jwtSubPrefix, resolveBackendBearerToken, setAccessTokenFromAuthData } from "@/lib/auth/auth-client";
 import { formatAuthFlowError, isEmailNotVerifiedError } from "@/lib/auth/auth-errors";
-import {
-  clearSignedOutMark,
-  markSessionSignedOut,
-  SESSION_QUERY_KEY,
-  useInvalidateSession,
-} from "@/lib/auth/use-session";
+import { clearSignedOutMark, markSessionSignedOut, cancelMobileAuthQueries } from "@/lib/auth/use-session";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { StatusBar } from "expo-status-bar";
 import { router, useLocalSearchParams } from "expo-router";
 import { LEGAL_APP_NAME, LEGAL_COMPANY_NAME, LEGAL_PARENT_COMPANY_NAME } from "@/lib/legal-constants";
 import { useQueryClient } from "@tanstack/react-query";
-import { fetch } from "expo/fetch";
-import { readJsonSafe } from "@/lib/api/api";
 import { provisionBackendUserAfterAuth } from "@/lib/auth/sync-backend-user";
-import { fetchMeUser, ME_QUERY_KEY } from "@/lib/auth/me-query";
+import { fetchMeUser } from "@/lib/auth/me-query";
 import { setPendingTeamInviteToken } from "@/lib/auth/pending-team-invite";
-import { finishMobilePostAuth } from "@/lib/auth/finish-post-auth";
+import { primeMobileAuthSession } from "@/lib/auth/finish-post-auth";
+import { navigateToMobileHomeWithRetry } from "@/lib/auth/auth-entry";
 
 export default function SignIn() {
   const params = useLocalSearchParams<{
@@ -48,8 +42,12 @@ export default function SignIn() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const invalidateSession = useInvalidateSession();
   const queryClient = useQueryClient();
+  const signingInRef = useRef(false);
+
+  useEffect(() => {
+    clearSignedOutMark();
+  }, []);
 
   useEffect(() => {
     if (reason === "session-required") {
@@ -65,31 +63,67 @@ export default function SignIn() {
     if (inviteToken) setPendingTeamInviteToken(inviteToken);
   }, [inviteToken]);
 
-  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+  const resolveSessionAfterSignIn = async (result: { data?: { user?: unknown } | null }) => {
+    setAccessTokenFromAuthData(result ?? null);
+    setAccessTokenFromAuthData(result.data ?? null);
+    let token =
+      setAccessTokenFromAuthData(result.data ?? null) ??
+      setAccessTokenFromAuthData(result ?? null);
 
-  const ensureSessionAndToken = async () => {
-    // Neon session materialization can lag briefly after sign-in on mobile.
-    for (let attempt = 0; attempt < 4; attempt += 1) {
-      await invalidateSession();
-      const bearer = (await getAccessToken())?.trim() ?? null;
-      const sessionRes = await authClient.getSession({
-        fetchOptions: {
-          headers: {
-            "X-Force-Fetch": "1",
-            ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}),
-          },
+    // Always materialize a fresh Neon session/JWT once — sign-in payload alone is not enough for /api/me.
+    const sessionRes = await authClient.getSession({
+      fetchOptions: {
+        headers: {
+          "X-Force-Fetch": "1",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-      } as never);
-      const tokenFromSession =
-        setAccessTokenFromAuthData(sessionRes ?? null) ??
-        setAccessTokenFromAuthData(sessionRes.data ?? null);
-      const tokenFromClient = await getAccessToken();
-      if (sessionRes.data?.user && (tokenFromSession || tokenFromClient)) {
-        return true;
-      }
-      await sleep(250);
+      },
+    } as never);
+    token =
+      setAccessTokenFromAuthData(sessionRes ?? null) ??
+      setAccessTokenFromAuthData(sessionRes.data ?? null) ??
+      token;
+    const sessionData = (sessionRes.data ?? null) as { user: unknown } | null;
+    const sessionUserId = (sessionData?.user as { id?: string } | undefined)?.id;
+    const backendToken = await resolveBackendBearerToken({
+      fresh: true,
+      expectedUserId: sessionUserId,
+    });
+    if (!sessionData?.user || !backendToken) {
+      agentDebugLog("session resolve failed", {
+        runId: "account-switch-v3",
+        hypothesisId: "H1",
+        hasUser: !!sessionData?.user,
+        hasToken: !!backendToken,
+      });
+      return null;
     }
-    return false;
+    agentDebugLog("session resolved", {
+      runId: "account-switch-v3",
+      hypothesisId: "H1",
+      userIdPrefix: sessionUserId?.slice(0, 8) ?? null,
+      jwtSubPrefix: jwtSubPrefix(backendToken),
+    });
+    return { sessionData, token: backendToken };
+  };
+
+  const loadProfileAfterAuth = async (token: string) => {
+    const syncOk = await provisionBackendUserAfterAuth(token);
+    agentDebugLog("loadProfile sync-user", { runId: "account-switch-v3", hypothesisId: "H2", syncOk });
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const me = await fetchMeUser(token);
+      if (me?.id) {
+        agentDebugLog("loadProfile success", { runId: "account-switch-v3", hypothesisId: "H3", attempt, syncOk });
+        return me;
+      }
+      agentDebugLog("loadProfile attempt miss", { runId: "account-switch-v3", hypothesisId: "H3", attempt, syncOk });
+      if (attempt < 4) {
+        await provisionBackendUserAfterAuth(token);
+        await new Promise((resolve) => setTimeout(resolve, 200 * (attempt + 1)));
+      }
+    }
+    agentDebugLog("loadProfile exhausted", { runId: "account-switch-v3", hypothesisId: "H3", syncOk, attempts: 5 });
+    return null;
   };
 
   const handleSignIn = async () => {
@@ -104,7 +138,12 @@ export default function SignIn() {
       return;
     }
     setLoading(true);
+    signingInRef.current = true;
+    clearAccessToken();
+    clearSignedOutMark();
+    await cancelMobileAuthQueries(queryClient);
     const emailNorm = email.trim().toLowerCase();
+    agentDebugLog("sign-in start", { runId: "account-switch-v3", hypothesisId: "H8", emailLen: emailNorm.length });
     try {
       const result = await authClient.signIn.email({
         email: emailNorm,
@@ -149,53 +188,29 @@ export default function SignIn() {
         const msg = result.error.message ?? "";
         setError(msg || "Invalid email or password. Please try again.");
       } else {
-        const tokenFromResult =
-          setAccessTokenFromAuthData(result ?? null) ??
-          setAccessTokenFromAuthData(result.data ?? null);
-        clearSignedOutMark();
-        const ready = tokenFromResult ? await ensureSessionAndToken() : await ensureSessionAndToken();
-        if (!ready) {
+        const resolved = await resolveSessionAfterSignIn(result);
+        if (!resolved) {
           setError("Sign-in did not establish a session. Please try again.");
           return;
         }
-        await queryClient.refetchQueries({ queryKey: SESSION_QUERY_KEY });
-        await provisionBackendUserAfterAuth();
-        const authHeaders = await getAuthHeaders();
-        let backendAuthed = false;
-        for (let attempt = 0; attempt < 3; attempt += 1) {
-          const backendSessionRes = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/api/me/debug`, {
-            credentials: "include",
-            headers: authHeaders,
-          });
-          const backendJson = await readJsonSafe<{
-            data?: { authenticated?: boolean };
-          }>(backendSessionRes);
-          if (backendSessionRes.ok && backendJson?.data?.authenticated === true) {
-            backendAuthed = true;
-            break;
-          }
-          await sleep(250);
-        }
-        if (!backendAuthed) {
-          // Do not strand the user on sign-in for transient backend auth propagation delays.
-          await sleep(200);
-        }
-        queryClient.removeQueries({ queryKey: ME_QUERY_KEY });
-        const me = await queryClient.fetchQuery({
-          queryKey: ME_QUERY_KEY,
-          queryFn: fetchMeUser,
-        });
+        const { sessionData, token } = resolved;
+        const me = await loadProfileAfterAuth(token);
         if (!me?.id) {
           setError("Could not load your profile. Try signing in again.");
           return;
         }
-        await finishMobilePostAuth(queryClient);
-        await queryClient.refetchQueries({ queryKey: SESSION_QUERY_KEY });
-        router.replace("/(app)/chat");
+        await primeMobileAuthSession(queryClient, sessionData, me);
+        agentDebugLog("sign-in complete awaiting layout nav", {
+          runId: "auth-simplify-v4",
+          hypothesisId: "H4",
+          meIdPrefix: me.id.slice(0, 8),
+        });
+        navigateToMobileHomeWithRetry(me.isAdmin === true);
       }
     } catch (err) {
       setError(formatAuthFlowError(err));
     } finally {
+      signingInRef.current = false;
       setLoading(false);
     }
   };

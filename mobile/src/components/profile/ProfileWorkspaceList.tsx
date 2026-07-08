@@ -1,17 +1,15 @@
 import React, { useState } from "react";
-import { View, Text, Pressable, ActivityIndicator, Modal, ScrollView } from "react-native";
+import { View, Text, Pressable, ActivityIndicator, Modal, ScrollView, Image } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Building2, Check, ChevronDown, Pencil, Plus, X } from "lucide-react-native";
+import { Building2, Check, ChevronDown, LogOut, X } from "lucide-react-native";
 import type { Team } from "@/lib/types";
+import { resolveUserImageUrl } from "@/lib/user-avatar";
 import {
-  WorkspaceTeamAvatar,
   formatTeamRole,
 } from "@/components/WorkspaceTeamUI";
 import {
   PROFILE_UI,
   ProfileCard,
-  ProfileDivider,
-  ProfileMenuRow,
 } from "@/components/profile/ProfileEnterpriseUI";
 
 type TeamWithRole = Team & { role?: string };
@@ -24,12 +22,38 @@ type ProfileWorkspaceListProps = {
   pendingCountMap: Record<string, number>;
   onSelectTeam: (teamId: string) => void;
   onManageActive?: () => void;
+  onLeaveActive?: () => void;
   onAddWorkspace: () => void;
 };
 
-const AVATAR_SIZE = 40;
 const MAX_VISIBLE_ROWS = 4;
-const ROW_HEIGHT = 64;
+const ROW_HEIGHT = 52;
+
+function WorkspaceRowIcon({ team, active }: { team: Pick<Team, "name" | "image">; active: boolean }) {
+  const imageUrl = resolveUserImageUrl(team.image);
+  return (
+    <View
+      style={[
+        PROFILE_UI.iconBox,
+        {
+          marginRight: 12,
+          overflow: "hidden",
+          padding: 0,
+          backgroundColor: "#EEF2FF",
+          borderColor: active ? "#6366F1" : "#E2E8F0",
+        },
+      ]}
+    >
+      {imageUrl ? (
+        <Image source={{ uri: imageUrl }} style={{ width: 36, height: 36 }} resizeMode="cover" />
+      ) : (
+        <Text style={{ fontSize: 15, fontWeight: "700", color: "#4361EE" }}>
+          {team.name?.[0]?.toUpperCase() ?? "?"}
+        </Text>
+      )}
+    </View>
+  );
+}
 
 function WorkspaceRowContent({
   team,
@@ -47,9 +71,17 @@ function WorkspaceRowContent({
   trailing?: React.ReactNode;
 }) {
   return (
-    <View style={{ flexDirection: "row", alignItems: "center", width: "100%" }}>
-      <WorkspaceTeamAvatar team={team} size={AVATAR_SIZE} active={isActive} />
-      <View style={{ flex: 1, marginLeft: 12, minWidth: 0, justifyContent: "center" }}>
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        paddingHorizontal: 14,
+        paddingVertical: 13,
+        minHeight: ROW_HEIGHT,
+      }}
+    >
+      <WorkspaceRowIcon team={team} active={isActive} />
+      <View style={{ flex: 1, minWidth: 0, justifyContent: "center" }}>
         <Text style={PROFILE_UI.rowTitle} numberOfLines={1}>
           {title}
         </Text>
@@ -78,6 +110,58 @@ function WorkspaceRowContent({
   );
 }
 
+function ActiveWorkspaceRow({
+  team,
+  pendingCount,
+  canSwitch,
+  onOpenPicker,
+  onManageActive,
+  onLeaveActive,
+}: {
+  team: TeamWithRole;
+  pendingCount: number;
+  canSwitch: boolean;
+  onOpenPicker: () => void;
+  onManageActive?: () => void;
+  onLeaveActive?: () => void;
+}) {
+  const trailing = onLeaveActive ? (
+    <Pressable
+      onPress={onLeaveActive}
+      hitSlop={8}
+      testID="leave-active-workspace"
+      style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1, marginLeft: 4 })}
+      accessibilityRole="button"
+      accessibilityLabel="Leave workspace"
+    >
+      <LogOut size={18} color="#64748B" />
+    </Pressable>
+  ) : canSwitch ? (
+    <ChevronDown size={18} color="#64748B" style={{ marginLeft: 4 }} />
+  ) : (
+    <Check size={20} color="#4338CA" strokeWidth={2.5} style={{ marginLeft: 4 }} />
+  );
+
+  return (
+    <Pressable
+      onPress={canSwitch ? onOpenPicker : undefined}
+      onLongPress={onManageActive ?? undefined}
+      delayLongPress={400}
+      testID="workspace-dropdown-trigger"
+      style={({ pressed }) => (canSwitch && pressed ? { backgroundColor: "#F8FAFC" } : undefined)}
+    >
+      <WorkspaceRowContent
+        team={team}
+        isActive
+        title={team.name}
+        subtitle={`${formatTeamRole(team.role)} · Current`}
+        pendingCount={pendingCount}
+        trailing={trailing}
+      />
+    </Pressable>
+  );
+}
+
 export function ProfileWorkspaceList({
   teams,
   activeTeamId,
@@ -86,6 +170,7 @@ export function ProfileWorkspaceList({
   pendingCountMap,
   onSelectTeam,
   onManageActive,
+  onLeaveActive,
   onAddWorkspace,
 }: ProfileWorkspaceListProps) {
   const insets = useSafeAreaInsets();
@@ -148,57 +233,14 @@ export function ProfileWorkspaceList({
   return (
     <>
       <ProfileCard>
-        <Pressable
-          onPress={canSwitch ? () => setPickerOpen(true) : undefined}
-          disabled={!canSwitch}
-          testID="workspace-dropdown-trigger"
-          style={({ pressed }) => ({
-            paddingHorizontal: 14,
-            paddingVertical: 12,
-            minHeight: ROW_HEIGHT,
-            backgroundColor: pressed && canSwitch ? "#F8FAFC" : "transparent",
-          })}
-        >
-          <WorkspaceRowContent
-            team={activeTeam}
-            isActive
-            title={activeTeam.name}
-            subtitle={`${formatTeamRole(activeTeam.role)} · Current`}
-            pendingCount={pendingCount}
-            trailing={
-              canSwitch ? (
-                <ChevronDown size={18} color="#64748B" />
-              ) : (
-                <Check size={20} color="#4338CA" strokeWidth={2.5} />
-              )
-            }
-          />
-        </Pressable>
-
-        {onManageActive ? (
-          <>
-            <ProfileDivider inset />
-            <ProfileMenuRow
-              icon={Pencil}
-              title="Edit workspace"
-              subtitle="Name, photo, and settings"
-              onPress={onManageActive}
-              testID="edit-active-workspace"
-            />
-          </>
-        ) : null}
-
-        {!isDemo ? (
-          <>
-            <ProfileDivider />
-            <ProfileMenuRow
-              icon={Plus}
-              title="Add workspace"
-              onPress={onAddWorkspace}
-              testID="create-join-team-button"
-            />
-          </>
-        ) : null}
+        <ActiveWorkspaceRow
+          team={activeTeam}
+          pendingCount={pendingCount}
+          canSwitch={canSwitch}
+          onOpenPicker={() => setPickerOpen(true)}
+          onManageActive={onManageActive}
+          onLeaveActive={onLeaveActive}
+        />
       </ProfileCard>
 
       <Modal visible={pickerOpen} transparent animationType="slide" onRequestClose={() => setPickerOpen(false)}>
@@ -265,7 +307,7 @@ export function ProfileWorkspaceList({
                       return (
                         <View key={team.id}>
                           {index > 0 ? (
-                            <View style={{ height: 1, backgroundColor: "#F1F5F9", marginLeft: 66 }} />
+                            <View style={{ height: 1, backgroundColor: "#F1F5F9", marginLeft: 52 }} />
                           ) : null}
                           <Pressable
                             onPress={() => {
@@ -278,8 +320,7 @@ export function ProfileWorkspaceList({
                               backgroundColor: isActive ? "#F8FAFC" : pressed ? "#F8FAFC" : "transparent",
                             })}
                           >
-                            <View style={{ paddingHorizontal: 14, paddingVertical: 12, minHeight: ROW_HEIGHT }}>
-                              <WorkspaceRowContent
+                            <WorkspaceRowContent
                                 team={team}
                                 isActive={isActive}
                                 title={team.name}
@@ -291,13 +332,24 @@ export function ProfileWorkspaceList({
                                   ) : undefined
                                 }
                               />
-                            </View>
                           </Pressable>
                         </View>
                       );
                     })}
                   </ScrollView>
                 </View>
+                {!isDemo ? (
+                  <Pressable
+                    onPress={() => {
+                      setPickerOpen(false);
+                      onAddWorkspace();
+                    }}
+                    style={{ paddingHorizontal: 20, paddingTop: 14, alignItems: "center" }}
+                    testID="create-join-team-button"
+                  >
+                    <Text style={{ fontSize: 14, fontWeight: "600", color: "#4338CA" }}>Add workspace</Text>
+                  </Pressable>
+                ) : null}
               </View>
             </View>
           </Pressable>

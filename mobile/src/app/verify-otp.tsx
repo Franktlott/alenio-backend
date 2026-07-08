@@ -19,9 +19,10 @@ import { authClient, getAccessToken, setAccessTokenFromAuthData } from "@/lib/au
 import { provisionBackendUserAfterAuth } from "@/lib/auth/sync-backend-user";
 import { formatAuthFlowError } from "@/lib/auth/auth-errors";
 import { clearPendingSignUp, getPendingSignUp } from "@/lib/auth/pending-signup";
-import { clearSignedOutMark, SESSION_QUERY_KEY, useInvalidateSession } from "@/lib/auth/use-session";
+import { clearSignedOutMark, useInvalidateSession } from "@/lib/auth/use-session";
 import { fetchMeUser, ME_QUERY_KEY } from "@/lib/auth/me-query";
-import { finishMobilePostAuth } from "@/lib/auth/finish-post-auth";
+import { primeMobileAuthSession } from "@/lib/auth/finish-post-auth";
+import { mobileHomeHref } from "@/lib/auth/auth-entry";
 import { setPendingTeamInviteToken } from "@/lib/auth/pending-team-invite";
 
 /** Better Auth defaults to 6; some projects use longer OTPs. */
@@ -118,8 +119,8 @@ export default function VerifyOtp() {
       }
 
       if (sessionRes.data?.user) {
-        await provisionBackendUserAfterAuth();
         clearSignedOutMark();
+        void provisionBackendUserAfterAuth();
         queryClient.removeQueries({ queryKey: ME_QUERY_KEY });
         const me = await queryClient.fetchQuery({
           queryKey: ME_QUERY_KEY,
@@ -129,9 +130,8 @@ export default function VerifyOtp() {
           router.replace("/sign-in");
           return;
         }
-        await finishMobilePostAuth(queryClient);
-        await queryClient.refetchQueries({ queryKey: SESSION_QUERY_KEY });
-        router.replace("/(app)/chat");
+        primeMobileAuthSession(queryClient, sessionRes.data, me);
+        router.replace(mobileHomeHref(me.isAdmin === true));
       } else {
         router.replace("/sign-in");
       }

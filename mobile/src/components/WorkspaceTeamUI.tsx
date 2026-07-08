@@ -2,6 +2,7 @@ import React from "react";
 import { View, Text, Image, Pressable, type ViewStyle } from "react-native";
 import { ChevronRight } from "lucide-react-native";
 import type { Team } from "@/lib/types";
+import { resolveUserImageUrl } from "@/lib/user-avatar";
 
 export const WORKSPACE_SWITCH_HINT = "Tap a workspace to switch.";
 
@@ -48,7 +49,7 @@ export function WorkspaceTeamAvatar({
   size?: number;
   active?: boolean;
 }) {
-  const radius = size >= 48 ? 14 : 10;
+  const radius = size >= 48 ? 14 : 8;
   return (
     <View
       style={{
@@ -59,18 +60,21 @@ export function WorkspaceTeamAvatar({
         alignItems: "center",
         justifyContent: "center",
         overflow: "hidden",
-        borderWidth: active ? 2 : 0,
-        borderColor: "#4361EE",
+        borderWidth: 1,
+        borderColor: active ? "#6366F1" : "#E2E8F0",
         flexShrink: 0,
       }}
     >
-      {team.image ? (
-        <Image source={{ uri: team.image }} style={{ width: size, height: size }} resizeMode="cover" />
-      ) : (
-        <Text style={{ fontSize: size * 0.42, fontWeight: "700", color: "#4361EE" }}>
-          {team.name?.[0]?.toUpperCase() ?? "?"}
-        </Text>
-      )}
+      {(() => {
+        const imageUrl = resolveUserImageUrl(team.image);
+        return imageUrl ? (
+          <Image source={{ uri: imageUrl }} style={{ width: size, height: size }} resizeMode="cover" />
+        ) : (
+          <Text style={{ fontSize: size * 0.42, fontWeight: "700", color: "#4361EE" }}>
+            {team.name?.[0]?.toUpperCase() ?? "?"}
+          </Text>
+        );
+      })()}
     </View>
   );
 }

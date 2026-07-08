@@ -1,9 +1,65 @@
+import type { MemberStandardsCompliance, WorkplaceStandards } from "./workplace-standards";
+
 export type FollowUpTasksDisplay = {
   label: string;
   value: string;
   title: string;
   overdue: true;
 };
+
+export type TeamComplianceSummary = {
+  checkInCompliancePct: number | null;
+  developmentPlanCompliancePct: number | null;
+};
+
+export function computeTeamCompliancePercentages(input: {
+  memberUserIds: string[];
+  memberStats?: Record<string, { standardsCompliance?: MemberStandardsCompliance }>;
+  workplaceStandards: WorkplaceStandards;
+}): TeamComplianceSummary {
+  const { memberUserIds, memberStats, workplaceStandards } = input;
+  if (memberUserIds.length === 0) {
+    return { checkInCompliancePct: null, developmentPlanCompliancePct: null };
+  }
+
+  let checkInCompliant = 0;
+  let checkInTotal = 0;
+  let goalsCompliant = 0;
+  let goalsTotal = 0;
+
+  for (const userId of memberUserIds) {
+    const compliance = memberStats?.[userId]?.standardsCompliance;
+    if (workplaceStandards.checkInRequired) {
+      checkInTotal++;
+      if (compliance?.checkInStatus === "on_track" || compliance?.checkInStatus === "due_soon") {
+        checkInCompliant++;
+      }
+    }
+    if (workplaceStandards.goalsRequired) {
+      goalsTotal++;
+      if (compliance?.goalsStatus === "on_track") goalsCompliant++;
+    }
+  }
+
+  return {
+    checkInCompliancePct:
+      checkInTotal > 0 ? Math.round((checkInCompliant / checkInTotal) * 100) : null,
+    developmentPlanCompliancePct:
+      goalsTotal > 0 ? Math.round((goalsCompliant / goalsTotal) * 100) : null,
+  };
+}
+
+export function formatTeamCompliancePercent(pct: number | null | undefined): string {
+  if (pct == null) return "—";
+  return `${pct}%`;
+}
+
+export function teamComplianceColor(pct: number | null | undefined): string {
+  if (pct == null) return "#94A3B8";
+  if (pct >= 100) return "#D97706";
+  if (pct > 85) return "#10B981";
+  return "#EF4444";
+}
 
 export function calendarDaysSinceDate(iso: string): number {
   const then = new Date(iso);

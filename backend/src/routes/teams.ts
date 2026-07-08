@@ -28,6 +28,19 @@ import {
   revokeLinkedGoDevice,
 } from "../lib/workplace-alerts";
 import {
+  canManageModules,
+  getModuleDefinition,
+  getWorkspaceModule,
+  goLive,
+  listWorkspaceModules,
+  setGeneratedTestCode,
+  setModuleStatus,
+  setSetupProgress,
+  switchToTesting,
+  updateTestingAccess,
+  validateModule,
+} from "../lib/workspace-modules";
+import {
   canInviteMembers,
   generateInviteToken,
   inviteExpiresAt,
@@ -972,6 +985,185 @@ teamsRouter.post("/:teamId/workplace-alerts", zValidator("json", workplaceAlertB
   }
 
   return c.json({ data: result.alert });
+});
+
+// ── Workspace modules (lifecycle + operating mode) ──────────────────────────
+// All routes are scoped by workspace (teamId) and require owner/team_leader.
+
+const moduleStatusSchema = z.object({ status: z.enum(["inactive", "active"]) });
+const operatingModeSchema = z.object({ operatingMode: z.enum(["testing", "live"]) });
+const setupProgressSchema = z.object({ setupProgressPercent: z.number().min(0).max(100) });
+const testingAccessSchema = z.object({
+  requireTestCode: z.boolean().optional(),
+  testAccessCode: z.string().trim().max(64).nullable().optional(),
+  testCodeExpiresAt: z.string().datetime().nullable().optional(),
+  allowedTestingWorkplaceIds: z.array(z.string()).optional(),
+  allowedTestingUserIds: z.array(z.string()).optional(),
+  allowedTestingRoles: z.array(z.string()).optional(),
+});
+
+async function guardModuleManage(teamId: string, userId: string, moduleKey?: string) {
+  if (moduleKey && !getModuleDefinition(moduleKey)) {
+    return { ok: false as const, status: 404 as const, message: "Unknown module", code: "NOT_FOUND" };
+  }
+  if (!(await canManageModules(teamId, userId))) {
+    return { ok: false as const, status: 403 as const, message: "Forbidden", code: "FORBIDDEN" };
+  }
+  return { ok: true as const };
+}
+
+// GET /api/teams/:teamId/modules
+teamsRouter.get("/:teamId/modules", async (c) => {
+  const user = c.get("user")!;
+  const { teamId } = c.req.param();
+  const guard = await guardModuleManage(teamId, user.id);
+  if (!guard.ok) return c.json({ error: { message: guard.message, code: guard.code } }, guard.status);
+  const modules = await listWorkspaceModules(teamId);
+  return c.json({ data: { modules } });
+});
+
+// GET /api/teams/:teamId/modules/:moduleKey
+teamsRouter.get("/:teamId/modules/:moduleKey", async (c) => {
+  const user = c.get("user")!;
+  const { teamId, moduleKey } = c.req.param();
+  const guard = await guardModuleManage(teamId, user.id, moduleKey);
+  if (!guard.ok) return c.json({ error: { message: guard.message, code: guard.code } }, guard.status);
+  const module = await getWorkspaceModule(teamId, moduleKey);
+  if (!module) return c.json({ error: { message: "Unknown module", code: "NOT_FOUND" } }, 404);
+  return c.json({ data: { module } });
+});
+
+// PATCH /api/teams/:teamId/modules/:moduleKey/status
+teamsRouter.patch("/:teamId/modules/:moduleKey/status", zValidator("json", moduleStatusSchema), async (c) => {
+  const user = c.get("user")!;
+  const { teamId, moduleKey } = c.req.param();
+  const { status } = c.req.valid("json");
+  const guard = await guardModuleManage(teamId, user.id, moduleKey);
+  if (!guard.ok) return c.json({ error: { message: guard.message, code: guard.code } }, guard.status);
+  const module = await setModuleStatus(teamId, moduleKey, status, user.id);
+  return c.json({ data: { module } });
+});
+
+// PATCH /api/teams/:teamId/modules/:moduleKey/operating-mode
+// Routes to go-live (with validation) or switch-to-testing.
+teamsRouter.patch("/:teamId/modules/:moduleKey/operating-mode", zValidator("json", operatingModeSchema), async (c) => {
+  const user = c.get("user")!;
+  const { teamId, moduleKey } = c.req.param();
+  const { operatingMode } = c.req.valid("json");
+  const guard = await guardModuleManage(teamId, user.id, moduleKey);
+  if (!guard.ok) return c.json({ error: { message: guard.message, code: guard.code } }, guard.status);
+
+  const result = operatingMode === "live"
+    ? await goLive(teamId, moduleKey, user.id)
+    : await switchToTesting(teamId, moduleKey, user.id);
+
+  if (!result.ok) {
+    if (result.code === "MODULE_INACTIVE") {
+      return c.json({ error: { message: "Module must be active to set an operating mode", code: "MODULE_INACTIVE" } }, 400);
+    }
+    return c.json({ error: { message: "Module failed validation for Go Live", code: "VALIDATION_FAILED" }, validation: result.validation }, 400);
+  }
+  return c.json({ data: { module: result.module } });
+});
+
+// PATCH /api/teams/:teamId/modules/:moduleKey/setup-progress
+teamsRouter.patch("/:teamId/modules/:moduleKey/setup-progress", zValidator("json", setupProgressSchema), async (c) => {
+  const user = c.get("user")!;
+  const { teamId, moduleKey } = c.req.param();
+  const { setupProgressPercent } = c.req.valid("json");
+  const guard = await guardModuleManage(teamId, user.id, moduleKey);
+  if (!guard.ok) return c.json({ error: { message: guard.message, code: guard.code } }, guard.status);
+  const module = await setSetupProgress(teamId, moduleKey, setupProgressPercent);
+  return c.json({ data: { module } });
+});
+
+// PATCH /api/teams/:teamId/modules/:moduleKey/testing-access
+teamsRouter.patch("/:teamId/modules/:moduleKey/testing-access", zValidator("json", testingAccessSchema), async (c) => {
+  const user = c.get("user")!;
+  const { teamId, moduleKey } = c.req.param();
+  const patch = c.req.valid("json");
+  const guard = await guardModuleManage(teamId, user.id, moduleKey);
+  if (!guard.ok) return c.json({ error: { message: guard.message, code: guard.code } }, guard.status);
+  const module = await updateTestingAccess(teamId, moduleKey, patch);
+  return c.json({ data: { module } });
+});
+
+// POST /api/teams/:teamId/modules/:moduleKey/generate-test-code
+teamsRouter.post("/:teamId/modules/:moduleKey/generate-test-code", async (c) => {
+  const user = c.get("user")!;
+  const { teamId, moduleKey } = c.req.param();
+  const guard = await guardModuleManage(teamId, user.id, moduleKey);
+  if (!guard.ok) return c.json({ error: { message: guard.message, code: guard.code } }, guard.status);
+  const module = await setGeneratedTestCode(teamId, moduleKey);
+  return c.json({ data: { module } });
+});
+
+// POST /api/teams/:teamId/modules/:moduleKey/validate
+teamsRouter.post("/:teamId/modules/:moduleKey/validate", async (c) => {
+  const user = c.get("user")!;
+  const { teamId, moduleKey } = c.req.param();
+  const guard = await guardModuleManage(teamId, user.id, moduleKey);
+  if (!guard.ok) return c.json({ error: { message: guard.message, code: guard.code } }, guard.status);
+  const validation = await validateModule(teamId, moduleKey);
+  return c.json({ data: { validation } });
+});
+
+// POST /api/teams/:teamId/modules/:moduleKey/go-live
+teamsRouter.post("/:teamId/modules/:moduleKey/go-live", async (c) => {
+  const user = c.get("user")!;
+  const { teamId, moduleKey } = c.req.param();
+  const guard = await guardModuleManage(teamId, user.id, moduleKey);
+  if (!guard.ok) return c.json({ error: { message: guard.message, code: guard.code } }, guard.status);
+  const result = await goLive(teamId, moduleKey, user.id);
+  if (!result.ok) {
+    if (result.code === "MODULE_INACTIVE") {
+      return c.json({ error: { message: "Module must be active to go live", code: "MODULE_INACTIVE" } }, 400);
+    }
+    return c.json({ error: { message: "Module failed validation for Go Live", code: "VALIDATION_FAILED" }, validation: result.validation }, 400);
+  }
+  return c.json({ data: { module: result.module } });
+});
+
+// POST /api/teams/:teamId/modules/:moduleKey/switch-to-testing
+teamsRouter.post("/:teamId/modules/:moduleKey/switch-to-testing", async (c) => {
+  const user = c.get("user")!;
+  const { teamId, moduleKey } = c.req.param();
+  const guard = await guardModuleManage(teamId, user.id, moduleKey);
+  if (!guard.ok) return c.json({ error: { message: guard.message, code: guard.code } }, guard.status);
+  const result = await switchToTesting(teamId, moduleKey, user.id);
+  if (!result.ok) {
+    return c.json({ error: { message: "Module must be active to switch to testing", code: "MODULE_INACTIVE" } }, 400);
+  }
+  return c.json({ data: { module: result.module } });
+});
+
+// GET /api/teams/:teamId/modules/:moduleKey/test-sessions — admin Testing Sessions view
+teamsRouter.get("/:teamId/modules/:moduleKey/test-sessions", async (c) => {
+  const user = c.get("user")!;
+  const { teamId, moduleKey } = c.req.param();
+  const guard = await guardModuleManage(teamId, user.id, moduleKey);
+  if (!guard.ok) return c.json({ error: { message: guard.message, code: guard.code } }, guard.status);
+  const sessions = await prisma.moduleTestSession.findMany({
+    where: { teamId, moduleKey },
+    orderBy: { startedAt: "desc" },
+    take: 200,
+  });
+  return c.json({
+    data: {
+      sessions: sessions.map((s) => ({
+        id: s.id,
+        moduleKey: s.moduleKey,
+        testerName: s.testerName,
+        workplaceName: s.workplaceName,
+        startedAt: s.startedAt.toISOString(),
+        completedAt: s.completedAt?.toISOString() ?? null,
+        durationSeconds: s.durationSeconds,
+        completedSteps: s.completedSteps,
+        failedSteps: s.failedSteps,
+        notes: s.notes,
+      })),
+    },
+  });
 });
 
 export { teamsRouter };

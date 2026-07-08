@@ -18,7 +18,7 @@ async function getMembership(userId: string, teamId: string) {
   });
 }
 
-// GET /api/teams/:teamId/messages - fetch last N messages, oldest first
+// GET /api/teams/:teamId/messages - paginated history, oldest first within each page
 messagesRouter.get("/", async (c) => {
   const user = c.get("user")!;
   const teamId = c.req.param("teamId") as string;
@@ -30,12 +30,10 @@ messagesRouter.get("/", async (c) => {
 
   const topicIdParam = c.req.query("topicId");
   const limitParam = c.req.query("limit");
-  const take = limitParam ? parseInt(limitParam, 10) : 100;
+  const beforeId = c.req.query("before");
+  const parsedLimit = limitParam ? parseInt(limitParam, 10) : 50;
+  const take = Number.isFinite(parsedLimit) && parsedLimit > 0 ? Math.min(parsedLimit, 100) : 50;
 
-  // Build topicId filter:
-  // - no param provided → return all messages (backwards compatible)
-  // - "general" → messages with no topic (topicId: null)
-  // - any other value → messages belonging to that topic
   let topicFilter: { topicId?: string | null } = {};
   if (topicIdParam === "general") {
     topicFilter = { topicId: null };
@@ -43,26 +41,48 @@ messagesRouter.get("/", async (c) => {
     topicFilter = { topicId: topicIdParam };
   }
 
-  const messages = await prisma.message.findMany({
-    where: { teamId, ...topicFilter },
-    include: {
-      sender: { select: { id: true, name: true, email: true, image: true } },
-      reactions: { include: { user: { select: { id: true, name: true } } } },
-      replyTo: {
-        select: {
-          id: true,
-          content: true,
-          mediaUrl: true,
-          mediaType: true,
-          sender: { select: { id: true, name: true } },
-        },
+  let beforeCreatedAt: Date | undefined;
+  if (beforeId) {
+    const beforeMessage = await prisma.message.findFirst({
+      where: { id: beforeId, teamId, ...topicFilter },
+      select: { createdAt: true },
+    });
+    if (!beforeMessage) {
+      return c.json({ data: { messages: [], hasMore: false, nextCursor: null } });
+    }
+    beforeCreatedAt = beforeMessage.createdAt;
+  }
+
+  const messageInclude = {
+    sender: { select: { id: true, name: true, email: true, image: true } },
+    reactions: { include: { user: { select: { id: true, name: true } } } },
+    replyTo: {
+      select: {
+        id: true,
+        content: true,
+        mediaUrl: true,
+        mediaType: true,
+        sender: { select: { id: true, name: true } },
       },
     },
+  } as const;
+
+  const messages = await prisma.message.findMany({
+    where: {
+      teamId,
+      ...topicFilter,
+      ...(beforeCreatedAt ? { createdAt: { lt: beforeCreatedAt } } : {}),
+    },
+    include: messageInclude,
     orderBy: { createdAt: "desc" },
-    take,
+    take: take + 1,
   });
 
-  return c.json({ data: messages.reverse() });
+  const hasMore = messages.length > take;
+  const page = messages.slice(0, take).reverse();
+  const nextCursor = hasMore && page.length > 0 ? page[0].id : null;
+
+  return c.json({ data: { messages: page, hasMore, nextCursor } });
 });
 
 // POST /api/teams/:teamId/messages - send a message

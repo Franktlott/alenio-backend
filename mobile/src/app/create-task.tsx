@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -10,14 +10,16 @@ import {
   Modal,
   Image,
   Alert,
+  Dimensions,
+  Pressable,
+  ScrollView,
 } from "react-native";
-import { SafeKeyboardAwareScrollView as KeyboardAwareScrollView } from "@/lib/safe-keyboard-controller";
+import { SafeKeyboardAvoidingView } from "@/lib/safe-keyboard-controller";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { LinearGradient } from "expo-linear-gradient";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams } from "expo-router";
-import { X, BookOpen, Bookmark, Plus, Square, Camera, Pencil, Trash2, ImageIcon } from "lucide-react-native";
+import { X, BookOpen, Bookmark, Plus, Square, Camera, Pencil, Trash2, ImageIcon, Check, ChevronDown } from "lucide-react-native";
 import * as ImagePicker from "expo-image-picker";
 import { api } from "@/lib/api/api";
 import { uploadFile } from "@/lib/upload";
@@ -46,10 +48,15 @@ const TASK_STATUS_OPTIONS: { label: string; value: TaskStatus }[] = [
   { label: "Completed", value: "done" },
 ];
 
+const SCREEN_HEIGHT = Dimensions.get("window").height;
+const CREATE_TASK_SHEET_MAX_HEIGHT = Math.round(SCREEN_HEIGHT * 0.92);
+const ASSIGNEE_SHEET_MAX_HEIGHT = Math.round(SCREEN_HEIGHT * 0.62);
+
 export default function CreateTaskScreen() {
   const { teamId, prefillTitle, initialDueDate } = useLocalSearchParams<{ teamId: string; prefillTitle?: string; initialDueDate?: string }>();
   const queryClient = useQueryClient();
   const { data: session } = useSession();
+  const insets = useSafeAreaInsets();
 
   const { data: meProfile } = useQuery({
     queryKey: ME_QUERY_KEY,
@@ -88,6 +95,7 @@ export default function CreateTaskScreen() {
   const [attachmentUri, setAttachmentUri] = useState<string | null>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [showPhotoOptions, setShowPhotoOptions] = useState(false);
+  const [showAssigneePicker, setShowAssigneePicker] = useState(false);
 
   const [editingTemplate, setEditingTemplate] = useState<TaskTemplate | null>(null);
   const [editTitle, setEditTitle] = useState("");
@@ -103,6 +111,21 @@ export default function CreateTaskScreen() {
   const members = team?.members ?? [];
   const currentMembership = members.find((m) => m.userId === session?.user?.id);
   const isRegularMember = !currentMembership || currentMembership.role === "member";
+
+  const assigneeOptions = useMemo(
+    () =>
+      [...members].sort((a, b) =>
+        (a.user.name?.trim() || a.user.email || "").localeCompare(
+          b.user.name?.trim() || b.user.email || "",
+          undefined,
+          { sensitivity: "base" },
+        ),
+      ),
+    [members],
+  );
+  const allAssigneeIds = useMemo(() => assigneeOptions.map((m) => m.userId), [assigneeOptions]);
+  const allAssigneesSelected =
+    allAssigneeIds.length > 0 && allAssigneeIds.every((id) => selectedAssignees.includes(id));
 
   const { data: templates = [] } = useQuery({
     queryKey: ["templates", teamId],
@@ -269,6 +292,20 @@ export default function CreateTaskScreen() {
     });
   };
 
+  const toggleAllAssignees = () => {
+    if (allAssigneesSelected) {
+      setSelectedAssignees([]);
+      setIsJoint(false);
+      return;
+    }
+    setSelectedAssignees(allAssigneeIds);
+  };
+
+  const memberDisplayName = (member: TeamMember) => {
+    const base = member.user.name || member.user.email || "Unknown";
+    return member.userId === session?.user?.id ? `${base} (You)` : base;
+  };
+
   const addSubtask = () => {
     const trimmed = newSubtaskTitle.trim();
     if (!trimmed) return;
@@ -314,48 +351,54 @@ export default function CreateTaskScreen() {
   };
 
   return (
-    <SafeAreaView
-      className="flex-1 bg-white dark:bg-slate-900"
-      edges={["top"]}
-      testID="create-task-screen"
-    >
-        {/* Header */}
-        <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
-          <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 14, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-            <TouchableOpacity onPress={() => router.back()} testID="close-button">
-              <X size={22} color="white" />
-            </TouchableOpacity>
-            <Text style={{ flex: 1, marginLeft: 12, color: "white", fontSize: 18, fontWeight: "700" }}>New Task</Text>
-            <View className="flex-row items-center" style={{ gap: 14 }}>
+    <View style={{ flex: 1, backgroundColor: "transparent" }} testID="create-task-screen">
+      <Pressable
+        style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)" }}
+        onPress={() => router.back()}
+        testID="create-task-backdrop"
+      />
+      <SafeKeyboardAvoidingView style={{ justifyContent: "flex-end" }}>
+        <Pressable
+          style={{
+            backgroundColor: "white",
+            borderTopLeftRadius: 24,
+            borderTopRightRadius: 24,
+            maxHeight: CREATE_TASK_SHEET_MAX_HEIGHT,
+            overflow: "hidden",
+          }}
+          onPress={(e) => e.stopPropagation()}
+        >
+          <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: "#E2E8F0", alignSelf: "center", marginTop: 8, marginBottom: 12 }} />
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, marginBottom: 16 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1 }}>
+              <Image source={require("@/assets/alenio-icon.png")} style={{ width: 28, height: 28, borderRadius: 7 }} />
+              <Text style={{ fontSize: 17, fontWeight: "700", color: "#0F172A" }}>New Task</Text>
+            </View>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
               {templates.length > 0 ? (
                 <TouchableOpacity onPress={() => setShowTemplatePicker(true)} testID="use-template-button">
-                  <BookOpen size={20} color="white" />
+                  <BookOpen size={20} color="#64748B" />
                 </TouchableOpacity>
               ) : null}
               <TouchableOpacity onPress={handleSaveAsTemplate} disabled={savingTemplate} testID="save-template-button">
-                  {savingTemplate ? (
-                    <ActivityIndicator color="white" size="small" />
-                  ) : (
-                    <Bookmark size={20} color="white" />
-                  )}
-                </TouchableOpacity>
-              <TouchableOpacity
-                onPress={handleCreate}
-                disabled={createMutation.isPending}
-                testID="create-button"
-              >
-                {createMutation.isPending ? (
-                  <ActivityIndicator color="white" size="small" />
-                ) : (
-                  <Text className="text-white font-semibold text-base">Create</Text>
-                )}
+                {savingTemplate ? <ActivityIndicator color="#4361EE" size="small" /> : <Bookmark size={20} color="#64748B" />}
               </TouchableOpacity>
-              <Image source={require("@/assets/alenio-icon.png")} style={{ width: 30, height: 30, borderRadius: 6 }} />
+              <Pressable
+                onPress={() => router.back()}
+                style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "#F1F5F9", alignItems: "center", justifyContent: "center" }}
+                testID="close-button"
+              >
+                <X size={16} color="#64748B" />
+              </Pressable>
             </View>
           </View>
-        </LinearGradient>
 
-        <KeyboardAwareScrollView className="flex-1" contentContainerStyle={{ paddingHorizontal: 16 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+          <ScrollView
+            style={{ maxHeight: CREATE_TASK_SHEET_MAX_HEIGHT - 88 }}
+            contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: insets.bottom + 24 }}
+            showsVerticalScrollIndicator
+            keyboardShouldPersistTaps="handled"
+          >
           {/* Title */}
           <TextInput
             className="text-xl font-semibold text-slate-900 dark:text-white py-4 border-b border-slate-100 dark:border-slate-800"
@@ -386,6 +429,40 @@ export default function CreateTaskScreen() {
           {error ? (
             <Text className="text-red-500 text-sm mt-2">{error}</Text>
           ) : null}
+
+          {/* Priority */}
+          <View className="py-4 border-b border-slate-100 dark:border-slate-800">
+            <Text className="text-sm font-semibold text-slate-500 mb-3">
+              Priority
+            </Text>
+            <View className="flex-row flex-wrap" style={{ gap: 8 }}>
+              {PRIORITIES.map((p) => (
+                <TouchableOpacity
+                  key={p.value}
+                  onPress={() => setPriority(p.value)}
+                  className="px-3 py-1.5 rounded-full border"
+                  style={
+                    priority === p.value
+                      ? {
+                          backgroundColor: p.color + "20",
+                          borderColor: p.color,
+                        }
+                      : { borderColor: "#E2E8F0", backgroundColor: "transparent" }
+                  }
+                  testID={`priority-${p.value}`}
+                >
+                  <Text
+                    className="text-xs font-semibold"
+                    style={{
+                      color: priority === p.value ? p.color : "#94A3B8",
+                    }}
+                  >
+                    {p.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
 
           {/* Due Date */}
           <View className="py-4 border-b border-slate-100 dark:border-slate-800">
@@ -454,139 +531,6 @@ export default function CreateTaskScreen() {
             )}
           </View>
 
-          {/* Priority */}
-          <View className="py-4 border-b border-slate-100 dark:border-slate-800">
-            <Text className="text-sm font-semibold text-slate-500 mb-3">
-              Priority
-            </Text>
-            <View className="flex-row flex-wrap" style={{ gap: 8 }}>
-              {PRIORITIES.map((p) => (
-                <TouchableOpacity
-                  key={p.value}
-                  onPress={() => setPriority(p.value)}
-                  className="px-3 py-1.5 rounded-full border"
-                  style={
-                    priority === p.value
-                      ? {
-                          backgroundColor: p.color + "20",
-                          borderColor: p.color,
-                        }
-                      : { borderColor: "#E2E8F0", backgroundColor: "transparent" }
-                  }
-                  testID={`priority-${p.value}`}
-                >
-                  <Text
-                    className="text-xs font-semibold"
-                    style={{
-                      color: priority === p.value ? p.color : "#94A3B8",
-                    }}
-                  >
-                    {p.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-
-          {/* Status */}
-          <View className="py-4 border-b border-slate-100 dark:border-slate-800">
-            <Text className="text-sm font-semibold text-slate-500 mb-3">
-              Status
-            </Text>
-            <View className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden bg-white dark:bg-slate-900">
-              <Picker selectedValue={taskStatus} onValueChange={(value) => setTaskStatus(value as TaskStatus)}>
-                {TASK_STATUS_OPTIONS.map((option) => (
-                  <Picker.Item key={option.value} label={option.label} value={option.value} />
-                ))}
-              </Picker>
-            </View>
-          </View>
-
-          {/* Assignees */}
-          {members.length > 0 ? (
-            <View className="py-4 border-b border-slate-100 dark:border-slate-800">
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 12 }}>
-                <Text className="text-sm font-semibold text-slate-500">Assign to</Text>
-                <Text style={{ fontSize: 12, color: "#EF4444", fontWeight: "600" }}>*</Text>
-              </View>
-              <View style={{ gap: 8 }}>
-                {members.map((m: TeamMember) => {
-                  const isSelected = selectedAssignees.includes(m.userId);
-                  const isMe = m.userId === session?.user?.id;
-                  const displayName = (m.user.name || m.user.email || "Unknown") + (isMe ? " (You)" : "");
-                  return (
-                    <TouchableOpacity
-                      key={m.id}
-                      onPress={() => toggleAssignee(m.userId)}
-                      className="flex-row items-center p-3 rounded-xl border"
-                      style={{
-                        borderColor: isSelected ? "#4361EE" : "#E2E8F0",
-                        backgroundColor: isSelected ? "#4361EE0D" : "transparent",
-                      }}
-                      testID={`assignee-${m.userId}`}
-                    >
-                      <View className="w-9 h-9 rounded-full overflow-hidden bg-indigo-100 items-center justify-center mr-3">
-                        {m.user.image ? (
-                          <Image source={{ uri: m.user.image }} style={{ width: 36, height: 36 }} resizeMode="cover" />
-                        ) : (
-                          <View className="w-9 h-9 rounded-full bg-indigo-600 items-center justify-center">
-                            <Text className="text-white text-xs font-bold">
-                              {displayName[0]?.toUpperCase() ?? "?"}
-                            </Text>
-                          </View>
-                        )}
-                      </View>
-                      <Text
-                        className="flex-1 font-medium text-sm"
-                        style={{ color: isSelected ? "#4361EE" : "#334155" }}
-                        numberOfLines={1}
-                      >
-                        {displayName}
-                      </Text>
-                      {isSelected ? (
-                        <View className="w-5 h-5 rounded-full bg-indigo-600 items-center justify-center">
-                          <Text className="text-white text-xs">✓</Text>
-                        </View>
-                      ) : null}
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            </View>
-          ) : null}
-
-          {/* Joint Task — only shown when 2+ assignees selected */}
-          {selectedAssignees.length >= 2 ? (
-            <View className="py-4 border-b border-slate-100 dark:border-slate-800">
-              <View className="flex-row items-center justify-between">
-                <View style={{ flex: 1, marginRight: 12 }}>
-                  <Text className="text-sm font-semibold text-slate-500">Joint Task</Text>
-                  <Text className="text-xs text-slate-400 mt-0.5">
-                    Everyone works on one shared task
-                  </Text>
-                </View>
-                <Switch
-                  value={isJoint}
-                  onValueChange={(val) => setIsJoint(val)}
-                  trackColor={{ false: "#E2E8F0", true: "#6B8EF6" }}
-                  thumbColor="white"
-                  testID="joint-task-switch"
-                />
-              </View>
-              {isJoint ? (
-                <View
-                  className="mt-3 px-3 py-2.5 rounded-xl"
-                  style={{ backgroundColor: "#EFF6FF" }}
-                  testID="joint-task-banner"
-                >
-                  <Text className="text-xs text-blue-600">
-                    Subtasks are shared — completing one marks it done for the whole team.
-                  </Text>
-                </View>
-              ) : null}
-            </View>
-          ) : null}
-
           {/* Recurring */}
           <View className="py-4 border-b border-slate-100 dark:border-slate-800">
             <View className="flex-row items-center justify-between mb-3">
@@ -594,11 +538,11 @@ export default function CreateTaskScreen() {
                 <Text className="text-sm font-semibold text-slate-500">
                   Recurring task
                 </Text>
-                <Text className="text-xs text-slate-400 mt-0.5">
-                  {isRecurring
-                    ? recurrenceCountHint(recurrenceType)
-                    : "Schedule the same task to repeat a set number of times"}
-                </Text>
+                {isRecurring ? (
+                  <Text className="text-xs text-slate-400 mt-0.5">
+                    {recurrenceCountHint(recurrenceType)}
+                  </Text>
+                ) : null}
               </View>
               <Switch
                 value={isRecurring}
@@ -611,28 +555,25 @@ export default function CreateTaskScreen() {
             {isRecurring ? (
               <View style={{ gap: 12, marginTop: 8 }}>
                 <View className="flex-row flex-wrap" style={{ gap: 8 }}>
-                  {RECURRENCE_TYPES.map((r) => (
-                    <TouchableOpacity
-                      key={r.value}
-                      onPress={() => setRecurrenceType(r.value)}
-                      className="px-3 py-1.5 rounded-full"
-                      style={{
-                        backgroundColor:
-                          recurrenceType === r.value ? "#4361EE" : "#F1F5F9",
-                      }}
-                      testID={`recurrence-${r.value}`}
-                    >
-                      <Text
-                        className="text-xs font-semibold"
+                  {RECURRENCE_TYPES.map((r) => {
+                    const selected = recurrenceType === r.value;
+                    return (
+                      <TouchableOpacity
+                        key={r.value}
+                        onPress={() => setRecurrenceType(r.value)}
+                        className="px-3 py-1.5 rounded-full border"
                         style={{
-                          color:
-                            recurrenceType === r.value ? "white" : "#64748B",
+                          backgroundColor: selected ? "#4361EE20" : "#F1F5F9",
+                          borderColor: selected ? "#4361EE" : "#E2E8F0",
                         }}
+                        testID={`recurrence-${r.value}`}
                       >
-                        {r.label}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
+                        <Text style={{ fontSize: 12, fontWeight: "600", color: selected ? "#4361EE" : "#64748B" }}>
+                          {r.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
                 </View>
                 <View className="flex-row items-center" style={{ gap: 8 }}>
                   <Text className="text-sm text-slate-500">Repeat for</Text>
@@ -651,61 +592,75 @@ export default function CreateTaskScreen() {
                   </Text>
                 </View>
 
-                {/* Day of week picker for weekly */}
                 {recurrenceType === "weekly" ? (
                   <View>
                     <Text className="text-xs text-slate-500 mb-2">On</Text>
                     <View className="flex-row flex-wrap" style={{ gap: 6 }}>
-                      {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day, i) => (
-                        <TouchableOpacity
-                          key={i}
-                          testID={`day-of-week-${i}`}
-                          onPress={() => setSelectedDayOfWeek(selectedDayOfWeek === i ? null : i)}
-                          className="w-10 h-10 rounded-full items-center justify-center"
-                          style={{
-                            backgroundColor: selectedDayOfWeek === i ? "#4361EE" : "#F1F5F9",
-                          }}
-                        >
-                          <Text
-                            className="text-xs font-semibold"
-                            style={{ color: selectedDayOfWeek === i ? "white" : "#64748B" }}
+                      {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day, i) => {
+                        const selected = selectedDayOfWeek === i;
+                        return (
+                          <TouchableOpacity
+                            key={i}
+                            testID={`day-of-week-${i}`}
+                            onPress={() => setSelectedDayOfWeek(selectedDayOfWeek === i ? null : i)}
+                            className="w-10 h-10 rounded-full items-center justify-center border"
+                            style={{
+                              backgroundColor: selected ? "#4361EE20" : "#F1F5F9",
+                              borderColor: selected ? "#4361EE" : "#E2E8F0",
+                            }}
                           >
-                            {day}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
+                            <Text style={{ fontSize: 12, fontWeight: "600", color: selected ? "#4361EE" : "#64748B" }}>
+                              {day}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
                     </View>
                   </View>
                 ) : null}
 
-                {/* Day of month picker for monthly */}
                 {recurrenceType === "monthly" ? (
                   <View>
                     <Text className="text-xs text-slate-500 mb-2">On day</Text>
                     <View className="flex-row flex-wrap" style={{ gap: 6 }}>
-                      {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
-                        <TouchableOpacity
-                          key={day}
-                          testID={`day-of-month-${day}`}
-                          onPress={() => setSelectedDayOfMonth(selectedDayOfMonth === day ? null : day)}
-                          className="w-9 h-9 rounded-full items-center justify-center"
-                          style={{
-                            backgroundColor: selectedDayOfMonth === day ? "#4361EE" : "#F1F5F9",
-                          }}
-                        >
-                          <Text
-                            className="text-xs font-semibold"
-                            style={{ color: selectedDayOfMonth === day ? "white" : "#64748B" }}
+                      {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => {
+                        const selected = selectedDayOfMonth === day;
+                        return (
+                          <TouchableOpacity
+                            key={day}
+                            testID={`day-of-month-${day}`}
+                            onPress={() => setSelectedDayOfMonth(selectedDayOfMonth === day ? null : day)}
+                            className="w-9 h-9 rounded-full items-center justify-center border"
+                            style={{
+                              backgroundColor: selected ? "#4361EE20" : "#F1F5F9",
+                              borderColor: selected ? "#4361EE" : "#E2E8F0",
+                            }}
                           >
-                            {day}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
+                            <Text style={{ fontSize: 12, fontWeight: "600", color: selected ? "#4361EE" : "#64748B" }}>
+                              {day}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
                     </View>
                   </View>
                 ) : null}
               </View>
             ) : null}
+          </View>
+
+          {/* Status */}
+          <View className="py-4 border-b border-slate-100 dark:border-slate-800">
+            <Text className="text-sm font-semibold text-slate-500 mb-3">
+              Status
+            </Text>
+            <View className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden bg-white dark:bg-slate-900">
+              <Picker selectedValue={taskStatus} onValueChange={(value) => setTaskStatus(value as TaskStatus)}>
+                {TASK_STATUS_OPTIONS.map((option) => (
+                  <Picker.Item key={option.value} label={option.label} value={option.value} />
+                ))}
+              </Picker>
+            </View>
           </View>
 
           {/* Photo attachment */}
@@ -780,8 +735,190 @@ export default function CreateTaskScreen() {
             </View>
           </View>
 
-          <View style={{ height: 32 }} />
-        </KeyboardAwareScrollView>
+          {/* Assignees */}
+          {members.length > 0 ? (
+            <View className="py-4 border-b border-slate-100 dark:border-slate-800">
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 8 }}>
+                <Text className="text-sm font-semibold text-slate-500">Assign to</Text>
+                <Text style={{ fontSize: 12, color: "#EF4444", fontWeight: "600" }}>*</Text>
+              </View>
+              <Pressable
+                onPress={() => setShowAssigneePicker(true)}
+                style={{
+                  borderWidth: 1.5,
+                  borderColor: selectedAssignees.length > 0 ? "#4361EE" : "#E2E8F0",
+                  borderRadius: 12,
+                  paddingHorizontal: 12,
+                  paddingVertical: 11,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  backgroundColor: selectedAssignees.length > 0 ? "#4361EE0D" : "#FFFFFF",
+                }}
+                testID="assignee-picker-button"
+              >
+                <Text style={{ fontSize: 13, color: "#334155", fontWeight: "500", flex: 1 }} numberOfLines={1}>
+                  {selectedAssignees.length === 0
+                    ? "Select associates"
+                    : allAssigneesSelected
+                      ? "All associates"
+                      : `${selectedAssignees.length} associate${selectedAssignees.length === 1 ? "" : "s"} selected`}
+                </Text>
+                <ChevronDown size={16} color="#64748B" />
+              </Pressable>
+            </View>
+          ) : null}
+
+          {/* Joint Task — only shown when 2+ assignees selected */}
+          {selectedAssignees.length >= 2 ? (
+            <View className="py-4 border-b border-slate-100 dark:border-slate-800">
+              <View className="flex-row items-center justify-between">
+                <View style={{ flex: 1, marginRight: 12 }}>
+                  <Text className="text-sm font-semibold text-slate-500">Joint Task</Text>
+                  <Text className="text-xs text-slate-400 mt-0.5">
+                    Everyone works on one shared task
+                  </Text>
+                </View>
+                <Switch
+                  value={isJoint}
+                  onValueChange={(val) => setIsJoint(val)}
+                  trackColor={{ false: "#E2E8F0", true: "#6B8EF6" }}
+                  thumbColor="white"
+                  testID="joint-task-switch"
+                />
+              </View>
+              {isJoint ? (
+                <View
+                  className="mt-3 px-3 py-2.5 rounded-xl"
+                  style={{ backgroundColor: "#EFF6FF" }}
+                  testID="joint-task-banner"
+                >
+                  <Text className="text-xs text-blue-600">
+                    Subtasks are shared — completing one marks it done for the whole team.
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+
+          <TouchableOpacity
+            onPress={handleCreate}
+            disabled={createMutation.isPending}
+            style={{
+              marginTop: 8,
+              backgroundColor: "#4361EE",
+              borderRadius: 14,
+              paddingVertical: 14,
+              alignItems: "center",
+            }}
+            testID="create-button"
+          >
+            {createMutation.isPending ? (
+              <ActivityIndicator color="white" />
+            ) : (
+              <Text style={{ color: "white", fontSize: 15, fontWeight: "700" }}>Create Task</Text>
+            )}
+          </TouchableOpacity>
+          </ScrollView>
+        </Pressable>
+      </SafeKeyboardAvoidingView>
+
+      <Modal visible={showAssigneePicker} transparent animationType="slide" onRequestClose={() => setShowAssigneePicker(false)}>
+        <Pressable
+          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.35)", justifyContent: "flex-end" }}
+          onPress={() => setShowAssigneePicker(false)}
+        >
+          <Pressable onPress={(e) => e.stopPropagation()}>
+            <View
+              style={{
+                backgroundColor: "white",
+                borderTopLeftRadius: 20,
+                borderTopRightRadius: 20,
+                maxHeight: ASSIGNEE_SHEET_MAX_HEIGHT,
+                paddingBottom: insets.bottom + 12,
+                overflow: "hidden",
+              }}
+            >
+              <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: "#E2E8F0", alignSelf: "center", marginTop: 10, marginBottom: 14 }} />
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, marginBottom: 8 }}>
+                <Text style={{ fontSize: 17, fontWeight: "700", color: "#0F172A" }}>Assign to</Text>
+                <Pressable
+                  onPress={() => setShowAssigneePicker(false)}
+                  style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "#F1F5F9", alignItems: "center", justifyContent: "center" }}
+                >
+                  <X size={16} color="#64748B" />
+                </Pressable>
+              </View>
+              <Pressable
+                onPress={toggleAllAssignees}
+                style={{
+                  marginHorizontal: 20,
+                  marginBottom: 8,
+                  paddingHorizontal: 12,
+                  paddingVertical: 11,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  borderRadius: 12,
+                  backgroundColor: "#F8FAFC",
+                  borderWidth: 1,
+                  borderColor: "#E2E8F0",
+                }}
+                testID="assignee-select-all"
+              >
+                <Text style={{ fontSize: 13, color: "#4361EE", fontWeight: "700" }}>
+                  {allAssigneesSelected ? "Deselect all" : "Select all"}
+                </Text>
+                {allAssigneesSelected ? <Check size={16} color="#4361EE" /> : null}
+              </Pressable>
+              <ScrollView
+                style={{ maxHeight: ASSIGNEE_SHEET_MAX_HEIGHT - 210 }}
+                contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 8 }}
+                showsVerticalScrollIndicator
+                keyboardShouldPersistTaps="handled"
+              >
+                {assigneeOptions.map((member, idx) => {
+                  const isSelected = selectedAssignees.includes(member.userId);
+                  return (
+                    <Pressable
+                      key={member.userId}
+                      onPress={() => toggleAssignee(member.userId)}
+                      style={{
+                        paddingVertical: 12,
+                        flexDirection: "row",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        borderBottomWidth: idx === assigneeOptions.length - 1 ? 0 : 1,
+                        borderBottomColor: "#F1F5F9",
+                      }}
+                      testID={`assignee-${member.userId}`}
+                    >
+                      <Text style={{ fontSize: 15, color: "#334155", fontWeight: isSelected ? "700" : "500", flex: 1 }} numberOfLines={1}>
+                        {memberDisplayName(member)}
+                      </Text>
+                      {isSelected ? <Check size={16} color="#4361EE" /> : <View style={{ width: 16, height: 16 }} />}
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+              <TouchableOpacity
+                onPress={() => setShowAssigneePicker(false)}
+                style={{
+                  marginHorizontal: 20,
+                  marginTop: 8,
+                  backgroundColor: "#4361EE",
+                  borderRadius: 14,
+                  paddingVertical: 14,
+                  alignItems: "center",
+                }}
+                testID="assignee-picker-done"
+              >
+                <Text style={{ color: "white", fontSize: 15, fontWeight: "700" }}>Done</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {/* Photo options modal */}
       <Modal visible={showPhotoOptions} transparent animationType="slide" onRequestClose={() => setShowPhotoOptions(false)}>
@@ -1012,6 +1149,6 @@ export default function CreateTaskScreen() {
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 }

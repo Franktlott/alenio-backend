@@ -18,6 +18,7 @@ import { router } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
 import { toast } from "burnt";
+import { fetchLatestTeamMessagePreview } from "@/lib/chat-message-pagination";
 import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
 import { useTeamStore } from "@/lib/state/team-store";
@@ -108,7 +109,7 @@ export default function ChatScreen() {
 
   const { data: teamGeneralMessages = [] } = useQuery({
     queryKey: ["messages", activeTeamId, "general", "preview"],
-    queryFn: () => api.get<any[]>(`/api/teams/${activeTeamId}/messages?topicId=general&limit=1`),
+    queryFn: () => fetchLatestTeamMessagePreview(activeTeamId!),
     enabled: !!activeTeamId,
     refetchInterval: 10000,
   });
@@ -161,6 +162,7 @@ export default function ChatScreen() {
   const memberCount = members.length;
   const topThreeMembers = members.slice(0, 3).map((m) => ({ image: m.user.image ?? null, name: m.user.name ?? null }));
   const lastGeneralMessage = teamGeneralMessages[0];
+  const teamPhotoUrl = resolveUserImageUrl(teamDetail?.image);
 
   return (
     <SafeAreaView testID="chat-screen" style={{ flex: 1, backgroundColor: "#F2F3F7" }} edges={[]}>
@@ -204,8 +206,11 @@ export default function ChatScreen() {
         >
           <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ padding: 16 }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-              {teamDetail?.image ? (
-                <Image source={{ uri: teamDetail.image }} style={{ width: 48, height: 48, borderRadius: 14, borderWidth: 2, borderColor: "rgba(255,255,255,0.3)" }} />
+              {teamPhotoUrl ? (
+                <Image
+                  source={{ uri: teamPhotoUrl }}
+                  style={{ width: 48, height: 48, borderRadius: 14, borderWidth: 2, borderColor: "rgba(255,255,255,0.3)" }}
+                />
               ) : (
                 <View style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: "rgba(255,255,255,0.18)", alignItems: "center", justifyContent: "center" }}>
                   <MessageCircle size={22} color="white" />

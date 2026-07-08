@@ -2,6 +2,7 @@ import { fetch } from "expo/fetch";
 import * as FileSystem from "expo-file-system/legacy";
 import { getAuthHeaders, refreshSessionTokens } from "./auth/auth-client";
 import { readJsonSafe } from "./api/api";
+import { getBackendUrl } from "./backend-url";
 
 type UploadResult = {
   id: string;
@@ -63,7 +64,7 @@ function formatUploadError(
 
 /** JSON + base64 avoids RN FormData, which expo/fetch does not support for local files. */
 async function postJsonUpload(body: JsonUploadBody): Promise<Response> {
-  const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL!;
+  const BACKEND_URL = getBackendUrl();
   let authHeaders = await getAuthHeaders();
   const headers = {
     ...authHeaders,

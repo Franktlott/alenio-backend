@@ -1,7 +1,8 @@
 import { fetch } from "expo/fetch";
 import { clearAccessToken, getAuthHeaders, refreshSessionTokens } from "../auth/auth-client";
+import { getBackendUrl } from "../backend-url";
 
-const baseUrl = process.env.EXPO_PUBLIC_BACKEND_URL!;
+const baseUrl = getBackendUrl();
 
 type ApiErrorBody = { error?: { message?: string } };
 

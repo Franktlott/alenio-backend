@@ -146,7 +146,7 @@ export function OutlookCalendarCard() {
         text: "Disconnect",
         style: "destructive",
         onPress: () => {
-          Alert.alert("Disconnect Outlook?", "Your busy blocks will be removed from Alenio.", [
+          Alert.alert("Disconnect Outlook?", "Your synced Outlook events will be removed from Alenio.", [
             { text: "Cancel", style: "cancel" },
             {
               text: "Disconnect",
@@ -194,7 +194,7 @@ export function OutlookCalendarCard() {
 
   const subtitle = connection?.connected
     ? `${connection.accountEmail ?? "Connected"}${connection.lastSyncedAt ? ` · Synced ${new Date(connection.lastSyncedAt).toLocaleDateString()}` : ""}`
-    : "Show personal busy times on your calendar";
+    : "Show your Outlook events on your calendar";
 
   const syncError = connection?.syncError ? formatOutlookUserError(connection.syncError) : null;
   const calendarLabel = connection?.externalCalendarName ?? "Choose a calendar";

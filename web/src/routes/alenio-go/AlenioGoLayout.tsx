@@ -1,5 +1,6 @@
 import { Outlet, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
+import { AlenioGoDevGate } from "../../components/alenio-go/AlenioGoDevGate";
 import { GoLeaderPinSetupModal } from "../../components/alenio-go/GoLeaderPinSetupModal";
 import { useEnterpriseShell } from "../../contexts/EnterpriseShellContext";
 import { usePendingApprovals } from "../../hooks/usePendingApprovals";
@@ -74,6 +75,7 @@ export function AlenioGoLayout() {
   };
 
   return (
+    <AlenioGoDevGate>
     <div className="enterprise-tab-shell enterprise-alenio-go-page" data-testid="alenio-go-page-shell">
       <Outlet context={outletContext} />
       {selectedTeamId ? (
@@ -92,5 +94,6 @@ export function AlenioGoLayout() {
         />
       ) : null}
     </div>
+    </AlenioGoDevGate>
   );
 }

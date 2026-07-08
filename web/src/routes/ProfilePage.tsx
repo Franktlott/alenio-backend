@@ -78,7 +78,7 @@ export function ProfilePage() {
     next.delete("message");
     setSearchParams(next, { replace: true });
     if (outlook === "connected") {
-      setOutlookNotice("Your busy times will appear on your Alenio calendar.");
+      setOutlookNotice("Your Outlook events will appear on your Alenio calendar.");
       setOutlookError(null);
     } else if (outlook === "error") {
       setOutlookNotice(null);

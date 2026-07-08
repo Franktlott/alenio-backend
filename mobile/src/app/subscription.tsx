@@ -2,24 +2,28 @@ import React from "react";
 import {
   View,
   Text,
-  ScrollView,
   TouchableOpacity,
   ActivityIndicator,
   Image,
+  Linking,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { ArrowLeft, Crown, Check, Lock, Star, Info } from "lucide-react-native";
+import { ArrowLeft, Calendar, Check, ExternalLink, Globe, Info, Lock, Shield, Store } from "lucide-react-native";
 import { router } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api/api";
 import { useTeamStore } from "@/lib/state/team-store";
 import {
-  PLAN_SCREEN_SUBTITLE,
+  OPEN_WEB_DASHBOARD_LABEL,
   PLAN_SCREEN_TITLE,
+  WEB_PLAN_MANAGEMENT_BODY,
+  WEB_PLAN_MANAGEMENT_TITLE,
+  WEB_WORKSPACE_DASHBOARD_URL,
   memberFreePlanMessage,
   ownerFreePlanMessage,
   teamActiveMessage,
+  workplaceAccessSubtitle,
 } from "@/lib/plan-access-copy";
 
 type TeamListRow = { id: string; role: string; name?: string };
@@ -51,7 +55,7 @@ const FREE_ACCENT = "#64748B";
 const TEAM_ACCENT = "#6366F1";
 
 const FREE_INCLUDED = ["Activity feed", "Team chat", "Team members"] as const;
-const FREE_LOCKED = ["Tasks & action items", "Metrics & dashboards", "Team calendar", "Performance insights"] as const;
+
 const TEAM_FEATURES = [
   "Tasks & action items",
   "Team calendar",
@@ -62,29 +66,98 @@ const TEAM_FEATURES = [
   "Priority support",
 ] as const;
 
+function AccessBadge({ label, color }: { label: string; color: string }) {
+  return (
+    <View
+      style={{
+        backgroundColor: color,
+        paddingHorizontal: 7,
+        paddingVertical: 3,
+        borderRadius: 999,
+      }}
+    >
+      <Text style={{ color: "white", fontSize: 8, fontWeight: "800", letterSpacing: 0.2 }}>{label}</Text>
+    </View>
+  );
+}
+
+function FeatureRow({
+  label,
+  locked = false,
+  accent = TEAM_ACCENT,
+}: {
+  label: string;
+  locked?: boolean;
+  accent?: string;
+}) {
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 5 }}>
+      <View
+        style={{
+          width: 16,
+          height: 16,
+          borderRadius: 8,
+          backgroundColor: locked ? "#F1F5F9" : "#EEF2FF",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        {locked ? <Lock size={9} color="#94A3B8" /> : <Check size={10} color={accent} strokeWidth={3} />}
+      </View>
+      <Text
+        style={{
+          flex: 1,
+          fontSize: 10,
+          lineHeight: 13,
+          color: locked ? "#94A3B8" : "#334155",
+          fontWeight: "500",
+        }}
+        numberOfLines={2}
+      >
+        {label}
+      </Text>
+    </View>
+  );
+}
+
+function SectionLabel({ children, muted = false }: { children: string; muted?: boolean }) {
+  return (
+    <Text
+      style={{
+        fontSize: 9,
+        color: muted ? "#94A3B8" : "#CBD5E1",
+        marginTop: 10,
+        fontWeight: "700",
+        letterSpacing: 0.6,
+      }}
+    >
+      {children}
+    </Text>
+  );
+}
+
 function InfoBanner({ children }: { children: React.ReactNode }) {
   return (
     <View
       style={{
-        marginHorizontal: 16,
-        marginTop: 20,
         flexDirection: "row",
-        gap: 12,
+        gap: 10,
         backgroundColor: "#EEF2FF",
-        borderRadius: 16,
-        padding: 16,
+        borderRadius: 14,
+        padding: 12,
         borderWidth: 1,
         borderColor: "#C7D2FE",
       }}
       testID="plan-access-info-banner"
     >
-      <Info size={20} color="#4361EE" style={{ marginTop: 2 }} />
-      <Text style={{ flex: 1, fontSize: 14, color: "#334155", lineHeight: 20 }}>{children}</Text>
+      <Info size={18} color="#4361EE" style={{ marginTop: 1 }} />
+      <Text style={{ flex: 1, fontSize: 12, color: "#334155", lineHeight: 17 }}>{children}</Text>
     </View>
   );
 }
 
 export default function SubscriptionScreen() {
+  const insets = useSafeAreaInsets();
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
 
   const { data: teams = [] } = useQuery({
@@ -103,18 +176,31 @@ export default function SubscriptionScreen() {
   const isOwner = activeTeam?.role === "owner";
   const currentPlan: TierPlan = subscriptionTierPlan(subscription);
 
+  const openWebDashboard = () => {
+    void Linking.openURL(WEB_WORKSPACE_DASHBOARD_URL);
+  };
+
+  const footerMessage =
+    !isLoading && currentPlan === "team"
+      ? teamActiveMessage(isOwner)
+      : !isLoading && currentPlan === "free" && isOwner
+        ? ownerFreePlanMessage()
+        : !isLoading && currentPlan === "free" && !isOwner
+          ? memberFreePlanMessage()
+          : null;
+
   return (
     <SafeAreaView
       style={{ flex: 1, backgroundColor: "#F8FAFC" }}
-      edges={["top"]}
+      edges={["top", "bottom"]}
       testID="subscription-screen"
     >
       <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
         <View
           style={{
             paddingHorizontal: 16,
-            paddingTop: 10,
-            paddingBottom: 14,
+            paddingTop: 8,
+            paddingBottom: 12,
             flexDirection: "row",
             alignItems: "center",
             justifyContent: "space-between",
@@ -127,145 +213,98 @@ export default function SubscriptionScreen() {
           >
             <ArrowLeft size={22} color="white" />
           </TouchableOpacity>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            <Crown size={20} color="#FCD34D" />
-            <Text style={{ color: "white", fontSize: 18, fontWeight: "700" }}>{PLAN_SCREEN_TITLE}</Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1, justifyContent: "center" }}>
+            <Shield size={18} color="white" />
+            <Text style={{ color: "white", fontSize: 17, fontWeight: "700" }}>{PLAN_SCREEN_TITLE}</Text>
           </View>
-          <View style={{ width: 30 }}>
-            <Image
-              source={require("@/assets/alenio-icon.png")}
-              style={{ width: 30, height: 30, borderRadius: 6 }}
-            />
-          </View>
+          <Image source={require("@/assets/alenio-icon.png")} style={{ width: 28, height: 28, borderRadius: 6 }} />
         </View>
       </LinearGradient>
 
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 48 }}
-      >
-        <View style={{ alignItems: "center", paddingHorizontal: 20, marginTop: 22 }}>
+      <View style={{ flex: 1, paddingHorizontal: 12, paddingBottom: Math.max(insets.bottom, 8) }}>
+        <View style={{ alignItems: "center", paddingHorizontal: 8, marginTop: 12 }}>
           {isLoading ? (
-            <ActivityIndicator color="#4361EE" testID="subscription-loading" style={{ marginBottom: 14 }} />
+            <ActivityIndicator color="#4361EE" testID="subscription-loading" style={{ marginBottom: 10 }} />
           ) : null}
+          <View
+            style={{
+              width: 52,
+              height: 52,
+              borderRadius: 26,
+              backgroundColor: "#EEF2FF",
+              alignItems: "center",
+              justifyContent: "center",
+              marginBottom: 10,
+            }}
+          >
+            <Store size={24} color="#6366F1" />
+          </View>
           <Text
             style={{
               textAlign: "center",
-              fontSize: 22,
+              fontSize: 20,
               fontWeight: "800",
               color: "#0F172A",
-              lineHeight: 28,
-              marginBottom: 8,
+              lineHeight: 24,
+              marginBottom: 6,
             }}
+            numberOfLines={2}
           >
-            {activeTeam?.name ? `${activeTeam.name}` : "Your workspace"}
+            {activeTeam?.name ?? "Your workplace"}
           </Text>
           <Text
             style={{
               textAlign: "center",
-              fontSize: 14,
+              fontSize: 12,
               color: "#64748B",
-              lineHeight: 20,
-              marginBottom: 4,
+              lineHeight: 17,
             }}
           >
-            {PLAN_SCREEN_SUBTITLE}
+            {workplaceAccessSubtitle(isOwner)}
           </Text>
           {!isLoading && subscription?.currentPeriodEnd && currentPlan === "team" ? (
-            <Text style={{ textAlign: "center", fontSize: 13, color: "#94A3B8", marginTop: 4 }}>
-              Access through {formatDate(subscription.currentPeriodEnd)}
-            </Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 5, marginTop: 6 }}>
+              <Calendar size={13} color="#94A3B8" />
+              <Text style={{ fontSize: 12, color: "#94A3B8" }}>
+                Access through {formatDate(subscription.currentPeriodEnd)}
+              </Text>
+            </View>
           ) : null}
         </View>
 
-        <View style={{ flexDirection: "row", gap: 10, paddingHorizontal: 12, marginTop: 18 }}>
+        <View style={{ flex: 1, flexDirection: "row", gap: 8, marginTop: 12, minHeight: 0 }}>
           <View
             style={{
               flex: 1,
               minWidth: 0,
-              borderRadius: 18,
+              borderRadius: 16,
               backgroundColor: "white",
               borderWidth: currentPlan === "free" ? 2 : 1,
               borderColor: currentPlan === "free" ? FREE_ACCENT : "#E8EDF2",
-              paddingHorizontal: 10,
-              paddingTop: 12,
-              paddingBottom: 14,
-              shadowColor: "#000",
-              shadowOpacity: 0.06,
-              shadowRadius: 8,
-              shadowOffset: { width: 0, height: 2 },
-              elevation: 2,
+              paddingHorizontal: 8,
+              paddingTop: 10,
+              paddingBottom: 10,
             }}
             testID="tier-card-free"
           >
-            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 4 }}>
               <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={{ fontSize: 17, fontWeight: "800", color: "#0F172A" }}>Free</Text>
-                <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 4, lineHeight: 15 }}>
+                <Text style={{ fontSize: 16, fontWeight: "800", color: "#0F172A" }}>Free</Text>
+                <Text style={{ fontSize: 10, color: "#94A3B8", marginTop: 2, lineHeight: 13 }}>
                   Chat and team basics
                 </Text>
               </View>
               {currentPlan === "free" ? (
-                <View
-                  style={{
-                    backgroundColor: FREE_ACCENT,
-                    paddingHorizontal: 8,
-                    paddingVertical: 4,
-                    borderRadius: 999,
-                  }}
-                  testID="current-plan-badge-free"
-                >
-                  <Text style={{ color: "white", fontSize: 9, fontWeight: "800" }}>CURRENT</Text>
-                </View>
+                <AccessBadge label="CURRENT ACCESS" color={FREE_ACCENT} />
               ) : null}
             </View>
-            <Text style={{ fontSize: 10, color: "#CBD5E1", marginTop: 12, fontWeight: "700", letterSpacing: 0.6 }}>
-              INCLUDED
-            </Text>
+            <SectionLabel>INCLUDED</SectionLabel>
             {FREE_INCLUDED.map((label) => (
-              <View key={label} style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 8 }}>
-                <View
-                  style={{
-                    width: 18,
-                    height: 18,
-                    borderRadius: 9,
-                    backgroundColor: "#E0F2FE",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <Check size={11} color="#0284C7" strokeWidth={3} />
-                </View>
-                <Text style={{ flex: 1, fontSize: 12, color: "#334155", fontWeight: "500" }}>{label}</Text>
-              </View>
+              <FeatureRow key={label} label={label} accent="#0284C7" />
             ))}
-            <Text
-              style={{
-                fontSize: 10,
-                color: "#94A3B8",
-                marginTop: 14,
-                fontWeight: "700",
-                letterSpacing: 0.6,
-              }}
-            >
-              UNLOCK WITH TEAM
-            </Text>
-            {FREE_LOCKED.map((label) => (
-              <View key={label} style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 8 }}>
-                <View
-                  style={{
-                    width: 18,
-                    height: 18,
-                    borderRadius: 9,
-                    backgroundColor: "#F1F5F9",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <Lock size={10} color="#94A3B8" />
-                </View>
-                <Text style={{ flex: 1, fontSize: 12, color: "#94A3B8", fontWeight: "500" }}>{label}</Text>
-              </View>
+            <SectionLabel muted>NOT INCLUDED</SectionLabel>
+            {TEAM_FEATURES.map((label) => (
+              <FeatureRow key={label} label={label} locked />
             ))}
           </View>
 
@@ -273,118 +312,92 @@ export default function SubscriptionScreen() {
             style={{
               flex: 1,
               minWidth: 0,
-              borderRadius: 18,
+              borderRadius: 16,
               backgroundColor: "white",
               borderWidth: currentPlan === "team" ? 2 : 1,
               borderColor: currentPlan === "team" ? TEAM_ACCENT : "#E8EDF2",
-              paddingHorizontal: 10,
-              paddingTop: 12,
-              paddingBottom: 14,
-              shadowColor: "#000",
-              shadowOpacity: currentPlan === "team" ? 0.1 : 0.06,
-              shadowRadius: 10,
-              shadowOffset: { width: 0, height: 3 },
-              elevation: currentPlan === "team" ? 4 : 2,
+              paddingHorizontal: 8,
+              paddingTop: 10,
+              paddingBottom: 10,
             }}
             testID="tier-card-team"
           >
-            {currentPlan !== "team" ? (
-              <View
-                style={{
-                  alignSelf: "flex-start",
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 4,
-                  backgroundColor: "#EEF2FF",
-                  borderWidth: 1,
-                  borderColor: "#C7D2FE",
-                  paddingHorizontal: 8,
-                  paddingVertical: 4,
-                  borderRadius: 999,
-                  marginBottom: 8,
-                }}
-              >
-                <Star size={11} color="#4F46E5" fill="#4F46E5" />
-                <Text style={{ fontSize: 9, fontWeight: "800", color: "#4F46E5" }}>FULL ACCESS</Text>
-              </View>
-            ) : (
-              <View style={{ alignItems: "flex-end", marginBottom: 8 }}>
-                <View
-                  style={{
-                    backgroundColor: TEAM_ACCENT,
-                    paddingHorizontal: 8,
-                    paddingVertical: 4,
-                    borderRadius: 999,
-                  }}
-                  testID="current-plan-badge-team"
-                >
-                  <Text style={{ color: "white", fontSize: 9, fontWeight: "800" }}>CURRENT</Text>
+            <View style={{ flex: 1, minHeight: 0 }}>
+              {currentPlan === "team" ? (
+                <View style={{ alignItems: "flex-end", marginBottom: 4 }}>
+                  <AccessBadge label="CURRENT ACCESS" color={TEAM_ACCENT} />
                 </View>
-              </View>
-            )}
-            <Text style={{ fontSize: 17, fontWeight: "800", color: "#0F172A" }}>Team</Text>
-            <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 4, lineHeight: 15 }}>
-              Execution, tasks, and insights
-            </Text>
-            <Text style={{ fontSize: 10, color: "#CBD5E1", marginTop: 12, fontWeight: "700", letterSpacing: 0.6 }}>
-              EVERYTHING IN FREE, PLUS
-            </Text>
-            {TEAM_FEATURES.map((label) => (
-              <View key={label} style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 8 }}>
+              ) : (
+                <View style={{ height: 18, marginBottom: 4 }} />
+              )}
+              <Text style={{ fontSize: 16, fontWeight: "800", color: "#0F172A" }}>Team</Text>
+              <Text style={{ fontSize: 10, color: "#94A3B8", marginTop: 2, lineHeight: 13 }}>
+                Execution, tasks, and insights
+              </Text>
+              <SectionLabel>EVERYTHING IN FREE, PLUS</SectionLabel>
+              {TEAM_FEATURES.map((label) => (
+                <FeatureRow key={label} label={label} accent={TEAM_ACCENT} />
+              ))}
+            </View>
+
+            <View
+              style={{
+                marginTop: 10,
+                borderRadius: 12,
+                padding: 10,
+                backgroundColor: "#F8FAFC",
+                borderWidth: 1,
+                borderColor: "#E2E8F0",
+                gap: 8,
+              }}
+              testID="web-plan-management-card"
+            >
+              <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 8 }}>
                 <View
                   style={{
-                    width: 18,
-                    height: 18,
-                    borderRadius: 9,
+                    width: 28,
+                    height: 28,
+                    borderRadius: 8,
                     backgroundColor: "#EEF2FF",
                     alignItems: "center",
                     justifyContent: "center",
                   }}
                 >
-                  <Check size={11} color={TEAM_ACCENT} strokeWidth={3} />
+                  <Globe size={14} color="#6366F1" />
                 </View>
-                <Text style={{ flex: 1, fontSize: 12, color: "#334155", fontWeight: "500" }}>{label}</Text>
-              </View>
-            ))}
-            <View style={{ marginTop: 14 }}>
-              {!isLoading ? (
-                <View
-                  style={{
-                    borderRadius: 12,
-                    paddingVertical: 11,
-                    alignItems: "center",
-                    backgroundColor: currentPlan === "team" ? "#EEF2FF" : "#F8FAFC",
-                    borderWidth: 1,
-                    borderColor: currentPlan === "team" ? "#C7D2FE" : "#E2E8F0",
-                  }}
-                >
-                  <Text
-                    style={{
-                      fontSize: 12,
-                      fontWeight: "700",
-                      color: currentPlan === "team" ? TEAM_ACCENT : "#94A3B8",
-                    }}
-                  >
-                    {currentPlan === "team" ? "Active for this workspace" : "Not active"}
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 11, fontWeight: "700", color: TEAM_ACCENT, marginBottom: 2 }}>
+                    {WEB_PLAN_MANAGEMENT_TITLE}
                   </Text>
+                  <Text style={{ fontSize: 10, color: "#64748B", lineHeight: 14 }}>{WEB_PLAN_MANAGEMENT_BODY}</Text>
                 </View>
-              ) : (
-                <ActivityIndicator color={TEAM_ACCENT} />
-              )}
+              </View>
+              <TouchableOpacity
+                onPress={openWebDashboard}
+                style={{
+                  backgroundColor: TEAM_ACCENT,
+                  borderRadius: 10,
+                  paddingVertical: 9,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 6,
+                }}
+                testID="open-web-dashboard-button"
+              >
+                <Text style={{ color: "white", fontSize: 11, fontWeight: "700" }}>{OPEN_WEB_DASHBOARD_LABEL}</Text>
+                <ExternalLink size={12} color="white" />
+              </TouchableOpacity>
             </View>
           </View>
         </View>
 
-        {!isLoading && currentPlan === "team" ? (
-          <InfoBanner>{teamActiveMessage()}</InfoBanner>
+        {footerMessage ? (
+          <View style={{ marginTop: 10 }}>
+            <InfoBanner>{footerMessage}</InfoBanner>
+          </View>
         ) : null}
-        {!isLoading && currentPlan === "free" && isOwner ? (
-          <InfoBanner>{ownerFreePlanMessage()}</InfoBanner>
-        ) : null}
-        {!isLoading && currentPlan === "free" && !isOwner ? (
-          <InfoBanner>{memberFreePlanMessage()}</InfoBanner>
-        ) : null}
-      </ScrollView>
+      </View>
     </SafeAreaView>
   );
 }

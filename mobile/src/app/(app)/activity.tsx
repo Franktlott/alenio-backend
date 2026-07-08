@@ -4,10 +4,10 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api/api";
 import { useTeamStore } from "@/lib/state/team-store";
-import { CheckCircle, UserPlus, UserMinus, Calendar, Activity, UserCheck, Trophy, Flame, Clock, Video, PartyPopper, X, Star, Award, Zap, Target, Users, Lightbulb, Heart, Flag } from "lucide-react-native";
+import { CheckCircle, UserPlus, UserMinus, Calendar, Activity, UserCheck, Trophy, Flame, Clock, Video, PartyPopper, X, Star, Award, Zap, Target, Users, Lightbulb, Heart, Flag, Search } from "lucide-react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Image as ExpoImage } from "expo-image";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useSession } from "@/lib/auth/use-session";
 import { NoTeamPlaceholder } from "@/components/NoTeamPlaceholder";
 import { router } from "expo-router";
@@ -37,6 +37,24 @@ function formatEventTime(startDate: string, endDate: string | null | undefined, 
 const REACTION_HINT_KEY = "reaction_hint_shown";
 const CELEBRATE_SHEET_MAX_HEIGHT = Math.round(Dimensions.get("window").height * 0.8);
 const CELEBRATE_HEADER_HEIGHT = 73;
+const CELEBRATE_MEMBER_SEARCH_HEIGHT = 56;
+
+type CelebrateTeamMember = {
+  userId: string;
+  user: { id: string; name: string; image: string | null };
+};
+
+function sortCelebrateMembers(members: CelebrateTeamMember[]): CelebrateTeamMember[] {
+  return [...members].sort((a, b) =>
+    (a.user.name?.trim() || "").localeCompare(b.user.name?.trim() || "", undefined, { sensitivity: "base" }),
+  );
+}
+
+function filterCelebrateMembers(members: CelebrateTeamMember[], query: string): CelebrateTeamMember[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return members;
+  return members.filter((m) => m.user.name?.toLowerCase().includes(q));
+}
 
 type ActivityEvent = {
   id: string;
@@ -911,6 +929,7 @@ export default function ActivityScreen() {
   const [celebrateTarget, setCelebrateTarget] = useState<{ id: string; name: string; image: string | null } | null>(null);
   const [celebrateType, setCelebrateType] = useState<string>(CELEBRATION_TYPES[0]!.key);
   const [celebrateMessage, setCelebrateMessage] = useState("");
+  const [celebrateMemberSearch, setCelebrateMemberSearch] = useState("");
   const hintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     AsyncStorage.getItem(REACTION_HINT_KEY).then((val) => {
@@ -952,18 +971,39 @@ export default function ActivityScreen() {
     enabled: !!activeTeamId && showCelebrateModal,
   });
 
+  const sortedCelebrateMembers = useMemo(
+    () => sortCelebrateMembers(teamMembers as CelebrateTeamMember[]),
+    [teamMembers],
+  );
+  const filteredCelebrateMembers = useMemo(
+    () => filterCelebrateMembers(sortedCelebrateMembers, celebrateMemberSearch),
+    [sortedCelebrateMembers, celebrateMemberSearch],
+  );
+
+  const closeCelebrateModal = () => {
+    setShowCelebrateModal(false);
+    setCelebrateStep(1);
+    setCelebrateTarget(null);
+    setCelebrateType(CELEBRATION_TYPES[0]!.key);
+    setCelebrateMessage("");
+    setCelebrateMemberSearch("");
+  };
+
   const celebrateMutation = useMutation({
     mutationFn: (payload: { targetUserId: string; celebrationType: string; message?: string }) =>
       api.post(`/api/teams/${activeTeamId}/activity/celebrate`, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["activity", activeTeamId] });
-      setShowCelebrateModal(false);
-      setCelebrateStep(1);
-      setCelebrateTarget(null);
-      setCelebrateType(CELEBRATION_TYPES[0]!.key);
-      setCelebrateMessage("");
+      closeCelebrateModal();
     },
   });
+
+  const celebrateMemberListMaxHeight =
+    CELEBRATE_SHEET_MAX_HEIGHT -
+    CELEBRATE_HEADER_HEIGHT -
+    CELEBRATE_MEMBER_SEARCH_HEIGHT -
+    insets.bottom -
+    16;
 
   const now = new Date();
 
@@ -993,7 +1033,7 @@ export default function ActivityScreen() {
             {!isDemo ? (
               <TouchableOpacity
                 testID="celebrate-button"
-                onPress={() => { setShowCelebrateModal(true); setCelebrateStep(1); }}
+                onPress={() => { setShowCelebrateModal(true); setCelebrateStep(1); setCelebrateMemberSearch(""); }}
                 style={{ backgroundColor: "rgba(255,255,255,0.2)", borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5, flexDirection: "row", alignItems: "center", gap: 5 }}
               >
                 <Text style={{ fontSize: 12 }}>🎉</Text>
@@ -1005,9 +1045,9 @@ export default function ActivityScreen() {
       </LinearGradient>
 
       {/* Celebrate modal */}
-      <Modal visible={showCelebrateModal} transparent animationType="slide" onRequestClose={() => setShowCelebrateModal(false)}>
+      <Modal visible={showCelebrateModal} transparent animationType="slide" onRequestClose={closeCelebrateModal}>
         <SafeKeyboardAvoidingView style={{ flex: 1, justifyContent: "flex-end" }}>
-          <TouchableOpacity style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)" }} activeOpacity={1} onPress={() => setShowCelebrateModal(false)} />
+          <TouchableOpacity style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)" }} activeOpacity={1} onPress={closeCelebrateModal} />
           <View
             style={{
               backgroundColor: "white",
@@ -1020,33 +1060,61 @@ export default function ActivityScreen() {
           >
             {/* Modal header */}
             <View style={{ flexShrink: 0, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingTop: 20, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: "#F1F5F9" }}>
-              <TouchableOpacity onPress={celebrateStep === 2 ? () => setCelebrateStep(1) : () => setShowCelebrateModal(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <TouchableOpacity onPress={celebrateStep === 2 ? () => setCelebrateStep(1) : closeCelebrateModal} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                 <Text style={{ fontSize: 14, color: "#64748B", fontWeight: "600" }}>{celebrateStep === 2 ? "← Back" : "Cancel"}</Text>
               </TouchableOpacity>
               <Text style={{ fontSize: 17, fontWeight: "700", color: "#1E293B" }}>
                 {celebrateStep === 1 ? "Who to celebrate? 🎉" : `Celebrate ${celebrateTarget?.name ?? ""}`}
               </Text>
-              <TouchableOpacity onPress={() => setShowCelebrateModal(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <TouchableOpacity onPress={closeCelebrateModal} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                 <X size={20} color="#94A3B8" />
               </TouchableOpacity>
             </View>
 
             {celebrateStep === 1 ? (
-              /* Step 1 — pick team member */
-              <ScrollView
-                style={{ maxHeight: CELEBRATE_SHEET_MAX_HEIGHT - CELEBRATE_HEADER_HEIGHT }}
-                contentContainerStyle={{ paddingVertical: 8, paddingBottom: insets.bottom + 16 }}
-                showsVerticalScrollIndicator
-                keyboardShouldPersistTaps="handled"
-                nestedScrollEnabled
-                testID="celebrate-member-list"
-              >
+              <>
+                <View
+                  style={{
+                    flexShrink: 0,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    marginHorizontal: 16,
+                    marginTop: 12,
+                    marginBottom: 8,
+                    paddingHorizontal: 12,
+                    height: CELEBRATE_MEMBER_SEARCH_HEIGHT - 12,
+                    borderRadius: 12,
+                    backgroundColor: "#F8FAFC",
+                    borderWidth: 1,
+                    borderColor: "#E2E8F0",
+                    gap: 8,
+                  }}
+                >
+                  <Search size={18} color="#94A3B8" />
+                  <TextInput
+                    value={celebrateMemberSearch}
+                    onChangeText={setCelebrateMemberSearch}
+                    placeholder="Search teammates"
+                    placeholderTextColor="#94A3B8"
+                    autoCorrect={false}
+                    autoCapitalize="none"
+                    returnKeyType="search"
+                    style={{ flex: 1, fontSize: 15, color: "#0F172A", paddingVertical: 0 }}
+                    testID="celebrate-member-search"
+                  />
+                  {celebrateMemberSearch.length > 0 ? (
+                    <TouchableOpacity onPress={() => setCelebrateMemberSearch("")} hitSlop={8}>
+                      <X size={16} color="#94A3B8" />
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+
                 {teamMembersLoading ? (
                   <View style={{ alignItems: "center", paddingVertical: 40 }}>
                     <ActivityIndicator color="#4361EE" />
                   </View>
                 ) : teamMembers.length === 0 ? (
-                  <View style={{ alignItems: "center", paddingHorizontal: 24, paddingVertical: 44 }}>
+                  <View style={{ alignItems: "center", paddingHorizontal: 24, paddingVertical: 44, paddingBottom: insets.bottom + 16 }}>
                     <Text style={{ fontSize: 36, marginBottom: 10 }}>🎉</Text>
                     <Text style={{ fontSize: 16, fontWeight: "700", color: "#334155", textAlign: "center" }}>
                       No teammates to celebrate yet
@@ -1055,25 +1123,69 @@ export default function ActivityScreen() {
                       Add more team members first, then come back to post a celebration.
                     </Text>
                   </View>
-                ) : teamMembers.map((m) => (
-                  <TouchableOpacity
-                    key={m.userId}
-                    testID={`celebrate-member-${m.userId}`}
-                    onPress={() => { setCelebrateTarget(m.user); setCelebrateStep(2); }}
-                    style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: "#F8FAFC" }}
-                  >
-                    <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: "#EEF2FF", alignItems: "center", justifyContent: "center", marginRight: 14, overflow: "hidden" }}>
-                      {m.user.image ? (
-                        <ExpoImage source={{ uri: m.user.image }} style={{ width: 44, height: 44 }} contentFit="cover" />
-                      ) : (
-                        <Text style={{ fontSize: 18, fontWeight: "700", color: "#4361EE" }}>{m.user.name[0]?.toUpperCase()}</Text>
-                      )}
-                    </View>
-                    <Text style={{ fontSize: 16, fontWeight: "600", color: "#1E293B", flex: 1 }}>{m.user.name}</Text>
-                    <Text style={{ fontSize: 18 }}>→</Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
+                ) : (
+                  <FlatList
+                    data={filteredCelebrateMembers}
+                    keyExtractor={(m) => m.userId}
+                    style={{ maxHeight: Math.max(180, celebrateMemberListMaxHeight) }}
+                    contentContainerStyle={{ paddingBottom: insets.bottom + 8 }}
+                    showsVerticalScrollIndicator
+                    keyboardShouldPersistTaps="handled"
+                    keyboardDismissMode="on-drag"
+                    testID="celebrate-member-list"
+                    ListEmptyComponent={
+                      <View style={{ alignItems: "center", paddingHorizontal: 24, paddingVertical: 32 }}>
+                        <Text style={{ fontSize: 15, fontWeight: "700", color: "#334155", textAlign: "center" }}>
+                          No matches
+                        </Text>
+                        <Text style={{ fontSize: 13, color: "#64748B", textAlign: "center", marginTop: 6 }}>
+                          Try a different name.
+                        </Text>
+                      </View>
+                    }
+                    renderItem={({ item: m }) => (
+                      <TouchableOpacity
+                        testID={`celebrate-member-${m.userId}`}
+                        onPress={() => {
+                          setCelebrateTarget(m.user);
+                          setCelebrateStep(2);
+                        }}
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          paddingHorizontal: 20,
+                          paddingVertical: 14,
+                          borderBottomWidth: 1,
+                          borderBottomColor: "#F8FAFC",
+                        }}
+                      >
+                        <View
+                          style={{
+                            width: 44,
+                            height: 44,
+                            borderRadius: 22,
+                            backgroundColor: "#EEF2FF",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            marginRight: 14,
+                            overflow: "hidden",
+                          }}
+                        >
+                          {m.user.image ? (
+                            <ExpoImage source={{ uri: m.user.image }} style={{ width: 44, height: 44 }} contentFit="cover" />
+                          ) : (
+                            <Text style={{ fontSize: 18, fontWeight: "700", color: "#4361EE" }}>
+                              {m.user.name[0]?.toUpperCase()}
+                            </Text>
+                          )}
+                        </View>
+                        <Text style={{ fontSize: 16, fontWeight: "600", color: "#1E293B", flex: 1 }}>{m.user.name}</Text>
+                        <Text style={{ fontSize: 18 }}>→</Text>
+                      </TouchableOpacity>
+                    )}
+                  />
+                )}
+              </>
             ) : (
               /* Step 2 — pick celebration type + message */
               <ScrollView

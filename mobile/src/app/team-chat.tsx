@@ -10,12 +10,14 @@ import {
   Modal,
   Image,
   ScrollView,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { usePaginatedTeamMessages } from "@/lib/chat-message-pagination";
 import { LinearGradient } from "expo-linear-gradient";
-import { ArrowLeft, Send, Paperclip, X, Video, Camera, ImageIcon, BarChart2 } from "lucide-react-native";
-import { BlurView } from "expo-blur";
+import { ArrowLeft, Send, Paperclip, X, Video, Camera, ImageIcon, BarChart2, Reply, Copy, Pencil, Trash2 } from "lucide-react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
@@ -23,14 +25,16 @@ import { useUnreadStore } from "@/lib/state/unread-store";
 import { uploadFile } from "@/lib/upload";
 import { pickMedia, takePhoto } from "@/lib/file-picker";
 import { ChatMessage } from "@/components/ChatMessage";
+import { MessageActionSheet, type MessageAnchorLayout } from "@/components/MessageActionSheet";
+import { MessageLongPressRow } from "@/components/MessageLongPressRow";
 import { ImageSendPreview } from "@/components/ImageSendPreview";
 import { MentionPicker } from "@/components/MentionPicker";
 import type { Message, Team, MessageReaction } from "@/lib/types";
 import { useDemoMode, showDemoAlert } from "@/lib/useDemo";
 import { useMention } from "@/lib/useMention";
 import { SafeKeyboardAvoidingView } from "@/lib/safe-keyboard-controller";
-
-const REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🔥'];
+import { resolveUserImageUrl } from "@/lib/user-avatar";
+import * as Clipboard from "expo-clipboard";
 
 function formatDateLabel(dateStr: string) {
   const d = new Date(dateStr);
@@ -220,7 +224,7 @@ export default function TeamChatScreen() {
   const queryClient = useQueryClient();
   const [input, setInput] = useState("");
   const [replyTo, setReplyTo] = useState<Message | null>(null);
-  const [emojiTarget, setEmojiTarget] = useState<Message | null>(null);
+  const [messageMenu, setMessageMenu] = useState<{ message: Message; layout: MessageAnchorLayout } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Message | null>(null);
   const [editTarget, setEditTarget] = useState<Message | null>(null);
   const [editInput, setEditInput] = useState("");
@@ -238,6 +242,9 @@ export default function TeamChatScreen() {
   const flatListRef = useRef<FlatList>(null);
   const currentUserId = session?.user?.id ?? "";
   const prevMsgCountRef = useRef<number>(0);
+  const isNearBottomRef = useRef(true);
+  const lastMessageIdRef = useRef<string | null>(null);
+  const didInitialScrollRef = useRef(false);
 
   const { mentionedUserIds, mentionQuery, onTextChange: onMentionTextChange, selectMention, resetMentions } = useMention();
 
@@ -245,12 +252,13 @@ export default function TeamChatScreen() {
 
   const markAsRead = useUnreadStore((s) => s.markAsRead);
 
-  const { data: messages = [], isLoading } = useQuery({
-    queryKey: ["messages", teamId, topicKey],
-    queryFn: () => api.get<Message[]>(`/api/teams/${teamId}/messages?topicId=${topicKey}`),
-    enabled: !!teamId,
-    refetchInterval: 3000,
-  });
+  const {
+    messages,
+    isLoading,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = usePaginatedTeamMessages<Message>(teamId, topicKey);
 
   const { data: polls = [] } = useQuery<PollType[]>({
     queryKey: ["polls", teamId, topicKey],
@@ -388,15 +396,43 @@ export default function TeamChatScreen() {
     if (file) setMediaPreview(file);
   };
 
-  const handleLongPress = useCallback((msg: Message) => {
-    setEmojiTarget(msg);
+  const handleLongPress = useCallback((msg: Message, layout: MessageAnchorLayout) => {
+    setMessageMenu({ message: msg, layout });
   }, []);
 
-  useEffect(() => {
-    if (messages.length > 0) {
-      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+  const handleScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+    const distanceFromBottom = contentSize.height - layoutMeasurement.height - contentOffset.y;
+    isNearBottomRef.current = distanceFromBottom < 80;
+  }, []);
+
+  const handleLoadOlder = useCallback(() => {
+    if (hasNextPage && !isFetchingNextPage) {
+      void fetchNextPage();
     }
-  }, [messages.length]);
+  }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
+
+  useEffect(() => {
+    didInitialScrollRef.current = false;
+    isNearBottomRef.current = true;
+    lastMessageIdRef.current = null;
+  }, [teamId, topicKey]);
+
+  useEffect(() => {
+    if (isLoading || messages.length === 0 || didInitialScrollRef.current) return;
+    didInitialScrollRef.current = true;
+    requestAnimationFrame(() => flatListRef.current?.scrollToEnd({ animated: false }));
+  }, [isLoading, messages.length, teamId, topicKey]);
+
+  useEffect(() => {
+    const lastMsg = messages[messages.length - 1];
+    if (!lastMsg) return;
+    const prevId = lastMessageIdRef.current;
+    lastMessageIdRef.current = lastMsg.id;
+    if (prevId !== lastMsg.id && isNearBottomRef.current) {
+      requestAnimationFrame(() => flatListRef.current?.scrollToEnd({ animated: true }));
+    }
+  }, [messages]);
 
   useEffect(() => {
     const lastMsg = messages[messages.length - 1];
@@ -411,6 +447,7 @@ export default function TeamChatScreen() {
   }, [messages]);
 
   const items = buildChatList(messages, polls);
+  const teamPhotoUrl = resolveUserImageUrl(team?.image);
 
   return (
     <SafeAreaView testID="team-chat-screen" className="flex-1 bg-slate-50 dark:bg-slate-900" edges={["top"]}>
@@ -420,8 +457,8 @@ export default function TeamChatScreen() {
             <ArrowLeft size={22} color="white" />
           </TouchableOpacity>
           <View className="w-9 h-9 rounded-full bg-white/20 items-center justify-center mr-3 overflow-hidden">
-            {team?.image ? (
-              <Image source={{ uri: team.image }} style={{ width: 36, height: 36 }} resizeMode="cover" />
+            {teamPhotoUrl ? (
+              <Image source={{ uri: teamPhotoUrl }} style={{ width: 36, height: 36 }} resizeMode="cover" />
             ) : (
               <Text className="text-white font-bold text-base">{(Array.isArray(teamName) ? teamName[0] : (teamName ?? "T"))[0].toUpperCase()}</Text>
             )}
@@ -498,102 +535,6 @@ export default function TeamChatScreen() {
               ))}
             </View>
           </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
-
-      {/* Emoji picker modal */}
-      <Modal
-        visible={!!emojiTarget}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setEmojiTarget(null)}
-      >
-        <TouchableOpacity
-          className="flex-1 bg-black/40 items-center justify-center"
-          activeOpacity={1}
-          onPress={() => setEmojiTarget(null)}
-        >
-          <BlurView intensity={70} tint="light" style={{ borderRadius: 16, overflow: "hidden", borderWidth: 1, borderColor: "rgba(255,255,255,0.6)" }}>
-            <View style={{ backgroundColor: "rgba(255,255,255,0.5)", padding: 12 }}>
-            {(() => {
-              const myReaction = emojiTarget
-                ? (emojiTarget.reactions ?? []).find((r: any) => r.userId === currentUserId)?.emoji
-                : undefined;
-              return (
-                <>
-                  <View className="flex-row mb-3" style={{ gap: 8 }}>
-                    {REACTION_EMOJIS.map((emoji) => {
-                      const isMine = emoji === myReaction;
-                      return (
-                        <TouchableOpacity
-                          key={emoji}
-                          onPress={() => {
-                            if (emojiTarget) reactionMutation.mutate({ messageId: emojiTarget.id, emoji });
-                            setEmojiTarget(null);
-                          }}
-                          style={{
-                            width: 44, height: 44, borderRadius: 22,
-                            backgroundColor: isMine ? "#EEF2FF" : "#F1F5F9",
-                            alignItems: "center", justifyContent: "center",
-                            borderWidth: isMine ? 1.5 : 0,
-                            borderColor: isMine ? "#4361EE" : "transparent",
-                          }}
-                        >
-                          <Text style={{ fontSize: 22 }}>{emoji}</Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                  {myReaction ? (
-                    <TouchableOpacity
-                      onPress={() => {
-                        if (emojiTarget) reactionMutation.mutate({ messageId: emojiTarget.id, emoji: myReaction });
-                        setEmojiTarget(null);
-                      }}
-                      className="flex-row items-center justify-center py-2 border-t border-slate-100 dark:border-slate-700"
-                    >
-                      <Text style={{ color: "#EF4444", fontWeight: "600", fontSize: 14 }}>Remove reaction</Text>
-                    </TouchableOpacity>
-                  ) : null}
-                </>
-              );
-            })()}
-            <TouchableOpacity
-              onPress={() => {
-                setReplyTo(emojiTarget);
-                setEmojiTarget(null);
-              }}
-              className="flex-row items-center justify-center py-2 border-t border-slate-100 dark:border-slate-700"
-            >
-              <Text className="text-indigo-600 font-semibold text-sm">↩ Reply</Text>
-            </TouchableOpacity>
-            {emojiTarget && canEdit(emojiTarget) ? (
-              <TouchableOpacity
-                onPress={() => {
-                  const target = emojiTarget;
-                  setEmojiTarget(null);
-                  setEditInput(target.content ?? "");
-                  setEditTarget(target);
-                }}
-                className="flex-row items-center justify-center py-2 border-t border-slate-100 dark:border-slate-700"
-              >
-                <Text className="text-slate-700 font-semibold text-sm">✏️ Edit message</Text>
-              </TouchableOpacity>
-            ) : null}
-            {emojiTarget && canDelete(emojiTarget) ? (
-              <TouchableOpacity
-                onPress={() => {
-                  const target = emojiTarget;
-                  setEmojiTarget(null);
-                  setDeleteTarget(target);
-                }}
-                className="flex-row items-center justify-center py-2 border-t border-slate-100 dark:border-slate-700"
-              >
-                <Text className="text-red-500 font-semibold text-sm">🗑 Delete message</Text>
-              </TouchableOpacity>
-            ) : null}
-            </View>
-          </BlurView>
         </TouchableOpacity>
       </Modal>
 
@@ -991,7 +932,18 @@ export default function TeamChatScreen() {
             keyExtractor={(item) => ("type" in item ? item.id : item.id)}
             contentContainerStyle={{ paddingVertical: 12, paddingHorizontal: 12 }}
             showsVerticalScrollIndicator={false}
-            onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
+            maintainVisibleContentPosition={{ minIndexForVisible: 0, autoscrollToTopThreshold: 10 }}
+            onScroll={handleScroll}
+            scrollEventThrottle={16}
+            onStartReached={handleLoadOlder}
+            onStartReachedThreshold={0.15}
+            ListHeaderComponent={
+              isFetchingNextPage ? (
+                <View style={{ paddingVertical: 12, alignItems: "center" }}>
+                  <ActivityIndicator color="#4361EE" size="small" />
+                </View>
+              ) : null
+            }
             renderItem={({ item }) => {
               if ("type" in item && (item as any).type === "date") {
                 return (
@@ -1023,24 +975,30 @@ export default function TeamChatScreen() {
               // Regular message
               const msg = item as Message;
               return (
-                <ChatMessage
-                  key={msg.id}
-                  id={msg.id}
-                  content={msg.content}
-                  mediaUrl={msg.mediaUrl}
-                  mediaType={msg.mediaType}
-                  replyTo={msg.replyTo}
-                  reactions={msg.reactions ?? []}
-                  senderName={msg.sender.name}
-                  senderInitial={msg.sender.name?.[0]?.toUpperCase() ?? "?"}
-                  senderImage={msg.sender.image}
-                  createdAt={msg.createdAt}
-                  editedAt={msg.editedAt}
-                  isOwn={msg.senderId === currentUserId}
-                  currentUserId={currentUserId}
-                  onLongPress={() => handleLongPress(msg)}
-                  onReactionTap={(reactions) => setReactionView(reactions)}
-                />
+                <MessageLongPressRow
+                  alignRight={msg.senderId === currentUserId}
+                  onOpenMenu={(layout) => handleLongPress(msg, layout)}
+                >
+                  <ChatMessage
+                    key={msg.id}
+                    id={msg.id}
+                    content={msg.content}
+                    mediaUrl={msg.mediaUrl}
+                    mediaType={msg.mediaType}
+                    replyTo={msg.replyTo}
+                    reactions={msg.reactions ?? []}
+                    senderName={msg.sender.name}
+                    senderInitial={msg.sender.name?.[0]?.toUpperCase() ?? "?"}
+                    senderImage={msg.sender.image}
+                    createdAt={msg.createdAt}
+                    editedAt={msg.editedAt}
+                    isOwn={msg.senderId === currentUserId}
+                    currentUserId={currentUserId}
+                    interactive={false}
+                    onReactionTap={(reactions) => setReactionView(reactions)}
+                    hideBubble={messageMenu?.message.id === msg.id}
+                  />
+                </MessageLongPressRow>
               );
             }}
           />
@@ -1139,6 +1097,85 @@ export default function TeamChatScreen() {
         onSend={handleSendMedia}
         isSending={uploading || sendMutation.isPending}
       />
+
+      <MessageActionSheet
+        visible={!!messageMenu}
+        layout={messageMenu?.layout ?? null}
+        alignRight={messageMenu?.message.senderId === currentUserId}
+        onClose={() => setMessageMenu(null)}
+        myReaction={
+          messageMenu
+            ? (messageMenu.message.reactions ?? []).find((r) => r.userId === currentUserId)?.emoji
+            : undefined
+        }
+        onReaction={(emoji) => {
+          if (!messageMenu) return;
+          reactionMutation.mutate({ messageId: messageMenu.message.id, emoji });
+        }}
+        actions={[
+          {
+            id: "reply",
+            label: "Reply",
+            icon: Reply,
+            onPress: () => {
+              if (messageMenu) setReplyTo(messageMenu.message);
+            },
+          },
+          {
+            id: "copy",
+            label: "Copy",
+            icon: Copy,
+            hidden: !messageMenu?.message.content,
+            onPress: () => {
+              if (messageMenu?.message.content) void Clipboard.setStringAsync(messageMenu.message.content);
+            },
+          },
+          {
+            id: "edit",
+            label: "Edit",
+            icon: Pencil,
+            hidden: !messageMenu || !canEdit(messageMenu.message),
+            onPress: () => {
+              if (!messageMenu) return;
+              setEditInput(messageMenu.message.content ?? "");
+              setEditTarget(messageMenu.message);
+            },
+          },
+          {
+            id: "delete",
+            label: "Delete",
+            icon: Trash2,
+            destructive: true,
+            separatorBefore: true,
+            hidden: !messageMenu || !canDelete(messageMenu.message),
+            onPress: () => {
+              if (messageMenu) setDeleteTarget(messageMenu.message);
+            },
+          },
+        ]}
+      >
+        {messageMenu ? (
+          <ChatMessage
+            variant="overlay"
+            anchorHeight={messageMenu.layout.height}
+            id={messageMenu.message.id}
+            content={messageMenu.message.content}
+            mediaUrl={messageMenu.message.mediaUrl}
+            mediaType={messageMenu.message.mediaType}
+            replyTo={messageMenu.message.replyTo}
+            reactions={[]}
+            senderName={messageMenu.message.sender.name}
+            senderInitial={messageMenu.message.sender.name?.[0]?.toUpperCase() ?? "?"}
+            senderImage={messageMenu.message.sender.image}
+            createdAt={messageMenu.message.createdAt}
+            editedAt={messageMenu.message.editedAt}
+            isOwn={messageMenu.message.senderId === currentUserId}
+            currentUserId={currentUserId}
+            interactive={false}
+            onReactionTap={() => {}}
+          />
+        ) : null}
+      </MessageActionSheet>
     </SafeAreaView>
   );
 }

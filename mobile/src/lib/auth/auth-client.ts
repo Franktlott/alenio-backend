@@ -4,6 +4,7 @@ import Constants from "expo-constants";
 import { fetch as expoFetch } from "expo/fetch";
 import * as Linking from "expo-linking";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getBackendUrl } from "../backend-url";
 
 const neonAuthUrl = process.env.EXPO_PUBLIC_NEON_AUTH_URL;
 
@@ -33,10 +34,10 @@ export function getEmailAuthCallbackUrl(): string {
     }
   }
 
-  const backend = process.env.EXPO_PUBLIC_BACKEND_URL?.trim();
-  if (backend) {
-    const normalized = backend.replace(/\/+$/, "");
-    return `${normalized}/`;
+  try {
+    return `${getBackendUrl()}/`;
+  } catch {
+    /* fall through */
   }
 
   if (neonAuthOrigin) {
@@ -109,8 +110,38 @@ export function setAccessToken(token: string | null | undefined) {
 
 export function clearAccessToken() {
   inMemoryAccessToken = null;
+  refreshInFlight = null;
   AsyncStorage.removeItem(ACCESS_TOKEN_KEY).catch(() => {});
 }
+
+function jwtSubject(token: string): string | null {
+  if (!looksLikeJwt(token)) return null;
+  try {
+    let base64 = token.split(".")[1]?.replace(/-/g, "+").replace(/_/g, "/") ?? "";
+    const pad = base64.length % 4;
+    if (pad) base64 += "=".repeat(4 - pad);
+    let decoded: string;
+    if (typeof atob !== "undefined") decoded = atob(base64);
+    else if (typeof Buffer !== "undefined") decoded = Buffer.from(base64, "base64").toString("utf8");
+    else return null;
+    const payload = JSON.parse(decoded) as { sub?: string };
+    return typeof payload.sub === "string" ? payload.sub : null;
+  } catch {
+    return null;
+  }
+}
+
+function jwtSubPrefix(token: string | null | undefined): string | null {
+  if (!token?.trim()) return null;
+  const sub = jwtSubject(token.trim());
+  return sub ? sub.slice(0, 8) : null;
+}
+
+function agentDebugLog(message: string, data: Record<string, unknown>) {
+  console.warn("[DEBUG-4ff4c0]", JSON.stringify({ message, ...data, timestamp: Date.now() }));
+}
+
+export { agentDebugLog, jwtSubPrefix };
 
 function pickTokenFromUnknown(data: unknown): string | null {
   if (!data || typeof data !== "object") return null;
@@ -289,6 +320,98 @@ async function getJwtTokenFromClient(): Promise<string | null> {
   }
 }
 
+/** Obtain a JWT the backend bearer middleware accepts (Neon getJWTToken / refresh). */
+export async function resolveBackendBearerToken(options?: {
+  fresh?: boolean;
+  expectedUserId?: string;
+}): Promise<string | null> {
+  const fresh = options?.fresh === true;
+  const expectedUserId = options?.expectedUserId?.trim() || undefined;
+
+  const accept = (token: string | null | undefined): string | null => {
+    const normalized = token?.trim() ?? "";
+    if (!normalized || !looksLikeJwt(normalized)) return null;
+    if (expectedUserId) {
+      const sub = jwtSubject(normalized);
+      if (sub && sub !== expectedUserId) {
+        agentDebugLog("reject jwt user mismatch", {
+          runId: "account-switch-v2",
+          hypothesisId: "H6",
+          expectedPrefix: expectedUserId.slice(0, 8),
+          gotPrefix: sub.slice(0, 8),
+        });
+        return null;
+      }
+    }
+    return normalized;
+  };
+
+  if (!fresh) {
+    const cachedJwt = accept(await getJwtTokenFromClient());
+    if (cachedJwt) {
+      setAccessToken(cachedJwt);
+      return cachedJwt;
+    }
+    const cached = accept(inMemoryAccessToken);
+    if (cached) return cached;
+  }
+
+  await refreshSessionTokens();
+  const jwtAfterRefresh = accept(await getJwtTokenFromClient());
+  if (jwtAfterRefresh) {
+    setAccessToken(jwtAfterRefresh);
+    agentDebugLog("accepted jwt after refresh", {
+      runId: "account-switch-v2",
+      hypothesisId: "H6",
+      subPrefix: jwtSubPrefix(jwtAfterRefresh),
+    });
+    return jwtAfterRefresh;
+  }
+
+  try {
+    const bearer = inMemoryAccessToken?.trim() ?? null;
+    const forced = await authClient.getSession({
+      fetchOptions: {
+        headers: {
+          "X-Force-Fetch": "1",
+          ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}),
+        },
+      },
+    } as never);
+    const fromSession =
+      accept(setAccessTokenFromAuthData(forced?.data ?? null)) ??
+      accept(setAccessTokenFromAuthData(forced ?? null)) ??
+      accept(deepFindToken(forced));
+    if (fromSession) {
+      setAccessToken(fromSession);
+      agentDebugLog("accepted jwt from forced getSession", {
+        runId: "account-switch-v2",
+        hypothesisId: "H6",
+        subPrefix: jwtSubPrefix(fromSession),
+      });
+      return fromSession;
+    }
+  } catch {
+    /* ignore */
+  }
+
+  const jwtRetry = accept(await getJwtTokenFromClient());
+  if (jwtRetry) {
+    setAccessToken(jwtRetry);
+    return jwtRetry;
+  }
+
+  const fallback = accept(await getAccessToken());
+  agentDebugLog("resolveBackendBearerToken exhausted", {
+    runId: "account-switch-v2",
+    hypothesisId: "H6",
+    fresh,
+    hasFallback: !!fallback,
+    subPrefix: jwtSubPrefix(fallback),
+  });
+  return fallback;
+}
+
 export async function getAccessToken(): Promise<string | null> {
   async function loadFromStorage(): Promise<string | null> {
     if (inMemoryAccessToken?.trim()) return inMemoryAccessToken.trim();
@@ -315,6 +438,11 @@ export async function getAccessToken(): Promise<string | null> {
       return token.trim();
     }
   } else if (token?.trim()) {
+    const jwt = await getJwtTokenFromClient();
+    if (jwt?.trim() && looksLikeJwt(jwt.trim())) {
+      setAccessToken(jwt.trim());
+      return jwt.trim();
+    }
     return token.trim();
   }
 
@@ -371,5 +499,10 @@ export async function getAccessToken(): Promise<string | null> {
 
 export async function getAuthHeaders(): Promise<Record<string, string>> {
   const token = await getAccessToken();
+  return authHeadersFromToken(token);
+}
+
+export function authHeadersFromToken(bearerToken?: string | null): Record<string, string> {
+  const token = bearerToken?.trim();
   return token ? { Authorization: `Bearer ${token}` } : {};
 }

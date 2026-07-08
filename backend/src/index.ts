@@ -53,6 +53,7 @@ import { ensureGoLoginSchema } from "./lib/ensure-go-login-schema";
 import { ensureWorkplaceAlertsSchema } from "./lib/ensure-workplace-alerts-schema";
 import { ensureGoFrontendSettingsSchema } from "./lib/ensure-go-frontend-settings-schema";
 import { ensureGoLeaderPinSchema } from "./lib/ensure-go-leader-pin-schema";
+import { ensureWorkspaceModulesSchema } from "./lib/ensure-workspace-modules-schema";
 import { ensureCalendarConnectionSchema } from "./lib/ensure-calendar-connection-schema";
 import { calendarConnectionsRouter } from "./routes/calendar-connections";
 import { developmentGoalsRouter } from "./routes/development-goals";
@@ -74,7 +75,7 @@ if (!isProduction) {
 /** Dev safety net + prod fallback when preDeploy db push missed a table. */
 const startupSchemaReady = Promise.all([
   ...(isProduction
-    ? [ensureGoLoginSchema(prisma), ensureWorkplaceAlertsSchema(prisma), ensureGoFrontendSettingsSchema(prisma), ensureGoLeaderPinSchema(prisma)]
+    ? [ensureGoLoginSchema(prisma), ensureWorkplaceAlertsSchema(prisma), ensureGoFrontendSettingsSchema(prisma), ensureGoLeaderPinSchema(prisma), ensureWorkspaceModulesSchema(prisma)]
     : [
         ensureOneOnOneSchema(prisma),
         ensureDevelopmentPlanSchema(prisma),
@@ -88,6 +89,7 @@ const startupSchemaReady = Promise.all([
         ensureWorkplaceAlertsSchema(prisma),
         ensureGoFrontendSettingsSchema(prisma),
         ensureGoLeaderPinSchema(prisma),
+        ensureWorkspaceModulesSchema(prisma),
       ]),
 ]);
 
@@ -750,11 +752,29 @@ app.post("/api/profile/email-change/confirm", async (c) => {
 // Get current user profile with admin flag
 app.get("/api/me", async (c) => {
   const user = c.get("user");
-  if (!user) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
+  const authDebug = c.get("authDebug");
+  const hasBearer = !!c.req.header("authorization")?.match(/^Bearer\s+/i);
+  if (!user) {
+    try {
+      const { appendFileSync } = await import("node:fs");
+      appendFileSync(
+        "/Users/franklott/Documents/GitHub/alenio-backend/.cursor/debug-4ff4c0.log",
+        `${JSON.stringify({ sessionId: "4ff4c0", runId: "pre-fix", hypothesisId: "H1", location: "index.ts:/api/me", message: "unauthorized", data: { hasBearer, neonAuthUserFound: authDebug?.neonAuthUserFound ?? false, matchedBy: authDebug?.matchedBy ?? "none" }, timestamp: Date.now() })}\n`,
+      );
+    } catch { /* ignore */ }
+    return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
+  }
   const fullUser = await prisma.user.findUnique({
     where: { id: user.id },
     select: { id: true, name: true, email: true, image: true, isAdmin: true, timezone: true },
   });
+  try {
+    const { appendFileSync } = await import("node:fs");
+    appendFileSync(
+      "/Users/franklott/Documents/GitHub/alenio-backend/.cursor/debug-4ff4c0.log",
+      `${JSON.stringify({ sessionId: "4ff4c0", runId: "pre-fix", hypothesisId: "H3", location: "index.ts:/api/me", message: "me lookup", data: { hasBearer, matchedBy: authDebug?.matchedBy ?? "none", hasFullUser: !!fullUser?.id }, timestamp: Date.now() })}\n`,
+    );
+  } catch { /* ignore */ }
   return c.json({ data: fullUser });
 });
 

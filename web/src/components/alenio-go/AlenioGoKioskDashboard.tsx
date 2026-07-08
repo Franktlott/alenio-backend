@@ -1,15 +1,16 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ackGoWorkplaceAlert,
+  fetchGoKioskModules,
   fetchGoWorkplaceAlerts,
   fetchPublicChecklistHub,
   type GoWorkplaceAlert,
+  type KioskModule,
 } from "../../lib/api";
 import { ALENIO_ALERT_SOUND_PATH, resolveWorkplaceAlertSoundUrl } from "../../lib/go-alert-sounds";
 import { stopGoAlertSoundLoop, setGoAlertSoundWorkspaceUrl } from "../../lib/go-alert-sound";
 import {
-  GO_DASH_KIOSK_MODULES,
   GO_DASH_QUICK_ACTIONS,
   greetingForHour,
   type GoDashModule,
@@ -24,16 +25,40 @@ import {
   GoDashQuickActionsGrid,
 } from "./go-dash-parts";
 import { GoKioskAlertModal, GoAlertSoundUnlockBanner } from "./GoKioskWorkplaceAlerts";
+import { GoKioskModuleTestCodeScreen, GoTestingModeBanner } from "./GoKioskModuleGate";
 
 type Props = {
   hubToken: string;
 };
 
-function buildKioskModules(): GoDashModule[] {
-  return GO_DASH_KIOSK_MODULES.map((module) => ({
-    ...module,
-    count: 0,
-    countMessage: module.active ? module.countMessage : "Coming soon",
+const KIOSK_ICON_BY_KEY: Record<string, GoDashModule["icon"]> = {
+  "temp-checks": "temp",
+  checklists: "checklists",
+  briefings: "briefings",
+  walks: "walks",
+};
+
+const KIOSK_TONE_BY_KEY: Record<string, GoDashModule["tone"]> = {
+  "temp-checks": "emerald",
+  checklists: "cyan",
+  briefings: "amber",
+  walks: "violet",
+};
+
+/** Merge live/testing modules from the server into the floor module wheel. Inactive modules are hidden. */
+function buildKioskModules(serverModules: KioskModule[]): GoDashModule[] {
+  return serverModules.map((m) => ({
+    id: m.moduleKey,
+    title: m.moduleName,
+    subtitle: m.description,
+    active: true,
+    tone: KIOSK_TONE_BY_KEY[m.moduleKey] ?? "indigo",
+    icon: KIOSK_ICON_BY_KEY[m.moduleKey] ?? "checklists",
+    count: null,
+    countMessage: m.operatingMode === "live" ? "Live" : "Testing mode",
+    operatingMode: m.operatingMode,
+    requireTestCode: m.requireTestCode,
+    ctaLabel: m.operatingMode === "live" ? `Open ${m.moduleName.toLowerCase()}` : "Open testing",
   }));
 }
 
@@ -55,7 +80,37 @@ export function AlenioGoKioskDashboard({ hubToken }: Props) {
   const alertQueueRef = useRef<GoWorkplaceAlert[]>([]);
   const hubRequestRef = useRef(0);
 
-  const kioskModules = useMemo(() => buildKioskModules(), []);
+  const [kioskModules, setKioskModules] = useState<GoDashModule[]>([]);
+  const [openModule, setOpenModule] = useState<GoDashModule | null>(null);
+  const [pendingTestModule, setPendingTestModule] = useState<GoDashModule | null>(null);
+
+  useEffect(() => {
+    if (!hubToken) return;
+    let cancelled = false;
+    const load = () => {
+      void fetchGoKioskModules(hubToken)
+        .then((mods) => {
+          if (!cancelled) setKioskModules(buildKioskModules(mods));
+        })
+        .catch(() => {
+          if (!cancelled) setKioskModules([]);
+        });
+    };
+    load();
+    const id = window.setInterval(load, 30_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [hubToken]);
+
+  const handleModuleSelect = useCallback((module: GoDashModule) => {
+    if (module.operatingMode === "testing" && module.requireTestCode) {
+      setPendingTestModule(module);
+      return;
+    }
+    setOpenModule(module);
+  }, []);
 
   const enqueueAlertsForModal = useCallback((incoming: GoWorkplaceAlert[]) => {
     if (incoming.length === 0) return;
@@ -238,7 +293,7 @@ export function AlenioGoKioskDashboard({ hubToken }: Props) {
               </div>
             </div>
             <div className="go-dash-stat-col">
-              <span className="go-dash-stat-value go-dash-stat-value--indigo">0</span>
+              <span className="go-dash-stat-value go-dash-stat-value--indigo">{kioskModules.length}</span>
               <span className="go-dash-stat-label">Active modules</span>
               <span className="go-dash-stat-hint">Alerts are live today</span>
             </div>
@@ -261,9 +316,43 @@ export function AlenioGoKioskDashboard({ hubToken }: Props) {
         </section>
 
         <div className="go-dash-body go-dash-body--kiosk go-dash-body--store">
-          <GoDashModuleWheel modules={kioskModules} />
+          {kioskModules.length > 0 ? (
+            <GoDashModuleWheel modules={kioskModules} onSelect={handleModuleSelect} />
+          ) : (
+            <p className="go-dash-empty-modules enterprise-muted">No modules are available yet.</p>
+          )}
         </div>
       </div>
+
+      {pendingTestModule ? (
+        <GoKioskModuleTestCodeScreen
+          hubToken={hubToken}
+          moduleKey={pendingTestModule.id}
+          moduleName={pendingTestModule.title}
+          onVerified={() => {
+            setOpenModule(pendingTestModule);
+            setPendingTestModule(null);
+          }}
+          onCancel={() => setPendingTestModule(null)}
+        />
+      ) : null}
+
+      {openModule ? (
+        <div className="go-module-open-overlay" data-testid="go-module-open-overlay">
+          {openModule.operatingMode === "testing" ? <GoTestingModeBanner /> : null}
+          <div className="go-module-open-body">
+            <h2 className="go-module-open-title">{openModule.title}</h2>
+            <p className="enterprise-muted">
+              {openModule.operatingMode === "live"
+                ? "This module is live."
+                : "You are running this module in testing mode."}
+            </p>
+            <button type="button" className="go-testcode-btn go-testcode-btn--ghost" onClick={() => setOpenModule(null)}>
+              Close
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       <div className="go-dash-bottom-dock go-dash-bottom-dock--store">
         <section className="go-dash-quick go-dash-quick--dock" aria-labelledby="go-kiosk-quick-title">

@@ -100,7 +100,13 @@ function storeCardMetric(module: GoDashModule): string {
   return String(module.count);
 }
 
-export function GoDashStoreModuleCard({ module }: { module: GoDashModule }) {
+export function GoDashStoreModuleCard({
+  module,
+  onSelect,
+}: {
+  module: GoDashModule;
+  onSelect?: (module: GoDashModule) => void;
+}) {
   const body = (
     <>
       {!module.active ? (
@@ -111,6 +117,12 @@ export function GoDashStoreModuleCard({ module }: { module: GoDashModule }) {
               <path d="M7 11V7a5 5 0 0 1 10 0v4" />
             </svg>
             Coming soon
+          </span>
+        </div>
+      ) : module.operatingMode ? (
+        <div className="go-dash-store-card__soon-row">
+          <span className={`go-mod-mode-badge go-mod-mode-badge--${module.operatingMode}`}>
+            {module.operatingMode === "live" ? "🟢 Live" : "🧪 Testing"}
           </span>
         </div>
       ) : null}
@@ -138,6 +150,19 @@ export function GoDashStoreModuleCard({ module }: { module: GoDashModule }) {
 
   const className = `go-dash-store-card go-dash-store-card--${module.tone}${module.active ? "" : " go-dash-store-card--inactive"}`;
 
+  if (module.active && onSelect) {
+    return (
+      <button
+        type="button"
+        className={className}
+        onClick={() => onSelect(module)}
+        data-testid={`go-dash-module-${module.id}`}
+      >
+        {body}
+      </button>
+    );
+  }
+
   if (module.active && module.href) {
     const isHash = module.href.startsWith("#");
     if (isHash) {
@@ -161,7 +186,13 @@ export function GoDashStoreModuleCard({ module }: { module: GoDashModule }) {
   );
 }
 
-export function GoDashModuleWheel({ modules }: { modules: GoDashModule[] }) {
+export function GoDashModuleWheel({
+  modules,
+  onSelect,
+}: {
+  modules: GoDashModule[];
+  onSelect?: (module: GoDashModule) => void;
+}) {
   const scrollable = modules.length > 4;
 
   return (
@@ -172,7 +203,7 @@ export function GoDashModuleWheel({ modules }: { modules: GoDashModule[] }) {
       <div className="go-dash-module-wheel-track" role="list">
         {modules.map((module) => (
           <div key={module.id} className="go-dash-module-wheel-item" role="listitem">
-            <GoDashStoreModuleCard module={module} />
+            <GoDashStoreModuleCard module={module} onSelect={onSelect} />
           </div>
         ))}
       </div>

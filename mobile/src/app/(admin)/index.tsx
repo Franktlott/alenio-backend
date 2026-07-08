@@ -21,9 +21,10 @@ import { authClient, clearAccessToken, getAuthHeaders } from "@/lib/auth/auth-cl
 import { SESSION_QUERY_KEY, markSessionSignedOut, useInvalidateSession } from "@/lib/auth/use-session";
 import { fetch } from "expo/fetch";
 import { readJsonSafe } from "@/lib/api/api";
+import { getBackendUrl } from "@/lib/backend-url";
 import { toast } from "burnt";
 
-const BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL!;
+const BASE_URL = getBackendUrl();
 
 type AdminUser = {
   id: string;

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { View, Text, TextInput, Pressable, KeyboardAvoidingView, Platform, ScrollView } from "react-native";
+import { View, Text, TextInput, Pressable, Platform, ScrollView, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { useMutation } from "@tanstack/react-query";
@@ -7,9 +7,26 @@ import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
 import { toast } from "burnt";
 import { Check, X } from "lucide-react-native";
+import { SafeKeyboardAvoidingView } from "@/lib/safe-keyboard-controller";
 
 const CATEGORIES = ["General", "Bug", "Feature Request"] as const;
-type Category = typeof CATEGORIES[number];
+type Category = (typeof CATEGORIES)[number];
+
+const UI = {
+  border: "#E2E8F0",
+  muted: "#64748B",
+  text: "#0F172A",
+  accent: "#4338CA",
+  errorBg: "#FEF2F2",
+  errorBorder: "#FECACA",
+  errorText: "#B91C1C",
+};
+
+function FieldLabel({ children }: { children: string }) {
+  return (
+    <Text style={{ fontSize: 12, fontWeight: "600", color: "#475569", marginBottom: 8 }}>{children}</Text>
+  );
+}
 
 export default function FeedbackScreen() {
   const insets = useSafeAreaInsets();
@@ -37,103 +54,190 @@ export default function FeedbackScreen() {
     },
   });
 
-  if (submitted) {
-    return (
+  const handleClose = () => router.back();
+
+  const modalBody = submitted ? (
+    <View style={{ padding: 20, alignItems: "center" }} testID="feedback-success">
       <View
-        style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#F8FAFC", paddingBottom: insets.bottom + 32 }}
-        testID="feedback-success"
+        style={{
+          width: 48,
+          height: 48,
+          borderRadius: 10,
+          backgroundColor: "#ECFDF5",
+          borderWidth: 1,
+          borderColor: "#A7F3D0",
+          alignItems: "center",
+          justifyContent: "center",
+          marginBottom: 14,
+        }}
       >
-        <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: "#ECFDF5", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>
-          <Check size={28} color="#22C55E" />
-        </View>
-        <Text style={{ fontSize: 18, fontWeight: "800", color: "#1E293B", marginBottom: 8 }}>Thanks for your feedback!</Text>
-        <Text style={{ fontSize: 14, color: "#94A3B8", textAlign: "center", paddingHorizontal: 32 }}>We read every message and use it to improve the app.</Text>
+        <Check size={22} color="#059669" />
       </View>
-    );
-  }
-
-  return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: "#F8FAFC" }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-      {/* Header */}
-      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingTop: 20, paddingBottom: 12 }}>
-        <View>
-          <Text style={{ fontSize: 20, fontWeight: "800", color: "#1E293B" }}>Send Feedback</Text>
-          <Text style={{ fontSize: 13, color: "#94A3B8", marginTop: 2 }}>Help us make the app better.</Text>
-        </View>
-        <Pressable
-          onPress={() => router.back()}
-          testID="close-feedback"
-          style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#F1F5F9", alignItems: "center", justifyContent: "center" }}
-        >
-          <X size={18} color="#64748B" />
-        </Pressable>
-      </View>
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: insets.bottom + 32 }}
-        keyboardShouldPersistTaps="handled"
-      >
-
-        {/* Category */}
-        <Text style={{ fontSize: 12, fontWeight: "600", color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10 }}>Category</Text>
-        <View style={{ flexDirection: "row", gap: 8, marginBottom: 24 }}>
-          {CATEGORIES.map((cat) => (
-            <Pressable
-              key={cat}
-              onPress={() => setCategory(cat)}
-              style={{
-                paddingHorizontal: 14,
-                paddingVertical: 8,
-                borderRadius: 20,
-                backgroundColor: category === cat ? "#4361EE" : "#F1F5F9",
-              }}
-              testID={`category-${cat.toLowerCase().replace(/ /g, "-")}`}
-            >
-              <Text style={{ fontSize: 13, fontWeight: "600", color: category === cat ? "white" : "#64748B" }}>{cat}</Text>
-            </Pressable>
-          ))}
+      <Text style={{ fontSize: 16, fontWeight: "700", color: UI.text, textAlign: "center" }}>Thanks for your feedback</Text>
+      <Text style={{ fontSize: 13, color: UI.muted, textAlign: "center", marginTop: 8, lineHeight: 19 }}>
+        We read every message and use it to improve the app.
+      </Text>
+    </View>
+  ) : (
+    <>
+      <View style={{ padding: 16 }}>
+        <FieldLabel>Category</FieldLabel>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
+          {CATEGORIES.map((cat) => {
+            const selected = category === cat;
+            return (
+              <Pressable
+                key={cat}
+                onPress={() => setCategory(cat)}
+                style={{
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                  borderRadius: 8,
+                  borderWidth: 1,
+                  borderColor: selected ? UI.accent : UI.border,
+                  backgroundColor: selected ? "#EEF2FF" : "#FFFFFF",
+                }}
+                testID={`category-${cat.toLowerCase().replace(/ /g, "-")}`}
+              >
+                <Text style={{ fontSize: 13, fontWeight: "600", color: selected ? UI.accent : "#64748B" }}>{cat}</Text>
+              </Pressable>
+            );
+          })}
         </View>
 
-        {/* Message */}
-        <Text style={{ fontSize: 12, fontWeight: "600", color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10 }}>Message</Text>
+        <FieldLabel>Message</FieldLabel>
         <TextInput
           testID="feedback-message-input"
           multiline
           numberOfLines={6}
-          placeholder="What's on your mind? Bug, idea, or just a thought..."
-          placeholderTextColor="#CBD5E1"
+          placeholder="Share a bug, idea, or suggestion..."
+          placeholderTextColor="#94A3B8"
           value={message}
           onChangeText={setMessage}
           style={{
-            backgroundColor: "white",
-            borderRadius: 16,
+            backgroundColor: "#FFFFFF",
+            borderRadius: 10,
             borderWidth: 1,
-            borderColor: "#E2E8F0",
-            padding: 16,
+            borderColor: "#DCE3EB",
+            paddingHorizontal: 12,
+            paddingVertical: 11,
             fontSize: 15,
-            color: "#1E293B",
-            minHeight: 140,
+            color: UI.text,
+            minHeight: 120,
             textAlignVertical: "top",
-            marginBottom: 32,
           }}
         />
+      </View>
 
+      <View
+        style={{
+          flexDirection: "row",
+          justifyContent: "flex-end",
+          gap: 10,
+          paddingHorizontal: 16,
+          paddingVertical: 12,
+          borderTopWidth: 1,
+          borderTopColor: "#EEF2F6",
+        }}
+      >
+        <Pressable
+          onPress={handleClose}
+          style={{
+            minWidth: 72,
+            borderWidth: 1,
+            borderColor: "#CBD5E1",
+            borderRadius: 10,
+            paddingHorizontal: 14,
+            paddingVertical: 10,
+            alignItems: "center",
+            backgroundColor: "#FFFFFF",
+          }}
+        >
+          <Text style={{ fontSize: 14, fontWeight: "600", color: "#334155" }}>Cancel</Text>
+        </Pressable>
         <Pressable
           testID="submit-feedback-button"
           onPress={() => submitMutation.mutate()}
           disabled={!message.trim() || submitMutation.isPending}
           style={{
-            backgroundColor: !message.trim() || submitMutation.isPending ? "#CBD5E1" : "#4361EE",
-            borderRadius: 16,
-            paddingVertical: 16,
+            minWidth: 96,
+            backgroundColor: !message.trim() || submitMutation.isPending ? "#94A3B8" : UI.accent,
+            borderRadius: 10,
+            paddingHorizontal: 16,
+            paddingVertical: 10,
             alignItems: "center",
           }}
         >
-          <Text style={{ color: "white", fontSize: 16, fontWeight: "700" }}>
-            {submitMutation.isPending ? "Sending..." : "Send Feedback"}
-          </Text>
+          {submitMutation.isPending ? (
+            <ActivityIndicator color="white" />
+          ) : (
+            <Text style={{ fontSize: 14, fontWeight: "600", color: "#FFFFFF" }}>Send</Text>
+          )}
         </Pressable>
-      </ScrollView>
-    </KeyboardAvoidingView>
+      </View>
+    </>
+  );
+
+  return (
+    <View style={{ flex: 1, backgroundColor: "transparent" }}>
+      <Pressable
+        style={{
+          flex: 1,
+          backgroundColor: "rgba(15, 23, 42, 0.4)",
+          justifyContent: "center",
+          paddingHorizontal: 20,
+          paddingTop: insets.top + 16,
+          paddingBottom: insets.bottom + 16,
+        }}
+        onPress={handleClose}
+      >
+        <SafeKeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
+          <Pressable onPress={(e) => e.stopPropagation?.()}>
+            <View
+              style={{
+                backgroundColor: "#FFFFFF",
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: UI.border,
+                overflow: "hidden",
+                width: "100%",
+                maxWidth: 420,
+                alignSelf: "center",
+                shadowColor: "#0F172A",
+                shadowOpacity: 0.16,
+                shadowRadius: 20,
+                shadowOffset: { width: 0, height: 10 },
+                elevation: 8,
+              }}
+            >
+              <View
+                style={{
+                  paddingHorizontal: 16,
+                  paddingTop: 14,
+                  paddingBottom: 12,
+                  borderBottomWidth: 1,
+                  borderBottomColor: UI.border,
+                  backgroundColor: "#F8FAFC",
+                }}
+              >
+                <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={{ fontSize: 17, fontWeight: "700", color: UI.text }}>Send feedback</Text>
+                    <Text style={{ fontSize: 13, color: UI.muted, marginTop: 2 }}>Help us improve the app</Text>
+                  </View>
+                  <Pressable onPress={handleClose} hitSlop={12} testID="close-feedback">
+                    <X size={20} color={UI.muted} />
+                  </Pressable>
+                </View>
+              </View>
+
+              <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} bounces={false}>
+                {modalBody}
+              </ScrollView>
+            </View>
+          </Pressable>
+        </SafeKeyboardAvoidingView>
+      </Pressable>
+    </View>
   );
 }

@@ -18,9 +18,10 @@ import { ArrowLeft, Mail, User, Trash2, Shield, Calendar, Users } from "lucide-r
 import { getAuthHeaders } from "@/lib/auth/auth-client";
 import { fetch } from "expo/fetch";
 import { readJsonSafe } from "@/lib/api/api";
+import { getBackendUrl } from "@/lib/backend-url";
 import { toast } from "burnt";
 
-const BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL!;
+const BASE_URL = getBackendUrl();
 
 type AdminUserDetail = {
   id: string;

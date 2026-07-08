@@ -29,9 +29,7 @@ import {
 import { printDevelopmentPlan, downloadDevelopmentPlanPdf } from "@/lib/development-plan-print";
 import {
   DEVELOPMENT_GOAL_ACTIVITY_KEY,
-  goalDaysUntilInactive,
   goalStatusLabel,
-  isGoalNearingInactive,
   normalizeDevelopmentGoalStatus,
 } from "@/lib/development-goal-activity";
 
@@ -66,6 +64,85 @@ function lastUpdatedAt(goal: DevelopmentGoal): string {
 
 function displayUserName(user: { name: string; email: string } | undefined): string {
   return user?.name?.trim() || user?.email || "Someone";
+}
+
+function GrowthEmptyState({
+  memberName,
+  canCreate,
+  hasAnyGoals,
+  error,
+  onStart,
+}: {
+  memberName: string;
+  canCreate: boolean;
+  hasAnyGoals: boolean;
+  error?: string | null;
+  onStart?: () => void;
+}) {
+  return (
+    <View
+      style={{
+        backgroundColor: "#F8FAFC",
+        borderRadius: 16,
+        padding: 28,
+        alignItems: "center",
+        borderWidth: 1,
+        borderColor: "#E2E8F0",
+        borderStyle: "dashed",
+      }}
+    >
+      <View
+        style={{
+          width: 56,
+          height: 56,
+          borderRadius: 28,
+          backgroundColor: "#EEF2FF",
+          alignItems: "center",
+          justifyContent: "center",
+          marginBottom: 16,
+        }}
+      >
+        <Target size={28} color="#4361EE" />
+      </View>
+      <Text style={{ fontSize: 17, fontWeight: "800", color: "#0F172A", textAlign: "center" }}>
+        {error ? "Could not load goals" : hasAnyGoals ? "No active goals yet" : "No goals yet"}
+      </Text>
+      <Text style={{ fontSize: 14, color: "#64748B", textAlign: "center", lineHeight: 21, marginTop: 8, maxWidth: 300 }}>
+        {error
+          ? error
+          : canCreate
+            ? hasAnyGoals
+              ? `Create a new goal for ${memberName}, or reactivate an inactive goal below.`
+              : `Set development goals for ${memberName}. Track skills, action steps, and progress over time.`
+            : `Development goals for ${memberName} will appear here once they're added.`}
+      </Text>
+      {!error ? (
+        <Text style={{ fontSize: 12, color: "#94A3B8", textAlign: "center", lineHeight: 17, marginTop: 10, maxWidth: 300 }}>
+          {DEVELOPMENT_GOAL_ACTIVITY_KEY.summary}
+        </Text>
+      ) : null}
+      {canCreate && onStart && !error ? (
+        <Pressable
+          onPress={onStart}
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 6,
+            backgroundColor: "#4361EE",
+            borderRadius: 12,
+            paddingHorizontal: 18,
+            paddingVertical: 12,
+            marginTop: 20,
+          }}
+        >
+          <Plus size={16} color="white" />
+          <Text style={{ fontSize: 14, fontWeight: "700", color: "white" }}>
+            {hasAnyGoals ? "Add goal" : "Start first goal"}
+          </Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
 }
 
 export function DevelopmentPlanTab({
@@ -330,8 +407,6 @@ export function DevelopmentPlanTab({
     const status = normalizeDevelopmentGoalStatus(goal.status);
     const isClosed = status === "closed";
     const isInactive = status === "inactive";
-    const nearingInactive = isGoalNearingInactive(goal);
-    const daysUntilInactive = goalDaysUntilInactive(goal);
 
     return (
     <View
@@ -396,13 +471,6 @@ export function DevelopmentPlanTab({
             <Text style={{ fontSize: 14, fontWeight: "600", color: "#EF4444" }}>Delete goal</Text>
           </Pressable>
         </View>
-      ) : null}
-
-      {nearingInactive && daysUntilInactive != null ? (
-        <Text style={{ marginTop: 10, fontSize: 12, color: "#C2410C", lineHeight: 18 }}>
-          Seneca reminder: goes inactive in {daysUntilInactive} day{daysUntilInactive !== 1 ? "s" : ""} without an
-          update.
-        </Text>
       ) : null}
 
       {isInactive ? (
@@ -492,95 +560,78 @@ export function DevelopmentPlanTab({
 
   return (
     <View style={{ gap: 16 }}>
-      <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" }}>
-        <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 18, fontWeight: "800", color: "#0F172A" }}>Development plan</Text>
-          <Text style={{ fontSize: 13, color: "#64748B", marginTop: 2 }}>
-            Goals and progress for {memberName}
-          </Text>
-          <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 6, lineHeight: 17 }}>
-            {DEVELOPMENT_GOAL_ACTIVITY_KEY.summary} {DEVELOPMENT_GOAL_ACTIVITY_KEY.reminderSummary}
-          </Text>
-        </View>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-          {goals.length > 0 ? (
-            <>
-              <Pressable
-                onPress={() => void onPrint()}
-                disabled={loading || printingPdf}
-                style={{
-                  borderWidth: 1,
-                  borderColor: "#D8DEE8",
-                  borderRadius: 10,
-                  paddingHorizontal: 12,
-                  paddingVertical: 8,
-                  opacity: loading || printingPdf ? 0.55 : 1,
-                }}
-              >
-                <Text style={{ fontSize: 13, fontWeight: "700", color: "#334155" }}>
-                  {printingPdf ? "Printing…" : "Print"}
-                </Text>
-              </Pressable>
-              <Pressable
-                onPress={() => void onDownloadPdf()}
-                disabled={loading || downloadingPdf}
-                style={{
-                  borderWidth: 1,
-                  borderColor: "#D8DEE8",
-                  borderRadius: 10,
-                  paddingHorizontal: 12,
-                  paddingVertical: 8,
-                  opacity: loading || downloadingPdf ? 0.55 : 1,
-                }}
-              >
-                <Text style={{ fontSize: 13, fontWeight: "700", color: "#334155" }}>
-                  {downloadingPdf ? "Downloading…" : "Download PDF"}
-                </Text>
-              </Pressable>
-            </>
-          ) : null}
-          {canCreate ? (
+      {goals.length > 0 ? (
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 8, flexWrap: "wrap" }}>
           <Pressable
-            onPress={openCreate}
+            onPress={() => void onPrint()}
+            disabled={loading || printingPdf}
             style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 4,
-              backgroundColor: "#4361EE",
+              borderWidth: 1,
+              borderColor: "#D8DEE8",
               borderRadius: 10,
               paddingHorizontal: 12,
               paddingVertical: 8,
+              opacity: loading || printingPdf ? 0.55 : 1,
             }}
           >
-            <Plus size={16} color="white" />
-            <Text style={{ fontSize: 13, fontWeight: "700", color: "white" }}>New goal</Text>
+            <Text style={{ fontSize: 13, fontWeight: "700", color: "#334155" }}>
+              {printingPdf ? "Printing…" : "Print"}
+            </Text>
           </Pressable>
-        ) : null}
+          <Pressable
+            onPress={() => void onDownloadPdf()}
+            disabled={loading || downloadingPdf}
+            style={{
+              borderWidth: 1,
+              borderColor: "#D8DEE8",
+              borderRadius: 10,
+              paddingHorizontal: 12,
+              paddingVertical: 8,
+              opacity: loading || downloadingPdf ? 0.55 : 1,
+            }}
+          >
+            <Text style={{ fontSize: 13, fontWeight: "700", color: "#334155" }}>
+              {downloadingPdf ? "Downloading…" : "Download PDF"}
+            </Text>
+          </Pressable>
+          {canCreate ? (
+            <Pressable
+              onPress={openCreate}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 4,
+                backgroundColor: "#4361EE",
+                borderRadius: 10,
+                paddingHorizontal: 12,
+                paddingVertical: 8,
+              }}
+            >
+              <Plus size={16} color="white" />
+              <Text style={{ fontSize: 13, fontWeight: "700", color: "white" }}>New goal</Text>
+            </Pressable>
+          ) : null}
         </View>
-      </View>
+      ) : null}
+
+      {!loading && activeGoals.length > 0 ? (
+        <Text style={{ fontSize: 12, color: "#94A3B8", lineHeight: 17 }}>
+          {DEVELOPMENT_GOAL_ACTIVITY_KEY.summary}
+        </Text>
+      ) : null}
 
       {loading ? (
         <ActivityIndicator color="#4361EE" style={{ marginVertical: 24 }} />
-      ) : err ? (
-        <Text style={{ fontSize: 13, color: "#DC2626" }}>{err}</Text>
       ) : (
         <>
           {activeGoals.length === 0 ? (
-            <View
-              style={{
-                backgroundColor: "#F8FAFC",
-                borderRadius: 14,
-                padding: 24,
-                alignItems: "center",
-                borderWidth: 1,
-                borderColor: "#E2E8F0",
-                borderStyle: "dashed",
-              }}
-            >
-              <Text style={{ fontSize: 14, color: "#64748B", textAlign: "center" }}>
-                {canCreate ? "No active goals yet. Tap New goal to get started." : "No active development goals."}
-              </Text>
-            </View>
+            <GrowthEmptyState
+              memberName={memberName}
+              canCreate={canCreate}
+              hasAnyGoals={goals.length > 0}
+              error={err}
+              onStart={canCreate ? openCreate : undefined}
+            />
           ) : (
             <View style={{ gap: 12 }}>{activeGoals.map((g) => renderGoalCard(g))}</View>
           )}

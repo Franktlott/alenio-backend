@@ -22,13 +22,14 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Camera, LogOut, Pencil, X, Trash2, Bell, Check, Crown, MessageSquare, Globe } from "lucide-react-native";
 import { notificationPreferencesSummary } from "@/components/NotificationPreferencesPanel";
 import { COMMON_TIMEZONES, formatTimeZoneLabel, getBrowserTimeZone, resolveTimeZone } from "@/lib/timezone";
-import { authClient, clearAccessToken, getAuthHeaders } from "@/lib/auth/auth-client";
-import { SESSION_QUERY_KEY, markSessionSignedOut, useInvalidateSession, useSession } from "@/lib/auth/use-session";
+import { authClient, agentDebugLog, clearAccessToken, getAuthHeaders } from "@/lib/auth/auth-client";
+import { SESSION_QUERY_KEY, markSessionSignedOut, useSession, clearMobileAuthCaches } from "@/lib/auth/use-session";
 import { clearNotifDebugLog, getNotifDebugLog, getNotifStatus, registerForPushNotificationsAsync } from "@/lib/notifications";
 import { router, useLocalSearchParams } from "expo-router";
 import { useMutation, useQuery, useQueryClient, useQueries } from "@tanstack/react-query";
 import { api } from "@/lib/api/api";
 import { readJsonSafe } from "@/lib/api/api";
+import { getBackendUrl } from "@/lib/backend-url";
 import { ME_QUERY_KEY } from "@/lib/auth/me-query";
 import { uploadFile } from "@/lib/upload";
 import { pickImage, takePhoto } from "@/lib/file-picker";
@@ -44,6 +45,7 @@ import {
   ProfileDivider,
   ProfileMenuRow,
   ProfileSection,
+  ProfileToolbarButton,
 } from "@/components/profile/ProfileEnterpriseUI";
 import { ProfileWorkspaceList } from "@/components/profile/ProfileWorkspaceList";
 import { OutlookCalendarCard } from "@/components/profile/OutlookCalendarCard";
@@ -71,7 +73,6 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const { outlook, message } = useLocalSearchParams<{ outlook?: string; message?: string }>();
   const { data: session } = useSession();
-  const invalidateSession = useInvalidateSession();
   const queryClient = useQueryClient();
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
   const setActiveTeamId = useTeamStore((s) => s.setActiveTeamId);
@@ -288,7 +289,7 @@ export default function ProfileScreen() {
   const deleteAccountMutation = useMutation({
     mutationFn: async () => {
       const authHeaders = await getAuthHeaders();
-      const res = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/api/user`, {
+      const res = await fetch(`${getBackendUrl()}/api/user`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json", ...authHeaders },
         credentials: "include",
@@ -300,12 +301,13 @@ export default function ProfileScreen() {
     },
     onSuccess: async () => {
       closeDeleteModal();
+      markSessionSignedOut();
       clearAccessToken();
+      await clearMobileAuthCaches(queryClient);
       await authClient.signOut();
-      await invalidateSession();
       queryClient.clear();
       setActiveTeamId(null);
-      router.replace("/(auth)/sign-in" as never);
+      router.replace("/welcome");
     },
     onError: (err: Error) => {
       setDeleteError(err.message === "Incorrect password" ? "Incorrect password. Please try again." : err.message);
@@ -395,20 +397,17 @@ export default function ProfileScreen() {
     setShowSignOutConfirm(false);
     markSessionSignedOut();
     clearAccessToken();
-    queryClient.setQueryData(SESSION_QUERY_KEY, null);
+    await clearMobileAuthCaches(queryClient);
     try {
       await authClient.signOut();
     } catch {
       // continue cleanup even if remote sign-out call fails
     }
-    try {
-      await invalidateSession();
-    } catch {
-      // continue cleanup even if query invalidation errors
-    }
+    clearAccessToken();
     queryClient.clear();
     setActiveTeamId(null);
-    router.replace("/sign-in");
+    agentDebugLog("sign-out complete", { runId: "auth-simplify-v1", hypothesisId: "H15" });
+    router.replace("/welcome");
   };
 
   const displayName = meProfile?.name ?? user?.name;
@@ -687,10 +686,26 @@ export default function ProfileScreen() {
               teamsLoading
                 ? undefined
                 : teams.length > 1
-                  ? "Tap your workspace to switch."
+                  ? canManageActiveTeam
+                    ? "Tap to switch · hold to edit."
+                    : "Tap your workspace to switch."
                   : canManageActiveTeam
-                    ? "Edit your workspace settings below."
+                    ? "Press and hold to edit workspace."
                     : undefined
+            }
+            action={
+              !isDemo && !teamsLoading && teams.length > 0 ? (
+                <ProfileToolbarButton
+                  label="Add"
+                  onPress={() =>
+                    router.push({
+                      pathname: "/onboarding",
+                      params: { intent: "add", mode: "create" },
+                    })
+                  }
+                  testID="create-join-team-button"
+                />
+              ) : undefined
             }
           >
             <ProfileWorkspaceList
@@ -703,6 +718,9 @@ export default function ProfileScreen() {
               onManageActive={
                 canManageActiveTeam && activeTeam ? () => openEditModal(activeTeam) : undefined
               }
+              onLeaveActive={
+                canLeaveActiveTeam && activeTeam ? () => setLeavingTeam(activeTeam) : undefined
+              }
               onAddWorkspace={() =>
                 router.push({
                   pathname: "/onboarding",
@@ -710,17 +728,6 @@ export default function ProfileScreen() {
                 })
               }
             />
-            {canLeaveActiveTeam && activeTeam ? (
-              <ProfileCard style={{ marginTop: 8 }}>
-                <ProfileMenuRow
-                  title="Leave workspace"
-                  destructive
-                  showChevron={false}
-                  onPress={() => setLeavingTeam(activeTeam)}
-                  testID="leave-active-workspace"
-                />
-              </ProfileCard>
-            ) : null}
           </ProfileSection>
 
           {/* Account */}
@@ -730,9 +737,9 @@ export default function ProfileScreen() {
                 <>
                   <ProfileMenuRow
                     icon={Crown}
-                    title="Plan & access"
+                    title="Workplace Access"
                     subtitle={
-                      ownerTeamSubscription?.plan === "team" ? "Team plan active" : "View and manage your plan"
+                      ownerTeamSubscription?.plan === "team" ? "Team access active" : "View workplace access"
                     }
                     onPress={() => router.push("/subscription")}
                     testID="subscription-row"
@@ -916,7 +923,7 @@ export default function ProfileScreen() {
             </View>
           </View>
           <Text className="text-xs text-slate-400" numberOfLines={1} style={{ maxWidth: "90%" }}>
-            {process.env.EXPO_PUBLIC_BACKEND_URL}
+            {getBackendUrl()}
           </Text>
         </View>) : null}
       </ScrollView>

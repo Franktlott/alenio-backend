@@ -4,6 +4,7 @@ import { auth } from "../auth";
 import { authGuard } from "../middleware/auth-guard";
 import { sendPushToUsers } from "../lib/push";
 import { env } from "../env";
+import { teamSubscriptionRowHasTeamFeatures, getTeamSubscription } from "./subscription";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -162,7 +163,7 @@ dmsRouter.post("/find-or-create", async (c) => {
 dmsRouter.post("/create-group", async (c) => {
   const user = c.get("user")!;
   const body = await c.req.json();
-  const { name, participantIds } = body;
+  const { name, participantIds, teamId: bodyTeamId } = body;
 
   if (!name?.trim()) {
     return c.json({ error: { message: "Group name is required", code: "VALIDATION_ERROR" } }, 400);
@@ -171,17 +172,33 @@ dmsRouter.post("/create-group", async (c) => {
     return c.json({ error: { message: "At least one participant is required", code: "VALIDATION_ERROR" } }, 400);
   }
 
-  // Check if user belongs to any pro team
-  const userTeams = await prisma.teamMember.findMany({
-    where: { userId: user.id },
-    select: { teamId: true },
-  });
-  const teamIds = userTeams.map((m) => m.teamId);
-  const proSubscription = await prisma.teamSubscription.findFirst({
-    where: { teamId: { in: teamIds }, plan: "pro" },
-  });
-  if (!proSubscription) {
-    return c.json({ error: { message: "Group chats require Alenio Pro", code: "SUBSCRIPTION_REQUIRED" } }, 403);
+  let hasPaidPlan = false;
+  if (typeof bodyTeamId === "string" && bodyTeamId.trim()) {
+    const teamId = bodyTeamId.trim();
+    const membership = await prisma.teamMember.findUnique({
+      where: { userId_teamId: { userId: user.id, teamId } },
+    });
+    if (!membership) {
+      return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
+    }
+    const subscription = await getTeamSubscription(teamId);
+    hasPaidPlan = teamSubscriptionRowHasTeamFeatures(subscription);
+  } else {
+    const userTeams = await prisma.teamMember.findMany({
+      where: { userId: user.id },
+      select: { teamId: true },
+    });
+    for (const { teamId } of userTeams) {
+      const subscription = await getTeamSubscription(teamId);
+      if (teamSubscriptionRowHasTeamFeatures(subscription)) {
+        hasPaidPlan = true;
+        break;
+      }
+    }
+  }
+
+  if (!hasPaidPlan) {
+    return c.json({ error: { message: "Group chats require Alenio Team", code: "SUBSCRIPTION_REQUIRED" } }, 403);
   }
 
   // Include the creator + all participants (deduplicated)
@@ -230,24 +247,50 @@ dmsRouter.get("/:conversationId/messages", async (c) => {
     return c.json({ error: { message: "Conversation not found", code: "NOT_FOUND" } }, 404);
   }
 
-  const messages = await prisma.directMessage.findMany({
-    where: { conversationId },
-    include: {
-      sender: { select: { id: true, name: true, email: true, image: true } },
-      reactions: { include: { user: { select: { id: true, name: true } } } },
-      replyTo: {
-        select: {
-          id: true,
-          content: true,
-          mediaUrl: true,
-          mediaType: true,
-          sender: { select: { id: true, name: true } },
-        },
+  const limitParam = c.req.query("limit");
+  const beforeId = c.req.query("before");
+  const parsedLimit = limitParam ? parseInt(limitParam, 10) : 50;
+  const take = Number.isFinite(parsedLimit) && parsedLimit > 0 ? Math.min(parsedLimit, 100) : 50;
+
+  let beforeCreatedAt: Date | undefined;
+  if (beforeId) {
+    const beforeMessage = await prisma.directMessage.findFirst({
+      where: { id: beforeId, conversationId },
+      select: { createdAt: true },
+    });
+    if (!beforeMessage) {
+      return c.json({ data: { messages: [], hasMore: false, nextCursor: null } });
+    }
+    beforeCreatedAt = beforeMessage.createdAt;
+  }
+
+  const messageInclude = {
+    sender: { select: { id: true, name: true, email: true, image: true } },
+    reactions: { include: { user: { select: { id: true, name: true } } } },
+    replyTo: {
+      select: {
+        id: true,
+        content: true,
+        mediaUrl: true,
+        mediaType: true,
+        sender: { select: { id: true, name: true } },
       },
     },
+  } as const;
+
+  const messages = await prisma.directMessage.findMany({
+    where: {
+      conversationId,
+      ...(beforeCreatedAt ? { createdAt: { lt: beforeCreatedAt } } : {}),
+    },
+    include: messageInclude,
     orderBy: { createdAt: "desc" },
-    take: 100,
+    take: take + 1,
   });
+
+  const hasMore = messages.length > take;
+  const page = messages.slice(0, take).reverse();
+  const nextCursor = hasMore && page.length > 0 ? page[0].id : null;
 
   // Touch updatedAt on conversation so list re-sorts
   await prisma.conversation.update({
@@ -255,7 +298,7 @@ dmsRouter.get("/:conversationId/messages", async (c) => {
     data: { updatedAt: new Date() },
   });
 
-  return c.json({ data: messages.reverse() });
+  return c.json({ data: { messages: page, hasMore, nextCursor } });
 });
 
 // POST /api/dms/:conversationId/messages

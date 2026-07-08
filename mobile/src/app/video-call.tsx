@@ -12,6 +12,7 @@ import { useSession } from "@/lib/auth/use-session";
 import { useCameraPermissions, useMicrophonePermissions } from "expo-camera";
 import { api } from "@/lib/api/api";
 import { readJsonSafe } from "@/lib/api/api";
+import { getBackendUrl } from "@/lib/backend-url";
 
 const alenioLogo = require("@/assets/alenio-logo-white.png");
 
@@ -72,7 +73,7 @@ export default function VideoCallScreen() {
   useEffect(() => {
     async function fetchRoom() {
       try {
-        const res = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/api/video/room`, {
+        const res = await fetch(`${getBackendUrl()}/api/video/room`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ roomId, userName }),

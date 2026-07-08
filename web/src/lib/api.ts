@@ -445,6 +445,160 @@ export function ackGoWorkplaceAlert(alertId: string, hubToken: string, deviceId:
   });
 }
 
+// ── Workspace modules (lifecycle + operating mode) ──────────────────────────
+
+export type ModuleStatus = "inactive" | "active";
+export type OperatingMode = "testing" | "live";
+
+export type ModuleTestingAccess = {
+  requireTestCode: boolean;
+  testAccessCode: string | null;
+  testCodeExpiresAt: string | null;
+  allowedTestingWorkplaceIds: string[];
+  allowedTestingUserIds: string[];
+  allowedTestingRoles: string[];
+};
+
+export type WorkspaceModule = {
+  moduleKey: string;
+  moduleName: string;
+  description: string;
+  icon: string;
+  tone: string;
+  baseHref: string;
+  status: ModuleStatus;
+  operatingMode: OperatingMode | null;
+  setupProgressPercent: number;
+  setupCompletedAt: string | null;
+  activatedAt: string | null;
+  liveStartedAt: string | null;
+  testingStartedAt: string | null;
+  testingAccess: ModuleTestingAccess;
+  updatedAt: string;
+};
+
+export type ModuleValidationResult = {
+  passed: boolean;
+  checks: { key: string; label: string; passed: boolean }[];
+  errors: string[];
+};
+
+export type ModuleTestSessionRow = {
+  id: string;
+  moduleKey: string;
+  testerName: string | null;
+  workplaceName: string | null;
+  startedAt: string;
+  completedAt: string | null;
+  durationSeconds: number | null;
+  completedSteps: number;
+  failedSteps: number;
+  notes: string | null;
+};
+
+const modulesBase = (teamId: string) => `/api/teams/${encodeURIComponent(teamId)}/modules`;
+
+export function fetchWorkspaceModules(teamId: string) {
+  return apiGetJson<{ data: { modules: WorkspaceModule[] } }>(modulesBase(teamId)).then((r) => r.data.modules);
+}
+
+export function fetchWorkspaceModule(teamId: string, moduleKey: string) {
+  return apiGetJson<{ data: { module: WorkspaceModule } }>(
+    `${modulesBase(teamId)}/${encodeURIComponent(moduleKey)}`,
+  ).then((r) => r.data.module);
+}
+
+export function setWorkspaceModuleStatus(teamId: string, moduleKey: string, status: ModuleStatus) {
+  return apiPatchJson<{ data: { module: WorkspaceModule } }>(
+    `${modulesBase(teamId)}/${encodeURIComponent(moduleKey)}/status`,
+    { status },
+  ).then((r) => r.data.module);
+}
+
+export function setWorkspaceModuleSetupProgress(teamId: string, moduleKey: string, setupProgressPercent: number) {
+  return apiPatchJson<{ data: { module: WorkspaceModule } }>(
+    `${modulesBase(teamId)}/${encodeURIComponent(moduleKey)}/setup-progress`,
+    { setupProgressPercent },
+  ).then((r) => r.data.module);
+}
+
+export function updateWorkspaceModuleTestingAccess(
+  teamId: string,
+  moduleKey: string,
+  patch: Partial<{
+    requireTestCode: boolean;
+    testAccessCode: string | null;
+    testCodeExpiresAt: string | null;
+    allowedTestingWorkplaceIds: string[];
+    allowedTestingUserIds: string[];
+    allowedTestingRoles: string[];
+  }>,
+) {
+  return apiPatchJson<{ data: { module: WorkspaceModule } }>(
+    `${modulesBase(teamId)}/${encodeURIComponent(moduleKey)}/testing-access`,
+    patch,
+  ).then((r) => r.data.module);
+}
+
+export function generateWorkspaceModuleTestCode(teamId: string, moduleKey: string) {
+  return apiPostJson<{ data: { module: WorkspaceModule } }>(
+    `${modulesBase(teamId)}/${encodeURIComponent(moduleKey)}/generate-test-code`,
+    {},
+  ).then((r) => r.data.module);
+}
+
+export function validateWorkspaceModule(teamId: string, moduleKey: string) {
+  return apiPostJson<{ data: { validation: ModuleValidationResult } }>(
+    `${modulesBase(teamId)}/${encodeURIComponent(moduleKey)}/validate`,
+    {},
+  ).then((r) => r.data.validation);
+}
+
+export function goLiveWorkspaceModule(teamId: string, moduleKey: string) {
+  return apiPostJson<{ data: { module: WorkspaceModule } }>(
+    `${modulesBase(teamId)}/${encodeURIComponent(moduleKey)}/go-live`,
+    {},
+  ).then((r) => r.data.module);
+}
+
+export function switchWorkspaceModuleToTesting(teamId: string, moduleKey: string) {
+  return apiPostJson<{ data: { module: WorkspaceModule } }>(
+    `${modulesBase(teamId)}/${encodeURIComponent(moduleKey)}/switch-to-testing`,
+    {},
+  ).then((r) => r.data.module);
+}
+
+export function fetchWorkspaceModuleTestSessions(teamId: string, moduleKey: string) {
+  return apiGetJson<{ data: { sessions: ModuleTestSessionRow[] } }>(
+    `${modulesBase(teamId)}/${encodeURIComponent(moduleKey)}/test-sessions`,
+  ).then((r) => r.data.sessions);
+}
+
+// Public kiosk module surface
+
+export type KioskModule = {
+  moduleKey: string;
+  moduleName: string;
+  description: string;
+  icon: string;
+  tone: string;
+  baseHref: string;
+  operatingMode: OperatingMode;
+  requireTestCode: boolean;
+};
+
+export function fetchGoKioskModules(hubToken: string) {
+  const q = new URLSearchParams({ hubToken });
+  return apiGetJson<{ data: { modules: KioskModule[] } }>(`/api/public/go/modules?${q}`).then((r) => r.data.modules);
+}
+
+export function verifyGoModuleTestCode(hubToken: string, deviceId: string, moduleKey: string, code: string) {
+  return apiPostJson<{ data: { success: boolean } }>(
+    `/api/public/go/modules/${encodeURIComponent(moduleKey)}/verify-test-code`,
+    { hubToken, deviceId, code },
+  ).then((r) => r.data);
+}
+
 export type WebTeamInvite = {
   id: string;
   teamId: string;
@@ -573,10 +727,10 @@ export function fetchWebCheckoutConfig() {
 }
 
 export function fetchTeamMessages(teamId: string, topicId: string) {
-  const q = new URLSearchParams({ topicId, limit: "100" });
-  return apiGetJson<{ data: TeamChatMessage[] }>(
+  const q = new URLSearchParams({ topicId, limit: "50" });
+  return apiGetJson<{ data: { messages: TeamChatMessage[]; hasMore: boolean; nextCursor: string | null } }>(
     `/api/teams/${encodeURIComponent(teamId)}/messages?${q.toString()}`,
-  ).then((r) => r.data);
+  ).then((r) => r.data.messages);
 }
 
 export function postTeamMessage(
@@ -648,10 +802,11 @@ export function findOrCreateDm(recipientId: string) {
   return apiPostJson<{ data: DmConversation }>("/api/dms/find-or-create", { recipientId }).then((r) => r.data);
 }
 
-export function createGroupDm(input: { name: string; participantIds: string[] }) {
+export function createGroupDm(input: { name: string; participantIds: string[]; teamId?: string }) {
   return apiPostJson<{ data: DmConversation }>("/api/dms/create-group", {
     name: input.name.trim(),
     participantIds: input.participantIds,
+    ...(input.teamId ? { teamId: input.teamId } : {}),
   }).then((r) => r.data);
 }
 
@@ -660,7 +815,9 @@ export function fetchDmConversations() {
 }
 
 export function fetchDmMessages(conversationId: string) {
-  return apiGetJson<{ data: DirectChatMessage[] }>(`/api/dms/${encodeURIComponent(conversationId)}/messages`).then((r) => r.data);
+  return apiGetJson<{ data: { messages: DirectChatMessage[]; hasMore: boolean; nextCursor: string | null } }>(
+    `/api/dms/${encodeURIComponent(conversationId)}/messages?limit=50`,
+  ).then((r) => r.data.messages);
 }
 
 export function postDmMessage(

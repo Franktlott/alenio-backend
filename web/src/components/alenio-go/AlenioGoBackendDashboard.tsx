@@ -1,13 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { AlenioGoLogo } from "../AlenioGoLogo";
-import { fetchTeamGoDevices, fetchWebTeam } from "../../lib/api";
+import { fetchTeamGoDevices, fetchWebTeam, fetchWorkspaceModules, type WorkspaceModule } from "../../lib/api";
+import { defaultModulesByKey, mergeWorkspaceModules } from "../../lib/workspace-modules";
 import { resolveGoHeroImage } from "../../lib/go-frontend-settings";
 import { probeImageUrl } from "../../lib/image-probe";
 import { goBackendAdminTiles, goBackendGreeting, goBackendQuickActions } from "../../lib/alenio-go-backend";
 import { formatGoDashClock } from "../../lib/alenio-go-dashboard";
 import type { usePendingApprovals } from "../../hooks/usePendingApprovals";
 import { GoBackendAdminTile } from "./GoBackendAdminTile";
+import { GoWorkspaceModulesPanel, GoWorkspaceModulesTab } from "./GoWorkspaceModulesPanel";
+
+const WSM_PANEL_KEY = "alenio.go.wsmPanelOpen";
 
 type ApprovalsState = ReturnType<typeof usePendingApprovals>;
 
@@ -34,6 +38,14 @@ export function AlenioGoBackendDashboard({
 }: Props) {
   const location = useLocation();
   const [linkedDeviceCount, setLinkedDeviceCount] = useState(0);
+  const [modulesByKey, setModulesByKey] = useState<Record<string, WorkspaceModule>>(() => defaultModulesByKey());
+  const [wsmOpen, setWsmOpen] = useState(() => {
+    try {
+      return sessionStorage.getItem(WSM_PANEL_KEY) !== "0";
+    } catch {
+      return true;
+    }
+  });
   const [heroImage, setHeroImage] = useState<string | null>(null);
   const [clock, setClock] = useState(() => formatGoDashClock());
   const [copyOk, setCopyOk] = useState(false);
@@ -97,6 +109,26 @@ export function AlenioGoBackendDashboard({
     };
   }, [canManage, teamId]);
 
+  useEffect(() => {
+    if (!canManage || !teamId) {
+      setModulesByKey(defaultModulesByKey());
+      return;
+    }
+    let cancelled = false;
+    void fetchWorkspaceModules(teamId)
+      .then((mods) => {
+        if (cancelled) return;
+        setModulesByKey(mergeWorkspaceModules(mods));
+      })
+      .catch(() => {
+        // Keep default inactive modules visible when API is unavailable (e.g. backend not deployed yet).
+        if (!cancelled) setModulesByKey(defaultModulesByKey());
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [canManage, teamId, location.pathname]);
+
   const firstName = userName?.trim().split(/\s+/)[0] ?? "there";
   const greeting = goBackendGreeting();
   const tiles = useMemo(
@@ -130,9 +162,25 @@ export function AlenioGoBackendDashboard({
     }
   }
 
+  function toggleWsmPanel() {
+    setWsmOpen((open) => {
+      const next = !open;
+      try {
+        sessionStorage.setItem(WSM_PANEL_KEY, next ? "1" : "0");
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  }
+
   return (
-    <div className="go-backend" data-testid="alenio-go-page">
-      <div className="go-backend-scroll">
+    <div
+      className={`go-backend-shell${canManage && wsmOpen ? " go-backend-shell--wsm-open" : ""}`}
+      data-testid="alenio-go-page"
+    >
+      <div className="go-backend">
+        <div className="go-backend-scroll">
         <section className="go-backend-hero go-dash-hero" style={heroStyle}>
           <div className="go-backend-hero-bar">
             <div className="go-backend-hero-brand">
@@ -191,7 +239,7 @@ export function AlenioGoBackendDashboard({
               </h2>
               <p className="go-backend-section-sub">Same Alenio Go experience your floor teams use — configured here.</p>
             </div>
-            <div className="go-backend-tiles">
+            <div className="go-backend-tiles go-backend-tiles--core">
               {tiles.map((tile) => (
                 <GoBackendAdminTile key={tile.id} tile={tile} />
               ))}
@@ -247,7 +295,28 @@ export function AlenioGoBackendDashboard({
             </div>
           </section>
         </div>
+        </div>
       </div>
+
+      {canManage && teamId ? (
+        <>
+          <GoWorkspaceModulesTab open={wsmOpen} onToggle={toggleWsmPanel} />
+          <GoWorkspaceModulesPanel
+            open={wsmOpen}
+            onClose={() => {
+              setWsmOpen(false);
+              try {
+                sessionStorage.setItem(WSM_PANEL_KEY, "0");
+              } catch {
+                /* ignore */
+              }
+            }}
+            teamId={teamId}
+            modulesByKey={modulesByKey}
+            onModulesChange={setModulesByKey}
+          />
+        </>
+      ) : null}
     </div>
   );
 }

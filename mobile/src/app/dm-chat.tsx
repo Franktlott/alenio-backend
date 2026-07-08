@@ -9,18 +9,22 @@ import {
   ActivityIndicator,
   Modal,
   Image,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { usePaginatedDmMessages } from "@/lib/chat-message-pagination";
 import { LinearGradient } from "expo-linear-gradient";
 import { ArrowLeft, Send, Paperclip, X, Users, Video, Trash2, Download, Reply, Copy, Camera, ImageIcon, MoreVertical, LogOut } from "lucide-react-native";
-import { BlurView } from "expo-blur";
 import { router, useLocalSearchParams } from "expo-router";
 import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
 import { uploadFile } from "@/lib/upload";
 import { pickMedia, takePhoto } from "@/lib/file-picker";
 import { ChatMessage } from "@/components/ChatMessage";
+import { MessageActionSheet, type MessageAnchorLayout } from "@/components/MessageActionSheet";
+import { MessageLongPressRow } from "@/components/MessageLongPressRow";
 import { ImageSendPreview } from "@/components/ImageSendPreview";
 import { MentionPicker } from "@/components/MentionPicker";
 import type { DirectMessage, MessageReaction, Conversation } from "@/lib/types";
@@ -37,8 +41,6 @@ import { useMention } from "@/lib/useMention";
 import { SafeKeyboardAvoidingView } from "@/lib/safe-keyboard-controller";
 import { dmOtherParticipant, resolveUserImageUrl, userInitials } from "@/lib/user-avatar";
 import { UserAvatar } from "@/components/UserAvatar";
-
-const REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🔥'];
 
 function DeleteAction({ drag, onDelete }: { drag: SharedValue<number>; onDelete: () => void }) {
   const styleAnimation = useAnimatedStyle(() => ({
@@ -97,7 +99,7 @@ export default function DMChatScreen() {
   const isDemo = useDemoMode();
   const [input, setInput] = useState("");
   const [replyTo, setReplyTo] = useState<DirectMessage | null>(null);
-  const [emojiTarget, setEmojiTarget] = useState<DirectMessage | null>(null);
+  const [messageMenu, setMessageMenu] = useState<{ message: DirectMessage; layout: MessageAnchorLayout } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DirectMessage | null>(null);
   const [showOptions, setShowOptions] = useState(false);
   const [showConvDeleteConfirm, setShowConvDeleteConfirm] = useState(false);
@@ -109,6 +111,9 @@ export default function DMChatScreen() {
   const currentUserId = session?.user?.id ?? "";
   const markAsRead = useUnreadStore((s) => s.markAsRead);
   const prevMsgCountRef = useRef<number>(0);
+  const isNearBottomRef = useRef(true);
+  const lastMessageIdRef = useRef<string | null>(null);
+  const didInitialScrollRef = useRef(false);
 
   const { mentionedUserIds, mentionQuery, onTextChange: onMentionTextChange, selectMention, resetMentions } = useMention();
 
@@ -138,12 +143,13 @@ export default function DMChatScreen() {
     .filter((p) => p.id !== currentUserId)
     .map((p) => ({ id: p.id, name: p.name, image: p.image ?? null }));
 
-  const { data: messages = [], isLoading } = useQuery({
-    queryKey: ["dm-messages", conversationId],
-    queryFn: () => api.get<DirectMessage[]>(`/api/dms/${conversationId}/messages`),
-    enabled: !!conversationId,
-    refetchInterval: 3000,
-  });
+  const {
+    messages,
+    isLoading,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = usePaginatedDmMessages<DirectMessage>(conversationId);
 
   const sendMutation = useMutation({
     mutationFn: (payload: { content?: string; mediaUrl?: string; mediaType?: string; replyToId?: string; mentionedUserIds?: string[] }) =>
@@ -259,15 +265,43 @@ export default function DMChatScreen() {
     }
   }, []);
 
-  const handleLongPress = useCallback((msg: DirectMessage) => {
-    setEmojiTarget(msg);
+  const handleLongPress = useCallback((msg: DirectMessage, layout: MessageAnchorLayout) => {
+    setMessageMenu({ message: msg, layout });
   }, []);
 
-  useEffect(() => {
-    if (messages.length > 0) {
-      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+  const handleScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+    const distanceFromBottom = contentSize.height - layoutMeasurement.height - contentOffset.y;
+    isNearBottomRef.current = distanceFromBottom < 80;
+  }, []);
+
+  const handleLoadOlder = useCallback(() => {
+    if (hasNextPage && !isFetchingNextPage) {
+      void fetchNextPage();
     }
-  }, [messages.length]);
+  }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
+
+  useEffect(() => {
+    didInitialScrollRef.current = false;
+    isNearBottomRef.current = true;
+    lastMessageIdRef.current = null;
+  }, [conversationId]);
+
+  useEffect(() => {
+    if (isLoading || messages.length === 0 || didInitialScrollRef.current) return;
+    didInitialScrollRef.current = true;
+    requestAnimationFrame(() => flatListRef.current?.scrollToEnd({ animated: false }));
+  }, [isLoading, messages.length, conversationId]);
+
+  useEffect(() => {
+    const lastMsg = messages[messages.length - 1];
+    if (!lastMsg) return;
+    const prevId = lastMessageIdRef.current;
+    lastMessageIdRef.current = lastMsg.id;
+    if (prevId !== lastMsg.id && isNearBottomRef.current) {
+      requestAnimationFrame(() => flatListRef.current?.scrollToEnd({ animated: true }));
+    }
+  }, [messages]);
 
   useEffect(() => {
     if (messages.length > 0) {
@@ -374,128 +408,6 @@ export default function DMChatScreen() {
                   <Text style={{ fontSize: 15, color: "#1E293B", fontWeight: "500" }}>{r.user.name}</Text>
                 </View>
               ))}
-            </View>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
-
-      {/* Message action sheet */}
-      <Modal
-        visible={!!emojiTarget}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setEmojiTarget(null)}
-      >
-        <TouchableOpacity
-          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }}
-          activeOpacity={1}
-          onPress={() => setEmojiTarget(null)}
-        >
-          <TouchableOpacity activeOpacity={1} onPress={() => {}}>
-            <View style={{ marginHorizontal: 12, marginBottom: 32 }}>
-              {/* Reaction row */}
-              {(() => {
-                const myReaction = emojiTarget
-                  ? (emojiTarget.reactions ?? []).find((r: any) => r.userId === currentUserId)?.emoji
-                  : undefined;
-                return (
-                  <BlurView intensity={70} tint="light" style={{ borderRadius: 16, overflow: "hidden", marginBottom: 8, borderWidth: 1, borderColor: "rgba(255,255,255,0.6)" }}>
-                    <View style={{ backgroundColor: "rgba(255,255,255,0.5)", borderRadius: 16, padding: 12 }}>
-                    <View style={{ flexDirection: "row", justifyContent: "space-around" }}>
-                      {REACTION_EMOJIS.map((emoji) => {
-                        const isMine = emoji === myReaction;
-                        return (
-                          <TouchableOpacity
-                            key={emoji}
-                            onPress={() => {
-                              if (emojiTarget) reactionMutation.mutate({ messageId: emojiTarget.id, emoji });
-                              setEmojiTarget(null);
-                            }}
-                            style={{
-                              width: 44, height: 44, borderRadius: 22,
-                              backgroundColor: isMine ? "#EEF2FF" : "#F1F5F9",
-                              alignItems: "center", justifyContent: "center",
-                              borderWidth: isMine ? 1.5 : 0,
-                              borderColor: isMine ? "#4361EE" : "transparent",
-                            }}
-                          >
-                            <Text style={{ fontSize: 22 }}>{emoji}</Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </View>
-                    {myReaction ? (
-                      <TouchableOpacity
-                        onPress={() => {
-                          if (emojiTarget) reactionMutation.mutate({ messageId: emojiTarget.id, emoji: myReaction });
-                          setEmojiTarget(null);
-                        }}
-                        style={{ alignItems: "center", paddingTop: 10, marginTop: 4, borderTopWidth: 0.5, borderTopColor: "#F1F5F9" }}
-                      >
-                        <Text style={{ fontSize: 14, color: "#EF4444", fontWeight: "600" }}>Remove reaction</Text>
-                      </TouchableOpacity>
-                    ) : null}
-                    </View>
-                  </BlurView>
-                );
-              })()}
-
-              {/* Action list */}
-              <View style={{ backgroundColor: "white", borderRadius: 16, overflow: "hidden" }}>
-                {/* Reply */}
-                <TouchableOpacity
-                  onPress={() => { setReplyTo(emojiTarget); setEmojiTarget(null); }}
-                  style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 0.5, borderBottomColor: "#E2E8F0" }}
-                >
-                  <Text style={{ fontSize: 16, color: "#1E293B" }}>Reply</Text>
-                  <Reply size={20} color="#64748B" />
-                </TouchableOpacity>
-
-                {/* Copy (text only) */}
-                {emojiTarget?.content ? (
-                  <TouchableOpacity
-                    onPress={() => {
-                      if (emojiTarget.content) Clipboard.setStringAsync(emojiTarget.content);
-                      setEmojiTarget(null);
-                    }}
-                    style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: emojiTarget?.mediaUrl ? 0.5 : 0, borderBottomColor: "#E2E8F0" }}
-                  >
-                    <Text style={{ fontSize: 16, color: "#1E293B" }}>Copy</Text>
-                    <Copy size={20} color="#64748B" />
-                  </TouchableOpacity>
-                ) : null}
-
-                {/* Save Photo / Video */}
-                {emojiTarget?.mediaUrl && emojiTarget?.mediaType ? (
-                  <TouchableOpacity
-                    onPress={() => {
-                      if (emojiTarget.mediaUrl && emojiTarget.mediaType) handleSaveMedia(emojiTarget.mediaUrl, emojiTarget.mediaType);
-                      setEmojiTarget(null);
-                    }}
-                    style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: emojiTarget?.senderId === currentUserId ? 0.5 : 0, borderBottomColor: "#E2E8F0" }}
-                  >
-                    <Text style={{ fontSize: 16, color: "#1E293B" }}>
-                      {emojiTarget.mediaType === "video" ? "Save Video" : "Save Photo"}
-                    </Text>
-                    <Download size={20} color="#64748B" />
-                  </TouchableOpacity>
-                ) : null}
-
-                {/* Delete (own messages only) */}
-                {emojiTarget?.senderId === currentUserId ? (
-                  <TouchableOpacity
-                    onPress={() => {
-                      const target = emojiTarget;
-                      setEmojiTarget(null);
-                      setDeleteTarget(target);
-                    }}
-                    style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 16 }}
-                  >
-                    <Text style={{ fontSize: 16, color: "#EF4444" }}>Delete</Text>
-                    <Trash2 size={20} color="#EF4444" />
-                  </TouchableOpacity>
-                ) : null}
-              </View>
             </View>
           </TouchableOpacity>
         </TouchableOpacity>
@@ -656,7 +568,18 @@ export default function DMChatScreen() {
             keyExtractor={(item) => ("type" in item ? item.id : item.id)}
             contentContainerStyle={{ paddingVertical: 12, paddingHorizontal: 12 }}
             showsVerticalScrollIndicator={false}
-            onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
+            maintainVisibleContentPosition={{ minIndexForVisible: 0, autoscrollToTopThreshold: 10 }}
+            onScroll={handleScroll}
+            scrollEventThrottle={16}
+            onStartReached={handleLoadOlder}
+            onStartReachedThreshold={0.15}
+            ListHeaderComponent={
+              isFetchingNextPage ? (
+                <View style={{ paddingVertical: 12, alignItems: "center" }}>
+                  <ActivityIndicator color="#4361EE" size="small" />
+                </View>
+              ) : null
+            }
             renderItem={({ item }) => {
               if ("type" in item && item.type === "date") {
                 return (
@@ -679,22 +602,28 @@ export default function DMChatScreen() {
                   rightThreshold={40}
                   overshootRight={false}
                 >
-                  <ChatMessage
-                    id={msg.id}
-                    content={msg.content}
-                    mediaUrl={msg.mediaUrl}
-                    mediaType={msg.mediaType}
-                    replyTo={msg.replyTo}
-                    reactions={msg.reactions ?? []}
-                    senderName={msg.sender.name ?? msg.sender.email ?? "Member"}
-                    senderInitial={userInitials(msg.sender)}
-                    senderImage={resolveUserImageUrl(msg.sender.image)}
-                    createdAt={msg.createdAt}
-                    isOwn={isOwn}
-                    currentUserId={currentUserId}
-                    onLongPress={() => handleLongPress(msg)}
-                    onReactionTap={(reactions) => setReactionView(reactions)}
-                  />
+                  <MessageLongPressRow
+                    alignRight={isOwn}
+                    onOpenMenu={(layout) => handleLongPress(msg, layout)}
+                  >
+                    <ChatMessage
+                      id={msg.id}
+                      content={msg.content}
+                      mediaUrl={msg.mediaUrl}
+                      mediaType={msg.mediaType}
+                      replyTo={msg.replyTo}
+                      reactions={msg.reactions ?? []}
+                      senderName={msg.sender.name ?? msg.sender.email ?? "Member"}
+                      senderInitial={userInitials(msg.sender)}
+                      senderImage={resolveUserImageUrl(msg.sender.image)}
+                      createdAt={msg.createdAt}
+                      isOwn={isOwn}
+                      currentUserId={currentUserId}
+                      interactive={false}
+                      onReactionTap={(reactions) => setReactionView(reactions)}
+                      hideBubble={messageMenu?.message.id === msg.id}
+                    />
+                  </MessageLongPressRow>
                 </ReanimatedSwipeable>
               );
             }}
@@ -792,6 +721,84 @@ export default function DMChatScreen() {
         onSend={handleSendMedia}
         isSending={uploading || sendMutation.isPending}
       />
+
+      <MessageActionSheet
+        visible={!!messageMenu}
+        layout={messageMenu?.layout ?? null}
+        alignRight={messageMenu?.message.senderId === currentUserId}
+        onClose={() => setMessageMenu(null)}
+        myReaction={
+          messageMenu
+            ? (messageMenu.message.reactions ?? []).find((r) => r.userId === currentUserId)?.emoji
+            : undefined
+        }
+        onReaction={(emoji) => {
+          if (!messageMenu) return;
+          reactionMutation.mutate({ messageId: messageMenu.message.id, emoji });
+        }}
+        actions={[
+          {
+            id: "reply",
+            label: "Reply",
+            icon: Reply,
+            onPress: () => {
+              if (messageMenu) setReplyTo(messageMenu.message);
+            },
+          },
+          {
+            id: "copy",
+            label: "Copy",
+            icon: Copy,
+            hidden: !messageMenu?.message.content,
+            onPress: () => {
+              if (messageMenu?.message.content) void Clipboard.setStringAsync(messageMenu.message.content);
+            },
+          },
+          {
+            id: "save-media",
+            label: messageMenu?.message.mediaType === "video" ? "Save video" : "Save photo",
+            icon: Download,
+            hidden: !messageMenu?.message.mediaUrl || !messageMenu?.message.mediaType,
+            onPress: () => {
+              if (messageMenu?.message.mediaUrl && messageMenu?.message.mediaType) {
+                handleSaveMedia(messageMenu.message.mediaUrl, messageMenu.message.mediaType);
+              }
+            },
+          },
+          {
+            id: "delete",
+            label: "Delete",
+            icon: Trash2,
+            destructive: true,
+            separatorBefore: true,
+            hidden: messageMenu?.message.senderId !== currentUserId,
+            onPress: () => {
+              if (messageMenu) setDeleteTarget(messageMenu.message);
+            },
+          },
+        ]}
+      >
+        {messageMenu ? (
+          <ChatMessage
+            variant="overlay"
+            anchorHeight={messageMenu.layout.height}
+            id={messageMenu.message.id}
+            content={messageMenu.message.content}
+            mediaUrl={messageMenu.message.mediaUrl}
+            mediaType={messageMenu.message.mediaType}
+            replyTo={messageMenu.message.replyTo}
+            reactions={[]}
+            senderName={messageMenu.message.sender.name ?? messageMenu.message.sender.email ?? "Member"}
+            senderInitial={userInitials(messageMenu.message.sender)}
+            senderImage={resolveUserImageUrl(messageMenu.message.sender.image)}
+            createdAt={messageMenu.message.createdAt}
+            isOwn={messageMenu.message.senderId === currentUserId}
+            currentUserId={currentUserId}
+            interactive={false}
+            onReactionTap={() => {}}
+          />
+        ) : null}
+      </MessageActionSheet>
     </SafeAreaView>
   );
 }

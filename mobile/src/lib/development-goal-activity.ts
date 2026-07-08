@@ -11,7 +11,6 @@ export const DEVELOPMENT_GOAL_ACTIVITY_KEY = {
   reminderDaysBefore: DEVELOPMENT_GOAL_INACTIVITY_REMINDER_DAYS_BEFORE,
   title: "Development goal activity",
   summary: `Goals become inactive after ${DEVELOPMENT_GOAL_INACTIVITY_DAYS} days with no progress updates or changes.`,
-  reminderSummary: `Seneca reminds you ${DEVELOPMENT_GOAL_INACTIVITY_REMINDER_DAYS_BEFORE} days before a goal goes inactive.`,
   activityCountsAs: [
     "Adding or editing progress notes",
     "Updating the skill or action steps",

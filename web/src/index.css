@@ -2432,6 +2432,295 @@ input {
   padding: 0;
   background: transparent;
   overflow: hidden;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Alenio Go development gate — covers the Go tab content only */
+.go-dev-gate-shell {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.go-dev-gate {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1.5rem 1.25rem;
+  background: linear-gradient(145deg, #020617 0%, #0f172a 38%, #1e1b4b 72%, #0f172a 100%);
+  color: #e2e8f0;
+  overflow: hidden;
+  border-radius: inherit;
+}
+
+.go-dev-gate-glow {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  filter: blur(64px);
+}
+
+.go-dev-gate-glow--one {
+  width: min(520px, 90vw);
+  height: min(520px, 90vw);
+  top: 8%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(67, 97, 238, 0.35);
+  animation: go-dev-gate-glow-drift 8s ease-in-out infinite;
+}
+
+.go-dev-gate-glow--two {
+  width: min(380px, 70vw);
+  height: min(380px, 70vw);
+  bottom: 18%;
+  right: -8%;
+  background: rgba(124, 58, 237, 0.28);
+  animation: go-dev-gate-glow-drift-alt 10s ease-in-out infinite reverse;
+}
+
+@keyframes go-dev-gate-glow-drift {
+  0%,
+  100% {
+    opacity: 0.65;
+    transform: translateX(-50%) translateY(0);
+  }
+  50% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(12px);
+  }
+}
+
+@keyframes go-dev-gate-glow-drift-alt {
+  0%,
+  100% {
+    opacity: 0.5;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 0.85;
+    transform: translateY(-16px);
+  }
+}
+
+.go-dev-gate-main {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  max-width: 34rem;
+  flex: 1;
+  justify-content: center;
+}
+
+.go-dev-gate-logo-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 1.75rem;
+}
+
+.go-dev-gate-logo-wrap--loading .go-dev-gate-logo {
+  animation: go-dev-gate-logo-pulse 1.2s ease-in-out infinite;
+}
+
+.go-dev-gate-logo {
+  filter: drop-shadow(0 8px 24px rgba(67, 97, 238, 0.35));
+}
+
+.go-dev-gate-spinner {
+  position: absolute;
+  inset: -12px;
+  border-radius: 50%;
+  border: 2px solid rgba(148, 163, 184, 0.15);
+  border-top-color: rgba(99, 102, 241, 0.85);
+  animation: go-dev-gate-spin 0.9s linear infinite;
+}
+
+@keyframes go-dev-gate-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes go-dev-gate-logo-pulse {
+  0%,
+  100% {
+    opacity: 0.88;
+    transform: scale(0.98);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.go-dev-gate-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.go-dev-gate-loading-text {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #cbd5e1;
+}
+
+.go-dev-gate-dots {
+  display: inline-flex;
+  gap: 0.35rem;
+}
+
+.go-dev-gate-dots span {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: #818cf8;
+  animation: go-dev-gate-dot 1.2s ease-in-out infinite;
+}
+
+.go-dev-gate-dots span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.go-dev-gate-dots span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes go-dev-gate-dot {
+  0%,
+  80%,
+  100% {
+    opacity: 0.35;
+    transform: translateY(0);
+  }
+  40% {
+    opacity: 1;
+    transform: translateY(-4px);
+  }
+}
+
+.go-dev-gate-copy {
+  animation: go-dev-gate-fade-in 0.4s ease;
+}
+
+@keyframes go-dev-gate-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.go-dev-gate-kicker {
+  margin: 0 0 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+.go-dev-gate-title {
+  margin: 0 0 0.75rem;
+  font-size: clamp(1.75rem, 5vw, 2.35rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  color: #f8fafc;
+}
+
+.go-dev-gate-sub {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.55;
+  color: #94a3b8;
+}
+
+.go-dev-gate-dev-form {
+  position: relative;
+  z-index: 1;
+  width: min(24rem, 100%);
+  margin-top: auto;
+  padding-top: 1.5rem;
+  border-top: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.go-dev-gate-dev-label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.go-dev-gate-dev-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.go-dev-gate-dev-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.625rem 0.75rem;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(15, 23, 42, 0.72);
+  color: #f8fafc;
+  font: inherit;
+}
+
+.go-dev-gate-dev-input::placeholder {
+  color: #64748b;
+}
+
+.go-dev-gate-dev-input:focus {
+  outline: none;
+  border-color: rgba(99, 102, 241, 0.65);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+}
+
+.go-dev-gate-dev-btn {
+  flex-shrink: 0;
+  padding: 0.625rem 1rem;
+  border: none;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #4361ee, #6366f1);
+  color: #fff;
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.go-dev-gate-dev-btn:hover {
+  filter: brightness(1.06);
+}
+
+.go-dev-gate-dev-error {
+  margin: 0.5rem 0 0;
+  font-size: 0.8125rem;
+  color: #fca5a5;
 }
 
 .enterprise-alenio-go-layout {
@@ -2823,6 +3112,281 @@ input {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.875rem;
+}
+
+.go-backend-tiles--core {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-width: 720px;
+}
+
+/* Workspace modules slide-out panel (admin/owner) */
+.go-backend-shell {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  position: relative;
+  overflow: hidden;
+}
+
+.go-backend-shell--wsm-open .go-backend {
+  margin-right: 320px;
+}
+
+.go-backend-shell .go-backend {
+  flex: 1;
+  min-width: 0;
+  transition: margin-right 0.2s ease;
+}
+
+.go-wsm-tab {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  z-index: 20;
+  transform: translateY(-50%);
+  width: 28px;
+  height: 56px;
+  border: 1px solid #e2e8f0;
+  border-right: none;
+  border-radius: 10px 0 0 10px;
+  background: #fff;
+  color: #64748b;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: -2px 0 8px rgba(15, 23, 42, 0.08);
+}
+
+.go-wsm-tab--open {
+  right: 320px;
+}
+
+.go-wsm-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 320px;
+  z-index: 15;
+  background: #fff;
+  border-left: 1px solid #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  box-shadow: -8px 0 24px rgba(15, 23, 42, 0.06);
+}
+
+.go-wsm-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 1.25rem 1rem 1rem;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.go-wsm-title {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.go-wsm-sub {
+  margin: 0.35rem 0 0;
+  font-size: 0.8125rem;
+  color: #64748b;
+  line-height: 1.45;
+}
+
+.go-wsm-close {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: 8px;
+}
+
+.go-wsm-close:hover {
+  color: #475569;
+  background: #f1f5f9;
+}
+
+.go-wsm-error {
+  margin: 0;
+  padding: 0.5rem 1rem;
+  font-size: 0.8125rem;
+  color: #b91c1c;
+  background: #fef2f2;
+}
+
+.go-wsm-section {
+  padding: 0.75rem 0;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.go-wsm-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1rem 0.5rem;
+}
+
+.go-wsm-section-head h3 {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: #334155;
+}
+
+.go-wsm-count {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #64748b;
+  background: #f1f5f9;
+  padding: 0.125rem 0.5rem;
+  border-radius: 999px;
+}
+
+.go-wsm-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.go-wsm-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto auto;
+  align-items: center;
+  gap: 0.5rem 0.625rem;
+  padding: 0.625rem 1rem;
+  border-top: 1px solid #f8fafc;
+}
+
+.go-wsm-row--available {
+  grid-template-columns: auto 1fr auto;
+}
+
+.go-wsm-row-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.go-wsm-row-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.go-wsm-row-copy strong {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.go-wsm-row-copy span {
+  font-size: 0.75rem;
+  color: #64748b;
+  line-height: 1.35;
+}
+
+.go-wsm-row-check {
+  color: #16a34a;
+  display: flex;
+}
+
+.go-wsm-row-configure {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #4361ee;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.go-wsm-row-configure:hover {
+  text-decoration: underline;
+}
+
+.go-wsm-row-go {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 1px solid #e2e8f0;
+  color: #64748b;
+  text-decoration: none;
+}
+
+.go-wsm-row-go:hover {
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+.go-wsm-row-enable {
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #0f172a;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  padding: 0.375rem 0.75rem;
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.go-wsm-row-enable:hover:not(:disabled) {
+  background: #f8fafc;
+  border-color: #94a3b8;
+}
+
+.go-wsm-row-enable:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.go-wsm-footer {
+  margin-top: auto;
+  padding: 1rem;
+}
+
+.go-wsm-library-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #4361ee;
+  text-decoration: none;
+}
+
+.go-wsm-library-link:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 1100px) {
+  .go-backend-shell--wsm-open .go-backend {
+    margin-right: 0;
+  }
+
+  .go-wsm-panel {
+    width: min(320px, 100%);
+    box-shadow: -12px 0 40px rgba(15, 23, 42, 0.15);
+  }
+
+  .go-wsm-tab--open {
+    right: min(320px, 100%);
+  }
 }
 
 .go-backend-tile {
@@ -35430,5 +35994,502 @@ button.enterprise-profile-legal-link {
     border-right: none;
     border-bottom: 1px solid #e2e8f0;
   }
+}
+
+/* ── Workspace module lifecycle + operating mode ─────────────────────────── */
+
+.go-backend-tile .go-dash-card-soon-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.go-backend-tile .go-mod-badge,
+.go-backend-tile .go-mod-mode-badge {
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.2);
+}
+.go-backend-tile .go-mod-tile-cta {
+  display: block;
+  margin-top: 12px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  opacity: 0.95;
+}
+
+.go-mod-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+.go-mod-badge--active {
+  background: #dcfce7;
+  color: #166534;
+}
+.go-mod-badge--inactive {
+  background: #e2e8f0;
+  color: #475569;
+}
+
+.go-mod-mode-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.go-mod-mode-badge--testing {
+  background: #fef3c7;
+  color: #92400e;
+}
+.go-mod-mode-badge--live {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+/* Module tile (admin dashboard) */
+.go-mod-tile-progress {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.go-mod-tile-progress-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.35);
+  overflow: hidden;
+}
+.go-mod-tile-progress-bar > span {
+  display: block;
+  height: 100%;
+  background: #fff;
+  border-radius: 999px;
+}
+.go-mod-tile-progress-label {
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0.9;
+}
+.go-mod-tile-cta {
+  margin-top: 10px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* Module settings page */
+.go-mod-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.go-mod-section {
+  margin-bottom: 16px;
+}
+.go-mod-section-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0 0 10px;
+}
+.go-mod-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  margin: 12px 0 0;
+}
+.go-mod-meta > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.go-mod-meta dt {
+  font-size: 12px;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.go-mod-meta dd {
+  margin: 0;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.go-mod-progress {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.go-mod-progress-bar {
+  flex: 1;
+  height: 10px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  overflow: hidden;
+}
+.go-mod-progress-bar > span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #4361ee, #7209b7);
+  border-radius: 999px;
+}
+.go-mod-progress-label {
+  font-weight: 700;
+  color: #0f172a;
+  min-width: 44px;
+  text-align: right;
+}
+.go-mod-range {
+  width: 100%;
+  margin-top: 12px;
+}
+.go-mod-hint {
+  font-size: 13px;
+  margin-top: 8px;
+}
+
+.go-mod-segment {
+  display: inline-flex;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #f1f5f9;
+}
+.go-mod-segment-btn {
+  border: none;
+  background: transparent;
+  padding: 10px 22px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #475569;
+  cursor: pointer;
+}
+.go-mod-segment-btn:disabled {
+  cursor: default;
+}
+.go-mod-segment-btn--active {
+  background: #fff;
+  color: #0f172a;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
+}
+.go-mod-mode-help {
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.go-mod-mode-help p {
+  margin: 0;
+  font-size: 13px;
+  color: #475569;
+  line-height: 1.5;
+}
+
+.go-mod-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 14px;
+  color: #0f172a;
+  margin-bottom: 14px;
+}
+.go-mod-code-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.go-mod-code-display {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  padding: 8px 16px;
+  border-radius: 10px;
+  background: #0f172a;
+  color: #fff;
+}
+.go-mod-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+.go-mod-field > span {
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+}
+.go-mod-input {
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 9px 12px;
+  font-size: 14px;
+  color: #0f172a;
+  background: #fff;
+}
+
+.go-mod-btn {
+  border-radius: 10px;
+  padding: 9px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+.go-mod-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.go-mod-btn--primary {
+  background: #4361ee;
+  color: #fff;
+}
+.go-mod-btn--ghost {
+  background: #fff;
+  color: #0f172a;
+  border-color: #cbd5e1;
+}
+
+.go-mod-validation-list {
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.go-mod-validation-list li {
+  font-size: 14px;
+}
+.go-mod-check-pass {
+  color: #15803d;
+}
+.go-mod-check-fail {
+  color: #b91c1c;
+}
+.go-mod-validation-errors {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #fef2f2;
+  color: #991b1b;
+  font-size: 13px;
+}
+.go-mod-validation-errors ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+.go-mod-sessions-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 12px;
+  font-size: 13px;
+}
+.go-mod-sessions-table th,
+.go-mod-sessions-table td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid #e2e8f0;
+}
+.go-mod-sessions-table th {
+  color: #64748b;
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.go-mod-error {
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+/* Modals */
+.go-mod-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  background: rgba(15, 23, 42, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.go-mod-modal {
+  background: #fff;
+  border-radius: 16px;
+  padding: 24px;
+  max-width: 440px;
+  width: 100%;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.3);
+}
+.go-mod-modal-title {
+  margin: 0 0 12px;
+  font-size: 20px;
+  font-weight: 700;
+  color: #0f172a;
+}
+.go-mod-modal-body {
+  margin: 0 0 10px;
+  color: #475569;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.go-mod-modal-list {
+  margin: 0 0 14px;
+  padding-left: 18px;
+  color: #475569;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.go-mod-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+/* ── Alenio Go kiosk: testing banner + test code + open overlay ──────────── */
+
+.go-testing-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 13px;
+  border-bottom: 1px solid #fde68a;
+}
+.go-testing-banner-tag {
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.go-testing-banner-copy {
+  opacity: 0.9;
+}
+
+.go-testcode-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1300;
+  background: rgba(15, 23, 42, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.go-testcode-card {
+  background: #fff;
+  border-radius: 20px;
+  padding: 32px;
+  max-width: 420px;
+  width: 100%;
+  text-align: center;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.4);
+}
+.go-testcode-eyebrow {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #92400e;
+}
+.go-testcode-title {
+  margin: 4px 0 20px;
+  font-size: 24px;
+  font-weight: 800;
+  color: #0f172a;
+}
+.go-testcode-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+  margin-bottom: 8px;
+}
+.go-testcode-input {
+  width: 100%;
+  text-align: center;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 0.3em;
+  padding: 14px;
+  border: 2px solid #cbd5e1;
+  border-radius: 14px;
+  text-transform: uppercase;
+}
+.go-testcode-error {
+  color: #b91c1c;
+  font-size: 14px;
+  margin: 12px 0 0;
+  font-weight: 600;
+}
+.go-testcode-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 24px;
+}
+.go-testcode-btn {
+  flex: 1;
+  border-radius: 12px;
+  padding: 14px;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+.go-testcode-btn--primary {
+  background: #4361ee;
+  color: #fff;
+}
+.go-testcode-btn--ghost {
+  background: #f1f5f9;
+  color: #0f172a;
+  border-color: #cbd5e1;
+}
+.go-testcode-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.go-module-open-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1250;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+}
+.go-module-open-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  text-align: center;
+  padding: 24px;
+}
+.go-module-open-title {
+  font-size: 26px;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0;
+}
+.go-dash-empty-modules {
+  text-align: center;
+  padding: 40px 20px;
 }
 
