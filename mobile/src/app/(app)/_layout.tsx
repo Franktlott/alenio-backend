@@ -189,6 +189,8 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
     }
   };
 
+  const activeRouteName = state.routes[state.index]?.name;
+
   return (
     <View style={{
       position: "absolute",
@@ -208,7 +210,7 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
       elevation: 12,
     }}>
       {visibleRoutes.map((route: any) => {
-        const isFocused = state.index === state.routes.indexOf(route);
+        const isFocused = activeRouteName === route.name;
         const tab = ALL_TABS.find((t) => t.name === route.name);
         if (!tab) return null;
         const { Icon, label, name } = tab;
@@ -230,7 +232,12 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
           <Pressable
             key={route.key}
             onPress={() => {
-              if (isFocused) return;
+              const event = navigation.emit({
+                type: "tabPress",
+                target: route.key,
+                canPreventDefault: true,
+              });
+              if (isFocused || event.defaultPrevented) return;
               prefetchRouteData(route.name);
               navigation.navigate(route.name);
             }}
@@ -240,7 +247,7 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
             <View style={{
               alignItems: "center",
               justifyContent: "center",
-              backgroundColor: "transparent",
+              backgroundColor: isFocused ? "#EEF2FF" : "transparent",
               borderRadius: 20,
               paddingHorizontal: 10,
               paddingVertical: 6,

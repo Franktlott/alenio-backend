@@ -283,6 +283,8 @@ export function ChatPage() {
   const [deleteChannelSaving, setDeleteChannelSaving] = useState(false);
   const [conversationDeleteOpen, setConversationDeleteOpen] = useState(false);
   const [conversationDeleteSaving, setConversationDeleteSaving] = useState(false);
+  const [leaveGroupOpen, setLeaveGroupOpen] = useState(false);
+  const [leaveGroupSaving, setLeaveGroupSaving] = useState(false);
   const [actionMessage, setActionMessage] = useState<ChatMessageLike | null>(null);
   const [editMessage, setEditMessage] = useState<ChatMessageLike | null>(null);
   const [editDraft, setEditDraft] = useState("");
@@ -723,6 +725,8 @@ export function ChatPage() {
     [conversations],
   );
   const activeConversation = selectedConversationId ? conversations.find((c) => c.id === selectedConversationId) : null;
+  const isLastGroupMember =
+    Boolean(activeConversation?.isGroup) && (activeConversation?.participants.length ?? 0) <= 1;
   const conversationLabel = activeConversation
     ? activeConversation.isGroup
       ? activeConversation.name ?? "Group chat"
@@ -797,13 +801,17 @@ export function ChatPage() {
 
   const onLeaveConversation = async () => {
     if (!selectedConversationId) return;
+    setLeaveGroupSaving(true);
     setActionErr(null);
     try {
       await leaveDmConversation(selectedConversationId);
+      setLeaveGroupOpen(false);
       await queryClient.invalidateQueries({ queryKey: queryKeys.chatConversations });
       exitConversation();
     } catch (e) {
       setActionErr(e instanceof Error ? e.message : "Could not leave group.");
+    } finally {
+      setLeaveGroupSaving(false);
     }
   };
 
@@ -1236,7 +1244,8 @@ export function ChatPage() {
                                   className="chat-header-more-item"
                                   onClick={() => {
                                     setMoreMenuOpen(false);
-                                    void onLeaveConversation();
+                                    setActionErr(null);
+                                    setLeaveGroupOpen(true);
                                   }}
                                   data-testid="chat-leave-group"
                                 >
@@ -1595,6 +1604,52 @@ export function ChatPage() {
                 data-testid="confirm-delete-channel"
               >
                 {deleteChannelSaving ? "Deleting…" : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {leaveGroupOpen && activeConversation?.isGroup ? (
+        <div className="enterprise-modal-backdrop" role="presentation" onClick={() => setLeaveGroupOpen(false)}>
+          <div
+            className="enterprise-modal-panel chat-delete-channel-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="chat-leave-group-title"
+            onClick={(e) => e.stopPropagation()}
+            data-testid="chat-leave-group-modal"
+          >
+            <h3 id="chat-leave-group-title" className="enterprise-modal-title">
+              {isLastGroupMember ? "Delete group?" : "Leave group?"}
+            </h3>
+            <p className="enterprise-muted enterprise-modal-sub">
+              {isLastGroupMember
+                ? "You are the last member. Leaving will permanently delete this group and all message history."
+                : "You will stop receiving messages from this group. Other members can still chat."}
+            </p>
+            {actionErr ? (
+              <p className="auth-error" role="alert">
+                {actionErr}
+              </p>
+            ) : null}
+            <div className="enterprise-modal-actions">
+              <button
+                type="button"
+                className="auth-btn-secondary"
+                onClick={() => setLeaveGroupOpen(false)}
+                disabled={leaveGroupSaving}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className={isLastGroupMember ? "enterprise-team-btn-destructive" : "auth-btn-primary"}
+                disabled={leaveGroupSaving}
+                onClick={() => void onLeaveConversation()}
+                data-testid="confirm-leave-group"
+              >
+                {leaveGroupSaving ? "Leaving…" : isLastGroupMember ? "Delete group" : "Leave group"}
               </button>
             </div>
           </div>

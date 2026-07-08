@@ -414,7 +414,7 @@ export default function ChatScreen() {
                 {PAYWALL_BODY}
               </Text>
               <TouchableOpacity
-                onPress={() => { setShowGroupPaywall(false); router.push("/subscription"); }}
+                onPress={() => { setShowGroupPaywall(false); router.push("/account-hub"); }}
                 testID="group-paywall-view-plan"
                 style={{ borderRadius: 14, overflow: "hidden", width: "100%", shadowColor: "#4361EE", shadowOpacity: 0.35, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 5, marginBottom: 10 }}
               >

@@ -482,20 +482,42 @@ dmsRouter.post("/:conversationId/leave", async (c) => {
   const user = c.get("user")!;
   const { conversationId } = c.req.param();
 
+  const conversation = await prisma.conversation.findUnique({
+    where: { id: conversationId },
+    select: { id: true, isGroup: true },
+  });
+  if (!conversation) {
+    return c.json({ error: { message: "Conversation not found", code: "NOT_FOUND" } }, 404);
+  }
+
   const participant = await prisma.conversationParticipant.findUnique({
     where: { conversationId_userId: { conversationId, userId: user.id } },
   });
   if (!participant) return c.json({ error: { message: "Not a participant", code: "FORBIDDEN" } }, 403);
 
-  await prisma.conversationParticipant.delete({
-    where: { conversationId_userId: { conversationId, userId: user.id } },
-  });
+  const remainingBeforeLeave = await prisma.conversationParticipant.count({ where: { conversationId } });
+  const isLastParticipant = remainingBeforeLeave <= 1;
 
-  // If no participants remain, delete the whole conversation
-  const remaining = await prisma.conversationParticipant.count({ where: { conversationId } });
-  if (remaining === 0) {
-    await prisma.conversation.delete({ where: { id: conversationId } });
-  }
+  await prisma.$transaction(async (tx) => {
+    await tx.conversationParticipant.delete({
+      where: { conversationId_userId: { conversationId, userId: user.id } },
+    });
+
+    if (conversation.isGroup && isLastParticipant) {
+      await tx.directMessageReaction.deleteMany({
+        where: { directMessage: { conversationId } },
+      });
+      await tx.directMessage.deleteMany({ where: { conversationId } });
+      await tx.conversationParticipant.deleteMany({ where: { conversationId } });
+      await tx.conversation.delete({ where: { id: conversationId } });
+      return;
+    }
+
+    const remaining = await tx.conversationParticipant.count({ where: { conversationId } });
+    if (remaining === 0) {
+      await tx.conversation.delete({ where: { id: conversationId } });
+    }
+  });
 
   return new Response(null, { status: 204 });
 });

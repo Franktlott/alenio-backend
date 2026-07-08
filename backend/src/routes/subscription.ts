@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { prisma } from "../prisma";
 import { auth } from "../auth";
 import { authGuard } from "../middleware/auth-guard";
+import { createTeamCheckoutSession, createTeamPortalSession } from "../lib/team-billing-sessions";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -109,6 +110,32 @@ subscriptionRouter.get("/health", async (c) => {
       },
     },
   });
+});
+
+// POST /api/teams/:teamId/subscription/checkout-session — Stripe Checkout (mobile + web)
+subscriptionRouter.post("/checkout-session", async (c) => {
+  const user = c.get("user")!;
+  const teamId = c.req.param("teamId") as string;
+  const result = await createTeamCheckoutSession({
+    teamId,
+    userId: user.id,
+    userEmail: user.email,
+  });
+  if ("error" in result) {
+    return c.json({ error: result.error }, result.status);
+  }
+  return c.json({ data: { url: result.url } });
+});
+
+// POST /api/teams/:teamId/subscription/portal-session — Stripe billing portal
+subscriptionRouter.post("/portal-session", async (c) => {
+  const user = c.get("user")!;
+  const teamId = c.req.param("teamId") as string;
+  const result = await createTeamPortalSession({ teamId, userId: user.id });
+  if ("error" in result) {
+    return c.json({ error: result.error }, result.status);
+  }
+  return c.json({ data: { url: result.url } });
 });
 
 // POST /api/teams/:teamId/subscription/upgrade — web billing only

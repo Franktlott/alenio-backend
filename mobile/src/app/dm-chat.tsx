@@ -103,6 +103,7 @@ export default function DMChatScreen() {
   const [deleteTarget, setDeleteTarget] = useState<DirectMessage | null>(null);
   const [showOptions, setShowOptions] = useState(false);
   const [showConvDeleteConfirm, setShowConvDeleteConfirm] = useState(false);
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   const [reactionView, setReactionView] = useState<MessageReaction[] | null>(null);
   const [mediaPreview, setMediaPreview] = useState<{ uri: string; mimeType: string; filename: string } | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -124,6 +125,8 @@ export default function DMChatScreen() {
   });
 
   const currentConversation = conversations.find((c) => c.id === conversationId);
+  const groupParticipantCount = currentConversation?.participants?.length ?? 0;
+  const isLastGroupMember = isGroup && groupParticipantCount <= 1;
   const headerUser = useMemo(() => {
     if (isGroup) {
       return {
@@ -181,6 +184,7 @@ export default function DMChatScreen() {
     mutationFn: () => api.post(`/api/dms/${conversationId}/leave`, {}),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["dms"] });
+      queryClient.removeQueries({ queryKey: ["dm-messages", conversationId] });
       router.replace("/(app)/chat");
     },
   });
@@ -486,7 +490,10 @@ export default function DMChatScreen() {
               )}
               {isGroup ? (
                 <TouchableOpacity
-                  onPress={() => { setShowOptions(false); leaveConversationMutation.mutate(); }}
+                  onPress={() => {
+                    setShowOptions(false);
+                    setTimeout(() => setShowLeaveConfirm(true), 300);
+                  }}
                   style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 16, borderTopWidth: 1, borderTopColor: "#F1F5F9" }}
                 >
                   <Text style={{ fontSize: 16, color: "#F59E0B" }}>Leave Group</Text>
@@ -498,6 +505,45 @@ export default function DMChatScreen() {
                 style={{ paddingVertical: 16, alignItems: "center", borderTopWidth: 1, borderTopColor: "#F1F5F9" }}
               >
                 <Text style={{ fontSize: 16, fontWeight: "600", color: "#64748B" }}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Leave group confirmation */}
+      <Modal visible={showLeaveConfirm} transparent animationType="fade" onRequestClose={() => setShowLeaveConfirm(false)}>
+        <TouchableOpacity style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)", alignItems: "center", justifyContent: "center", paddingHorizontal: 32 }} activeOpacity={1} onPress={() => setShowLeaveConfirm(false)}>
+          <TouchableOpacity activeOpacity={1} style={{ width: "100%", backgroundColor: "white", borderRadius: 16, overflow: "hidden" }}>
+            <View style={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 16, alignItems: "center" }}>
+              <Text style={{ fontSize: 17, fontWeight: "700", color: "#0F172A", marginBottom: 4 }}>
+                {isLastGroupMember ? "Delete Group?" : "Leave Group?"}
+              </Text>
+              <Text style={{ fontSize: 13, color: "#64748B", textAlign: "center" }}>
+                {isLastGroupMember
+                  ? "You are the last member. Leaving will permanently delete this group and all message history."
+                  : "You will stop receiving messages from this group. Other members can still chat."}
+              </Text>
+            </View>
+            <View style={{ flexDirection: "row", borderTopWidth: 1, borderTopColor: "#F1F5F9" }}>
+              <TouchableOpacity onPress={() => setShowLeaveConfirm(false)} style={{ flex: 1, paddingVertical: 14, alignItems: "center", borderRightWidth: 1, borderRightColor: "#F1F5F9" }}>
+                <Text style={{ fontSize: 15, fontWeight: "500", color: "#64748B" }}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => {
+                  setShowLeaveConfirm(false);
+                  leaveConversationMutation.mutate();
+                }}
+                disabled={leaveConversationMutation.isPending}
+                style={{ flex: 1, paddingVertical: 14, alignItems: "center" }}
+              >
+                {leaveConversationMutation.isPending ? (
+                  <ActivityIndicator size="small" color={isLastGroupMember ? "#EF4444" : "#F59E0B"} />
+                ) : (
+                  <Text style={{ fontSize: 15, fontWeight: "700", color: isLastGroupMember ? "#EF4444" : "#F59E0B" }}>
+                    {isLastGroupMember ? "Delete Group" : "Leave"}
+                  </Text>
+                )}
               </TouchableOpacity>
             </View>
           </TouchableOpacity>

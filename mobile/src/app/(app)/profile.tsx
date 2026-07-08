@@ -733,20 +733,20 @@ export default function ProfileScreen() {
           {/* Account */}
           <ProfileSection title="Account">
             <ProfileCard>
-              {isOwnerOfAnyTeam ? (
-                <>
-                  <ProfileMenuRow
-                    icon={Crown}
-                    title="Workplace Access"
-                    subtitle={
-                      ownerTeamSubscription?.plan === "team" ? "Team access active" : "View workplace access"
-                    }
-                    onPress={() => router.push("/subscription")}
-                    testID="subscription-row"
-                  />
-                  <ProfileDivider inset />
-                </>
-              ) : null}
+              <ProfileMenuRow
+                icon={Crown}
+                title="Account & Billing"
+                subtitle={
+                  isOwnerOfAnyTeam
+                    ? ownerTeamSubscription?.plan === "team"
+                      ? "Team access active · Manage workplaces"
+                      : "Manage workplace subscriptions"
+                    : "View workplace plans"
+                }
+                onPress={() => router.push("/account-hub")}
+                testID="account-hub-row"
+              />
+              <ProfileDivider inset />
               <ProfileMenuRow
                 icon={Bell}
                 title="Notifications"

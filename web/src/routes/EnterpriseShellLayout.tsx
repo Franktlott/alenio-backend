@@ -7,7 +7,7 @@ import { EnterpriseShellContext, type EnterpriseShellContextValue } from "../con
 import { fetchWebMe, fetchWebTeams, patchApiProfile, type WebMeUser, type WebTeamRow } from "../lib/api";
 import { getBrowserTimeZone } from "../lib/timezone";
 import { hasMobileWebPreferred } from "../lib/app-links";
-import { getPersistedEnterpriseTeamId, pickEnterpriseTeamId, setPersistedEnterpriseTeamId, teamsWorkspaceSelectionKey } from "../lib/enterprise-selected-team";
+import { getPersistedEnterpriseTeamId, pickEnterpriseTeamId, resolveEnterpriseTeamId, setPersistedEnterpriseTeamId, teamsWorkspaceSelectionKey } from "../lib/enterprise-selected-team";
 import { isMobileBrowser } from "../lib/mobile-browser";
 import { enterpriseNavTitle } from "../lib/enterprise-nav";
 import { SenecaFloatingLauncher } from "../components/seneca/SenecaFloatingLauncher";
@@ -178,6 +178,17 @@ export function EnterpriseShellLayout() {
   const contentClassName = [handle.enterpriseContentClassName ?? "", shellContentSuffix].filter(Boolean).join(" ").trim();
 
   const activeNav = activeNavFromPath(location.pathname);
+
+  useEffect(() => {
+    if (!teams?.length) return;
+    const teamIdFromUrl = new URLSearchParams(location.search).get("teamId")?.trim() ?? "";
+    if (!teamIdFromUrl) return;
+    const resolved = resolveEnterpriseTeamId(teams, { teamIdFromUrl }, selectedTeamId);
+    if (resolved && resolved !== selectedTeamId) {
+      setSelectedTeamId(resolved);
+      setPersistedEnterpriseTeamId(resolved);
+    }
+  }, [teams, location.search, selectedTeamId]);
 
   /** Resolve workspace before passive effects run pickEnterpriseTeamId — layout effects need this or owners get misclassified briefly. */
   const effectiveTeamId = useMemo(() => {

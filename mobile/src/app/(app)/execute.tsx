@@ -1392,22 +1392,47 @@ export default function TasksScreen() {
         {/* Sticky section: filter tabs + sort */}
         <View style={{ backgroundColor: "#F8FAFC", paddingTop: 10 }}>
           <View style={{ paddingHorizontal: 16, marginBottom: 10 }}>
-            <View style={{ flexDirection: "row", backgroundColor: "#E2E8F0", borderRadius: 12, padding: 4, marginBottom: 8 }}>
-              {(["all", "completed", ...(isRegularMember ? [] : ["assigned"])] as FilterTab[]).map((f) => (
-                <TouchableOpacity
-                  key={f}
-                  onPress={() => setFilter(f)}
-                  style={{
-                    flex: 1, paddingVertical: 8, borderRadius: 10, alignItems: "center",
-                    backgroundColor: filter === f ? "white" : "transparent",
-                  }}
-                  testID={`filter-${f}`}
-                >
-                  <Text style={{ fontSize: 13, fontWeight: "600", color: filter === f ? "#0F172A" : "#94A3B8" }}>
-                    {f === "all" ? "Active" : f === "assigned" ? "Team" : "Completed"}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+            <View style={{ flexDirection: "row", alignSelf: "stretch", backgroundColor: "#E2E8F0", borderRadius: 12, padding: 4, marginBottom: 8 }}>
+              {(["all", "completed", ...(isRegularMember ? [] : ["assigned"])] as FilterTab[]).map((f) => {
+                const isSelected = filter === f;
+                return (
+                  <TouchableOpacity
+                    key={f}
+                    activeOpacity={0.85}
+                    onPress={() => setFilter(f)}
+                    style={{
+                      flex: 1,
+                      minWidth: 0,
+                      paddingVertical: 10,
+                      borderRadius: 10,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      backgroundColor: isSelected ? "#FFFFFF" : "transparent",
+                      ...(isSelected
+                        ? {
+                            shadowColor: "#0F172A",
+                            shadowOffset: { width: 0, height: 1 },
+                            shadowOpacity: 0.08,
+                            shadowRadius: 3,
+                            elevation: 2,
+                          }
+                        : {}),
+                    }}
+                    testID={`filter-${f}`}
+                  >
+                    <Text
+                      numberOfLines={1}
+                      style={{
+                        fontSize: 14,
+                        fontWeight: isSelected ? "700" : "600",
+                        color: isSelected ? "#4361EE" : "#64748B",
+                      }}
+                    >
+                      {f === "all" ? "Active" : f === "assigned" ? "Team" : "Completed"}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 6 }}>
               <ArrowUpDown size={12} color="#94A3B8" />

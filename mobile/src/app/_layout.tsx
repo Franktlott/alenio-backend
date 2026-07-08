@@ -288,6 +288,8 @@ function RootLayoutNav() {
                 headerShown: false,
               }}
             />
+            <Stack.Screen name="account-hub" />
+            <Stack.Screen name="billing" />
             <Stack.Screen name="subscription" />
             <Stack.Screen
               name="switch-workspace"

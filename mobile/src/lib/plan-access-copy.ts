@@ -16,6 +16,11 @@ export function hasWorkspaceTaskAccess(
 
 export const PLAN_SCREEN_TITLE = "Workplace Access";
 
+export const ACCOUNT_HUB_TITLE = "Account & Billing";
+
+export const ACCOUNT_HUB_SUBTITLE =
+  "Manage subscriptions and billing for all your workplaces in one place. Select a workplace to view its plan or make changes.";
+
 export function workplaceAccessSubtitle(isOwner: boolean): string {
   if (isOwner) {
     return "This workplace's access is managed on the web. You can upgrade the workplace, manage billing, and view invoices from the Alenio web dashboard.";
@@ -24,6 +29,14 @@ export function workplaceAccessSubtitle(isOwner: boolean): string {
 }
 
 export const WEB_WORKSPACE_DASHBOARD_URL = "https://alenio.app/billing";
+
+export function webBillingUrlForTeam(teamId?: string, opts?: { subscribe?: boolean }): string {
+  const params = new URLSearchParams();
+  if (teamId?.trim()) params.set("teamId", teamId.trim());
+  if (opts?.subscribe) params.set("subscribe", "1");
+  const qs = params.toString();
+  return qs ? `${WEB_WORKSPACE_DASHBOARD_URL}?${qs}` : WEB_WORKSPACE_DASHBOARD_URL;
+}
 
 export const WEB_PLAN_MANAGEMENT_TITLE = "Manage on the web";
 

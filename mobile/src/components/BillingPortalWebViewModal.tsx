@@ -11,33 +11,37 @@ import {
 import { WebView } from "react-native-webview";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { X } from "lucide-react-native";
-import { isStripePortalEmbedUrl } from "@/lib/subscription-billing";
+import { isBillingWebViewUrl, billingFlowCompleteFromUrl } from "@/lib/subscription-billing";
 
 type Props = {
   visible: boolean;
   url: string | null;
   onClose: () => void;
+  onFlowComplete?: (result: "success" | "cancel") => void;
 };
 
 /**
  * Secure billing portal: approved HTTPS billing hosts only; no arbitrary URLs.
  */
-export function BillingPortalWebViewModal({ visible, url, onClose }: Props) {
+export function BillingPortalWebViewModal({ visible, url, onClose, onFlowComplete }: Props) {
   const scheme = useColorScheme();
   const isDark = scheme === "dark";
   const [loading, setLoading] = useState(true);
 
   const onNavChange = useCallback(
     (navUrl: string) => {
-      if (!isStripePortalEmbedUrl(navUrl)) {
+      const complete = billingFlowCompleteFromUrl(navUrl);
+      if (complete) {
+        onFlowComplete?.(complete);
+        onClose();
         return false;
       }
-      return true;
+      return isBillingWebViewUrl(navUrl);
     },
-    [],
+    [onClose, onFlowComplete],
   );
 
-  const safeUrl = url && isStripePortalEmbedUrl(url) ? url : null;
+  const safeUrl = url && isBillingWebViewUrl(url) ? url : null;
   const open = !!(visible && safeUrl);
 
   useEffect(() => {
