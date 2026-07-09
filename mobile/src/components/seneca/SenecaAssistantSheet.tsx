@@ -599,7 +599,7 @@ export function SenecaAssistantSheet({ open, onClose, teamId: teamIdProp }: Prop
 
                           {chatMessage.planProposal ? (
                             <View style={styles.planConfirmCard} testID="seneca-plan-one-on-one-confirm">
-                              <Text style={styles.planConfirmTitle}>1:1 details</Text>
+                              <Text style={styles.planConfirmTitle}>Check-in details</Text>
                               <View style={styles.planConfirmRow}>
                                 <Text style={styles.planConfirmLabel}>With</Text>
                                 <Text style={styles.planConfirmValue}>{chatMessage.planProposal.memberName}</Text>

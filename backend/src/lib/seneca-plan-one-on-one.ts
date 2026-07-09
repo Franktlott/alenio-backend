@@ -63,7 +63,7 @@ export function conversationHasScheduleTopic(
 ): boolean {
   if (isScheduleOneOnOneQuestion(question)) return true;
   const blob = [...messages.map((message) => message.content), question].join(" ").toLowerCase();
-  if (!/\b(1:1|one[- ]on[- ]one|check[- ]?in|scheduled a 1:1|plan a 1:1)\b/.test(blob)) {
+  if (!/\b(1:1|one[- ]on[- ]one|check[- ]?in|scheduled a check-in|plan a check-in|scheduled a 1:1|plan a 1:1)\b/.test(blob)) {
     return false;
   }
   const latest = question.toLowerCase();
@@ -214,5 +214,5 @@ export function finalizePlanOneOnOneProposal(
 }
 
 export function buildPlanConfirmationMessage(proposal: SenecaPlanOneOnOneProposal): string {
-  return `I'd like to schedule a 1:1 with ${proposal.memberName} on ${proposal.dateLabel} at ${proposal.timeLabel} (${proposal.durationMinutes} min). Please confirm before I add it to your calendar.`;
+  return `I'd like to schedule a check-in with ${proposal.memberName} on ${proposal.dateLabel} at ${proposal.timeLabel} (${proposal.durationMinutes} min). Please confirm before I add it to your calendar.`;
 }

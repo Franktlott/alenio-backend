@@ -32,7 +32,7 @@ export type SenecaQuickAction = {
 export const SENECA_ASK_EXAMPLES = [
   "What should I focus on today?",
   "Who needs recognition?",
-  "Prepare my next 1:1",
+  "Prepare my next check-in",
   "Where are we falling behind?",
 ] as const;
 
@@ -97,7 +97,7 @@ export function buildLeadershipBriefing(snapshot: WorkspaceSnapshot): BriefingIn
       memberUserId: nearingInactive.memberUserId,
       actions: [
         { id: "create_dev_note", label: "Review development plan" },
-        { id: "prepare_1on1", label: "Prepare 1:1" },
+        { id: "prepare_1on1", label: "Prepare check-in" },
       ],
     });
   }
@@ -134,7 +134,7 @@ export function buildLeadershipBriefing(snapshot: WorkspaceSnapshot): BriefingIn
       detail: `${detailParts.join(", but ")}.`,
       memberUserId: checkIn.userId,
       actions: [
-        { id: "prepare_1on1", label: "Prepare 1:1" },
+        { id: "prepare_1on1", label: "Prepare check-in" },
         { id: "create_dev_note", label: "Create development note" },
       ],
     });
@@ -163,7 +163,7 @@ export function buildLeadershipBriefing(snapshot: WorkspaceSnapshot): BriefingIn
       category: "Needs Attention",
       tone: "risk",
       title: `${snapshot.membersWithoutRecentCheckIn} teammates without a recent check-in`,
-      detail: "Consider scheduling 1:1s to stay connected with the floor.",
+      detail: "Consider scheduling check-ins to stay connected with the floor.",
       actions: [{ id: "prepare_1on1", label: "Schedule check-ins" }],
     });
   }
@@ -218,7 +218,7 @@ export function buildLeadershipBriefing(snapshot: WorkspaceSnapshot): BriefingIn
       detail: "Review progress and offer support in your next check-ins.",
       actions: [
         { id: "create_dev_note", label: "Review development plans" },
-        { id: "prepare_1on1", label: "Prepare 1:1" },
+        { id: "prepare_1on1", label: "Prepare check-in" },
       ],
     });
   }

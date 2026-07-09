@@ -241,13 +241,13 @@ calendarRouter.post(
 
     const isOneOnOne = body.isOneOnOne === true;
     if (isOneOnOne && !isCalendarOwnerOrLeader(membership.role)) {
-      return c.json({ error: { message: "Only workspace owners and team leaders can plan 1:1 check-ins.", code: "FORBIDDEN" } }, 403);
+      return c.json({ error: { message: "Only workspace owners and team leaders can plan check-ins.", code: "FORBIDDEN" } }, 403);
     }
 
     const oneOnOneMemberUserId = body.oneOnOneMemberUserId?.trim() || null;
     if (isOneOnOne) {
       if (!oneOnOneMemberUserId) {
-        return c.json({ error: { message: "Choose a team member for this 1:1.", code: "BAD_REQUEST" } }, 400);
+        return c.json({ error: { message: "Choose a team member for this check-in.", code: "BAD_REQUEST" } }, 400);
       }
       const member = await prisma.teamMember.findUnique({
         where: { userId_teamId: { userId: oneOnOneMemberUserId, teamId } },
@@ -256,7 +256,7 @@ calendarRouter.post(
         return c.json({ error: { message: "That team member was not found in this workspace.", code: "BAD_REQUEST" } }, 400);
       }
       if (oneOnOneMemberUserId === user.id) {
-        return c.json({ error: { message: "Plan a 1:1 with someone on your team, not yourself.", code: "BAD_REQUEST" } }, 400);
+        return c.json({ error: { message: "Plan a check-in with someone on your team, not yourself.", code: "BAD_REQUEST" } }, 400);
       }
     }
 
@@ -284,7 +284,7 @@ calendarRouter.post(
       }
     }
     if (isOneOnOne && (!end || end <= start)) {
-      return c.json({ error: { message: "Choose a valid start and end time for this 1:1.", code: "BAD_REQUEST" } }, 400);
+      return c.json({ error: { message: "Choose a valid start and end time for this check-in.", code: "BAD_REQUEST" } }, 400);
     }
 
     const event = await prisma.calendarEvent.create({
@@ -407,11 +407,11 @@ calendarRouter.patch(
       body.oneOnOneTemplateId !== undefined ? body.oneOnOneTemplateId : existing.oneOnOneTemplateId;
 
     if (nextIsOneOnOne && !isCalendarOwnerOrLeader(membership.role)) {
-      return c.json({ error: { message: "Only workspace owners and team leaders can plan 1:1 check-ins.", code: "FORBIDDEN" } }, 403);
+      return c.json({ error: { message: "Only workspace owners and team leaders can plan check-ins.", code: "FORBIDDEN" } }, 403);
     }
     if (nextIsOneOnOne) {
       if (!nextOneOnOneMemberUserId) {
-        return c.json({ error: { message: "Choose a team member for this 1:1.", code: "BAD_REQUEST" } }, 400);
+        return c.json({ error: { message: "Choose a team member for this check-in.", code: "BAD_REQUEST" } }, 400);
       }
       if (!teamMemberIds.has(nextOneOnOneMemberUserId)) {
         return c.json({ error: { message: "That team member was not found in this workspace.", code: "BAD_REQUEST" } }, 400);
@@ -433,7 +433,7 @@ calendarRouter.patch(
       }
     }
     if (nextIsOneOnOne && (!nextEnd || nextEnd <= nextStart)) {
-      return c.json({ error: { message: "Choose a valid start and end time for this 1:1.", code: "BAD_REQUEST" } }, 400);
+      return c.json({ error: { message: "Choose a valid start and end time for this check-in.", code: "BAD_REQUEST" } }, 400);
     }
 
     const mergedAssigneeIds = Array.from(

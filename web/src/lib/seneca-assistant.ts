@@ -106,7 +106,7 @@ export const SENECA_QUICK_PROMPTS: SenecaPrompt[] = [
   },
   {
     id: "prep-1on1",
-    label: "Prep a 1:1",
+    label: "Prep a check-in",
     hint: "Talking points before your next check-in",
   },
   {
@@ -404,7 +404,7 @@ export function buildSenecaResponse(
           action(
             "schedule_check_in",
             `Prep check-in with ${checkInGap.name}`,
-            "Open Team and start 1:1 prep",
+            "Open Team and start check-in prep",
           ),
         );
       }
@@ -490,13 +490,13 @@ export function buildSenecaResponse(
       return {
         message: snapshot.memberNeedingCheckIn
           ? `Prep focus: ${snapshot.memberNeedingCheckIn.name} — ${snapshot.memberNeedingCheckIn.days} days since your last check-in. Review open tasks, development goals, and recent wins before you meet.`
-          : `Pick a teammate and Seneca will surface open tasks, development goals, and recent activity before your next 1:1.`,
+          : `Pick a teammate and Seneca will surface open tasks, development goals, and recent activity before your next check-in.`,
         insights: snapshot.memberNeedingCheckIn
           ? [
               {
                 id: "prep-member",
                 label: `${snapshot.memberNeedingCheckIn.name} is due for a check-in`,
-                detail: `${snapshot.memberNeedingCheckIn.days} days since your last 1:1`,
+                detail: `${snapshot.memberNeedingCheckIn.days} days since your last check-in`,
               },
             ]
           : [],
@@ -508,11 +508,11 @@ export function buildSenecaResponse(
 
     case "notes-to-tasks":
       return {
-        message: `Paste rough notes from a huddle or 1:1 and I'll help you turn them into owned follow-ups. For now, create tasks with clear titles, assignees, and due dates so nothing slips after the conversation.`,
+        message: `Paste rough notes from a huddle or check-in and I'll help you turn them into owned follow-ups. For now, create tasks with clear titles, assignees, and due dates so nothing slips after the conversation.`,
         insights: [],
         actions: [
           action("create_follow_up_task", "Create follow-up task", "Add tasks from your latest notes"),
-          action("schedule_check_in", "Review in next 1:1", "Attach follow-ups to an upcoming check-in"),
+          action("schedule_check_in", "Review in next check-in", "Attach follow-ups to an upcoming check-in"),
         ],
       };
 
@@ -524,7 +524,7 @@ export function buildSenecaResponse(
         insights: [],
         actions: [
           action("create_recognition", "Create recognition post", "Post to the team activity feed"),
-          action("schedule_check_in", "Mention in 1:1", "Reinforce the win in your next check-in"),
+          action("schedule_check_in", "Mention in check-in", "Reinforce the win in your next check-in"),
         ],
       };
 

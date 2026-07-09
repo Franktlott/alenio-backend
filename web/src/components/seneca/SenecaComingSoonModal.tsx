@@ -57,7 +57,7 @@ export function SenecaComingSoonModal({ open, onClose }: Props) {
               Seneca — coming soon
             </h2>
             <p className="seneca-soon-sub">
-              Your manager coaching partner for check-ins, development plans, and better 1:1 conversations. We&apos;re
+              Your manager coaching partner for check-ins, development plans, and better coaching conversations. We&apos;re
               putting the finishing touches on it.
             </p>
             <button type="button" className="seneca-soon-dismiss" onClick={onClose}>

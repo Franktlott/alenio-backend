@@ -42,7 +42,7 @@ export function listUpcomingOneOnOnesForMember(
 
 export function oneOnOneEventTitle(memberName: string): string {
   const trimmed = memberName.trim();
-  return trimmed ? `1:1 — ${trimmed}` : "1:1 check-in";
+  return trimmed ? `Check-in — ${trimmed}` : "Check-in";
 }
 
 export function oneOnOneEndFromDuration(start: Date, durationMinutes: number): Date {

@@ -104,7 +104,7 @@ const useCases = [
   },
   {
     title: "For managers",
-    desc: "Seneca AI, 1:1 check-ins, and development plans — less follow-up, more coaching.",
+    desc: "Seneca AI, check-ins, and development plans — less follow-up, more coaching.",
     tone: "manager",
     image: "/usecase-for-managers.png",
   },
@@ -175,7 +175,7 @@ const compareRows: {
     alenio: true,
   },
   {
-    feature: "1:1 check-ins with templates & prep",
+    feature: "Check-ins with templates & prep",
     teams: "Separate tools",
     slack: false,
     groupme: false,

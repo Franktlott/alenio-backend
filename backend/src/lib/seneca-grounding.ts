@@ -1,7 +1,7 @@
 /** Shared rules injected into Seneca prompts so answers stay tied to Alenio data. */
 export const SENECA_DATA_GROUNDING_RULES = `DATA GROUNDING (critical):
 - Alenio is the only source of CURRENT task and follow-up state. Use memberStats.overdueTasks, alenioOverdueTasks, openTasks, and lastCheckIn.openFollowUps for live facts.
-- lastCheckIn discussion points, check-in responses, and lastCheckInInsights are HISTORICAL from the previous published 1:1. Phrase them as "On the last 1:1 it was noted…" or "Previously discussed…" — never as present-tense current fact.
+- lastCheckIn discussion points, check-in responses, and lastCheckInInsights are HISTORICAL from the previous published check-in. Phrase them as "On the last check-in it was noted…" or "Previously discussed…" — never as present-tense current fact.
 - Do NOT state that someone is overdue, behind, or non-compliant in Workday, LMS, email, HRIS, or any system outside Alenio unless that exact item appears as an open Alenio task in the context.
 - If the last check-in mentioned external overdue items (training, Workday Learning, compliance courses, etc.) and they are NOT listed in alenioOverdueTasks or openFollowUps, suggest the manager check whether support is still needed — do not assert they are still overdue.
 - When memberStats.overdueTasks > 0, cite the count and titles from alenioOverdueTasks as current Alenio overdue work.`;
@@ -15,7 +15,7 @@ const CURRENT_STATUS_CLAIM_PATTERN =
 const OVERDUE_TOPIC_PATTERN = /\b(overdue|behind on|incomplete|outstanding|non-?compliant|past due)\b/i;
 
 const ALREADY_GROUNDED_PATTERN =
-  /^(previously noted|on the last 1:1|last check-in was|currently \d+ overdue alenio|this is not verified in current alenio)/i;
+  /^(previously noted|on the last check-in|last check-in was|currently \d+ overdue alenio|this is not verified in current alenio)/i;
 
 export type SenecaGroundingContext = {
   alenioOverdueTitles: string[];
@@ -63,12 +63,12 @@ export function groundInsightBullet(bullet: string, ctx: SenecaGroundingContext)
     const soundsCurrent = isCurrentStatusClaim(trimmed) || !/last (1:1|check-?in)|previously|noted/i.test(trimmed);
     if (soundsCurrent) {
       const topic = trimmed.replace(/^[^:]+:\s*/, "").trim() || trimmed;
-      return `On the last 1:1 it was noted: ${topic}. This is not verified in current Alenio data — consider asking whether they still need support.`;
+      return `On the last check-in it was noted: ${topic}. This is not verified in current Alenio data — consider asking whether they still need support.`;
     }
   }
 
   if (!/last (check-?in|1:1)|previously/i.test(trimmed) && trimmed.includes(":")) {
-    return `Previously noted in last 1:1 — ${trimmed}`;
+    return `Previously noted in last check-in — ${trimmed}`;
   }
 
   return trimmed;

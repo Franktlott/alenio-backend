@@ -21,6 +21,11 @@ import { oneOnOnePublishedAt } from "../lib/one-on-one-meeting-dates";
 import { parseCalendarDueDate } from "../lib/recurrence-series";
 import { resolveTimeZone } from "../lib/timezone";
 import {
+  checkInEventTitle,
+  plannedCheckInTitlesForMember,
+  PLANNED_CHECK_IN_TITLE_PREFIXES,
+} from "../lib/check-in-event-title";
+import {
   hasArchivedMemberRecords,
   isActiveTeamMember,
 } from "../lib/workspace-member-departure";
@@ -454,8 +459,7 @@ async function createFollowUpTasks(
 }
 
 function plannedOneOnOneTitle(memberName: string): string {
-  const trimmed = memberName.trim();
-  return trimmed ? `1:1 — ${trimmed}` : "1:1 check-in";
+  return checkInEventTitle(memberName);
 }
 
 // GET /api/teams/:teamId/members/:memberUserId/planned-one-on-ones
@@ -469,7 +473,7 @@ oneOnOneMeetingsRouter.get("/:memberUserId/planned-one-on-ones", async (c) => {
     return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
   }
   if (!canManageOneOnOne(membership)) {
-    return c.json({ error: { message: "Only workspace owners and team leaders can view planned 1:1s.", code: "FORBIDDEN" } }, 403);
+    return c.json({ error: { message: "Only workspace owners and team leaders can view planned check-ins.", code: "FORBIDDEN" } }, 403);
   }
 
   const access = await resolveCheckInMemberAccess(membership, teamId, memberUserId, {});
@@ -484,7 +488,7 @@ oneOnOneMeetingsRouter.get("/:memberUserId/planned-one-on-ones", async (c) => {
       include: { user: { select: { name: true, email: true } } },
     });
     const memberLabel = member?.user.name?.trim() || member?.user.email?.split("@")[0] || "";
-    const legacyTitle = memberLabel ? plannedOneOnOneTitle(memberLabel) : null;
+    const legacyTitles = memberLabel ? plannedCheckInTitlesForMember(memberLabel) : [];
 
     const events = await prisma.calendarEvent.findMany({
       where: {
@@ -492,11 +496,14 @@ oneOnOneMeetingsRouter.get("/:memberUserId/planned-one-on-ones", async (c) => {
         createdById: user.id,
         OR: [
           { oneOnOneMemberUserId: memberUserId },
-          ...(legacyTitle ? [{ title: legacyTitle }] : []),
+          ...legacyTitles.map((title) => ({ title })),
         ],
         AND: [
           {
-            OR: [{ isOneOnOne: true }, { title: { startsWith: "1:1 —" } }],
+            OR: [
+              { isOneOnOne: true },
+              ...PLANNED_CHECK_IN_TITLE_PREFIXES.map((prefix) => ({ title: { startsWith: prefix } })),
+            ],
           },
         ],
       },

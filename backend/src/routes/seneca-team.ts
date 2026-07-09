@@ -154,7 +154,7 @@ function ruleBasedAskResponse(question: string, ctx: Awaited<ReturnType<typeof b
   return {
     message: `${ctx.teamName} looks steady from here — no overdue tasks flagged. Consider a proactive check-in or recognition post to keep momentum.`,
     suggestedActions: [
-      { title: "Schedule check-in", description: "Open Team and start 1:1 prep", action: "schedule_check_in" },
+      { title: "Schedule check-in", description: "Open Team and start check-in prep", action: "schedule_check_in" },
       { title: "Recognize a win", description: "Celebrate progress on the activity feed", action: "create_recognition" },
     ],
   };
@@ -198,8 +198,8 @@ senecaTeamRouter.post("/ask", zValidator("json", askBodySchema), async (c) => {
     const conversationPrompt = formatConversationForPrompt(body.messages, body.question);
     const schedulingRules = scheduleIntent
       ? `
-SCHEDULING A 1:1 (critical):
-- The manager wants to schedule or plan a 1:1, or is continuing a scheduling conversation.
+SCHEDULING A CHECK-IN (critical):
+- The manager wants to schedule or plan a check-in, or is continuing a scheduling conversation.
 - You CANNOT create calendar events yourself.
 - NEVER say you have already scheduled, booked, or added anything to the calendar unless the manager explicitly confirmed in this same conversation and you are only restating the pending plan for confirmation.
 - Use the full conversation to resolve member, date, time, and duration. Follow-up messages like "yes", "confirm", or "make it 2pm" refer to the plan under discussion.
@@ -297,7 +297,7 @@ senecaTeamRouter.post("/check-in-template", zValidator("json", checkInTemplateBo
 
   try {
     const draft = await senecaJson<unknown>(
-      `Create a manager-led 1:1 check-in template based on this request: "${body.brief}".
+      `Create a manager-led check-in template based on this request: "${body.brief}".
 Return JSON with:
 - title (string): concise template name
 - description (string|null): one-sentence summary

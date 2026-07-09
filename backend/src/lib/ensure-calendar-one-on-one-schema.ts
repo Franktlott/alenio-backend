@@ -28,6 +28,7 @@ export async function ensureCalendarOneOnOneSchema(prisma: PrismaClient): Promis
       UPDATE "CalendarEvent"
       SET "isOneOnOne" = true
       WHERE "title" LIKE '1:1 —%'
+         OR "title" LIKE 'Check-in —%'
         AND COALESCE("isOneOnOne", false) = false;
     `);
   } catch (err) {

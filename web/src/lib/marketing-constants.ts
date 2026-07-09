@@ -11,7 +11,7 @@ export const MARKETING_DEMO_HREF = `mailto:${LEGAL_CONTACT_EMAIL}?subject=${enco
 export const MARKETING_HERO_HEADLINE = "The operating system for";
 export const MARKETING_HERO_HEADLINE_ACCENT = "team execution.";
 export const MARKETING_HERO_SUBCOPY =
-  "Alenio unifies chat, tasks, and calendar — with optional Outlook sync, Seneca AI coaching, 1:1 check-ins, and development plans — so managers spend less time chasing updates and more time leading the floor.";
+  "Alenio unifies chat, tasks, and calendar — with optional Outlook sync, Seneca AI coaching, check-ins, and development plans — so managers spend less time chasing updates and more time leading the floor.";
 
 export const MARKETING_FINAL_CTA_HEADLINE = "Stop guessing. Start executing.";
 export const MARKETING_FINAL_CTA_SUBCOPY =
@@ -21,12 +21,12 @@ export const MARKETING_SENECA_SECTION = {
   eyebrow: "Seneca AI",
   title: "Your manager's AI chief of staff",
   subcopy:
-    "Seneca is built for frontline leaders — not generic help. It surfaces what needs attention, preps you for 1:1s, turns notes into tasks, and helps you recognize wins across your workspace.",
+    "Seneca is built for frontline leaders — not generic help. It surfaces what needs attention, preps you for check-ins, turns notes into tasks, and helps you recognize wins across your workspace.",
   insightExample:
     "You have 3 overdue tasks, 1 missed checklist, and Vera hasn't had a check-in in 42 days.",
   prompts: [
     "What needs my attention?",
-    "Prep a 1:1",
+    "Prep a check-in",
     "Turn notes into tasks",
     "Recognize a team win",
   ] as const,
@@ -37,7 +37,7 @@ export const MARKETING_SENECA_SECTION = {
     },
     {
       title: "Check-in prep & review",
-      desc: "Pre-meeting briefs, leadership review, and follow-up tasks inside every 1:1.",
+      desc: "Pre-meeting briefs, leadership review, and follow-up tasks inside every check-in.",
     },
     {
       title: "Development plan generation",
@@ -61,7 +61,7 @@ export const MARKETING_COACHING_PILLARS = [
     ],
   },
   {
-    title: "Structured 1:1 check-ins",
+    title: "Structured check-ins",
     icon: "checkin",
     points: [
       "Custom templates with leader prep",
@@ -121,7 +121,7 @@ export const ENTERPRISE_PAGE_PILLARS = [
     title: "Coach at every layer",
     points: [
       "Seneca AI for district and store managers",
-      "1:1 check-ins with prep, notes, and follow-ups",
+      "Check-ins with prep, notes, and follow-ups",
       "Development plans tied to member profiles",
     ],
   },

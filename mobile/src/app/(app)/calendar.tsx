@@ -370,7 +370,7 @@ export default function CalendarScreen() {
                 testID="header-plan-one-on-one-button"
               >
                 <UserRound size={14} color="white" />
-                <Text style={{ color: "white", fontSize: 12, fontWeight: "600" }}>Plan 1:1</Text>
+                <Text style={{ color: "white", fontSize: 12, fontWeight: "600" }}>Plan check-in</Text>
               </Pressable>
             ) : null}
             {activeTeamId && !isDemo ? (
@@ -798,7 +798,7 @@ export default function CalendarScreen() {
                           <View style={{ backgroundColor: event.color + "20", paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 }}>
                             <Text style={{ fontSize: 10, fontWeight: "600", color: event.color }}>
                               {isOneOnOneEvent
-                                ? "1:1"
+                                ? "Check-in"
                                 : event.endDate && !isSameDay(new Date(event.startDate), new Date(event.endDate))
                                   ? `${new Date(event.startDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${new Date(event.endDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
                                   : "Event"}

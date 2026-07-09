@@ -129,7 +129,7 @@ export const SENECA_QUICK_PROMPTS: SenecaPrompt[] = [
   },
   {
     id: "prep-1on1",
-    label: "Prep a 1:1",
+    label: "Prep a check-in",
     hint: "Talking points before your next check-in",
   },
   {
@@ -406,7 +406,7 @@ export function buildSenecaResponse(
           action(
             "schedule_check_in",
             `Prep check-in with ${checkInGap.name}`,
-            "Open Team and start 1:1 prep",
+            "Open Team and start check-in prep",
             undefined,
             checkInGap.userId,
           ),
@@ -498,13 +498,13 @@ export function buildSenecaResponse(
       return {
         message: snapshot.memberNeedingCheckIn
           ? `Prep focus: ${snapshot.memberNeedingCheckIn.name} — ${snapshot.memberNeedingCheckIn.days} days since your last check-in. Review open tasks, development goals, and recent wins before you meet.`
-          : `Pick a teammate and Seneca will surface open tasks, development goals, and recent activity before your next 1:1.`,
+          : `Pick a teammate and Seneca will surface open tasks, development goals, and recent activity before your next check-in.`,
         insights: snapshot.memberNeedingCheckIn
           ? [
               {
                 id: "prep-member",
                 label: `${snapshot.memberNeedingCheckIn.name} is due for a check-in`,
-                detail: `${snapshot.memberNeedingCheckIn.days} days since your last 1:1`,
+                detail: `${snapshot.memberNeedingCheckIn.days} days since your last check-in`,
               },
             ]
           : [],
@@ -528,7 +528,7 @@ export function buildSenecaResponse(
           action("create_follow_up_task", "Create follow-up task", "Add tasks from your latest notes"),
           action(
             "schedule_check_in",
-            "Review in next 1:1",
+            "Review in next check-in",
             "Attach follow-ups to an upcoming check-in",
             undefined,
             snapshot.memberNeedingCheckIn?.userId,
@@ -546,7 +546,7 @@ export function buildSenecaResponse(
           action("create_recognition", "Create recognition post", "Post to the team activity feed"),
           action(
             "schedule_check_in",
-            "Mention in 1:1",
+            "Mention in check-in",
             "Reinforce the win in your next check-in",
             undefined,
             snapshot.memberNeedingCheckIn?.userId,

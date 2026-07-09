@@ -422,7 +422,7 @@ export function OneOnOneHistoryTab({
     const templateTitle = event.oneOnOneTemplateId
       ? templateTitleById.get(event.oneOnOneTemplateId) ?? null
       : null;
-    const title = templateTitle ?? "1:1";
+    const title = templateTitle ?? "Check-in";
     setMenuMeetingId(null);
     Alert.alert(title, formatScheduledOneOnOneWhen(event), [
       {
@@ -452,7 +452,7 @@ export function OneOnOneHistoryTab({
     const templateTitle = event.oneOnOneTemplateId
       ? templateTitleById.get(event.oneOnOneTemplateId) ?? null
       : null;
-    const title = templateTitle ?? "1:1";
+    const title = templateTitle ?? "Check-in";
     return (
       <Pressable
         onPress={() => void startPlannedOneOnOne(event)}
@@ -1192,7 +1192,7 @@ export function OneOnOneHistoryTab({
             testID="plan-one-on-one-button"
           >
             <CalendarCheck size={16} color="#475569" />
-            <Text style={{ fontSize: 13, fontWeight: "600", color: "#334155" }}>Plan 1:1</Text>
+            <Text style={{ fontSize: 13, fontWeight: "600", color: "#334155" }}>Plan check-in</Text>
           </Pressable>
           <Pressable
             onPress={() => void startCreate()}
@@ -1231,7 +1231,7 @@ export function OneOnOneHistoryTab({
 
       {plannedLoadError ? (
         <Text style={{ fontSize: 13, color: "#DC2626", lineHeight: 18 }}>
-          Could not load upcoming 1:1s
+          Could not load upcoming check-ins
           {plannedLoadErrorDetail instanceof Error ? `: ${plannedLoadErrorDetail.message}` : "."}
         </Text>
       ) : null}

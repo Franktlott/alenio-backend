@@ -70,8 +70,8 @@ export function formatTaskOneOnOneSource(task: ApiTask, options?: SourceOptions)
       }) ?? meeting.createdAt;
     const datePart = dateIso ? formatSourceDate(dateIso) : "";
     return datePart
-      ? `Generated from 1:1 with ${name} · ${datePart}`
-      : `Generated from 1:1 with ${name}`;
+      ? `Generated from check-in with ${name} · ${datePart}`
+      : `Generated from check-in with ${name}`;
   }
 
   const feedback = parseFeedbackTaskDescription(task.description);
@@ -79,11 +79,11 @@ export function formatTaskOneOnOneSource(task: ApiTask, options?: SourceOptions)
     const managerId = task.creatorId ?? task.creator?.id;
     if (!managerId) {
       const name = memberLabel(feedback.memberUserId, memberNameByUserId);
-      return `Generated from 1:1 with ${name}`;
+      return `Generated from check-in with ${name}`;
     }
     const counterpartyId = checkInCounterpartyId(feedback.memberUserId, managerId, viewerUserId);
     const name = counterpartyName(counterpartyId, managerId, task.creator?.name, memberNameByUserId);
-    return `Generated from 1:1 with ${name}`;
+    return `Generated from check-in with ${name}`;
   }
 
   return null;

@@ -4,7 +4,7 @@ export const FREE_INCLUDED = ["Activity feed", "Team chat", "Team members"] as c
 export const FREE_LOCKED = [
   "Tasks & action items",
   "Seneca AI coaching",
-  "1:1 check-ins & development plans",
+  "Check-ins & development plans",
   "Metrics & dashboards",
   "Team calendar",
   "Performance insights",
@@ -12,7 +12,7 @@ export const FREE_LOCKED = [
 export const TEAM_FEATURES = [
   "Tasks & action items",
   "Seneca AI coaching assistant",
-  "1:1 check-ins with Seneca prep",
+  "Check-ins with Seneca prep",
   "Development plans & Seneca goal generation",
   "Team calendar",
   "Outlook calendar sync (private, read-only)",
@@ -33,7 +33,7 @@ export const BILLING_COMPARE_FEATURES = [
   { name: "Team members", free: true },
   { name: "Tasks & action items", free: false },
   { name: "Seneca AI coaching", free: false },
-  { name: "1:1 check-ins & development plans", free: false },
+  { name: "Check-ins & development plans", free: false },
   { name: "Team calendar", free: false },
   { name: "Outlook calendar sync", free: false },
   { name: "Metrics & dashboards", free: false },

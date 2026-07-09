@@ -254,7 +254,7 @@ Use lastCheckIn and lastCheckInInsights in the context JSON. Focus on what was d
 ${SENECA_DATA_GROUNDING_RULES}
 
 Return JSON with keys:
-- lastCheckInInsights (string[]): 2-6 bullets for the MANAGER summarizing the previous check-in (what was discussed, wins, blockers, commitments, open follow-ups). Write about the associate in third person. Never copy associate-facing script or upcoming-meeting instructions. For anything not in alenioOverdueTasks or openFollowUps, use "on the last 1:1 it was noted" language — never present-tense overdue claims about external systems (Workday, LMS, etc.).
+- lastCheckInInsights (string[]): 2-6 bullets for the MANAGER summarizing the previous check-in (what was discussed, wins, blockers, commitments, open follow-ups). Write about the associate in third person. Never copy associate-facing script or upcoming-meeting instructions. For anything not in alenioOverdueTasks or openFollowUps, use "on the last check-in it was noted" language — never present-tense overdue claims about external systems (Workday, LMS, etc.).
 - openDevelopmentGoals (string[]): skill names
 - openFollowUpTasks (string[]): task titles still open in Alenio
 - recentWins (string[])
@@ -376,7 +376,7 @@ senecaRouter.post("/:memberUserId/seneca/summary", zValidator("json", summaryBod
 
   try {
     const summary = await senecaJson<SenecaSummaryAi>(
-      `Generate a post-check-in summary for the manager after completing a 1:1 with ${body.memberName ?? raw.memberName}.
+      `Generate a post-check-in summary for the manager after completing a check-in with ${body.memberName ?? raw.memberName}.
 Return JSON with:
 - conversationSummary (string)
 - winsDiscussed (string[])

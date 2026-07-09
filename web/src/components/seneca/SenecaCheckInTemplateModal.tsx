@@ -199,7 +199,7 @@ export function SenecaCheckInTemplateModal({ open, teamId, onClose, onSaved }: P
               id="seneca-template-brief"
               className="auth-input seneca-dev-plan-textarea seneca-goal-prompt"
               rows={3}
-              placeholder="e.g. Weekly 1:1 for retail associates — wins, blockers, and focus for next week"
+              placeholder="e.g. Weekly check-in for retail associates — wins, blockers, and focus for next week"
               value={brief}
               onChange={(e) => setBrief(e.target.value)}
               autoFocus

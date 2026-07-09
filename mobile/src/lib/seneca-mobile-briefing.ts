@@ -81,7 +81,7 @@ export function buildMobilePriorityInsights(snapshot: WorkspaceSnapshot): Mobile
       kind: "coaching",
       label: "Coaching opportunity",
       message: `${snapshot.membersWithoutRecentCheckIn} teammates are due for a check-in.`,
-      detail: "Several 1:1s are overdue across the team.",
+      detail: "Several check-ins are overdue across the team.",
       actionLabel: "Prepare",
       chatPrompt:
         "Several teammates haven't had a recent check-in. Who should I prioritize and how should I prepare?",
