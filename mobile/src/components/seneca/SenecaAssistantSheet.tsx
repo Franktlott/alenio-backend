@@ -432,12 +432,6 @@ export function SenecaAssistantSheet({ open, onClose, teamId: teamIdProp }: Prop
       ),
     );
   };
-    setChatMessages((prev) =>
-      prev.map((message) =>
-        message.id === messageId ? { ...message, planProposal: null } : message,
-      ),
-    );
-  };
 
   const onSenecaAction = (action: SenecaActionCard) => {
     if (!activeTeamId) return;
