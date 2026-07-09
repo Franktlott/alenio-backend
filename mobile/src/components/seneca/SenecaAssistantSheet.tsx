@@ -43,9 +43,8 @@ import {
   type MobilePriorityInsight,
 } from "@/lib/seneca-mobile-briefing";
 import { fetchSenecaAsk, type SenecaAskActionId, type SenecaChatTurn, type SenecaPlanOneOnOneProposal } from "@/lib/seneca-api";
-import { planOneOnOneHref } from "@/lib/plan-one-on-one";
+import { SenecaPlanCheckInCard } from "./SenecaPlanCheckInCard";
 import { quickActionNavigate, senecaActionNavigate } from "@/lib/seneca-navigation";
-import { router } from "expo-router";
 import { useTeamStore } from "@/lib/state/team-store";
 import { ME_QUERY_KEY, fetchMeUser } from "@/lib/auth/me-query";
 import { SafeKeyboardAvoidingView } from "@/lib/safe-keyboard-controller";
@@ -395,6 +394,16 @@ export function SenecaAssistantSheet({ open, onClose, teamId: teamIdProp }: Prop
     setChatError(null);
   };
 
+  const onPlanCheckInSaved = (messageId: string, summary: string) => {
+    setChatMessages((prev) =>
+      prev.map((message) =>
+        message.id === messageId
+          ? { ...message, text: summary, planProposal: null }
+          : message,
+      ),
+    );
+  };
+
   const dismissPlanProposal = (messageId: string) => {
     setChatMessages((prev) =>
       prev.map((message) =>
@@ -419,25 +428,6 @@ export function SenecaAssistantSheet({ open, onClose, teamId: teamIdProp }: Prop
     setMoreOpen(false);
     handleClose();
     quickActionNavigate(kind, activeTeamId);
-  };
-
-  const openPlanProposal = (proposal: SenecaPlanOneOnOneProposal) => {
-    if (!activeTeamId) return;
-    handleClose();
-    router.push(
-      planOneOnOneHref(activeTeamId, {
-        memberUserId: proposal.memberUserId,
-        startDate: proposal.startDate,
-      }),
-    );
-  };
-
-  const onConfirmPlanProposal = (proposal: SenecaPlanOneOnOneProposal) => {
-    openPlanProposal(proposal);
-  };
-
-  const onEditPlanProposal = (proposal: SenecaPlanOneOnOneProposal) => {
-    openPlanProposal(proposal);
   };
 
   return (
@@ -597,49 +587,13 @@ export function SenecaAssistantSheet({ open, onClose, teamId: teamIdProp }: Prop
                           </View>
                           <Text style={styles.senecaMessage}>{chatMessage.text}</Text>
 
-                          {chatMessage.planProposal ? (
-                            <View style={styles.planConfirmCard} testID="seneca-plan-one-on-one-confirm">
-                              <Text style={styles.planConfirmTitle}>Check-in details</Text>
-                              <View style={styles.planConfirmRow}>
-                                <Text style={styles.planConfirmLabel}>With</Text>
-                                <Text style={styles.planConfirmValue}>{chatMessage.planProposal.memberName}</Text>
-                              </View>
-                              <View style={styles.planConfirmRow}>
-                                <Text style={styles.planConfirmLabel}>When</Text>
-                                <Text style={styles.planConfirmValue}>
-                                  {chatMessage.planProposal.dateLabel} · {chatMessage.planProposal.timeLabel}
-                                </Text>
-                              </View>
-                              <View style={styles.planConfirmRow}>
-                                <Text style={styles.planConfirmLabel}>Duration</Text>
-                                <Text style={styles.planConfirmValue}>
-                                  {chatMessage.planProposal.durationMinutes} min
-                                </Text>
-                              </View>
-                              <View style={styles.planConfirmActions}>
-                                <Pressable
-                                  onPress={() => onConfirmPlanProposal(chatMessage.planProposal!)}
-                                  style={styles.planConfirmPrimary}
-                                  testID="seneca-plan-one-on-one-confirm-button"
-                                >
-                                  <Text style={styles.planConfirmPrimaryText}>Confirm & plan</Text>
-                                </Pressable>
-                                <Pressable
-                                  onPress={() => onEditPlanProposal(chatMessage.planProposal!)}
-                                  style={styles.planConfirmSecondary}
-                                  testID="seneca-plan-one-on-one-edit-button"
-                                >
-                                  <Text style={styles.planConfirmSecondaryText}>Review & edit</Text>
-                                </Pressable>
-                                <Pressable
-                                  onPress={() => dismissPlanProposal(chatMessage.id)}
-                                  style={styles.planConfirmGhost}
-                                  testID="seneca-plan-one-on-one-cancel-button"
-                                >
-                                  <Text style={styles.planConfirmGhostText}>Not now</Text>
-                                </Pressable>
-                              </View>
-                            </View>
+                          {chatMessage.planProposal && activeTeamId ? (
+                            <SenecaPlanCheckInCard
+                              teamId={activeTeamId}
+                              proposal={chatMessage.planProposal}
+                              onSaved={(summary) => onPlanCheckInSaved(chatMessage.id, summary)}
+                              onDismiss={() => dismissPlanProposal(chatMessage.id)}
+                            />
                           ) : null}
 
                           {chatMessage.insights && chatMessage.insights.length > 0 ? (
@@ -1080,80 +1034,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     color: "#64748B",
-  },
-  planConfirmCard: {
-    marginTop: 14,
-    backgroundColor: "#F8FAFC",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    padding: 14,
-    gap: 8,
-  },
-  planConfirmTitle: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#64748B",
-    textTransform: "uppercase",
-    letterSpacing: 0.6,
-    marginBottom: 2,
-  },
-  planConfirmRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 10,
-  },
-  planConfirmLabel: {
-    width: 68,
-    fontSize: 13,
-    color: "#94A3B8",
-    fontWeight: "500",
-  },
-  planConfirmValue: {
-    flex: 1,
-    fontSize: 13,
-    color: "#0F172A",
-    fontWeight: "600",
-  },
-  planConfirmActions: {
-    gap: 8,
-    marginTop: 6,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: "#E2E8F0",
-  },
-  planConfirmPrimary: {
-    backgroundColor: "#4361EE",
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: "center",
-  },
-  planConfirmPrimaryText: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#FFFFFF",
-  },
-  planConfirmSecondary: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-  },
-  planConfirmSecondaryText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#334155",
-  },
-  planConfirmGhost: {
-    paddingVertical: 8,
-    alignItems: "center",
-  },
-  planConfirmGhostText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#94A3B8",
   },
   nextSteps: {
     backgroundColor: "#FFFFFF",
