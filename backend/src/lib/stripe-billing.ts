@@ -30,9 +30,6 @@ export function isStripePortalConfigured(): boolean {
   return !!(getStripeClient() && billingReturnBaseUrl());
 }
 
-/**
- * Persist team subscription from a Stripe Subscription object (webhooks + checkout completion).
- */
 function subscriptionCurrentPeriodEnd(subscription: Stripe.Subscription): Date | null {
   const data = subscription.items?.data;
   if (data?.length) {
@@ -45,6 +42,19 @@ function subscriptionCurrentPeriodEnd(subscription: Stripe.Subscription): Date |
   return null;
 }
 
+/** Active Stripe sub scheduled to end (portal cancel-at-period-end or cancel_at timestamp). */
+export function isStripeSubscriptionCanceling(subscription: Stripe.Subscription): boolean {
+  if (subscription.cancel_at_period_end === true) return true;
+  const cancelAt = subscription.cancel_at;
+  if (cancelAt != null && ["active", "trialing"].includes(subscription.status)) {
+    return cancelAt * 1000 > Date.now();
+  }
+  return false;
+}
+
+/**
+ * Persist team subscription from a Stripe Subscription object (webhooks + checkout completion).
+ */
 export async function applySubscriptionFromStripeSubscription(
   teamId: string,
   customerId: string | null,
@@ -58,10 +68,12 @@ export async function applySubscriptionFromStripeSubscription(
   let plan = "free";
   let status = "canceled";
   let subId: string | null = subscription.id;
+  let cancelAtPeriodEnd = false;
 
   if (stripeStatus === "active" || stripeStatus === "trialing") {
     plan = "team";
     status = "active";
+    cancelAtPeriodEnd = isStripeSubscriptionCanceling(subscription);
   } else if (stripeStatus === "past_due") {
     plan = "team";
     status = "past_due";
@@ -79,16 +91,26 @@ export async function applySubscriptionFromStripeSubscription(
     subId = null;
   }
 
-  await prisma.teamSubscription.update({
-    where: { teamId },
-    data: {
-      ...(customerId ? { stripeCustomerId: customerId } : {}),
-      stripeSubscriptionId: subId,
-      plan,
-      status,
-      currentPeriodEnd,
-    },
-  });
+  const baseData = {
+    ...(customerId ? { stripeCustomerId: customerId } : {}),
+    stripeSubscriptionId: subId,
+    plan,
+    status,
+    currentPeriodEnd,
+  };
+
+  try {
+    await prisma.teamSubscription.update({
+      where: { teamId },
+      data: { ...baseData, cancelAtPeriodEnd },
+    });
+  } catch (err) {
+    console.warn("[stripe] cancelAtPeriodEnd column unavailable, persisting without it:", err);
+    await prisma.teamSubscription.update({
+      where: { teamId },
+      data: baseData,
+    });
+  }
 }
 
 export function stripeCustomerIdOfSubscription(subscription: Stripe.Subscription): string | null {
@@ -247,8 +269,26 @@ export async function reconcileTeamStripeSubscription(teamId: string): Promise<{
   };
 }
 
-const subscriptionReadReconcileCooldownMs = 60_000;
+const subscriptionReadReconcileCooldownMs = 10_000;
 const lastSubscriptionReadReconcileAt = new Map<string, number>();
+
+export async function syncCancelAtPeriodEndFromStripe(teamId: string): Promise<boolean> {
+  const row = await getTeamSubscription(teamId);
+  const subId = row.stripeSubscriptionId?.trim();
+  const stripe = getStripeClient();
+  if (!subId || !stripe) return row.cancelAtPeriodEnd === true;
+
+  try {
+    const subscription = await stripe.subscriptions.retrieve(subId, { expand: ["items.data"] });
+    const customerId = stripeCustomerIdOfSubscription(subscription);
+    await applySubscriptionFromStripeSubscription(teamId, customerId, subscription);
+    return isStripeSubscriptionCanceling(subscription);
+  } catch (e) {
+    console.warn("[stripe] syncCancelAtPeriodEndFromStripe failed", teamId, e);
+    const refreshed = await getTeamSubscription(teamId);
+    return refreshed.cancelAtPeriodEnd === true;
+  }
+}
 
 /**
  * Best-effort pull from Stripe when the app reads subscription (Plan page, mobile layout).

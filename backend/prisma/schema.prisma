@@ -205,6 +205,8 @@ model TeamSubscription {
   stripeCustomerId     String?
   stripeSubscriptionId String?
   currentPeriodEnd     DateTime?
+  /** Stripe cancel_at_period_end — team plan stays active until currentPeriodEnd. */
+  cancelAtPeriodEnd    Boolean   @default(false)
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
 }

@@ -67,12 +67,30 @@ subscriptionRouter.get("/", async (c) => {
     return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
   }
 
-  const { reconcileStripeForSubscriptionRead } = await import("../lib/stripe-billing");
-  await reconcileStripeForSubscriptionRead(teamId);
+  const { reconcileStripeForSubscriptionRead, syncCancelAtPeriodEndFromStripe } = await import(
+    "../lib/stripe-billing"
+  );
+  try {
+    await reconcileStripeForSubscriptionRead(teamId);
+  } catch (err) {
+    console.warn("[subscription] Stripe reconcile skipped:", err);
+  }
 
-  const subscription = await getTeamSubscription(teamId);
+  let subscription = await getTeamSubscription(teamId);
+  const cancelAtPeriodEnd = await syncCancelAtPeriodEndFromStripe(teamId);
+  subscription = await getTeamSubscription(teamId);
   const billingProvider = billingProviderFromSubscription(subscription);
-  return c.json({ data: { ...subscription, billingProvider } });
+  return c.json({
+    data: {
+      plan: subscription.plan,
+      status: subscription.status,
+      currentPeriodEnd: subscription.currentPeriodEnd,
+      cancelAtPeriodEnd,
+      billingProvider,
+      stripeCustomerId: subscription.stripeCustomerId,
+      stripeSubscriptionId: subscription.stripeSubscriptionId,
+    },
+  });
 });
 
 export const PLAN_PRICING: Record<string, { price: number; memberLimit: number }> = {

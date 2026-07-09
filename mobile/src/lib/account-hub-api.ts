@@ -10,10 +10,12 @@ export type WorkspaceBillingRow = {
   image: string | null;
   role: string;
   canManageBilling: boolean;
+  memberCount: number;
   subscription: {
     plan: string;
     status: string;
     currentPeriodEnd: string | null;
+    cancelAtPeriodEnd?: boolean;
     billingProvider: BillingProvider;
     hasStripeCustomer: boolean;
     hasStripeSubscription: boolean;
@@ -29,12 +31,14 @@ type TeamListRow = {
   name: string;
   image: string | null;
   role: string;
+  _count?: { members: number };
 };
 
 type SubscriptionRow = {
   plan: string;
   status: string;
   currentPeriodEnd: string | null;
+  cancelAtPeriodEnd?: boolean;
   billingProvider?: BillingProvider;
 };
 
@@ -47,15 +51,56 @@ export function rowFromTeamAndSubscription(team: TeamListRow, sub: SubscriptionR
     image: team.image,
     role: team.role,
     canManageBilling: team.role === "owner",
+    memberCount: team._count?.members ?? 0,
     subscription: {
       plan: sub.plan,
       status: sub.status,
       currentPeriodEnd: sub.currentPeriodEnd,
+      cancelAtPeriodEnd: sub.cancelAtPeriodEnd === true,
       billingProvider,
       hasStripeCustomer: isStripe,
       hasStripeSubscription: isStripe && (sub.plan === "team" || sub.plan === "pro"),
     },
   };
+}
+
+export type WorkspaceSubscriptionTone = "free" | "active" | "canceling" | "canceled" | "issue";
+
+export function workspaceSubscriptionTone(sub: {
+  plan: string;
+  status: string;
+  cancelAtPeriodEnd?: boolean;
+}): WorkspaceSubscriptionTone {
+  const tier = tierFromPlan(sub.plan);
+  if (tier !== "team") return "free";
+  const status = (sub.status ?? "active").trim().toLowerCase();
+  if (status === "canceled") return "canceled";
+  if (status === "past_due") return "issue";
+  if (sub.cancelAtPeriodEnd) return "canceling";
+  return "active";
+}
+
+export function workspaceSubscriptionLine(
+  sub: {
+    plan: string;
+    status: string;
+    currentPeriodEnd: string | null;
+    cancelAtPeriodEnd?: boolean;
+  },
+  formatDate: (iso: string | null) => string,
+): string {
+  const tier = tierFromPlan(sub.plan);
+  if (tier !== "team") return "Not subscribed";
+  const status = (sub.status ?? "active").trim().toLowerCase();
+  if (status === "canceled") return "Subscription ended";
+  if (status === "past_due") return "Payment issue";
+  if (sub.cancelAtPeriodEnd && sub.currentPeriodEnd) {
+    return `Cancels ${formatDate(sub.currentPeriodEnd)}`;
+  }
+  if (sub.currentPeriodEnd) {
+    return `Renews ${formatDate(sub.currentPeriodEnd)}`;
+  }
+  return "Team plan active";
 }
 
 /** Load workplaces via existing mobile APIs (same as profile / tabs). */
@@ -116,6 +161,35 @@ export function postBillingCheckout(teamId: string) {
 
 export function postBillingPortal(teamId: string) {
   return postBillingSession(teamId, "portal");
+}
+
+/** Open Stripe checkout/portal for a workspace, or fall back to the web billing deep link. */
+export async function openWorkspaceBilling(
+  workspace: WorkspaceBillingRow,
+): Promise<{ url: string; openedWebFallback?: boolean }> {
+  const tier = tierFromPlan(workspace.subscription.plan);
+  const hasStripeBilling =
+    workspace.subscription.billingProvider === "stripe" ||
+    workspace.subscription.hasStripeSubscription ||
+    workspace.subscription.hasStripeCustomer;
+
+  if (!workspace.canManageBilling) {
+    const url = webBillingUrlForTeam(workspace.id);
+    await Linking.openURL(url);
+    return { url, openedWebFallback: true };
+  }
+
+  if (tier === "team" && hasStripeBilling) {
+    return postBillingPortal(workspace.id);
+  }
+
+  if (tier === "free") {
+    return postBillingCheckout(workspace.id);
+  }
+
+  const url = webBillingUrlForTeam(workspace.id);
+  await Linking.openURL(url);
+  return { url, openedWebFallback: true };
 }
 
 export function tierFromPlan(plan: string | null | undefined): "free" | "team" {

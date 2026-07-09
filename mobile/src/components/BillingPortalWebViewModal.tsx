@@ -16,6 +16,7 @@ import { isBillingWebViewUrl, billingFlowCompleteFromUrl } from "@/lib/subscript
 type Props = {
   visible: boolean;
   url: string | null;
+  workspaceName?: string | null;
   onClose: () => void;
   onFlowComplete?: (result: "success" | "cancel") => void;
 };
@@ -23,7 +24,13 @@ type Props = {
 /**
  * Secure billing portal: approved HTTPS billing hosts only; no arbitrary URLs.
  */
-export function BillingPortalWebViewModal({ visible, url, onClose, onFlowComplete }: Props) {
+export function BillingPortalWebViewModal({
+  visible,
+  url,
+  workspaceName,
+  onClose,
+  onFlowComplete,
+}: Props) {
   const scheme = useColorScheme();
   const isDark = scheme === "dark";
   const [loading, setLoading] = useState(true);
@@ -50,11 +57,24 @@ export function BillingPortalWebViewModal({ visible, url, onClose, onFlowComplet
 
   if (!open) return null;
 
+  const workplaceLabel = workspaceName?.trim() || null;
+
   return (
     <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <SafeAreaView style={[styles.safe, { backgroundColor: isDark ? "#0f172a" : "#fff" }]} edges={["top"]}>
         <View style={[styles.header, { borderBottomColor: isDark ? "#334155" : "#e2e8f0" }]}>
-          <Text style={[styles.title, { color: isDark ? "#f8fafc" : "#0f172a" }]}>Manage subscription</Text>
+          <View style={styles.headerText}>
+            <Text style={[styles.title, { color: isDark ? "#f8fafc" : "#0f172a" }]}>Manage subscription</Text>
+            {workplaceLabel ? (
+              <Text
+                style={[styles.subtitle, { color: isDark ? "#94a3b8" : "#64748b" }]}
+                numberOfLines={2}
+                testID="billing-portal-workspace-name"
+              >
+                {workplaceLabel}
+              </Text>
+            ) : null}
+          </View>
           <TouchableOpacity
             onPress={onClose}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
@@ -67,7 +87,9 @@ export function BillingPortalWebViewModal({ visible, url, onClose, onFlowComplet
         {loading ? (
           <View style={styles.loader} pointerEvents="none">
             <ActivityIndicator size="large" color="#4361EE" />
-            <Text style={[styles.loaderText, { color: isDark ? "#94a3b8" : "#64748b" }]}>Loading secure billing…</Text>
+            <Text style={[styles.loaderText, { color: isDark ? "#94a3b8" : "#64748b" }]}>
+              {workplaceLabel ? `Loading billing for ${workplaceLabel}…` : "Loading secure billing…"}
+            </Text>
           </View>
         ) : null}
         <WebView
@@ -97,8 +119,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
+    gap: 12,
   },
+  headerText: { flex: 1, minWidth: 0 },
   title: { fontSize: 17, fontWeight: "700" },
+  subtitle: { fontSize: 13, fontWeight: "600", marginTop: 2 },
   web: { flex: 1 },
   loader: {
     ...StyleSheet.absoluteFillObject,

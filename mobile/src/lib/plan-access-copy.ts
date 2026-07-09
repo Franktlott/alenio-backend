@@ -16,10 +16,10 @@ export function hasWorkspaceTaskAccess(
 
 export const PLAN_SCREEN_TITLE = "Workplace Access";
 
-export const ACCOUNT_HUB_TITLE = "Account & Billing";
+export const ACCOUNT_HUB_TITLE = "Plan & Access";
 
 export const ACCOUNT_HUB_SUBTITLE =
-  "Manage subscriptions and billing for all your workplaces in one place. Select a workplace to view its plan or make changes.";
+  "View workplace plans, access status, and manage your account settings.";
 
 export function workplaceAccessSubtitle(isOwner: boolean): string {
   if (isOwner) {

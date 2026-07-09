@@ -37,6 +37,7 @@ import * as ImagePicker from "expo-image-picker";
 import { useTeamStore } from "@/lib/state/team-store";
 import { useSwitchWorkspace } from "@/hooks/use-switch-workspace";
 import { toast } from "burnt";
+import { ACCOUNT_HUB_TITLE } from "@/lib/plan-access-copy";
 import type { Team } from "@/lib/types";
 import { SafeKeyboardAvoidingView } from "@/lib/safe-keyboard-controller";
 import {
@@ -119,7 +120,6 @@ export default function ProfileScreen() {
   const [editTeamImage, setEditTeamImage] = useState<string | null>(null);
   const [uploadingTeamImage, setUploadingTeamImage] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
-  const [deleteTeamPhrase, setDeleteTeamPhrase] = useState("");
   const [deleteTeamPassword, setDeleteTeamPassword] = useState("");
   const [leavingTeam, setLeavingTeam] = useState<Team | null>(null);
   const [timezoneModalOpen, setTimezoneModalOpen] = useState(false);
@@ -338,7 +338,6 @@ export default function ProfileScreen() {
     setEditTeamName(team.name);
     setEditTeamImage(team.image ?? null);
     setConfirmingDelete(false);
-    setDeleteTeamPhrase("");
     setDeleteTeamPassword("");
   };
 
@@ -347,7 +346,6 @@ export default function ProfileScreen() {
     setEditTeamName("");
     setEditTeamImage(null);
     setConfirmingDelete(false);
-    setDeleteTeamPhrase("");
     setDeleteTeamPassword("");
   };
 
@@ -381,16 +379,11 @@ export default function ProfileScreen() {
     updateTeamMutation.mutate({ id: editingTeam.id, data: { name: editTeamName.trim(), image: editTeamImage } });
   };
 
-  const deleteTeamConfirmationReady =
-    deleteTeamPhrase.trim() === "DELETE" || deleteTeamPassword.trim().length > 0;
+  const deleteTeamConfirmationReady = deleteTeamPassword.trim().length > 0;
 
   const handleDeleteTeam = () => {
     if (!editingTeam || !deleteTeamConfirmationReady) return;
-    const body =
-      deleteTeamPhrase.trim() === "DELETE"
-        ? { confirmPhrase: "DELETE" as const }
-        : { password: deleteTeamPassword };
-    deleteTeamMutation.mutate({ id: editingTeam.id, body });
+    deleteTeamMutation.mutate({ id: editingTeam.id, body: { password: deleteTeamPassword } });
   };
 
   const handleSignOut = async () => {
@@ -735,7 +728,7 @@ export default function ProfileScreen() {
             <ProfileCard>
               <ProfileMenuRow
                 icon={Crown}
-                title="Account & Billing"
+                title={ACCOUNT_HUB_TITLE}
                 subtitle={
                   isOwnerOfAnyTeam
                     ? ownerTeamSubscription?.plan === "team"
@@ -1050,7 +1043,6 @@ export default function ProfileScreen() {
                       <TouchableOpacity
                         onPress={() => {
                           setConfirmingDelete(false);
-                          setDeleteTeamPhrase("");
                           setDeleteTeamPassword("");
                         }}
                         testID="back-from-delete"
@@ -1064,23 +1056,7 @@ export default function ProfileScreen() {
                       {" "}and all its tasks and messages. Members will keep their accounts.
                     </Text>
                     <Text className="text-sm text-slate-500 dark:text-slate-400 mb-3">
-                      Confirm with either option below.
-                    </Text>
-                    <Text className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
-                      Type <Text className="text-slate-800 dark:text-slate-200">DELETE</Text>
-                    </Text>
-                    <TextInput
-                      className="bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white rounded-xl px-4 py-3 text-base mb-3 border border-slate-200 dark:border-slate-600"
-                      value={deleteTeamPhrase}
-                      onChangeText={setDeleteTeamPhrase}
-                      placeholder="DELETE"
-                      placeholderTextColor="#94A3B8"
-                      autoCapitalize="characters"
-                      autoCorrect={false}
-                      testID="delete-confirm-phrase-input"
-                    />
-                    <Text className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2 text-center">
-                      or
+                      Enter your account password to confirm.
                     </Text>
                     <Text className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
                       Your account password
@@ -1112,7 +1088,6 @@ export default function ProfileScreen() {
                     <TouchableOpacity
                       onPress={() => {
                         setConfirmingDelete(false);
-                        setDeleteTeamPhrase("");
                         setDeleteTeamPassword("");
                       }}
                       className="rounded-2xl py-4 items-center bg-slate-100 dark:bg-slate-700"
