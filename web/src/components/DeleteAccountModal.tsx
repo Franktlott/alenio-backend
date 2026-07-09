@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { deleteApiAccount } from "../lib/api";
+import { Link } from "react-router-dom";
+import { deleteApiAccount, fetchAccountDeletionReadiness, type AccountDeletionReadiness } from "../lib/api";
 
 const IMPACT_ITEMS = [
   "You'll be removed from all your workspaces",
@@ -20,6 +21,8 @@ export function DeleteAccountModal({ open, onClose, onDeleted }: Props) {
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [readiness, setReadiness] = useState<AccountDeletionReadiness | null>(null);
+  const [readinessLoading, setReadinessLoading] = useState(false);
 
   const reset = () => {
     setStep(1);
@@ -27,6 +30,8 @@ export function DeleteAccountModal({ open, onClose, onDeleted }: Props) {
     setShowPassword(false);
     setBusy(false);
     setError(null);
+    setReadiness(null);
+    setReadinessLoading(false);
   };
 
   const close = () => {
@@ -41,6 +46,25 @@ export function DeleteAccountModal({ open, onClose, onDeleted }: Props) {
 
   useEffect(() => {
     if (!open) return;
+    let cancelled = false;
+    setReadinessLoading(true);
+    void fetchAccountDeletionReadiness()
+      .then((data) => {
+        if (!cancelled) setReadiness(data);
+      })
+      .catch(() => {
+        if (!cancelled) setReadiness({ canDelete: false, issues: [] });
+      })
+      .finally(() => {
+        if (!cancelled) setReadinessLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape" && !busy) close();
     };
@@ -49,6 +73,10 @@ export function DeleteAccountModal({ open, onClose, onDeleted }: Props) {
   }, [open, busy]);
 
   if (!open) return null;
+
+  const blockers = readiness?.issues.filter((issue) => issue.blocking) ?? [];
+  const warnings = readiness?.issues.filter((issue) => !issue.blocking) ?? [];
+  const canContinue = readiness?.canDelete === true && !readinessLoading;
 
   const onConfirmDelete = async () => {
     if (!password.trim()) {
@@ -89,11 +117,49 @@ export function DeleteAccountModal({ open, onClose, onDeleted }: Props) {
                 <li key={item}>{item}</li>
               ))}
             </ul>
+            {readinessLoading ? <p className="enterprise-muted">Checking workspaces and billing…</p> : null}
+            {!readinessLoading && blockers.length > 0 ? (
+              <div className="enterprise-profile-delete-blockers" data-testid="delete-account-blockers">
+                <p className="enterprise-profile-delete-blockers-title">Resolve these before deleting</p>
+                <ul>
+                  {blockers.map((issue) => (
+                    <li key={`${issue.code}-${issue.teamId}`}>
+                      <span>{issue.message}</span>
+                      {issue.code === "active_web_billing" ? (
+                        <Link
+                          to={`/billing?teamId=${encodeURIComponent(issue.teamId)}`}
+                          className="enterprise-profile-delete-action-link"
+                          onClick={close}
+                        >
+                          Open billing
+                        </Link>
+                      ) : null}
+                      {issue.code === "multi_member_owner" ? (
+                        <Link to="/team" className="enterprise-profile-delete-action-link" onClick={close}>
+                          Go to Team
+                        </Link>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+            {!readinessLoading && warnings.length > 0 ? (
+              <div className="enterprise-profile-delete-warnings" data-testid="delete-account-warnings">
+                <p className="enterprise-profile-delete-blockers-title">Before you continue</p>
+                <ul>
+                  {warnings.map((issue) => (
+                    <li key={`${issue.code}-${issue.teamId}`}>{issue.message}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
             <div className="enterprise-profile-delete-actions">
               <button
                 type="button"
                 className="auth-submit enterprise-profile-delete-continue"
                 onClick={() => setStep(2)}
+                disabled={!canContinue}
                 data-testid="delete-continue-step1"
               >
                 Continue

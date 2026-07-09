@@ -19662,6 +19662,55 @@ button.enterprise-profile-legal-link {
   background: #e2e8f0;
 }
 
+.enterprise-profile-delete-blockers,
+.enterprise-profile-delete-warnings {
+  margin: 0 0 1rem;
+  padding: 0.85rem 1rem;
+  border-radius: 12px;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.enterprise-profile-delete-blockers {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  color: #92400e;
+}
+
+.enterprise-profile-delete-warnings {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  color: #475569;
+}
+
+.enterprise-profile-delete-blockers-title {
+  margin: 0 0 0.5rem;
+  font-weight: 700;
+}
+
+.enterprise-profile-delete-blockers ul,
+.enterprise-profile-delete-warnings ul {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+.enterprise-profile-delete-blockers li,
+.enterprise-profile-delete-warnings li {
+  margin-bottom: 0.65rem;
+}
+
+.enterprise-profile-delete-action-link {
+  display: inline-block;
+  margin-top: 0.35rem;
+  font-weight: 600;
+  color: #4361ee;
+  text-decoration: none;
+}
+
+.enterprise-profile-delete-action-link:hover {
+  text-decoration: underline;
+}
+
 .enterprise-profile-delete-final-warning {
   margin: 0 0 1rem;
   padding: 0.85rem 1rem;

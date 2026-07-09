@@ -154,6 +154,27 @@ export default function ProfileScreen() {
     enabled: !!user,
   });
 
+  const { data: deletionReadiness, isLoading: deletionReadinessLoading } = useQuery({
+    queryKey: ["deletion-readiness"],
+    queryFn: () =>
+      api.get<{
+        canDelete: boolean;
+        issues: Array<{
+          code: string;
+          message: string;
+          teamId: string;
+          teamName: string;
+          blocking: boolean;
+        }>;
+      }>("/api/user/deletion-readiness"),
+    enabled: deleteStep > 0 && !!user,
+    staleTime: 0,
+  });
+
+  const deleteBlockers = deletionReadiness?.issues.filter((issue) => issue.blocking) ?? [];
+  const deleteWarnings = deletionReadiness?.issues.filter((issue) => !issue.blocking) ?? [];
+  const canContinueDelete = deletionReadiness?.canDelete === true;
+
   const isOwnerOfAnyTeam = teams.some((t) => (t as Team & { role?: string }).role === "owner");
   const activeTeam = teams.find((t) => t.id === activeTeamId) as (Team & { role?: string }) | undefined;
   const canManageActiveTeam =
@@ -1184,7 +1205,7 @@ export default function ProfileScreen() {
                         <X size={22} color="#94A3B8" />
                       </TouchableOpacity>
                     </View>
-                    <View className="bg-red-50 rounded-2xl p-4 mb-5" style={{ gap: 12 }}>
+                    <View className="bg-red-50 rounded-2xl p-4 mb-4" style={{ gap: 12 }}>
                       {[
                         "You'll be removed from all your teams",
                         "All your messages will be deleted",
@@ -1197,9 +1218,62 @@ export default function ProfileScreen() {
                         </View>
                       ))}
                     </View>
+                    {deletionReadinessLoading ? (
+                      <View className="items-center py-4 mb-4">
+                        <ActivityIndicator color="#64748B" />
+                        <Text className="text-sm text-slate-500 mt-2">Checking workspaces and billing…</Text>
+                      </View>
+                    ) : null}
+                    {!deletionReadinessLoading && deleteBlockers.length > 0 ? (
+                      <View className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-4" style={{ gap: 10 }}>
+                        <Text className="text-sm font-semibold text-amber-900">Resolve these before deleting</Text>
+                        {deleteBlockers.map((issue) => (
+                          <View key={`${issue.code}-${issue.teamId}`} style={{ gap: 8 }}>
+                            <Text className="text-sm text-amber-900 leading-5">{issue.message}</Text>
+                            {issue.code === "active_web_billing" ? (
+                              <TouchableOpacity
+                                onPress={() => {
+                                  closeDeleteModal();
+                                  router.push({ pathname: "/account-hub", params: { teamId: issue.teamId } });
+                                }}
+                                className="self-start rounded-lg bg-white border border-amber-200 px-3 py-2"
+                              >
+                                <Text className="text-sm font-semibold text-[#4361EE]">Open {ACCOUNT_HUB_TITLE}</Text>
+                              </TouchableOpacity>
+                            ) : null}
+                            {issue.code === "multi_member_owner" ? (
+                              <TouchableOpacity
+                                onPress={() => {
+                                  closeDeleteModal();
+                                  router.push("/(app)/team");
+                                }}
+                                className="self-start rounded-lg bg-white border border-amber-200 px-3 py-2"
+                              >
+                                <Text className="text-sm font-semibold text-[#4361EE]">Go to Team</Text>
+                              </TouchableOpacity>
+                            ) : null}
+                          </View>
+                        ))}
+                      </View>
+                    ) : null}
+                    {!deletionReadinessLoading && deleteWarnings.length > 0 ? (
+                      <View className="bg-slate-50 border border-slate-200 rounded-2xl p-4 mb-4" style={{ gap: 8 }}>
+                        <Text className="text-sm font-semibold text-slate-700">Before you continue</Text>
+                        {deleteWarnings.map((issue) => (
+                          <Text key={`${issue.code}-${issue.teamId}`} className="text-sm text-slate-600 leading-5">
+                            {issue.message}
+                          </Text>
+                        ))}
+                      </View>
+                    ) : null}
                     <TouchableOpacity
-                      onPress={() => setDeleteStep(2)}
+                      onPress={() => {
+                        if (!canContinueDelete) return;
+                        setDeleteStep(2);
+                      }}
+                      disabled={deletionReadinessLoading || !canContinueDelete}
                       className="rounded-2xl py-4 items-center mb-3 bg-slate-100"
+                      style={{ opacity: deletionReadinessLoading || !canContinueDelete ? 0.45 : 1 }}
                       testID="delete-continue-step1"
                     >
                       <Text className="font-semibold text-slate-700 text-base">Continue</Text>

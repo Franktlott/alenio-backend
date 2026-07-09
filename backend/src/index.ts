@@ -37,6 +37,7 @@ import { sendPushNotificationsStrict } from "./lib/push";
 import { getDatabasePublicSummary } from "./lib/database-public-summary";
 import { syncAppUserFromNeonAuth } from "./lib/ensure-app-user";
 import { deleteAppUserCompletely } from "./lib/delete-app-user";
+import { assertAccountDeletionAllowed, getAccountDeletionReadiness } from "./lib/account-deletion-readiness";
 import {
   deleteStorageObjectByUrlIfOwned,
   isFirebaseStorageConfigured,
@@ -916,9 +917,24 @@ app.get("/api/users/search", async (c) => {
   return c.json({ data: users });
 });
 
+app.get("/api/user/deletion-readiness", async (c) => {
+  const user = c.get("user");
+  if (!user) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
+
+  const readiness = await getAccountDeletionReadiness(user.id);
+  return c.json({ data: readiness });
+});
+
 app.delete("/api/user", async (c) => {
   const user = c.get("user");
   if (!user) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
+
+  try {
+    await assertAccountDeletionAllowed(user.id);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Account cannot be deleted yet.";
+    return c.json({ error: { message, code: "DELETION_BLOCKED" } }, 409);
+  }
 
   const body = await c.req.json();
   const { password } = body;

@@ -1,12 +1,15 @@
 import { prisma } from "../prisma";
 import { deleteAllUserStorageObjects } from "./firebase-storage";
 import { deleteNeonAuthUser } from "./delete-neon-auth-user";
+import { assertAccountDeletionAllowed } from "./account-deletion-readiness";
 
 /**
  * Permanently deletes a user: app rows in Postgres, storage, then Neon Auth.
  * Ensures the `User` record is removed after clearing FK-restricted relations.
  */
 export async function deleteAppUserCompletely(userId: string): Promise<void> {
+  await assertAccountDeletionAllowed(userId);
+
   const existing = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
   if (!existing) return;
 

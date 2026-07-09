@@ -296,6 +296,23 @@ export function deleteApiAccount(password: string) {
   });
 }
 
+export type AccountDeletionIssue = {
+  code: "multi_member_owner" | "active_web_billing" | "mobile_store_billing";
+  message: string;
+  teamId: string;
+  teamName: string;
+  blocking: boolean;
+};
+
+export type AccountDeletionReadiness = {
+  canDelete: boolean;
+  issues: AccountDeletionIssue[];
+};
+
+export function fetchAccountDeletionReadiness() {
+  return apiGetJson<{ data: AccountDeletionReadiness }>("/api/user/deletion-readiness").then((r) => r.data);
+}
+
 export async function fetchWebTeams() {
   const [webRes, mobileRes] = await Promise.all([
     apiGetJson<{ data: WebTeamRow[] }>("/web/api/teams"),
