@@ -18,6 +18,8 @@ export type PlannedOneOnOneEvent = OneOnOneCalendarEventFields & {
   endDate?: string | null;
   allDay?: boolean;
   isVideoMeeting?: boolean;
+  createdById?: string;
+  createdBy?: { id: string; name: string | null } | null;
 };
 
 export function isUpcomingOneOnOneForMember(

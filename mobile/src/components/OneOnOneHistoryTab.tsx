@@ -67,6 +67,7 @@ type Props = {
   leaderUserId: string | null;
   canCreate: boolean;
   canModify: boolean;
+  isSelf?: boolean;
   autoStartCheckIn?: boolean;
   preferredTemplateId?: string | null;
 };
@@ -233,10 +234,12 @@ export function OneOnOneHistoryTab({
   leaderUserId,
   canCreate,
   canModify,
+  isSelf = false,
   autoStartCheckIn = false,
   preferredTemplateId = null,
 }: Props) {
   const insets = useSafeAreaInsets();
+  const canViewUpcoming = canCreate || isSelf;
   const [view, setView] = useState<OneOneView>("list");
   const [meetings, setMeetings] = useState<OneOnOneMeeting[]>([]);
   const [templates, setTemplates] = useState<OneOnOneTemplate[]>([]);
@@ -267,20 +270,20 @@ export function OneOnOneHistoryTab({
   } = useQuery({
     queryKey: ["planned-one-on-ones", teamId, memberUserId],
     queryFn: () => fetchPlannedOneOnOnes(teamId, memberUserId),
-    enabled: !!teamId && !!memberUserId && canCreate,
+    enabled: !!teamId && !!memberUserId && canViewUpcoming,
   });
 
   useFocusEffect(
     useCallback(() => {
-      if (!teamId || !memberUserId || !canCreate) return;
+      if (!teamId || !memberUserId || !canViewUpcoming) return;
       void refetchPlannedOneOnOnes();
-    }, [teamId, memberUserId, canCreate, refetchPlannedOneOnOnes]),
+    }, [teamId, memberUserId, canViewUpcoming, refetchPlannedOneOnOnes]),
   );
 
   useEffect(() => {
-    if (!teamId || !memberUserId || !canCreate) return;
+    if (!teamId || !memberUserId || !canViewUpcoming) return;
     void refetchPlannedOneOnOnes();
-  }, [teamId, memberUserId, canCreate, refetchPlannedOneOnOnes]);
+  }, [teamId, memberUserId, canViewUpcoming, refetchPlannedOneOnOnes]);
 
   const { data: templateCatalog = [] } = useQuery({
     queryKey: ["one-on-one-templates", teamId],
@@ -453,6 +456,70 @@ export function OneOnOneHistoryTab({
       ? templateTitleById.get(event.oneOnOneTemplateId) ?? null
       : null;
     const title = templateTitle ?? "Check-in";
+    const schedulerName = event.createdBy?.name?.trim() || managerName || "Your manager";
+    const memberSubtitle = isSelf && !canCreate
+      ? `With ${schedulerName} · ${formatScheduledOneOnOneWhen(event)}`
+      : formatScheduledOneOnOneWhen(event);
+
+    const rowContent = (
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+            <Text style={{ fontSize: 14, fontWeight: "600", color: "#0F172A", flexShrink: 1 }} numberOfLines={1}>
+              {title}
+            </Text>
+            <View
+              style={{
+                backgroundColor: "#F8FAFC",
+                borderRadius: 4,
+                paddingHorizontal: 6,
+                paddingVertical: 2,
+                borderWidth: 1,
+                borderColor: "#E2E8F0",
+              }}
+            >
+              <Text style={{ fontSize: 10, fontWeight: "600", color: "#64748B" }}>Scheduled</Text>
+            </View>
+          </View>
+          <Text style={{ fontSize: 12, color: "#64748B", marginTop: 1 }} numberOfLines={1}>
+            {memberSubtitle}
+          </Text>
+        </View>
+        {canCreate ? (
+          <Pressable
+            onPress={(e) => {
+              e.stopPropagation?.();
+              openPlannedEventMenu(event);
+            }}
+            hitSlop={8}
+            testID={`planned-one-on-one-menu-${event.id}`}
+          >
+            <MoreVertical size={16} color="#64748B" />
+          </Pressable>
+        ) : null}
+      </View>
+    );
+
+    if (!canCreate) {
+      return (
+        <View
+          style={{
+            backgroundColor: "white",
+            borderRadius: 10,
+            paddingHorizontal: 12,
+            paddingVertical: 10,
+            borderWidth: 1,
+            borderColor: "#E2E8F0",
+            minHeight: PLANNED_ONE_ON_ONE_ROW_HEIGHT,
+            justifyContent: "center",
+          }}
+          testID={`planned-one-on-one-${event.id}`}
+        >
+          {rowContent}
+        </View>
+      );
+    }
+
     return (
       <Pressable
         onPress={() => void startPlannedOneOnOne(event)}
@@ -468,40 +535,7 @@ export function OneOnOneHistoryTab({
         }}
         testID={`planned-one-on-one-${event.id}`}
       >
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-              <Text style={{ fontSize: 14, fontWeight: "600", color: "#0F172A", flexShrink: 1 }} numberOfLines={1}>
-                {title}
-              </Text>
-              <View
-                style={{
-                  backgroundColor: "#F8FAFC",
-                  borderRadius: 4,
-                  paddingHorizontal: 6,
-                  paddingVertical: 2,
-                  borderWidth: 1,
-                  borderColor: "#E2E8F0",
-                }}
-              >
-                <Text style={{ fontSize: 10, fontWeight: "600", color: "#64748B" }}>Scheduled</Text>
-              </View>
-            </View>
-            <Text style={{ fontSize: 12, color: "#64748B", marginTop: 1 }} numberOfLines={1}>
-              {formatScheduledOneOnOneWhen(event)}
-            </Text>
-          </View>
-          <Pressable
-            onPress={(e) => {
-              e.stopPropagation?.();
-              openPlannedEventMenu(event);
-            }}
-            hitSlop={8}
-            testID={`planned-one-on-one-menu-${event.id}`}
-          >
-            <MoreVertical size={16} color="#64748B" />
-          </Pressable>
-        </View>
+        {rowContent}
       </Pressable>
     );
   };
@@ -1236,7 +1270,7 @@ export function OneOnOneHistoryTab({
         </Text>
       ) : null}
 
-      {canCreate && upcomingPlanned.length > 0 ? (
+      {canViewUpcoming && upcomingPlanned.length > 0 ? (
         <View style={{ gap: 8 }}>
           <Text
             style={{

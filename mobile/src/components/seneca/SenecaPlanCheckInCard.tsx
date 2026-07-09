@@ -55,6 +55,9 @@ export function SenecaPlanCheckInCard({ teamId, proposal, onSaved, onDismiss }: 
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["calendar-events", teamId] });
       void queryClient.invalidateQueries({ queryKey: ["planned-one-on-ones", teamId] });
+      void queryClient.invalidateQueries({
+        queryKey: ["planned-one-on-ones", teamId, proposal.memberUserId],
+      });
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       const summary = formatEventDateAndTime(eventStart.toISOString(), eventEnd.toISOString());
       onSaved(

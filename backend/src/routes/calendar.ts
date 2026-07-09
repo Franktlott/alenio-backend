@@ -314,6 +314,25 @@ calendarRouter.post(
       await scheduleEventReminders(event.id, event.title, teamId, event.startDate, reminderMins, assigneeIds);
     }
 
+    if (isOneOnOne && oneOnOneMemberUserId && oneOnOneMemberUserId !== user.id) {
+      const whenLabel = start.toLocaleString("en-US", {
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      });
+      const schedulerName = user.name?.trim() || "Your manager";
+      await sendPushToUsers(
+        [oneOnOneMemberUserId],
+        "Check-in scheduled",
+        `${schedulerName} scheduled a check-in with you for ${whenLabel}.`,
+        { eventId: event.id, teamId, type: "check_in_scheduled" },
+        "notifMeetings",
+        teamId,
+      );
+    }
+
     await logActivity({
       teamId,
       userId: user.id,

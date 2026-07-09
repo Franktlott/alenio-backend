@@ -472,13 +472,22 @@ oneOnOneMeetingsRouter.get("/:memberUserId/planned-one-on-ones", async (c) => {
   if (!membership) {
     return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
   }
-  if (!canManageOneOnOne(membership)) {
+
+  const isSelf = memberUserId === user.id;
+  if (!isSelf && !canManageOneOnOne(membership)) {
     return c.json({ error: { message: "Only workspace owners and team leaders can view planned check-ins.", code: "FORBIDDEN" } }, 403);
   }
 
-  const access = await resolveCheckInMemberAccess(membership, teamId, memberUserId, {});
-  if (!access.ok || access.isFormer) {
-    return c.json({ error: { message: "Member not found", code: "NOT_FOUND" } }, 404);
+  if (!isSelf) {
+    const access = await resolveCheckInMemberAccess(membership, teamId, memberUserId, {});
+    if (!access.ok || access.isFormer) {
+      return c.json({ error: { message: "Member not found", code: "NOT_FOUND" } }, 404);
+    }
+  } else {
+    const active = await isActiveTeamMember(prisma, teamId, memberUserId);
+    if (!active) {
+      return c.json({ error: { message: "Member not found", code: "NOT_FOUND" } }, 404);
+    }
   }
 
   try {
@@ -489,25 +498,40 @@ oneOnOneMeetingsRouter.get("/:memberUserId/planned-one-on-ones", async (c) => {
     });
     const memberLabel = member?.user.name?.trim() || member?.user.email?.split("@")[0] || "";
     const legacyTitles = memberLabel ? plannedCheckInTitlesForMember(memberLabel) : [];
+    const plannedTypeFilter = {
+      OR: [
+        { isOneOnOne: true },
+        ...PLANNED_CHECK_IN_TITLE_PREFIXES.map((prefix) => ({ title: { startsWith: prefix } })),
+      ],
+    };
 
     const events = await prisma.calendarEvent.findMany({
-      where: {
-        teamId,
-        createdById: user.id,
-        OR: [
-          { oneOnOneMemberUserId: memberUserId },
-          ...legacyTitles.map((title) => ({ title })),
-        ],
-        AND: [
-          {
-            OR: [
-              { isOneOnOne: true },
-              ...PLANNED_CHECK_IN_TITLE_PREFIXES.map((prefix) => ({ title: { startsWith: prefix } })),
+      where: isSelf
+        ? {
+            teamId,
+            AND: [
+              plannedTypeFilter,
+              {
+                OR: [
+                  { oneOnOneMemberUserId: memberUserId },
+                  ...legacyTitles.map((title) => ({ title })),
+                ],
+              },
             ],
+          }
+        : {
+            teamId,
+            createdById: user.id,
+            OR: [
+              { oneOnOneMemberUserId: memberUserId },
+              ...legacyTitles.map((title) => ({ title })),
+            ],
+            AND: [plannedTypeFilter],
           },
-        ],
-      },
       orderBy: { startDate: "asc" },
+      include: {
+        createdBy: { select: { id: true, name: true, image: true } },
+      },
     });
 
     const upcoming = events.filter((event) => {
@@ -526,6 +550,10 @@ oneOnOneMeetingsRouter.get("/:memberUserId/planned-one-on-ones", async (c) => {
         isOneOnOne: event.isOneOnOne,
         oneOnOneMemberUserId: event.oneOnOneMemberUserId,
         oneOnOneTemplateId: event.oneOnOneTemplateId,
+        createdById: event.createdById,
+        createdBy: event.createdBy
+          ? { id: event.createdBy.id, name: event.createdBy.name }
+          : null,
       })),
     });
   } catch (err) {

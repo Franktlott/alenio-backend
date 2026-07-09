@@ -556,6 +556,7 @@ export default function MemberProfileScreen() {
               leaderUserId={leaderUserId}
               canCreate={canCreateOneOne}
               canModify={canCreateOneOne}
+              isSelf={isSelf}
               autoStartCheckIn={shouldAutoStartCheckIn}
               preferredTemplateId={preferredCheckInTemplateId}
             />
