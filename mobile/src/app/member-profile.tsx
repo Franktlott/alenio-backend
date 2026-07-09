@@ -362,6 +362,7 @@ export default function MemberProfileScreen() {
         style={{ flex: 1 }}
         contentContainerStyle={{ paddingBottom: Math.max(24, insets.bottom), paddingTop: 12 }}
         stickyHeaderIndices={[1]}
+        nestedScrollEnabled
       >
         <View style={{ paddingHorizontal: 12, paddingBottom: 10 }}>
           <View

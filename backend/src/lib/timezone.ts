@@ -78,6 +78,29 @@ export function calendarDayFromInstant(instant: string | Date, timeZone: string)
   }).format(date);
 }
 
+/** UTC instant for a wall-clock date + time in the user's timezone. */
+export function instantFromCalendarDateAndTime(
+  dateOnly: string,
+  hour: number,
+  minute: number,
+  timeZone: string,
+): Date {
+  const match = dateOnly.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return new Date(NaN);
+  const y = Number(match[1]);
+  const mo = Number(match[2]);
+  const d = Number(match[3]);
+  const tz = resolveTimeZone(timeZone);
+  let utc = Date.UTC(y, mo - 1, d, hour, minute, 0, 0);
+  for (let i = 0; i < 4; i++) {
+    const got = getZonedWallTime(new Date(utc), tz);
+    const desired = Date.UTC(y, mo - 1, d, hour, minute, 0, 0);
+    const actual = Date.UTC(got.y, got.mo - 1, got.d, got.h, got.mi, got.s, 0);
+    utc += desired - actual;
+  }
+  return new Date(utc);
+}
+
 export function getZonedDayOfWeek(date: Date, timeZone: string): number {
   const weekday = new Intl.DateTimeFormat("en-US", {
     timeZone: resolveTimeZone(timeZone),

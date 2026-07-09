@@ -40,7 +40,7 @@ import { isFeedbackTaskDescription } from "@/lib/one-on-one-feedback";
 import { hasTeamPlan, hasWorkspaceTaskAccess } from "@/lib/plan-access-copy";
 import { SafeKeyboardAvoidingView } from "@/lib/safe-keyboard-controller";
 import { getUSHolidays, type USFederalHoliday } from "@/lib/us-federal-holidays";
-import { formatEventTimeRange } from "@/lib/format-event-time";
+import { formatEventDateAndTime, formatEventDateLabel, eventShowsScheduledTime } from "@/lib/format-event-time";
 import {
   VIDEO_MEETING_DURATION_OPTIONS,
   durationMinutesFromRange,
@@ -1343,12 +1343,11 @@ export default function TasksScreen() {
                 </View>
               ))}
               {dayEvents.map((ev) => {
-                const start = new Date(ev.startDate);
-                const end = ev.endDate ? new Date(ev.endDate) : start;
-                const isSingleDay = toLocalIso(start) === toLocalIso(end);
-                const dateText = isSingleDay
-                  ? start.toLocaleDateString("en-US", { month: "short", day: "numeric" })
-                  : `${start.toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${end.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
+                const dateText = formatEventDateLabel(ev.startDate, ev.endDate);
+                const scheduleText = eventShowsScheduledTime(ev)
+                  ? formatEventDateAndTime(ev.startDate, ev.endDate)
+                  : dateText;
+                const showTimedStyle = eventShowsScheduledTime(ev);
                 return (
                   <Pressable
                     key={ev.id}
@@ -1367,19 +1366,18 @@ export default function TasksScreen() {
                         </View>
                       </View>
                       <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                        {ev.isVideoMeeting ? (
-                          <>
-                            <Clock size={10} color="#4361EE" />
-                            <Text style={{ fontSize: 11, color: "#4361EE", fontWeight: "600" }}>
-                              {formatEventTimeRange(ev.startDate, ev.endDate)}
-                            </Text>
-                          </>
-                        ) : (
-                          <>
-                            <CalendarDays size={10} color="#64748B" />
-                            <Text style={{ fontSize: 11, color: "#64748B" }}>{dateText}</Text>
-                          </>
-                        )}
+                        {showTimedStyle ? <Clock size={10} color="#4361EE" /> : <CalendarDays size={10} color="#64748B" />}
+                        <Text
+                          style={{
+                            fontSize: 11,
+                            color: showTimedStyle ? "#4361EE" : "#64748B",
+                            fontWeight: showTimedStyle ? "600" : "400",
+                            flexShrink: 1,
+                          }}
+                          numberOfLines={1}
+                        >
+                          {scheduleText}
+                        </Text>
                       </View>
                     </View>
                   </Pressable>

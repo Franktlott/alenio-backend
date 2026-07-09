@@ -8,6 +8,15 @@ export type SenecaAskActionId =
   | "build_checklist"
   | "open_team";
 
+export type SenecaPlanOneOnOneProposal = {
+  memberUserId: string;
+  memberName: string;
+  startDate: string;
+  durationMinutes: number;
+  dateLabel: string;
+  timeLabel: string;
+};
+
 export type SenecaAskResponse = {
   available: boolean;
   message: string;
@@ -17,6 +26,7 @@ export type SenecaAskResponse = {
     description: string;
     action: SenecaAskActionId;
   }>;
+  planOneOnOne?: SenecaPlanOneOnOneProposal | null;
 };
 
 export function fetchSenecaAsk(teamId: string, question: string) {

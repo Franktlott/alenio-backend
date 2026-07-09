@@ -6,6 +6,7 @@ import {
   TextInput,
   Modal,
   ScrollView,
+  FlatList,
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
@@ -14,7 +15,7 @@ import {
 import { toast } from "burnt";
 import { useQuery } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Plus, X, ChevronLeft, MoreVertical, Check, CalendarCheck, Clock } from "lucide-react-native";
+import { Plus, X, ChevronLeft, MoreVertical, Check, CalendarCheck } from "lucide-react-native";
 import { router, useFocusEffect } from "expo-router";
 import {
   planOneOnOneHref,
@@ -102,6 +103,14 @@ function formatScheduledOneOnOneWhen(event: PlannedOneOnOneEvent): string {
   }
   return datePart;
 }
+
+const PLANNED_ONE_ON_ONE_VISIBLE_ROWS = 2;
+const PLANNED_ONE_ON_ONE_ROW_HEIGHT = 56;
+const PLANNED_ONE_ON_ONE_ROW_GAP = 8;
+const PLANNED_ONE_ON_ONE_LIST_HEIGHT =
+  PLANNED_ONE_ON_ONE_VISIBLE_ROWS * PLANNED_ONE_ON_ONE_ROW_HEIGHT +
+  (PLANNED_ONE_ON_ONE_VISIBLE_ROWS - 1) * PLANNED_ONE_ON_ONE_ROW_GAP +
+  16;
 
 function meetingToFillTemplate(meeting: OneOnOneMeeting): OneOnOneTemplate {
   return {
@@ -407,6 +416,94 @@ export function OneOnOneHistoryTab({
     } finally {
       setLoadingTemplates(false);
     }
+  };
+
+  const openPlannedEventMenu = (event: PlannedOneOnOneEvent) => {
+    const templateTitle = event.oneOnOneTemplateId
+      ? templateTitleById.get(event.oneOnOneTemplateId) ?? null
+      : null;
+    const title = templateTitle ?? "1:1";
+    setMenuMeetingId(null);
+    Alert.alert(title, formatScheduledOneOnOneWhen(event), [
+      {
+        text: "Start check-in",
+        onPress: () => {
+          void startPlannedOneOnOne(event);
+        },
+      },
+      {
+        text: "Edit schedule",
+        onPress: () => {
+          router.push(
+            planOneOnOneHref(teamId, {
+              eventId: event.id,
+              memberUserId,
+              templateId: event.oneOnOneTemplateId ?? undefined,
+              startDate: event.startDate,
+            }),
+          );
+        },
+      },
+      { text: "Cancel", style: "cancel" },
+    ]);
+  };
+
+  const renderPlannedOneOnOneRow = ({ item: event }: { item: PlannedOneOnOneEvent }) => {
+    const templateTitle = event.oneOnOneTemplateId
+      ? templateTitleById.get(event.oneOnOneTemplateId) ?? null
+      : null;
+    const title = templateTitle ?? "1:1";
+    return (
+      <Pressable
+        onPress={() => void startPlannedOneOnOne(event)}
+        style={{
+          backgroundColor: "white",
+          borderRadius: 10,
+          paddingHorizontal: 12,
+          paddingVertical: 10,
+          borderWidth: 1,
+          borderColor: "#E2E8F0",
+          minHeight: PLANNED_ONE_ON_ONE_ROW_HEIGHT,
+          justifyContent: "center",
+        }}
+        testID={`planned-one-on-one-${event.id}`}
+      >
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+              <Text style={{ fontSize: 14, fontWeight: "600", color: "#0F172A", flexShrink: 1 }} numberOfLines={1}>
+                {title}
+              </Text>
+              <View
+                style={{
+                  backgroundColor: "#F8FAFC",
+                  borderRadius: 4,
+                  paddingHorizontal: 6,
+                  paddingVertical: 2,
+                  borderWidth: 1,
+                  borderColor: "#E2E8F0",
+                }}
+              >
+                <Text style={{ fontSize: 10, fontWeight: "600", color: "#64748B" }}>Scheduled</Text>
+              </View>
+            </View>
+            <Text style={{ fontSize: 12, color: "#64748B", marginTop: 1 }} numberOfLines={1}>
+              {formatScheduledOneOnOneWhen(event)}
+            </Text>
+          </View>
+          <Pressable
+            onPress={(e) => {
+              e.stopPropagation?.();
+              openPlannedEventMenu(event);
+            }}
+            hitSlop={8}
+            testID={`planned-one-on-one-menu-${event.id}`}
+          >
+            <MoreVertical size={16} color="#64748B" />
+          </Pressable>
+        </View>
+      </Pressable>
+    );
   };
 
   useEffect(() => {
@@ -1085,17 +1182,17 @@ export function OneOnOneHistoryTab({
               flexDirection: "row",
               alignItems: "center",
               gap: 4,
-              backgroundColor: "#F5F3FF",
+              backgroundColor: "white",
               borderRadius: 10,
               paddingHorizontal: 12,
               paddingVertical: 8,
               borderWidth: 1,
-              borderColor: "#DDD6FE",
+              borderColor: "#E2E8F0",
             }}
             testID="plan-one-on-one-button"
           >
-            <CalendarCheck size={16} color="#7C3AED" />
-            <Text style={{ fontSize: 13, fontWeight: "700", color: "#7C3AED" }}>Plan 1:1</Text>
+            <CalendarCheck size={16} color="#475569" />
+            <Text style={{ fontSize: 13, fontWeight: "600", color: "#334155" }}>Plan 1:1</Text>
           </Pressable>
           <Pressable
             onPress={() => void startCreate()}
@@ -1140,7 +1237,7 @@ export function OneOnOneHistoryTab({
       ) : null}
 
       {canCreate && upcomingPlanned.length > 0 ? (
-        <View style={{ gap: 10 }}>
+        <View style={{ gap: 8 }}>
           <Text
             style={{
               fontSize: 11,
@@ -1152,91 +1249,30 @@ export function OneOnOneHistoryTab({
           >
             Upcoming
           </Text>
-          {upcomingPlanned.map((event) => {
-            const templateTitle = event.oneOnOneTemplateId
-              ? templateTitleById.get(event.oneOnOneTemplateId) ?? null
-              : null;
-            return (
-              <View
-                key={event.id}
-                style={{
-                  backgroundColor: "#FAF5FF",
-                  borderRadius: 12,
-                  padding: 14,
-                  borderWidth: 1,
-                  borderColor: "#DDD6FE",
-                  borderLeftWidth: 4,
-                  borderLeftColor: "#7C3AED",
-                }}
-                testID={`planned-one-on-one-${event.id}`}
-              >
-                <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 15, fontWeight: "700", color: "#0F172A" }}>
-                      {templateTitle ?? "Planned 1:1"}
-                    </Text>
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 }}>
-                      <Clock size={12} color="#7C3AED" />
-                      <Text style={{ fontSize: 12, color: "#6D28D9", fontWeight: "600" }}>
-                        {formatScheduledOneOnOneWhen(event)}
-                      </Text>
-                    </View>
-                    <View
-                      style={{
-                        alignSelf: "flex-start",
-                        marginTop: 8,
-                        backgroundColor: "#EDE9FE",
-                        borderRadius: 8,
-                        paddingHorizontal: 8,
-                        paddingVertical: 3,
-                      }}
-                    >
-                      <Text style={{ fontSize: 11, fontWeight: "700", color: "#6D28D9" }}>Scheduled</Text>
-                    </View>
-                  </View>
-                </View>
-                <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
-                  <Pressable
-                    onPress={() => void startPlannedOneOnOne(event)}
-                    style={{
-                      flex: 1,
-                      backgroundColor: "#7C3AED",
-                      borderRadius: 10,
-                      paddingVertical: 10,
-                      alignItems: "center",
-                    }}
-                    testID={`planned-one-on-one-start-${event.id}`}
-                  >
-                    <Text style={{ fontSize: 13, fontWeight: "700", color: "white" }}>Start check-in</Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={() =>
-                      router.push(
-                        planOneOnOneHref(teamId, {
-                          eventId: event.id,
-                          memberUserId,
-                          templateId: event.oneOnOneTemplateId ?? undefined,
-                          startDate: event.startDate,
-                        }),
-                      )
-                    }
-                    style={{
-                      paddingHorizontal: 14,
-                      borderRadius: 10,
-                      paddingVertical: 10,
-                      alignItems: "center",
-                      borderWidth: 1,
-                      borderColor: "#DDD6FE",
-                      backgroundColor: "white",
-                    }}
-                    testID={`planned-one-on-one-edit-${event.id}`}
-                  >
-                    <Text style={{ fontSize: 13, fontWeight: "700", color: "#6D28D9" }}>Edit</Text>
-                  </Pressable>
-                </View>
-              </View>
-            );
-          })}
+          <View
+            style={{
+              height: PLANNED_ONE_ON_ONE_LIST_HEIGHT,
+              borderRadius: 10,
+              borderWidth: 1,
+              borderColor: "#E2E8F0",
+              backgroundColor: "#FAFBFC",
+              overflow: "hidden",
+            }}
+            testID="planned-one-on-one-list"
+          >
+            <FlatList
+              data={upcomingPlanned}
+              keyExtractor={(event) => event.id}
+              renderItem={renderPlannedOneOnOneRow}
+              nestedScrollEnabled
+              style={{ flex: 1 }}
+              scrollEnabled={upcomingPlanned.length > PLANNED_ONE_ON_ONE_VISIBLE_ROWS}
+              showsVerticalScrollIndicator={upcomingPlanned.length > PLANNED_ONE_ON_ONE_VISIBLE_ROWS}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={{ padding: 8 }}
+              ItemSeparatorComponent={() => <View style={{ height: PLANNED_ONE_ON_ONE_ROW_GAP }} />}
+            />
+          </View>
         </View>
       ) : null}
 

@@ -11,6 +11,14 @@ import {
   senecaWorkspaceContextToPrompt,
 } from "../lib/seneca-workspace-context";
 import { normalizeCheckInTemplateDraft } from "../lib/seneca-normalize";
+import {
+  buildPlanConfirmationMessage,
+  finalizePlanOneOnOneProposal,
+  isScheduleOneOnOneQuestion,
+  type SenecaPlanOneOnOneDraft,
+  type SenecaPlanOneOnOneProposal,
+} from "../lib/seneca-plan-one-on-one";
+import { resolveTimeZone } from "../lib/timezone";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -54,7 +62,18 @@ type SenecaAskAi = {
     description: string;
     action: SenecaAskActionId;
   }>;
+  planOneOnOne?: SenecaPlanOneOnOneDraft | null;
 };
+
+function resolvePlanProposal(
+  draft: SenecaPlanOneOnOneDraft | null | undefined,
+  question: string,
+  ctx: Awaited<ReturnType<typeof buildSenecaWorkspaceContext>>,
+  managerTimeZone: string,
+): SenecaPlanOneOnOneProposal | null {
+  if (!draft && !isScheduleOneOnOneQuestion(question)) return null;
+  return finalizePlanOneOnOneProposal(draft ?? {}, question, ctx, managerTimeZone);
+}
 
 function ruleBasedAskResponse(question: string, ctx: Awaited<ReturnType<typeof buildSenecaWorkspaceContext>>): SenecaAskAi {
   const q = question.toLowerCase();
@@ -125,17 +144,44 @@ senecaTeamRouter.post("/ask", zValidator("json", askBodySchema), async (c) => {
   }
 
   const ctx = await buildSenecaWorkspaceContext(teamId, user.id);
+  const manager = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { timezone: true },
+  });
+  const managerTimeZone = resolveTimeZone(manager?.timezone);
 
   if (!senecaAvailable()) {
+    const fallback = ruleBasedAskResponse(body.question, ctx);
+    const planOneOnOne = resolvePlanProposal(null, body.question, ctx, managerTimeZone);
     return c.json({
       data: {
         available: false,
-        ...ruleBasedAskResponse(body.question, ctx),
+        message: planOneOnOne ? buildPlanConfirmationMessage(planOneOnOne) : fallback.message,
+        insights: fallback.insights ?? [],
+        suggestedActions: planOneOnOne
+          ? []
+          : fallback.suggestedActions ?? [],
+        planOneOnOne,
       },
     });
   }
 
   try {
+    const scheduleIntent = isScheduleOneOnOneQuestion(body.question);
+    const schedulingRules = scheduleIntent
+      ? `
+SCHEDULING A 1:1 (critical):
+- The manager wants to schedule or plan a 1:1. You CANNOT create calendar events yourself.
+- NEVER say you have already scheduled, booked, or added anything to the calendar.
+- Extract member name, date (YYYY-MM-DD), optional time (HH:mm 24h), and durationMinutes from their message. Use team member names from context only.
+- In "message", summarize the proposed plan and ask them to confirm before it is added.
+- Return "planOneOnOne": { "memberName": "string", "date": "YYYY-MM-DD", "time": "HH:mm or null", "durationMinutes": 45 } when you have enough detail.
+- If date or member is unclear, ask a clarifying question in "message" and set planOneOnOne to null.
+`
+      : `
+- NEVER claim you scheduled, created, or saved calendar events, tasks, or check-ins unless the manager has already confirmed an action in this app.
+`;
+
     const out = await senecaJson<SenecaAskAi>(
       `You are Seneca, an AI leadership assistant for frontline managers using Alenio.
 Answer the manager's question using ONLY the workspace context JSON below.
@@ -144,7 +190,7 @@ Answer the manager's question using ONLY the workspace context JSON below.
 - If they ask about a manager, leader, or team member, use names and stats from the context.
 - If the context lacks information, say what you know and suggest a concrete next step.
 - Do not invent tasks, people, or metrics not in the context.
-
+${schedulingRules}
 ${SENECA_DATA_GROUNDING_RULES}
 
 Manager question: "${body.question}"
@@ -153,28 +199,47 @@ Return JSON:
 {
   "message": "string — your direct answer",
   "insights": [{ "label": "string", "detail": "optional string" }],
-  "suggestedActions": [{ "title": "string", "description": "string", "action": "view_overdue_tasks"|"schedule_check_in"|"create_recognition"|"create_follow_up_task"|"build_checklist"|"open_team" }]
+  "suggestedActions": [{ "title": "string", "description": "string", "action": "view_overdue_tasks"|"schedule_check_in"|"create_recognition"|"create_follow_up_task"|"build_checklist"|"open_team" }],
+  "planOneOnOne": { "memberName": "string", "date": "YYYY-MM-DD", "time": "HH:mm or null", "durationMinutes": 45 } | null
 }
 Include 0-4 insights and 0-3 suggestedActions when helpful.`,
       senecaWorkspaceContextToPrompt(ctx),
     );
 
+    const planOneOnOne = resolvePlanProposal(out.planOneOnOne, body.question, ctx, managerTimeZone);
+    const message = planOneOnOne
+      ? buildPlanConfirmationMessage(planOneOnOne)
+      : out.message?.trim() || "I'm here to help you lead the floor. What would you like to focus on?";
+
     return c.json({
       data: {
         available: true,
-        message: out.message?.trim() || "I'm here to help you lead the floor. What would you like to focus on?",
+        message,
         insights: Array.isArray(out.insights) ? out.insights.slice(0, 6) : [],
-        suggestedActions: Array.isArray(out.suggestedActions) ? out.suggestedActions.slice(0, 4) : [],
+        suggestedActions: planOneOnOne
+          ? []
+          : Array.isArray(out.suggestedActions)
+            ? out.suggestedActions.slice(0, 4)
+            : [],
+        planOneOnOne,
       },
     });
   } catch (e) {
     const fallback = ruleBasedAskResponse(body.question, ctx);
+    const planOneOnOne = resolvePlanProposal(null, body.question, ctx, managerTimeZone);
     return c.json({
       data: {
         available: false,
-        message: e instanceof Error ? e.message : fallback.message,
+        message: planOneOnOne
+          ? buildPlanConfirmationMessage(planOneOnOne)
+          : e instanceof Error
+            ? e.message
+            : fallback.message,
         insights: fallback.insights ?? [],
-        suggestedActions: fallback.suggestedActions ?? [],
+        suggestedActions: planOneOnOne
+          ? []
+          : fallback.suggestedActions ?? [],
+        planOneOnOne,
       },
     });
   }

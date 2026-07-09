@@ -21,7 +21,7 @@ import { useSession } from "@/lib/auth/use-session";
 import type { Task, Team } from "@/lib/types";
 import { useDemoMode } from "@/lib/useDemo";
 import { getUSHolidays, type USFederalHoliday } from "@/lib/us-federal-holidays";
-import { eventShowsScheduledTime, formatEventTimeRange } from "@/lib/format-event-time";
+import { eventShowsScheduledTime, formatEventDateAndTime, formatEventDateLabel, formatEventTimeRange } from "@/lib/format-event-time";
 import { CALENDAR_WEEKDAY_LABELS, eventCalendarDayRange, getDaysInMonth } from "@/lib/calendar-grid";
 import { isMyWorkspaceTask } from "@/lib/workspace-tasks";
 import { fetchExternalCalendarEvents, type ExternalCalendarEventItem } from "@/lib/outlook-calendar-api";
@@ -815,9 +815,13 @@ export default function CalendarScreen() {
                             marginTop: 4,
                           }}
                         >
-                          {formatEventTimeRange(event.startDate, event.endDate)}
+                          {formatEventDateAndTime(event.startDate, event.endDate)}
                         </Text>
-                      ) : null}
+                      ) : (
+                        <Text style={{ fontSize: 12, color: "#64748B", marginTop: 4 }}>
+                          {formatEventDateLabel(event.startDate, event.endDate)}
+                        </Text>
+                      )}
                       {event.description ? (
                         <Text style={{ fontSize: 12, color: "#64748B", marginTop: 4 }} numberOfLines={2}>
                           {event.description}
