@@ -131,11 +131,22 @@ export type GroupMemberCandidate = {
   workspaceLabel: string;
 };
 
+export type GroupParticipantRole = "owner" | "admin" | "member";
+
+export type ConversationParticipant = {
+  id: string;
+  name: string | null;
+  email: string | null;
+  image: string | null;
+  role: GroupParticipantRole;
+};
+
 export interface Conversation {
   id: string;
   isGroup: boolean;
   name?: string | null;
-  participants?: User[];
+  participants?: ConversationParticipant[];
+  myRole?: GroupParticipantRole | null;
   workspaceContext?: GroupWorkspaceContext | null;
   createdAt: string;
   updatedAt: string;

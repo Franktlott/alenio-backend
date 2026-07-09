@@ -13,7 +13,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { LinearGradient } from "expo-linear-gradient";
-import { MessageCircle, Users, Lock, Plus, Sparkles } from "lucide-react-native";
+import { MessageCircle, Users, Lock, Plus, Sparkles, ChevronRight } from "lucide-react-native";
 import { router } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
@@ -199,11 +199,19 @@ export default function ChatScreen() {
         contentContainerStyle={{ paddingBottom: insets.bottom + 100 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" />}
       >
-        {/* Team Chat card */}
-        <Pressable
-          testID="team-chat-button"
-          onPress={() => router.push({ pathname: "/team-channels", params: { teamId: activeTeamId, teamName: teamDetail?.name ?? "" } })}
-          style={{ marginHorizontal: 16, marginTop: 20, borderRadius: 20, overflow: "hidden", shadowColor: "#4361EE", shadowOpacity: 0.3, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 5 }}
+        {/* Current workspace */}
+        <View
+          style={{
+            marginHorizontal: 16,
+            marginTop: 20,
+            borderRadius: 20,
+            overflow: "hidden",
+            shadowColor: "#4361EE",
+            shadowOpacity: 0.3,
+            shadowRadius: 12,
+            shadowOffset: { width: 0, height: 4 },
+            elevation: 5,
+          }}
         >
           <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ padding: 16 }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
@@ -218,33 +226,70 @@ export default function ChatScreen() {
                 </View>
               )}
               <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 16, fontWeight: "700", color: "white" }}>Team Chat</Text>
-                <Text style={{ fontSize: 13, color: "rgba(255,255,255,0.7)", marginTop: 1 }}>Primary team space</Text>
+                <Text style={{ fontSize: 12, color: "rgba(255,255,255,0.75)", fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.6 }}>
+                  Current workspace
+                </Text>
+                <Text style={{ fontSize: 16, fontWeight: "700", color: "white", marginTop: 2 }} numberOfLines={1}>
+                  {teamDetail?.name ?? "Workspace"}
+                </Text>
               </View>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                {teamChatUnreadCount > 0 ? (
-                  <View style={{ backgroundColor: "#EF4444", borderRadius: 10, minWidth: 20, height: 20, alignItems: "center", justifyContent: "center", paddingHorizontal: 6 }}>
-                    <Text style={{ color: "white", fontSize: 11, fontWeight: "700" }}>{teamChatUnreadCount}</Text>
-                  </View>
-                ) : null}
-                {topThreeMembers.length > 0 ? <AvatarStack members={topThreeMembers} /> : null}
-              </View>
+              {topThreeMembers.length > 0 ? <AvatarStack members={topThreeMembers} /> : null}
             </View>
             <View style={{ height: 1, backgroundColor: "rgba(255,255,255,0.15)", marginTop: 14, marginBottom: 10 }} />
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 16 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 16, marginBottom: 12 }}>
               <Text style={{ fontSize: 12, color: "rgba(255,255,255,0.7)" }}>
                 {memberCount} {memberCount === 1 ? "member" : "members"}
               </Text>
               <Text style={{ fontSize: 12, color: "rgba(255,255,255,0.7)" }}>
                 {lastGeneralMessage
-                  ? `Last: ${formatTime(lastGeneralMessage.createdAt)}`
+                  ? `Last activity: ${formatTime(lastGeneralMessage.createdAt)}`
                   : "No activity yet"}
               </Text>
             </View>
+            <Pressable
+              testID="team-chat-button"
+              onPress={() => router.push({ pathname: "/team-channels", params: { teamId: activeTeamId, teamName: teamDetail?.name ?? "" } })}
+              style={({ pressed }) => ({
+                alignSelf: "stretch",
+                width: "100%",
+                backgroundColor: pressed ? "rgba(255,255,255,0.28)" : "rgba(255,255,255,0.18)",
+                borderWidth: 1,
+                borderColor: "rgba(255,255,255,0.35)",
+                borderRadius: 14,
+                overflow: "hidden",
+              })}
+            >
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  width: "100%",
+                  paddingVertical: 12,
+                  paddingHorizontal: 14,
+                  gap: 10,
+                }}
+              >
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
+                  <MessageCircle size={16} color="white" strokeWidth={2.5} />
+                  <Text style={{ color: "white", fontSize: 14, fontWeight: "700" }} numberOfLines={1}>
+                    Open Team Chat
+                  </Text>
+                </View>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                  {teamChatUnreadCount > 0 ? (
+                    <View style={{ backgroundColor: "#EF4444", borderRadius: 10, minWidth: 20, height: 20, alignItems: "center", justifyContent: "center", paddingHorizontal: 6 }}>
+                      <Text style={{ color: "white", fontSize: 11, fontWeight: "700" }}>{teamChatUnreadCount}</Text>
+                    </View>
+                  ) : null}
+                  <ChevronRight size={16} color="rgba(255,255,255,0.9)" strokeWidth={2.5} />
+                </View>
+              </View>
+            </Pressable>
           </LinearGradient>
-        </Pressable>
+        </View>
 
-        {/* DMs / Group Messages section */}
+        {/* Messages section */}
         <View style={{ marginHorizontal: 16, marginTop: 28, marginBottom: 10, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
           <View>
             <Text style={{ fontSize: 20, fontWeight: "700", color: "#0F172A" }}>Messages</Text>
@@ -257,7 +302,7 @@ export default function ChatScreen() {
             <ActivityIndicator color="#4361EE" />
           </View>
         ) : conversations.length === 0 ? (
-          <View style={{ alignItems: "center", paddingHorizontal: 20, paddingVertical: 16 }} testID="conversations-empty-state">
+          <View style={{ alignItems: "center", paddingHorizontal: 20, paddingVertical: 8, marginBottom: 8 }} testID="conversations-empty-state">
             <View style={{ width: 88, height: 88, borderRadius: 44, backgroundColor: "#E8EEFF", alignItems: "center", justifyContent: "center", marginBottom: 14 }}>
               <MessageCircle size={40} color="#4361EE" strokeWidth={2} />
               <View

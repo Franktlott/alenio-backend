@@ -10,6 +10,15 @@ import {
   resolveGroupConversationContext,
   userHasPaidTeamPlan,
 } from "../lib/group-conversation-workspace";
+import {
+  canDeleteGroup,
+  canManageGroupAdmins,
+  canManageGroupMembers,
+  canRemoveGroupParticipant,
+  canTransferGroupOwnership,
+  formatGroupParticipants,
+} from "../lib/group-conversation-roles";
+import type { ConversationParticipantRole } from "@prisma/client";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -18,6 +27,27 @@ type Variables = {
 
 const dmsRouter = new Hono<{ Variables: Variables }>();
 dmsRouter.use("*", authGuard);
+
+const participantUserSelect = { id: true, name: true, email: true, image: true } as const;
+
+async function getGroupParticipant(
+  conversationId: string,
+  userId: string,
+) {
+  return prisma.conversationParticipant.findUnique({
+    where: { conversationId_userId: { conversationId, userId } },
+    include: {
+      conversation: { select: { id: true, isGroup: true } },
+    },
+  });
+}
+
+function myGroupRole(
+  participants: Array<{ userId: string; role: ConversationParticipantRole }>,
+  userId: string,
+): ConversationParticipantRole | null {
+  return participants.find((participant) => participant.userId === userId)?.role ?? null;
+}
 
 // GET /api/dms - list all conversations for current user
 dmsRouter.get("/", async (c) => {
@@ -30,7 +60,7 @@ dmsRouter.get("/", async (c) => {
         include: {
           participants: {
             include: {
-              user: { select: { id: true, name: true, email: true, image: true } },
+              user: { select: participantUserSelect },
             },
           },
           messages: {
@@ -50,7 +80,6 @@ dmsRouter.get("/", async (c) => {
     participations.map(async (p) => {
       const conv = p.conversation;
       const lastMessage = conv.messages[0] ?? null;
-      const participantUsers = conv.participants.map((cp) => cp.user);
 
       if (conv.isGroup) {
         const workspaceContext = await resolveGroupConversationContext(
@@ -62,7 +91,8 @@ dmsRouter.get("/", async (c) => {
           id: conv.id,
           isGroup: true,
           name: conv.name,
-          participants: participantUsers,
+          participants: formatGroupParticipants(conv.participants),
+          myRole: myGroupRole(conv.participants, user.id),
           recipient: null,
           workspaceContext,
           lastMessage,
@@ -70,6 +100,8 @@ dmsRouter.get("/", async (c) => {
           updatedAt: conv.updatedAt,
         };
       }
+
+      const participantUsers = conv.participants.map((cp) => cp.user);
 
       const other = conv.participants.find((cp) => cp.userId !== user.id);
       return {
@@ -115,7 +147,7 @@ dmsRouter.post("/find-or-create", async (c) => {
     include: {
       participants: {
         include: {
-          user: { select: { id: true, name: true, email: true, image: true } },
+          user: { select: participantUserSelect },
         },
       },
       messages: {
@@ -153,7 +185,7 @@ dmsRouter.post("/find-or-create", async (c) => {
     include: {
       participants: {
         include: {
-          user: { select: { id: true, name: true, email: true, image: true } },
+          user: { select: participantUserSelect },
         },
       },
     },
@@ -215,13 +247,16 @@ dmsRouter.post("/create-group", async (c) => {
       name: name.trim(),
       isGroup: true,
       participants: {
-        create: allIds.map((userId) => ({ userId })),
+        create: allIds.map((userId) => ({
+          userId,
+          role: userId === user.id ? "owner" : "member",
+        })),
       },
     },
     include: {
       participants: {
         include: {
-          user: { select: { id: true, name: true, email: true, image: true } },
+          user: { select: participantUserSelect },
         },
       },
     },
@@ -237,7 +272,8 @@ dmsRouter.post("/create-group", async (c) => {
       id: conversation.id,
       isGroup: true,
       name: conversation.name,
-      participants: conversation.participants.map((p) => p.user),
+      participants: formatGroupParticipants(conversation.participants),
+      myRole: "owner" as const,
       recipient: null,
       workspaceContext,
       lastMessage: null,
@@ -489,6 +525,250 @@ dmsRouter.delete("/:conversationId/messages/:messageId", async (c) => {
   return new Response(null, { status: 204 });
 });
 
+// POST /api/dms/:conversationId/members — add people to a group (owner or admin)
+dmsRouter.post("/:conversationId/members", async (c) => {
+  const user = c.get("user")!;
+  const { conversationId } = c.req.param();
+  const { participantIds } = await c.req.json<{ participantIds?: string[] }>();
+
+  if (!Array.isArray(participantIds) || participantIds.length < 1) {
+    return c.json({ error: { message: "At least one participant is required", code: "VALIDATION_ERROR" } }, 400);
+  }
+
+  const actor = await getGroupParticipant(conversationId, user.id);
+  if (!actor?.conversation.isGroup) {
+    return c.json({ error: { message: "Conversation not found", code: "NOT_FOUND" } }, 404);
+  }
+  if (!canManageGroupMembers(actor.role)) {
+    return c.json({ error: { message: "Only the group owner can add members", code: "FORBIDDEN" } }, 403);
+  }
+
+  const uniqueIds = Array.from(new Set(participantIds.filter((id) => id && id !== user.id)));
+  if (uniqueIds.length === 0) {
+    return c.json({ error: { message: "No valid participants to add", code: "VALIDATION_ERROR" } }, 400);
+  }
+
+  const existing = await prisma.conversationParticipant.findMany({
+    where: { conversationId },
+    select: { userId: true },
+  });
+  const existingIds = new Set(existing.map((row) => row.userId));
+  const toAdd = uniqueIds.filter((id) => !existingIds.has(id));
+  if (toAdd.length === 0) {
+    return c.json({ error: { message: "Everyone selected is already in the group", code: "VALIDATION_ERROR" } }, 400);
+  }
+
+  try {
+    await assertParticipantsShareWorkspaceWithCreator(user.id, toAdd);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Invalid group participants.";
+    return c.json({ error: { message, code: "VALIDATION_ERROR" } }, 400);
+  }
+
+  await prisma.conversationParticipant.createMany({
+    data: toAdd.map((userId) => ({
+      conversationId,
+      userId,
+      role: "member" as const,
+    })),
+    skipDuplicates: true,
+  });
+
+  await prisma.conversation.update({
+    where: { id: conversationId },
+    data: { updatedAt: new Date() },
+  });
+
+  const conversation = await prisma.conversation.findUnique({
+    where: { id: conversationId },
+    include: {
+      participants: {
+        include: { user: { select: participantUserSelect } },
+      },
+    },
+  });
+  if (!conversation) {
+    return c.json({ error: { message: "Conversation not found", code: "NOT_FOUND" } }, 404);
+  }
+
+  return c.json({
+    data: {
+      participants: formatGroupParticipants(conversation.participants),
+      myRole: myGroupRole(conversation.participants, user.id),
+    },
+  });
+});
+
+// DELETE /api/dms/:conversationId/members/:userId — remove someone from a group
+dmsRouter.delete("/:conversationId/members/:userId", async (c) => {
+  const user = c.get("user")!;
+  const { conversationId, userId: targetUserId } = c.req.param();
+
+  const actor = await getGroupParticipant(conversationId, user.id);
+  if (!actor?.conversation.isGroup) {
+    return c.json({ error: { message: "Conversation not found", code: "NOT_FOUND" } }, 404);
+  }
+  if (!canManageGroupMembers(actor.role)) {
+    return c.json({ error: { message: "Only the group owner can remove members", code: "FORBIDDEN" } }, 403);
+  }
+
+  const target = await prisma.conversationParticipant.findUnique({
+    where: { conversationId_userId: { conversationId, userId: targetUserId } },
+  });
+  if (!target) {
+    return c.json({ error: { message: "Member not found", code: "NOT_FOUND" } }, 404);
+  }
+  if (!canRemoveGroupParticipant(actor.role, target.role)) {
+    return c.json({ error: { message: "You cannot remove this member", code: "FORBIDDEN" } }, 403);
+  }
+
+  await prisma.conversationParticipant.delete({
+    where: { conversationId_userId: { conversationId, userId: targetUserId } },
+  });
+
+  await prisma.conversation.update({
+    where: { id: conversationId },
+    data: { updatedAt: new Date() },
+  });
+
+  const conversation = await prisma.conversation.findUnique({
+    where: { id: conversationId },
+    include: {
+      participants: {
+        include: { user: { select: participantUserSelect } },
+      },
+    },
+  });
+  if (!conversation) {
+    return c.json({ error: { message: "Conversation not found", code: "NOT_FOUND" } }, 404);
+  }
+
+  return c.json({
+    data: {
+      participants: formatGroupParticipants(conversation.participants),
+      myRole: myGroupRole(conversation.participants, user.id),
+    },
+  });
+});
+
+// POST /api/dms/:conversationId/transfer-ownership — promote another member to owner
+dmsRouter.post("/:conversationId/transfer-ownership", async (c) => {
+  const user = c.get("user")!;
+  const { conversationId } = c.req.param();
+  const { userId: newOwnerId } = await c.req.json<{ userId?: string }>();
+
+  if (!newOwnerId) {
+    return c.json({ error: { message: "userId is required", code: "VALIDATION_ERROR" } }, 400);
+  }
+  if (newOwnerId === user.id) {
+    return c.json({ error: { message: "You are already the owner", code: "VALIDATION_ERROR" } }, 400);
+  }
+
+  const actor = await getGroupParticipant(conversationId, user.id);
+  if (!actor?.conversation.isGroup) {
+    return c.json({ error: { message: "Conversation not found", code: "NOT_FOUND" } }, 404);
+  }
+  if (!canTransferGroupOwnership(actor.role)) {
+    return c.json({ error: { message: "Only the group owner can transfer ownership", code: "FORBIDDEN" } }, 403);
+  }
+
+  const target = await prisma.conversationParticipant.findUnique({
+    where: { conversationId_userId: { conversationId, userId: newOwnerId } },
+  });
+  if (!target) {
+    return c.json({ error: { message: "Member not found", code: "NOT_FOUND" } }, 404);
+  }
+  if (target.role === "owner") {
+    return c.json({ error: { message: "Member is already the owner", code: "VALIDATION_ERROR" } }, 400);
+  }
+
+  await prisma.$transaction([
+    prisma.conversationParticipant.update({
+      where: { conversationId_userId: { conversationId, userId: newOwnerId } },
+      data: { role: "owner" },
+    }),
+    prisma.conversationParticipant.update({
+      where: { conversationId_userId: { conversationId, userId: user.id } },
+      data: { role: "member" },
+    }),
+  ]);
+
+  const conversation = await prisma.conversation.findUnique({
+    where: { id: conversationId },
+    include: {
+      participants: {
+        include: { user: { select: participantUserSelect } },
+      },
+    },
+  });
+  if (!conversation) {
+    return c.json({ error: { message: "Conversation not found", code: "NOT_FOUND" } }, 404);
+  }
+
+  return c.json({
+    data: {
+      participants: formatGroupParticipants(conversation.participants),
+      myRole: myGroupRole(conversation.participants, user.id),
+    },
+  });
+});
+
+// PATCH /api/dms/:conversationId/participants/:userId/role — promote or demote group admins
+dmsRouter.patch("/:conversationId/participants/:userId/role", async (c) => {
+  const user = c.get("user")!;
+  const { conversationId, userId: targetUserId } = c.req.param();
+  const { role } = await c.req.json<{ role?: ConversationParticipantRole }>();
+
+  if (role !== "admin" && role !== "member") {
+    return c.json({ error: { message: "Role must be admin or member", code: "VALIDATION_ERROR" } }, 400);
+  }
+
+  const actor = await getGroupParticipant(conversationId, user.id);
+  if (!actor?.conversation.isGroup) {
+    return c.json({ error: { message: "Conversation not found", code: "NOT_FOUND" } }, 404);
+  }
+  if (!canManageGroupAdmins(actor.role)) {
+    return c.json({ error: { message: "Only the group owner can manage admins", code: "FORBIDDEN" } }, 403);
+  }
+
+  const target = await prisma.conversationParticipant.findUnique({
+    where: { conversationId_userId: { conversationId, userId: targetUserId } },
+  });
+  if (!target) {
+    return c.json({ error: { message: "Member not found", code: "NOT_FOUND" } }, 404);
+  }
+  if (target.role === "owner") {
+    return c.json({ error: { message: "Use transfer ownership instead", code: "VALIDATION_ERROR" } }, 400);
+  }
+  if (target.role === role) {
+    return c.json({ error: { message: `Member is already ${role === "admin" ? "an admin" : "a member"}`, code: "VALIDATION_ERROR" } }, 400);
+  }
+
+  await prisma.conversationParticipant.update({
+    where: { conversationId_userId: { conversationId, userId: targetUserId } },
+    data: { role },
+  });
+
+  const conversation = await prisma.conversation.findUnique({
+    where: { id: conversationId },
+    include: {
+      participants: {
+        include: { user: { select: participantUserSelect } },
+      },
+    },
+  });
+  if (!conversation) {
+    return c.json({ error: { message: "Conversation not found", code: "NOT_FOUND" } }, 404);
+  }
+
+  return c.json({
+    data: {
+      participants: formatGroupParticipants(conversation.participants),
+      myRole: myGroupRole(conversation.participants, user.id),
+    },
+  });
+});
+
 // POST /api/dms/:conversationId/leave — leave a conversation (removes self from participants)
 dmsRouter.post("/:conversationId/leave", async (c) => {
   const user = c.get("user")!;
@@ -506,6 +786,15 @@ dmsRouter.post("/:conversationId/leave", async (c) => {
     where: { conversationId_userId: { conversationId, userId: user.id } },
   });
   if (!participant) return c.json({ error: { message: "Not a participant", code: "FORBIDDEN" } }, 403);
+
+  if (conversation.isGroup && participant.role === "owner") {
+    return c.json({
+      error: {
+        message: "Group owners cannot leave. Transfer ownership to another member first.",
+        code: "FORBIDDEN",
+      },
+    }, 403);
+  }
 
   const remainingBeforeLeave = await prisma.conversationParticipant.count({ where: { conversationId } });
   const isLastParticipant = remainingBeforeLeave <= 1;
@@ -539,10 +828,12 @@ dmsRouter.delete("/:conversationId", async (c) => {
   const user = c.get("user")!;
   const { conversationId } = c.req.param();
 
-  const participant = await prisma.conversationParticipant.findUnique({
-    where: { conversationId_userId: { conversationId, userId: user.id } },
-  });
+  const participant = await getGroupParticipant(conversationId, user.id);
   if (!participant) return c.json({ error: { message: "Not a participant", code: "FORBIDDEN" } }, 403);
+
+  if (participant.conversation.isGroup && !canDeleteGroup(participant.role)) {
+    return c.json({ error: { message: "Only the group owner can delete the group", code: "FORBIDDEN" } }, 403);
+  }
 
   await prisma.conversation.delete({ where: { id: conversationId } });
   return new Response(null, { status: 204 });

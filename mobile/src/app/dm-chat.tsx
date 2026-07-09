@@ -16,7 +16,7 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { usePaginatedDmMessages } from "@/lib/chat-message-pagination";
 import { LinearGradient } from "expo-linear-gradient";
-import { ArrowLeft, Send, Paperclip, X, Users, Video, Trash2, Download, Reply, Copy, Camera, ImageIcon, MoreVertical, LogOut } from "lucide-react-native";
+import { ArrowLeft, Send, Paperclip, X, Users, Video, Trash2, Download, Reply, Copy, Camera, ImageIcon, MoreVertical, LogOut, UserPlus, UserMinus, Crown, Shield } from "lucide-react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
@@ -27,7 +27,7 @@ import { MessageActionSheet, type MessageAnchorLayout } from "@/components/Messa
 import { MessageLongPressRow } from "@/components/MessageLongPressRow";
 import { ImageSendPreview } from "@/components/ImageSendPreview";
 import { MentionPicker } from "@/components/MentionPicker";
-import type { DirectMessage, MessageReaction, Conversation } from "@/lib/types";
+import type { DirectMessage, MessageReaction, Conversation, GroupParticipantRole } from "@/lib/types";
 import * as Clipboard from "expo-clipboard";
 import ReanimatedSwipeable from "react-native-gesture-handler/ReanimatedSwipeable";
 import Reanimated, { useAnimatedStyle, interpolate, type SharedValue } from "react-native-reanimated";
@@ -42,6 +42,7 @@ import { SafeKeyboardAvoidingView } from "@/lib/safe-keyboard-controller";
 import { dmOtherParticipant, resolveUserImageUrl, userInitials } from "@/lib/user-avatar";
 import { UserAvatar } from "@/components/UserAvatar";
 import { groupWorkspaceLabel } from "@/lib/group-workspace-label";
+import { GroupManageModals } from "@/components/GroupManageModals";
 
 function DeleteAction({ drag, onDelete }: { drag: SharedValue<number>; onDelete: () => void }) {
   const styleAnimation = useAnimatedStyle(() => ({
@@ -105,6 +106,7 @@ export default function DMChatScreen() {
   const [showOptions, setShowOptions] = useState(false);
   const [showConvDeleteConfirm, setShowConvDeleteConfirm] = useState(false);
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+  const [groupManageMode, setGroupManageMode] = useState<"add" | "remove" | "transfer" | "admins" | null>(null);
   const [reactionView, setReactionView] = useState<MessageReaction[] | null>(null);
   const [mediaPreview, setMediaPreview] = useState<{ uri: string; mimeType: string; filename: string } | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -126,7 +128,13 @@ export default function DMChatScreen() {
   });
 
   const currentConversation = conversations.find((c) => c.id === conversationId);
-  const groupParticipantCount = currentConversation?.participants?.length ?? 0;
+  const groupParticipants = currentConversation?.participants ?? [];
+  const groupParticipantCount = groupParticipants.length;
+  const myGroupRole: GroupParticipantRole = currentConversation?.myRole ?? groupParticipants.find((p) => p.id === currentUserId)?.role ?? "member";
+  const canManageGroupMembers = myGroupRole === "owner";
+  const canDeleteGroup = myGroupRole === "owner";
+  const canManageGroupAdmins = myGroupRole === "owner";
+  const canLeaveGroup = !isGroup || myGroupRole !== "owner";
   const groupWorkspace = isGroup ? groupWorkspaceLabel(currentConversation?.workspaceContext) : null;
   const isLastGroupMember = isGroup && groupParticipantCount <= 1;
   const headerUser = useMemo(() => {
@@ -189,6 +197,9 @@ export default function DMChatScreen() {
       queryClient.removeQueries({ queryKey: ["dm-messages", conversationId] });
       router.replace("/(app)/chat");
     },
+    onError: (err: Error) => {
+      toast({ title: err.message || "Could not leave group", preset: "error" });
+    },
   });
 
   const deleteConversationMutation = useMutation({
@@ -197,7 +208,15 @@ export default function DMChatScreen() {
       queryClient.invalidateQueries({ queryKey: ["dms"] });
       router.replace("/(app)/chat");
     },
+    onError: (err: Error) => {
+      toast({ title: err.message || "Could not delete group", preset: "error" });
+    },
   });
+
+  const openGroupManage = (mode: "add" | "remove" | "transfer" | "admins") => {
+    setShowOptions(false);
+    setTimeout(() => setGroupManageMode(mode), 300);
+  };
 
   const handleSend = async () => {
     const content = input.trim();
@@ -475,7 +494,43 @@ export default function DMChatScreen() {
               <Text style={{ fontSize: 13, fontWeight: "600", color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.5, paddingHorizontal: 20, paddingBottom: 8 }}>
                 {isGroup ? "Group Options" : "Conversation Options"}
               </Text>
-              {isGroup ? (
+              {isGroup && canManageGroupMembers ? (
+                <TouchableOpacity
+                  onPress={() => openGroupManage("add")}
+                  style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 16, borderTopWidth: 1, borderTopColor: "#F1F5F9" }}
+                >
+                  <Text style={{ fontSize: 16, color: "#0F172A" }}>Add Members</Text>
+                  <UserPlus size={20} color="#4361EE" />
+                </TouchableOpacity>
+              ) : null}
+              {isGroup && canManageGroupMembers ? (
+                <TouchableOpacity
+                  onPress={() => openGroupManage("remove")}
+                  style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 16, borderTopWidth: 1, borderTopColor: "#F1F5F9" }}
+                >
+                  <Text style={{ fontSize: 16, color: "#0F172A" }}>Remove Members</Text>
+                  <UserMinus size={20} color="#EF4444" />
+                </TouchableOpacity>
+              ) : null}
+              {isGroup && canManageGroupAdmins ? (
+                <TouchableOpacity
+                  onPress={() => openGroupManage("admins")}
+                  style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 16, borderTopWidth: 1, borderTopColor: "#F1F5F9" }}
+                >
+                  <Text style={{ fontSize: 16, color: "#0F172A" }}>Manage Admins</Text>
+                  <Shield size={20} color="#4361EE" />
+                </TouchableOpacity>
+              ) : null}
+              {isGroup && canDeleteGroup ? (
+                <TouchableOpacity
+                  onPress={() => openGroupManage("transfer")}
+                  style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 16, borderTopWidth: 1, borderTopColor: "#F1F5F9" }}
+                >
+                  <Text style={{ fontSize: 16, color: "#0F172A" }}>Transfer Ownership</Text>
+                  <Crown size={20} color="#F59E0B" />
+                </TouchableOpacity>
+              ) : null}
+              {isGroup && canDeleteGroup ? (
                 <TouchableOpacity
                   onPress={() => { setShowOptions(false); setTimeout(() => setShowConvDeleteConfirm(true), 300); }}
                   style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 16, borderTopWidth: 1, borderTopColor: "#F1F5F9" }}
@@ -483,7 +538,8 @@ export default function DMChatScreen() {
                   <Text style={{ fontSize: 16, color: "#EF4444" }}>Delete Group</Text>
                   <Trash2 size={20} color="#EF4444" />
                 </TouchableOpacity>
-              ) : (
+              ) : null}
+              {!isGroup ? (
                 <TouchableOpacity
                   onPress={() => { setShowOptions(false); setTimeout(() => setShowConvDeleteConfirm(true), 300); }}
                   style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 16, borderTopWidth: 1, borderTopColor: "#F1F5F9" }}
@@ -491,8 +547,8 @@ export default function DMChatScreen() {
                   <Text style={{ fontSize: 16, color: "#EF4444" }}>Delete Conversation</Text>
                   <Trash2 size={20} color="#EF4444" />
                 </TouchableOpacity>
-              )}
-              {isGroup ? (
+              ) : null}
+              {isGroup && canLeaveGroup ? (
                 <TouchableOpacity
                   onPress={() => {
                     setShowOptions(false);
@@ -514,6 +570,16 @@ export default function DMChatScreen() {
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
+
+      {isGroup ? (
+        <GroupManageModals
+          conversationId={conversationId}
+          participants={groupParticipants}
+          currentUserId={currentUserId}
+          mode={groupManageMode}
+          onClose={() => setGroupManageMode(null)}
+        />
+      ) : null}
 
       {/* Leave group confirmation */}
       <Modal visible={showLeaveConfirm} transparent animationType="fade" onRequestClose={() => setShowLeaveConfirm(false)}>

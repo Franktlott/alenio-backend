@@ -58,6 +58,7 @@ import { ensureGoLeaderPinSchema } from "./lib/ensure-go-leader-pin-schema";
 import { ensureWorkspaceModulesSchema } from "./lib/ensure-workspace-modules-schema";
 import { ensureSubscriptionCancelSchema } from "./lib/ensure-subscription-cancel-schema";
 import { ensureConversationTeamSchema } from "./lib/ensure-conversation-team-schema";
+import { ensureGroupParticipantRolesSchema } from "./lib/ensure-group-participant-roles-schema";
 import { ensureCalendarConnectionSchema } from "./lib/ensure-calendar-connection-schema";
 import { calendarConnectionsRouter } from "./routes/calendar-connections";
 import { developmentGoalsRouter } from "./routes/development-goals";
@@ -79,7 +80,7 @@ if (!isProduction) {
 /** Dev safety net + prod fallback when preDeploy db push missed a table. */
 const startupSchemaReady = Promise.all([
   ...(isProduction
-    ? [ensureGoLoginSchema(prisma), ensureWorkplaceAlertsSchema(prisma), ensureGoFrontendSettingsSchema(prisma), ensureGoLeaderPinSchema(prisma), ensureWorkspaceModulesSchema(prisma), ensureSubscriptionCancelSchema(prisma), ensureConversationTeamSchema(prisma)]
+    ? [ensureGoLoginSchema(prisma), ensureWorkplaceAlertsSchema(prisma), ensureGoFrontendSettingsSchema(prisma), ensureGoLeaderPinSchema(prisma), ensureWorkspaceModulesSchema(prisma), ensureSubscriptionCancelSchema(prisma), ensureConversationTeamSchema(prisma), ensureGroupParticipantRolesSchema(prisma)]
     : [
         ensureOneOnOneSchema(prisma),
         ensureDevelopmentPlanSchema(prisma),
@@ -96,6 +97,7 @@ const startupSchemaReady = Promise.all([
         ensureWorkspaceModulesSchema(prisma),
         ensureSubscriptionCancelSchema(prisma),
         ensureConversationTeamSchema(prisma),
+        ensureGroupParticipantRolesSchema(prisma),
       ]),
 ]);
 

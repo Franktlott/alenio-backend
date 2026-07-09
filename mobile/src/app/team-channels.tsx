@@ -14,7 +14,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { LinearGradient } from "expo-linear-gradient";
-import { MessageCircle, Users, Hash, ChevronLeft, Plus } from "lucide-react-native";
+import { MessageCircle, Hash, ChevronLeft, Plus } from "lucide-react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { toast } from "burnt";
@@ -137,6 +137,7 @@ export default function TeamChannelsScreen() {
   const topThreeMembers = members.slice(0, 3).map((m) => ({ image: m.user.image ?? null, name: m.user.name ?? null }));
   const lastGeneralMessage = teamGeneralMessages[0];
   const teamPhotoUrl = resolveUserImageUrl(teamDetail?.image);
+  const displayTeamName = teamName || teamDetail?.name || "Workspace";
 
   // Determine if the current user is owner/admin of the team
   const currentMember = members.find((m) => m.user.id === session?.user?.id);
@@ -208,11 +209,16 @@ export default function TeamChannelsScreen() {
         contentContainerStyle={{ paddingBottom: insets.bottom + 100 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" />}
       >
-        {/* Team Chat card */}
+        {/* Team Chat section */}
+        <View style={{ marginHorizontal: 16, marginTop: 20, marginBottom: 10 }}>
+          <Text style={{ fontSize: 20, fontWeight: "700", color: "#0F172A" }}>Team Chat</Text>
+          <Text style={{ fontSize: 13, color: "#6B7280", marginTop: 2 }}>{displayTeamName}</Text>
+        </View>
+
         <Pressable
           testID="team-channels-team-chat-button"
           onPress={() => router.push({ pathname: "/team-chat", params: { teamId, teamName: teamName ?? "" } })}
-          style={{ marginHorizontal: 16, marginTop: 20, backgroundColor: "white", borderRadius: 20, overflow: "hidden", shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 2 }}
+          style={{ marginHorizontal: 16, marginBottom: 10, backgroundColor: "white", borderRadius: 20, overflow: "hidden", shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 2 }}
         >
           <View style={{ height: 3, backgroundColor: "#4361EE" }} />
           <View style={{ flexDirection: "row", alignItems: "center", padding: 16, gap: 12 }}>
