@@ -622,8 +622,25 @@ input {
 
 .chat-group-item-meta {
   font-size: 0.6875rem;
-  font-weight: 500;
   color: #94a3b8;
+}
+
+.chat-group-item-workspace {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: #6366f1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-create-user-workspace {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: #6366f1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .chat-avatar {

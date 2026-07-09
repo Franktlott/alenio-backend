@@ -823,7 +823,9 @@ export function ChatPage() {
   const channelHeaderHash = !isDmMode;
   const channelDescription = isDmMode
     ? activeConversation?.isGroup
-      ? `${activeConversation.participants.length} members`
+      ? activeConversation.workspaceContext?.label
+        ? `${activeConversation.workspaceContext.label} · ${activeConversation.participants.length} members`
+        : `${activeConversation.participants.length} members`
       : "Private conversation"
     : activeTopic?.description?.trim() ||
       (selectedTopicId === "general" ? "General team conversations and updates." : `Messages in ${activeTopic?.name ?? "this channel"}.`);
@@ -1114,6 +1116,9 @@ export function ChatPage() {
                         </span>
                         <span className="chat-group-item-copy">
                           <span className="chat-group-item-name">{conv.name ?? "Group chat"}</span>
+                          {conv.workspaceContext?.label ? (
+                            <span className="chat-group-item-workspace">{conv.workspaceContext.label}</span>
+                          ) : null}
                           <span className="chat-group-item-meta">{conv.participants.length} members</span>
                         </span>
                       </li>
@@ -1521,7 +1526,6 @@ export function ChatPage() {
         open={createGroupOpen}
         saving={createSaving}
         error={createGroupOpen ? createErr : null}
-        teamMembers={teamDetail?.members ?? []}
         myUserId={me?.id ?? ""}
         onClose={closeCreateModals}
         onSubmit={(input) => void onCreateGroup(input)}

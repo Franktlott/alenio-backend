@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  createGroupDm,
   createTeamTopic,
   findOrCreateDm,
+  fetchGroupMemberCandidates,
   searchUsers,
+  type GroupMemberCandidate,
   type UserSearchRow,
   type WebTeamMemberRow,
 } from "../lib/api";
@@ -52,6 +53,9 @@ function UserPickList({
               )}
               <span className="chat-create-user-copy">
                 <span className="chat-create-user-name">{userLabel(user)}</span>
+                {"workspaceLabel" in user && user.workspaceLabel ? (
+                  <span className="chat-create-user-workspace">{user.workspaceLabel}</span>
+                ) : null}
                 {user.email && user.email !== user.name ? (
                   <span className="chat-create-user-email">{user.email}</span>
                 ) : null}
@@ -264,7 +268,6 @@ type CreateGroupModalProps = {
   open: boolean;
   saving: boolean;
   error: string | null;
-  teamMembers: WebTeamMemberRow[];
   myUserId: string;
   onClose: () => void;
   onSubmit: (input: { name: string; participantIds: string[] }) => void;
@@ -274,61 +277,47 @@ export function CreateGroupModal({
   open,
   saving,
   error,
-  teamMembers,
   myUserId,
   onClose,
   onSubmit,
 }: CreateGroupModalProps) {
   const [groupName, setGroupName] = useState("");
   const [query, setQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<UserPickRow[]>([]);
-  const [searching, setSearching] = useState(false);
-  const [selected, setSelected] = useState<UserPickRow[]>([]);
+  const [candidates, setCandidates] = useState<GroupMemberCandidate[]>([]);
+  const [loadingCandidates, setLoadingCandidates] = useState(false);
+  const [selected, setSelected] = useState<GroupMemberCandidate[]>([]);
 
   useEffect(() => {
     if (!open) {
       setGroupName("");
       setQuery("");
-      setSearchResults([]);
+      setCandidates([]);
       setSelected([]);
     }
   }, [open]);
 
   useEffect(() => {
-    if (!open || query.trim().length < 2) {
-      setSearchResults([]);
-      setSearching(false);
-      return;
-    }
+    if (!open) return;
     let cancelled = false;
-    setSearching(true);
-    void searchUsers(query)
+    setLoadingCandidates(true);
+    void fetchGroupMemberCandidates(query)
       .then((rows) => {
-        if (!cancelled) setSearchResults(rows.filter((u) => u.id !== myUserId));
+        if (!cancelled) setCandidates(rows.filter((u) => u.id !== myUserId));
       })
       .catch(() => {
-        if (!cancelled) setSearchResults([]);
+        if (!cancelled) setCandidates([]);
       })
       .finally(() => {
-        if (!cancelled) setSearching(false);
+        if (!cancelled) setLoadingCandidates(false);
       });
     return () => {
       cancelled = true;
     };
   }, [open, query, myUserId]);
 
-  const teamUsers = useMemo(
-    () =>
-      teamMembers
-        .filter((m) => m.userId !== myUserId)
-        .map((m) => m.user),
-    [teamMembers, myUserId],
-  );
-
-  const displayUsers = query.trim().length >= 2 ? searchResults : teamUsers;
   const selectedIds = useMemo(() => new Set(selected.map((u) => u.id)), [selected]);
 
-  const toggleUser = (user: UserPickRow) => {
+  const toggleUser = (user: GroupMemberCandidate) => {
     setSelected((prev) =>
       prev.some((u) => u.id === user.id) ? prev.filter((u) => u.id !== user.id) : [...prev, user],
     );
@@ -352,7 +341,7 @@ export function CreateGroupModal({
           <h3 id="chat-create-group-title" className="enterprise-task-modal-title">
             New group message
           </h3>
-          <p className="enterprise-muted">Add a name and pick at least one teammate.</p>
+          <p className="enterprise-muted">Add a name and pick people from any of your workspaces.</p>
         </header>
         <div className="chat-create-modal-body">
           {error ? <p className="enterprise-form-error" role="alert">{error}</p> : null}
@@ -371,16 +360,16 @@ export function CreateGroupModal({
             className="auth-input"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search teammates…"
+            placeholder="Search people across your workspaces…"
           />
           {selected.length > 0 ? (
             <p className="chat-create-selected-count">
               {selected.length} selected
             </p>
           ) : null}
-          {searching ? <p className="enterprise-muted">Searching…</p> : null}
+          {loadingCandidates ? <p className="enterprise-muted">Loading people…</p> : null}
           <UserPickList
-            users={displayUsers}
+            users={candidates}
             multiSelect
             selectedIds={selectedIds}
             onToggle={toggleUser}

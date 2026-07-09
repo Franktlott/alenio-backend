@@ -130,6 +130,7 @@ model Team {
   briefings Briefing[]
   walkTemplates WalkTemplate[]
   walkCompletions WalkCompletion[]
+  conversations Conversation[]
   workspaceModules WorkspaceModule[]
   moduleTestSessions ModuleTestSession[]
 }
@@ -485,10 +486,15 @@ model Conversation {
   id           String                    @id @default(cuid())
   name         String?
   isGroup      Boolean                   @default(false)
+  /** Workspace the group was created in (used to label cross-workspace chat lists). */
+  teamId       String?
+  team         Team?                     @relation(fields: [teamId], references: [id], onDelete: SetNull)
   createdAt    DateTime                  @default(now())
   updatedAt    DateTime                  @updatedAt
   participants ConversationParticipant[]
   messages     DirectMessage[]
+
+  @@index([teamId])
 }
 
 model ConversationParticipant {

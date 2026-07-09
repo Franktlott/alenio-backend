@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useCallback, useState } from "react";
 import {
   View,
   Text,
@@ -46,7 +46,8 @@ import { StandardsStatusKey } from "@/components/StandardsStatusKey";
 import { useTeamStore } from "@/lib/state/team-store";
 import { useSession } from "@/lib/auth/use-session";
 import QRCode from "react-native-qrcode-svg";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
+import { reconcileActiveTeamAfterRemoval } from "@/lib/workspace-switch";
 import type { Team, TeamMember, Task } from "@/lib/types";
 import { NoTeamPlaceholder } from "@/components/NoTeamPlaceholder";
 import { AddMemberModal } from "@/components/AddMemberModal";
@@ -282,6 +283,7 @@ export default function TeamScreen() {
   const insets = useSafeAreaInsets();
   const TAB_BAR_CLEARANCE = insets.bottom + 84;
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
+  const setActiveTeamId = useTeamStore((s) => s.setActiveTeamId);
   const hasHydrated = useTeamStore((s) => s._hasHydrated);
   const { data: session } = useSession();
   const isDemo = useDemoMode();
@@ -293,7 +295,15 @@ export default function TeamScreen() {
     queryKey: ["team", activeTeamId],
     queryFn: () => api.get<Team>(`/api/teams/${activeTeamId}`),
     enabled: !!activeTeamId,
+    staleTime: 0,
   });
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!session?.user || !activeTeamId) return;
+      void reconcileActiveTeamAfterRemoval(activeTeamId, setActiveTeamId, queryClient);
+    }, [session?.user, activeTeamId, setActiveTeamId, queryClient]),
+  );
 
   const currentMembership = team?.members?.find((m) => m.userId === session?.user?.id);
   const myRole = currentMembership?.role;

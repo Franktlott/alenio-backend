@@ -41,6 +41,7 @@ import { useMention } from "@/lib/useMention";
 import { SafeKeyboardAvoidingView } from "@/lib/safe-keyboard-controller";
 import { dmOtherParticipant, resolveUserImageUrl, userInitials } from "@/lib/user-avatar";
 import { UserAvatar } from "@/components/UserAvatar";
+import { groupWorkspaceLabel } from "@/lib/group-workspace-label";
 
 function DeleteAction({ drag, onDelete }: { drag: SharedValue<number>; onDelete: () => void }) {
   const styleAnimation = useAnimatedStyle(() => ({
@@ -126,6 +127,7 @@ export default function DMChatScreen() {
 
   const currentConversation = conversations.find((c) => c.id === conversationId);
   const groupParticipantCount = currentConversation?.participants?.length ?? 0;
+  const groupWorkspace = isGroup ? groupWorkspaceLabel(currentConversation?.workspaceContext) : null;
   const isLastGroupMember = isGroup && groupParticipantCount <= 1;
   const headerUser = useMemo(() => {
     if (isGroup) {
@@ -344,7 +346,9 @@ export default function DMChatScreen() {
           </View>
           <View className="flex-1">
             <Text style={{ color: "white", fontSize: 18, fontWeight: "700" }}>{headerUser.name}</Text>
-            <Text className="text-white/70 text-xs">{isGroup ? "Group chat" : "Direct message"}</Text>
+            <Text className="text-white/70 text-xs">
+              {isGroup ? (groupWorkspace ?? "Group chat") : "Direct message"}
+            </Text>
           </View>
           {!isDemo ? (
             <TouchableOpacity

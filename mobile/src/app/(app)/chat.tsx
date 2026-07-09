@@ -30,6 +30,7 @@ import { useSubscriptionStore } from "@/lib/state/subscription-store";
 import { PAYWALL_BODY, PAYWALL_TITLE } from "@/lib/plan-access-copy";
 import { dmOtherParticipant, resolveUserImageUrl } from "@/lib/user-avatar";
 import { UserAvatar } from "@/components/UserAvatar";
+import { groupWorkspaceLabel } from "@/lib/group-workspace-label";
 
 const PINNED_DMS_KEY = "pinned_dms";
 
@@ -292,6 +293,7 @@ export default function ChatScreen() {
             const displayName = isGroup
               ? (conv.name ?? conv.participants?.map((p) => p.name ?? "").filter(Boolean).join(", ") ?? "Group")
               : (otherUser?.name?.trim() || otherUser?.email?.trim() || "Direct Message");
+            const groupWorkspace = isGroup ? groupWorkspaceLabel(conv.workspaceContext) : null;
             const lastMsg = conv.lastMessage;
             const timeStr = lastMsg ? formatTime(lastMsg.createdAt) : (conv.updatedAt ? formatTime(conv.updatedAt) : "");
 
@@ -334,11 +336,16 @@ export default function ChatScreen() {
                   )}
 
                   {/* Content */}
-                  <View style={{ flex: 1 }}>
+                    <View style={{ flex: 1 }}>
                     <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 3 }}>
                       <Text style={{ fontSize: 15, fontWeight: "700", color: "#0F172A", flex: 1 }} numberOfLines={1}>{displayName}</Text>
                       <Text style={{ fontSize: 11, color: "#94A3B8", marginLeft: 8, flexShrink: 0 }}>{timeStr}</Text>
                     </View>
+                    {groupWorkspace ? (
+                      <Text style={{ fontSize: 11, fontWeight: "600", color: "#6366F1", marginBottom: 3 }} numberOfLines={1}>
+                        {groupWorkspace}
+                      </Text>
+                    ) : null}
                     <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
                       <Text style={{ fontSize: 13, color: "#6B7280", flex: 1 }} numberOfLines={1}>
                         {lastMsg

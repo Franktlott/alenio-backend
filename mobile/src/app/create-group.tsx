@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -15,34 +15,27 @@ import { router } from "expo-router";
 import { toast } from "burnt";
 import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
-import { useTeamStore } from "@/lib/state/team-store";
-import type { User, Team, Conversation } from "@/lib/types";
+import type { Conversation, GroupMemberCandidate } from "@/lib/types";
 
 export default function CreateGroupScreen() {
   const { data: session } = useSession();
-  const activeTeamId = useTeamStore((s) => s.activeTeamId);
   const queryClient = useQueryClient();
 
   const [groupName, setGroupName] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedUsers, setSelectedUsers] = useState<User[]>([]);
+  const [selectedUsers, setSelectedUsers] = useState<GroupMemberCandidate[]>([]);
 
-  // Fetch team members as suggestions
-  const { data: team } = useQuery({
-    queryKey: ["team", activeTeamId],
-    queryFn: () => api.get<Team>(`/api/teams/${activeTeamId}`),
-    enabled: !!activeTeamId,
-  });
-
-  // Search users when query is entered
-  const { data: searchResults = [], isFetching: isSearching } = useQuery({
-    queryKey: ["user-search", searchQuery],
-    queryFn: () => api.get<User[]>(`/api/users/search?q=${encodeURIComponent(searchQuery)}`),
-    enabled: searchQuery.trim().length >= 2,
+  const { data: candidates = [], isFetching: candidatesLoading } = useQuery({
+    queryKey: ["group-member-candidates", searchQuery],
+    queryFn: () =>
+      api.get<GroupMemberCandidate[]>(
+        `/api/dms/group-member-candidates${searchQuery.trim().length >= 2 ? `?q=${encodeURIComponent(searchQuery.trim())}` : ""}`,
+      ),
+    enabled: !!session?.user,
   });
 
   const createGroupMutation = useMutation({
-    mutationFn: (payload: { name: string; participantIds: string[]; teamId?: string }) =>
+    mutationFn: (payload: { name: string; participantIds: string[] }) =>
       api.post<Conversation>("/api/dms/create-group", payload),
     onSuccess: (conv) => {
       queryClient.invalidateQueries({ queryKey: ["dms"] });
@@ -60,35 +53,28 @@ export default function CreateGroupScreen() {
     },
   });
 
-  const toggleUser = (user: User) => {
+  const toggleUser = (user: GroupMemberCandidate) => {
     setSelectedUsers((prev) =>
       prev.some((u) => u.id === user.id)
         ? prev.filter((u) => u.id !== user.id)
-        : [...prev, user]
+        : [...prev, user],
     );
   };
 
   const isSelected = (userId: string) => selectedUsers.some((u) => u.id === userId);
 
-  // Build user list: search results if query is active, else team members (excluding self)
-  const currentUserId = session?.user?.id ?? "";
-  const teamMembers: User[] = (team?.members ?? [])
-    .filter((m) => m.userId !== currentUserId)
-    .map((m) => m.user);
-
-  const displayUsers =
-    searchQuery.trim().length >= 2
-      ? searchResults.filter((u) => u.id !== currentUserId)
-      : teamMembers;
+  const displayUsers = useMemo(() => {
+    const currentUserId = session?.user?.id ?? "";
+    return candidates.filter((user) => user.id !== currentUserId);
+  }, [candidates, session?.user?.id]);
 
   const canCreate = groupName.trim().length > 0 && selectedUsers.length >= 1;
 
   const handleCreate = () => {
-    if (!canCreate || !activeTeamId) return;
+    if (!canCreate) return;
     createGroupMutation.mutate({
       name: groupName.trim(),
       participantIds: selectedUsers.map((u) => u.id),
-      teamId: activeTeamId,
     });
   };
 
@@ -98,7 +84,6 @@ export default function CreateGroupScreen() {
       className="flex-1 bg-white dark:bg-slate-900"
       edges={["top", "bottom"]}
     >
-      {/* Header */}
       <View className="flex-row items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-800">
         <TouchableOpacity onPress={() => router.back()}>
           <X size={22} color="#64748B" />
@@ -122,7 +107,6 @@ export default function CreateGroupScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Group name input */}
       <View className="px-4 py-3 border-b border-slate-100 dark:border-slate-800">
         <View
           className="flex-row items-center bg-slate-100 dark:bg-slate-800 rounded-2xl px-4 py-3"
@@ -141,7 +125,6 @@ export default function CreateGroupScreen() {
         </View>
       </View>
 
-      {/* Selected users chips */}
       {selectedUsers.length > 0 ? (
         <View
           className="px-4 py-2 flex-row flex-wrap border-b border-slate-100 dark:border-slate-800"
@@ -155,7 +138,7 @@ export default function CreateGroupScreen() {
               style={{ gap: 6 }}
             >
               <Text className="text-indigo-700 dark:text-indigo-300 text-sm font-medium">
-                {u.name}
+                {u.name ?? u.email ?? "Member"}
               </Text>
               <X size={12} color="#6366F1" />
             </TouchableOpacity>
@@ -163,7 +146,6 @@ export default function CreateGroupScreen() {
         </View>
       ) : null}
 
-      {/* Search bar */}
       <View className="px-4 py-3">
         <View
           className="flex-row items-center bg-slate-100 dark:bg-slate-800 rounded-2xl px-4 py-2.5"
@@ -172,13 +154,13 @@ export default function CreateGroupScreen() {
           <Search size={16} color="#94A3B8" />
           <TextInput
             testID="user-search-input"
-            placeholder="Search by name or email..."
+            placeholder="Search people across your workspaces..."
             placeholderTextColor="#94A3B8"
             value={searchQuery}
             onChangeText={setSearchQuery}
             className="flex-1 text-sm text-slate-900 dark:text-white"
           />
-          {isSearching ? <ActivityIndicator size="small" color="#94A3B8" /> : null}
+          {candidatesLoading ? <ActivityIndicator size="small" color="#94A3B8" /> : null}
         </View>
       </View>
 
@@ -188,7 +170,6 @@ export default function CreateGroupScreen() {
         </Text>
       ) : null}
 
-      {/* User list */}
       <FlatList
         testID="user-list"
         data={displayUsers}
@@ -196,13 +177,15 @@ export default function CreateGroupScreen() {
         ListHeaderComponent={
           !searchQuery.trim() ? (
             <Text className="px-4 pb-2 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-              Team Members
+              People across your workspaces
             </Text>
           ) : null
         }
         ListEmptyComponent={
-          searchQuery.trim().length >= 2 && !isSearching ? (
-            <Text className="text-center text-slate-400 text-sm py-8">No users found</Text>
+          !candidatesLoading ? (
+            <Text className="text-center text-slate-400 text-sm py-8">
+              {searchQuery.trim().length >= 2 ? "No people found" : "No teammates available yet"}
+            </Text>
           ) : null
         }
         renderItem={({ item }) => (
@@ -225,8 +208,17 @@ export default function CreateGroupScreen() {
               )}
             </View>
             <View className="flex-1">
-              <Text className="font-semibold text-slate-900 dark:text-white">{item.name}</Text>
-              <Text className="text-xs text-slate-500">{item.email}</Text>
+              <Text className="font-semibold text-slate-900 dark:text-white">
+                {item.name ?? item.email ?? "Member"}
+              </Text>
+              <Text className="text-xs text-indigo-600 dark:text-indigo-300" numberOfLines={1}>
+                {item.workspaceLabel}
+              </Text>
+              {item.email && item.name ? (
+                <Text className="text-xs text-slate-500" numberOfLines={1}>
+                  {item.email}
+                </Text>
+              ) : null}
             </View>
             <View
               className="w-6 h-6 rounded-full border-2 items-center justify-center"

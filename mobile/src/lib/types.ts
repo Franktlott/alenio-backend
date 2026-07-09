@@ -116,11 +116,27 @@ export interface DirectMessage {
   sender: User;
 }
 
+export type GroupWorkspaceContext = {
+  label: string;
+  workspaces: Array<{ id: string; name: string }>;
+  isCrossWorkspace: boolean;
+};
+
+export type GroupMemberCandidate = {
+  id: string;
+  name: string | null;
+  email: string | null;
+  image: string | null;
+  workspaces: Array<{ id: string; name: string }>;
+  workspaceLabel: string;
+};
+
 export interface Conversation {
   id: string;
   isGroup: boolean;
   name?: string | null;
   participants?: User[];
+  workspaceContext?: GroupWorkspaceContext | null;
   createdAt: string;
   updatedAt: string;
   recipient: User | null;

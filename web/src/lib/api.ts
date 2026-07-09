@@ -235,12 +235,28 @@ export type TeamTopic = {
   _count?: { messages: number };
 };
 
+export type GroupWorkspaceContext = {
+  label: string;
+  workspaces: Array<{ id: string; name: string }>;
+  isCrossWorkspace: boolean;
+};
+
+export type GroupMemberCandidate = {
+  id: string;
+  name: string | null;
+  email: string | null;
+  image: string | null;
+  workspaces: Array<{ id: string; name: string }>;
+  workspaceLabel: string;
+};
+
 export type DmConversation = {
   id: string;
   isGroup: boolean;
   name: string | null;
   participants: Array<{ id: string; name: string | null; email: string | null; image: string | null }>;
   recipient: { id: string; name: string | null; email: string | null; image: string | null } | null;
+  workspaceContext?: GroupWorkspaceContext | null;
   lastMessage: {
     id: string;
     content: string | null;
@@ -819,12 +835,16 @@ export function findOrCreateDm(recipientId: string) {
   return apiPostJson<{ data: DmConversation }>("/api/dms/find-or-create", { recipientId }).then((r) => r.data);
 }
 
-export function createGroupDm(input: { name: string; participantIds: string[]; teamId?: string }) {
+export function createGroupDm(input: { name: string; participantIds: string[] }) {
   return apiPostJson<{ data: DmConversation }>("/api/dms/create-group", {
     name: input.name.trim(),
     participantIds: input.participantIds,
-    ...(input.teamId ? { teamId: input.teamId } : {}),
   }).then((r) => r.data);
+}
+
+export function fetchGroupMemberCandidates(query = "") {
+  const suffix = query.trim().length >= 2 ? `?q=${encodeURIComponent(query.trim())}` : "";
+  return apiGetJson<{ data: GroupMemberCandidate[] }>(`/api/dms/group-member-candidates${suffix}`).then((r) => r.data);
 }
 
 export function fetchDmConversations() {

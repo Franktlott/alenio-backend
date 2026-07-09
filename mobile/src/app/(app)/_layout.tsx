@@ -244,14 +244,7 @@ function FloatingTabBar({ state, descriptors, navigation }: any) {
             style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 3 }}
             testID={`tab-${name}`}
           >
-            <View style={{
-              alignItems: "center",
-              justifyContent: "center",
-              backgroundColor: isFocused ? "#EEF2FF" : "transparent",
-              borderRadius: 20,
-              paddingHorizontal: 10,
-              paddingVertical: 6,
-            }}>
+            <View style={{ alignItems: "center", justifyContent: "center" }}>
               <View>
                 <Icon size={20} color={isFocused ? "#4361EE" : "#94A3B8"} strokeWidth={isFocused ? 2.5 : 1.8} />
                 {badge ? (

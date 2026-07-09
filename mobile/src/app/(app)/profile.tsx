@@ -36,6 +36,7 @@ import { pickImage, takePhoto } from "@/lib/file-picker";
 import * as ImagePicker from "expo-image-picker";
 import { useTeamStore } from "@/lib/state/team-store";
 import { useSwitchWorkspace } from "@/hooks/use-switch-workspace";
+import { applyTeamRemovedFromAccount } from "@/lib/workspace-switch";
 import { toast } from "burnt";
 import { ACCOUNT_HUB_TITLE } from "@/lib/plan-access-copy";
 import type { Team } from "@/lib/types";
@@ -270,38 +271,19 @@ export default function ProfileScreen() {
   const deleteTeamMutation = useMutation({
     mutationFn: ({ id, body }: { id: string; body: { confirmPhrase?: string; password?: string } }) =>
       api.delete(`/api/teams/${id}`, body),
-    onSuccess: async () => {
-      const freshTeams = await queryClient.fetchQuery({
-        queryKey: ["teams"],
-        queryFn: () => api.get<Team[]>("/api/teams"),
-      });
+    onSuccess: async (_data, { id }) => {
       closeEditModal();
-      const remaining = freshTeams.filter((t) => t.id !== editingTeam?.id);
-      if (remaining.length > 0) {
-        setActiveTeamId(remaining[0].id);
-      } else {
-        setActiveTeamId(null);
-        router.replace("/onboarding");
-      }
+      await applyTeamRemovedFromAccount(id, activeTeamId, setActiveTeamId, queryClient);
+      toast({ title: "Workspace deleted", preset: "done" });
     },
     onError: () => toast({ title: "Failed to delete team", preset: "error" }),
   });
 
   const leaveTeamMutation = useMutation({
     mutationFn: (teamId: string) => api.delete(`/api/teams/${teamId}/leave`),
-    onSuccess: async () => {
-      const freshTeams = await queryClient.fetchQuery({
-        queryKey: ["teams"],
-        queryFn: () => api.get<Team[]>("/api/teams"),
-      });
+    onSuccess: async (_data, teamId) => {
       setLeavingTeam(null);
-      const remaining = freshTeams.filter((t) => t.id !== leavingTeam?.id);
-      if (remaining.length > 0) {
-        setActiveTeamId(remaining[0].id);
-      } else {
-        setActiveTeamId(null);
-        router.replace("/onboarding");
-      }
+      await applyTeamRemovedFromAccount(teamId, activeTeamId, setActiveTeamId, queryClient);
       toast({ title: "Left team", preset: "done" });
     },
     onError: () => toast({ title: "Failed to leave team", preset: "error" }),

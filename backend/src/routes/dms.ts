@@ -4,7 +4,12 @@ import { auth } from "../auth";
 import { authGuard } from "../middleware/auth-guard";
 import { sendPushToUsers } from "../lib/push";
 import { env } from "../env";
-import { teamSubscriptionRowHasTeamFeatures, getTeamSubscription } from "./subscription";
+import {
+  assertParticipantsShareWorkspaceWithCreator,
+  listGroupMemberCandidates,
+  resolveGroupConversationContext,
+  userHasPaidTeamPlan,
+} from "../lib/group-conversation-workspace";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -41,35 +46,45 @@ dmsRouter.get("/", async (c) => {
     orderBy: { conversation: { updatedAt: "desc" } },
   });
 
-  const conversations = participations.map((p) => {
-    const conv = p.conversation;
-    const lastMessage = conv.messages[0] ?? null;
+  const conversations = await Promise.all(
+    participations.map(async (p) => {
+      const conv = p.conversation;
+      const lastMessage = conv.messages[0] ?? null;
+      const participantUsers = conv.participants.map((cp) => cp.user);
 
-    if (conv.isGroup) {
+      if (conv.isGroup) {
+        const workspaceContext = await resolveGroupConversationContext(
+          user.id,
+          conv.participants.map((cp) => cp.userId),
+        );
+
+        return {
+          id: conv.id,
+          isGroup: true,
+          name: conv.name,
+          participants: participantUsers,
+          recipient: null,
+          workspaceContext,
+          lastMessage,
+          createdAt: conv.createdAt,
+          updatedAt: conv.updatedAt,
+        };
+      }
+
+      const other = conv.participants.find((cp) => cp.userId !== user.id);
       return {
         id: conv.id,
-        isGroup: true,
-        name: conv.name,
-        participants: conv.participants.map(cp => cp.user),
-        recipient: null,
+        isGroup: false,
+        name: null,
+        participants: participantUsers,
+        recipient: other?.user ?? null,
+        workspaceContext: null,
         lastMessage,
         createdAt: conv.createdAt,
         updatedAt: conv.updatedAt,
       };
-    }
-
-    const other = conv.participants.find((cp) => cp.userId !== user.id);
-    return {
-      id: conv.id,
-      isGroup: false,
-      name: null,
-      participants: conv.participants.map(cp => cp.user),
-      recipient: other?.user ?? null,
-      lastMessage,
-      createdAt: conv.createdAt,
-      updatedAt: conv.updatedAt,
-    };
-  });
+    }),
+  );
 
   return c.json({ data: conversations });
 });
@@ -159,11 +174,19 @@ dmsRouter.post("/find-or-create", async (c) => {
   }, 201);
 });
 
+// GET /api/dms/group-member-candidates — teammates across all of the user's workspaces
+dmsRouter.get("/group-member-candidates", async (c) => {
+  const user = c.get("user")!;
+  const q = c.req.query("q")?.trim() ?? "";
+  const candidates = await listGroupMemberCandidates(user.id, q);
+  return c.json({ data: candidates });
+});
+
 // POST /api/dms/create-group - create a group conversation
 dmsRouter.post("/create-group", async (c) => {
   const user = c.get("user")!;
   const body = await c.req.json();
-  const { name, participantIds, teamId: bodyTeamId } = body;
+  const { name, participantIds } = body;
 
   if (!name?.trim()) {
     return c.json({ error: { message: "Group name is required", code: "VALIDATION_ERROR" } }, 400);
@@ -172,33 +195,16 @@ dmsRouter.post("/create-group", async (c) => {
     return c.json({ error: { message: "At least one participant is required", code: "VALIDATION_ERROR" } }, 400);
   }
 
-  let hasPaidPlan = false;
-  if (typeof bodyTeamId === "string" && bodyTeamId.trim()) {
-    const teamId = bodyTeamId.trim();
-    const membership = await prisma.teamMember.findUnique({
-      where: { userId_teamId: { userId: user.id, teamId } },
-    });
-    if (!membership) {
-      return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
-    }
-    const subscription = await getTeamSubscription(teamId);
-    hasPaidPlan = teamSubscriptionRowHasTeamFeatures(subscription);
-  } else {
-    const userTeams = await prisma.teamMember.findMany({
-      where: { userId: user.id },
-      select: { teamId: true },
-    });
-    for (const { teamId } of userTeams) {
-      const subscription = await getTeamSubscription(teamId);
-      if (teamSubscriptionRowHasTeamFeatures(subscription)) {
-        hasPaidPlan = true;
-        break;
-      }
-    }
-  }
-
+  const hasPaidPlan = await userHasPaidTeamPlan(user.id);
   if (!hasPaidPlan) {
     return c.json({ error: { message: "Group chats require Alenio Team", code: "SUBSCRIPTION_REQUIRED" } }, 403);
+  }
+
+  try {
+    await assertParticipantsShareWorkspaceWithCreator(user.id, participantIds);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Invalid group participants.";
+    return c.json({ error: { message, code: "VALIDATION_ERROR" } }, 400);
   }
 
   // Include the creator + all participants (deduplicated)
@@ -221,13 +227,19 @@ dmsRouter.post("/create-group", async (c) => {
     },
   });
 
+  const workspaceContext = await resolveGroupConversationContext(
+    user.id,
+    conversation.participants.map((participant) => participant.userId),
+  );
+
   return c.json({
     data: {
       id: conversation.id,
       isGroup: true,
       name: conversation.name,
-      participants: conversation.participants.map(p => p.user),
+      participants: conversation.participants.map((p) => p.user),
       recipient: null,
+      workspaceContext,
       lastMessage: null,
       createdAt: conversation.createdAt,
       updatedAt: conversation.updatedAt,
