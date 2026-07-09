@@ -453,7 +453,9 @@ async function createFollowUpTasks(
   }
 }
 
-  }
+function plannedOneOnOneTitle(memberName: string): string {
+  const trimmed = memberName.trim();
+  return trimmed ? `1:1 — ${trimmed}` : "1:1 check-in";
 }
 
 // GET /api/teams/:teamId/members/:memberUserId/planned-one-on-ones
@@ -477,17 +479,31 @@ oneOnOneMeetingsRouter.get("/:memberUserId/planned-one-on-ones", async (c) => {
 
   try {
     const now = Date.now();
+    const member = await prisma.teamMember.findUnique({
+      where: { userId_teamId: { userId: memberUserId, teamId } },
+      include: { user: { select: { name: true, email: true } } },
+    });
+    const memberLabel = member?.user.name?.trim() || member?.user.email?.split("@")[0] || "";
+    const legacyTitle = memberLabel ? plannedOneOnOneTitle(memberLabel) : null;
+
     const events = await prisma.calendarEvent.findMany({
       where: {
         teamId,
-        oneOnOneMemberUserId: memberUserId,
-        OR: [{ isOneOnOne: true }, { title: { startsWith: "1:1 —" } }],
+        createdById: user.id,
+        OR: [
+          { oneOnOneMemberUserId: memberUserId },
+          ...(legacyTitle ? [{ title: legacyTitle }] : []),
+        ],
+        AND: [
+          {
+            OR: [{ isOneOnOne: true }, { title: { startsWith: "1:1 —" } }],
+          },
+        ],
       },
       orderBy: { startDate: "asc" },
     });
 
     const upcoming = events.filter((event) => {
-      if (event.createdById !== user.id) return false;
       const endMs = new Date(event.endDate ?? event.startDate).getTime();
       return endMs >= now;
     });

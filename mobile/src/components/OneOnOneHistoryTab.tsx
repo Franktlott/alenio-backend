@@ -250,7 +250,12 @@ export function OneOnOneHistoryTab({
   const [prepAcknowledged, setPrepAcknowledged] = useState(false);
   const autoStartHandledRef = useRef(false);
 
-  const { data: upcomingPlanned = [], refetch: refetchPlannedOneOnOnes } = useQuery({
+  const {
+    data: upcomingPlanned = [],
+    refetch: refetchPlannedOneOnOnes,
+    isError: plannedLoadError,
+    error: plannedLoadErrorDetail,
+  } = useQuery({
     queryKey: ["planned-one-on-ones", teamId, memberUserId],
     queryFn: () => fetchPlannedOneOnOnes(teamId, memberUserId),
     enabled: !!teamId && !!memberUserId && canCreate,
@@ -1120,6 +1125,13 @@ export function OneOnOneHistoryTab({
             View only on mobile. Create and edit check-ins from the web Team page.
           </Text>
         </View>
+      ) : null}
+
+      {plannedLoadError ? (
+        <Text style={{ fontSize: 13, color: "#DC2626", lineHeight: 18 }}>
+          Could not load upcoming 1:1s
+          {plannedLoadErrorDetail instanceof Error ? `: ${plannedLoadErrorDetail.message}` : "."}
+        </Text>
       ) : null}
 
       {canCreate && upcomingPlanned.length > 0 ? (
