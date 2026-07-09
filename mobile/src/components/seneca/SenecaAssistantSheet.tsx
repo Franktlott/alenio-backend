@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -42,7 +42,7 @@ import {
   managerFirstName,
   type MobilePriorityInsight,
 } from "@/lib/seneca-mobile-briefing";
-import { fetchSenecaAsk, type SenecaAskActionId, type SenecaPlanOneOnOneProposal } from "@/lib/seneca-api";
+import { fetchSenecaAsk, type SenecaAskActionId, type SenecaChatTurn, type SenecaPlanOneOnOneProposal } from "@/lib/seneca-api";
 import { planOneOnOneHref } from "@/lib/plan-one-on-one";
 import { quickActionNavigate, senecaActionNavigate } from "@/lib/seneca-navigation";
 import { router } from "expo-router";
@@ -57,6 +57,15 @@ type Props = {
 };
 
 type ViewMode = "briefing" | "chat";
+
+type SenecaChatMessage = {
+  id: string;
+  role: "user" | "assistant";
+  text: string;
+  insights?: SenecaInsightItem[];
+  actions?: SenecaActionCard[];
+  planProposal?: SenecaPlanOneOnOneProposal | null;
+};
 
 const INSIGHT_STYLE: Record<
   MobilePriorityInsight["kind"],
@@ -240,16 +249,13 @@ export function SenecaAssistantSheet({ open, onClose, teamId: teamIdProp }: Prop
   const [view, setView] = useState<ViewMode>("briefing");
   const [snapshot, setSnapshot] = useState<WorkspaceSnapshot | null>(null);
   const [snapshotLoading, setSnapshotLoading] = useState(false);
-  const [activeThread, setActiveThread] = useState<string | null>(null);
+  const [chatMessages, setChatMessages] = useState<SenecaChatMessage[]>([]);
   const [activeInsight, setActiveInsight] = useState<MobilePriorityInsight | null>(null);
   const [askDraft, setAskDraft] = useState("");
   const [thinking, setThinking] = useState(false);
-  const [message, setMessage] = useState("");
-  const [insights, setInsights] = useState<SenecaInsightItem[]>([]);
-  const [actions, setActions] = useState<SenecaActionCard[]>([]);
-  const [planProposal, setPlanProposal] = useState<SenecaPlanOneOnOneProposal | null>(null);
   const [chatError, setChatError] = useState<string | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
+  const chatScrollRef = useRef<ScrollView>(null);
 
   const managerName = managerFirstName(me?.name);
   const headlines = useMemo(() => buildMobileBriefingHeadlines(managerName), [managerName, open]);
@@ -272,14 +278,10 @@ export function SenecaAssistantSheet({ open, onClose, teamId: teamIdProp }: Prop
 
   const resetChat = useCallback(() => {
     setView("briefing");
-    setActiveThread(null);
+    setChatMessages([]);
     setActiveInsight(null);
     setAskDraft("");
     setThinking(false);
-    setMessage("");
-    setInsights([]);
-    setActions([]);
-    setPlanProposal(null);
     setChatError(null);
     setMoreOpen(false);
   }, []);
@@ -319,38 +321,45 @@ export function SenecaAssistantSheet({ open, onClose, teamId: teamIdProp }: Prop
       const trimmed = question.trim();
       if (!trimmed) return;
 
+      const history: SenecaChatTurn[] = chatMessages.map((message) => ({
+        role: message.role,
+        content: message.text,
+      }));
+      const userMessage: SenecaChatMessage = {
+        id: `user-${Date.now()}`,
+        role: "user",
+        text: trimmed,
+      };
+
       setView("chat");
-      setActiveThread(trimmed);
       if (insight) setActiveInsight(insight);
+      setChatMessages((prev) => [...prev, userMessage]);
       setThinking(true);
-      setMessage("");
-      setInsights([]);
-      setActions([]);
-      setPlanProposal(null);
       setChatError(null);
       setAskDraft("");
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
       void (async () => {
         try {
-          const res = await fetchSenecaAsk(activeTeamId, trimmed);
-          setMessage(res.message);
-          setPlanProposal(res.planOneOnOne ?? null);
-          setInsights(
-            (res.insights ?? []).slice(0, 3).map((item, index) => ({
+          const res = await fetchSenecaAsk(activeTeamId, trimmed, history);
+          const assistantMessage: SenecaChatMessage = {
+            id: `assistant-${Date.now()}`,
+            role: "assistant",
+            text: res.message,
+            planProposal: res.planOneOnOne ?? null,
+            insights: (res.insights ?? []).slice(0, 3).map((item, index) => ({
               id: `ask-insight-${index}`,
               label: item.label,
               detail: item.detail,
             })),
-          );
-          setActions(
-            (res.suggestedActions ?? []).slice(0, 3).map((item) => ({
+            actions: (res.suggestedActions ?? []).slice(0, 3).map((item) => ({
               id: item.action as SenecaAskActionId,
               title: item.title,
               description: item.description,
               memberUserId: insight?.memberUserId,
             })),
-          );
+          };
+          setChatMessages((prev) => [...prev, assistantMessage]);
         } catch (e) {
           setChatError(e instanceof Error ? e.message : "Seneca could not answer right now.");
         } finally {
@@ -358,8 +367,16 @@ export function SenecaAssistantSheet({ open, onClose, teamId: teamIdProp }: Prop
         }
       })();
     },
-    [activeTeamId],
+    [activeTeamId, chatMessages],
   );
+
+  useEffect(() => {
+    if (view !== "chat") return;
+    const timer = setTimeout(() => {
+      chatScrollRef.current?.scrollToEnd({ animated: true });
+    }, 50);
+    return () => clearTimeout(timer);
+  }, [chatMessages, thinking, view, chatError]);
 
   const onInsightAction = (insight: MobilePriorityInsight) => {
     runAsk(insight.chatPrompt, insight);
@@ -372,14 +389,18 @@ export function SenecaAssistantSheet({ open, onClose, teamId: teamIdProp }: Prop
 
   const backToBriefing = () => {
     setView("briefing");
-    setActiveThread(null);
+    setChatMessages([]);
     setActiveInsight(null);
     setThinking(false);
-    setMessage("");
-    setInsights([]);
-    setActions([]);
-    setPlanProposal(null);
     setChatError(null);
+  };
+
+  const dismissPlanProposal = (messageId: string) => {
+    setChatMessages((prev) =>
+      prev.map((message) =>
+        message.id === messageId ? { ...message, planProposal: null } : message,
+      ),
+    );
   };
 
   const onSenecaAction = (action: SenecaActionCard) => {
@@ -411,14 +432,12 @@ export function SenecaAssistantSheet({ open, onClose, teamId: teamIdProp }: Prop
     );
   };
 
-  const onConfirmPlanProposal = () => {
-    if (!planProposal) return;
-    openPlanProposal(planProposal);
+  const onConfirmPlanProposal = (proposal: SenecaPlanOneOnOneProposal) => {
+    openPlanProposal(proposal);
   };
 
-  const onEditPlanProposal = () => {
-    if (!planProposal) return;
-    openPlanProposal(planProposal);
+  const onEditPlanProposal = (proposal: SenecaPlanOneOnOneProposal) => {
+    openPlanProposal(proposal);
   };
 
   return (
@@ -557,113 +576,124 @@ export function SenecaAssistantSheet({ open, onClose, teamId: teamIdProp }: Prop
                 </ScrollView>
               ) : (
                 <ScrollView
+                  ref={chatScrollRef}
                   style={styles.scroll}
                   contentContainerStyle={styles.chatScrollContent}
                   keyboardShouldPersistTaps="handled"
                   showsVerticalScrollIndicator={false}
                   testID="seneca-chat-scroll"
                 >
-                  {activeThread ? (
-                    <View style={styles.userBubble}>
-                      <Text style={styles.userBubbleText}>{activeThread}</Text>
-                    </View>
-                  ) : null}
+                  {chatMessages.map((chatMessage) =>
+                    chatMessage.role === "user" ? (
+                      <View key={chatMessage.id} style={styles.userBubble}>
+                        <Text style={styles.userBubbleText}>{chatMessage.text}</Text>
+                      </View>
+                    ) : (
+                      <View key={chatMessage.id}>
+                        <View style={styles.senecaBlock}>
+                          <View style={styles.senecaBlockHead}>
+                            <SenecaIcon size={24} />
+                            <Text style={styles.senecaBlockName}>Seneca</Text>
+                          </View>
+                          <Text style={styles.senecaMessage}>{chatMessage.text}</Text>
 
-                  <View style={styles.senecaBlock}>
-                    <View style={styles.senecaBlockHead}>
-                      <SenecaIcon size={24} />
-                      <Text style={styles.senecaBlockName}>Seneca</Text>
-                    </View>
+                          {chatMessage.planProposal ? (
+                            <View style={styles.planConfirmCard} testID="seneca-plan-one-on-one-confirm">
+                              <Text style={styles.planConfirmTitle}>1:1 details</Text>
+                              <View style={styles.planConfirmRow}>
+                                <Text style={styles.planConfirmLabel}>With</Text>
+                                <Text style={styles.planConfirmValue}>{chatMessage.planProposal.memberName}</Text>
+                              </View>
+                              <View style={styles.planConfirmRow}>
+                                <Text style={styles.planConfirmLabel}>When</Text>
+                                <Text style={styles.planConfirmValue}>
+                                  {chatMessage.planProposal.dateLabel} · {chatMessage.planProposal.timeLabel}
+                                </Text>
+                              </View>
+                              <View style={styles.planConfirmRow}>
+                                <Text style={styles.planConfirmLabel}>Duration</Text>
+                                <Text style={styles.planConfirmValue}>
+                                  {chatMessage.planProposal.durationMinutes} min
+                                </Text>
+                              </View>
+                              <View style={styles.planConfirmActions}>
+                                <Pressable
+                                  onPress={() => onConfirmPlanProposal(chatMessage.planProposal!)}
+                                  style={styles.planConfirmPrimary}
+                                  testID="seneca-plan-one-on-one-confirm-button"
+                                >
+                                  <Text style={styles.planConfirmPrimaryText}>Confirm & plan</Text>
+                                </Pressable>
+                                <Pressable
+                                  onPress={() => onEditPlanProposal(chatMessage.planProposal!)}
+                                  style={styles.planConfirmSecondary}
+                                  testID="seneca-plan-one-on-one-edit-button"
+                                >
+                                  <Text style={styles.planConfirmSecondaryText}>Review & edit</Text>
+                                </Pressable>
+                                <Pressable
+                                  onPress={() => dismissPlanProposal(chatMessage.id)}
+                                  style={styles.planConfirmGhost}
+                                  testID="seneca-plan-one-on-one-cancel-button"
+                                >
+                                  <Text style={styles.planConfirmGhostText}>Not now</Text>
+                                </Pressable>
+                              </View>
+                            </View>
+                          ) : null}
 
-                    {thinking ? (
+                          {chatMessage.insights && chatMessage.insights.length > 0 ? (
+                            <View style={styles.chatNotes}>
+                              {chatMessage.insights.map((item) => (
+                                <Text key={item.id} style={styles.chatNote}>
+                                  {item.label}
+                                  {item.detail ? ` — ${item.detail}` : null}
+                                </Text>
+                              ))}
+                            </View>
+                          ) : null}
+                        </View>
+
+                        {chatMessage.actions && chatMessage.actions.length > 0 ? (
+                          <View style={styles.nextSteps}>
+                            <Text style={styles.nextStepsLabel}>Recommended actions</Text>
+                            {chatMessage.actions.map((item, index) => (
+                              <Pressable
+                                key={`${chatMessage.id}-${item.id}`}
+                                onPress={() => onSenecaAction(item)}
+                                style={[styles.nextStepRow, index > 0 && styles.nextStepRowBorder]}
+                                testID={`seneca-action-${item.id}`}
+                              >
+                                <View style={styles.nextStepCopy}>
+                                  <Text style={styles.nextStepTitle}>{item.title}</Text>
+                                  <Text style={styles.nextStepDesc}>{item.description}</Text>
+                                </View>
+                                <ChevronRight size={16} color="#94A3B8" />
+                              </Pressable>
+                            ))}
+                          </View>
+                        ) : null}
+                      </View>
+                    ),
+                  )}
+
+                  {thinking ? (
+                    <View style={styles.senecaBlock}>
+                      <View style={styles.senecaBlockHead}>
+                        <SenecaIcon size={24} />
+                        <Text style={styles.senecaBlockName}>Seneca</Text>
+                      </View>
                       <View style={styles.thinkingRow} testID="seneca-thinking">
                         <ActivityIndicator size="small" color="#4361EE" />
                         <Text style={styles.thinkingText}>Analyzing workspace…</Text>
                       </View>
-                    ) : (
-                      <>
-                        {chatError ? (
-                          <Text style={styles.errorText} testID="seneca-chat-error">
-                            {chatError}
-                          </Text>
-                        ) : null}
-                        {message ? <Text style={styles.senecaMessage}>{message}</Text> : null}
-
-                        {!thinking && planProposal ? (
-                          <View style={styles.planConfirmCard} testID="seneca-plan-one-on-one-confirm">
-                            <Text style={styles.planConfirmTitle}>1:1 details</Text>
-                            <View style={styles.planConfirmRow}>
-                              <Text style={styles.planConfirmLabel}>With</Text>
-                              <Text style={styles.planConfirmValue}>{planProposal.memberName}</Text>
-                            </View>
-                            <View style={styles.planConfirmRow}>
-                              <Text style={styles.planConfirmLabel}>When</Text>
-                              <Text style={styles.planConfirmValue}>
-                                {planProposal.dateLabel} · {planProposal.timeLabel}
-                              </Text>
-                            </View>
-                            <View style={styles.planConfirmRow}>
-                              <Text style={styles.planConfirmLabel}>Duration</Text>
-                              <Text style={styles.planConfirmValue}>{planProposal.durationMinutes} min</Text>
-                            </View>
-                            <View style={styles.planConfirmActions}>
-                              <Pressable
-                                onPress={onConfirmPlanProposal}
-                                style={styles.planConfirmPrimary}
-                                testID="seneca-plan-one-on-one-confirm-button"
-                              >
-                                <Text style={styles.planConfirmPrimaryText}>Confirm & plan</Text>
-                              </Pressable>
-                              <Pressable
-                                onPress={onEditPlanProposal}
-                                style={styles.planConfirmSecondary}
-                                testID="seneca-plan-one-on-one-edit-button"
-                              >
-                                <Text style={styles.planConfirmSecondaryText}>Review & edit</Text>
-                              </Pressable>
-                              <Pressable
-                                onPress={() => setPlanProposal(null)}
-                                style={styles.planConfirmGhost}
-                                testID="seneca-plan-one-on-one-cancel-button"
-                              >
-                                <Text style={styles.planConfirmGhostText}>Not now</Text>
-                              </Pressable>
-                            </View>
-                          </View>
-                        ) : null}
-
-                        {insights.length > 0 ? (
-                          <View style={styles.chatNotes}>
-                            {insights.map((item) => (
-                              <Text key={item.id} style={styles.chatNote}>
-                                {item.label}
-                                {item.detail ? ` — ${item.detail}` : null}
-                              </Text>
-                            ))}
-                          </View>
-                        ) : null}
-                      </>
-                    )}
-                  </View>
-
-                  {!thinking && actions.length > 0 ? (
-                    <View style={styles.nextSteps}>
-                      <Text style={styles.nextStepsLabel}>Recommended actions</Text>
-                      {actions.map((item, index) => (
-                        <Pressable
-                          key={item.id}
-                          onPress={() => onSenecaAction(item)}
-                          style={[styles.nextStepRow, index > 0 && styles.nextStepRowBorder]}
-                          testID={`seneca-action-${item.id}`}
-                        >
-                          <View style={styles.nextStepCopy}>
-                            <Text style={styles.nextStepTitle}>{item.title}</Text>
-                            <Text style={styles.nextStepDesc}>{item.description}</Text>
-                          </View>
-                          <ChevronRight size={16} color="#94A3B8" />
-                        </Pressable>
-                      ))}
                     </View>
+                  ) : null}
+
+                  {chatError ? (
+                    <Text style={styles.errorText} testID="seneca-chat-error">
+                      {chatError}
+                    </Text>
                   ) : null}
                 </ScrollView>
               )}

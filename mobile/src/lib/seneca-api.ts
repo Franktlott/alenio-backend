@@ -8,6 +8,11 @@ export type SenecaAskActionId =
   | "build_checklist"
   | "open_team";
 
+export type SenecaChatTurn = {
+  role: "user" | "assistant";
+  content: string;
+};
+
 export type SenecaPlanOneOnOneProposal = {
   memberUserId: string;
   memberName: string;
@@ -29,6 +34,6 @@ export type SenecaAskResponse = {
   planOneOnOne?: SenecaPlanOneOnOneProposal | null;
 };
 
-export function fetchSenecaAsk(teamId: string, question: string) {
-  return api.post<SenecaAskResponse>(`/api/teams/${teamId}/seneca/ask`, { question });
+export function fetchSenecaAsk(teamId: string, question: string, messages: SenecaChatTurn[] = []) {
+  return api.post<SenecaAskResponse>(`/api/teams/${teamId}/seneca/ask`, { question, messages });
 }

@@ -13,8 +13,9 @@ import {
 import { normalizeCheckInTemplateDraft } from "../lib/seneca-normalize";
 import {
   buildPlanConfirmationMessage,
+  conversationHasScheduleTopic,
+  conversationSourceText,
   finalizePlanOneOnOneProposal,
-  isScheduleOneOnOneQuestion,
   type SenecaPlanOneOnOneDraft,
   type SenecaPlanOneOnOneProposal,
 } from "../lib/seneca-plan-one-on-one";
@@ -44,7 +45,31 @@ const checkInTemplateBodySchema = z.object({
 
 const askBodySchema = z.object({
   question: z.string().trim().min(1, "Ask Seneca a question").max(1000),
+  messages: z
+    .array(
+      z.object({
+        role: z.enum(["user", "assistant"]),
+        content: z.string().trim().min(1).max(4000),
+      }),
+    )
+    .max(20)
+    .optional()
+    .default([]),
 });
+
+type SenecaChatTurn = z.infer<typeof askBodySchema>["messages"][number];
+
+function formatConversationForPrompt(messages: SenecaChatTurn[], question: string): string {
+  const prior = messages.slice(-12);
+  if (prior.length === 0) {
+    return `Manager question: "${question}"`;
+  }
+  const lines = prior.map((message) =>
+    message.role === "user" ? `Manager: ${message.content}` : `Seneca: ${message.content}`,
+  );
+  lines.push(`Manager: ${question}`);
+  return `Conversation so far:\n${lines.join("\n")}\n\nRespond to the manager's latest message in context.`;
+}
 
 type SenecaAskActionId =
   | "view_overdue_tasks"
@@ -68,11 +93,13 @@ type SenecaAskAi = {
 function resolvePlanProposal(
   draft: SenecaPlanOneOnOneDraft | null | undefined,
   question: string,
+  messages: SenecaChatTurn[],
   ctx: Awaited<ReturnType<typeof buildSenecaWorkspaceContext>>,
   managerTimeZone: string,
 ): SenecaPlanOneOnOneProposal | null {
-  if (!draft && !isScheduleOneOnOneQuestion(question)) return null;
-  return finalizePlanOneOnOneProposal(draft ?? {}, question, ctx, managerTimeZone);
+  const sourceText = conversationSourceText(messages, question);
+  if (!conversationHasScheduleTopic(messages, question)) return null;
+  return finalizePlanOneOnOneProposal(draft ?? {}, question, ctx, managerTimeZone, sourceText);
 }
 
 function ruleBasedAskResponse(question: string, ctx: Awaited<ReturnType<typeof buildSenecaWorkspaceContext>>): SenecaAskAi {
@@ -152,7 +179,7 @@ senecaTeamRouter.post("/ask", zValidator("json", askBodySchema), async (c) => {
 
   if (!senecaAvailable()) {
     const fallback = ruleBasedAskResponse(body.question, ctx);
-    const planOneOnOne = resolvePlanProposal(null, body.question, ctx, managerTimeZone);
+    const planOneOnOne = resolvePlanProposal(null, body.question, body.messages, ctx, managerTimeZone);
     return c.json({
       data: {
         available: false,
@@ -167,24 +194,28 @@ senecaTeamRouter.post("/ask", zValidator("json", askBodySchema), async (c) => {
   }
 
   try {
-    const scheduleIntent = isScheduleOneOnOneQuestion(body.question);
+    const scheduleIntent = conversationHasScheduleTopic(body.messages, body.question);
+    const conversationPrompt = formatConversationForPrompt(body.messages, body.question);
     const schedulingRules = scheduleIntent
       ? `
 SCHEDULING A 1:1 (critical):
-- The manager wants to schedule or plan a 1:1. You CANNOT create calendar events yourself.
-- NEVER say you have already scheduled, booked, or added anything to the calendar.
-- Extract member name, date (YYYY-MM-DD), optional time (HH:mm 24h), and durationMinutes from their message. Use team member names from context only.
+- The manager wants to schedule or plan a 1:1, or is continuing a scheduling conversation.
+- You CANNOT create calendar events yourself.
+- NEVER say you have already scheduled, booked, or added anything to the calendar unless the manager explicitly confirmed in this same conversation and you are only restating the pending plan for confirmation.
+- Use the full conversation to resolve member, date, time, and duration. Follow-up messages like "yes", "confirm", or "make it 2pm" refer to the plan under discussion.
+- Extract member name, date (YYYY-MM-DD), optional time (HH:mm 24h), and durationMinutes. Use team member names from context only.
 - In "message", summarize the proposed plan and ask them to confirm before it is added.
 - Return "planOneOnOne": { "memberName": "string", "date": "YYYY-MM-DD", "time": "HH:mm or null", "durationMinutes": 45 } when you have enough detail.
 - If date or member is unclear, ask a clarifying question in "message" and set planOneOnOne to null.
 `
       : `
 - NEVER claim you scheduled, created, or saved calendar events, tasks, or check-ins unless the manager has already confirmed an action in this app.
+- Treat the conversation as continuous. Follow-up messages refer to earlier context.
 `;
 
     const out = await senecaJson<SenecaAskAi>(
       `You are Seneca, an AI leadership assistant for frontline managers using Alenio.
-Answer the manager's question using ONLY the workspace context JSON below.
+Answer the manager using ONLY the workspace context JSON below and the conversation history.
 - Be practical, warm, and concise (2-4 sentences unless they ask for a list).
 - If they ask for a leadership quote, give a short quote plus one sentence on how it applies to their team today.
 - If they ask about a manager, leader, or team member, use names and stats from the context.
@@ -193,7 +224,7 @@ Answer the manager's question using ONLY the workspace context JSON below.
 ${schedulingRules}
 ${SENECA_DATA_GROUNDING_RULES}
 
-Manager question: "${body.question}"
+${conversationPrompt}
 
 Return JSON:
 {
@@ -206,7 +237,7 @@ Include 0-4 insights and 0-3 suggestedActions when helpful.`,
       senecaWorkspaceContextToPrompt(ctx),
     );
 
-    const planOneOnOne = resolvePlanProposal(out.planOneOnOne, body.question, ctx, managerTimeZone);
+    const planOneOnOne = resolvePlanProposal(out.planOneOnOne, body.question, body.messages, ctx, managerTimeZone);
     const message = planOneOnOne
       ? buildPlanConfirmationMessage(planOneOnOne)
       : out.message?.trim() || "I'm here to help you lead the floor. What would you like to focus on?";
@@ -226,7 +257,7 @@ Include 0-4 insights and 0-3 suggestedActions when helpful.`,
     });
   } catch (e) {
     const fallback = ruleBasedAskResponse(body.question, ctx);
-    const planOneOnOne = resolvePlanProposal(null, body.question, ctx, managerTimeZone);
+    const planOneOnOne = resolvePlanProposal(null, body.question, body.messages, ctx, managerTimeZone);
     return c.json({
       data: {
         available: false,

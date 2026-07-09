@@ -57,6 +57,30 @@ export function isScheduleOneOnOneQuestion(question: string): boolean {
   );
 }
 
+export function conversationHasScheduleTopic(
+  messages: Array<{ role: string; content: string }>,
+  question: string,
+): boolean {
+  if (isScheduleOneOnOneQuestion(question)) return true;
+  const blob = [...messages.map((message) => message.content), question].join(" ").toLowerCase();
+  if (!/\b(1:1|one[- ]on[- ]one|check[- ]?in|scheduled a 1:1|plan a 1:1)\b/.test(blob)) {
+    return false;
+  }
+  const latest = question.toLowerCase();
+  return (
+    /\b(confirm|yes|yep|yeah|sounds good|that works|looks good|go ahead|please do|make it|change|move it|at \d|pm|am)\b/.test(
+      latest,
+    ) || isScheduleOneOnOneQuestion(latest)
+  );
+}
+
+export function conversationSourceText(
+  messages: Array<{ role: string; content: string }>,
+  question: string,
+): string {
+  return [...messages.map((message) => message.content), question].join("\n");
+}
+
 export function resolveMemberByName(
   query: string,
   members: SenecaWorkspaceContext["members"],
@@ -159,12 +183,14 @@ export function finalizePlanOneOnOneProposal(
   question: string,
   ctx: SenecaWorkspaceContext,
   managerTimeZone: string,
+  sourceText?: string,
 ): SenecaPlanOneOnOneProposal | null {
-  const memberQuery = draft.memberName?.trim() || extractMemberFromQuestion(question);
+  const source = sourceText ?? question;
+  const memberQuery = draft.memberName?.trim() || extractMemberFromQuestion(source);
   const member = memberQuery ? resolveMemberByName(memberQuery, ctx.members) : null;
   if (!member) return null;
 
-  const dateOnly = draft.date?.trim() || extractDateFromQuestion(question);
+  const dateOnly = draft.date?.trim() || extractDateFromQuestion(source);
   if (!dateOnly || !/^\d{4}-\d{2}-\d{2}$/.test(dateOnly)) return null;
 
   const { hour, minute } = parseTimeParts(draft.time);
