@@ -80,6 +80,8 @@ function readBodyVideoMeetingFlag(body: Record<string, unknown>): boolean {
   return false;
 }
 
+const webRouter = new Hono();
+
 // ── API: me ──────────────────────────────────────────────────────────────────
 webRouter.get("/api/me", async (c) => {
   if (!(await getWebSession(c))) return c.json({ error: "Unauthorized" }, 401);
