@@ -12,6 +12,8 @@ type Variables = {
 
 const activityRouter = new Hono<{ Variables: Variables }>();
 
+const ACTIVITY_FEED_DAYS = 14;
+
 activityRouter.use("*", authGuard);
 
 activityRouter.get("/:teamId/activity", async (c) => {
@@ -25,10 +27,10 @@ activityRouter.get("/:teamId/activity", async (c) => {
     return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
   }
 
-  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const feedStart = new Date(Date.now() - ACTIVITY_FEED_DAYS * 24 * 60 * 60 * 1000);
 
   const activities = await prisma.teamActivity.findMany({
-    where: { teamId, createdAt: { gte: sevenDaysAgo } },
+    where: { teamId, createdAt: { gte: feedStart } },
     include: {
       user: { select: { id: true, name: true, image: true } },
       reactions: {

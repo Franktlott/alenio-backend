@@ -14,6 +14,11 @@ import {
   reconcileInactiveDevelopmentGoals,
   type DevelopmentGoalLifecycleStatus,
 } from "../lib/development-goal-activity";
+import {
+  canManageTeamRoster,
+  hasArchivedMemberRecords,
+  isActiveTeamMember,
+} from "../lib/workspace-member-departure";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -174,6 +179,21 @@ developmentGoalsRouter.get("/:memberUserId/development-goals", async (c) => {
   const membership = await getMembership(c, teamId);
   if (!membership) {
     return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
+  }
+
+  const activeMember = await isActiveTeamMember(prisma, teamId, memberUserId);
+  if (!activeMember) {
+    const canViewArchive =
+      canManageTeamRoster(membership.role) &&
+      (await hasArchivedMemberRecords(prisma, teamId, memberUserId));
+    if (!canViewArchive) {
+      return c.json({ error: { message: "Member not found", code: "NOT_FOUND" } }, 404);
+    }
+  } else if (
+    membership.userId !== memberUserId &&
+    !canManageTeamRoster(membership.role)
+  ) {
+    return c.json({ error: { message: "Member not found", code: "NOT_FOUND" } }, 404);
   }
 
   try {

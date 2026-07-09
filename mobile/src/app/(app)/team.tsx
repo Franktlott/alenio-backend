@@ -27,6 +27,7 @@ import {
   ChevronLeft,
   ChevronRight,
   QrCode,
+  Lock,
 } from "lucide-react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -40,6 +41,7 @@ import {
   standardsBadgeColors,
   mergeWorkplaceStandards,
   type MemberStatsPayload,
+  type MemberStandardsCompliance,
   type StandardsBadgeDisplay,
 } from "@/lib/workplace-standards";
 import { StandardsStatusKey } from "@/components/StandardsStatusKey";
@@ -78,10 +80,45 @@ type JoinRequest = {
 // ------------------------------------------------------------------
 const yTicks = [60, 80, 100];
 
+type FormerMemberRow = {
+  userId: string;
+  user: TeamMember["user"];
+  isFormer: true;
+};
+
 function memberRoleLabel(role: TeamMember["role"]): string {
   if (role === "owner") return "Owner";
   if (role === "team_leader") return "Team Leader";
   return "Member";
+}
+
+function isTaskAssignedToUser(task: Task, userId: string): boolean {
+  if (!userId) return false;
+  return (task.assignments ?? []).some((assignment) => assignment.userId === userId);
+}
+
+function personalCheckInMetricColor(status: MemberStandardsCompliance["checkInStatus"] | undefined): string {
+  if (status === "on_track") return "#10B981";
+  if (status === "due_soon") return "#F59E0B";
+  if (status === "overdue") return "#EF4444";
+  return "#94A3B8";
+}
+
+function personalGoalsMetricColor(status: MemberStandardsCompliance["goalsStatus"] | undefined): string {
+  if (status === "on_track") return "#10B981";
+  if (status === "missing_goals") return "#4F46E5";
+  return "#94A3B8";
+}
+
+function sortMembersWithSelfFirst<T extends { userId: string; user: { name?: string | null } }>(
+  members: T[],
+  myId: string,
+): T[] {
+  const byName = (a: T, b: T) => (a.user.name ?? "").localeCompare(b.user.name ?? "");
+  if (!myId) return [...members].sort(byName);
+  const self = members.find((member) => member.userId === myId);
+  const others = members.filter((member) => member.userId !== myId).sort(byName);
+  return self ? [self, ...others] : others;
 }
 
 function MemberMetricColumn({ label, value }: { label: string; value: string }) {
@@ -500,6 +537,12 @@ export default function TeamScreen() {
   const memberStats = memberStatsPayload?.stats;
   const workplaceStandards = mergeWorkplaceStandards(memberStatsPayload?.workplaceStandards);
 
+  const { data: formerMembers = [] } = useQuery({
+    queryKey: ["former-members", activeTeamId],
+    queryFn: () => api.get<FormerMemberRow[]>(`/api/teams/${activeTeamId}/former-members`),
+    enabled: !!activeTeamId && isPaid && isOwner,
+  });
+
   const { data: teamTasksData } = useQuery({
     queryKey: ["team-overview-tasks", activeTeamId],
     queryFn: () =>
@@ -513,6 +556,7 @@ export default function TeamScreen() {
     setRefreshing(true);
     await queryClient.invalidateQueries({ queryKey: ["team", activeTeamId] });
     await queryClient.invalidateQueries({ queryKey: ["member-stats", activeTeamId] });
+    await queryClient.invalidateQueries({ queryKey: ["former-members", activeTeamId] });
     await queryClient.invalidateQueries({ queryKey: ["team-overview-tasks", activeTeamId] });
     await queryClient.invalidateQueries({ queryKey: ["team-invites", activeTeamId] });
     setRefreshing(false);
@@ -542,8 +586,21 @@ export default function TeamScreen() {
     return due >= todayStart && due <= todayEnd;
   };
 
-  const totalOpen = teamTasks.filter((t) => !isTaskDone(t)).length;
-  const openTasks = teamTasks
+  const showTeamOverview = isOwner;
+  const overviewSourceTasks = showTeamOverview
+    ? teamTasks
+    : teamTasks.filter((t) => isTaskAssignedToUser(t, myId));
+  const myMemberStats = memberStats?.[myId];
+  const myCompliance = myMemberStats?.standardsCompliance;
+  const members = team?.members ?? [];
+  const teamCompliance = computeTeamCompliancePercentages({
+    memberUserIds: members.filter((m) => m.role !== "owner").map((m) => m.userId),
+    memberStats,
+    workplaceStandards,
+  });
+
+  const totalOpen = overviewSourceTasks.filter((t) => !isTaskDone(t)).length;
+  const openTasks = overviewSourceTasks
     .filter((t) => !isTaskDone(t))
     .sort((a, b) => {
       if (!a.dueDate && !b.dueDate) return a.title.localeCompare(b.title);
@@ -551,14 +608,44 @@ export default function TeamScreen() {
       if (!b.dueDate) return -1;
       return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
     });
-  const dueTodayTasks = teamTasks
+  const dueTodayTasks = overviewSourceTasks
     .filter((t) => isTaskDueToday(t))
     .sort((a, b) => a.title.localeCompare(b.title));
   const totalDueToday = dueTodayTasks.length;
-  const overdueTasks = teamTasks
+  const overdueTasks = overviewSourceTasks
     .filter((t) => isTaskOverdue(t))
     .sort((a, b) => new Date(a.dueDate!).getTime() - new Date(b.dueDate!).getTime());
   const totalOverdue = overdueTasks.length;
+  const hasTappableTaskStats = totalOpen > 0 || totalDueToday > 0 || totalOverdue > 0;
+  const overviewComplianceMetrics = showTeamOverview
+    ? ([
+        {
+          key: "checkIn",
+          value: formatTeamCompliancePercent(teamCompliance.checkInCompliancePct),
+          label: "Check-in compliance",
+          color: teamComplianceColor(teamCompliance.checkInCompliancePct),
+        },
+        {
+          key: "devPlan",
+          value: formatTeamCompliancePercent(teamCompliance.developmentPlanCompliancePct),
+          label: "Development plan compliance",
+          color: teamComplianceColor(teamCompliance.developmentPlanCompliancePct),
+        },
+      ] as const)
+    : ([
+        {
+          key: "checkIn",
+          value: formatDaysSinceCheckIn(myMemberStats?.daysSinceLastOneOnOne),
+          label: "Last check-in",
+          color: personalCheckInMetricColor(myCompliance?.checkInStatus),
+        },
+        {
+          key: "goals",
+          value: myCompliance?.goalsDisplay ?? "—",
+          label: "Goals",
+          color: personalGoalsMetricColor(myCompliance?.goalsStatus),
+        },
+      ] as const);
 
   const overviewSheetTasks =
     overviewTasksSheet === "open"
@@ -569,16 +656,8 @@ export default function TeamScreen() {
           ? overdueTasks
           : [];
 
-  // Alphabetically sorted member list
-  const members = team?.members ?? [];
-  const sortedMembers = [...members].sort((a, b) =>
-    (a.user.name ?? "").localeCompare(b.user.name ?? "")
-  );
-  const teamCompliance = computeTeamCompliancePercentages({
-    memberUserIds: members.filter((m) => m.role !== "owner").map((m) => m.userId),
-    memberStats,
-    workplaceStandards,
-  });
+  // Logged-in user first, then everyone else alphabetically
+  const sortedMembers = sortMembersWithSelfFirst(members, myId);
 
   // ------------------------------------------------------------------
   // Guard states
@@ -816,7 +895,7 @@ export default function TeamScreen() {
             }}
           >
             <Text style={{ fontSize: 16, fontWeight: "800", color: "#0F172A", marginBottom: 6 }}>
-              Team Overview
+              {showTeamOverview ? "Team Overview" : "My Overview"}
             </Text>
 
             <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 6 }}>
@@ -836,7 +915,7 @@ export default function TeamScreen() {
                   </>
                 );
 
-                if (isOwner && value > 0) {
+                if (value > 0) {
                   return (
                     <Pressable
                       key={key}
@@ -858,24 +937,18 @@ export default function TeamScreen() {
             </View>
 
             <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 6, marginTop: 4 }}>
-              {(
-                [
-                  {
-                    key: "checkIn",
-                    value: formatTeamCompliancePercent(teamCompliance.checkInCompliancePct),
-                    label: "Check-in compliance",
-                    color: teamComplianceColor(teamCompliance.checkInCompliancePct),
-                  },
-                  {
-                    key: "devPlan",
-                    value: formatTeamCompliancePercent(teamCompliance.developmentPlanCompliancePct),
-                    label: "Development plan compliance",
-                    color: teamComplianceColor(teamCompliance.developmentPlanCompliancePct),
-                  },
-                ] as const
-              ).map(({ key, value, label, color }) => (
+              {overviewComplianceMetrics.map(({ key, value, label, color }) => (
                 <View key={key} style={{ flex: 1, alignItems: "center", paddingVertical: 2 }}>
-                  <Text style={{ fontSize: 20, fontWeight: "900", color, lineHeight: 22 }}>{value}</Text>
+                  <Text
+                    numberOfLines={showTeamOverview ? 1 : 2}
+                    style={
+                      showTeamOverview
+                        ? { fontSize: 20, fontWeight: "900", color, lineHeight: 22, textAlign: "center" }
+                        : { fontSize: 13, fontWeight: "700", color, lineHeight: 16, textAlign: "center" }
+                    }
+                  >
+                    {value}
+                  </Text>
                   <Text numberOfLines={2} style={{ fontSize: 10, color: "#64748B", marginTop: 1, textAlign: "center", lineHeight: 13 }}>
                     {label}
                   </Text>
@@ -883,7 +956,7 @@ export default function TeamScreen() {
               ))}
             </View>
 
-            {isOwner ? (
+            {hasTappableTaskStats ? (
               <Text
                 numberOfLines={1}
                 style={{ fontSize: 9, color: "#94A3B8", marginTop: 2 }}
@@ -1080,17 +1153,37 @@ export default function TeamScreen() {
                 </View>
 
                 <View style={{ width: 1, alignSelf: "stretch", backgroundColor: "#E2E8F0", marginRight: 6 }} />
-                <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 2 }}>
-                  <MemberMetricColumn
-                    label="Last check-in"
-                    value={formatDaysSinceCheckIn(stats?.daysSinceLastOneOnOne)}
-                  />
-                  <MemberMetricColumn
-                    label="Goals"
-                    value={compliance?.goalsDisplay ?? "—"}
-                  />
-                  <MemberStatusColumn badge={primaryBadge} />
-                </View>
+                {hasProfilePermission ? (
+                  <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 2 }}>
+                    <MemberMetricColumn
+                      label="Last check-in"
+                      value={formatDaysSinceCheckIn(stats?.daysSinceLastOneOnOne)}
+                    />
+                    <MemberMetricColumn
+                      label="Goals"
+                      value={compliance?.goalsDisplay ?? "—"}
+                    />
+                    <MemberStatusColumn badge={primaryBadge} />
+                  </View>
+                ) : (
+                  <View
+                    style={{ flex: 1, alignItems: "center", justifyContent: "center" }}
+                    accessibilityLabel="Member activity is private"
+                  >
+                    <View
+                      style={{
+                        width: 28,
+                        height: 28,
+                        borderRadius: 14,
+                        backgroundColor: "#F1F5F9",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <Lock size={14} color="#94A3B8" />
+                    </View>
+                  </View>
+                )}
 
                 {hasProfilePermission && followUpDisplay ? (
                   <View
@@ -1207,6 +1300,64 @@ export default function TeamScreen() {
           {sortedMembers.length === 0 ? (
             <View style={{ paddingVertical: 32, alignItems: "center" }}>
               <Text style={{ fontSize: 13, color: "#94A3B8" }}>No members yet</Text>
+            </View>
+          ) : null}
+
+          {isOwner && formerMembers.length > 0 ? (
+            <View style={{ marginTop: 12, gap: 8 }}>
+              <Text style={{ fontSize: 11, fontWeight: "700", color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.6 }}>
+                Former members
+              </Text>
+              {formerMembers.map((former) => (
+                <Pressable
+                  key={former.userId}
+                  onPress={() =>
+                    router.push({
+                      pathname: "/member-profile",
+                      params: { teamId: activeTeamId ?? "", memberUserId: former.userId },
+                    })
+                  }
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    paddingHorizontal: 10,
+                    paddingVertical: 10,
+                    borderRadius: 14,
+                    borderWidth: 1,
+                    borderColor: "#E2E8F0",
+                    backgroundColor: "#F8FAFC",
+                    gap: 10,
+                  }}
+                  testID={`former-member-row-${former.userId}`}
+                >
+                  <View
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 18,
+                      backgroundColor: "#E2E8F0",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      overflow: "hidden",
+                    }}
+                  >
+                    {former.user.image ? (
+                      <Image source={{ uri: former.user.image }} style={{ width: 36, height: 36 }} resizeMode="cover" />
+                    ) : (
+                      <Text style={{ color: "#64748B", fontWeight: "700", fontSize: 14 }}>
+                        {former.user.name?.[0]?.toUpperCase() ?? "?"}
+                      </Text>
+                    )}
+                  </View>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={{ fontSize: 12, fontWeight: "700", color: "#0F172A" }} numberOfLines={1}>
+                      {former.user.name ?? former.user.email ?? "Member"}
+                    </Text>
+                    <Text style={{ fontSize: 10, color: "#94A3B8", marginTop: 2 }}>View archived check-ins</Text>
+                  </View>
+                  <ChevronRight size={16} color="#CBD5E1" />
+                </Pressable>
+              ))}
             </View>
           ) : null}
           </ScrollView>

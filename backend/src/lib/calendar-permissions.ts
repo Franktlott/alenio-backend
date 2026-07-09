@@ -20,6 +20,7 @@ export type CalendarEventVisibility = {
   approvalStatus?: string | null;
   createdById: string;
   isVideoMeeting?: boolean;
+  isOneOnOne?: boolean;
 };
 
 export function canViewCalendarEvent(
@@ -30,7 +31,7 @@ export function canViewCalendarEvent(
 ): boolean {
   if (event.isHidden) {
     if (event.createdById === userId) return true;
-    if (event.isVideoMeeting && assigneeIds.includes(userId)) return true;
+    if (assigneeIds.includes(userId) && (event.isVideoMeeting || event.isOneOnOne)) return true;
     return false;
   }
 

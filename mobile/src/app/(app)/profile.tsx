@@ -283,6 +283,7 @@ export default function ProfileScreen() {
     mutationFn: (teamId: string) => api.delete(`/api/teams/${teamId}/leave`),
     onSuccess: async (_data, teamId) => {
       setLeavingTeam(null);
+      await queryClient.invalidateQueries({ queryKey: ["former-members", teamId] });
       await applyTeamRemovedFromAccount(teamId, activeTeamId, setActiveTeamId, queryClient);
       toast({ title: "Left team", preset: "done" });
     },

@@ -200,7 +200,9 @@ export default function ChatScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" />}
       >
         {/* Current workspace */}
-        <View
+        <Pressable
+          testID="team-chat-button"
+          onPress={() => router.push({ pathname: "/team-channels", params: { teamId: activeTeamId, teamName: teamDetail?.name ?? "" } })}
           style={{
             marginHorizontal: 16,
             marginTop: 20,
@@ -246,18 +248,16 @@ export default function ChatScreen() {
                   : "No activity yet"}
               </Text>
             </View>
-            <Pressable
-              testID="team-chat-button"
-              onPress={() => router.push({ pathname: "/team-channels", params: { teamId: activeTeamId, teamName: teamDetail?.name ?? "" } })}
-              style={({ pressed }) => ({
+            <View
+              style={{
                 alignSelf: "stretch",
                 width: "100%",
-                backgroundColor: pressed ? "rgba(255,255,255,0.28)" : "rgba(255,255,255,0.18)",
+                backgroundColor: "rgba(255,255,255,0.18)",
                 borderWidth: 1,
                 borderColor: "rgba(255,255,255,0.35)",
                 borderRadius: 14,
                 overflow: "hidden",
-              })}
+              }}
             >
               <View
                 style={{
@@ -285,9 +285,9 @@ export default function ChatScreen() {
                   <ChevronRight size={16} color="rgba(255,255,255,0.9)" strokeWidth={2.5} />
                 </View>
               </View>
-            </Pressable>
+            </View>
           </LinearGradient>
-        </View>
+        </Pressable>
 
         {/* Messages section */}
         <View style={{ marginHorizontal: 16, marginTop: 28, marginBottom: 10, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>

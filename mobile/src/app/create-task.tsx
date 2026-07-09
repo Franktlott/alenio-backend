@@ -24,11 +24,10 @@ import * as ImagePicker from "expo-image-picker";
 import { api } from "@/lib/api/api";
 import { uploadFile } from "@/lib/upload";
 import { useSession } from "@/lib/auth/use-session";
-import type { Task, TaskPriority, RecurrenceType, Team, TeamMember, TaskTemplate, TaskStatus } from "@/lib/types";
+import type { Task, TaskPriority, RecurrenceType, Team, TeamMember, TaskTemplate } from "@/lib/types";
 import { recurrenceCountHint, recurrenceDurationUnit } from "@/lib/recurring-task";
 import { ME_QUERY_KEY } from "@/lib/auth/me-query";
 import { calendarDueIso, resolveTimeZone } from "@/lib/timezone";
-import { Picker } from "@react-native-picker/picker";
 
 const PRIORITIES: { label: string; value: TaskPriority; color: string }[] = [
   { label: "Low", value: "low", color: "#94A3B8" },
@@ -41,11 +40,6 @@ const RECURRENCE_TYPES: { label: string; value: RecurrenceType }[] = [
   { label: "Daily", value: "daily" },
   { label: "Weekly", value: "weekly" },
   { label: "Monthly", value: "monthly" },
-];
-
-const TASK_STATUS_OPTIONS: { label: string; value: TaskStatus }[] = [
-  { label: "Open", value: "todo" },
-  { label: "Completed", value: "done" },
 ];
 
 const SCREEN_HEIGHT = Dimensions.get("window").height;
@@ -66,7 +60,6 @@ export default function CreateTaskScreen() {
 
   const [title, setTitle] = useState(typeof prefillTitle === "string" ? prefillTitle : "");
   const [description, setDescription] = useState("");
-  const [taskStatus, setTaskStatus] = useState<TaskStatus>("todo");
   const [priority, setPriority] = useState<TaskPriority>("medium");
   const [selectedAssignees, setSelectedAssignees] = useState<string[]>([]);
   const [isRecurring, setIsRecurring] = useState(false);
@@ -244,7 +237,7 @@ export default function CreateTaskScreen() {
     createMutation.mutate({
       title: title.trim(),
       description: description.trim() || undefined,
-      status: taskStatus,
+      status: "todo",
       priority,
       dueDate: dueDate ? calendarDueIso(dueDate, resolveTimeZone(meProfile?.timezone)) : undefined,
       timeZone: resolveTimeZone(meProfile?.timezone),
@@ -478,7 +471,7 @@ export default function CreateTaskScreen() {
               <Text className="text-lg mr-3">📅</Text>
               <Text className="flex-1 text-sm font-medium" style={{ color: dueDate ? "#4361EE" : "#94A3B8" }}>
                 {dueDate
-                  ? dueDate.toLocaleString("en-US", { weekday: "short", month: "long", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })
+                  ? dueDate.toLocaleDateString("en-US", { weekday: "short", month: "long", day: "numeric", year: "numeric" })
                   : "Select a due date"}
               </Text>
               {dueDate ? (
@@ -647,20 +640,6 @@ export default function CreateTaskScreen() {
                 ) : null}
               </View>
             ) : null}
-          </View>
-
-          {/* Status */}
-          <View className="py-4 border-b border-slate-100 dark:border-slate-800">
-            <Text className="text-sm font-semibold text-slate-500 mb-3">
-              Status
-            </Text>
-            <View className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden bg-white dark:bg-slate-900">
-              <Picker selectedValue={taskStatus} onValueChange={(value) => setTaskStatus(value as TaskStatus)}>
-                {TASK_STATUS_OPTIONS.map((option) => (
-                  <Picker.Item key={option.value} label={option.label} value={option.value} />
-                ))}
-              </Picker>
-            </View>
           </View>
 
           {/* Photo attachment */}

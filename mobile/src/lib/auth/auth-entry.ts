@@ -33,7 +33,8 @@ export function navigateToMobileHomeWithRetry(isAdmin: boolean) {
   });
 
   attempt("immediate");
-  for (const ms of [16, 50, 150, 300, 600, 1200, 2000, 3500, 5000]) {
+  // Short retry window only — long retries were yanking users off other screens.
+  for (const ms of [150, 600]) {
     timers.push(setTimeout(() => attempt(`t+${ms}`), ms));
   }
 

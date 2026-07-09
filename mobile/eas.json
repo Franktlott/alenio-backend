@@ -33,6 +33,7 @@
       }
     },
     "production": {
+      "autoIncrement": true,
       "env": {
         "EXPO_PUBLIC_EXAMPLE_ENV_VAR": "test",
         "EXPO_PUBLIC_RESEND_API_KEY": "re_e98uRCcU_KedN3V9Sq2fZv7ARMkfpfCeL",

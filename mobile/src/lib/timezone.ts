@@ -35,8 +35,21 @@ export function calendarDayFromInstant(instant: string | Date, timeZone?: string
 }
 
 export function calendarDueIso(d: Date, timeZone?: string | null): string {
-  const day = calendarDayFromInstant(d, timeZone);
-  return day;
+  return calendarDayFromInstant(d, timeZone);
+}
+
+/** Display a task due instant as its calendar date (due time is always end of day). */
+export function formatTaskDueDateLabel(
+  instant: string | Date | null | undefined,
+  timeZone?: string | null,
+): string {
+  if (!instant) return "—";
+  const day = calendarDayFromInstant(instant, timeZone);
+  if (!day) return "—";
+  const [y, mo, d] = day.split("-").map(Number);
+  const local = new Date(y!, mo! - 1, d);
+  if (Number.isNaN(local.getTime())) return "—";
+  return local.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
 export function formatTimeZoneLabel(timeZone: string, now = new Date()): string {

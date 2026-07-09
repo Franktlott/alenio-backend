@@ -30,7 +30,7 @@ export function NoTeamPlaceholder() {
         Welcome to Alenio
       </Text>
       <Text style={{ fontSize: 15, color: "#94A3B8", textAlign: "center", lineHeight: 22, marginBottom: 32 }}>
-        Join an existing team or create a new one to get started.
+        Join an existing workspace or create a new one to get started.
       </Text>
 
       {isLoading ? (
@@ -67,9 +67,9 @@ export function NoTeamPlaceholder() {
             width: "100%",
             alignItems: "center",
           }}
-          testID="setup-team-button"
+          testID="setup-workspace-button"
         >
-          <Text style={{ color: "white", fontWeight: "700", fontSize: 15 }}>Set up your team</Text>
+          <Text style={{ color: "white", fontWeight: "700", fontSize: 15 }}>Set up your workspace</Text>
         </Pressable>
       )}
     </View>

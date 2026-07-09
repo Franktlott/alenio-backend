@@ -11093,6 +11093,54 @@ a.go-dash-alert-item {
   background: #fff;
 }
 
+.enterprise-team-roster-former {
+  border-top: 1px solid #eef2f6;
+  padding-top: 0.65rem;
+  margin-top: 0.35rem;
+}
+
+.enterprise-team-roster-former-title {
+  margin: 0 0 0.35rem;
+  padding: 0 0.65rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+.enterprise-team-roster--former {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #f8fafc;
+}
+
+.enterprise-team-roster-card--former {
+  grid-template-columns: minmax(0, 1fr) auto 0.875rem;
+  background: #f8fafc;
+}
+
+.enterprise-team-roster-card--former:hover {
+  background: #f1f5f9;
+}
+
+.enterprise-team-roster-former-pill {
+  font-size: 0.625rem;
+  font-weight: 700;
+  color: #64748b;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  padding: 0.1rem 0.35rem;
+}
+
+.enterprise-team-roster-former-hint {
+  font-size: 0.6875rem;
+  color: #94a3b8;
+  white-space: nowrap;
+}
+
 .enterprise-team-roster-col {
   min-width: 0;
   max-width: 100%;
@@ -11318,6 +11366,13 @@ a.go-dash-alert-item {
   color: #cbd5e1;
   line-height: 1;
   flex-shrink: 0;
+}
+
+.enterprise-team-roster-col--locked-metrics {
+  grid-column: 2 / 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .enterprise-team-roster-lock {
@@ -12012,6 +12067,16 @@ a.go-dash-alert-item {
   color: #15803d;
   background: #dcfce7;
   border: 1px solid #bbf7d0;
+  border-radius: 999px;
+  padding: 0.15rem 0.45rem;
+}
+
+.enterprise-team-profile-former-badge {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: #64748b;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
   border-radius: 999px;
   padding: 0.15rem 0.45rem;
 }
@@ -14402,6 +14467,12 @@ a.go-dash-alert-item {
   background: #ecfeff;
   color: #0e7490;
   border-color: #a5f3fc;
+}
+
+.enterprise-team-role-badge--former {
+  background: #f8fafc;
+  color: #64748b;
+  border-color: #e2e8f0;
 }
 
 .enterprise-team-member-submetrics {

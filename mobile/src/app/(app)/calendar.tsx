@@ -13,7 +13,7 @@ import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { ChevronLeft, ChevronRight, Plus, Calendar, Video, Globe, X } from "lucide-react-native";
+import { ChevronLeft, ChevronRight, Plus, Calendar, Video, Globe, X, UserRound } from "lucide-react-native";
 import { router } from "expo-router";
 import { api } from "@/lib/api/api";
 import { useTeamStore } from "@/lib/state/team-store";
@@ -25,6 +25,7 @@ import { eventShowsScheduledTime, formatEventTimeRange } from "@/lib/format-even
 import { CALENDAR_WEEKDAY_LABELS, eventCalendarDayRange, getDaysInMonth } from "@/lib/calendar-grid";
 import { isMyWorkspaceTask } from "@/lib/workspace-tasks";
 import { fetchExternalCalendarEvents, type ExternalCalendarEventItem } from "@/lib/outlook-calendar-api";
+import { oneOnOneCheckInHref, planOneOnOneHref } from "@/lib/plan-one-on-one";
 
 const EXTERNAL_BUSY_COLOR = "#94A3B8";
 
@@ -41,6 +42,9 @@ type CalendarEvent = {
   createdAt: string;
   isHidden?: boolean;
   isVideoMeeting?: boolean;
+  isOneOnOne?: boolean;
+  oneOnOneMemberUserId?: string | null;
+  oneOnOneTemplateId?: string | null;
   approvalStatus?: "pending" | "approved" | "rejected";
   createdBy?: { id: string; name: string; image?: string | null };
 };
@@ -344,6 +348,31 @@ export default function CalendarScreen() {
                 <Text style={{ color: "white", fontSize: 13, fontWeight: "700" }}>{pendingEvents.length} pending</Text>
               </Pressable>
             ) : null}
+            {activeTeamId && !isDemo && isOwnerOrLeader ? (
+              <Pressable
+                onPress={() =>
+                  router.push(
+                    planOneOnOneHref(activeTeamId!, {
+                      startDate: (selectedDate ?? new Date()).toISOString(),
+                      myRole,
+                    }),
+                  )
+                }
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 4,
+                  backgroundColor: "rgba(255,255,255,0.22)",
+                  paddingHorizontal: 10,
+                  paddingVertical: 7,
+                  borderRadius: 20,
+                }}
+                testID="header-plan-one-on-one-button"
+              >
+                <UserRound size={14} color="white" />
+                <Text style={{ color: "white", fontSize: 12, fontWeight: "600" }}>Plan 1:1</Text>
+              </Pressable>
+            ) : null}
             {activeTeamId && !isDemo ? (
               <Pressable
                 onPress={() =>
@@ -622,6 +651,7 @@ export default function CalendarScreen() {
                 ))}
                 {selectedEvents.map((event) => {
                   const showJoin = canShowVideoJoinOnEvent(event, meetingNow, isOwnerOrLeader);
+                  const isOneOnOneEvent = event.isOneOnOne === true && !!event.oneOnOneMemberUserId;
                   const cardStyle = {
                     backgroundColor: "white" as const,
                     borderRadius: 14,
@@ -634,7 +664,19 @@ export default function CalendarScreen() {
                     shadowOffset: { width: 0, height: 1 },
                     elevation: 1,
                   };
-                  const openEventEdit = () =>
+                  const openEventEdit = () => {
+                    if (isOneOnOneEvent) {
+                      router.push(
+                        planOneOnOneHref(activeTeamId!, {
+                          eventId: event.id,
+                          memberUserId: event.oneOnOneMemberUserId ?? undefined,
+                          templateId: event.oneOnOneTemplateId ?? undefined,
+                          startDate: event.startDate,
+                          myRole,
+                        }),
+                      );
+                      return;
+                    }
                     router.push({
                       pathname: "/create-event",
                       params: {
@@ -650,12 +692,14 @@ export default function CalendarScreen() {
                         myRole,
                       },
                     });
+                  };
                   const canEdit = canManageEvent(event);
                   const titleBlock = (
                     <View style={{ flexDirection: "row", alignItems: "center", flex: 1, gap: 6, minWidth: 0 }}>
                       <Text style={{ fontSize: 14, fontWeight: "700", color: "#0F172A", flex: 1 }} numberOfLines={1}>
                         {event.title}
                       </Text>
+                      {isOneOnOneEvent ? <UserRound size={13} color="#7C3AED" /> : null}
                       {event.isVideoMeeting ? <Video size={13} color="#4361EE" /> : null}
                     </View>
                   );
@@ -675,6 +719,37 @@ export default function CalendarScreen() {
                           <View style={{ flex: 1, minWidth: 0 }}>{titleBlock}</View>
                         )}
                         <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                          {isOneOnOneEvent && isOwnerOrLeader ? (
+                            <Pressable
+                              onPress={() =>
+                                router.push(
+                                  oneOnOneCheckInHref(
+                                    activeTeamId!,
+                                    event.oneOnOneMemberUserId!,
+                                    event.oneOnOneTemplateId,
+                                  ),
+                                )
+                              }
+                              accessibilityRole="button"
+                              accessibilityLabel={`Start check-in for ${event.title}`}
+                              hitSlop={6}
+                              testID={`event-start-check-in-${event.id}`}
+                              style={{
+                                flexDirection: "row",
+                                alignItems: "center",
+                                gap: 4,
+                                backgroundColor: "#F5F3FF",
+                                borderWidth: 1,
+                                borderColor: "#DDD6FE",
+                                paddingHorizontal: 10,
+                                paddingVertical: 6,
+                                borderRadius: 999,
+                              }}
+                            >
+                              <UserRound size={12} color="#7C3AED" />
+                              <Text style={{ fontSize: 11, fontWeight: "700", color: "#7C3AED" }}>Start</Text>
+                            </Pressable>
+                          ) : null}
                           {showJoin ? (
                             <Pressable
                               onPress={() =>
@@ -722,9 +797,11 @@ export default function CalendarScreen() {
                           ) : null}
                           <View style={{ backgroundColor: event.color + "20", paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 }}>
                             <Text style={{ fontSize: 10, fontWeight: "600", color: event.color }}>
-                              {event.endDate && !isSameDay(new Date(event.startDate), new Date(event.endDate))
-                                ? `${new Date(event.startDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${new Date(event.endDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
-                                : "Event"}
+                              {isOneOnOneEvent
+                                ? "1:1"
+                                : event.endDate && !isSameDay(new Date(event.startDate), new Date(event.endDate))
+                                  ? `${new Date(event.startDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${new Date(event.endDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
+                                  : "Event"}
                             </Text>
                           </View>
                         </View>
@@ -733,8 +810,8 @@ export default function CalendarScreen() {
                         <Text
                           style={{
                             fontSize: 12,
-                            color: event.isVideoMeeting ? "#4361EE" : "#64748B",
-                            fontWeight: event.isVideoMeeting ? "600" : "400",
+                            color: event.isVideoMeeting || isOneOnOneEvent ? "#4361EE" : "#64748B",
+                            fontWeight: event.isVideoMeeting || isOneOnOneEvent ? "600" : "400",
                             marginTop: 4,
                           }}
                         >
@@ -747,7 +824,9 @@ export default function CalendarScreen() {
                         </Text>
                       ) : null}
                       {canEdit ? (
-                        <Text style={{ fontSize: 11, color: "#CBD5E1", marginTop: 6 }}>Tap title row to edit</Text>
+                        <Text style={{ fontSize: 11, color: "#CBD5E1", marginTop: 6 }}>
+                          {isOneOnOneEvent ? "Tap title to edit plan" : "Tap title row to edit"}
+                        </Text>
                       ) : null}
                     </View>
                   );

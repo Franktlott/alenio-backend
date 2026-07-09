@@ -80,31 +80,41 @@ export function BillingPortalWebViewModal({
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             accessibilityLabel="Close billing portal"
             testID="billing-portal-close"
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 18,
+              backgroundColor: isDark ? "#1e293b" : "#f1f5f9",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
           >
-            <X size={22} color={isDark ? "#e2e8f0" : "#64748b"} />
+            <X size={20} color={isDark ? "#e2e8f0" : "#64748b"} />
           </TouchableOpacity>
         </View>
-        {loading ? (
-          <View style={styles.loader} pointerEvents="none">
-            <ActivityIndicator size="large" color="#4361EE" />
-            <Text style={[styles.loaderText, { color: isDark ? "#94a3b8" : "#64748b" }]}>
-              {workplaceLabel ? `Loading billing for ${workplaceLabel}…` : "Loading secure billing…"}
-            </Text>
-          </View>
-        ) : null}
-        <WebView
-          source={{ uri: safeUrl }}
-          style={styles.web}
-          onLoadStart={() => setLoading(true)}
-          onLoadEnd={() => setLoading(false)}
-          onError={() => setLoading(false)}
-          javaScriptEnabled
-          domStorageEnabled
-          sharedCookiesEnabled
-          setSupportMultipleWindows={false}
-          onShouldStartLoadWithRequest={(req) => onNavChange(req.url)}
-          originWhitelist={["https://*"]}
-        />
+        <View style={styles.webHost}>
+          {loading ? (
+            <View style={styles.loader} pointerEvents="none">
+              <ActivityIndicator size="large" color="#4361EE" />
+              <Text style={[styles.loaderText, { color: isDark ? "#94a3b8" : "#64748b" }]}>
+                {workplaceLabel ? `Loading billing for ${workplaceLabel}…` : "Loading secure billing…"}
+              </Text>
+            </View>
+          ) : null}
+          <WebView
+            source={{ uri: safeUrl }}
+            style={styles.web}
+            onLoadStart={() => setLoading(true)}
+            onLoadEnd={() => setLoading(false)}
+            onError={() => setLoading(false)}
+            javaScriptEnabled
+            domStorageEnabled
+            sharedCookiesEnabled
+            setSupportMultipleWindows={false}
+            onShouldStartLoadWithRequest={(req) => onNavChange(req.url)}
+            originWhitelist={["https://*"]}
+          />
+        </View>
       </SafeAreaView>
     </Modal>
   );
@@ -124,6 +134,7 @@ const styles = StyleSheet.create({
   headerText: { flex: 1, minWidth: 0 },
   title: { fontSize: 17, fontWeight: "700" },
   subtitle: { fontSize: 13, fontWeight: "600", marginTop: 2 },
+  webHost: { flex: 1, position: "relative" },
   web: { flex: 1 },
   loader: {
     ...StyleSheet.absoluteFillObject,

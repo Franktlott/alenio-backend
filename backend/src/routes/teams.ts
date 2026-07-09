@@ -28,6 +28,11 @@ import {
   revokeLinkedGoDevice,
 } from "../lib/workplace-alerts";
 import {
+  canManageTeamRoster,
+  cleanupWorkspaceMemberDeparture,
+  listFormerWorkspaceMembers,
+} from "../lib/workspace-member-departure";
+import {
   canManageModules,
   getModuleDefinition,
   getWorkspaceModule,
@@ -256,6 +261,25 @@ teamsRouter.get("/:teamId", async (c) => {
   return c.json({ data: { ...team, role: membership.role, workplaceStandards, goFrontendSettings } });
 });
 
+// GET /api/teams/:teamId/former-members - archived members with check-in or growth history
+teamsRouter.get("/:teamId/former-members", async (c) => {
+  const user = c.get("user")!;
+  const { teamId } = c.req.param();
+
+  const membership = await prisma.teamMember.findUnique({
+    where: { userId_teamId: { userId: user.id, teamId } },
+  });
+  if (!membership) {
+    return c.json({ error: { message: "Team not found", code: "NOT_FOUND" } }, 404);
+  }
+  if (!canManageTeamRoster(membership.role)) {
+    return c.json({ error: { message: "Only leaders can view former members", code: "FORBIDDEN" } }, 403);
+  }
+
+  const data = await listFormerWorkspaceMembers(prisma, teamId);
+  return c.json({ data });
+});
+
 // PATCH /api/teams/:teamId - update team name
 teamsRouter.patch("/:teamId", async (c) => {
   const user = c.get("user")!;
@@ -368,6 +392,8 @@ teamsRouter.delete("/:teamId/leave", async (c) => {
       403,
     );
   }
+
+  await cleanupWorkspaceMemberDeparture(prisma, teamId, user.id);
 
   await prisma.teamMember.deleteMany({
     where: { userId: user.id, teamId },
@@ -821,6 +847,8 @@ teamsRouter.delete("/:teamId/members/:memberId", async (c) => {
   if (["owner", "team_leader"].includes(targetMembership.role)) {
     return c.json({ error: { message: "Cannot remove an owner or team leader", code: "FORBIDDEN" } }, 403);
   }
+
+  await cleanupWorkspaceMemberDeparture(prisma, teamId, memberId);
 
   await prisma.teamMember.delete({
     where: { userId_teamId: { userId: memberId, teamId } },

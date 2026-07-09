@@ -13,6 +13,7 @@ type Props = {
   teamId: string;
   member: WebTeamMemberRow;
   isSelf: boolean;
+  isFormerMember?: boolean;
   managerName: string | null;
   leaderUserId: string | null;
   roleLabel: string;
@@ -36,6 +37,7 @@ export function TeamMemberProfilePanel({
   teamId,
   member,
   isSelf,
+  isFormerMember = false,
   managerName,
   leaderUserId,
   roleLabel,
@@ -81,7 +83,11 @@ export function TeamMemberProfilePanel({
                 {displayName}
                 {isSelf ? " (you)" : ""}
               </h2>
-              <span className="enterprise-team-profile-active-badge">Active</span>
+              {isFormerMember ? (
+                <span className="enterprise-team-profile-former-badge">Former member</span>
+              ) : (
+                <span className="enterprise-team-profile-active-badge">Active</span>
+              )}
             </div>
             <p className="enterprise-team-profile-role-line">
               <span className={roleBadgeClass}>{roleLabel}</span>
@@ -89,7 +95,7 @@ export function TeamMemberProfilePanel({
             {member.user.email ? (
               <p className="enterprise-muted enterprise-team-profile-email">{member.user.email}</p>
             ) : null}
-            {managerName && member.role !== "owner" ? (
+            {managerName && member.role !== "owner" && !isFormerMember ? (
               <p className="enterprise-muted enterprise-team-profile-reports">
                 Reports to: <strong>{managerName}</strong>
               </p>

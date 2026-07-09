@@ -3,7 +3,9 @@ import { prisma } from "../prisma";
 import { getSessionFromHeaders } from "../auth";
 import { sendPushToUsers } from "../lib/push";
 import { logActivity } from "../lib/activity";
-import { materializeRecurringTasksForTeam } from "../lib/recurrence-series";
+import { cleanupWorkspaceMemberDeparture } from "../lib/workspace-member-departure";
+import { materializeRecurringTasksForTeam, parseCalendarDueDate } from "../lib/recurrence-series";
+import { isValidTimeZone, resolveTimeZone } from "../lib/timezone";
 import { mountWebStripeBilling } from "./web-stripe-billing";
 import { oneOnOneTemplatesRouter } from "./one-on-one-templates";
 import { checkInTemplateLibraryRouter } from "./check-in-template-library";
@@ -32,7 +34,11 @@ import {
   serializeGoFrontendSettings,
 } from "../lib/go-frontend-settings";
 
-const webRouter = new Hono();
+async function getWebUserTimeZone(userId: string, bodyTimeZone?: unknown): Promise<string> {
+  if (typeof bodyTimeZone === "string" && isValidTimeZone(bodyTimeZone)) return bodyTimeZone;
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { timezone: true } });
+  return resolveTimeZone(user?.timezone);
+}
 
 // Helper: get session from cookie
 async function getWebSession(c: any) {
@@ -334,6 +340,8 @@ webRouter.delete("/api/teams/:id/members/:userId", async (c) => {
   if (["owner", "team_leader"].includes(targetMembership.role)) {
     return c.json({ error: { message: "Cannot remove an owner or team leader" } }, 403);
   }
+  await cleanupWorkspaceMemberDeparture(prisma, id, memberId);
+
   await prisma.teamMember.delete({
     where: { userId_teamId: { userId: memberId, teamId: id } },
   });
@@ -519,6 +527,7 @@ webRouter.post("/api/tasks", async (c) => {
     isJoint,
     incognito,
     subtasks: subtasksRaw,
+    timeZone: bodyTimeZone,
   } = body as Record<string, unknown>;
 
   if (!title || typeof title !== "string" || !title.trim()) {
@@ -543,7 +552,11 @@ webRouter.post("/api/tasks", async (c) => {
   }
 
   const normalizedStatus = status === "done" ? "done" : "todo";
-  const dueDateObj = dueDate && (typeof dueDate === "string" || typeof dueDate === "number") ? new Date(dueDate as string | number) : null;
+  const userTimeZone = await getWebUserTimeZone(userId, bodyTimeZone);
+  const dueDateObj =
+    dueDate && (typeof dueDate === "string" || typeof dueDate === "number")
+      ? parseCalendarDueDate(String(dueDate), userTimeZone)
+      : null;
   const pri = typeof priority === "string" && priority.trim() ? priority.trim() : "medium";
 
   const subtaskList: { title: string; order: number }[] = Array.isArray(subtasksRaw)
@@ -651,12 +664,15 @@ webRouter.patch("/api/tasks/:id", async (c) => {
   ]);
   if (!assignment && !taskCheck) return c.json({ error: "Not found" }, 404);
   const body = await c.req.json().catch(() => ({}));
-  const { title, description, priority, dueDate, status } = body;
+  const { title, description, priority, dueDate, status, timeZone: bodyTimeZone } = body;
+  const userTimeZone = await getWebUserTimeZone(userId, bodyTimeZone);
   const updateData: any = {};
   if (title !== undefined) updateData.title = title.trim();
   if (description !== undefined) updateData.description = description || null;
   if (priority !== undefined) updateData.priority = priority;
-  if (dueDate !== undefined) updateData.dueDate = dueDate ? new Date(dueDate) : null;
+  if (dueDate !== undefined) {
+    updateData.dueDate = dueDate ? parseCalendarDueDate(String(dueDate), userTimeZone) : null;
+  }
   if (status !== undefined) updateData.status = status;
   const task = await prisma.task.update({
     where: { id },

@@ -12,13 +12,21 @@ import {
   Platform,
 } from "react-native";
 import { toast } from "burnt";
+import { useQuery } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Plus, X, ChevronLeft, MoreVertical, Check, CalendarCheck } from "lucide-react-native";
+import { Plus, X, ChevronLeft, MoreVertical, Check, CalendarCheck, Clock } from "lucide-react-native";
+import { router, useFocusEffect } from "expo-router";
+import {
+  planOneOnOneHref,
+  type PlannedOneOnOneEvent,
+} from "@/lib/plan-one-on-one";
+import { formatEventTimeRange, eventShowsScheduledTime } from "@/lib/format-event-time";
 import {
   createOneOnOneMeeting,
   deleteOneOnOneMeeting,
   fetchOneOnOneMeetings,
   fetchOneOnOneTemplates,
+  fetchPlannedOneOnOnes,
   updateOneOnOneMeeting,
   type OneOnOneMeeting,
   type OneOnOneTemplate,
@@ -58,6 +66,8 @@ type Props = {
   leaderUserId: string | null;
   canCreate: boolean;
   canModify: boolean;
+  autoStartCheckIn?: boolean;
+  preferredTemplateId?: string | null;
 };
 
 type OneOneView = "list" | "pick" | "fill";
@@ -85,6 +95,14 @@ function formatMeetingDate(iso: string): string {
   }
 }
 
+function formatScheduledOneOnOneWhen(event: PlannedOneOnOneEvent): string {
+  const datePart = formatMeetingDate(event.startDate);
+  if (eventShowsScheduledTime({ allDay: event.allDay ?? false, isVideoMeeting: event.isVideoMeeting })) {
+    return `${datePart} · ${formatEventTimeRange(event.startDate, event.endDate)}`;
+  }
+  return datePart;
+}
+
 function meetingToFillTemplate(meeting: OneOnOneMeeting): OneOnOneTemplate {
   return {
     id: meeting.templateId ?? meeting.id,
@@ -102,9 +120,9 @@ function meetingToFillTemplate(meeting: OneOnOneMeeting): OneOnOneTemplate {
 function dueDateInputToIso(value: string): string | undefined {
   const trimmed = value.trim();
   if (!trimmed) return undefined;
-  const parsed = new Date(`${trimmed}T23:59:59`);
-  if (Number.isNaN(parsed.getTime())) return undefined;
-  return parsed.toISOString();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+  const match = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return match?.[1] ? match[0] : undefined;
 }
 
 function groupFields(fields: OneOnOneTemplateField[]) {
@@ -206,6 +224,8 @@ export function OneOnOneHistoryTab({
   leaderUserId,
   canCreate,
   canModify,
+  autoStartCheckIn = false,
+  preferredTemplateId = null,
 }: Props) {
   const insets = useSafeAreaInsets();
   const [view, setView] = useState<OneOneView>("list");
@@ -228,6 +248,37 @@ export function OneOnOneHistoryTab({
   const [highlightLeaderFieldId, setHighlightLeaderFieldId] = useState<string | null>(null);
   const fillScrollRef = useRef<ScrollView>(null);
   const [prepAcknowledged, setPrepAcknowledged] = useState(false);
+  const autoStartHandledRef = useRef(false);
+
+  const { data: upcomingPlanned = [], refetch: refetchPlannedOneOnOnes } = useQuery({
+    queryKey: ["planned-one-on-ones", teamId, memberUserId],
+    queryFn: () => fetchPlannedOneOnOnes(teamId, memberUserId),
+    enabled: !!teamId && !!memberUserId && canCreate,
+  });
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!teamId || !memberUserId || !canCreate) return;
+      void refetchPlannedOneOnOnes();
+    }, [teamId, memberUserId, canCreate, refetchPlannedOneOnOnes]),
+  );
+
+  const { data: templateCatalog = [] } = useQuery({
+    queryKey: ["one-on-one-templates", teamId],
+    queryFn: () => fetchOneOnOneTemplates(teamId),
+    enabled: !!teamId && canCreate,
+  });
+
+  const templateTitleById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const template of templateCatalog) {
+      map.set(template.id, template.title);
+    }
+    for (const template of templates) {
+      map.set(template.id, template.title);
+    }
+    return map;
+  }, [templateCatalog, templates]);
 
   const todayStart = useMemo(() => {
     const d = new Date();
@@ -281,6 +332,7 @@ export function OneOnOneHistoryTab({
     setMenuMeetingId(null);
     setErr(null);
     setTemplates([]);
+    autoStartHandledRef.current = false;
   }, [memberUserId, teamId]);
 
   const startCreate = async () => {
@@ -289,7 +341,7 @@ export function OneOnOneHistoryTab({
     setLoadingTemplates(true);
     setView("pick");
     try {
-      const list = await fetchOneOnOneTemplates(teamId);
+      const list = templateCatalog.length > 0 ? templateCatalog : await fetchOneOnOneTemplates(teamId);
       setTemplates(list);
       if (list.length === 0) {
         setErr("No check-in templates yet. Ask your workspace owner to create templates on the web Team page.");
@@ -316,8 +368,65 @@ export function OneOnOneHistoryTab({
     setFollowUpDrafts([newFollowUpDraft()]);
     setPrepAcknowledged(false);
     setErr(null);
+    setLeaderCommentsNudgeOpen(false);
+    setFeedbackPromptOpen(false);
     setView("fill");
   };
+
+  const startPlannedOneOnOne = async (event: PlannedOneOnOneEvent) => {
+    setErr(null);
+    setEditingMeeting(null);
+    setLoadingTemplates(true);
+    setView("pick");
+    try {
+      const list = templateCatalog.length > 0 ? templateCatalog : await fetchOneOnOneTemplates(teamId);
+      setTemplates(list);
+      const preferred = event.oneOnOneTemplateId
+        ? list.find((template) => template.id === event.oneOnOneTemplateId) ?? null
+        : null;
+      if (preferred) {
+        pickTemplate(preferred);
+        return;
+      }
+      if (list.length === 0) {
+        setErr("No check-in templates yet. Ask your workspace owner to create templates on the web Team page.");
+        return;
+      }
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Could not load templates.");
+    } finally {
+      setLoadingTemplates(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!autoStartCheckIn || !canCreate || autoStartHandledRef.current) return;
+    autoStartHandledRef.current = true;
+    void (async () => {
+      setErr(null);
+      setEditingMeeting(null);
+      setLoadingTemplates(true);
+      setView("pick");
+      try {
+        const list = templateCatalog.length > 0 ? templateCatalog : await fetchOneOnOneTemplates(teamId);
+        setTemplates(list);
+        if (list.length === 0) {
+          setErr("No check-in templates yet. Ask your workspace owner to create templates on the web Team page.");
+          return;
+        }
+        const preferred = preferredTemplateId
+          ? list.find((template) => template.id === preferredTemplateId) ?? null
+          : null;
+        if (preferred) {
+          pickTemplate(preferred);
+        }
+      } catch (e) {
+        setErr(e instanceof Error ? e.message : "Could not load templates.");
+      } finally {
+        setLoadingTemplates(false);
+      }
+    })();
+  }, [autoStartCheckIn, canCreate, preferredTemplateId, teamId]);
 
   const startEdit = (meeting: OneOnOneMeeting) => {
     setPreviewMeeting(null);
@@ -328,6 +437,8 @@ export function OneOnOneHistoryTab({
     setFollowUpDrafts([]);
     setPrepAcknowledged(true);
     setErr(null);
+    setLeaderCommentsNudgeOpen(false);
+    setFeedbackPromptOpen(false);
     setView("fill");
   };
 
@@ -345,6 +456,13 @@ export function OneOnOneHistoryTab({
       return;
     }
     setFeedbackPromptOpen(true);
+  };
+
+  const onSaveDraftClick = () => {
+    if (!selectedTemplate || saving) return;
+    setLeaderCommentsNudgeOpen(false);
+    setFeedbackPromptOpen(false);
+    void performSaveDraft();
   };
 
   const onAddLeaderNotesFromNudge = () => {
@@ -415,6 +533,8 @@ export function OneOnOneHistoryTab({
 
   const performSaveDraft = async () => {
     if (!selectedTemplate || saving) return;
+    setLeaderCommentsNudgeOpen(false);
+    setFeedbackPromptOpen(false);
     setSaving(true);
     setErr(null);
     try {
@@ -523,6 +643,8 @@ export function OneOnOneHistoryTab({
     }
     setFollowUpDrafts([]);
     setErr(null);
+    setLeaderCommentsNudgeOpen(false);
+    setFeedbackPromptOpen(false);
   };
 
   const renderFieldInput = (field: OneOnOneTemplateField) => {
@@ -850,7 +972,7 @@ export function OneOnOneHistoryTab({
         >
           {!editingMeeting || editingMeeting.status === "draft" ? (
             <Pressable
-              onPress={() => void performSaveDraft()}
+              onPress={onSaveDraftClick}
               disabled={saving}
               style={{
                 borderRadius: 12,
@@ -934,27 +1056,53 @@ export function OneOnOneHistoryTab({
   if (view === "fill") return renderFillView();
   if (view === "pick") return renderPickView();
 
+  const showHistorySection = upcomingPlanned.length > 0 || meetings.length > 0;
+  const showEmptyState = !loadingMeetings && upcomingPlanned.length === 0 && meetings.length === 0;
+
   return (
     <View style={{ gap: 16 }}>
-      {meetings.length > 0 ? (
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "flex-end" }}>
-          {canCreate ? (
-            <Pressable
-              onPress={() => void startCreate()}
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 4,
-                backgroundColor: "#4361EE",
-                borderRadius: 10,
-                paddingHorizontal: 12,
-                paddingVertical: 8,
-              }}
-            >
-              <Plus size={16} color="white" />
-              <Text style={{ fontSize: 13, fontWeight: "700", color: "white" }}>New check-in</Text>
-            </Pressable>
-          ) : null}
+      {canCreate ? (
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 8 }}>
+          <Pressable
+            onPress={() =>
+              router.push(
+                planOneOnOneHref(teamId, {
+                  memberUserId,
+                }),
+              )
+            }
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 4,
+              backgroundColor: "#F5F3FF",
+              borderRadius: 10,
+              paddingHorizontal: 12,
+              paddingVertical: 8,
+              borderWidth: 1,
+              borderColor: "#DDD6FE",
+            }}
+            testID="plan-one-on-one-button"
+          >
+            <CalendarCheck size={16} color="#7C3AED" />
+            <Text style={{ fontSize: 13, fontWeight: "700", color: "#7C3AED" }}>Plan 1:1</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => void startCreate()}
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 4,
+              backgroundColor: "#4361EE",
+              borderRadius: 10,
+              paddingHorizontal: 12,
+              paddingVertical: 8,
+            }}
+            testID="new-check-in-button"
+          >
+            <Plus size={16} color="white" />
+            <Text style={{ fontSize: 13, fontWeight: "700", color: "white" }}>New check-in</Text>
+          </Pressable>
         </View>
       ) : null}
 
@@ -974,17 +1122,131 @@ export function OneOnOneHistoryTab({
         </View>
       ) : null}
 
+      {canCreate && upcomingPlanned.length > 0 ? (
+        <View style={{ gap: 10 }}>
+          <Text
+            style={{
+              fontSize: 11,
+              fontWeight: "700",
+              color: "#94A3B8",
+              textTransform: "uppercase",
+              letterSpacing: 0.6,
+            }}
+          >
+            Upcoming
+          </Text>
+          {upcomingPlanned.map((event) => {
+            const templateTitle = event.oneOnOneTemplateId
+              ? templateTitleById.get(event.oneOnOneTemplateId) ?? null
+              : null;
+            return (
+              <View
+                key={event.id}
+                style={{
+                  backgroundColor: "#FAF5FF",
+                  borderRadius: 12,
+                  padding: 14,
+                  borderWidth: 1,
+                  borderColor: "#DDD6FE",
+                  borderLeftWidth: 4,
+                  borderLeftColor: "#7C3AED",
+                }}
+                testID={`planned-one-on-one-${event.id}`}
+              >
+                <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 15, fontWeight: "700", color: "#0F172A" }}>
+                      {templateTitle ?? "Planned 1:1"}
+                    </Text>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 }}>
+                      <Clock size={12} color="#7C3AED" />
+                      <Text style={{ fontSize: 12, color: "#6D28D9", fontWeight: "600" }}>
+                        {formatScheduledOneOnOneWhen(event)}
+                      </Text>
+                    </View>
+                    <View
+                      style={{
+                        alignSelf: "flex-start",
+                        marginTop: 8,
+                        backgroundColor: "#EDE9FE",
+                        borderRadius: 8,
+                        paddingHorizontal: 8,
+                        paddingVertical: 3,
+                      }}
+                    >
+                      <Text style={{ fontSize: 11, fontWeight: "700", color: "#6D28D9" }}>Scheduled</Text>
+                    </View>
+                  </View>
+                </View>
+                <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
+                  <Pressable
+                    onPress={() => void startPlannedOneOnOne(event)}
+                    style={{
+                      flex: 1,
+                      backgroundColor: "#7C3AED",
+                      borderRadius: 10,
+                      paddingVertical: 10,
+                      alignItems: "center",
+                    }}
+                    testID={`planned-one-on-one-start-${event.id}`}
+                  >
+                    <Text style={{ fontSize: 13, fontWeight: "700", color: "white" }}>Start check-in</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() =>
+                      router.push(
+                        planOneOnOneHref(teamId, {
+                          eventId: event.id,
+                          memberUserId,
+                          templateId: event.oneOnOneTemplateId ?? undefined,
+                          startDate: event.startDate,
+                        }),
+                      )
+                    }
+                    style={{
+                      paddingHorizontal: 14,
+                      borderRadius: 10,
+                      paddingVertical: 10,
+                      alignItems: "center",
+                      borderWidth: 1,
+                      borderColor: "#DDD6FE",
+                      backgroundColor: "white",
+                    }}
+                    testID={`planned-one-on-one-edit-${event.id}`}
+                  >
+                    <Text style={{ fontSize: 13, fontWeight: "700", color: "#6D28D9" }}>Edit</Text>
+                  </Pressable>
+                </View>
+              </View>
+            );
+          })}
+        </View>
+      ) : null}
+
       {loadingMeetings ? (
         <ActivityIndicator color="#4361EE" style={{ marginVertical: 24 }} />
-      ) : meetings.length === 0 ? (
+      ) : showEmptyState ? (
         <CheckInEmptyState
           memberName={memberName}
           canCreate={canCreate}
           error={err}
           onStart={canCreate ? () => void startCreate() : undefined}
         />
-      ) : (
+      ) : showHistorySection ? (
         <View style={{ gap: 10 }}>
+          {upcomingPlanned.length > 0 ? (
+            <Text
+              style={{
+                fontSize: 11,
+                fontWeight: "700",
+                color: "#94A3B8",
+                textTransform: "uppercase",
+                letterSpacing: 0.6,
+              }}
+            >
+              History
+            </Text>
+          ) : null}
           {[...meetings]
             .sort((a, b) => oneOnOneDisplayDateMs(b) - oneOnOneDisplayDateMs(a))
             .map((meeting) => {
@@ -1101,7 +1363,7 @@ export function OneOnOneHistoryTab({
               );
             })}
         </View>
-      )}
+      ) : null}
 
       <Modal
         visible={!!previewMeeting}

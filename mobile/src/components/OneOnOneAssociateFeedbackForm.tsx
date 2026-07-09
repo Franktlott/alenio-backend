@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Animated, Pressable, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Modal, Pressable, Text, TextInput, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   submitOneOnOneAssociateFeedback,
   type OneOnOneAssociateFeedbackContext,
@@ -27,75 +28,64 @@ type Props = {
   onSubmitted?: () => void;
 };
 
-function FeedbackCompleteState({
-  animate,
-  submittedMode,
-}: {
-  animate: boolean;
-  submittedMode: "feedback" | "none";
-}) {
-  const fade = useRef(new Animated.Value(animate ? 0 : 1)).current;
-  const scale = useRef(new Animated.Value(animate ? 0.85 : 1)).current;
-
-  useEffect(() => {
-    if (!animate) return;
-    Animated.parallel([
-      Animated.timing(fade, { toValue: 1, duration: 450, useNativeDriver: true }),
-      Animated.spring(scale, { toValue: 1, friction: 7, useNativeDriver: true }),
-    ]).start();
-  }, [animate, fade, scale]);
+function FeedbackCompleteModal({ submittedMode }: { submittedMode: "feedback" | "none" }) {
+  const insets = useSafeAreaInsets();
 
   return (
-    <View
-      style={{
-        borderWidth: 1,
-        borderColor: "#BBF7D0",
-        borderRadius: 12,
-        padding: 16,
-        backgroundColor: "#F0FDF4",
-        marginBottom: 16,
-        alignItems: "center",
-      }}
-    >
-      <Animated.View
+    <Modal visible transparent animationType="fade" statusBarTranslucent onRequestClose={() => {}}>
+      <View
         style={{
-          width: 28,
-          height: 28,
-          borderRadius: 14,
-          backgroundColor: "#22C55E",
-          alignItems: "center",
+          flex: 1,
+          backgroundColor: "rgba(15, 23, 42, 0.45)",
           justifyContent: "center",
-          marginBottom: 10,
-          opacity: fade,
-          transform: [{ scale }],
+          alignItems: "center",
+          paddingHorizontal: 24,
+          paddingTop: insets.top + 16,
+          paddingBottom: insets.bottom + 16,
         }}
       >
-        <Text style={{ color: "#FFFFFF", fontSize: 14, fontWeight: "800", marginTop: -1 }}>✓</Text>
-      </Animated.View>
-      <Animated.Text
-        style={{
-          fontSize: 15,
-          fontWeight: "700",
-          color: "#15803D",
-          textAlign: "center",
-          marginBottom: 4,
-          opacity: fade,
-        }}
-      >
-        {ASSOCIATE_FEEDBACK_COMPLETE_MESSAGE}
-      </Animated.Text>
-      <Animated.Text
-        style={{
-          fontSize: 13,
-          color: "#64748B",
-          lineHeight: 18,
-          textAlign: "center",
-          opacity: fade,
-        }}
-      >
-        {submittedMode === "none" ? "Recorded as nothing to add." : "Your takeaways are saved to the check-in."}
-      </Animated.Text>
-    </View>
+        <View
+          style={{
+            width: "100%",
+            maxWidth: 320,
+            borderWidth: 1,
+            borderColor: "#BBF7D0",
+            borderRadius: 16,
+            padding: 24,
+            backgroundColor: "#F0FDF4",
+            alignItems: "center",
+          }}
+        >
+          <View
+            style={{
+              width: 48,
+              height: 48,
+              borderRadius: 24,
+              backgroundColor: "#22C55E",
+              alignItems: "center",
+              justifyContent: "center",
+              marginBottom: 16,
+            }}
+          >
+            <Text style={{ color: "#FFFFFF", fontSize: 22, fontWeight: "800", marginTop: -1 }}>✓</Text>
+          </View>
+          <Text
+            style={{
+              fontSize: 17,
+              fontWeight: "700",
+              color: "#15803D",
+              textAlign: "center",
+              marginBottom: 8,
+            }}
+          >
+            {ASSOCIATE_FEEDBACK_COMPLETE_MESSAGE}
+          </Text>
+          <Text style={{ fontSize: 14, color: "#64748B", lineHeight: 20, textAlign: "center" }}>
+            {submittedMode === "none" ? "Recorded as nothing to add." : "Your takeaways are saved to the check-in."}
+          </Text>
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -155,8 +145,12 @@ export function OneOnOneAssociateFeedbackForm({
     }
   };
 
+  if (done && completedInSession) {
+    return <FeedbackCompleteModal submittedMode={submittedMode} />;
+  }
+
   if (done) {
-    return <FeedbackCompleteState animate={completedInSession} submittedMode={submittedMode} />;
+    return null;
   }
 
   return (

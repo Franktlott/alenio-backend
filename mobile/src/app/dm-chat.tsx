@@ -43,6 +43,7 @@ import { dmOtherParticipant, resolveUserImageUrl, userInitials } from "@/lib/use
 import { UserAvatar } from "@/components/UserAvatar";
 import { groupWorkspaceLabel } from "@/lib/group-workspace-label";
 import { GroupManageModals } from "@/components/GroupManageModals";
+import { bottomSheetMenu } from "@/lib/bottom-sheet-menu-styles";
 
 function DeleteAction({ drag, onDelete }: { drag: SharedValue<number>; onDelete: () => void }) {
   const styleAnimation = useAnimatedStyle(() => ({
@@ -106,7 +107,7 @@ export default function DMChatScreen() {
   const [showOptions, setShowOptions] = useState(false);
   const [showConvDeleteConfirm, setShowConvDeleteConfirm] = useState(false);
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
-  const [groupManageMode, setGroupManageMode] = useState<"add" | "remove" | "transfer" | "admins" | null>(null);
+  const [groupManageMode, setGroupManageMode] = useState<"add" | "remove" | "transfer" | "admins" | "members" | null>(null);
   const [reactionView, setReactionView] = useState<MessageReaction[] | null>(null);
   const [mediaPreview, setMediaPreview] = useState<{ uri: string; mimeType: string; filename: string } | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -213,7 +214,7 @@ export default function DMChatScreen() {
     },
   });
 
-  const openGroupManage = (mode: "add" | "remove" | "transfer" | "admins") => {
+  const openGroupManage = (mode: "add" | "remove" | "transfer" | "admins" | "members") => {
     setShowOptions(false);
     setTimeout(() => setGroupManageMode(mode), 300);
   };
@@ -487,65 +488,77 @@ export default function DMChatScreen() {
       <Modal visible={showOptions} transparent animationType="slide" onRequestClose={() => setShowOptions(false)}>
         <TouchableOpacity style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "flex-end" }} activeOpacity={1} onPress={() => setShowOptions(false)}>
           <TouchableOpacity activeOpacity={1} onPress={() => {}}>
-            <View style={{ backgroundColor: "white", marginHorizontal: 12, marginBottom: 32, borderRadius: 16, overflow: "hidden" }}>
-              <View style={{ paddingVertical: 10, alignItems: "center" }}>
-                <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: "#E2E8F0" }} />
+            <View style={bottomSheetMenu.sheet}>
+              <View style={bottomSheetMenu.handleWrap}>
+                <View style={bottomSheetMenu.handle} />
               </View>
-              <Text style={{ fontSize: 13, fontWeight: "600", color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.5, paddingHorizontal: 20, paddingBottom: 8 }}>
+              <Text style={bottomSheetMenu.sectionLabel}>
                 {isGroup ? "Group Options" : "Conversation Options"}
               </Text>
+              {isGroup ? (
+                <TouchableOpacity
+                  onPress={() => openGroupManage("members")}
+                  style={bottomSheetMenu.row}
+                >
+                  <Text style={bottomSheetMenu.rowLabel}>Members</Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                    <Text style={bottomSheetMenu.rowMeta}>{groupParticipantCount}</Text>
+                    <Users size={bottomSheetMenu.iconSize} color="#4361EE" />
+                  </View>
+                </TouchableOpacity>
+              ) : null}
               {isGroup && canManageGroupMembers ? (
                 <TouchableOpacity
                   onPress={() => openGroupManage("add")}
-                  style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 16, borderTopWidth: 1, borderTopColor: "#F1F5F9" }}
+                  style={bottomSheetMenu.row}
                 >
-                  <Text style={{ fontSize: 16, color: "#0F172A" }}>Add Members</Text>
-                  <UserPlus size={20} color="#4361EE" />
+                  <Text style={bottomSheetMenu.rowLabel}>Add Members</Text>
+                  <UserPlus size={bottomSheetMenu.iconSize} color="#4361EE" />
                 </TouchableOpacity>
               ) : null}
               {isGroup && canManageGroupMembers ? (
                 <TouchableOpacity
                   onPress={() => openGroupManage("remove")}
-                  style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 16, borderTopWidth: 1, borderTopColor: "#F1F5F9" }}
+                  style={bottomSheetMenu.row}
                 >
-                  <Text style={{ fontSize: 16, color: "#0F172A" }}>Remove Members</Text>
-                  <UserMinus size={20} color="#EF4444" />
+                  <Text style={bottomSheetMenu.rowLabel}>Remove Members</Text>
+                  <UserMinus size={bottomSheetMenu.iconSize} color="#EF4444" />
                 </TouchableOpacity>
               ) : null}
               {isGroup && canManageGroupAdmins ? (
                 <TouchableOpacity
                   onPress={() => openGroupManage("admins")}
-                  style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 16, borderTopWidth: 1, borderTopColor: "#F1F5F9" }}
+                  style={bottomSheetMenu.row}
                 >
-                  <Text style={{ fontSize: 16, color: "#0F172A" }}>Manage Admins</Text>
-                  <Shield size={20} color="#4361EE" />
+                  <Text style={bottomSheetMenu.rowLabel}>Manage Admins</Text>
+                  <Shield size={bottomSheetMenu.iconSize} color="#4361EE" />
                 </TouchableOpacity>
               ) : null}
               {isGroup && canDeleteGroup ? (
                 <TouchableOpacity
                   onPress={() => openGroupManage("transfer")}
-                  style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 16, borderTopWidth: 1, borderTopColor: "#F1F5F9" }}
+                  style={bottomSheetMenu.row}
                 >
-                  <Text style={{ fontSize: 16, color: "#0F172A" }}>Transfer Ownership</Text>
-                  <Crown size={20} color="#F59E0B" />
+                  <Text style={bottomSheetMenu.rowLabel}>Transfer Ownership</Text>
+                  <Crown size={bottomSheetMenu.iconSize} color="#F59E0B" />
                 </TouchableOpacity>
               ) : null}
               {isGroup && canDeleteGroup ? (
                 <TouchableOpacity
                   onPress={() => { setShowOptions(false); setTimeout(() => setShowConvDeleteConfirm(true), 300); }}
-                  style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 16, borderTopWidth: 1, borderTopColor: "#F1F5F9" }}
+                  style={bottomSheetMenu.row}
                 >
-                  <Text style={{ fontSize: 16, color: "#EF4444" }}>Delete Group</Text>
-                  <Trash2 size={20} color="#EF4444" />
+                  <Text style={bottomSheetMenu.rowLabelDestructive}>Delete Group</Text>
+                  <Trash2 size={bottomSheetMenu.iconSize} color="#EF4444" />
                 </TouchableOpacity>
               ) : null}
               {!isGroup ? (
                 <TouchableOpacity
                   onPress={() => { setShowOptions(false); setTimeout(() => setShowConvDeleteConfirm(true), 300); }}
-                  style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 16, borderTopWidth: 1, borderTopColor: "#F1F5F9" }}
+                  style={bottomSheetMenu.row}
                 >
-                  <Text style={{ fontSize: 16, color: "#EF4444" }}>Delete Conversation</Text>
-                  <Trash2 size={20} color="#EF4444" />
+                  <Text style={bottomSheetMenu.rowLabelDestructive}>Delete Conversation</Text>
+                  <Trash2 size={bottomSheetMenu.iconSize} color="#EF4444" />
                 </TouchableOpacity>
               ) : null}
               {isGroup && canLeaveGroup ? (
@@ -554,17 +567,17 @@ export default function DMChatScreen() {
                     setShowOptions(false);
                     setTimeout(() => setShowLeaveConfirm(true), 300);
                   }}
-                  style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 16, borderTopWidth: 1, borderTopColor: "#F1F5F9" }}
+                  style={bottomSheetMenu.row}
                 >
-                  <Text style={{ fontSize: 16, color: "#F59E0B" }}>Leave Group</Text>
-                  <LogOut size={20} color="#F59E0B" />
+                  <Text style={bottomSheetMenu.rowLabelWarning}>Leave Group</Text>
+                  <LogOut size={bottomSheetMenu.iconSize} color="#F59E0B" />
                 </TouchableOpacity>
               ) : null}
               <TouchableOpacity
                 onPress={() => setShowOptions(false)}
-                style={{ paddingVertical: 16, alignItems: "center", borderTopWidth: 1, borderTopColor: "#F1F5F9" }}
+                style={bottomSheetMenu.footer}
               >
-                <Text style={{ fontSize: 16, fontWeight: "600", color: "#64748B" }}>Cancel</Text>
+                <Text style={bottomSheetMenu.footerText}>Cancel</Text>
               </TouchableOpacity>
             </View>
           </TouchableOpacity>

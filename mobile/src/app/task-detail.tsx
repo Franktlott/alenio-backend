@@ -31,6 +31,8 @@ import {
   parseFeedbackTaskDescription,
 } from "@/lib/one-on-one-feedback";
 import { isRecurringTask, type RecurrenceScope } from "@/lib/recurring-task";
+import { isTaskOverdue } from "@/lib/seneca-task-display";
+import { formatTaskDueDateLabel, resolveTimeZone } from "@/lib/timezone";
 
 const PRIORITY_COLORS: Record<string, string> = {
   urgent: "#EF4444",
@@ -44,6 +46,7 @@ export default function TaskDetailScreen() {
   const { data: session } = useSession();
   const isDemo = useDemoMode();
   const queryClient = useQueryClient();
+  const userTimeZone = resolveTimeZone();
   const insets = useSafeAreaInsets();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [recurringScopeMode, setRecurringScopeMode] = useState<"delete" | "edit" | null>(null);
@@ -722,17 +725,21 @@ export default function TaskDetailScreen() {
 
         {/* Due date chip (active tasks) */}
         {!showFocusedFeedbackTask && task.dueDate && !isCompleted ? (() => {
-          const due = new Date(task.dueDate);
-          const overdue = due < new Date();
+          const overdue = isTaskOverdue(task);
+          const dueLabel = formatTaskDueDateLabel(task.dueDate, userTimeZone);
+          const dueToday =
+            !overdue &&
+            task.dueDate &&
+            formatTaskDueDateLabel(task.dueDate, userTimeZone) === formatTaskDueDateLabel(new Date(), userTimeZone);
           return (
             <View className="mb-4 flex-row items-center">
               <View
                 className="flex-row items-center px-3 py-2 rounded-xl"
-                style={{ backgroundColor: overdue ? "#FEF2F2" : "#F8FAFC", gap: 6 }}
+                style={{ backgroundColor: overdue ? "#FEF2F2" : dueToday ? "#FFF7ED" : "#F8FAFC", gap: 6 }}
               >
                 <Text style={{ fontSize: 14 }}>{overdue ? "⚠️" : "📅"}</Text>
-                <Text className="text-sm font-medium" style={{ color: overdue ? "#EF4444" : "#64748B" }}>
-                  Due {due.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
+                <Text className="text-sm font-medium" style={{ color: overdue ? "#EF4444" : dueToday ? "#EA580C" : "#64748B" }}>
+                  {dueToday ? "Due today" : `Due ${dueLabel}`}
                 </Text>
                 {overdue ? (
                   <Text className="text-xs font-semibold" style={{ color: "#EF4444" }}>Overdue</Text>
@@ -752,7 +759,7 @@ export default function TaskDetailScreen() {
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
               <Text style={{ fontSize: 11, color: "#94A3B8" }}>⏱</Text>
               <Text className="text-xs text-slate-400">
-                Due {new Date(task.dueDate).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })}
+                Due {formatTaskDueDateLabel(task.dueDate, userTimeZone)}
               </Text>
             </View>
           ) : null}
@@ -944,7 +951,7 @@ export default function TaskDetailScreen() {
               <Text style={{ fontSize: 28, marginBottom: 8 }}>⚠️</Text>
               <Text className="text-lg font-bold text-slate-900 dark:text-white mb-1">Recall this task?</Text>
               <Text className="text-sm text-slate-500 dark:text-slate-400 text-center">
-                {task?.dueDate && new Date(task.dueDate) < new Date()
+                {task?.dueDate && isTaskOverdue(task)
                   ? "This task is past its due date and will be marked as overdue once recalled."
                   : "This will move the task back to active and allow edits to be made."}
               </Text>

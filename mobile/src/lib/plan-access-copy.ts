@@ -18,9 +18,6 @@ export const PLAN_SCREEN_TITLE = "Workplace Access";
 
 export const ACCOUNT_HUB_TITLE = "Plan & Access";
 
-export const ACCOUNT_HUB_SUBTITLE =
-  "View workplace plans, access status, and manage your account settings.";
-
 export function workplaceAccessSubtitle(isOwner: boolean): string {
   if (isOwner) {
     return "This workplace's access is managed on the web. You can upgrade the workplace, manage billing, and view invoices from the Alenio web dashboard.";

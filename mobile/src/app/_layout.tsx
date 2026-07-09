@@ -1,6 +1,6 @@
 import { Toaster } from 'burnt/web';
 import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router/react-navigation';
-import { Stack, router } from 'expo-router';
+import { Stack, router, usePathname } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { AppState, Image, View } from 'react-native';
@@ -14,7 +14,7 @@ import * as Notifications from 'expo-notifications';
 import * as Haptics from 'expo-haptics';
 import { registerForPushNotificationsAsync } from '@/lib/notifications';
 import { ensureSessionFreshOnForeground, agentDebugLog } from '@/lib/auth/auth-client';
-import { navigateToMobileHomeWithRetry } from '@/lib/auth/auth-entry';
+import { isAuthEntryPath, navigateToMobileHomeWithRetry } from '@/lib/auth/auth-entry';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -109,6 +109,8 @@ function RootLayoutNav() {
   const [animDone, setAnimDone] = useState(false);
   const [sessionSettled, setSessionSettled] = useState(false);
   const coldStartBootstrapped = useRef(false);
+  const didHomeNavRef = useRef(false);
+  const pathname = usePathname();
 
   const { data: authReady } = useMobileAuthReady();
 
@@ -162,18 +164,26 @@ function RootLayoutNav() {
     return () => sub.remove();
   }, []);
 
-  // Enter the app once atomic auth-ready is set (cold start, sign-in, or account switch).
+  // Enter the app once from bootstrap routes (cold start / sign-in). Do not hijack other screens.
   useEffect(() => {
     const userId = authReady?.me?.id ?? null;
-    if (!hasBackendSession || !userId) return;
+    if (!hasBackendSession || !userId) {
+      didHomeNavRef.current = false;
+      return;
+    }
+    if (didHomeNavRef.current) return;
+    if (!isAuthEntryPath(pathname)) return;
+
+    didHomeNavRef.current = true;
     agentDebugLog("layout navigating on session ready", {
       runId: "auth-simplify-v4",
       hypothesisId: "H4",
       isAdmin,
       userIdPrefix: userId.slice(0, 8),
+      pathname,
     });
     return navigateToMobileHomeWithRetry(isAdmin);
-  }, [hasBackendSession, isAdmin, authReady?.me?.id]);
+  }, [hasBackendSession, isAdmin, authReady?.me?.id, pathname]);
 
   useEffect(() => {
     if (!hasBackendSession) return;
@@ -258,6 +268,7 @@ function RootLayoutNav() {
               }}
             />
             <Stack.Screen name="create-event" />
+            <Stack.Screen name="plan-one-on-one" />
             <Stack.Screen name="task-detail" />
             <Stack.Screen name="member-profile" />
             <Stack.Screen name="team-chat" />

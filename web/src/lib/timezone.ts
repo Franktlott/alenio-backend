@@ -23,9 +23,25 @@ export function resolveTimeZone(raw?: string | null): string {
   return getBrowserTimeZone();
 }
 
-/** Send YYYY-MM-DD as end-of-day in the user's timezone (server interprets with timeZone). */
-export function calendarDuePayload(dateOnly: string, timeZone?: string | null): string {
-  return dateOnly;
+/** Send YYYY-MM-DD; server stores end of that calendar day (11:59:59 PM) in the user's timezone. */
+export function calendarDuePayload(dateOnly: string, _timeZone?: string | null): string {
+  const trimmed = dateOnly.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+  const day = calendarDayFromInstant(trimmed, _timeZone);
+  return day || trimmed;
+}
+
+export function formatTaskDueDateLabel(
+  instant: string | Date | null | undefined,
+  timeZone?: string | null,
+): string {
+  if (!instant) return "—";
+  const day = calendarDayFromInstant(instant, timeZone);
+  if (!day) return "—";
+  const [y, mo, d] = day.split("-").map(Number);
+  const local = new Date(y!, mo! - 1, d);
+  if (Number.isNaN(local.getTime())) return "—";
+  return local.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
 
 export function calendarDayFromInstant(instant: string | Date, timeZone?: string | null): string {

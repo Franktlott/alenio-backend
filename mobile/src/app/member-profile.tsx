@@ -114,11 +114,19 @@ function parseTab(value: string | string[] | undefined): ProfileTab {
   return "Overview";
 }
 
+type FormerMemberRow = {
+  userId: string;
+  user: TeamMember["user"];
+  isFormer: true;
+};
+
 export default function MemberProfileScreen() {
   const params = useLocalSearchParams<{
     teamId?: string;
     memberUserId?: string;
     tab?: string;
+    startCheckIn?: string;
+    templateId?: string;
   }>();
   const activeTeamIdFromStore = useTeamStore((s) => s.activeTeamId);
   const teamId = params.teamId ?? activeTeamIdFromStore ?? "";
@@ -130,7 +138,9 @@ export default function MemberProfileScreen() {
   const isPaid = plan === "team";
 
   const insets = useSafeAreaInsets();
-  const [activeTab, setActiveTab] = useState<ProfileTab>(parseTab(params.tab));
+  const [activeTab, setActiveTab] = useState<ProfileTab>(() =>
+    params.startCheckIn === "1" ? "Check-In" : parseTab(params.tab),
+  );
   const [manageOpen, setManageOpen] = useState(false);
 
   const { data: team, isLoading } = useQuery({
@@ -150,6 +160,26 @@ export default function MemberProfileScreen() {
   const member = team?.members?.find((m) => m.userId === memberUserId) ?? null;
   const myMembership = team?.members?.find((m) => m.userId === session?.user?.id);
   const myRole = myMembership?.role;
+  const canViewAsLeader = myRole === "owner" || myRole === "team_leader";
+  const { data: formerMembers = [], isLoading: formerMembersLoading } = useQuery({
+    queryKey: ["former-members", teamId],
+    queryFn: () => api.get<FormerMemberRow[]>(`/api/teams/${teamId}/former-members`),
+    enabled: !!teamId && canViewAsLeader && !member,
+  });
+  const formerMember = formerMembers.find((row) => row.userId === memberUserId) ?? null;
+  const profileMember: TeamMember | null =
+    member ??
+    (formerMember
+      ? {
+          id: `former-${formerMember.userId}`,
+          role: "member",
+          userId: formerMember.userId,
+          teamId: teamId ?? "",
+          joinedAt: "",
+          user: formerMember.user,
+        }
+      : null);
+  const isFormerMember = !member && !!formerMember;
   const myId = session?.user?.id ?? "";
   const isSelf = memberUserId === myId;
 
@@ -158,26 +188,31 @@ export default function MemberProfileScreen() {
   const leaderUserId = ownerMember?.userId ?? null;
 
   const canManage = useMemo(() => {
-    if (!member || !myRole) return false;
+    if (isFormerMember || !profileMember || !myRole) return false;
     if (myRole !== "owner" && myRole !== "team_leader") return false;
-    if (member.role === "owner") return false;
-    if (myRole === "team_leader" && member.role !== "member") return false;
-    return member.userId !== myId;
-  }, [member, myRole, myId]);
+    if (profileMember.role === "owner") return false;
+    if (myRole === "team_leader" && profileMember.role !== "member") return false;
+    return profileMember.userId !== myId;
+  }, [isFormerMember, profileMember, myRole, myId]);
 
   const canCreateDevGoal =
-    isSelf || myRole === "owner" || myRole === "team_leader" || myRole === "admin";
+    !isFormerMember &&
+    (isSelf || myRole === "owner" || myRole === "team_leader" || myRole === "admin");
   const canAddDevNotes = canCreateDevGoal;
-  const canCreateOneOne = myRole === "owner" || myRole === "team_leader";
+  const canCreateOneOne = !isFormerMember && (myRole === "owner" || myRole === "team_leader");
+  const shouldAutoStartCheckIn = params.startCheckIn === "1";
+  const preferredCheckInTemplateId =
+    typeof params.templateId === "string" && params.templateId.length > 0 ? params.templateId : null;
 
   const stats = memberStats?.[memberUserId];
-  const displayName = member?.user.name ?? member?.user.email ?? "Member";
+  const displayName = profileMember?.user.name ?? profileMember?.user.email ?? "Member";
 
   const removeMutation = useMutation({
     mutationFn: (userId: string) => api.delete(`/api/teams/${teamId}/members/${userId}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["team", teamId] });
       queryClient.invalidateQueries({ queryKey: ["member-stats", teamId] });
+      queryClient.invalidateQueries({ queryKey: ["former-members", teamId] });
       toast({ title: "Member removed", preset: "done" });
       router.back();
     },
@@ -216,10 +251,21 @@ export default function MemberProfileScreen() {
     );
   }
 
-  if (isLoading || !member) {
+  if (isLoading || (!member && canViewAsLeader && formerMembersLoading)) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: PAGE_BG, alignItems: "center", justifyContent: "center" }}>
         <ActivityIndicator color="#4361EE" />
+      </SafeAreaView>
+    );
+  }
+
+  if (!profileMember) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: PAGE_BG, alignItems: "center", justifyContent: "center", paddingHorizontal: 24 }}>
+        <Text style={{ color: "#64748B", textAlign: "center", lineHeight: 22 }}>Member not found.</Text>
+        <Pressable onPress={() => router.back()} style={{ marginTop: 16 }}>
+          <Text style={{ color: "#4361EE", fontWeight: "700" }}>Go back</Text>
+        </Pressable>
       </SafeAreaView>
     );
   }
@@ -285,7 +331,7 @@ export default function MemberProfileScreen() {
         </Pressable>
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={{ fontSize: 11, fontWeight: "600", color: "#64748B", textTransform: "uppercase", letterSpacing: 0.6 }}>
-            Team member
+            {isFormerMember ? "Former member" : "Team member"}
           </Text>
           <Text style={{ fontSize: 16, fontWeight: "700", color: "#0F172A" }} numberOfLines={1}>
             {displayName}
@@ -346,11 +392,11 @@ export default function MemberProfileScreen() {
                   borderColor: "#E0E7FF",
                 }}
               >
-                {member.user.image ? (
-                  <Image source={{ uri: member.user.image }} style={{ width: 48, height: 48 }} resizeMode="cover" />
+                {profileMember.user.image ? (
+                  <Image source={{ uri: profileMember.user.image }} style={{ width: 48, height: 48 }} resizeMode="cover" />
                 ) : (
                   <Text style={{ fontSize: 18, fontWeight: "800", color: "#4361EE" }}>
-                    {member.user.name?.[0]?.toUpperCase() ?? "?"}
+                    {profileMember.user.name?.[0]?.toUpperCase() ?? "?"}
                   </Text>
                 )}
               </View>
@@ -358,18 +404,19 @@ export default function MemberProfileScreen() {
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                   <View
                     style={{
-                      backgroundColor: "#EEF2FF",
+                      backgroundColor: isFormerMember ? "#F8FAFC" : "#EEF2FF",
                       borderRadius: 6,
                       paddingHorizontal: 8,
                       paddingVertical: 3,
                       borderWidth: 1,
-                      borderColor: "#C7D2FE",
+                      borderColor: isFormerMember ? "#E2E8F0" : "#C7D2FE",
                     }}
                   >
-                    <Text style={{ fontSize: 10, fontWeight: "700", color: "#4338CA" }}>
-                      {roleLabel(member.role)}
+                    <Text style={{ fontSize: 10, fontWeight: "700", color: isFormerMember ? "#64748B" : "#4338CA" }}>
+                      {isFormerMember ? "Former member" : roleLabel(profileMember.role)}
                     </Text>
                   </View>
+                  {!isFormerMember ? (
                   <View
                     style={{
                       backgroundColor: "#ECFDF5",
@@ -382,13 +429,14 @@ export default function MemberProfileScreen() {
                   >
                     <Text style={{ fontSize: 10, fontWeight: "700", color: "#15803D" }}>Active</Text>
                   </View>
+                  ) : null}
                 </View>
-                {member.user.email ? (
+                {profileMember.user.email ? (
                   <Text style={{ fontSize: 12, color: "#64748B", marginTop: 6 }} numberOfLines={1}>
-                    {member.user.email}
+                    {profileMember.user.email}
                   </Text>
                 ) : null}
-                {managerName && member.role !== "owner" ? (
+                {managerName && profileMember.role !== "owner" && !isFormerMember ? (
                   <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 3 }} numberOfLines={1}>
                     Reports to {managerName}
                   </Text>
@@ -507,6 +555,8 @@ export default function MemberProfileScreen() {
               leaderUserId={leaderUserId}
               canCreate={canCreateOneOne}
               canModify={canCreateOneOne}
+              autoStartCheckIn={shouldAutoStartCheckIn}
+              preferredTemplateId={preferredCheckInTemplateId}
             />
           )}
         </View>

@@ -1,6 +1,7 @@
 import { clearAccessToken, getAccessToken, refreshSessionTokens } from "./auth-client";
 import { extractMessagePage } from "./chat-message-pagination";
 import { getWebApiBase } from "./api-base";
+import { calendarDuePayload } from "./timezone";
 
 function apiBaseUrl(): string {
   return getWebApiBase();
@@ -1379,6 +1380,18 @@ export type WebTeamMemberRow = {
   user: { id: string; name: string | null; email: string | null; image: string | null };
 };
 
+export type WebFormerMemberRow = {
+  userId: string;
+  user: { id: string; name: string | null; email: string; image: string | null };
+  isFormer: true;
+};
+
+export function fetchFormerWorkspaceMembers(teamId: string) {
+  return apiGetJson<{ data: WebFormerMemberRow[] }>(
+    `/api/teams/${encodeURIComponent(teamId)}/former-members`,
+  ).then((r) => r.data);
+}
+
 export type WebTeamDetail = {
   id: string;
   name: string;
@@ -1716,7 +1729,7 @@ export function createTeamTask(input: CreateWebTaskInput) {
       description: input.description || undefined,
       priority: input.priority ?? "medium",
       status: input.status ?? "todo",
-      dueDate: input.dueDate || undefined,
+      dueDate: input.dueDate ? calendarDuePayload(input.dueDate, input.timeZone) : undefined,
       assigneeIds: input.assigneeIds,
       isJoint: input.isJoint === true,
       incognito: input.incognito === true,
@@ -1746,7 +1759,8 @@ export function createWebTask(input: CreateWebTaskInput) {
     description: input.description || undefined,
     priority: input.priority ?? "medium",
     status: input.status ?? "todo",
-    dueDate: input.dueDate || undefined,
+    dueDate: input.dueDate ? calendarDuePayload(input.dueDate, input.timeZone) : undefined,
+    timeZone: input.timeZone,
     assigneeIds: input.assigneeIds,
     isJoint: input.isJoint === true,
     incognito: input.incognito === true,

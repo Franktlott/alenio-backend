@@ -287,10 +287,16 @@ export default function OnboardingScreen() {
     }
   };
 
-  const canDismiss = isAddFlow || router.canGoBack();
-
   const handleClose = () => {
-    if (canDismiss) router.back();
+    if (isAddFlow && router.canGoBack()) {
+      router.back();
+      return;
+    }
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+    router.replace("/(app)/chat");
   };
 
   const modalBody = pendingRequest ? (
@@ -476,23 +482,22 @@ export default function OnboardingScreen() {
           borderTopColor: "#EEF2F6",
         }}
       >
-        {canDismiss ? (
-          <Pressable
-            onPress={handleClose}
-            style={{
-              minWidth: 72,
-              borderWidth: 1,
-              borderColor: "#CBD5E1",
-              borderRadius: 10,
-              paddingHorizontal: 14,
-              paddingVertical: 10,
-              alignItems: "center",
-              backgroundColor: "#FFFFFF",
-            }}
-          >
-            <Text style={{ fontSize: 14, fontWeight: "600", color: "#334155" }}>Cancel</Text>
-          </Pressable>
-        ) : null}
+        <Pressable
+          onPress={handleClose}
+          style={{
+            minWidth: 72,
+            borderWidth: 1,
+            borderColor: "#CBD5E1",
+            borderRadius: 10,
+            paddingHorizontal: 14,
+            paddingVertical: 10,
+            alignItems: "center",
+            backgroundColor: "#FFFFFF",
+          }}
+          testID="onboarding-cancel"
+        >
+          <Text style={{ fontSize: 14, fontWeight: "600", color: "#334155" }}>Cancel</Text>
+        </Pressable>
         <Pressable
           onPress={handleSubmit}
           disabled={isLoading}
@@ -534,7 +539,7 @@ export default function OnboardingScreen() {
           paddingTop: insets.top + 16,
           paddingBottom: insets.bottom + 16,
         }}
-        onPress={canDismiss ? handleClose : undefined}
+        onPress={handleClose}
       >
         <SafeKeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
           <Pressable onPress={(e) => e.stopPropagation?.()}>
@@ -574,11 +579,21 @@ export default function OnboardingScreen() {
                       Create or join a workspace
                     </Text>
                   </View>
-                  {canDismiss ? (
-                    <Pressable onPress={handleClose} hitSlop={12} testID="onboarding-close">
-                      <X size={20} color={UI.muted} />
-                    </Pressable>
-                  ) : null}
+                  <Pressable
+                    onPress={handleClose}
+                    hitSlop={12}
+                    testID="onboarding-close"
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: 16,
+                      backgroundColor: "#EEF2F6",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <X size={18} color={UI.muted} />
+                  </Pressable>
                 </View>
               </View>
 

@@ -558,7 +558,7 @@ function TaskRow({ task, onToggle, onPress, onLongPress }: { task: Task; onToggl
                   {overdue
                     ? `Overdue · ${fmtDate(dueDate)}`
                     : today
-                    ? `Today · ${fmtTime(dueDate)}`
+                    ? "Due today"
                     : fmtDate(dueDate)}
                 </Text>
               </View>
@@ -2221,7 +2221,7 @@ export default function TasksScreen() {
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
                   <Users size={18} color={!eventIsHidden ? "#4361EE" : "#CBD5E1"} />
                   <View>
-                    <Text style={{ fontSize: 14, fontWeight: "600", color: "#0F172A" }}>Public</Text>
+                    <Text style={{ fontSize: 14, fontWeight: "600", color: "#0F172A" }}>{!eventIsHidden ? "Public" : "Private"}</Text>
                     <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 1 }}>
                       {!eventIsHidden ? "Visible to the whole team" : "Only visible to you"}
                     </Text>

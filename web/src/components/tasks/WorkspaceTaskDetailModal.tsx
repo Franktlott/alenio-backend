@@ -32,11 +32,12 @@ import {
   statusLabel,
   taskBadges,
   assigneeInitials,
+  isTaskOverdue,
 } from "../../lib/task-display";
 import { isRecurringTask, type RecurrenceScope } from "../../lib/recurring-task";
 import { isTaskPhotoUrl } from "../../lib/task-attachment";
 import { TaskDescriptionContent } from "./TaskDescriptionField";
-import { calendarDayFromInstant, resolveTimeZone } from "../../lib/timezone";
+import { calendarDayFromInstant, calendarDuePayload, resolveTimeZone } from "../../lib/timezone";
 
 const PRIORITIES = [
   { label: "Low", value: "low" },
@@ -157,7 +158,7 @@ export function WorkspaceTaskDetailModal({
       const updated = await updateCoreTeamTask(teamId, task.id, {
         title: editTitle.trim(),
         priority: editPriority,
-        dueDate: editDueDate || null,
+        dueDate: editDueDate ? calendarDuePayload(editDueDate, userTimeZone) : null,
         timeZone: userTimeZone,
         ...(scope === "series" ? { scope: "series" } : {}),
       });
@@ -748,7 +749,7 @@ export function WorkspaceTaskDetailModal({
         open={prompt === "recall"}
         title="Recall this task?"
         message={
-          task.dueDate && new Date(task.dueDate) < new Date()
+          task.dueDate && isTaskOverdue(task)
             ? "This task is past its due date and will be marked as overdue once recalled."
             : "This will move the task back to active and allow edits to be made."
         }

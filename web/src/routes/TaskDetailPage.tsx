@@ -20,9 +20,11 @@ import {
 import { ASSOCIATE_FEEDBACK_SECTION_TITLE, parseFeedbackTaskDescription } from "../lib/one-on-one-feedback";
 import { normalizeTaskStatus } from "../lib/task-status";
 import { isTaskPhotoUrl } from "../lib/task-attachment";
+import { formatTaskDueDateLabel } from "../lib/timezone";
 
-function formatWhen(iso: string | null): string {
+function formatWhen(iso: string | null, due = false): string {
   if (!iso) return "—";
+  if (due) return formatTaskDueDateLabel(iso);
   try {
     return new Date(iso).toLocaleString(undefined, {
       dateStyle: "medium",
@@ -309,7 +311,7 @@ export function TaskDetailPage() {
             <dt>Team</dt>
             <dd>{task.team.name}</dd>
             <dt>Due</dt>
-            <dd>{formatWhen(task.dueDate)}</dd>
+            <dd>{formatWhen(task.dueDate, true)}</dd>
             <dt>Created</dt>
             <dd>{formatWhen(task.createdAt)}</dd>
             {task.completedAt ? (

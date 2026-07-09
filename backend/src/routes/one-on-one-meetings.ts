@@ -18,6 +18,12 @@ import {
 } from "../lib/one-on-one-feedback";
 import { appendLeaderCommentsFields, readLeaderCommentsFromMeeting } from "../lib/check-in-leader-comments";
 import { oneOnOnePublishedAt } from "../lib/one-on-one-meeting-dates";
+import { parseCalendarDueDate } from "../lib/recurrence-series";
+import { resolveTimeZone } from "../lib/timezone";
+import {
+  hasArchivedMemberRecords,
+  isActiveTeamMember,
+} from "../lib/workspace-member-departure";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -106,6 +112,21 @@ function parseResponses(raw: string): Record<string, string | number> {
 
 function canManageOneOnOne(membership: { role: string }): boolean {
   return membership.role === "owner" || membership.role === "team_leader";
+}
+
+async function resolveCheckInMemberAccess(
+  membership: { role: string },
+  teamId: string,
+  memberUserId: string,
+  options: { write?: boolean },
+): Promise<{ ok: true; isFormer: boolean } | { ok: false }> {
+  const active = await isActiveTeamMember(prisma, teamId, memberUserId);
+  if (active) return { ok: true, isFormer: false };
+  if (options.write) return { ok: false };
+  if (!canManageOneOnOne(membership)) return { ok: false };
+  const hasArchive = await hasArchivedMemberRecords(prisma, teamId, memberUserId);
+  if (!hasArchive) return { ok: false };
+  return { ok: true, isFormer: true };
 }
 
 function serializeFollowUpTask(task: {
@@ -387,12 +408,16 @@ async function createFollowUpTasks(
   teamId: string,
   creatorId: string,
   tasks: z.infer<typeof followUpTaskSchema>[],
+  timeZone?: string | null,
 ) {
   if (tasks.length === 0) return;
+  const tz = resolveTimeZone(timeZone);
 
   for (const task of tasks) {
     const dueDate =
-      task.dueDate && !Number.isNaN(Date.parse(task.dueDate)) ? new Date(task.dueDate) : null;
+      task.dueDate && !Number.isNaN(Date.parse(task.dueDate))
+        ? parseCalendarDueDate(task.dueDate, tz)
+        : null;
     const baseData = {
       title: task.title.trim(),
       description: task.description?.trim() || null,
@@ -428,6 +453,63 @@ async function createFollowUpTasks(
   }
 }
 
+  }
+}
+
+// GET /api/teams/:teamId/members/:memberUserId/planned-one-on-ones
+oneOnOneMeetingsRouter.get("/:memberUserId/planned-one-on-ones", async (c) => {
+  const user = c.get("user")!;
+  const teamId = c.req.param("teamId") as string;
+  const memberUserId = c.req.param("memberUserId") as string;
+
+  const membership = await getMembership(c, teamId);
+  if (!membership) {
+    return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
+  }
+  if (!canManageOneOnOne(membership)) {
+    return c.json({ error: { message: "Only workspace owners and team leaders can view planned 1:1s.", code: "FORBIDDEN" } }, 403);
+  }
+
+  const access = await resolveCheckInMemberAccess(membership, teamId, memberUserId, {});
+  if (!access.ok || access.isFormer) {
+    return c.json({ error: { message: "Member not found", code: "NOT_FOUND" } }, 404);
+  }
+
+  try {
+    const now = Date.now();
+    const events = await prisma.calendarEvent.findMany({
+      where: {
+        teamId,
+        oneOnOneMemberUserId: memberUserId,
+        OR: [{ isOneOnOne: true }, { title: { startsWith: "1:1 —" } }],
+      },
+      orderBy: { startDate: "asc" },
+    });
+
+    const upcoming = events.filter((event) => {
+      if (event.createdById !== user.id) return false;
+      const endMs = new Date(event.endDate ?? event.startDate).getTime();
+      return endMs >= now;
+    });
+
+    return c.json({
+      data: upcoming.map((event) => ({
+        id: event.id,
+        title: event.title,
+        startDate: event.startDate.toISOString(),
+        endDate: event.endDate?.toISOString() ?? null,
+        allDay: event.allDay,
+        isVideoMeeting: event.isVideoMeeting,
+        isOneOnOne: event.isOneOnOne,
+        oneOnOneMemberUserId: event.oneOnOneMemberUserId,
+        oneOnOneTemplateId: event.oneOnOneTemplateId,
+      })),
+    });
+  } catch (err) {
+    return prismaRouteError(c, err, "[one-on-one-meetings] planned-one-on-ones GET failed");
+  }
+});
+
 // GET /api/teams/:teamId/members/:memberUserId/one-on-ones
 oneOnOneMeetingsRouter.get("/:memberUserId/one-on-ones", async (c) => {
   const teamId = c.req.param("teamId") as string;
@@ -438,16 +520,14 @@ oneOnOneMeetingsRouter.get("/:memberUserId/one-on-ones", async (c) => {
     return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
   }
 
-  const targetMember = await prisma.teamMember.findUnique({
-    where: { userId_teamId: { userId: memberUserId, teamId } },
-  });
-  if (!targetMember) {
+  const access = await resolveCheckInMemberAccess(membership, teamId, memberUserId, {});
+  if (!access.ok) {
     return c.json({ error: { message: "Member not found", code: "NOT_FOUND" } }, 404);
   }
 
   try {
     const where: { teamId: string; memberUserId: string; status?: string } = { teamId, memberUserId };
-    if (!canManageOneOnOne(membership)) {
+    if (!canManageOneOnOne(membership) || access.isFormer) {
       where.status = "published";
     }
 
@@ -482,10 +562,8 @@ oneOnOneMeetingsRouter.post(
       return c.json({ error: { message: "You cannot create a check-in for this member", code: "FORBIDDEN" } }, 403);
     }
 
-    const targetMember = await prisma.teamMember.findUnique({
-      where: { userId_teamId: { userId: memberUserId, teamId } },
-    });
-    if (!targetMember) {
+    const access = await resolveCheckInMemberAccess(membership, teamId, memberUserId, { write: true });
+    if (!access.ok) {
       return c.json({ error: { message: "Member not found", code: "NOT_FOUND" } }, 404);
     }
 
@@ -530,10 +608,11 @@ oneOnOneMeetingsRouter.post(
         });
 
         if (followUpTasks.length > 0) {
+          const tz = resolveTimeZone(user.timezone);
           for (const task of followUpTasks) {
             const dueDate =
               task.dueDate && !Number.isNaN(Date.parse(task.dueDate))
-                ? new Date(task.dueDate)
+                ? parseCalendarDueDate(task.dueDate, tz)
                 : null;
             const baseData = {
               title: task.title.trim(),
@@ -596,6 +675,11 @@ oneOnOneMeetingsRouter.patch(
       return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
     }
 
+    const access = await resolveCheckInMemberAccess(membership, teamId, memberUserId, { write: true });
+    if (!access.ok) {
+      return c.json({ error: { message: "Member not found", code: "NOT_FOUND" } }, 404);
+    }
+
     const existing = await prisma.oneOnOneMeeting.findFirst({
       where: { id: meetingId, teamId, memberUserId },
     });
@@ -649,7 +733,7 @@ oneOnOneMeetingsRouter.patch(
       });
 
       if (followUpTasks.length > 0) {
-        await createFollowUpTasks(meetingId, teamId, user.id, followUpTasks);
+        await createFollowUpTasks(meetingId, teamId, user.id, followUpTasks, user.timezone);
       }
 
       const managerName = user.name?.trim() || user.email || "Your manager";
@@ -814,6 +898,11 @@ oneOnOneMeetingsRouter.delete("/:memberUserId/one-on-ones/:meetingId", async (c)
   const membership = await getMembership(c, teamId);
   if (!membership) {
     return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
+  }
+
+  const access = await resolveCheckInMemberAccess(membership, teamId, memberUserId, { write: true });
+  if (!access.ok) {
+    return c.json({ error: { message: "Member not found", code: "NOT_FOUND" } }, 404);
   }
 
   const existing = await prisma.oneOnOneMeeting.findFirst({

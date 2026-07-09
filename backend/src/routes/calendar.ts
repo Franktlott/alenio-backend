@@ -11,6 +11,7 @@ import {
   canApproveCalendarEvent,
   canManageCalendarEvent,
   canViewCalendarEvent,
+  isCalendarOwnerOrLeader,
   resolveCalendarCreate,
   resolveCalendarUpdate,
 } from "../lib/calendar-permissions";
@@ -120,16 +121,16 @@ export async function initMeetingReminders() {
   try {
     const upcoming = await prisma.calendarEvent.findMany({
       where: {
-        isVideoMeeting: true,
+        OR: [{ isVideoMeeting: true }, { isOneOnOne: true }],
         startDate: { gt: new Date() },
       },
-      select: { id: true, title: true, teamId: true, startDate: true, reminderMinutes: true },
+      select: { id: true, title: true, teamId: true, startDate: true, reminderMinutes: true, isVideoMeeting: true, isOneOnOne: true },
     });
 
     for (const event of upcoming) {
       const settings = parseMeetingSettings(event.reminderMinutes);
       const mins = settings.reminderMinutes;
-      if (mins.length > 0) {
+      if (mins.length > 0 && (event.isVideoMeeting || event.isOneOnOne)) {
         await scheduleEventReminders(event.id, event.title, event.teamId, event.startDate, mins, settings.assigneeIds);
       }
     }
@@ -209,6 +210,9 @@ const createEventSchema = z.object({
   color: z.string().optional(),
   isHidden: z.boolean().optional(),
   isVideoMeeting: z.boolean().optional().default(false),
+  isOneOnOne: z.boolean().optional().default(false),
+  oneOnOneMemberUserId: z.string().optional(),
+  oneOnOneTemplateId: z.string().optional(),
   reminderMinutes: z.array(z.number()).optional().default([]),
   assigneeIds: z.array(z.string()).optional().default([]),
 });
@@ -235,14 +239,39 @@ calendarRouter.post(
       return c.json({ error: { message: createPolicy.message, code: "FORBIDDEN" } }, 403);
     }
 
-    const reminderMins = body.reminderMinutes ?? [];
+    const isOneOnOne = body.isOneOnOne === true;
+    if (isOneOnOne && !isCalendarOwnerOrLeader(membership.role)) {
+      return c.json({ error: { message: "Only workspace owners and team leaders can plan 1:1 check-ins.", code: "FORBIDDEN" } }, 403);
+    }
+
+    const oneOnOneMemberUserId = body.oneOnOneMemberUserId?.trim() || null;
+    if (isOneOnOne) {
+      if (!oneOnOneMemberUserId) {
+        return c.json({ error: { message: "Choose a team member for this 1:1.", code: "BAD_REQUEST" } }, 400);
+      }
+      const member = await prisma.teamMember.findUnique({
+        where: { userId_teamId: { userId: oneOnOneMemberUserId, teamId } },
+      });
+      if (!member) {
+        return c.json({ error: { message: "That team member was not found in this workspace.", code: "BAD_REQUEST" } }, 400);
+      }
+      if (oneOnOneMemberUserId === user.id) {
+        return c.json({ error: { message: "Plan a 1:1 with someone on your team, not yourself.", code: "BAD_REQUEST" } }, 400);
+      }
+    }
+
+    const reminderMins = body.reminderMinutes ?? (isOneOnOne ? [15] : []);
     const teamMembers = await prisma.teamMember.findMany({
       where: { teamId },
       select: { userId: true },
     });
     const teamMemberIds = new Set(teamMembers.map((m) => m.userId));
     const assigneeIds = Array.from(
-      new Set([...(body.assigneeIds ?? []).filter((id) => teamMemberIds.has(id)), user.id])
+      new Set([
+        ...(body.assigneeIds ?? []).filter((id) => teamMemberIds.has(id)),
+        user.id,
+        ...(isOneOnOne && oneOnOneMemberUserId ? [oneOnOneMemberUserId] : []),
+      ]),
     );
 
     const start = new Date(body.startDate);
@@ -254,6 +283,9 @@ calendarRouter.post(
         return c.json({ error: { message: scheduleError, code: "BAD_REQUEST" } }, 400);
       }
     }
+    if (isOneOnOne && (!end || end <= start)) {
+      return c.json({ error: { message: "Choose a valid start and end time for this 1:1.", code: "BAD_REQUEST" } }, 400);
+    }
 
     const event = await prisma.calendarEvent.create({
       data: {
@@ -261,10 +293,13 @@ calendarRouter.post(
         description: body.description,
         startDate: start,
         endDate: end,
-        allDay: isVideoMeeting ? false : (body.allDay ?? true),
-        color: body.color ?? "#4361EE",
-        isHidden: createPolicy.isHidden,
+        allDay: isOneOnOne || isVideoMeeting ? false : (body.allDay ?? true),
+        color: body.color ?? (isOneOnOne ? "#7C3AED" : "#4361EE"),
+        isHidden: isOneOnOne ? true : createPolicy.isHidden,
         isVideoMeeting,
+        isOneOnOne,
+        oneOnOneMemberUserId: isOneOnOne ? oneOnOneMemberUserId : null,
+        oneOnOneTemplateId: isOneOnOne ? body.oneOnOneTemplateId ?? null : null,
         approvalStatus: createPolicy.approvalStatus,
         reminderMinutes: JSON.stringify({ reminderMinutes: reminderMins, assigneeIds }),
         teamId,
@@ -275,7 +310,7 @@ calendarRouter.post(
       },
     });
 
-    if (body.isVideoMeeting && reminderMins.length > 0) {
+    if ((body.isVideoMeeting || isOneOnOne) && reminderMins.length > 0) {
       await scheduleEventReminders(event.id, event.title, teamId, event.startDate, reminderMins, assigneeIds);
     }
 
@@ -317,6 +352,9 @@ const updateEventSchema = z.object({
   color: z.string().optional(),
   isHidden: z.boolean().optional(),
   isVideoMeeting: z.boolean().optional(),
+  isOneOnOne: z.boolean().optional(),
+  oneOnOneMemberUserId: z.string().nullable().optional(),
+  oneOnOneTemplateId: z.string().nullable().optional(),
   reminderMinutes: z.array(z.number()).optional(),
   assigneeIds: z.array(z.string()).optional(),
 });
@@ -362,6 +400,23 @@ calendarRouter.patch(
       ? Array.from(new Set([...body.assigneeIds.filter((id) => teamMemberIds.has(id)), existing.createdById]))
       : existingSettings.assigneeIds;
     const nextReminderMinutes = body.reminderMinutes ?? existingSettings.reminderMinutes;
+    const nextIsOneOnOne = body.isOneOnOne !== undefined ? body.isOneOnOne : existing.isOneOnOne;
+    let nextOneOnOneMemberUserId =
+      body.oneOnOneMemberUserId !== undefined ? body.oneOnOneMemberUserId : existing.oneOnOneMemberUserId;
+    const nextOneOnOneTemplateId =
+      body.oneOnOneTemplateId !== undefined ? body.oneOnOneTemplateId : existing.oneOnOneTemplateId;
+
+    if (nextIsOneOnOne && !isCalendarOwnerOrLeader(membership.role)) {
+      return c.json({ error: { message: "Only workspace owners and team leaders can plan 1:1 check-ins.", code: "FORBIDDEN" } }, 403);
+    }
+    if (nextIsOneOnOne) {
+      if (!nextOneOnOneMemberUserId) {
+        return c.json({ error: { message: "Choose a team member for this 1:1.", code: "BAD_REQUEST" } }, 400);
+      }
+      if (!teamMemberIds.has(nextOneOnOneMemberUserId)) {
+        return c.json({ error: { message: "That team member was not found in this workspace.", code: "BAD_REQUEST" } }, 400);
+      }
+    }
 
     const nextStart = body.startDate !== undefined ? new Date(body.startDate) : existing.startDate;
     const nextEnd =
@@ -377,6 +432,16 @@ calendarRouter.patch(
         return c.json({ error: { message: scheduleError, code: "BAD_REQUEST" } }, 400);
       }
     }
+    if (nextIsOneOnOne && (!nextEnd || nextEnd <= nextStart)) {
+      return c.json({ error: { message: "Choose a valid start and end time for this 1:1.", code: "BAD_REQUEST" } }, 400);
+    }
+
+    const mergedAssigneeIds = Array.from(
+      new Set([
+        ...nextAssigneeIds,
+        ...(nextIsOneOnOne && nextOneOnOneMemberUserId ? [nextOneOnOneMemberUserId] : []),
+      ]),
+    );
 
     const updated = await prisma.calendarEvent.update({
       where: { id: eventId },
@@ -385,16 +450,23 @@ calendarRouter.patch(
         ...(body.description !== undefined ? { description: body.description } : {}),
         ...(body.startDate !== undefined ? { startDate: nextStart } : {}),
         ...(body.endDate !== undefined ? { endDate: nextEnd } : {}),
-        ...(body.allDay !== undefined ? { allDay: nextIsVideoMeeting ? false : body.allDay } : nextIsVideoMeeting ? { allDay: false } : {}),
+        ...(body.allDay !== undefined
+          ? { allDay: nextIsVideoMeeting || nextIsOneOnOne ? false : body.allDay }
+          : nextIsVideoMeeting || nextIsOneOnOne
+            ? { allDay: false }
+            : {}),
         ...(body.color !== undefined ? { color: body.color } : {}),
-        ...(body.isHidden !== undefined ? { isHidden: body.isHidden } : {}),
+        ...(body.isHidden !== undefined ? { isHidden: body.isHidden } : nextIsOneOnOne ? { isHidden: true } : {}),
         ...(updatePolicy.resetApproval ? { approvalStatus: updatePolicy.resetApproval } : {}),
         ...(body.isVideoMeeting !== undefined || updatePolicy.forbidVideo
           ? { isVideoMeeting: nextIsVideoMeeting }
           : {}),
+        ...(body.isOneOnOne !== undefined ? { isOneOnOne: nextIsOneOnOne } : {}),
+        ...(body.oneOnOneMemberUserId !== undefined ? { oneOnOneMemberUserId: nextOneOnOneMemberUserId } : {}),
+        ...(body.oneOnOneTemplateId !== undefined ? { oneOnOneTemplateId: nextOneOnOneTemplateId } : {}),
         reminderMinutes: JSON.stringify({
           reminderMinutes: nextReminderMinutes,
-          assigneeIds: nextAssigneeIds,
+          assigneeIds: mergedAssigneeIds,
         }),
       },
       include: {
@@ -404,18 +476,19 @@ calendarRouter.patch(
 
     // Re-schedule reminders if relevant fields changed
     const isVideo = body.isVideoMeeting !== undefined ? body.isVideoMeeting : existing.isVideoMeeting;
-    if (isVideo && (body.reminderMinutes !== undefined || body.startDate !== undefined)) {
+    const isOneOnOne = body.isOneOnOne !== undefined ? body.isOneOnOne : existing.isOneOnOne;
+    if ((isVideo || isOneOnOne) && (body.reminderMinutes !== undefined || body.startDate !== undefined)) {
       await scheduleEventReminders(
         updated.id,
         updated.title,
         teamId,
         updated.startDate,
         nextReminderMinutes,
-        nextAssigneeIds
+        mergedAssigneeIds,
       );
     }
 
-    return c.json({ data: { ...updated, assigneeIds: nextAssigneeIds } });
+    return c.json({ data: { ...updated, assigneeIds: mergedAssigneeIds } });
   }
 );
 

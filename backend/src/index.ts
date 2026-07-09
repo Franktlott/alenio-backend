@@ -50,6 +50,7 @@ import { ensureTeamInviteSchema } from "./lib/ensure-team-invite-schema";
 import { ensureRecurrenceSeriesSchema } from "./lib/ensure-recurrence-series-schema";
 import { ensureUserTimezoneSchema } from "./lib/ensure-user-timezone-schema";
 import { ensureCalendarApprovalSchema } from "./lib/ensure-calendar-approval-schema";
+import { ensureCalendarOneOnOneSchema } from "./lib/ensure-calendar-one-on-one-schema";
 import { ensureWorkplaceStandardsSchema } from "./lib/ensure-workplace-standards-schema";
 import { ensureGoLoginSchema } from "./lib/ensure-go-login-schema";
 import { ensureWorkplaceAlertsSchema } from "./lib/ensure-workplace-alerts-schema";
@@ -80,7 +81,7 @@ if (!isProduction) {
 /** Dev safety net + prod fallback when preDeploy db push missed a table. */
 const startupSchemaReady = Promise.all([
   ...(isProduction
-    ? [ensureGoLoginSchema(prisma), ensureWorkplaceAlertsSchema(prisma), ensureGoFrontendSettingsSchema(prisma), ensureGoLeaderPinSchema(prisma), ensureWorkspaceModulesSchema(prisma), ensureSubscriptionCancelSchema(prisma), ensureConversationTeamSchema(prisma), ensureGroupParticipantRolesSchema(prisma)]
+    ? [ensureGoLoginSchema(prisma), ensureWorkplaceAlertsSchema(prisma), ensureGoFrontendSettingsSchema(prisma), ensureGoLeaderPinSchema(prisma), ensureWorkspaceModulesSchema(prisma), ensureSubscriptionCancelSchema(prisma), ensureConversationTeamSchema(prisma), ensureGroupParticipantRolesSchema(prisma), ensureCalendarOneOnOneSchema(prisma)]
     : [
         ensureOneOnOneSchema(prisma),
         ensureDevelopmentPlanSchema(prisma),
@@ -88,6 +89,7 @@ const startupSchemaReady = Promise.all([
         ensureRecurrenceSeriesSchema(prisma),
         ensureUserTimezoneSchema(prisma),
         ensureCalendarApprovalSchema(prisma),
+        ensureCalendarOneOnOneSchema(prisma),
         ensureWorkplaceStandardsSchema(prisma),
         ensureCalendarConnectionSchema(prisma),
         ensureGoLoginSchema(prisma),

@@ -50,7 +50,6 @@ import {
 import { api } from "@/lib/api/api";
 import { useTeamStore } from "@/lib/state/team-store";
 import {
-  ACCOUNT_HUB_SUBTITLE,
   ACCOUNT_HUB_TITLE,
 } from "@/lib/plan-access-copy";
 
@@ -626,8 +625,21 @@ function ComparePlansModal({
         >
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
             <Text style={{ fontSize: 18, fontWeight: "800", color: "#0F172A" }}>Compare Plans</Text>
-            <Pressable onPress={onClose} hitSlop={8}>
-              <X size={20} color="#94A3B8" />
+            <Pressable
+              onPress={onClose}
+              hitSlop={8}
+              accessibilityLabel="Close compare plans"
+              testID="compare-plans-close"
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 16,
+                backgroundColor: "#F1F5F9",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <X size={18} color="#64748B" />
             </Pressable>
           </View>
           <ScrollView
@@ -672,6 +684,19 @@ function ComparePlansModal({
               </View>
             </View>
           </ScrollView>
+          <TouchableOpacity
+            onPress={onClose}
+            style={{
+              marginTop: 8,
+              paddingVertical: 12,
+              borderRadius: 12,
+              backgroundColor: "#F1F5F9",
+              alignItems: "center",
+            }}
+            testID="compare-plans-cancel"
+          >
+            <Text style={{ fontSize: 14, fontWeight: "700", color: "#64748B" }}>Close</Text>
+          </TouchableOpacity>
         </View>
       </View>
     </Modal>
@@ -876,10 +901,6 @@ export default function AccountHubScreen() {
           backgroundColor: PROFILE_UI.pageBg,
         }}
       >
-        <Text style={{ fontSize: 12, color: "#64748B", lineHeight: 16, marginBottom: 8 }} numberOfLines={1}>
-          {ACCOUNT_HUB_SUBTITLE}
-        </Text>
-
         {isLoading ? (
           <View style={{ flex: 1, minHeight: 280, alignItems: "center", justifyContent: "center" }} testID="account-hub-loading">
             <ActivityIndicator color="#4361EE" size="large" />

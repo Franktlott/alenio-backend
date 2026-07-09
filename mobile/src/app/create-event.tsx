@@ -508,7 +508,7 @@ export default function CreateEventScreen() {
             <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
               <Users size={18} color={!isHidden ? "#4361EE" : "#CBD5E1"} />
               <View>
-                <Text style={{ fontSize: 14, fontWeight: "600", color: "#0F172A" }}>Public</Text>
+                <Text style={{ fontSize: 14, fontWeight: "600", color: "#0F172A" }}>{!isHidden ? "Public" : "Private"}</Text>
                 <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 1 }}>{!isHidden ? "Visible to the whole team" : "Only visible to you"}</Text>
               </View>
             </View>

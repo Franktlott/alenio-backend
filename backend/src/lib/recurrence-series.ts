@@ -49,17 +49,19 @@ export function dueDayKey(date: Date, timeZone?: string | null): string {
   return calendarDayFromInstant(date, resolveTimeZone(timeZone));
 }
 
-/** Parse a calendar due date in the user's timezone. */
+/** Parse a calendar due date in the user's timezone (always end of that day, 11:59:59 PM). */
 export function parseCalendarDueDate(input: string | Date, timeZone: string = DEFAULT_TIMEZONE): Date {
+  const tz = resolveTimeZone(timeZone);
   if (typeof input === "string") {
-    const match = input.match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (match) {
-      return dueInstantFromCalendarDay(match[0], timeZone);
+    const trimmed = input.trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+      return dueInstantFromCalendarDay(trimmed, tz);
     }
   }
   const date = input instanceof Date ? input : new Date(input);
-  const day = calendarDayFromInstant(date, timeZone);
-  return day ? dueInstantFromCalendarDay(day, timeZone) : date;
+  if (Number.isNaN(date.getTime())) return date;
+  const day = calendarDayFromInstant(date, tz);
+  return day ? dueInstantFromCalendarDay(day, tz) : date;
 }
 
 /** Snap the series start to the chosen weekday / day-of-month before spawning. */

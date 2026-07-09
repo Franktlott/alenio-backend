@@ -19,6 +19,7 @@ import {
   fetchWebTeam,
   fetchWebTeamSubscription,
   fetchWebTeamTasks,
+  fetchFormerWorkspaceMembers,
   inviteMemberByEmail,
   rejectTeamJoinRequest,
   removeTeamMemberApi,
@@ -28,6 +29,7 @@ import {
   type TeamMemberStatsMap,
   type WebMeUser,
   type WebTeamDetail,
+  type WebFormerMemberRow,
   type WebTeamInvite,
   type WebTeamJoinRequest,
   type WebTeamMemberRow,
@@ -391,13 +393,14 @@ function IconGear() {
 async function fetchTeamContext(teamId: string) {
   const detail = await fetchWebTeam(teamId);
   const manageJoin = canManageJoinRequests(detail.myRole);
-  const [stats, tasks, sub, joinList, inviteList, calendarPending] = await Promise.all([
+  const [stats, tasks, sub, joinList, inviteList, calendarPending, formerMembers] = await Promise.all([
     fetchTeamMemberStats(teamId).catch(() => null),
     fetchWebTeamTasks(teamId).catch(() => []),
     fetchWebTeamSubscription(teamId).catch(() => null),
     manageJoin ? fetchTeamJoinRequests(teamId).catch(() => []) : Promise.resolve([]),
     manageJoin ? fetchTeamInvites(teamId).catch(() => []) : Promise.resolve([]),
     manageJoin ? fetchPendingCalendarEvents(teamId).catch(() => []) : Promise.resolve([]),
+    manageJoin ? fetchFormerWorkspaceMembers(teamId).catch(() => []) : Promise.resolve([]),
   ]);
   const plan = sub?.plan ?? "free";
   return {
@@ -409,6 +412,7 @@ async function fetchTeamContext(teamId: string) {
     incoming: manageJoin ? joinList : [],
     pendingInvites: manageJoin ? inviteList : [],
     pendingCalendarEvents: manageJoin ? calendarPending : [],
+    formerMembers: Array.isArray(formerMembers) ? formerMembers : [],
   };
 }
 
@@ -439,8 +443,24 @@ function canViewMemberProfile(
   return meRole === "owner" || meRole === "team_leader";
 }
 
-function memberSort(a: WebTeamMemberRow, b: WebTeamMemberRow): number {
+function memberSort(a: WebTeamMemberRow, b: WebTeamMemberRow, myId: string): number {
+  if (a.userId === myId && b.userId !== myId) return -1;
+  if (b.userId === myId && a.userId !== myId) return 1;
   return (a.user.name ?? "").localeCompare(b.user.name ?? "");
+}
+
+function formerToMemberRow(former: WebFormerMemberRow): WebTeamMemberRow {
+  return {
+    id: `former-${former.userId}`,
+    userId: former.userId,
+    role: "member",
+    user: {
+      id: former.user.id,
+      name: former.user.name,
+      email: former.user.email,
+      image: former.user.image,
+    },
+  };
 }
 
 function formatInviteDate(iso: string): string {
@@ -476,6 +496,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
   const incoming = teamContextQuery.data?.incoming ?? [];
   const pendingInvites = teamContextQuery.data?.pendingInvites ?? [];
   const pendingCalendarEvents = teamContextQuery.data?.pendingCalendarEvents ?? [];
+  const formerMembers = teamContextQuery.data?.formerMembers ?? [];
   const loadErr =
     teamContextQuery.error instanceof Error
       ? teamContextQuery.error.message
@@ -526,15 +547,23 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
     };
   }, [showInitialLoading, onWorkspaceSwitchLoading]);
 
-  const sortedMembers = useMemo(() => [...(teamDetail?.members ?? [])].sort(memberSort), [teamDetail?.members]);
+  const sortedMembers = useMemo(
+    () => [...(teamDetail?.members ?? [])].sort((a, b) => memberSort(a, b, myId)),
+    [teamDetail?.members, myId],
+  );
 
   useEffect(() => {
     if (!teamDetail || !myId || !selectedMemberId) return;
     const selected = sortedMembers.find((m) => m.userId === selectedMemberId);
-    if (!selected) return;
-    if (canViewMemberProfile(teamDetail.myRole, selected.userId, myId, selected.role)) return;
-    setSelectedMemberId(myId);
-  }, [teamDetail, myId, selectedMemberId, sortedMembers]);
+    if (selected) {
+      if (canViewMemberProfile(teamDetail.myRole, selected.userId, myId, selected.role)) return;
+      setSelectedMemberId(myId);
+      return;
+    }
+    const former = formerMembers.find((f) => f.userId === selectedMemberId);
+    if (former && canManageJoinRequests(teamDetail.myRole)) return;
+    if (former) setSelectedMemberId(myId);
+  }, [teamDetail, myId, selectedMemberId, sortedMembers, formerMembers]);
 
   useEffect(() => {
     if (!teamDetail || !myId) return;
@@ -554,15 +583,16 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
   }, [selectedTeamId]);
 
   useEffect(() => {
-    if (sortedMembers.length === 0) {
+    if (sortedMembers.length === 0 && formerMembers.length === 0) {
       setSelectedMemberId(null);
       return;
     }
     setSelectedMemberId((prev) => {
       if (prev && sortedMembers.some((m) => m.userId === prev)) return prev;
-      return sortedMembers[0]?.userId ?? null;
+      if (prev && formerMembers.some((f) => f.userId === prev)) return prev;
+      return sortedMembers[0]?.userId ?? formerMembers[0]?.userId ?? null;
     });
-  }, [selectedTeamId, sortedMembers]);
+  }, [selectedTeamId, sortedMembers, formerMembers]);
 
   useEffect(() => {
     const member = searchParams.get("member")?.trim().toLowerCase();
@@ -588,6 +618,18 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
     () => sortedMembers.find((m) => m.userId === selectedMemberId) ?? null,
     [sortedMembers, selectedMemberId],
   );
+
+  const selectedFormerMember = useMemo(
+    () => formerMembers.find((f) => f.userId === selectedMemberId) ?? null,
+    [formerMembers, selectedMemberId],
+  );
+
+  const profileMember = useMemo(
+    () => selectedMember ?? (selectedFormerMember ? formerToMemberRow(selectedFormerMember) : null),
+    [selectedMember, selectedFormerMember],
+  );
+
+  const isFormerMemberProfile = !!selectedFormerMember;
 
   const ownerMember = useMemo(() => sortedMembers.find((m) => m.role === "owner") ?? null, [sortedMembers]);
 
@@ -979,41 +1021,52 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                           </span>
                         </span>
 
-                        <span className="enterprise-team-roster-col enterprise-team-roster-col--check-in">
-                          {checkIn ? (
-                            <RosterMetricCell tone={checkIn.tone} primary={checkIn.primary} secondary={checkIn.secondary} />
-                          ) : (
-                            <span className="enterprise-team-roster-metric-cell">…</span>
-                          )}
-                        </span>
-
-                        <span className="enterprise-team-roster-col enterprise-team-roster-col--goals">
-                          {goals ? (
-                            <RosterMetricCell tone={goals.tone} primary={goals.primary} icon="none" />
-                          ) : (
-                            <span className="enterprise-team-roster-metric-cell">…</span>
-                          )}
-                        </span>
-
-                        <span className="enterprise-team-roster-col enterprise-team-roster-col--overall">
-                          {overall ? (
-                            <span className={`enterprise-team-roster-overall enterprise-team-roster-overall--${overall.tone}`}>
-                              <RosterOverallIcon tone={overall.tone} label={overall.label} />
-                              <span>{overall.label}</span>
-                            </span>
-                          ) : (
-                            <span className="enterprise-team-roster-metric-cell">…</span>
-                          )}
-                        </span>
-
                         {canView ? (
-                          <span className="enterprise-team-roster-chevron" aria-hidden>
-                            ›
-                          </span>
+                          <>
+                            <span className="enterprise-team-roster-col enterprise-team-roster-col--check-in">
+                              {checkIn ? (
+                                <RosterMetricCell tone={checkIn.tone} primary={checkIn.primary} secondary={checkIn.secondary} />
+                              ) : (
+                                <span className="enterprise-team-roster-metric-cell">…</span>
+                              )}
+                            </span>
+
+                            <span className="enterprise-team-roster-col enterprise-team-roster-col--goals">
+                              {goals ? (
+                                <RosterMetricCell tone={goals.tone} primary={goals.primary} icon="none" />
+                              ) : (
+                                <span className="enterprise-team-roster-metric-cell">…</span>
+                              )}
+                            </span>
+
+                            <span className="enterprise-team-roster-col enterprise-team-roster-col--overall">
+                              {overall ? (
+                                <span className={`enterprise-team-roster-overall enterprise-team-roster-overall--${overall.tone}`}>
+                                  <RosterOverallIcon tone={overall.tone} label={overall.label} />
+                                  <span>{overall.label}</span>
+                                </span>
+                              ) : (
+                                <span className="enterprise-team-roster-metric-cell">…</span>
+                              )}
+                            </span>
+
+                            <span className="enterprise-team-roster-chevron" aria-hidden>
+                              ›
+                            </span>
+                          </>
                         ) : (
-                          <span className="enterprise-team-roster-lock" title="You don't have access to this member's profile" aria-label="Profile locked">
-                            <IconLock />
-                          </span>
+                          <>
+                            <span
+                              className="enterprise-team-roster-col enterprise-team-roster-col--locked-metrics"
+                              title="You don't have access to this member's activity"
+                              aria-label="Member activity locked"
+                            >
+                              <span className="enterprise-team-roster-lock">
+                                <IconLock />
+                              </span>
+                            </span>
+                            <span className="enterprise-team-roster-table-head-spacer" aria-hidden />
+                          </>
                         )}
                       </>
                     );
@@ -1037,6 +1090,46 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                     );
                   })}
                 </ul>
+
+                {manageMembers && formerMembers.length > 0 ? (
+                  <div className="enterprise-team-roster-former">
+                    <p className="enterprise-team-roster-former-title">Former members</p>
+                    <ul className="enterprise-team-roster enterprise-team-roster--former">
+                      {formerMembers.map((former) => {
+                        const isSelected = former.userId === selectedMemberId;
+                        const displayName = former.user.name ?? former.user.email ?? "Member";
+                        return (
+                          <li key={former.userId}>
+                            <button
+                              type="button"
+                              className={`enterprise-team-roster-card enterprise-team-roster-card--former${isSelected ? " enterprise-team-roster-card--selected" : ""}`}
+                              onClick={() => setSelectedMemberId(former.userId)}
+                              data-testid={`team-roster-former-${former.userId}`}
+                            >
+                              <span className="enterprise-team-roster-col enterprise-team-roster-col--member">
+                                <span className="enterprise-team-roster-avatar">
+                                  {former.user.image ? (
+                                    <img src={former.user.image} alt={displayName} />
+                                  ) : (
+                                    (former.user.name?.[0] ?? former.user.email?.[0] ?? "?").toUpperCase()
+                                  )}
+                                </span>
+                                <span className="enterprise-team-roster-member-copy">
+                                  <span className="enterprise-team-roster-name">{displayName}</span>
+                                  <span className="enterprise-team-roster-former-pill">Former member</span>
+                                </span>
+                              </span>
+                              <span className="enterprise-team-roster-former-hint">View archived check-ins</span>
+                              <span className="enterprise-team-roster-chevron" aria-hidden>
+                                ›
+                              </span>
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                ) : null}
               </div>
 
               <RosterStatusLegend />
@@ -1045,39 +1138,45 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
         </aside>
 
         <main className="enterprise-team-split-detail">
-          {selectedMember && canViewMemberProfile(myRole, selectedMember.userId, myId, selectedMember.role) ? (
+          {profileMember &&
+          (selectedMember
+            ? canViewMemberProfile(myRole, profileMember.userId, myId, profileMember.role)
+            : manageMembers) ? (
             <TeamMemberProfilePanel
-              key={selectedMember.userId}
+              key={profileMember.userId}
               teamId={teamDetail.id}
-              member={selectedMember}
-              isSelf={selectedMember.userId === myId}
+              member={profileMember}
+              isSelf={profileMember.userId === myId}
+              isFormerMember={isFormerMemberProfile}
               managerName={ownerMember?.user.name ?? ownerMember?.user.email ?? null}
               leaderUserId={ownerMember?.userId ?? null}
-              roleLabel={roleLabel(selectedMember.role)}
-              roleBadgeClass={roleBadgeClass(selectedMember.role)}
-              canManage={canOpenMemberRow(myRole, selectedMember)}
-              canCreateOneOne={myRole === "owner" || myRole === "team_leader"}
+              roleLabel={isFormerMemberProfile ? "Former member" : roleLabel(profileMember.role)}
+              roleBadgeClass={isFormerMemberProfile ? "enterprise-team-role-badge enterprise-team-role-badge--former" : roleBadgeClass(profileMember.role)}
+              canManage={!isFormerMemberProfile && canOpenMemberRow(myRole, profileMember)}
+              canCreateOneOne={!isFormerMemberProfile && (myRole === "owner" || myRole === "team_leader")}
               canCreateDevGoal={
-                selectedMember.userId === myId ||
-                myRole === "owner" ||
-                myRole === "team_leader" ||
-                myRole === "admin"
+                !isFormerMemberProfile &&
+                (profileMember.userId === myId ||
+                  myRole === "owner" ||
+                  myRole === "team_leader" ||
+                  myRole === "admin")
               }
               canAddDevNotes={
-                selectedMember.userId === myId ||
-                myRole === "owner" ||
-                myRole === "team_leader" ||
-                myRole === "admin"
+                !isFormerMemberProfile &&
+                (profileMember.userId === myId ||
+                  myRole === "owner" ||
+                  myRole === "team_leader" ||
+                  myRole === "admin")
               }
-              streak={isPaid ? memberStats?.[selectedMember.userId]?.streak : undefined}
-              overdueFollowUpTasks={memberStats?.[selectedMember.userId]?.overdueFollowUpTasks}
+              streak={isPaid ? memberStats?.[profileMember.userId]?.streak : undefined}
+              overdueFollowUpTasks={memberStats?.[profileMember.userId]?.overdueFollowUpTasks}
               workplaceStandards={workplaceStandards}
-              standardsCompliance={memberStats?.[selectedMember.userId]?.standardsCompliance}
-              daysSinceLastCheckIn={memberStats?.[selectedMember.userId]?.daysSinceLastOneOnOne}
+              standardsCompliance={memberStats?.[profileMember.userId]?.standardsCompliance}
+              daysSinceLastCheckIn={memberStats?.[profileMember.userId]?.daysSinceLastOneOnOne}
               canManageStandards={canManageOneOneTemplates}
               onManageStandards={() => setWorkplaceStandardsOpen(true)}
               onBack={() => setSelectedMemberId(null)}
-              onManage={() => openMemberModal(selectedMember)}
+              onManage={() => openMemberModal(profileMember)}
             />
           ) : (
             <div className="enterprise-team-profile-empty">

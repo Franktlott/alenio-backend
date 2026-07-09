@@ -1,0 +1,140 @@
+export const bottomSheetMenu = {
+  sheet: {
+    backgroundColor: "white",
+    marginHorizontal: 12,
+    marginBottom: 32,
+    borderRadius: 16,
+    overflow: "hidden" as const,
+    maxHeight: "80%" as const,
+  },
+  handleWrap: {
+    paddingVertical: 8,
+    alignItems: "center" as const,
+  },
+  handle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "#E2E8F0",
+  },
+  sectionLabel: {
+    fontSize: 13,
+    fontWeight: "600" as const,
+    color: "#94A3B8",
+    textTransform: "uppercase" as const,
+    letterSpacing: 0.5,
+    paddingHorizontal: 20,
+    paddingBottom: 6,
+  },
+  row: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    justifyContent: "space-between" as const,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#F1F5F9",
+  },
+  rowLabel: {
+    fontSize: 15,
+    color: "#0F172A",
+  },
+  rowMeta: {
+    fontSize: 12,
+    color: "#94A3B8",
+  },
+  rowLabelDestructive: {
+    fontSize: 15,
+    color: "#EF4444",
+  },
+  rowLabelWarning: {
+    fontSize: 15,
+    color: "#F59E0B",
+  },
+  footer: {
+    paddingVertical: 12,
+    alignItems: "center" as const,
+    borderTopWidth: 1,
+    borderTopColor: "#F1F5F9",
+  },
+  footerText: {
+    fontSize: 15,
+    fontWeight: "600" as const,
+    color: "#64748B",
+  },
+  listRow: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    gap: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F1F5F9",
+  },
+  avatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+  },
+  avatarFallback: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#EEF2FF",
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+  },
+  memberName: {
+    fontSize: 14,
+    fontWeight: "600" as const,
+    color: "#0F172A",
+  },
+  memberMeta: {
+    fontSize: 11,
+    color: "#94A3B8",
+    marginTop: 1,
+  },
+  searchWrap: {
+    marginHorizontal: 20,
+    marginBottom: 8,
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    backgroundColor: "#F8FAFC",
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    gap: 8,
+  },
+  searchInput: {
+    flex: 1,
+    paddingVertical: 8,
+    fontSize: 14,
+    color: "#0F172A",
+  },
+  primaryButton: {
+    marginHorizontal: 20,
+    marginTop: 4,
+    marginBottom: 8,
+    backgroundColor: "#4361EE",
+    borderRadius: 12,
+    paddingVertical: 11,
+    alignItems: "center" as const,
+  },
+  primaryButtonText: {
+    color: "white",
+    fontSize: 14,
+    fontWeight: "700" as const,
+  },
+  iconAction: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+  },
+  listMaxHeight: 280,
+  iconSize: 18,
+} as const;
+
+export function bottomSheetSectionLabel(title: string, meta?: string) {
+  return meta ? `${title} · ${meta}` : title;
+}

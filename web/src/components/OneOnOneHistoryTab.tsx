@@ -174,9 +174,9 @@ function newFollowUpDraft(): FollowUpDraft {
 function dueDateInputToIso(value: string): string | undefined {
   const trimmed = value.trim();
   if (!trimmed) return undefined;
-  const parsed = new Date(`${trimmed}T23:59:59`);
-  if (Number.isNaN(parsed.getTime())) return undefined;
-  return parsed.toISOString();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+  const match = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return match?.[1] ? match[0] : undefined;
 }
 
 function formatFollowUpDueDate(iso: string | null | undefined): string | null {
@@ -416,6 +416,8 @@ export function OneOnOneHistoryTab({
     setSenecaPrepLoading(false);
     setSenecaPrepRequested(false);
     setErr(null);
+    setLeaderCommentsNudgeOpen(false);
+    setFeedbackPromptOpen(false);
     setView("fill");
   };
 
@@ -542,6 +544,8 @@ export function OneOnOneHistoryTab({
     setFollowUpDrafts([]);
     setPrepAcknowledged(true);
     setErr(null);
+    setLeaderCommentsNudgeOpen(false);
+    setFeedbackPromptOpen(false);
     setView("fill");
   };
 
@@ -617,6 +621,8 @@ export function OneOnOneHistoryTab({
 
   const performSaveDraft = async () => {
     if (!selectedTemplate || saving) return;
+    setLeaderCommentsNudgeOpen(false);
+    setFeedbackPromptOpen(false);
     setSaving(true);
     setErr(null);
     try {
@@ -673,6 +679,9 @@ export function OneOnOneHistoryTab({
   };
 
   const onSaveDraftClick = () => {
+    if (!selectedTemplate || saving) return;
+    setLeaderCommentsNudgeOpen(false);
+    setFeedbackPromptOpen(false);
     void performSaveDraft();
   };
 
@@ -901,6 +910,8 @@ export function OneOnOneHistoryTab({
     setSenecaPrepLoading(false);
     setSenecaPrepRequested(false);
     setErr(null);
+    setLeaderCommentsNudgeOpen(false);
+    setFeedbackPromptOpen(false);
   };
 
   const addFollowUpDraft = () => {

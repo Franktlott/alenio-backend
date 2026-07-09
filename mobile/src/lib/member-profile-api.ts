@@ -1,4 +1,5 @@
 import { api } from "@/lib/api/api";
+import type { PlannedOneOnOneEvent } from "@/lib/plan-one-on-one";
 
 export type DevelopmentGoalNote = {
   id: string;
@@ -183,6 +184,10 @@ export function deleteDevelopmentGoal(teamId: string, memberUserId: string, goal
 
 export function fetchOneOnOneMeetings(teamId: string, memberUserId: string) {
   return api.get<OneOnOneMeeting[]>(`${enc(teamId, memberUserId)}/one-on-ones`);
+}
+
+export function fetchPlannedOneOnOnes(teamId: string, memberUserId: string) {
+  return api.get<PlannedOneOnOneEvent[]>(`${enc(teamId, memberUserId)}/planned-one-on-ones`);
 }
 
 export function createOneOnOneMeeting(
