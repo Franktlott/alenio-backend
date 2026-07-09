@@ -1,4 +1,5 @@
 import { clearAccessToken, getAccessToken, refreshSessionTokens } from "./auth-client";
+import { extractMessagePage } from "./chat-message-pagination";
 import { getWebApiBase } from "./api-base";
 
 function apiBaseUrl(): string {
@@ -468,7 +469,9 @@ export type GoWorkplaceAlert = {
 
 export function fetchGoWorkplaceAlerts(hubToken: string, deviceId: string) {
   const q = new URLSearchParams({ hubToken, deviceId });
-  return apiGetJson<{ data: { alerts: GoWorkplaceAlert[] } }>(`/api/public/go/alerts?${q}`).then((r) => r.data.alerts);
+  return apiGetJson<{ data: { alerts: GoWorkplaceAlert[] } }>(`/api/public/go/alerts?${q}`).then((r) =>
+    Array.isArray(r.data.alerts) ? r.data.alerts : [],
+  );
 }
 
 export function ackGoWorkplaceAlert(alertId: string, hubToken: string, deviceId: string) {
@@ -532,7 +535,9 @@ export type ModuleTestSessionRow = {
 const modulesBase = (teamId: string) => `/api/teams/${encodeURIComponent(teamId)}/modules`;
 
 export function fetchWorkspaceModules(teamId: string) {
-  return apiGetJson<{ data: { modules: WorkspaceModule[] } }>(modulesBase(teamId)).then((r) => r.data.modules);
+  return apiGetJson<{ data: { modules: WorkspaceModule[] } }>(modulesBase(teamId)).then((r) =>
+    Array.isArray(r.data.modules) ? r.data.modules : [],
+  );
 }
 
 export function fetchWorkspaceModule(teamId: string, moduleKey: string) {
@@ -763,7 +768,7 @@ export function fetchTeamMessages(teamId: string, topicId: string) {
   const q = new URLSearchParams({ topicId, limit: "50" });
   return apiGetJson<{ data: { messages: TeamChatMessage[]; hasMore: boolean; nextCursor: string | null } }>(
     `/api/teams/${encodeURIComponent(teamId)}/messages?${q.toString()}`,
-  ).then((r) => r.data.messages);
+  ).then((r) => extractMessagePage<TeamChatMessage>(r.data).messages);
 }
 
 export function postTeamMessage(
@@ -854,7 +859,7 @@ export function fetchDmConversations() {
 export function fetchDmMessages(conversationId: string) {
   return apiGetJson<{ data: { messages: DirectChatMessage[]; hasMore: boolean; nextCursor: string | null } }>(
     `/api/dms/${encodeURIComponent(conversationId)}/messages?limit=50`,
-  ).then((r) => r.data.messages);
+  ).then((r) => extractMessagePage<DirectChatMessage>(r.data).messages);
 }
 
 export function postDmMessage(

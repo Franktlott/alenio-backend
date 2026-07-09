@@ -25,6 +25,7 @@ import {
 } from "../components/ChatMessageActions";
 import { ChatMessageMedia } from "../components/ChatMessageMedia";
 import { linkifyText } from "../lib/linkify";
+import { normalizeMessageList } from "../lib/chat-message-pagination";
 import { isRecentFooterEnterpriseWorkspaceSelect } from "../lib/enterprise-selected-team";
 import {
   createGroupDm,
@@ -344,8 +345,9 @@ export function ChatPage() {
   const topics = topicsQuery.data ?? [];
   const teamDetail = teamDetailQuery.data ?? null;
   const messages = useMemo(() => {
-    const raw = threadQuery.data?.messages ?? [];
-    return [...raw].sort((a, b) => {
+    const raw = threadQuery.data?.messages;
+    const list = normalizeMessageList<TeamChatMessage | DirectChatMessage>(raw);
+    return [...list].sort((a, b) => {
       const diff = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
       return diff !== 0 ? diff : a.id.localeCompare(b.id);
     });
