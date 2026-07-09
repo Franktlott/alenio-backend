@@ -42,8 +42,9 @@ import {
   managerFirstName,
   type MobilePriorityInsight,
 } from "@/lib/seneca-mobile-briefing";
-import { fetchSenecaAsk, type SenecaAskActionId, type SenecaChatTurn, type SenecaPlanOneOnOneProposal } from "@/lib/seneca-api";
+import { fetchSenecaAsk, type SenecaAskActionId, type SenecaCancelOneOnOneProposal, type SenecaChatTurn, type SenecaPlanOneOnOneProposal } from "@/lib/seneca-api";
 import { SenecaPlanCheckInCard } from "./SenecaPlanCheckInCard";
+import { SenecaCancelCheckInCard } from "./SenecaCancelCheckInCard";
 import { quickActionNavigate, senecaActionNavigate } from "@/lib/seneca-navigation";
 import { useTeamStore } from "@/lib/state/team-store";
 import { ME_QUERY_KEY, fetchMeUser } from "@/lib/auth/me-query";
@@ -64,6 +65,7 @@ type SenecaChatMessage = {
   insights?: SenecaInsightItem[];
   actions?: SenecaActionCard[];
   planProposal?: SenecaPlanOneOnOneProposal | null;
+  cancelProposal?: SenecaCancelOneOnOneProposal | null;
 };
 
 const INSIGHT_STYLE: Record<
@@ -346,6 +348,7 @@ export function SenecaAssistantSheet({ open, onClose, teamId: teamIdProp }: Prop
             role: "assistant",
             text: res.message,
             planProposal: res.planOneOnOne ?? null,
+            cancelProposal: res.cancelOneOnOne ?? null,
             insights: (res.insights ?? []).slice(0, 3).map((item, index) => ({
               id: `ask-insight-${index}`,
               label: item.label,
@@ -398,13 +401,37 @@ export function SenecaAssistantSheet({ open, onClose, teamId: teamIdProp }: Prop
     setChatMessages((prev) =>
       prev.map((message) =>
         message.id === messageId
-          ? { ...message, text: summary, planProposal: null }
+          ? { ...message, text: summary, planProposal: null, cancelProposal: null }
+          : message,
+      ),
+    );
+  };
+
+  const onCheckInCancelled = (messageId: string, summary: string) => {
+    setChatMessages((prev) =>
+      prev.map((message) =>
+        message.id === messageId
+          ? { ...message, text: summary, planProposal: null, cancelProposal: null }
           : message,
       ),
     );
   };
 
   const dismissPlanProposal = (messageId: string) => {
+    setChatMessages((prev) =>
+      prev.map((message) =>
+        message.id === messageId ? { ...message, planProposal: null } : message,
+      ),
+    );
+  };
+
+  const dismissCancelProposal = (messageId: string) => {
+    setChatMessages((prev) =>
+      prev.map((message) =>
+        message.id === messageId ? { ...message, cancelProposal: null } : message,
+      ),
+    );
+  };
     setChatMessages((prev) =>
       prev.map((message) =>
         message.id === messageId ? { ...message, planProposal: null } : message,
@@ -586,6 +613,15 @@ export function SenecaAssistantSheet({ open, onClose, teamId: teamIdProp }: Prop
                             <Text style={styles.senecaBlockName}>Seneca</Text>
                           </View>
                           <Text style={styles.senecaMessage}>{chatMessage.text}</Text>
+
+                          {chatMessage.cancelProposal && activeTeamId ? (
+                            <SenecaCancelCheckInCard
+                              teamId={activeTeamId}
+                              proposal={chatMessage.cancelProposal}
+                              onCancelled={(summary) => onCheckInCancelled(chatMessage.id, summary)}
+                              onDismiss={() => dismissCancelProposal(chatMessage.id)}
+                            />
+                          ) : null}
 
                           {chatMessage.planProposal && activeTeamId ? (
                             <SenecaPlanCheckInCard

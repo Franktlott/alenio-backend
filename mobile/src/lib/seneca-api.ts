@@ -22,6 +22,15 @@ export type SenecaPlanOneOnOneProposal = {
   timeLabel: string;
 };
 
+export type SenecaCancelOneOnOneProposal = {
+  eventId: string;
+  memberUserId: string;
+  memberName: string;
+  startDate: string;
+  dateLabel: string;
+  timeLabel: string;
+};
+
 export type SenecaAskResponse = {
   available: boolean;
   message: string;
@@ -32,6 +41,7 @@ export type SenecaAskResponse = {
     action: SenecaAskActionId;
   }>;
   planOneOnOne?: SenecaPlanOneOnOneProposal | null;
+  cancelOneOnOne?: SenecaCancelOneOnOneProposal | null;
 };
 
 export function fetchSenecaAsk(teamId: string, question: string, messages: SenecaChatTurn[] = []) {

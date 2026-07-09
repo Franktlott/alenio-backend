@@ -19,6 +19,15 @@ import {
   type SenecaPlanOneOnOneDraft,
   type SenecaPlanOneOnOneProposal,
 } from "../lib/seneca-plan-one-on-one";
+import {
+  buildCancelClarificationMessage,
+  buildCancelConfirmationMessage,
+  conversationHasCancelCheckInTopic,
+  finalizeCancelOneOnOneProposal,
+  type PlannedCheckInEventRow,
+  type SenecaCancelOneOnOneDraft,
+  type SenecaCancelOneOnOneProposal,
+} from "../lib/seneca-cancel-one-on-one";
 import { calendarDayFromInstant, resolveTimeZone } from "../lib/timezone";
 
 type Variables = {
@@ -88,7 +97,48 @@ type SenecaAskAi = {
     action: SenecaAskActionId;
   }>;
   planOneOnOne?: SenecaPlanOneOnOneDraft | null;
+  cancelOneOnOne?: SenecaCancelOneOnOneDraft | null;
 };
+
+async function loadUpcomingPlannedCheckIns(
+  teamId: string,
+  managerUserId: string,
+  ctx: Awaited<ReturnType<typeof buildSenecaWorkspaceContext>>,
+): Promise<PlannedCheckInEventRow[]> {
+  const now = Date.now();
+  const events = await prisma.calendarEvent.findMany({
+    where: {
+      teamId,
+      createdById: managerUserId,
+      isOneOnOne: true,
+      oneOnOneMemberUserId: { not: null },
+    },
+    orderBy: { startDate: "asc" },
+  });
+
+  const memberNameById = new Map(ctx.members.map((member) => [member.userId, member.name]));
+
+  return events
+    .filter((event) => new Date(event.endDate ?? event.startDate).getTime() >= now)
+    .map((event) => ({
+      id: event.id,
+      memberUserId: event.oneOnOneMemberUserId!,
+      memberName: memberNameById.get(event.oneOnOneMemberUserId!) ?? "Team member",
+      startDate: event.startDate,
+    }));
+}
+
+function resolveCancelProposal(
+  draft: SenecaCancelOneOnOneDraft | null | undefined,
+  question: string,
+  messages: SenecaChatTurn[],
+  upcoming: PlannedCheckInEventRow[],
+  ctx: Awaited<ReturnType<typeof buildSenecaWorkspaceContext>>,
+  managerTimeZone: string,
+): SenecaCancelOneOnOneProposal | null {
+  if (!conversationHasCancelCheckInTopic(messages, question)) return null;
+  return finalizeCancelOneOnOneProposal(draft ?? {}, question, messages, upcoming, ctx, managerTimeZone);
+}
 
 function resolvePlanProposal(
   draft: SenecaPlanOneOnOneDraft | null | undefined,
@@ -179,22 +229,47 @@ senecaTeamRouter.post("/ask", zValidator("json", askBodySchema), async (c) => {
 
   if (!senecaAvailable()) {
     const fallback = ruleBasedAskResponse(body.question, ctx);
-    const planOneOnOne = resolvePlanProposal(null, body.question, body.messages, ctx, managerTimeZone);
+    const cancelIntent = conversationHasCancelCheckInTopic(body.messages, body.question);
+    const upcomingPlanned = cancelIntent
+      ? await loadUpcomingPlannedCheckIns(teamId, user.id, ctx)
+      : [];
+    const cancelOneOnOne = resolveCancelProposal(
+      null,
+      body.question,
+      body.messages,
+      upcomingPlanned,
+      ctx,
+      managerTimeZone,
+    );
+    const planOneOnOne = cancelOneOnOne
+      ? null
+      : resolvePlanProposal(null, body.question, body.messages, ctx, managerTimeZone);
     return c.json({
       data: {
         available: false,
-        message: planOneOnOne ? buildPlanConfirmationMessage(planOneOnOne) : fallback.message,
+        message: cancelOneOnOne
+          ? buildCancelConfirmationMessage(cancelOneOnOne)
+          : planOneOnOne
+            ? buildPlanConfirmationMessage(planOneOnOne)
+            : cancelIntent
+              ? buildCancelClarificationMessage(upcomingPlanned, managerTimeZone)
+              : fallback.message,
         insights: fallback.insights ?? [],
-        suggestedActions: planOneOnOne
+        suggestedActions: cancelOneOnOne || planOneOnOne
           ? []
           : fallback.suggestedActions ?? [],
         planOneOnOne,
+        cancelOneOnOne,
       },
     });
   }
 
   try {
-    const scheduleIntent = conversationHasScheduleTopic(body.messages, body.question);
+    const cancelIntent = conversationHasCancelCheckInTopic(body.messages, body.question);
+    const scheduleIntent = !cancelIntent && conversationHasScheduleTopic(body.messages, body.question);
+    const upcomingPlanned = cancelIntent
+      ? await loadUpcomingPlannedCheckIns(teamId, user.id, ctx)
+      : [];
     const conversationPrompt = formatConversationForPrompt(body.messages, body.question);
     const todayYmd = calendarDayFromInstant(new Date(), managerTimeZone);
     const todayLabel = new Date().toLocaleDateString("en-US", {
@@ -217,8 +292,19 @@ SCHEDULING A CHECK-IN (critical):
 - Return "planOneOnOne": { "memberName": "string", "date": "YYYY-MM-DD", "time": "HH:mm or null", "durationMinutes": 45 } when you have enough detail.
 - If date or member is unclear, ask a clarifying question in "message" and set planOneOnOne to null.
 `
-      : `
-- NEVER claim you scheduled, created, or saved calendar events, tasks, or check-ins unless the manager has already confirmed an action in this app.
+      : cancelIntent
+        ? `
+CANCELLING A CHECK-IN (critical):
+- The manager wants to delete, cancel, or remove a scheduled check-in, or is confirming a cancellation.
+- You CANNOT delete calendar events yourself.
+- NEVER say you have already cancelled or deleted anything unless the manager explicitly confirmed in this same conversation and you are only restating the pending cancellation for confirmation.
+- Use the full conversation and upcomingPlannedCheckIns in context to identify the right event by member and/or date/time.
+- Return "cancelOneOnOne": { "memberName": "string", "date": "YYYY-MM-DD or null", "time": "HH:mm or null" } when you have enough detail.
+- In "message", summarize what you will cancel and ask them to confirm before it is removed.
+- If the check-in is unclear, ask which one using upcomingPlannedCheckIns and set cancelOneOnOne to null.
+`
+        : `
+- NEVER claim you scheduled, created, saved, cancelled, or deleted calendar events, tasks, or check-ins unless the manager has already confirmed an action in this app.
 - Treat the conversation as continuous. Follow-up messages refer to earlier context.
 `;
 
@@ -240,46 +326,91 @@ Return JSON:
   "message": "string — your direct answer",
   "insights": [{ "label": "string", "detail": "optional string" }],
   "suggestedActions": [{ "title": "string", "description": "string", "action": "view_overdue_tasks"|"schedule_check_in"|"create_recognition"|"create_follow_up_task"|"build_checklist"|"open_team" }],
-  "planOneOnOne": { "memberName": "string", "date": "YYYY-MM-DD", "time": "HH:mm or null", "durationMinutes": 45 } | null
+  "planOneOnOne": { "memberName": "string", "date": "YYYY-MM-DD", "time": "HH:mm or null", "durationMinutes": 45 } | null,
+  "cancelOneOnOne": { "memberName": "string", "date": "YYYY-MM-DD or null", "time": "HH:mm or null" } | null
 }
 Include 0-4 insights and 0-3 suggestedActions when helpful.`,
-      senecaWorkspaceContextToPrompt(ctx),
+      JSON.stringify(
+        {
+          ...ctx,
+          ...(cancelIntent ? { upcomingPlannedCheckIns: upcomingPlanned.map((event) => ({
+            memberName: event.memberName,
+            startDate: event.startDate.toISOString(),
+          })) } : {}),
+        },
+        null,
+        2,
+      ),
     );
 
-    const planOneOnOne = resolvePlanProposal(out.planOneOnOne, body.question, body.messages, ctx, managerTimeZone);
-    const message = planOneOnOne
-      ? buildPlanConfirmationMessage(planOneOnOne)
-      : out.message?.trim() || "I'm here to help you lead the floor. What would you like to focus on?";
+    const cancelOneOnOne = resolveCancelProposal(
+      out.cancelOneOnOne,
+      body.question,
+      body.messages,
+      upcomingPlanned,
+      ctx,
+      managerTimeZone,
+    );
+    const planOneOnOne = cancelOneOnOne
+      ? null
+      : resolvePlanProposal(out.planOneOnOne, body.question, body.messages, ctx, managerTimeZone);
+    const message = cancelOneOnOne
+      ? buildCancelConfirmationMessage(cancelOneOnOne)
+      : planOneOnOne
+        ? buildPlanConfirmationMessage(planOneOnOne)
+        : cancelIntent
+          ? buildCancelClarificationMessage(upcomingPlanned, managerTimeZone)
+          : out.message?.trim() || "I'm here to help you lead the floor. What would you like to focus on?";
 
     return c.json({
       data: {
         available: true,
         message,
         insights: Array.isArray(out.insights) ? out.insights.slice(0, 6) : [],
-        suggestedActions: planOneOnOne
+        suggestedActions: cancelOneOnOne || planOneOnOne
           ? []
           : Array.isArray(out.suggestedActions)
             ? out.suggestedActions.slice(0, 4)
             : [],
         planOneOnOne,
+        cancelOneOnOne,
       },
     });
   } catch (e) {
     const fallback = ruleBasedAskResponse(body.question, ctx);
-    const planOneOnOne = resolvePlanProposal(null, body.question, body.messages, ctx, managerTimeZone);
+    const cancelIntent = conversationHasCancelCheckInTopic(body.messages, body.question);
+    const upcomingPlanned = cancelIntent
+      ? await loadUpcomingPlannedCheckIns(teamId, user.id, ctx)
+      : [];
+    const cancelOneOnOne = resolveCancelProposal(
+      null,
+      body.question,
+      body.messages,
+      upcomingPlanned,
+      ctx,
+      managerTimeZone,
+    );
+    const planOneOnOne = cancelOneOnOne
+      ? null
+      : resolvePlanProposal(null, body.question, body.messages, ctx, managerTimeZone);
     return c.json({
       data: {
         available: false,
-        message: planOneOnOne
-          ? buildPlanConfirmationMessage(planOneOnOne)
-          : e instanceof Error
-            ? e.message
-            : fallback.message,
+        message: cancelOneOnOne
+          ? buildCancelConfirmationMessage(cancelOneOnOne)
+          : planOneOnOne
+            ? buildPlanConfirmationMessage(planOneOnOne)
+            : cancelIntent
+              ? buildCancelClarificationMessage(upcomingPlanned, managerTimeZone)
+              : e instanceof Error
+                ? e.message
+                : fallback.message,
         insights: fallback.insights ?? [],
-        suggestedActions: planOneOnOne
+        suggestedActions: cancelOneOnOne || planOneOnOne
           ? []
           : fallback.suggestedActions ?? [],
         planOneOnOne,
+        cancelOneOnOne,
       },
     });
   }

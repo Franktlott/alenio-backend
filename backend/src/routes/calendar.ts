@@ -540,25 +540,6 @@ calendarRouter.delete("/:teamId/events/:eventId", async (c) => {
     pendingReminders.delete(eventId);
   }
 
-  if (existing.isOneOnOne && existing.oneOnOneMemberUserId && existing.oneOnOneMemberUserId !== user.id) {
-    const whenLabel = existing.startDate.toLocaleString("en-US", {
-      weekday: "short",
-      month: "short",
-      day: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-    });
-    const cancellerName = user.name?.trim() || "Your manager";
-    await sendPushToUsers(
-      [existing.oneOnOneMemberUserId],
-      "Check-in cancelled",
-      `${cancellerName} cancelled your check-in scheduled for ${whenLabel}.`,
-      { eventId, teamId, type: "check_in_cancelled" },
-      "notifMeetings",
-      teamId,
-    );
-  }
-
   await prisma.calendarEvent.delete({ where: { id: eventId } });
 
   return c.body(null, 204);
