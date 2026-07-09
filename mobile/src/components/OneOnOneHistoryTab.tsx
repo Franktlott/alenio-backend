@@ -268,6 +268,11 @@ export function OneOnOneHistoryTab({
     }, [teamId, memberUserId, canCreate, refetchPlannedOneOnOnes]),
   );
 
+  useEffect(() => {
+    if (!teamId || !memberUserId || !canCreate) return;
+    void refetchPlannedOneOnOnes();
+  }, [teamId, memberUserId, canCreate, refetchPlannedOneOnOnes]);
+
   const { data: templateCatalog = [] } = useQuery({
     queryKey: ["one-on-one-templates", teamId],
     queryFn: () => fetchOneOnOneTemplates(teamId),
