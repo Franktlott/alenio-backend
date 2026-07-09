@@ -1,5 +1,11 @@
 import type { SenecaWorkspaceContext } from "./seneca-workspace-context";
-import { instantFromCalendarDateAndTime, resolveTimeZone } from "./timezone";
+import {
+  addCalendarDaysInTimeZone,
+  calendarDayFromInstant,
+  getZonedDayOfWeek,
+  instantFromCalendarDateAndTime,
+  resolveTimeZone,
+} from "./timezone";
 
 export type SenecaPlanOneOnOneDraft = {
   memberName?: string | null;
@@ -136,7 +142,63 @@ export function extractMemberFromQuestion(question: string): string | null {
     .trim();
 }
 
-export function extractDateFromQuestion(question: string, now = new Date()): string | null {
+const WEEKDAYS: Record<string, number> = {
+  sunday: 0,
+  sun: 0,
+  monday: 1,
+  mon: 1,
+  tuesday: 2,
+  tue: 2,
+  tues: 2,
+  wednesday: 3,
+  wed: 3,
+  thursday: 4,
+  thu: 4,
+  thur: 4,
+  thurs: 4,
+  friday: 5,
+  fri: 5,
+  saturday: 6,
+  sat: 6,
+};
+
+function addDaysInTimeZone(now: Date, days: number, timeZone: string): string {
+  return calendarDayFromInstant(addCalendarDaysInTimeZone(now, days, timeZone), timeZone);
+}
+
+function nextWeekdayInTimeZone(weekday: number, now: Date, timeZone: string): string {
+  const current = getZonedDayOfWeek(now, timeZone);
+  let delta = weekday - current;
+  if (delta <= 0) delta += 7;
+  return addDaysInTimeZone(now, delta, timeZone);
+}
+
+export function extractDateFromQuestion(
+  question: string,
+  now = new Date(),
+  timeZone = "UTC",
+): string | null {
+  const tz = resolveTimeZone(timeZone);
+  const q = question.toLowerCase();
+
+  if (/\b(today|tonight|this evening|this afternoon)\b/.test(q)) {
+    return calendarDayFromInstant(now, tz);
+  }
+
+  if (/\btomorrow\b/.test(q)) {
+    return addDaysInTimeZone(now, 1, tz);
+  }
+
+  const nextWeekday = q.match(
+    /\bnext\s+(sunday|monday|tuesday|wednesday|thursday|friday|saturday|sun|mon|tue|tues|wed|thu|thur|thurs|fri|sat)\b/,
+  );
+  if (nextWeekday?.[1]) {
+    const weekday = WEEKDAYS[nextWeekday[1]];
+    if (weekday !== undefined) {
+      return nextWeekdayInTimeZone(weekday, now, tz);
+    }
+  }
+
   const iso = question.match(/\b(20\d{2}-\d{2}-\d{2})\b/);
   if (iso?.[1]) return iso[1];
 
@@ -148,12 +210,58 @@ export function extractDateFromQuestion(question: string, now = new Date()): str
   const named = question.match(
     /\b(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\s+(\d{1,2})(?:st|nd|rd|th)?(?:,?\s*(20\d{2}))?/i,
   );
-  if (named) {
+  if (named?.[1] && named[2]) {
     const month = MONTHS[named[1].toLowerCase()];
     const day = Number(named[2]);
-    const year = named[3] ? Number(named[3]) : now.getFullYear();
+    const year = named[3] ? Number(named[3]) : Number(calendarDayFromInstant(now, tz).slice(0, 4));
     if (month && day >= 1 && day <= 31) {
       return `${year}-${padDatePart(month)}-${padDatePart(day)}`;
+    }
+  }
+
+  return null;
+}
+
+function toTwentyFourHour(hour: number, meridiem: string): { hour: number; minute: number } | null {
+  if (Number.isNaN(hour) || hour < 1 || hour > 12) return null;
+  const lower = meridiem.toLowerCase().replace(/\./g, "");
+  const isPm = lower.startsWith("p");
+  const isAm = lower.startsWith("a");
+  if (!isPm && !isAm) return null;
+  let h = hour % 12;
+  if (isPm) h += 12;
+  return { hour: h, minute: 0 };
+}
+
+export function extractTimeFromQuestion(question: string): string | null {
+  const q = question.toLowerCase();
+
+  const withMinutes = q.match(/\b(\d{1,2}):(\d{2})\s*(a\.?m\.?|p\.?m\.?)\b/);
+  if (withMinutes?.[1] && withMinutes[2] && withMinutes[3]) {
+    const hour = Number(withMinutes[1]);
+    const minute = Number(withMinutes[2]);
+    const meridiem = withMinutes[3];
+    if (!Number.isNaN(hour) && !Number.isNaN(minute) && minute >= 0 && minute <= 59) {
+      const lower = meridiem.toLowerCase().replace(/\./g, "");
+      let h = hour % 12;
+      if (lower.startsWith("p") && hour < 12) h += 12;
+      if (lower.startsWith("a") && hour === 12) h = 0;
+      return `${padDatePart(h)}:${padDatePart(minute)}`;
+    }
+  }
+
+  const simple = q.match(/\b(?:at\s+)?(\d{1,2})\s*(a\.?m\.?|p\.?m\.?)\b/);
+  if (simple?.[1] && simple[2]) {
+    const parsed = toTwentyFourHour(Number(simple[1]), simple[2]);
+    if (parsed) return `${padDatePart(parsed.hour)}:${padDatePart(parsed.minute)}`;
+  }
+
+  const twentyFour = q.match(/\bat\s+(\d{1,2}):(\d{2})\b/);
+  if (twentyFour) {
+    const hour = Number(twentyFour[1]);
+    const minute = Number(twentyFour[2]);
+    if (!Number.isNaN(hour) && !Number.isNaN(minute) && hour <= 23 && minute <= 59) {
+      return `${padDatePart(hour)}:${padDatePart(minute)}`;
     }
   }
 
@@ -190,10 +298,12 @@ export function finalizePlanOneOnOneProposal(
   const member = memberQuery ? resolveMemberByName(memberQuery, ctx.members) : null;
   if (!member) return null;
 
-  const dateOnly = draft.date?.trim() || extractDateFromQuestion(source);
+  const now = new Date();
+  const dateOnly =
+    extractDateFromQuestion(source, now, managerTimeZone) || draft.date?.trim() || null;
   if (!dateOnly || !/^\d{4}-\d{2}-\d{2}$/.test(dateOnly)) return null;
 
-  const { hour, minute } = parseTimeParts(draft.time);
+  const { hour, minute } = parseTimeParts(extractTimeFromQuestion(source) || draft.time);
   const start = instantFromCalendarDateAndTime(dateOnly, hour, minute, managerTimeZone);
   if (Number.isNaN(start.getTime())) return null;
 

@@ -19,7 +19,7 @@ import {
   type SenecaPlanOneOnOneDraft,
   type SenecaPlanOneOnOneProposal,
 } from "../lib/seneca-plan-one-on-one";
-import { resolveTimeZone } from "../lib/timezone";
+import { calendarDayFromInstant, resolveTimeZone } from "../lib/timezone";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -196,6 +196,14 @@ senecaTeamRouter.post("/ask", zValidator("json", askBodySchema), async (c) => {
   try {
     const scheduleIntent = conversationHasScheduleTopic(body.messages, body.question);
     const conversationPrompt = formatConversationForPrompt(body.messages, body.question);
+    const todayYmd = calendarDayFromInstant(new Date(), managerTimeZone);
+    const todayLabel = new Date().toLocaleDateString("en-US", {
+      weekday: "long",
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+      timeZone: managerTimeZone,
+    });
     const schedulingRules = scheduleIntent
       ? `
 SCHEDULING A CHECK-IN (critical):
@@ -203,6 +211,7 @@ SCHEDULING A CHECK-IN (critical):
 - You CANNOT create calendar events yourself.
 - NEVER say you have already scheduled, booked, or added anything to the calendar unless the manager explicitly confirmed in this same conversation and you are only restating the pending plan for confirmation.
 - Use the full conversation to resolve member, date, time, and duration. Follow-up messages like "yes", "confirm", or "make it 2pm" refer to the plan under discussion.
+- The manager's local date today (${managerTimeZone}) is ${todayYmd} (${todayLabel}). Interpret "today", "tonight", and "tomorrow" relative to this date.
 - Extract member name, date (YYYY-MM-DD), optional time (HH:mm 24h), and durationMinutes. Use team member names from context only.
 - In "message", summarize the proposed plan and ask them to confirm before it is added.
 - Return "planOneOnOne": { "memberName": "string", "date": "YYYY-MM-DD", "time": "HH:mm or null", "durationMinutes": 45 } when you have enough detail.
