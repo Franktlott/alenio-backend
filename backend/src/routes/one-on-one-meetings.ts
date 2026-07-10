@@ -26,7 +26,7 @@ import {
   PLANNED_CHECK_IN_TITLE_PREFIXES,
 } from "../lib/check-in-event-title";
 import {
-  hasArchivedMemberRecords,
+  hasArchivedCheckInRecords,
   isActiveTeamMember,
 } from "../lib/workspace-member-departure";
 import { removePlannedCheckInCalendarEvent } from "../lib/remove-planned-check-in-event";
@@ -132,7 +132,7 @@ async function resolveCheckInMemberAccess(
   if (active) return { ok: true, isFormer: false };
   if (options.write) return { ok: false };
   if (!canManageOneOnOne(membership)) return { ok: false };
-  const hasArchive = await hasArchivedMemberRecords(prisma, teamId, memberUserId);
+  const hasArchive = await hasArchivedCheckInRecords(prisma, teamId, memberUserId);
   if (!hasArchive) return { ok: false };
   return { ok: true, isFormer: true };
 }
@@ -459,6 +459,37 @@ async function createFollowUpTasks(
       }
     }
   }
+}
+
+function followUpTaskKey(title: string, assigneeUserId: string): string {
+  return `${title.trim().toLowerCase()}::${assigneeUserId}`;
+}
+
+/** Create only follow-ups that are not already linked to this check-in (avoids duplicates on re-save). */
+async function syncFollowUpTasks(
+  meetingId: string,
+  teamId: string,
+  creatorId: string,
+  tasks: z.infer<typeof followUpTaskSchema>[],
+  timeZone?: string | null,
+) {
+  if (tasks.length === 0) return;
+  const existing = await loadFollowUpTasks(meetingId);
+  const existingKeys = new Set(
+    existing
+      .map((task) => {
+        const assigneeId = task.assignee?.id;
+        if (!assigneeId) return null;
+        return followUpTaskKey(task.title, assigneeId);
+      })
+      .filter((key): key is string => Boolean(key)),
+  );
+  const toCreate = tasks.filter((task) => {
+    const title = task.title.trim();
+    if (!title) return false;
+    return !existingKeys.has(followUpTaskKey(title, task.assigneeUserId));
+  });
+  await createFollowUpTasks(meetingId, teamId, creatorId, toCreate, timeZone);
 }
 
 function plannedOneOnOneTitle(memberName: string): string {
@@ -797,7 +828,7 @@ oneOnOneMeetingsRouter.patch(
       });
 
       if (followUpTasks.length > 0) {
-        await createFollowUpTasks(meetingId, teamId, user.id, followUpTasks, user.timezone);
+        await syncFollowUpTasks(meetingId, teamId, user.id, followUpTasks, user.timezone);
       }
 
       const managerName = user.name?.trim() || user.email || "Your manager";

@@ -172,6 +172,18 @@ webRouter.post("/api/teams", async (c) => {
     }
     throw err;
   }
+
+  const owner = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { name: true },
+  });
+  const { notifyAdminsNewWorkspace } = await import("../lib/admin-push");
+  void notifyAdminsNewWorkspace({
+    id: team.id,
+    name: team.name,
+    ownerName: owner?.name ?? null,
+  }).catch((err) => console.warn("[web-app] admin workspace push failed", err));
+
   return c.json({ data: { ...team, role: "owner", hasTeamFeatures: false } });
 });
 

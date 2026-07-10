@@ -17,32 +17,49 @@ export async function isActiveTeamMember(
   return !!membership;
 }
 
+export async function hasArchivedCheckInRecords(
+  db: PrismaClient,
+  teamId: string,
+  userId: string,
+): Promise<boolean> {
+  const publishedCheckIn = await db.oneOnOneMeeting.findFirst({
+    where: { teamId, memberUserId: userId, status: "published" },
+    select: { id: true },
+  });
+  return !!publishedCheckIn;
+}
+
+/** @deprecated Use hasArchivedCheckInRecords — development goals are deleted on departure. */
 export async function hasArchivedMemberRecords(
   db: PrismaClient,
   teamId: string,
   userId: string,
 ): Promise<boolean> {
-  const [publishedCheckIn, developmentGoal] = await Promise.all([
-    db.oneOnOneMeeting.findFirst({
-      where: { teamId, memberUserId: userId, status: "published" },
-      select: { id: true },
-    }),
-    db.developmentGoal.findFirst({
-      where: { teamId, memberUserId: userId },
-      select: { id: true },
-    }),
-  ]);
-  return !!(publishedCheckIn || developmentGoal);
+  return hasArchivedCheckInRecords(db, teamId, userId);
+}
+
+async function deleteDepartedMemberDevelopmentGoals(
+  db: PrismaClient,
+  teamId: string,
+  userId: string,
+): Promise<number> {
+  const result = await db.developmentGoal.deleteMany({
+    where: { teamId, memberUserId: userId },
+  });
+  return result.count;
 }
 
 export async function cleanupWorkspaceMemberDeparture(
   db: PrismaClient,
   teamId: string,
   userId: string,
-): Promise<{ deletedDraftCheckIns: number; closedTasks: number }> {
-  const draftResult = await db.oneOnOneMeeting.deleteMany({
-    where: { teamId, memberUserId: userId, status: "draft" },
-  });
+): Promise<{ deletedDraftCheckIns: number; deletedDevelopmentGoals: number; closedTasks: number }> {
+  const [draftResult, deletedDevelopmentGoals] = await Promise.all([
+    db.oneOnOneMeeting.deleteMany({
+      where: { teamId, memberUserId: userId, status: "draft" },
+    }),
+    deleteDepartedMemberDevelopmentGoals(db, teamId, userId),
+  ]);
 
   const openTasks = await db.task.findMany({
     where: {
@@ -74,7 +91,11 @@ export async function cleanupWorkspaceMemberDeparture(
     closedTasks = result.count;
   }
 
-  return { deletedDraftCheckIns: draftResult.count, closedTasks };
+  return {
+    deletedDraftCheckIns: draftResult.count,
+    deletedDevelopmentGoals,
+    closedTasks,
+  };
 }
 
 export type FormerWorkspaceMember = {
@@ -93,21 +114,23 @@ export async function listFormerWorkspaceMembers(
   });
   const currentIds = new Set(currentMembers.map((member) => member.userId));
 
-  const [checkInMembers, goalMembers] = await Promise.all([
-    db.oneOnOneMeeting.groupBy({
-      by: ["memberUserId"],
-      where: { teamId, status: "published" },
-    }),
-    db.developmentGoal.groupBy({
-      by: ["memberUserId"],
-      where: { teamId },
-    }),
-  ]);
+  if (currentIds.size > 0) {
+    await db.developmentGoal.deleteMany({
+      where: {
+        teamId,
+        memberUserId: { notIn: [...currentIds] },
+      },
+    });
+  }
 
-  const formerIds = [...new Set([
-    ...checkInMembers.map((row) => row.memberUserId),
-    ...goalMembers.map((row) => row.memberUserId),
-  ])].filter((userId) => !currentIds.has(userId));
+  const checkInMembers = await db.oneOnOneMeeting.groupBy({
+    by: ["memberUserId"],
+    where: { teamId, status: "published" },
+  });
+
+  const formerIds = checkInMembers
+    .map((row) => row.memberUserId)
+    .filter((userId) => !currentIds.has(userId));
 
   if (formerIds.length === 0) return [];
 

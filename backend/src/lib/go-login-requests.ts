@@ -3,7 +3,27 @@ import { sendPushToUsers } from "./push";
 import { ensureTeamGoHubToken } from "./go-hub";
 
 export function normalizeWorkspaceCode(code: string): string {
-  return code.trim().toUpperCase();
+  return code.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+}
+
+export async function findTeamByInviteCode<T extends { id: string }>(
+  code: string,
+  select: Record<string, true>,
+): Promise<T | null> {
+  const normalized = normalizeWorkspaceCode(code);
+  if (!normalized) return null;
+
+  const exact = await prisma.team.findUnique({
+    where: { inviteCode: normalized },
+    select,
+  });
+  if (exact) return exact as T;
+
+  const insensitive = await prisma.team.findFirst({
+    where: { inviteCode: { equals: normalized, mode: "insensitive" } },
+    select,
+  });
+  return (insensitive as T | null) ?? null;
 }
 
 /** Owners and team leaders can approve Alenio Go device links. */

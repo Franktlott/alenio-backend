@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { env } from "../env";
 import { prisma } from "../prisma";
+import { createEmailPasswordUser } from "../auth";
 
 const adminRouter = new Hono();
 
@@ -11,6 +12,104 @@ adminRouter.use("/api/*", async (c, next) => {
     return c.json({ error: "Unauthorized" }, 401);
   }
   await next();
+});
+
+async function findNeonAuthUserIdByEmail(email: string): Promise<string | null> {
+  try {
+    const rows = await prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT id FROM neon_auth."user" WHERE email = ${email} LIMIT 1
+    `;
+    return rows[0]?.id ?? null;
+  } catch (err) {
+    console.warn("[admin] neon_auth lookup failed:", err);
+    return null;
+  }
+}
+
+async function markNeonAuthEmailVerified(authUserId: string): Promise<void> {
+  try {
+    await prisma.$executeRaw`
+      UPDATE neon_auth."user"
+      SET "emailVerified" = true, "updatedAt" = NOW()
+      WHERE id = CAST(${authUserId} AS uuid)
+    `;
+  } catch (err) {
+    console.warn("[admin] neon_auth verify failed:", err);
+  }
+}
+
+// Create or repair the initial platform admin login (password-gated).
+adminRouter.post("/api/bootstrap-admin", async (c) => {
+  const body = (await c.req.json().catch(() => ({}))) as {
+    email?: string;
+    password?: string;
+    name?: string;
+  };
+  const email = (body.email ?? "admin@alenio.app").trim().toLowerCase();
+  const password = body.password ?? "AlenioAdmin123!";
+  const name = (body.name ?? "Alenio Admin").trim() || "Alenio Admin";
+
+  if (password.length < 8) {
+    return c.json({ error: "Password must be at least 8 characters" }, 400);
+  }
+
+  await createEmailPasswordUser(email, password, name);
+
+  let authId = await findNeonAuthUserIdByEmail(email);
+  if (!authId) {
+    // Auth row may take a moment; fall back to existing app user id.
+    const existing = await prisma.user.findUnique({ where: { email }, select: { id: true } });
+    authId = existing?.id ?? null;
+  }
+  if (!authId) {
+    return c.json(
+      {
+        error:
+          "Auth account was not found after signup. Try again in a few seconds, or sign up once in the app first.",
+      },
+      500,
+    );
+  }
+
+  await markNeonAuthEmailVerified(authId);
+
+  const byId = await prisma.user.findUnique({ where: { id: authId } });
+  const byEmail = await prisma.user.findUnique({ where: { email } });
+
+  let user;
+  if (byId) {
+    user = await prisma.user.update({
+      where: { id: authId },
+      data: { isAdmin: true, emailVerified: true, name },
+      select: { id: true, email: true, name: true, isAdmin: true },
+    });
+  } else if (byEmail) {
+    user = await prisma.user.update({
+      where: { email },
+      data: { isAdmin: true, emailVerified: true, name },
+      select: { id: true, email: true, name: true, isAdmin: true },
+    });
+  } else {
+    user = await prisma.user.create({
+      data: {
+        id: authId,
+        email,
+        name,
+        emailVerified: true,
+        isAdmin: true,
+        updatedAt: new Date(),
+      },
+      select: { id: true, email: true, name: true, isAdmin: true },
+    });
+  }
+
+  return c.json({
+    data: {
+      user,
+      login: { email, password },
+      message: "Sign in on mobile with these credentials to open the Admin dashboard.",
+    },
+  });
 });
 
 // Stats

@@ -4,7 +4,7 @@ import { z } from "zod";
 import { prisma } from "../prisma";
 import { ensureTeamGoHubToken, teamHasGoPlan } from "../lib/go-hub";
 import {
-  normalizeWorkspaceCode,
+  findTeamByInviteCode,
   notifyGoLoginApprovers,
 } from "../lib/go-login-requests";
 import {
@@ -27,16 +27,7 @@ const linkBodySchema = z.object({
 });
 
 async function findTeamByWorkspaceCode(code: string) {
-  const normalized = normalizeWorkspaceCode(code);
-  const exact = await prisma.team.findUnique({
-    where: { inviteCode: normalized },
-    select: { id: true, name: true },
-  });
-  if (exact) return exact;
-  return prisma.team.findFirst({
-    where: { inviteCode: { equals: code.trim(), mode: "insensitive" } },
-    select: { id: true, name: true },
-  });
+  return findTeamByInviteCode(code, { id: true, name: true });
 }
 
 publicGoLinkRouter.post("/link", zValidator("json", linkBodySchema), async (c) => {

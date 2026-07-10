@@ -62,6 +62,11 @@ export async function applySubscriptionFromStripeSubscription(
 ): Promise<void> {
   await getTeamSubscription(teamId);
 
+  const previous = await prisma.teamSubscription.findUnique({
+    where: { teamId },
+    select: { plan: true, status: true, team: { select: { name: true } } },
+  });
+
   const stripeStatus = subscription.status;
   const currentPeriodEnd = subscriptionCurrentPeriodEnd(subscription);
 
@@ -111,6 +116,17 @@ export async function applySubscriptionFromStripeSubscription(
       data: baseData,
     });
   }
+
+  const teamName = previous?.team.name ?? "Workplace";
+  const { notifyAdminsBillingChange } = await import("./admin-push");
+  void notifyAdminsBillingChange({
+    teamId,
+    teamName,
+    plan,
+    status,
+    previousPlan: previous?.plan,
+    previousStatus: previous?.status,
+  }).catch((err) => console.warn("[stripe-billing] admin push failed", err));
 }
 
 export function stripeCustomerIdOfSubscription(subscription: Stripe.Subscription): string | null {

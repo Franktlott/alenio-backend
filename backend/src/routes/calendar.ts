@@ -235,7 +235,7 @@ calendarRouter.post(
 
     const isOneOnOne = body.isOneOnOne === true;
     if (isOneOnOne && !isCalendarOwnerOrLeader(membership.role)) {
-      return c.json({ error: { message: "Only workspace owners and team leaders can plan check-ins.", code: "FORBIDDEN" } }, 403);
+      return c.json({ error: { message: "Only workspace owners and team leaders can schedule check-ins.", code: "FORBIDDEN" } }, 403);
     }
 
     const oneOnOneMemberUserId = body.oneOnOneMemberUserId?.trim() || null;
@@ -420,7 +420,7 @@ calendarRouter.patch(
       body.oneOnOneTemplateId !== undefined ? body.oneOnOneTemplateId : existing.oneOnOneTemplateId;
 
     if (nextIsOneOnOne && !isCalendarOwnerOrLeader(membership.role)) {
-      return c.json({ error: { message: "Only workspace owners and team leaders can plan check-ins.", code: "FORBIDDEN" } }, 403);
+      return c.json({ error: { message: "Only workspace owners and team leaders can schedule check-ins.", code: "FORBIDDEN" } }, 403);
     }
     if (nextIsOneOnOne) {
       if (!nextOneOnOneMemberUserId) {

@@ -20,6 +20,7 @@ import {
 import {
   approveGoLoginRequest,
   canManageGoLoginRequests,
+  findTeamByInviteCode,
 } from "../lib/go-login-requests";
 import {
   canManageWorkplaceAlerts,
@@ -147,6 +148,13 @@ teamsRouter.post("/", async (c) => {
     throw err;
   }
 
+  const { notifyAdminsNewWorkspace } = await import("../lib/admin-push");
+  void notifyAdminsNewWorkspace({
+    id: team.id,
+    name: team.name,
+    ownerName: user.name,
+  }).catch((err) => console.warn("[teams] admin workspace push failed", err));
+
   return c.json({ data: { ...team, role: "owner" } }, 201);
 });
 
@@ -156,7 +164,11 @@ teamsRouter.post("/join", async (c) => {
   const body = await c.req.json();
   const { inviteCode } = body;
 
-  const team = await prisma.team.findUnique({ where: { inviteCode } });
+  if (!inviteCode || typeof inviteCode !== "string" || !inviteCode.trim()) {
+    return c.json({ error: { message: "Invite code is required", code: "VALIDATION_ERROR" } }, 400);
+  }
+
+  const team = await findTeamByInviteCode(inviteCode, { id: true, name: true, inviteCode: true });
   if (!team) {
     return c.json({ error: { message: "Invalid invite code", code: "NOT_FOUND" } }, 404);
   }
@@ -261,7 +273,7 @@ teamsRouter.get("/:teamId", async (c) => {
   return c.json({ data: { ...team, role: membership.role, workplaceStandards, goFrontendSettings } });
 });
 
-// GET /api/teams/:teamId/former-members - archived members with check-in or growth history
+// GET /api/teams/:teamId/former-members - archived members with published check-in history
 teamsRouter.get("/:teamId/former-members", async (c) => {
   const user = c.get("user")!;
   const { teamId } = c.req.param();
@@ -290,7 +302,7 @@ teamsRouter.patch("/:teamId", async (c) => {
     where: { userId_teamId: { userId: user.id, teamId } },
   });
   if (!membership || !["owner","team_leader"].includes(membership.role)) {
-    return c.json({ error: { message: "Only the team owner can edit team info", code: "FORBIDDEN" } }, 403);
+    return c.json({ error: { message: "Only owners and team leaders can edit team info", code: "FORBIDDEN" } }, 403);
   }
 
   const nameTrim = typeof body.name === "string" ? body.name.trim() : "";
@@ -498,41 +510,74 @@ teamsRouter.post("/:teamId/join-requests/:requestId/approve", async (c) => {
 
   const joinRequest = await prisma.joinRequest.findUnique({
     where: { id: requestId },
-    include: { team: { select: { name: true } } },
+    include: {
+      team: { select: { name: true } },
+      user: { select: { id: true, name: true } },
+    },
   });
   if (!joinRequest || joinRequest.teamId !== teamId) {
     return c.json({ error: { message: "Join request not found", code: "NOT_FOUND" } }, 404);
   }
 
-  const hasOwnerNow = await teamHasOwner(teamId);
-  const hasTeamLeaderNow = Boolean(
-    await prisma.teamMember.findFirst({ where: { teamId, role: "team_leader" } }),
-  );
-  await prisma.$transaction(async (tx) => {
-    const hasOwner = await tx.teamMember.findFirst({ where: { teamId, role: "owner" } });
-    let newMemberRole = "member";
-    if (!hasOwner) {
-      const tl = await tx.teamMember.findFirst({
-        where: { teamId, role: "team_leader" },
-        orderBy: { joinedAt: "asc" },
-      });
-      if (tl) {
-        await tx.teamMember.update({
-          where: { userId_teamId: { userId: tl.userId, teamId } },
-          data: { role: "owner" },
-        });
-      } else {
-        newMemberRole = "owner";
-      }
-    }
-    await tx.teamMember.create({
-      data: { userId: joinRequest.userId, teamId, role: newMemberRole },
-    });
-    await tx.joinRequest.update({
+  if (joinRequest.status === "approved") {
+    return c.json({ data: { success: true, alreadyApproved: true } });
+  }
+  if (joinRequest.status !== "pending") {
+    return c.json(
+      { error: { message: "This join request is no longer pending", code: "CONFLICT" } },
+      409,
+    );
+  }
+
+  const existingMember = await prisma.teamMember.findUnique({
+    where: { userId_teamId: { userId: joinRequest.userId, teamId } },
+  });
+  if (existingMember) {
+    await prisma.joinRequest.update({
       where: { id: requestId },
       data: { status: "approved" },
     });
-  });
+    return c.json({ data: { success: true, alreadyMember: true } });
+  }
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      const hasOwner = await tx.teamMember.findFirst({ where: { teamId, role: "owner" } });
+      let newMemberRole = "member";
+      if (!hasOwner) {
+        const tl = await tx.teamMember.findFirst({
+          where: { teamId, role: "team_leader" },
+          orderBy: { joinedAt: "asc" },
+        });
+        if (tl) {
+          await tx.teamMember.update({
+            where: { userId_teamId: { userId: tl.userId, teamId } },
+            data: { role: "owner" },
+          });
+        } else {
+          newMemberRole = "owner";
+        }
+      }
+      await tx.teamMember.create({
+        data: { userId: joinRequest.userId, teamId, role: newMemberRole },
+      });
+      await tx.joinRequest.update({
+        where: { id: requestId },
+        data: { status: "approved" },
+      });
+    });
+  } catch (err) {
+    // Unique membership race: treat as success after marking approved.
+    const racedMember = await prisma.teamMember.findUnique({
+      where: { userId_teamId: { userId: joinRequest.userId, teamId } },
+    });
+    if (!racedMember) throw err;
+    await prisma.joinRequest.update({
+      where: { id: requestId },
+      data: { status: "approved" },
+    });
+    return c.json({ data: { success: true, alreadyMember: true } });
+  }
 
   // Notify the requesting user
   await sendPushToUsers(
@@ -543,6 +588,14 @@ teamsRouter.post("/:teamId/join-requests/:requestId/approve", async (c) => {
     undefined,
     teamId
   );
+
+  const { notifyAdminsMemberJoined } = await import("../lib/admin-push");
+  void notifyAdminsMemberJoined({
+    userId: joinRequest.userId,
+    userName: joinRequest.user.name,
+    teamId,
+    teamName: joinRequest.team.name,
+  }).catch((err) => console.warn("[teams] admin member-joined push failed", err));
 
   // Log activity for member joining
   const joinedUser = await prisma.user.findUnique({
@@ -574,6 +627,16 @@ teamsRouter.post("/:teamId/join-requests/:requestId/reject", async (c) => {
   });
   if (!joinRequest || joinRequest.teamId !== teamId) {
     return c.json({ error: { message: "Join request not found", code: "NOT_FOUND" } }, 404);
+  }
+
+  if (joinRequest.status === "rejected") {
+    return c.json({ data: { success: true, alreadyRejected: true } });
+  }
+  if (joinRequest.status !== "pending") {
+    return c.json(
+      { error: { message: "This join request is no longer pending", code: "CONFLICT" } },
+      409,
+    );
   }
 
   await prisma.joinRequest.update({
@@ -830,7 +893,7 @@ teamsRouter.delete("/:teamId/members/:memberId", async (c) => {
     where: { userId_teamId: { userId: user.id, teamId } },
   });
   if (!membership || !["owner","team_leader"].includes(membership.role)) {
-    return c.json({ error: { message: "Only team owners can remove members", code: "FORBIDDEN" } }, 403);
+    return c.json({ error: { message: "Only owners and team leaders can remove members", code: "FORBIDDEN" } }, 403);
   }
 
   if (memberId === user.id) {

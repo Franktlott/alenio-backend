@@ -51,6 +51,11 @@ export async function createPlatformUser(input: {
     },
   });
 
+  const { notifyAdminsNewUser } = await import("./admin-push");
+  void notifyAdminsNewUser(user).catch((err) =>
+    console.warn("[admin-platform] admin push on user create failed", err),
+  );
+
   return { ok: true as const, user };
 }
 
@@ -171,6 +176,11 @@ export async function updateTeamSubscription(
 
   const normalizedPlan = plan === "pro" ? "team" : plan;
 
+  const previous = await prisma.teamSubscription.findUnique({
+    where: { teamId },
+    select: { plan: true, status: true, team: { select: { name: true } } },
+  });
+
   const subscription = await prisma.teamSubscription.upsert({
     where: { teamId },
     create: {
@@ -182,7 +192,18 @@ export async function updateTeamSubscription(
       ...(normalizedPlan ? { plan: normalizedPlan } : {}),
       ...(status ? { status } : {}),
     },
+    include: { team: { select: { name: true } } },
   });
+
+  const { notifyAdminsBillingChange } = await import("./admin-push");
+  void notifyAdminsBillingChange({
+    teamId,
+    teamName: subscription.team.name,
+    plan: subscription.plan,
+    status: subscription.status,
+    previousPlan: previous?.plan,
+    previousStatus: previous?.status,
+  }).catch((err) => console.warn("[admin-platform] billing push failed", err));
 
   return { ok: true as const, subscription };
 }
@@ -242,6 +263,23 @@ export async function createEnterpriseAccount(input: {
       });
       return createdTeam;
     });
+
+    const { notifyAdminsNewWorkspace, notifyAdminsBillingChange } = await import("./admin-push");
+    void notifyAdminsNewWorkspace({
+      id: team.id,
+      name: team.name,
+      ownerName: owner.name,
+    }).catch((err) => console.warn("[admin-platform] workspace push failed", err));
+    if (plan !== "free") {
+      void notifyAdminsBillingChange({
+        teamId: team.id,
+        teamName: team.name,
+        plan,
+        status: "active",
+        previousPlan: "free",
+        previousStatus: "canceled",
+      }).catch((err) => console.warn("[admin-platform] billing push failed", err));
+    }
 
     return {
       ok: true as const,

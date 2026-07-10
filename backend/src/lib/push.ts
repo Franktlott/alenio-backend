@@ -155,7 +155,16 @@ export async function sendPushNotification(
   await sendPushNotifications([{ token: to, title, body, data }]);
 }
 
-type NotifPrefKey = "notifMessages" | "notifTaskAssigned" | "notifTaskDue" | "notifMeetings";
+type NotifPrefKey =
+  | "notifMessages"
+  | "notifTaskAssigned"
+  | "notifTaskDue"
+  | "notifMeetings"
+  | "notifAdminUsers"
+  | "notifAdminWorkspaces"
+  | "notifAdminBilling";
+
+export type { NotifPrefKey };
 
 export async function sendPushToUsers(
   userIds: string[],

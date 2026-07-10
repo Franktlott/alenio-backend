@@ -126,5 +126,12 @@ export async function syncAppUserFromNeonAuth(authUser: AppUser): Promise<{
     return null;
   }
 
+  if (matchedBy === "created") {
+    const { notifyAdminsNewUser } = await import("./admin-push");
+    void notifyAdminsNewUser(user).catch((err) =>
+      console.warn("[ensure-app-user] admin push failed", err),
+    );
+  }
+
   return { user, matchedBy };
 }

@@ -28,7 +28,6 @@ import { adminApiRouter } from "./routes/admin-api";
 import { webRouter } from "./routes/web-app";
 import { handleStripeWebhook } from "./routes/stripe-webhook";
 import { pollsRouter } from "./routes/polls";
-import { demoRouter } from "./routes/demo";
 import { videoRouter } from "./routes/video";
 import { usersRouter } from "./routes/users";
 import { ogPreviewRouter } from "./routes/og-preview";
@@ -762,34 +761,21 @@ app.post("/api/profile/email-change/confirm", async (c) => {
 // Get current user profile with admin flag
 app.get("/api/me", async (c) => {
   const user = c.get("user");
-  const authDebug = c.get("authDebug");
-  const hasBearer = !!c.req.header("authorization")?.match(/^Bearer\s+/i);
   if (!user) {
-    try {
-      const { appendFileSync } = await import("node:fs");
-      appendFileSync(
-        "/Users/franklott/Documents/GitHub/alenio-backend/.cursor/debug-4ff4c0.log",
-        `${JSON.stringify({ sessionId: "4ff4c0", runId: "pre-fix", hypothesisId: "H1", location: "index.ts:/api/me", message: "unauthorized", data: { hasBearer, neonAuthUserFound: authDebug?.neonAuthUserFound ?? false, matchedBy: authDebug?.matchedBy ?? "none" }, timestamp: Date.now() })}\n`,
-      );
-    } catch { /* ignore */ }
     return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
   }
   const fullUser = await prisma.user.findUnique({
     where: { id: user.id },
     select: { id: true, name: true, email: true, image: true, isAdmin: true, timezone: true },
   });
-  try {
-    const { appendFileSync } = await import("node:fs");
-    appendFileSync(
-      "/Users/franklott/Documents/GitHub/alenio-backend/.cursor/debug-4ff4c0.log",
-      `${JSON.stringify({ sessionId: "4ff4c0", runId: "pre-fix", hypothesisId: "H3", location: "index.ts:/api/me", message: "me lookup", data: { hasBearer, matchedBy: authDebug?.matchedBy ?? "none", hasFullUser: !!fullUser?.id }, timestamp: Date.now() })}\n`,
-    );
-  } catch { /* ignore */ }
   return c.json({ data: fullUser });
 });
 
-// Debug: confirm auth session + app user row + active database target
+// Debug: confirm auth session + app user row + active database target (non-production only)
 app.get("/api/me/debug", async (c) => {
+  if ((env.NODE_ENV ?? "").toLowerCase() === "production") {
+    return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
+  }
   const user = c.get("user");
   const session = c.get("session");
   const authDebug = c.get("authDebug");
@@ -872,9 +858,34 @@ app.get("/api/notification-preferences", async (c) => {
   if (!user) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
   const prefs = await prisma.user.findUnique({
     where: { id: user.id },
-    select: { notifMessages: true, notifTaskAssigned: true, notifTaskDue: true, notifMeetings: true, notifTone: true, pushToken: true },
+    select: {
+      isAdmin: true,
+      notifMessages: true,
+      notifTaskAssigned: true,
+      notifTaskDue: true,
+      notifMeetings: true,
+      notifAdminUsers: true,
+      notifAdminWorkspaces: true,
+      notifAdminBilling: true,
+      notifTone: true,
+      pushToken: true,
+    },
   });
-  return c.json({ data: { ...prefs, hasToken: !!prefs?.pushToken } });
+  const { pushToken, ...rest } = prefs ?? {};
+  return c.json({
+    data: {
+      ...rest,
+      hasToken: !!pushToken,
+      // Non-admins never see admin toggles; omit sensitive defaults from client if not admin
+      ...(rest?.isAdmin
+        ? {}
+        : {
+            notifAdminUsers: undefined,
+            notifAdminWorkspaces: undefined,
+            notifAdminBilling: undefined,
+          }),
+    },
+  });
 });
 
 // Update notification preferences
@@ -882,7 +893,23 @@ app.patch("/api/notification-preferences", async (c) => {
   const user = c.get("user");
   if (!user) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
   const body = await c.req.json();
-  const { notifMessages, notifTaskAssigned, notifTaskDue, notifMeetings, notifTone } = body;
+  const {
+    notifMessages,
+    notifTaskAssigned,
+    notifTaskDue,
+    notifMeetings,
+    notifAdminUsers,
+    notifAdminWorkspaces,
+    notifAdminBilling,
+    notifTone,
+  } = body;
+
+  const me = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { isAdmin: true },
+  });
+  const isAdmin = me?.isAdmin === true;
+
   const updated = await prisma.user.update({
     where: { id: user.id },
     data: {
@@ -891,10 +918,34 @@ app.patch("/api/notification-preferences", async (c) => {
       ...(notifTaskDue !== undefined ? { notifTaskDue } : {}),
       ...(notifMeetings !== undefined ? { notifMeetings } : {}),
       ...(notifTone !== undefined ? { notifTone } : {}),
+      ...(isAdmin && notifAdminUsers !== undefined ? { notifAdminUsers } : {}),
+      ...(isAdmin && notifAdminWorkspaces !== undefined ? { notifAdminWorkspaces } : {}),
+      ...(isAdmin && notifAdminBilling !== undefined ? { notifAdminBilling } : {}),
     },
-    select: { notifMessages: true, notifTaskAssigned: true, notifTaskDue: true, notifMeetings: true, notifTone: true },
+    select: {
+      isAdmin: true,
+      notifMessages: true,
+      notifTaskAssigned: true,
+      notifTaskDue: true,
+      notifMeetings: true,
+      notifAdminUsers: true,
+      notifAdminWorkspaces: true,
+      notifAdminBilling: true,
+      notifTone: true,
+    },
   });
-  return c.json({ data: updated });
+  return c.json({
+    data: {
+      ...updated,
+      ...(updated.isAdmin
+        ? {}
+        : {
+            notifAdminUsers: undefined,
+            notifAdminWorkspaces: undefined,
+            notifAdminBilling: undefined,
+          }),
+    },
+  });
 });
 
 app.get("/api/users/search", async (c) => {
@@ -1000,7 +1051,6 @@ app.route("/api/teams", calendarRouter);
 app.route("/api/teams", activityRouter);
 app.route("/api/teams", topicsRouter);
 app.route("/api/teams", pollsRouter);
-app.route("/api/demo", demoRouter);
 app.route("/api/og-preview", ogPreviewRouter);
 app.route("/api/feedback", feedbackRouter);
 app.route("/api/video", videoRouter);

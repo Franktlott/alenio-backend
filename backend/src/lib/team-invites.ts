@@ -226,6 +226,18 @@ export async function redeemInviteForUser(
     },
   });
 
+  const member = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { name: true },
+  });
+  const { notifyAdminsMemberJoined } = await import("./admin-push");
+  void notifyAdminsMemberJoined({
+    userId,
+    userName: member?.name ?? userEmail,
+    teamId: invite.teamId,
+    teamName: invite.team.name,
+  }).catch((err) => console.warn("[team-invites] admin member-joined push failed", err));
+
   return { teamId: invite.teamId, teamName: invite.team.name };
 }
 

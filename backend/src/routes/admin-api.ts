@@ -24,14 +24,221 @@ const adminApiRouter = new Hono<{ Variables: Variables }>();
 adminApiRouter.use("*", adminGuard);
 
 adminApiRouter.get("/stats", async (c) => {
-  const [users, teams, tasks, messages, activeSubscriptions] = await Promise.all([
+  const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+  const [
+    users,
+    teams,
+    tasks,
+    messages,
+    activeSubscriptions,
+    usersThisWeek,
+    teamsThisWeek,
+    checkIns,
+    checkInsThisWeek,
+    developmentGoals,
+    activeGoals,
+    recentUsers,
+    recentTeams,
+    recentSubscriptions,
+    recentMembers,
+  ] = await Promise.all([
     prisma.user.count(),
     prisma.team.count(),
     prisma.task.count(),
     prisma.message.count(),
-    prisma.teamSubscription.count({ where: { status: "active", plan: { not: "free" } } }),
+    prisma.teamSubscription.count({
+      where: { status: "active", plan: { not: "free" } },
+    }),
+    prisma.user.count({ where: { createdAt: { gte: weekAgo } } }),
+    prisma.team.count({ where: { createdAt: { gte: weekAgo } } }),
+    prisma.oneOnOneMeeting.count({ where: { status: "published" } }),
+    prisma.oneOnOneMeeting.count({
+      where: { status: "published", createdAt: { gte: weekAgo } },
+    }),
+    prisma.developmentGoal.count(),
+    prisma.developmentGoal.count({ where: { status: "active" } }),
+    prisma.user.findMany({
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        image: true,
+        createdAt: true,
+        isAdmin: true,
+      },
+      orderBy: { createdAt: "desc" },
+      take: 8,
+    }),
+    prisma.team.findMany({
+      select: {
+        id: true,
+        name: true,
+        createdAt: true,
+        members: {
+          where: { role: "owner" },
+          take: 1,
+          select: { user: { select: { name: true, email: true } } },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 15,
+    }),
+    prisma.teamSubscription.findMany({
+      where: {
+        updatedAt: { gte: thirtyDaysAgo },
+        OR: [
+          { plan: { not: "free" }, status: "active" },
+          { status: "past_due" },
+          { status: "canceled" },
+        ],
+      },
+      select: {
+        id: true,
+        teamId: true,
+        plan: true,
+        status: true,
+        createdAt: true,
+        updatedAt: true,
+        team: { select: { name: true } },
+      },
+      orderBy: { updatedAt: "desc" },
+      take: 20,
+    }),
+    prisma.teamMember.findMany({
+      where: {
+        joinedAt: { gte: thirtyDaysAgo },
+        role: { not: "owner" },
+      },
+      select: {
+        id: true,
+        joinedAt: true,
+        role: true,
+        teamId: true,
+        user: { select: { id: true, name: true, email: true } },
+        team: { select: { name: true } },
+      },
+      orderBy: { joinedAt: "desc" },
+      take: 15,
+    }),
   ]);
-  return c.json({ data: { users, teams, tasks, messages, activeSubscriptions } });
+
+  type AdminAlert = {
+    id: string;
+    type: string;
+    title: string;
+    subtitle: string | null;
+    occurredAt: string;
+    entityId: string | null;
+    entityKind: "user" | "team" | "subscription" | null;
+  };
+
+  const alerts: AdminAlert[] = [];
+
+  for (const user of recentUsers) {
+    alerts.push({
+      id: `user:${user.id}`,
+      type: "user_signup",
+      title: "New user signed up",
+      subtitle: `${user.name} · ${user.email}`,
+      occurredAt: user.createdAt.toISOString(),
+      entityId: user.id,
+      entityKind: "user",
+    });
+  }
+
+  for (const team of recentTeams) {
+    const owner = team.members[0]?.user;
+    alerts.push({
+      id: `team:${team.id}`,
+      type: "workspace_created",
+      title: "New workplace created",
+      subtitle: owner
+        ? `${team.name} · by ${owner.name}`
+        : team.name,
+      occurredAt: team.createdAt.toISOString(),
+      entityId: team.id,
+      entityKind: "team",
+    });
+  }
+
+  for (const sub of recentSubscriptions) {
+    const workspace = sub.team.name;
+    if (sub.status === "past_due") {
+      alerts.push({
+        id: `sub-past-due:${sub.id}:${sub.updatedAt.toISOString()}`,
+        type: "subscription_past_due",
+        title: "Payment past due",
+        subtitle: `${workspace} · Team plan`,
+        occurredAt: sub.updatedAt.toISOString(),
+        entityId: sub.teamId,
+        entityKind: "team",
+      });
+    } else if (sub.status === "canceled") {
+      alerts.push({
+        id: `sub-canceled:${sub.id}:${sub.updatedAt.toISOString()}`,
+        type: "subscription_canceled",
+        title: "Subscription canceled",
+        subtitle: workspace,
+        occurredAt: sub.updatedAt.toISOString(),
+        entityId: sub.teamId,
+        entityKind: "team",
+      });
+    } else if (sub.plan !== "free" && sub.status === "active") {
+      const isNew =
+        Math.abs(sub.updatedAt.getTime() - sub.createdAt.getTime()) < 5 * 60 * 1000;
+      alerts.push({
+        id: `sub-started:${sub.id}:${sub.updatedAt.toISOString()}`,
+        type: "subscription_started",
+        title: isNew ? "New paid subscription" : "Subscription updated",
+        subtitle: `${workspace} · ${sub.plan} plan`,
+        occurredAt: sub.updatedAt.toISOString(),
+        entityId: sub.teamId,
+        entityKind: "team",
+      });
+    }
+  }
+
+  for (const member of recentMembers) {
+    alerts.push({
+      id: `member:${member.id}`,
+      type: "member_joined",
+      title: "Member joined a workplace",
+      subtitle: `${member.user.name} · ${member.team.name}`,
+      occurredAt: member.joinedAt.toISOString(),
+      entityId: member.user.id,
+      entityKind: "user",
+    });
+  }
+
+  alerts.sort((a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime());
+  const recentAlerts = alerts.slice(0, 40);
+  const alertsToday = recentAlerts.filter(
+    (a) => Date.now() - new Date(a.occurredAt).getTime() < 24 * 60 * 60 * 1000,
+  ).length;
+
+  return c.json({
+    data: {
+      users,
+      teams,
+      tasks,
+      messages,
+      activeSubscriptions,
+      usersThisWeek,
+      teamsThisWeek,
+      checkIns,
+      checkInsThisWeek,
+      developmentGoals,
+      activeGoals,
+      alertsToday,
+      recentUsers: recentUsers.map((user) => ({
+        ...user,
+        createdAt: user.createdAt.toISOString(),
+      })),
+      recentAlerts,
+    },
+  });
 });
 
 adminApiRouter.get("/users", async (c) => {

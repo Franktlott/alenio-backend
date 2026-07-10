@@ -39,6 +39,12 @@ model User {
   notifTaskAssigned Boolean @default(true)
   notifTaskDue      Boolean @default(true)
   notifMeetings     Boolean @default(true)
+  /** Platform admin push: new user signups + member joins */
+  notifAdminUsers       Boolean @default(true)
+  /** Platform admin push: new workplaces */
+  notifAdminWorkspaces  Boolean @default(true)
+  /** Platform admin push: paid / canceled / past_due subscriptions */
+  notifAdminBilling     Boolean @default(true)
   notifTone         String  @default("synth")
   timezone          String?
   isAdmin           Boolean @default(false)
