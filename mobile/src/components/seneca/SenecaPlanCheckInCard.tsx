@@ -9,7 +9,7 @@ import {
   StyleSheet,
 } from "react-native";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { Calendar, Clock } from "lucide-react-native";
+import { Calendar, Clock, Video } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { SenecaPlanOneOnOneProposal } from "@/lib/seneca-api";
@@ -51,17 +51,19 @@ export function SenecaPlanCheckInCard({ teamId, proposal, onSaved, onDismiss }: 
         memberName: proposal.memberName,
         startDate: eventStart,
         durationMinutes,
+        isVideoMeeting: true,
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["calendar-events", teamId] });
       void queryClient.invalidateQueries({ queryKey: ["planned-one-on-ones", teamId] });
+      void queryClient.invalidateQueries({ queryKey: ["upcoming-video-meetings"] });
       void queryClient.invalidateQueries({
         queryKey: ["planned-one-on-ones", teamId, proposal.memberUserId],
       });
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       const summary = formatEventDateAndTime(eventStart.toISOString(), eventEnd.toISOString());
       onSaved(
-        `Done — your check-in with ${proposal.memberName} is on the calendar for ${summary}.`,
+        `Done — your virtual check-in with ${proposal.memberName} is on the calendar for ${summary}.`,
       );
     },
     onError: (err) => {
@@ -137,6 +139,10 @@ export function SenecaPlanCheckInCard({ teamId, proposal, onSaved, onDismiss }: 
           <View style={styles.row}>
             <Text style={styles.label}>Duration</Text>
             <Text style={styles.value}>{durationMinutes} min</Text>
+          </View>
+          <View style={styles.videoRow}>
+            <Video size={14} color="#4361EE" />
+            <Text style={styles.videoText}>Virtual meeting with join link</Text>
           </View>
         </>
       )}
@@ -316,6 +322,17 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     color: "#0F172A",
+    fontWeight: "600",
+  },
+  videoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 2,
+  },
+  videoText: {
+    fontSize: 13,
+    color: "#4361EE",
     fontWeight: "600",
   },
   editField: {

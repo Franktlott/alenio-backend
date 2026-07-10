@@ -324,5 +324,5 @@ export function finalizePlanOneOnOneProposal(
 }
 
 export function buildPlanConfirmationMessage(proposal: SenecaPlanOneOnOneProposal): string {
-  return `I'd like to schedule a check-in with ${proposal.memberName} on ${proposal.dateLabel} at ${proposal.timeLabel} (${proposal.durationMinutes} min). Confirm below to add it to your calendar, or edit the details first.`;
+  return `I'd like to schedule a virtual check-in with ${proposal.memberName} on ${proposal.dateLabel} at ${proposal.timeLabel} (${proposal.durationMinutes} min). Confirm below to add it to your calendar with a video join link, or edit the details first.`;
 }
