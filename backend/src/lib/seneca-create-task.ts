@@ -90,6 +90,10 @@ export function conversationHasCreateTaskTopic(
     return true;
   }
 
+  if (/\b(joint|shared|separate|individual|split)\b/.test(latest) && /\b(task|tasks)\b/.test(latest)) {
+    return true;
+  }
+
   return false;
 }
 
@@ -192,6 +196,36 @@ function extractTitleFromSource(source: string): string | null {
   return null;
 }
 
+function extractTaskModeFromSource(source: string): boolean | null {
+  const blob = source.toLowerCase();
+  if (
+    /\b(joint task|shared task|same task|one task|work together|together on|collaborate on|team task)\b/.test(
+      blob,
+    )
+  ) {
+    return true;
+  }
+  if (
+    /\b(separate tasks?|individual tasks?|each (?:person|one|of them)|their own tasks?|split tasks?|own task)\b/.test(
+      blob,
+    )
+  ) {
+    return false;
+  }
+  return null;
+}
+
+function resolveIsJoint(
+  draft: SenecaCreateTaskDraft,
+  source: string,
+  assigneeCount: number,
+): boolean {
+  if (assigneeCount <= 1) return false;
+  if (draft.isJoint === true) return true;
+  if (draft.isJoint === false) return false;
+  return extractTaskModeFromSource(source) ?? false;
+}
+
 function formatDueDateLabel(dueDate: string, timeZone: string): string {
   const parts = dueDate.split("-").map(Number);
   const y = parts[0] ?? 0;
@@ -230,7 +264,7 @@ export function finalizeCreateTaskProposal(
       : null) || extractDateFromQuestion(source, new Date(), managerTimeZone);
 
   const priority = normalizePriority(draft.priority);
-  const isJoint = draft.isJoint === true || members.length > 1;
+  const isJoint = resolveIsJoint(draft, source, members.length);
 
   return {
     title,
@@ -247,6 +281,9 @@ export function finalizeCreateTaskProposal(
 export function buildCreateTaskConfirmationMessage(proposal: SenecaCreateTaskProposal): string {
   const duePart = proposal.dueDateLabel ? ` by ${proposal.dueDateLabel}` : "";
   const assigneeLabel = proposal.assigneeNames.join(" and ");
+  if (proposal.assigneeNames.length > 1 && !proposal.isJoint) {
+    return `I'll create ${proposal.assigneeNames.length} separate tasks for ${assigneeLabel}: "${proposal.title}"${duePart}. Review the details below — confirm to assign them, or edit first.`;
+  }
   const taskKind = proposal.isJoint ? "joint task" : "task";
   return `I'll create a ${taskKind} for ${assigneeLabel}: "${proposal.title}"${duePart}. Review the details below — confirm to assign it, or edit first.`;
 }

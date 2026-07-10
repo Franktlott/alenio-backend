@@ -10,7 +10,7 @@ import {
   TextInput,
 } from "react-native";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { Calendar, Flag, Users } from "lucide-react-native";
+import { Calendar, Flag, Users, UserRound } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { SenecaCreateTaskProposal } from "@/lib/seneca-api";
@@ -60,8 +60,17 @@ export function SenecaCreateTaskCard({ teamId, proposal, onSaved, onDismiss }: P
   );
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isJoint, setIsJoint] = useState(proposal.isJoint);
 
   const assigneeLabel = proposal.assigneeNames.join(" and ");
+  const assigneeCount = proposal.assigneeUserIds.length;
+  const hasMultipleAssignees = assigneeCount > 1;
+  const confirmLabel =
+    hasMultipleAssignees && !isJoint
+      ? `Create ${assigneeCount} separate tasks`
+      : hasMultipleAssignees && isJoint
+        ? "Confirm & create joint task"
+        : "Confirm & create";
 
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -75,7 +84,7 @@ export function SenecaCreateTaskCard({ teamId, proposal, onSaved, onDismiss }: P
         dueDate: dueDate ? calendarDueIso(dueDate, timeZone) : undefined,
         timeZone,
         assigneeIds: proposal.assigneeUserIds,
-        isJoint: proposal.isJoint || undefined,
+        isJoint: isJoint || undefined,
       });
     },
     onSuccess: () => {
@@ -83,10 +92,13 @@ export function SenecaCreateTaskCard({ teamId, proposal, onSaved, onDismiss }: P
       void queryClient.invalidateQueries({ queryKey: ["tasks"] });
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       const duePart = dueDate ? ` due ${formatDueDate(dueDate)}` : "";
-      const taskKind = proposal.isJoint ? "joint task" : "task";
-      onSaved(
-        `Done — "${title.trim()}" is assigned as a ${taskKind} for ${assigneeLabel}${duePart}.`,
-      );
+      const summary =
+        hasMultipleAssignees && !isJoint
+          ? `Done — created ${assigneeCount} separate tasks for ${assigneeLabel}: "${title.trim()}"${duePart}.`
+          : hasMultipleAssignees && isJoint
+            ? `Done — "${title.trim()}" is assigned as a joint task for ${assigneeLabel}${duePart}.`
+            : `Done — "${title.trim()}" is assigned to ${assigneeLabel}${duePart}.`;
+      onSaved(summary);
     },
     onError: (err) => {
       setError(err instanceof Error ? err.message : "Could not create this task.");
@@ -103,8 +115,43 @@ export function SenecaCreateTaskCard({ teamId, proposal, onSaved, onDismiss }: P
     setDescription(proposal.description ?? "");
     setPriority(proposal.priority);
     setDueDate(proposal.dueDate ? dueDateFromYmd(proposal.dueDate) : null);
+    setIsJoint(proposal.isJoint);
     setError(null);
   };
+
+  const taskModeSelector = hasMultipleAssignees ? (
+    <View style={styles.modeRow}>
+      <Pressable
+        onPress={() => setIsJoint(false)}
+        style={[styles.modeChip, !isJoint && styles.modeChipActive]}
+        testID="seneca-create-task-separate-mode"
+      >
+        <UserRound size={15} color={!isJoint ? "#4361EE" : "#64748B"} />
+        <Text style={[styles.modeChipTitle, !isJoint && styles.modeChipTitleActive]}>Separate</Text>
+        <Text style={[styles.modeChipHint, !isJoint && styles.modeChipHintActive]}>One task each</Text>
+      </Pressable>
+      <Pressable
+        onPress={() => setIsJoint(true)}
+        style={[styles.modeChip, isJoint && styles.modeChipActive]}
+        testID="seneca-create-task-joint-mode"
+      >
+        <Users size={15} color={isJoint ? "#4361EE" : "#64748B"} />
+        <Text style={[styles.modeChipTitle, isJoint && styles.modeChipTitleActive]}>Joint</Text>
+        <Text style={[styles.modeChipHint, isJoint && styles.modeChipHintActive]}>Shared task</Text>
+      </Pressable>
+    </View>
+  ) : null;
+
+  const taskModeSummary = hasMultipleAssignees ? (
+    <View style={styles.jointRow}>
+      {isJoint ? <Users size={14} color="#4361EE" /> : <UserRound size={14} color="#4361EE" />}
+      <Text style={styles.jointText}>
+        {isJoint
+          ? "Joint task — everyone works on one shared task"
+          : `Separate tasks — one for each person (${assigneeCount} total)`}
+      </Text>
+    </View>
+  ) : null;
 
   return (
     <View style={styles.card} testID="seneca-create-task-confirm">
@@ -115,12 +162,8 @@ export function SenecaCreateTaskCard({ teamId, proposal, onSaved, onDismiss }: P
         <Text style={styles.value}>{assigneeLabel}</Text>
       </View>
 
-      {proposal.isJoint ? (
-        <View style={styles.jointRow}>
-          <Users size={14} color="#4361EE" />
-          <Text style={styles.jointText}>Joint task — everyone works on one shared task</Text>
-        </View>
-      ) : null}
+      {taskModeSelector}
+      {taskModeSummary}
 
       {editing ? (
         <>
@@ -203,7 +246,7 @@ export function SenecaCreateTaskCard({ teamId, proposal, onSaved, onDismiss }: P
               {saveMutation.isPending ? (
                 <ActivityIndicator size="small" color="#FFFFFF" />
               ) : (
-                <Text style={styles.primaryText}>Create task</Text>
+                <Text style={styles.primaryText}>{confirmLabel}</Text>
               )}
             </Pressable>
             <Pressable
@@ -227,7 +270,7 @@ export function SenecaCreateTaskCard({ teamId, proposal, onSaved, onDismiss }: P
               {saveMutation.isPending ? (
                 <ActivityIndicator size="small" color="#FFFFFF" />
               ) : (
-                <Text style={styles.primaryText}>Confirm & create</Text>
+                <Text style={styles.primaryText}>{confirmLabel}</Text>
               )}
             </Pressable>
             <Pressable
@@ -414,6 +457,42 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: "#4361EE",
     fontWeight: "600",
+  },
+  modeRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 2,
+  },
+  modeChip: {
+    flex: 1,
+    alignItems: "center",
+    gap: 2,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: 10,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  modeChipActive: {
+    backgroundColor: "#EEF2FF",
+    borderColor: "#4361EE",
+  },
+  modeChipTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#64748B",
+  },
+  modeChipTitleActive: {
+    color: "#4361EE",
+  },
+  modeChipHint: {
+    fontSize: 11,
+    fontWeight: "500",
+    color: "#94A3B8",
+  },
+  modeChipHintActive: {
+    color: "#4361EE",
   },
   error: {
     fontSize: 13,
