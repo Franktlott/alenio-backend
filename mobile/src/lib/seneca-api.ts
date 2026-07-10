@@ -34,8 +34,9 @@ export type SenecaCancelOneOnOneProposal = {
 export type SenecaCreateTaskProposal = {
   title: string;
   description: string | null;
-  assigneeUserId: string;
-  assigneeName: string;
+  assigneeUserIds: string[];
+  assigneeNames: string[];
+  isJoint: boolean;
   dueDate: string | null;
   dueDateLabel: string | null;
   priority: "low" | "medium" | "high";

@@ -294,8 +294,9 @@ CREATING A TASK (critical):
 - Do NOT give generic coaching advice (like "check in with them") when the manager is providing task details. Stay in task-creation mode until they confirm or dismiss.
 - Use the full conversation to resolve assignee, title, description, due date, and priority. Follow-up messages like "yes", "confirm", or added details refer to the task under discussion.
 - The manager's local date today (${managerTimeZone}) is ${todayYmd} (${todayLabel}). Interpret "today", "tonight", "tomorrow", and weekdays like "this Sunday" or "by Sunday" relative to this date.
-- When assignee and work are clear, ALWAYS return createTask with title, assigneeName, dueDate, and priority. The app shows a confirmation card — your job is to draft, not coach.
-- Return "createTask": { "title": "string", "description": "string or null", "assigneeName": "string", "dueDate": "YYYY-MM-DD or null", "priority": "low|medium|high or null" } when you have enough detail (at minimum assignee and title).
+- When assignee and work are clear, ALWAYS return createTask with title, assignee names, dueDate, and priority. The app shows a confirmation card — your job is to draft, not coach.
+- For multiple assignees (e.g. "Karyna and Khristyan"), return all names in assigneeNames and set isJoint to true so they share one task.
+- Return "createTask": { "title": "string", "description": "string or null", "assigneeName": "string or null", "assigneeNames": ["string"], "dueDate": "YYYY-MM-DD or null", "priority": "low|medium|high or null", "isJoint": true|false|null } when you have enough detail (at minimum assignee and title).
 - In "message", summarize the proposed task and ask them to confirm below before it is created.
 - If assignee or title is unclear, ask one short clarifying question in "message" and set createTask to null.
 `
@@ -321,7 +322,7 @@ Return JSON:
   "message": "string — your direct answer",
   "planOneOnOne": { "memberName": "string", "date": "YYYY-MM-DD", "time": "HH:mm or null", "durationMinutes": 45 } | null,
   "cancelOneOnOne": { "memberName": "string", "date": "YYYY-MM-DD or null", "time": "HH:mm or null" } | null,
-  "createTask": { "title": "string", "description": "string or null", "assigneeName": "string", "dueDate": "YYYY-MM-DD or null", "priority": "low|medium|high or null" } | null
+  "createTask": { "title": "string", "description": "string or null", "assigneeName": "string or null", "assigneeNames": ["string"], "dueDate": "YYYY-MM-DD or null", "priority": "low|medium|high or null", "isJoint": true|false|null } | null
 }`,
       cancelIntent
         ? JSON.stringify(

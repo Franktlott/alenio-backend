@@ -11,15 +11,18 @@ export type SenecaCreateTaskDraft = {
   title?: string | null;
   description?: string | null;
   assigneeName?: string | null;
+  assigneeNames?: string[] | null;
   dueDate?: string | null;
   priority?: string | null;
+  isJoint?: boolean | null;
 };
 
 export type SenecaCreateTaskProposal = {
   title: string;
   description: string | null;
-  assigneeUserId: string;
-  assigneeName: string;
+  assigneeUserIds: string[];
+  assigneeNames: string[];
+  isJoint: boolean;
   dueDate: string | null;
   dueDateLabel: string | null;
   priority: "low" | "medium" | "high";
@@ -102,25 +105,54 @@ function isGenericAssigneePhrase(name: string): boolean {
   return /\b(team member|a member|someone|them|him|her|associate|employee|staff)\b/.test(n);
 }
 
-function extractAssigneeFromSource(source: string): string | null {
+function splitAssigneeNames(raw: string): string[] {
+  return raw
+    .split(/\s*(?:,|&|\band\b)\s*/i)
+    .map((part) => part.trim().replace(/[.,!?]+$/, ""))
+    .filter(Boolean);
+}
+
+function extractAssigneeNamesFromSource(source: string): string[] {
   const lines = source.split("\n").map((line) => line.trim()).filter(Boolean).reverse();
 
   for (const line of lines) {
+    const forTo = line.match(/\bfor\s+(.+?)\s+to\s+/i);
+    if (forTo?.[1]) {
+      const names = splitAssigneeNames(forTo[1]).filter((name) => !isGenericAssigneePhrase(name));
+      if (names.length > 0) return names;
+    }
+
     const leadMatch = line.match(
       /^([a-z][a-z'.-]+(?:\s+[a-z][a-z'.-]+)?)\s+(?:needs? to|should|must|has to|have to)\b/i,
     );
-    if (leadMatch?.[1] && !isGenericAssigneePhrase(leadMatch[1])) return leadMatch[1];
-  }
+    if (leadMatch?.[1] && !isGenericAssigneePhrase(leadMatch[1])) return [leadMatch[1]];
 
-  for (const line of lines) {
-    const forMatch = line.match(/\b(?:with|for)\s+([a-z][a-z'.-]+(?:\s+[a-z][a-z'.-]+)?)/i);
-    if (forMatch?.[1] && !isGenericAssigneePhrase(forMatch[1])) return forMatch[1];
+    const forMatch = line.match(/\b(?:with|for)\s+(.+?)(?:\s+to\s+|\s+by\s+|\?|\.|$)/i);
+    if (forMatch?.[1]) {
+      const names = splitAssigneeNames(forMatch[1]).filter((name) => !isGenericAssigneePhrase(name));
+      if (names.length > 0) return names;
+    }
   }
 
   const fromFor = extractMemberFromQuestion(source);
-  if (fromFor && !isGenericAssigneePhrase(fromFor)) return fromFor;
+  if (fromFor && !isGenericAssigneePhrase(fromFor)) return splitAssigneeNames(fromFor);
 
-  return null;
+  return [];
+}
+
+function resolveAssigneeNames(
+  draft: SenecaCreateTaskDraft,
+  source: string,
+): string[] {
+  const fromDraft = (draft.assigneeNames ?? [])
+    .map((name) => name?.trim())
+    .filter((name): name is string => Boolean(name));
+  if (fromDraft.length > 0) return fromDraft;
+
+  const single = draft.assigneeName?.trim();
+  if (single) return splitAssigneeNames(single);
+
+  return extractAssigneeNamesFromSource(source);
 }
 
 function normalizeTaskTitle(raw: string): string {
@@ -133,6 +165,11 @@ function extractTitleFromSource(source: string): string | null {
   const lines = source.split("\n").map((line) => line.trim()).filter(Boolean).reverse();
 
   for (const line of lines) {
+    const forToTitle = line.match(/\bto\s+(.+?)(?:\s+by\s+|\s+before\s+|\s+this\s+|\s+on\s+|\?|\.|$)/i);
+    if (forToTitle?.[1] && /\bfor\s+.+\s+to\s+/i.test(line)) {
+      return normalizeTaskTitle(forToTitle[1]);
+    }
+
     const needsTo = line.match(
       /\bneeds?\s+to\s+(.+?)(?:\s+by\s+|\s+before\s+|\s+this\s+|\s+on\s+|\?|\.|$)/i,
     );
@@ -178,9 +215,11 @@ export function finalizeCreateTaskProposal(
   sourceText?: string,
 ): SenecaCreateTaskProposal | null {
   const source = sourceText ?? question;
-  const assigneeQuery = draft.assigneeName?.trim() || extractAssigneeFromSource(source);
-  const member = assigneeQuery ? resolveMemberByName(assigneeQuery, ctx.members) : null;
-  if (!member) return null;
+  const assigneeQueries = resolveAssigneeNames(draft, source);
+  const members = assigneeQueries
+    .map((query) => resolveMemberByName(query, ctx.members))
+    .filter((member): member is NonNullable<typeof member> => member !== null);
+  if (members.length === 0 || members.length !== assigneeQueries.length) return null;
 
   const title = draft.title?.trim() || extractTitleFromSource(source);
   if (!title) return null;
@@ -191,12 +230,14 @@ export function finalizeCreateTaskProposal(
       : null) || extractDateFromQuestion(source, new Date(), managerTimeZone);
 
   const priority = normalizePriority(draft.priority);
+  const isJoint = draft.isJoint === true || members.length > 1;
 
   return {
     title,
     description: draft.description?.trim() || null,
-    assigneeUserId: member.userId,
-    assigneeName: member.name,
+    assigneeUserIds: members.map((member) => member.userId),
+    assigneeNames: members.map((member) => member.name),
+    isJoint,
     dueDate: dueDateRaw,
     dueDateLabel: dueDateRaw ? formatDueDateLabel(dueDateRaw, managerTimeZone) : null,
     priority,
@@ -205,5 +246,7 @@ export function finalizeCreateTaskProposal(
 
 export function buildCreateTaskConfirmationMessage(proposal: SenecaCreateTaskProposal): string {
   const duePart = proposal.dueDateLabel ? ` by ${proposal.dueDateLabel}` : "";
-  return `I'll create a task for ${proposal.assigneeName}: "${proposal.title}"${duePart}. Review the details below — confirm to assign it, or edit first.`;
+  const assigneeLabel = proposal.assigneeNames.join(" and ");
+  const taskKind = proposal.isJoint ? "joint task" : "task";
+  return `I'll create a ${taskKind} for ${assigneeLabel}: "${proposal.title}"${duePart}. Review the details below — confirm to assign it, or edit first.`;
 }

@@ -10,7 +10,7 @@ import {
   TextInput,
 } from "react-native";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { Calendar, Flag } from "lucide-react-native";
+import { Calendar, Flag, Users } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { SenecaCreateTaskProposal } from "@/lib/seneca-api";
@@ -61,6 +61,8 @@ export function SenecaCreateTaskCard({ teamId, proposal, onSaved, onDismiss }: P
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const assigneeLabel = proposal.assigneeNames.join(" and ");
+
   const saveMutation = useMutation({
     mutationFn: async () => {
       const trimmedTitle = title.trim();
@@ -72,7 +74,8 @@ export function SenecaCreateTaskCard({ teamId, proposal, onSaved, onDismiss }: P
         priority,
         dueDate: dueDate ? calendarDueIso(dueDate, timeZone) : undefined,
         timeZone,
-        assigneeIds: [proposal.assigneeUserId],
+        assigneeIds: proposal.assigneeUserIds,
+        isJoint: proposal.isJoint || undefined,
       });
     },
     onSuccess: () => {
@@ -80,8 +83,9 @@ export function SenecaCreateTaskCard({ teamId, proposal, onSaved, onDismiss }: P
       void queryClient.invalidateQueries({ queryKey: ["tasks"] });
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       const duePart = dueDate ? ` due ${formatDueDate(dueDate)}` : "";
+      const taskKind = proposal.isJoint ? "joint task" : "task";
       onSaved(
-        `Done — "${title.trim()}" is assigned to ${proposal.assigneeName}${duePart}.`,
+        `Done — "${title.trim()}" is assigned as a ${taskKind} for ${assigneeLabel}${duePart}.`,
       );
     },
     onError: (err) => {
@@ -107,9 +111,16 @@ export function SenecaCreateTaskCard({ teamId, proposal, onSaved, onDismiss }: P
       <Text style={styles.title}>{editing ? "Edit task" : "Task details"}</Text>
 
       <View style={styles.row}>
-        <Text style={styles.label}>Assignee</Text>
-        <Text style={styles.value}>{proposal.assigneeName}</Text>
+        <Text style={styles.label}>Assignees</Text>
+        <Text style={styles.value}>{assigneeLabel}</Text>
       </View>
+
+      {proposal.isJoint ? (
+        <View style={styles.jointRow}>
+          <Users size={14} color="#4361EE" />
+          <Text style={styles.jointText}>Joint task — everyone works on one shared task</Text>
+        </View>
+      ) : null}
 
       {editing ? (
         <>
@@ -388,6 +399,18 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   priorityDisplayText: {
+    fontSize: 13,
+    color: "#4361EE",
+    fontWeight: "600",
+  },
+  jointRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 2,
+  },
+  jointText: {
+    flex: 1,
     fontSize: 13,
     color: "#4361EE",
     fontWeight: "600",
