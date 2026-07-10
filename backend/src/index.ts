@@ -826,15 +826,35 @@ app.get("/api/me/debug", async (c) => {
   });
 });
 
-// Save push token
+// Save push token (legacy endpoint — kept for older clients)
 app.post("/api/push-token", async (c) => {
   const user = c.get("user");
   if (!user) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
-  const { token } = await c.req.json();
-  if (token !== null && typeof token !== "string") return c.json({ error: { message: "Token must be string or null" } }, 400);
-  const cleaned = typeof token === "string" ? token.trim() : null;
-  await prisma.user.update({ where: { id: user.id }, data: { pushToken: cleaned && cleaned.length ? cleaned : null } });
-  return c.json({ data: { ok: true } });
+  const body = await c.req.json().catch(() => ({} as { token?: unknown; pushToken?: unknown }));
+  const raw = body.pushToken ?? body.token;
+  if (raw !== null && raw !== undefined && typeof raw !== "string") {
+    return c.json({ error: { message: "Token must be string or null" } }, 400);
+  }
+  const cleaned = typeof raw === "string" ? raw.trim() : null;
+  const next = cleaned && cleaned.length ? cleaned : null;
+  try {
+    if (next) {
+      await prisma.user.updateMany({
+        where: { pushToken: next, NOT: { id: user.id } },
+        data: { pushToken: null },
+      });
+    }
+    const updated = await prisma.user.update({
+      where: { id: user.id },
+      data: { pushToken: next },
+      select: { pushToken: true },
+    });
+    console.log(`[push-token-legacy] saved user=${user.id} hasToken=${!!updated.pushToken}`);
+    return c.json({ data: { ok: true, hasToken: !!updated.pushToken } });
+  } catch (err) {
+    console.error(`[push-token-legacy] failed user=${user.id}:`, err);
+    return c.json({ error: { message: "Failed to save push token", code: "PUSH_TOKEN_SAVE_FAILED" } }, 500);
+  }
 });
 // Test push notification (sends a real push to the current user's device)
 app.post("/api/push-test", async (c) => {

@@ -116,8 +116,8 @@ export const api = {
     const parsed = await readJsonSafe<{ data: T }>(response);
     return parsed?.data as T;
   },
-  patch: <T>(url: string, body: unknown) =>
-    request<{ data: T }>(url, { method: "PATCH", body: JSON.stringify(body) }).then((r) => r.data),
+  patch: <T>(url: string, body: unknown, opts?: { skipSignOut?: boolean }) =>
+    request<{ data: T }>(url, { method: "PATCH", body: JSON.stringify(body), ...opts }).then((r) => r.data),
   patchFull: <T>(url: string, body: unknown) =>
     request<{ data: T; milestone?: number; comeback?: number }>(url, { method: "PATCH", body: JSON.stringify(body) }),
 };

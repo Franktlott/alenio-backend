@@ -264,12 +264,67 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
         if (!isValidExpoPushToken(token)) throw new Error("invalid token");
 
         await saveNotifStatus("saving token to backend...");
-        await appendNotifDebug({ step: "backend-save", status: "info" });
-        // Prefer the "Push Work" style endpoint if present; fall back to legacy.
+        await appendNotifDebug({ step: "backend-save", status: "info", detail: token.substring(0, 35) + "..." });
+
+        let saved = false;
+        let saveError = "";
         try {
-          await withTimeout(api.patch("/api/users/push-token", { pushToken: token }), 15_000, "savePushToken");
-        } catch {
-          await withTimeout(api.post("/api/push-token", { token }, { skipSignOut: true }), 15_000, "savePushTokenLegacy");
+          const result = await withTimeout(
+            api.patch<{ ok: boolean; hasToken?: boolean }>(
+              "/api/users/push-token",
+              { pushToken: token },
+              { skipSignOut: true },
+            ),
+            15_000,
+            "savePushToken",
+          );
+          saved = result?.ok === true || result?.hasToken === true;
+          if (!saved) saveError = "patch returned without ok";
+        } catch (err) {
+          saveError = err instanceof Error ? err.message : String(err);
+          console.warn("[notifications] PATCH /api/users/push-token failed:", saveError);
+          await appendNotifDebug({ step: "backend-save-patch", status: "error", detail: saveError });
+        }
+
+        if (!saved) {
+          try {
+            const legacy = await withTimeout(
+              api.post<{ ok: boolean; hasToken?: boolean }>(
+                "/api/push-token",
+                { token, pushToken: token },
+                { skipSignOut: true },
+              ),
+              15_000,
+              "savePushTokenLegacy",
+            );
+            saved = legacy?.ok === true || legacy?.hasToken === true;
+            if (!saved) saveError = "legacy returned without ok";
+          } catch (err) {
+            saveError = err instanceof Error ? err.message : String(err);
+            console.warn("[notifications] POST /api/push-token failed:", saveError);
+            await appendNotifDebug({ step: "backend-save-legacy", status: "error", detail: saveError });
+          }
+        }
+
+        if (!saved) {
+          throw new Error(`backend save failed: ${saveError || "unknown"}`);
+        }
+
+        // Confirm the token actually persisted for this account.
+        try {
+          const status = await withTimeout(
+            api.get<{ hasPushToken?: boolean; hasToken?: boolean }>("/api/users/push-status"),
+            10_000,
+            "verifyPushToken",
+          );
+          if (!(status?.hasPushToken || status?.hasToken)) {
+            throw new Error("backend save did not persist (hasToken=false)");
+          }
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          // Non-fatal if status endpoint fails but save reported ok — still treat as registered.
+          if (msg.includes("did not persist")) throw err;
+          console.warn("[notifications] push-status verify skipped:", msg);
         }
 
         await saveNotifStatus("registered ok");
