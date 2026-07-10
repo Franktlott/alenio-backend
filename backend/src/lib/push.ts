@@ -49,8 +49,12 @@ async function checkReceiptsAfterDelay(receiptIdToToken: Record<string, string>)
     const tokensToInvalidate: string[] = [];
     for (const [id, receipt] of Object.entries(receipts)) {
       if (receipt.status !== "ok") {
-        console.error(`[push] ❌ Receipt error for ${id}: ${receipt.message ?? ""} (${receipt.details?.error ?? "unknown"})`);
-        if (receipt.details?.error === "DeviceNotRegistered" || receipt.details?.error === "InvalidCredentials") {
+        const errorCode = receipt.details?.error ?? "unknown";
+        console.error(`[push] ❌ Receipt error for ${id}: ${receipt.message ?? ""} (${errorCode})`);
+        // Only DeviceNotRegistered means this specific token is dead.
+        // InvalidCredentials is a project/APNs config problem — clearing tokens would wipe
+        // every recipient and stop all future pushes until they re-open the app.
+        if (errorCode === "DeviceNotRegistered") {
           const token = receiptIdToToken[id];
           if (token) tokensToInvalidate.push(token);
         }
@@ -91,7 +95,7 @@ async function sendPushChunkStrict(chunk: PushPayload[]): Promise<void> {
         priority: "high",
         channelId: m.channelId ?? "alenio_main",
         data: m.data,
-        ...(m.image ? { image: m.image } : {}),
+        ...(m.image ? { richContent: { image: m.image } } : {}),
       }))
     ),
   });

@@ -400,57 +400,50 @@ dmsRouter.post("/:conversationId/messages", async (c) => {
     data: { updatedAt: new Date() },
   });
 
-  // Send push notification to other participants
-  {
-    const conversation = await prisma.conversation.findUnique({
-      where: { id: conversationId },
-      include: {
-        participants: { select: { userId: true } },
-      },
-    });
-    if (conversation) {
+  // Fire-and-forget push — never block the message response on Expo
+  const senderName = user.name ?? "Someone";
+  const msgText = content?.trim() || "📷 Photo";
+  const capturedMentionIds = mentionIds;
+  void (async () => {
+    try {
+      const [conversation, senderRecord] = await Promise.all([
+        prisma.conversation.findUnique({
+          where: { id: conversationId },
+          include: { participants: { select: { userId: true } } },
+        }),
+        prisma.user.findUnique({ where: { id: user.id }, select: { image: true } }),
+      ]);
+      if (!conversation) return;
+
       const otherIds = conversation.participants
-        .map((p: any) => p.userId)
-        .filter((id: string) => id !== user.id);
+        .map((p) => p.userId)
+        .filter((id) => id !== user.id);
 
-      const senderName = user.name ?? "Someone";
-      const msgText = content?.trim() || "📷 Photo";
-      const notifTitle = conversation.name
-        ? conversation.name
-        : senderName;
-      const notifBody = conversation.name
-        ? `${senderName}: ${msgText}`
-        : msgText;
-
-      const senderRecord = await prisma.user.findUnique({ where: { id: user.id }, select: { image: true } });
+      const notifTitle = conversation.name ? conversation.name : senderName;
+      const notifBody = conversation.name ? `${senderName}: ${msgText}` : msgText;
       const ALENIO_LOGO_URL = `${env.BACKEND_URL}/static/alenio-logo.png`;
       const senderImage = senderRecord?.image ?? ALENIO_LOGO_URL;
 
+      console.log(`[dms] push fanout conversation=${conversationId} recipients=${otherIds.length}`);
       await sendPushToUsers(otherIds, notifTitle, notifBody, { conversationId }, "notifMessages", undefined, senderImage);
-    }
-  }
 
-  // Send mention notifications
-  if (mentionIds.length > 0) {
-    const participants = await prisma.conversationParticipant.findMany({
-      where: { conversationId },
-      select: { userId: true },
-    });
-    const participantIds = new Set(participants.map((p: any) => p.userId));
-    const validMentionIds = mentionIds.filter((id: string) => id !== user.id && participantIds.has(id));
-
-    if (validMentionIds.length > 0) {
-      const senderName = user.name ?? "Someone";
-      const mentionBody = content?.trim() || "mentioned you in a message";
-      await sendPushToUsers(
-        validMentionIds,
-        `${senderName} mentioned you`,
-        mentionBody,
-        { conversationId },
-        "notifMessages"
-      );
+      if (capturedMentionIds.length > 0) {
+        const participantIds = new Set(conversation.participants.map((p) => p.userId));
+        const validMentionIds = capturedMentionIds.filter((id) => id !== user.id && participantIds.has(id));
+        if (validMentionIds.length > 0) {
+          await sendPushToUsers(
+            validMentionIds,
+            `${senderName} mentioned you`,
+            content?.trim() || "mentioned you in a message",
+            { conversationId },
+            "notifMessages",
+          );
+        }
+      }
+    } catch (err) {
+      console.error("[dms] push fanout failed:", err);
     }
-  }
+  })();
 
   return c.json({ data: message }, 201);
 });

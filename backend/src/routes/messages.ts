@@ -158,6 +158,7 @@ messagesRouter.post("/", async (c) => {
       const notifData = { teamId, teamName: team?.name ?? "", topicId: capturedTopicId, type: "message" };
       const memberIds = members.map((m: { userId: string }) => m.userId);
 
+      console.log(`[messages] push fanout team=${teamId} recipients=${memberIds.length}`);
       await sendPushToUsers(memberIds, notifTitle, notifBody, notifData, "notifMessages", teamId);
 
       if (capturedMentionIds.length > 0) {
@@ -170,8 +171,8 @@ messagesRouter.post("/", async (c) => {
           teamId
         );
       }
-    } catch {
-      // Silently fail — notifications are non-critical
+    } catch (err) {
+      console.error("[messages] push fanout failed:", err);
     }
   })();
 
