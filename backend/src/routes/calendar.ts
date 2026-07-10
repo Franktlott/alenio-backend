@@ -15,6 +15,10 @@ import {
   resolveCalendarCreate,
   resolveCalendarUpdate,
 } from "../lib/calendar-permissions";
+import {
+  cancelPendingCalendarEventReminders,
+  storePendingCalendarEventReminders,
+} from "../lib/calendar-event-reminders";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -24,9 +28,6 @@ type Variables = {
 const calendarRouter = new Hono<{ Variables: Variables }>();
 
 calendarRouter.use("*", authGuard);
-
-// In-memory map of scheduled reminder timeouts per event
-const pendingReminders = new Map<string, ReturnType<typeof setTimeout>[]>();
 
 function parseMeetingSettings(raw: string | null | undefined): { reminderMinutes: number[]; assigneeIds: string[] } {
   if (!raw) return { reminderMinutes: [], assigneeIds: [] };
@@ -67,12 +68,7 @@ async function scheduleEventReminders(
   reminderMinutes: number[],
   assigneeIds: string[] = []
 ) {
-  // Cancel any existing reminders for this event
-  const existing = pendingReminders.get(eventId);
-  if (existing) {
-    existing.forEach((t) => clearTimeout(t));
-    pendingReminders.delete(eventId);
-  }
+  cancelPendingCalendarEventReminders(eventId);
 
   if (reminderMinutes.length === 0) return;
 
@@ -111,9 +107,7 @@ async function scheduleEventReminders(
     handles.push(handle);
   }
 
-  if (handles.length > 0) {
-    pendingReminders.set(eventId, handles);
-  }
+  storePendingCalendarEventReminders(eventId, handles);
 }
 
 // Re-schedule reminders for upcoming events on startup
@@ -533,12 +527,7 @@ calendarRouter.delete("/:teamId/events/:eventId", async (c) => {
     return c.json({ error: { message: "You can only delete your own calendar entries.", code: "FORBIDDEN" } }, 403);
   }
 
-  // Cancel any pending reminders
-  const handles = pendingReminders.get(eventId);
-  if (handles) {
-    handles.forEach((t) => clearTimeout(t));
-    pendingReminders.delete(eventId);
-  }
+  cancelPendingCalendarEventReminders(eventId);
 
   await prisma.calendarEvent.delete({ where: { id: eventId } });
 

@@ -55,6 +55,7 @@ export function oneOnOneCheckInHref(
   teamId: string,
   memberUserId: string,
   templateId?: string | null,
+  plannedEventId?: string | null,
 ): Href {
   return {
     pathname: "/member-profile",
@@ -64,6 +65,7 @@ export function oneOnOneCheckInHref(
       tab: "check-in",
       startCheckIn: "1",
       ...(templateId ? { templateId } : {}),
+      ...(plannedEventId ? { plannedEventId } : {}),
     },
   };
 }

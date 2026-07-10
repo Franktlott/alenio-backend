@@ -29,6 +29,7 @@ import {
   hasArchivedMemberRecords,
   isActiveTeamMember,
 } from "../lib/workspace-member-departure";
+import { removePlannedCheckInCalendarEvent } from "../lib/remove-planned-check-in-event";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -61,6 +62,7 @@ const createMeetingSchema = z.object({
   followUpTasks: z.array(followUpTaskSchema).optional(),
   requestAssociateFeedback: z.boolean().optional(),
   status: z.enum(["draft", "published"]).optional(),
+  plannedCalendarEventId: z.string().min(1).optional(),
 });
 
 const updateMeetingSchema = z.object({
@@ -68,6 +70,7 @@ const updateMeetingSchema = z.object({
   followUpTasks: z.array(followUpTaskSchema).optional(),
   requestAssociateFeedback: z.boolean().optional(),
   status: z.enum(["draft", "published"]).optional(),
+  plannedCalendarEventId: z.string().min(1).optional(),
 });
 
 const meetingInclude = {
@@ -693,6 +696,16 @@ oneOnOneMeetingsRouter.post(
         return created;
       });
 
+      if (!isDraft && body.plannedCalendarEventId) {
+        await removePlannedCheckInCalendarEvent(prisma, {
+          eventId: body.plannedCalendarEventId,
+          teamId,
+          memberUserId,
+          actorUserId: user.id,
+          actorRole: membership.role,
+        });
+      }
+
       const managerName = user.name?.trim() || user.email || "Your manager";
       if (!isDraft) {
         await createMeetingAssociateFeedbackRequest(
@@ -796,6 +809,16 @@ oneOnOneMeetingsRouter.patch(
           user.id,
           managerName,
         );
+      }
+
+      if (publishingNow && body.plannedCalendarEventId) {
+        await removePlannedCheckInCalendarEvent(prisma, {
+          eventId: body.plannedCalendarEventId,
+          teamId,
+          memberUserId,
+          actorUserId: user.id,
+          actorRole: membership.role,
+        });
       }
 
       const meeting = await prisma.oneOnOneMeeting.findUnique({

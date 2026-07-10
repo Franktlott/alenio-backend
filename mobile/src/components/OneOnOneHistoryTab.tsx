@@ -13,7 +13,7 @@ import {
   Platform,
 } from "react-native";
 import { toast } from "burnt";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Plus, X, ChevronLeft, MoreVertical, Check, CalendarCheck } from "lucide-react-native";
 import { router, useFocusEffect } from "expo-router";
@@ -41,6 +41,7 @@ import {
   LEADER_COMMENTS_NUDGE_COPY,
   LEADER_COMMENTS_NUDGE_TITLE,
 } from "@/lib/check-in-leader-comments";
+import { validateCheckInResponses } from "@/lib/validate-check-in-responses";
 import { meetingNumberFor, downloadOneOnOneMeetingPdf, printOneOnOneMeeting } from "@/lib/one-on-one-print";
 import { oneOnOneDisplayDate, oneOnOneDisplayDateMs } from "@/lib/one-on-one-dates";
 import {
@@ -70,6 +71,7 @@ type Props = {
   isSelf?: boolean;
   autoStartCheckIn?: boolean;
   preferredTemplateId?: string | null;
+  plannedEventId?: string | null;
 };
 
 type OneOneView = "list" | "pick" | "fill";
@@ -237,8 +239,10 @@ export function OneOnOneHistoryTab({
   isSelf = false,
   autoStartCheckIn = false,
   preferredTemplateId = null,
+  plannedEventId = null,
 }: Props) {
   const insets = useSafeAreaInsets();
+  const queryClient = useQueryClient();
   const canViewUpcoming = canCreate || isSelf;
   const [view, setView] = useState<OneOneView>("list");
   const [meetings, setMeetings] = useState<OneOnOneMeeting[]>([]);
@@ -258,8 +262,10 @@ export function OneOnOneHistoryTab({
   const [feedbackPromptOpen, setFeedbackPromptOpen] = useState(false);
   const [leaderCommentsNudgeOpen, setLeaderCommentsNudgeOpen] = useState(false);
   const [highlightLeaderFieldId, setHighlightLeaderFieldId] = useState<string | null>(null);
+  const [highlightRequiredFieldId, setHighlightRequiredFieldId] = useState<string | null>(null);
   const fillScrollRef = useRef<ScrollView>(null);
   const [prepAcknowledged, setPrepAcknowledged] = useState(false);
+  const [linkedPlannedEventId, setLinkedPlannedEventId] = useState<string | null>(null);
   const autoStartHandledRef = useRef(false);
 
   const {
@@ -354,12 +360,14 @@ export function OneOnOneHistoryTab({
     setMenuMeetingId(null);
     setErr(null);
     setTemplates([]);
+    setLinkedPlannedEventId(null);
     autoStartHandledRef.current = false;
   }, [memberUserId, teamId]);
 
   const startCreate = async () => {
     setErr(null);
     setEditingMeeting(null);
+    setLinkedPlannedEventId(null);
     setLoadingTemplates(true);
     setView("pick");
     try {
@@ -398,6 +406,7 @@ export function OneOnOneHistoryTab({
   const startPlannedOneOnOne = async (event: PlannedOneOnOneEvent) => {
     setErr(null);
     setEditingMeeting(null);
+    setLinkedPlannedEventId(event.id);
     setLoadingTemplates(true);
     setView("pick");
     try {
@@ -543,6 +552,9 @@ export function OneOnOneHistoryTab({
   useEffect(() => {
     if (!autoStartCheckIn || !canCreate || autoStartHandledRef.current) return;
     autoStartHandledRef.current = true;
+    if (plannedEventId) {
+      setLinkedPlannedEventId(plannedEventId);
+    }
     void (async () => {
       setErr(null);
       setEditingMeeting(null);
@@ -567,12 +579,13 @@ export function OneOnOneHistoryTab({
         setLoadingTemplates(false);
       }
     })();
-  }, [autoStartCheckIn, canCreate, preferredTemplateId, teamId]);
+  }, [autoStartCheckIn, canCreate, preferredTemplateId, plannedEventId, teamId]);
 
   const startEdit = (meeting: OneOnOneMeeting) => {
     setPreviewMeeting(null);
     setMenuMeetingId(null);
     setEditingMeeting(meeting);
+    setLinkedPlannedEventId(null);
     setSelectedTemplate(meetingToFillTemplate(meeting));
     setResponses({ ...meeting.responses });
     setFollowUpDrafts([]);
@@ -588,10 +601,23 @@ export function OneOnOneHistoryTab({
     if (highlightLeaderFieldId === fieldId && String(value).trim()) {
       setHighlightLeaderFieldId(null);
     }
+    if (highlightRequiredFieldId === fieldId) {
+      setHighlightRequiredFieldId(null);
+      setErr(null);
+    }
   };
 
   const onPublishClick = () => {
     if (!selectedTemplate || saving) return;
+    const validationError = validateCheckInResponses(selectedTemplate.fields, responses);
+    if (validationError) {
+      setErr(validationError.message);
+      setHighlightRequiredFieldId(validationError.fieldId);
+      toast({ title: validationError.message, preset: "error" });
+      return;
+    }
+    setHighlightRequiredFieldId(null);
+    setErr(null);
     if (canCreate && isLeaderCommentsEmpty(selectedTemplate.fields, responses)) {
       setLeaderCommentsNudgeOpen(true);
       return;
@@ -649,6 +675,7 @@ export function OneOnOneHistoryTab({
         followUpTasks,
         requestAssociateFeedback,
         status: "published" as const,
+        ...(linkedPlannedEventId ? { plannedCalendarEventId: linkedPlannedEventId } : {}),
       };
       if (editingMeeting) {
         await updateOneOnOneMeeting(teamId, memberUserId, editingMeeting.id, payload);
@@ -664,9 +691,15 @@ export function OneOnOneHistoryTab({
       setEditingMeeting(null);
       setResponses({});
       setFollowUpDrafts([]);
+      setLinkedPlannedEventId(null);
+      void refetchPlannedOneOnOnes();
+      void queryClient.invalidateQueries({ queryKey: ["calendar-events", teamId] });
+      void queryClient.invalidateQueries({ queryKey: ["planned-one-on-ones", teamId] });
       toast({ title: "Check-in saved", preset: "done" });
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "Could not save check-in.");
+      const message = e instanceof Error ? e.message : "Could not save check-in.";
+      setErr(message);
+      toast({ title: message, preset: "error" });
     } finally {
       setSaving(false);
     }
@@ -786,6 +819,8 @@ export function OneOnOneHistoryTab({
     setErr(null);
     setLeaderCommentsNudgeOpen(false);
     setFeedbackPromptOpen(false);
+    setHighlightRequiredFieldId(null);
+    setLinkedPlannedEventId(null);
   };
 
   const renderFieldInput = (field: OneOnOneTemplateField) => {
@@ -971,27 +1006,45 @@ export function OneOnOneHistoryTab({
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
           <ScrollView ref={fillScrollRef} contentContainerStyle={{ padding: 16, gap: 20, paddingBottom: 100 }}>
             {err ? <Text style={{ fontSize: 13, color: "#DC2626" }}>{err}</Text> : null}
-            {fillFields.map((field) => (
+            {fillFields.map((field) => {
+              const isRequiredHighlight = highlightRequiredFieldId === field.id;
+              const isLeaderHighlight = highlightLeaderFieldId === field.id;
+              return (
               <View
                 key={field.id}
                 style={
-                  highlightLeaderFieldId === field.id
+                  isRequiredHighlight
                     ? {
                         borderWidth: 2,
-                        borderColor: "#818CF8",
+                        borderColor: "#DC2626",
                         borderRadius: 12,
                         padding: 10,
-                        backgroundColor: "#EEF2FF",
+                        backgroundColor: "#FEF2F2",
                       }
-                    : undefined
+                    : isLeaderHighlight
+                      ? {
+                          borderWidth: 2,
+                          borderColor: "#818CF8",
+                          borderRadius: 12,
+                          padding: 10,
+                          backgroundColor: "#EEF2FF",
+                        }
+                      : undefined
                 }
               >
                 <Text style={{ fontSize: 13, fontWeight: "600", color: "#334155", marginBottom: 6 }}>
                   {field.label}
+                  {field.required ? <Text style={{ color: "#DC2626" }}> *</Text> : null}
                 </Text>
+                {field.helpText ? (
+                  <Text style={{ fontSize: 12, color: "#94A3B8", marginBottom: 6, lineHeight: 16 }}>
+                    {field.helpText}
+                  </Text>
+                ) : null}
                 {renderFieldInput(field)}
               </View>
-            ))}
+            );
+            })}
 
             {!editingMeeting ? (
               <View>
@@ -1194,7 +1247,90 @@ export function OneOnOneHistoryTab({
     </View>
   );
 
-  if (view === "fill") return renderFillView();
+  const renderPublishModals = () => (
+    <>
+      <Modal visible={leaderCommentsNudgeOpen} transparent animationType="fade" onRequestClose={() => setLeaderCommentsNudgeOpen(false)}>
+        <Pressable
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.4)",
+            justifyContent: "center",
+            padding: 24,
+            paddingTop: 24 + insets.top,
+            paddingBottom: 24 + insets.bottom,
+          }}
+          onPress={() => setLeaderCommentsNudgeOpen(false)}
+        >
+          <Pressable onPress={(e) => e.stopPropagation?.()} style={{ backgroundColor: "white", borderRadius: 16, padding: 20 }}>
+            <Text style={{ fontSize: 18, fontWeight: "800", color: "#0F172A" }}>{LEADER_COMMENTS_NUDGE_TITLE}</Text>
+            <Text style={{ fontSize: 14, color: "#64748B", marginTop: 8, lineHeight: 20 }}>{LEADER_COMMENTS_NUDGE_COPY}</Text>
+            <View style={{ flexDirection: "row", gap: 10, marginTop: 20 }}>
+              <Pressable
+                onPress={onContinueWithoutLeaderNotes}
+                disabled={saving}
+                style={{ flex: 1, paddingVertical: 12, borderRadius: 10, backgroundColor: "#F1F5F9", alignItems: "center" }}
+              >
+                <Text style={{ fontWeight: "700", color: "#64748B" }}>Continue</Text>
+              </Pressable>
+              <Pressable
+                onPress={onAddLeaderNotesFromNudge}
+                disabled={saving}
+                style={{ flex: 1, paddingVertical: 12, borderRadius: 10, backgroundColor: "#4361EE", alignItems: "center" }}
+              >
+                <Text style={{ fontWeight: "700", color: "white" }}>Add notes</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal visible={feedbackPromptOpen} transparent animationType="fade" onRequestClose={() => setFeedbackPromptOpen(false)}>
+        <Pressable
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.4)",
+            justifyContent: "center",
+            padding: 24,
+            paddingTop: 24 + insets.top,
+            paddingBottom: 24 + insets.bottom,
+          }}
+          onPress={() => setFeedbackPromptOpen(false)}
+        >
+          <Pressable onPress={(e) => e.stopPropagation?.()} style={{ backgroundColor: "white", borderRadius: 16, padding: 20 }}>
+            <Text style={{ fontSize: 18, fontWeight: "800", color: "#0F172A" }}>Request feedback?</Text>
+            <Text style={{ fontSize: 14, color: "#64748B", marginTop: 8, lineHeight: 20 }}>
+              Request associate feedback and commitments from {memberName}? They&apos;ll receive a task to share their notes.
+            </Text>
+            <View style={{ flexDirection: "row", gap: 10, marginTop: 20 }}>
+              <Pressable
+                onPress={() => void performSave(false)}
+                disabled={saving}
+                style={{ flex: 1, paddingVertical: 12, borderRadius: 10, backgroundColor: "#F1F5F9", alignItems: "center" }}
+              >
+                <Text style={{ fontWeight: "700", color: "#64748B" }}>No</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => void performSave(true)}
+                disabled={saving}
+                style={{ flex: 1, paddingVertical: 12, borderRadius: 10, backgroundColor: "#4361EE", alignItems: "center" }}
+              >
+                <Text style={{ fontWeight: "700", color: "white" }}>Yes</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+    </>
+  );
+
+  if (view === "fill") {
+    return (
+      <>
+        {renderFillView()}
+        {renderPublishModals()}
+      </>
+    );
+  }
   if (view === "pick") return renderPickView();
 
   const showHistorySection = upcomingPlanned.length > 0 || meetings.length > 0;
@@ -1651,77 +1787,7 @@ export function OneOnOneHistoryTab({
         </View>
       </Modal>
 
-      <Modal visible={leaderCommentsNudgeOpen} transparent animationType="fade" onRequestClose={() => setLeaderCommentsNudgeOpen(false)}>
-        <Pressable
-          style={{
-            flex: 1,
-            backgroundColor: "rgba(0,0,0,0.4)",
-            justifyContent: "center",
-            padding: 24,
-            paddingTop: 24 + insets.top,
-            paddingBottom: 24 + insets.bottom,
-          }}
-          onPress={() => setLeaderCommentsNudgeOpen(false)}
-        >
-          <Pressable onPress={(e) => e.stopPropagation?.()} style={{ backgroundColor: "white", borderRadius: 16, padding: 20 }}>
-            <Text style={{ fontSize: 18, fontWeight: "800", color: "#0F172A" }}>{LEADER_COMMENTS_NUDGE_TITLE}</Text>
-            <Text style={{ fontSize: 14, color: "#64748B", marginTop: 8, lineHeight: 20 }}>{LEADER_COMMENTS_NUDGE_COPY}</Text>
-            <View style={{ flexDirection: "row", gap: 10, marginTop: 20 }}>
-              <Pressable
-                onPress={onContinueWithoutLeaderNotes}
-                disabled={saving}
-                style={{ flex: 1, paddingVertical: 12, borderRadius: 10, backgroundColor: "#F1F5F9", alignItems: "center" }}
-              >
-                <Text style={{ fontWeight: "700", color: "#64748B" }}>Continue</Text>
-              </Pressable>
-              <Pressable
-                onPress={onAddLeaderNotesFromNudge}
-                disabled={saving}
-                style={{ flex: 1, paddingVertical: 12, borderRadius: 10, backgroundColor: "#4361EE", alignItems: "center" }}
-              >
-                <Text style={{ fontWeight: "700", color: "white" }}>Add notes</Text>
-              </Pressable>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
-
-      <Modal visible={feedbackPromptOpen} transparent animationType="fade" onRequestClose={() => setFeedbackPromptOpen(false)}>
-        <Pressable
-          style={{
-            flex: 1,
-            backgroundColor: "rgba(0,0,0,0.4)",
-            justifyContent: "center",
-            padding: 24,
-            paddingTop: 24 + insets.top,
-            paddingBottom: 24 + insets.bottom,
-          }}
-          onPress={() => setFeedbackPromptOpen(false)}
-        >
-          <Pressable onPress={(e) => e.stopPropagation?.()} style={{ backgroundColor: "white", borderRadius: 16, padding: 20 }}>
-            <Text style={{ fontSize: 18, fontWeight: "800", color: "#0F172A" }}>Request feedback?</Text>
-            <Text style={{ fontSize: 14, color: "#64748B", marginTop: 8, lineHeight: 20 }}>
-              Request associate feedback and commitments from {memberName}? They&apos;ll receive a task to share their notes.
-            </Text>
-            <View style={{ flexDirection: "row", gap: 10, marginTop: 20 }}>
-              <Pressable
-                onPress={() => void performSave(false)}
-                disabled={saving}
-                style={{ flex: 1, paddingVertical: 12, borderRadius: 10, backgroundColor: "#F1F5F9", alignItems: "center" }}
-              >
-                <Text style={{ fontWeight: "700", color: "#64748B" }}>No</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => void performSave(true)}
-                disabled={saving}
-                style={{ flex: 1, paddingVertical: 12, borderRadius: 10, backgroundColor: "#4361EE", alignItems: "center" }}
-              >
-                <Text style={{ fontWeight: "700", color: "white" }}>Yes</Text>
-              </Pressable>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
+      {renderPublishModals()}
     </View>
   );
 }

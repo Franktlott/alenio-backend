@@ -199,6 +199,7 @@ export function createOneOnOneMeeting(
     followUpTasks?: OneOnOneFollowUpTaskInput[];
     requestAssociateFeedback?: boolean;
     status?: "draft" | "published";
+    plannedCalendarEventId?: string;
   },
 ) {
   return api.post<OneOnOneMeeting>(`${enc(teamId, memberUserId)}/one-on-ones`, input);
@@ -213,6 +214,7 @@ export function updateOneOnOneMeeting(
     followUpTasks?: OneOnOneFollowUpTaskInput[];
     requestAssociateFeedback?: boolean;
     status?: "draft" | "published";
+    plannedCalendarEventId?: string;
   },
 ) {
   return api.patch<OneOnOneMeeting>(

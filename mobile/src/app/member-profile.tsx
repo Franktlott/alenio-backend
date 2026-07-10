@@ -127,6 +127,7 @@ export default function MemberProfileScreen() {
     tab?: string;
     startCheckIn?: string;
     templateId?: string;
+    plannedEventId?: string;
   }>();
   const activeTeamIdFromStore = useTeamStore((s) => s.activeTeamId);
   const teamId = params.teamId ?? activeTeamIdFromStore ?? "";
@@ -203,6 +204,10 @@ export default function MemberProfileScreen() {
   const shouldAutoStartCheckIn = params.startCheckIn === "1";
   const preferredCheckInTemplateId =
     typeof params.templateId === "string" && params.templateId.length > 0 ? params.templateId : null;
+  const plannedCheckInEventId =
+    typeof params.plannedEventId === "string" && params.plannedEventId.length > 0
+      ? params.plannedEventId
+      : null;
 
   const stats = memberStats?.[memberUserId];
   const displayName = profileMember?.user.name ?? profileMember?.user.email ?? "Member";
@@ -559,6 +564,7 @@ export default function MemberProfileScreen() {
               isSelf={isSelf}
               autoStartCheckIn={shouldAutoStartCheckIn}
               preferredTemplateId={preferredCheckInTemplateId}
+              plannedEventId={plannedCheckInEventId}
             />
           )}
         </View>

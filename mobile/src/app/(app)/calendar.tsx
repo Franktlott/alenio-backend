@@ -727,6 +727,7 @@ export default function CalendarScreen() {
                                     activeTeamId!,
                                     event.oneOnOneMemberUserId!,
                                     event.oneOnOneTemplateId,
+                                    event.id,
                                   ),
                                 )
                               }
