@@ -4,12 +4,9 @@ import { z } from "zod";
 import { auth } from "../auth";
 import { authGuard } from "../middleware/auth-guard";
 import { prisma } from "../prisma";
-import { SENECA_DATA_GROUNDING_RULES } from "../lib/seneca-grounding";
 import { senecaAvailable, senecaJson, senecaUnavailableMessage } from "../lib/seneca-openai";
-import {
-  buildSenecaWorkspaceContext,
-  senecaWorkspaceContextToPrompt,
-} from "../lib/seneca-workspace-context";
+import { buildSenecaChatContext, senecaChatContextToPrompt } from "../lib/seneca-chat-context";
+import type { SenecaWorkspaceContext } from "../lib/seneca-workspace-context";
 import { normalizeCheckInTemplateDraft } from "../lib/seneca-normalize";
 import {
   buildPlanConfirmationMessage,
@@ -103,7 +100,7 @@ type SenecaAskAi = {
 async function loadUpcomingPlannedCheckIns(
   teamId: string,
   managerUserId: string,
-  ctx: Awaited<ReturnType<typeof buildSenecaWorkspaceContext>>,
+  ctx: SenecaWorkspaceContext,
 ): Promise<PlannedCheckInEventRow[]> {
   const now = Date.now();
   const events = await prisma.calendarEvent.findMany({
@@ -133,7 +130,7 @@ function resolveCancelProposal(
   question: string,
   messages: SenecaChatTurn[],
   upcoming: PlannedCheckInEventRow[],
-  ctx: Awaited<ReturnType<typeof buildSenecaWorkspaceContext>>,
+  ctx: SenecaWorkspaceContext,
   managerTimeZone: string,
 ): SenecaCancelOneOnOneProposal | null {
   if (!conversationHasCancelCheckInTopic(messages, question)) return null;
@@ -144,7 +141,7 @@ function resolvePlanProposal(
   draft: SenecaPlanOneOnOneDraft | null | undefined,
   question: string,
   messages: SenecaChatTurn[],
-  ctx: Awaited<ReturnType<typeof buildSenecaWorkspaceContext>>,
+  ctx: SenecaWorkspaceContext,
   managerTimeZone: string,
 ): SenecaPlanOneOnOneProposal | null {
   const sourceText = conversationSourceText(messages, question);
@@ -152,61 +149,19 @@ function resolvePlanProposal(
   return finalizePlanOneOnOneProposal(draft ?? {}, question, ctx, managerTimeZone, sourceText);
 }
 
-function ruleBasedAskResponse(question: string, ctx: Awaited<ReturnType<typeof buildSenecaWorkspaceContext>>): SenecaAskAi {
+function ruleBasedAskResponse(question: string): SenecaAskAi {
   const q = question.toLowerCase();
-  const leaders = ctx.members.filter((m) => m.role === "Owner" || m.role === "Team leader");
 
   if (q.includes("quote")) {
     return {
       message:
-        "Leadership is practiced in the small moments — a clear expectation, a timely check-in, and recognition when the floor runs well. What routine on your team deserves more consistency this week?",
-      suggestedActions: [
-        {
-          title: "Recognize a team win",
-          description: "Post a shout-out on the activity feed",
-          action: "create_recognition",
-        },
-      ],
-    };
-  }
-
-  if (q.includes("manager") || q.includes("leader") || q.includes("owner")) {
-    const leaderNames = leaders.map((m) => `${m.name} (${m.role})`).join(", ");
-    return {
-      message: leaderNames
-        ? `In ${ctx.teamName}, your leadership roles include: ${leaderNames}. I can help you prep check-ins, follow up on tasks, or recognize wins across the team.`
-        : `I don't see a designated team leader in ${ctx.teamName} yet. Check Team to confirm roles and ownership.`,
-      insights: leaders.map((m) => ({
-        label: m.name,
-        detail: `${m.role} · ${m.overdueTasks} overdue · ${m.activeDevGoals} dev goal${m.activeDevGoals !== 1 ? "s" : ""}`,
-      })),
-      suggestedActions: [{ title: "Open Team", description: "Review members and roles", action: "open_team" }],
-    };
-  }
-
-  if (ctx.overdueTasks.length > 0) {
-    return {
-      message: `${ctx.teamName} has ${ctx.overdueTasks.length} overdue task${ctx.overdueTasks.length !== 1 ? "s" : ""} right now. Start there before adding new work.`,
-      insights: ctx.overdueTasks.slice(0, 3).map((t) => ({
-        label: t.title,
-        detail: `${t.assigneeNames.join(", ")}${t.dueDate ? ` · due ${new Date(t.dueDate).toLocaleDateString()}` : ""}`,
-      })),
-      suggestedActions: [
-        {
-          title: "View overdue tasks",
-          description: "Open Workspace filtered to past-due work",
-          action: "view_overdue_tasks",
-        },
-      ],
+        "Leadership is practiced in the small moments — a clear expectation, a timely check-in, and recognition when the floor runs well. What would you like help with on your team this week?",
     };
   }
 
   return {
-    message: `${ctx.teamName} looks steady from here — no overdue tasks flagged. Consider a proactive check-in or recognition post to keep momentum.`,
-    suggestedActions: [
-      { title: "Schedule check-in", description: "Open Team and start check-in prep", action: "schedule_check_in" },
-      { title: "Recognize a win", description: "Celebrate progress on the activity feed", action: "create_recognition" },
-    ],
+    message:
+      "I'm here to help with leadership coaching, check-in scheduling, and team conversations. What would you like to work on?",
   };
 }
 
@@ -220,7 +175,7 @@ senecaTeamRouter.post("/ask", zValidator("json", askBodySchema), async (c) => {
     return c.json({ error: { message: "Only managers can use Seneca" } }, 403);
   }
 
-  const ctx = await buildSenecaWorkspaceContext(teamId, user.id);
+  const ctx = await buildSenecaChatContext(teamId, user.id);
   const manager = await prisma.user.findUnique({
     where: { id: user.id },
     select: { timezone: true },
@@ -228,7 +183,7 @@ senecaTeamRouter.post("/ask", zValidator("json", askBodySchema), async (c) => {
   const managerTimeZone = resolveTimeZone(manager?.timezone);
 
   if (!senecaAvailable()) {
-    const fallback = ruleBasedAskResponse(body.question, ctx);
+    const fallback = ruleBasedAskResponse(body.question);
     const cancelIntent = conversationHasCancelCheckInTopic(body.messages, body.question);
     const upcomingPlanned = cancelIntent
       ? await loadUpcomingPlannedCheckIns(teamId, user.id, ctx)
@@ -254,10 +209,8 @@ senecaTeamRouter.post("/ask", zValidator("json", askBodySchema), async (c) => {
             : cancelIntent
               ? buildCancelClarificationMessage(upcomingPlanned, managerTimeZone)
               : fallback.message,
-        insights: fallback.insights ?? [],
-        suggestedActions: cancelOneOnOne || planOneOnOne
-          ? []
-          : fallback.suggestedActions ?? [],
+        insights: [],
+        suggestedActions: cancelOneOnOne || planOneOnOne ? [] : [],
         planOneOnOne,
         cancelOneOnOne,
       },
@@ -310,37 +263,36 @@ CANCELLING A CHECK-IN (critical):
 
     const out = await senecaJson<SenecaAskAi>(
       `You are Seneca, an AI leadership assistant for frontline managers using Alenio.
-Answer the manager using ONLY the workspace context JSON below and the conversation history.
+Answer using the conversation history and the light team context below (team name and member names only).
 - Be practical, warm, and concise (2-4 sentences unless they ask for a list).
-- If they ask for a leadership quote, give a short quote plus one sentence on how it applies to their team today.
-- If they ask about a manager, leader, or team member, use names and stats from the context.
-- If the context lacks information, say what you know and suggest a concrete next step.
-- Do not invent tasks, people, or metrics not in the context.
+- You do NOT have access to live tasks, metrics, overdue work, or check-in history unless the manager tells you in chat.
+- Do not invent tasks, overdue items, or performance data.
+- For leadership coaching, give actionable advice grounded in what the manager shares.
+- Use team member names from context when scheduling check-ins.
 ${schedulingRules}
-${SENECA_DATA_GROUNDING_RULES}
 
 ${conversationPrompt}
 
 Return JSON:
 {
   "message": "string — your direct answer",
-  "insights": [{ "label": "string", "detail": "optional string" }],
-  "suggestedActions": [{ "title": "string", "description": "string", "action": "view_overdue_tasks"|"schedule_check_in"|"create_recognition"|"create_follow_up_task"|"build_checklist"|"open_team" }],
   "planOneOnOne": { "memberName": "string", "date": "YYYY-MM-DD", "time": "HH:mm or null", "durationMinutes": 45 } | null,
   "cancelOneOnOne": { "memberName": "string", "date": "YYYY-MM-DD or null", "time": "HH:mm or null" } | null
-}
-Include 0-4 insights and 0-3 suggestedActions when helpful.`,
-      JSON.stringify(
-        {
-          ...ctx,
-          ...(cancelIntent ? { upcomingPlannedCheckIns: upcomingPlanned.map((event) => ({
-            memberName: event.memberName,
-            startDate: event.startDate.toISOString(),
-          })) } : {}),
-        },
-        null,
-        2,
-      ),
+}`,
+      cancelIntent
+        ? JSON.stringify(
+            {
+              teamName: ctx.teamName,
+              members: ctx.members.map((member) => member.name),
+              upcomingPlannedCheckIns: upcomingPlanned.map((event) => ({
+                memberName: event.memberName,
+                startDate: event.startDate.toISOString(),
+              })),
+            },
+            null,
+            2,
+          )
+        : senecaChatContextToPrompt(ctx),
     );
 
     const cancelOneOnOne = resolveCancelProposal(
@@ -366,18 +318,14 @@ Include 0-4 insights and 0-3 suggestedActions when helpful.`,
       data: {
         available: true,
         message,
-        insights: Array.isArray(out.insights) ? out.insights.slice(0, 6) : [],
-        suggestedActions: cancelOneOnOne || planOneOnOne
-          ? []
-          : Array.isArray(out.suggestedActions)
-            ? out.suggestedActions.slice(0, 4)
-            : [],
+        insights: [],
+        suggestedActions: [],
         planOneOnOne,
         cancelOneOnOne,
       },
     });
   } catch (e) {
-    const fallback = ruleBasedAskResponse(body.question, ctx);
+    const fallback = ruleBasedAskResponse(body.question);
     const cancelIntent = conversationHasCancelCheckInTopic(body.messages, body.question);
     const upcomingPlanned = cancelIntent
       ? await loadUpcomingPlannedCheckIns(teamId, user.id, ctx)
@@ -405,10 +353,8 @@ Include 0-4 insights and 0-3 suggestedActions when helpful.`,
               : e instanceof Error
                 ? e.message
                 : fallback.message,
-        insights: fallback.insights ?? [],
-        suggestedActions: cancelOneOnOne || planOneOnOne
-          ? []
-          : fallback.suggestedActions ?? [],
+        insights: [],
+        suggestedActions: cancelOneOnOne || planOneOnOne ? [] : [],
         planOneOnOne,
         cancelOneOnOne,
       },
