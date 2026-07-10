@@ -31,6 +31,16 @@ export type SenecaCancelOneOnOneProposal = {
   timeLabel: string;
 };
 
+export type SenecaCreateTaskProposal = {
+  title: string;
+  description: string | null;
+  assigneeUserId: string;
+  assigneeName: string;
+  dueDate: string | null;
+  dueDateLabel: string | null;
+  priority: "low" | "medium" | "high";
+};
+
 export type SenecaAskResponse = {
   available: boolean;
   message: string;
@@ -42,6 +52,7 @@ export type SenecaAskResponse = {
   }>;
   planOneOnOne?: SenecaPlanOneOnOneProposal | null;
   cancelOneOnOne?: SenecaCancelOneOnOneProposal | null;
+  createTask?: SenecaCreateTaskProposal | null;
 };
 
 export function fetchSenecaAsk(teamId: string, question: string, messages: SenecaChatTurn[] = []) {

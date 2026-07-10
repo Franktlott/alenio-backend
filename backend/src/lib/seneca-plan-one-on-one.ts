@@ -189,6 +189,32 @@ export function extractDateFromQuestion(
     return addDaysInTimeZone(now, 1, tz);
   }
 
+  const thisWeekday = q.match(
+    /\b(?:by\s+)?this\s+(sunday|monday|tuesday|wednesday|thursday|friday|saturday|sun|mon|tue|tues|wed|thu|thur|thurs|fri|sat)\b/,
+  );
+  if (thisWeekday?.[1]) {
+    const weekday = WEEKDAYS[thisWeekday[1]];
+    if (weekday !== undefined) {
+      const current = getZonedDayOfWeek(now, tz);
+      let delta = weekday - current;
+      if (delta < 0) delta += 7;
+      return addDaysInTimeZone(now, delta, tz);
+    }
+  }
+
+  const byWeekday = q.match(
+    /\b(?:by|on|before)\s+(sunday|monday|tuesday|wednesday|thursday|friday|saturday|sun|mon|tue|tues|wed|thu|thur|thurs|fri|sat)\b/,
+  );
+  if (byWeekday?.[1]) {
+    const weekday = WEEKDAYS[byWeekday[1]];
+    if (weekday !== undefined) {
+      const current = getZonedDayOfWeek(now, tz);
+      let delta = weekday - current;
+      if (delta <= 0) delta += 7;
+      return addDaysInTimeZone(now, delta, tz);
+    }
+  }
+
   const nextWeekday = q.match(
     /\bnext\s+(sunday|monday|tuesday|wednesday|thursday|friday|saturday|sun|mon|tue|tues|wed|thu|thur|thurs|fri|sat)\b/,
   );

@@ -25,6 +25,14 @@ import {
   type SenecaCancelOneOnOneDraft,
   type SenecaCancelOneOnOneProposal,
 } from "../lib/seneca-cancel-one-on-one";
+import {
+  buildCreateTaskConfirmationMessage,
+  conversationHasCreateTaskTopic,
+  conversationSourceText as createTaskConversationSourceText,
+  finalizeCreateTaskProposal,
+  type SenecaCreateTaskDraft,
+  type SenecaCreateTaskProposal,
+} from "../lib/seneca-create-task";
 import { calendarDayFromInstant, resolveTimeZone } from "../lib/timezone";
 
 type Variables = {
@@ -95,6 +103,7 @@ type SenecaAskAi = {
   }>;
   planOneOnOne?: SenecaPlanOneOnOneDraft | null;
   cancelOneOnOne?: SenecaCancelOneOnOneDraft | null;
+  createTask?: SenecaCreateTaskDraft | null;
 };
 
 async function loadUpcomingPlannedCheckIns(
@@ -149,6 +158,18 @@ function resolvePlanProposal(
   return finalizePlanOneOnOneProposal(draft ?? {}, question, ctx, managerTimeZone, sourceText);
 }
 
+function resolveCreateTaskProposal(
+  draft: SenecaCreateTaskDraft | null | undefined,
+  question: string,
+  messages: SenecaChatTurn[],
+  ctx: SenecaWorkspaceContext,
+  managerTimeZone: string,
+): SenecaCreateTaskProposal | null {
+  const sourceText = createTaskConversationSourceText(messages, question);
+  if (!conversationHasCreateTaskTopic(messages, question)) return null;
+  return finalizeCreateTaskProposal(draft ?? {}, question, ctx, managerTimeZone, sourceText);
+}
+
 function ruleBasedAskResponse(question: string): SenecaAskAi {
   const q = question.toLowerCase();
 
@@ -199,6 +220,9 @@ senecaTeamRouter.post("/ask", zValidator("json", askBodySchema), async (c) => {
     const planOneOnOne = cancelOneOnOne
       ? null
       : resolvePlanProposal(null, body.question, body.messages, ctx, managerTimeZone);
+    const createTask = cancelOneOnOne || planOneOnOne
+      ? null
+      : resolveCreateTaskProposal(null, body.question, body.messages, ctx, managerTimeZone);
     return c.json({
       data: {
         available: false,
@@ -206,13 +230,16 @@ senecaTeamRouter.post("/ask", zValidator("json", askBodySchema), async (c) => {
           ? buildCancelConfirmationMessage(cancelOneOnOne)
           : planOneOnOne
             ? buildPlanConfirmationMessage(planOneOnOne)
-            : cancelIntent
-              ? buildCancelClarificationMessage(upcomingPlanned, managerTimeZone)
-              : fallback.message,
+            : createTask
+              ? buildCreateTaskConfirmationMessage(createTask)
+              : cancelIntent
+                ? buildCancelClarificationMessage(upcomingPlanned, managerTimeZone)
+                : fallback.message,
         insights: [],
-        suggestedActions: cancelOneOnOne || planOneOnOne ? [] : [],
+        suggestedActions: cancelOneOnOne || planOneOnOne || createTask ? [] : [],
         planOneOnOne,
         cancelOneOnOne,
+        createTask,
       },
     });
   }
@@ -220,6 +247,8 @@ senecaTeamRouter.post("/ask", zValidator("json", askBodySchema), async (c) => {
   try {
     const cancelIntent = conversationHasCancelCheckInTopic(body.messages, body.question);
     const scheduleIntent = !cancelIntent && conversationHasScheduleTopic(body.messages, body.question);
+    const taskIntent =
+      !cancelIntent && !scheduleIntent && conversationHasCreateTaskTopic(body.messages, body.question);
     const upcomingPlanned = cancelIntent
       ? await loadUpcomingPlannedCheckIns(teamId, user.id, ctx)
       : [];
@@ -256,7 +285,21 @@ CANCELLING A CHECK-IN (critical):
 - In "message", summarize what you will cancel and ask them to confirm before it is removed.
 - If the check-in is unclear, ask which one using upcomingPlannedCheckIns and set cancelOneOnOne to null.
 `
-        : `
+        : taskIntent
+          ? `
+CREATING A TASK (critical):
+- The manager wants to create or assign a task for a team member, or is continuing a task-creation conversation.
+- You CANNOT create tasks yourself.
+- NEVER say you have already created, assigned, or saved a task unless the manager explicitly confirmed in this same conversation and you are only restating the pending task for confirmation.
+- Do NOT give generic coaching advice (like "check in with them") when the manager is providing task details. Stay in task-creation mode until they confirm or dismiss.
+- Use the full conversation to resolve assignee, title, description, due date, and priority. Follow-up messages like "yes", "confirm", or added details refer to the task under discussion.
+- The manager's local date today (${managerTimeZone}) is ${todayYmd} (${todayLabel}). Interpret "today", "tonight", "tomorrow", and weekdays like "this Sunday" or "by Sunday" relative to this date.
+- When assignee and work are clear, ALWAYS return createTask with title, assigneeName, dueDate, and priority. The app shows a confirmation card — your job is to draft, not coach.
+- Return "createTask": { "title": "string", "description": "string or null", "assigneeName": "string", "dueDate": "YYYY-MM-DD or null", "priority": "low|medium|high or null" } when you have enough detail (at minimum assignee and title).
+- In "message", summarize the proposed task and ask them to confirm below before it is created.
+- If assignee or title is unclear, ask one short clarifying question in "message" and set createTask to null.
+`
+          : `
 - NEVER claim you scheduled, created, saved, cancelled, or deleted calendar events, tasks, or check-ins unless the manager has already confirmed an action in this app.
 - Treat the conversation as continuous. Follow-up messages refer to earlier context.
 `;
@@ -277,7 +320,8 @@ Return JSON:
 {
   "message": "string — your direct answer",
   "planOneOnOne": { "memberName": "string", "date": "YYYY-MM-DD", "time": "HH:mm or null", "durationMinutes": 45 } | null,
-  "cancelOneOnOne": { "memberName": "string", "date": "YYYY-MM-DD or null", "time": "HH:mm or null" } | null
+  "cancelOneOnOne": { "memberName": "string", "date": "YYYY-MM-DD or null", "time": "HH:mm or null" } | null,
+  "createTask": { "title": "string", "description": "string or null", "assigneeName": "string", "dueDate": "YYYY-MM-DD or null", "priority": "low|medium|high or null" } | null
 }`,
       cancelIntent
         ? JSON.stringify(
@@ -306,13 +350,18 @@ Return JSON:
     const planOneOnOne = cancelOneOnOne
       ? null
       : resolvePlanProposal(out.planOneOnOne, body.question, body.messages, ctx, managerTimeZone);
+    const createTask = cancelOneOnOne || planOneOnOne
+      ? null
+      : resolveCreateTaskProposal(out.createTask, body.question, body.messages, ctx, managerTimeZone);
     const message = cancelOneOnOne
       ? buildCancelConfirmationMessage(cancelOneOnOne)
       : planOneOnOne
         ? buildPlanConfirmationMessage(planOneOnOne)
-        : cancelIntent
-          ? buildCancelClarificationMessage(upcomingPlanned, managerTimeZone)
-          : out.message?.trim() || "I'm here to help you lead the floor. What would you like to focus on?";
+        : createTask
+          ? buildCreateTaskConfirmationMessage(createTask)
+          : cancelIntent
+            ? buildCancelClarificationMessage(upcomingPlanned, managerTimeZone)
+            : out.message?.trim() || "I'm here to help you lead the floor. What would you like to focus on?";
 
     return c.json({
       data: {
@@ -322,6 +371,7 @@ Return JSON:
         suggestedActions: [],
         planOneOnOne,
         cancelOneOnOne,
+        createTask,
       },
     });
   } catch (e) {
@@ -341,6 +391,9 @@ Return JSON:
     const planOneOnOne = cancelOneOnOne
       ? null
       : resolvePlanProposal(null, body.question, body.messages, ctx, managerTimeZone);
+    const createTask = cancelOneOnOne || planOneOnOne
+      ? null
+      : resolveCreateTaskProposal(null, body.question, body.messages, ctx, managerTimeZone);
     return c.json({
       data: {
         available: false,
@@ -348,15 +401,18 @@ Return JSON:
           ? buildCancelConfirmationMessage(cancelOneOnOne)
           : planOneOnOne
             ? buildPlanConfirmationMessage(planOneOnOne)
-            : cancelIntent
-              ? buildCancelClarificationMessage(upcomingPlanned, managerTimeZone)
-              : e instanceof Error
-                ? e.message
-                : fallback.message,
+            : createTask
+              ? buildCreateTaskConfirmationMessage(createTask)
+              : cancelIntent
+                ? buildCancelClarificationMessage(upcomingPlanned, managerTimeZone)
+                : e instanceof Error
+                  ? e.message
+                  : fallback.message,
         insights: [],
-        suggestedActions: cancelOneOnOne || planOneOnOne ? [] : [],
+        suggestedActions: cancelOneOnOne || planOneOnOne || createTask ? [] : [],
         planOneOnOne,
         cancelOneOnOne,
+        createTask,
       },
     });
   }
