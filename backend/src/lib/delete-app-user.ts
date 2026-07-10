@@ -2,6 +2,7 @@ import { prisma } from "../prisma";
 import { deleteAllUserStorageObjects } from "./firebase-storage";
 import { deleteNeonAuthUser } from "./delete-neon-auth-user";
 import { assertAccountDeletionAllowed } from "./account-deletion-readiness";
+import { deleteWorkspaceCompletely } from "./delete-workspace";
 
 /**
  * Permanently deletes a user: app rows in Postgres, storage, then Neon Auth.
@@ -12,6 +13,17 @@ export async function deleteAppUserCompletely(userId: string): Promise<void> {
 
   const existing = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
   if (!existing) return;
+
+  const ownedTeams = await prisma.teamMember.findMany({
+    where: { userId, role: "owner" },
+    select: { teamId: true },
+  });
+  for (const { teamId } of ownedTeams) {
+    const memberCount = await prisma.teamMember.count({ where: { teamId } });
+    if (memberCount === 1) {
+      await deleteWorkspaceCompletely(teamId);
+    }
+  }
 
   await prisma.$transaction(
     async (tx) => {
@@ -36,17 +48,6 @@ export async function deleteAppUserCompletely(userId: string): Promise<void> {
       await tx.topic.deleteMany({ where: { createdById: userId } });
       await tx.calendarEvent.deleteMany({ where: { createdById: userId } });
       await tx.teamActivityReaction.deleteMany({ where: { userId } });
-
-      const ownedTeams = await tx.teamMember.findMany({
-        where: { userId, role: "owner" },
-        select: { teamId: true },
-      });
-      for (const { teamId } of ownedTeams) {
-        const memberCount = await tx.teamMember.count({ where: { teamId } });
-        if (memberCount === 1) {
-          await tx.team.delete({ where: { id: teamId } });
-        }
-      }
 
       await tx.user.delete({ where: { id: userId } });
     },

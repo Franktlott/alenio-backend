@@ -28,6 +28,7 @@ import {
   listLinkedGoDevices,
   revokeLinkedGoDevice,
 } from "../lib/workplace-alerts";
+import { deleteWorkspaceCompletely } from "../lib/delete-workspace";
 import {
   canManageTeamRoster,
   cleanupWorkspaceMemberDeparture,
@@ -474,9 +475,24 @@ teamsRouter.delete("/:teamId", async (c) => {
     );
   }
 
-  await prisma.team.delete({ where: { id: teamId } });
+  try {
+    await deleteWorkspaceCompletely(teamId);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[teams] delete workspace failed team=${teamId} user=${user.id}:`, err);
+    return c.json(
+      {
+        error: {
+          message: "Could not delete this workspace. Please try again or contact support.",
+          code: "WORKSPACE_DELETE_FAILED",
+          detail: msg.slice(0, 300),
+        },
+      },
+      500,
+    );
+  }
 
-  return c.body(null, 204);
+  return c.json({ data: { ok: true, deletedTeamId: teamId } });
 });
 
 // GET /api/teams/:teamId/join-requests - list pending join requests
