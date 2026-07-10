@@ -328,7 +328,7 @@ tasksRouter.get("/", async (c) => {
       ...(resolvedAssigneeId ? { assignments: { some: { userId: resolvedAssigneeId } } } : {}),
       // "me" is a shorthand that resolves to the authenticated user's ID
       ...(creatorId ? { creatorId: creatorId === "me" ? user.id : creatorId } : {}),
-      ...(monthFilters.length && !activeOnly ? { AND: monthFilters } : {}),
+      ...(monthFilters.length ? { AND: monthFilters } : {}),
     },
     include: {
       assignments: {

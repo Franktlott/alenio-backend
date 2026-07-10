@@ -102,6 +102,15 @@ function toLocalIso(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+function taskMatchesCalendarMonth(task: Task, year: number, month: number): boolean {
+  if (!task.dueDate) {
+    const now = new Date();
+    return year === now.getFullYear() && month === now.getMonth();
+  }
+  const due = new Date(task.dueDate);
+  return due.getFullYear() === year && due.getMonth() === month;
+}
+
 function buildWorkspaceTasksPath(
   teamId: string,
   opts: {
@@ -122,6 +131,8 @@ function buildWorkspaceTasksPath(
     params.set("status", "done");
   } else {
     params.set("activeOnly", "true");
+    params.set("dueYear", String(opts.calendarYear));
+    params.set("dueMonth", String(opts.calendarMonth));
   }
   if (opts.cursor) params.set("cursor", opts.cursor);
   return `/api/teams/${teamId}/tasks?${params.toString()}`;
@@ -190,24 +201,39 @@ function MiniCalendar({
     if (viewMonth === 11) onViewMonthChange(viewYear + 1, 0);
     else onViewMonthChange(viewYear, viewMonth + 1);
   };
+  const goToToday = () => {
+    onViewMonthChange(today.getFullYear(), today.getMonth());
+    onSelectDay(toLocalIso(today));
+  };
+  const showTodayButton =
+    viewYear !== today.getFullYear() ||
+    viewMonth !== today.getMonth() ||
+    selectedDay !== toLocalIso(today);
 
   return (
     <View style={{ backgroundColor: "white", marginHorizontal: 16, marginTop: 10, marginBottom: 4, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 10, shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 2 }}>
       {/* Month nav */}
-      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-        <TouchableOpacity onPress={prevMonth} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: showTodayButton ? 2 : 8 }}>
+        <TouchableOpacity onPress={prevMonth} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} testID="workspace-calendar-prev-month">
           <ChevronLeft size={18} color="#64748B" />
         </TouchableOpacity>
-        <Text style={{ fontSize: 14, fontWeight: "700", color: "#0F172A" }}>
-          {MONTH_NAMES[viewMonth]} {viewYear}
-        </Text>
-        <TouchableOpacity onPress={nextMonth} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+        <View style={{ alignItems: "center", gap: 2 }}>
+          <Text style={{ fontSize: 14, fontWeight: "700", color: "#0F172A" }}>
+            {MONTH_NAMES[viewMonth]} {viewYear}
+          </Text>
+          {showTodayButton ? (
+            <TouchableOpacity onPress={goToToday} hitSlop={{ top: 6, bottom: 6, left: 8, right: 8 }} testID="workspace-calendar-today-button">
+              <Text style={{ color: "#4361EE", fontSize: 12, fontWeight: "700" }}>Today</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+        <TouchableOpacity onPress={nextMonth} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} testID="workspace-calendar-next-month">
           <ChevronRight size={18} color="#64748B" />
         </TouchableOpacity>
       </View>
 
       {/* Day headers */}
-      <View style={{ flexDirection: "row", marginBottom: 2 }}>
+      <View style={{ flexDirection: "row", marginBottom: 2, marginTop: showTodayButton ? 6 : 0 }}>
         {DAY_LABELS.map((d) => (
           <Text key={d} style={{ flex: 1, textAlign: "center", fontSize: 11, fontWeight: "600", color: "#94A3B8" }}>{d}</Text>
         ))}
@@ -700,7 +726,7 @@ export default function TasksScreen() {
     const queryKey =
       filter === "completed"
         ? (["tasks", activeTeamId, "mine", calendarYear, calendarMonth, "completed"] as const)
-        : (["tasks", activeTeamId, "mine", "active"] as const);
+        : (["tasks", activeTeamId, "mine", calendarYear, calendarMonth, "active"] as const);
     try {
       const result = await api.get<{ tasks: Task[]; nextCursor: string | null }>(
         buildWorkspaceTasksPath(activeTeamId, {
@@ -762,7 +788,7 @@ export default function TasksScreen() {
     error: myActiveLoadError,
     refetch: refetchMyActiveTasks,
   } = useQuery({
-    queryKey: ["tasks", activeTeamId, "mine", "active"],
+    queryKey: ["tasks", activeTeamId, "mine", calendarYear, calendarMonth, "active"],
     queryFn: async () =>
       api.get<{ tasks: Task[]; nextCursor: string | null }>(
         buildWorkspaceTasksPath(activeTeamId!, {
@@ -798,7 +824,7 @@ export default function TasksScreen() {
 
   // Tasks I created — Team tab (prefetched for leaders so switching tabs is instant)
   const { data: teamTasksData, isPending: teamTasksPending } = useQuery({
-    queryKey: ["tasks", activeTeamId, "team"],
+    queryKey: ["tasks", activeTeamId, "team", calendarYear, calendarMonth],
     queryFn: async () => {
       const result = await api.get<{ tasks: Task[]; nextCursor: string | null }>(
         buildWorkspaceTasksPath(activeTeamId!, {
@@ -1132,15 +1158,20 @@ export default function TasksScreen() {
     return true;
   });
 
+  const monthScopedTasks =
+    filter === "completed" || selectedDay
+      ? filteredTasks
+      : filteredTasks.filter((t) => taskMatchesCalendarMonth(t, calendarYear, calendarMonth));
+
   const dayScopedTasks = selectedDay
-    ? filteredTasks.filter((t) => {
+    ? monthScopedTasks.filter((t) => {
         if (filter === "completed") {
           return t.completedAt ? toLocalIso(new Date(t.completedAt)) === selectedDay : false;
         }
         if (!t.dueDate) return false;
         return toLocalIso(new Date(t.dueDate)) === selectedDay;
       })
-    : filteredTasks;
+    : monthScopedTasks;
 
   const tasks: Task[] = dayScopedTasks.slice().sort((a, b) => {
     if (sort === "priority") {
