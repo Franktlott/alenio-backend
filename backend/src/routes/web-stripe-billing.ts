@@ -122,7 +122,7 @@ export function mountWebStripeBilling(webRouter: Hono): void {
         {
           error: {
             message:
-              "This team’s subscription is managed in the mobile app (App Store). Web checkout is only for teams billed on the web.",
+              "This workspace already has an active Team plan. Cancel or change it in Plan & Access before starting web checkout.",
             code: "MOBILE_MANAGED",
           },
         },

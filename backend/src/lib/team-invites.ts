@@ -122,8 +122,8 @@ export async function sendTeamInviteEmail(input: {
   const iosStore = env.IOS_APP_STORE_URL?.trim() ?? "";
   const androidStore = env.ANDROID_PLAY_STORE_URL?.trim() ?? "";
   const storeLinks = [
-    iosStore ? `<a href="${iosStore}" style="color: #4361EE;">App Store</a>` : "",
-    androidStore ? `<a href="${androidStore}" style="color: #4361EE;">Google Play</a>` : "",
+    iosStore ? `<a href="${iosStore}" style="color: #4361EE;">Download for iOS</a>` : "",
+    androidStore ? `<a href="${androidStore}" style="color: #4361EE;">Download for Android</a>` : "",
   ]
     .filter(Boolean)
     .join(" · ");

@@ -72,23 +72,13 @@ export async function getAccountDeletionReadiness(userId: string): Promise<Accou
     const billingProvider = billingProviderFromSubscription(subscription);
     const paidActive = isActivePaidTeamPlan(subscription);
 
-    if (paidActive && billingProvider === "stripe") {
+    if (paidActive && (billingProvider === "stripe" || billingProvider === "mobile_store")) {
       issues.push({
-        code: "active_web_billing",
+        code: billingProvider === "stripe" ? "active_web_billing" : "mobile_store_billing",
         message: `Cancel the Team plan for "${teamName}" in Plan & Access (or the web billing dashboard) before deleting your account.`,
         teamId,
         teamName,
         blocking: true,
-      });
-    }
-
-    if (paidActive && billingProvider === "mobile_store") {
-      issues.push({
-        code: "mobile_store_billing",
-        message: `Cancel your App Store or Google Play subscription for "${teamName}" in your device subscription settings to avoid future charges.`,
-        teamId,
-        teamName,
-        blocking: false,
       });
     }
   }
