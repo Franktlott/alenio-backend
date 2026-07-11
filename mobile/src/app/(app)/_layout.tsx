@@ -23,6 +23,7 @@ import type { CalendarEvent, Conversation, Team, Task } from "@/lib/types";
 import MeetingBanner from "@/components/MeetingBanner";
 import { SenecaFloatingLauncher } from "@/components/seneca/SenecaFloatingLauncher";
 import { NO_WORKSPACE_WELCOME_PATH, resolveActiveTeamId } from "@/lib/no-workspace-routing";
+import { realtimeClient, userRealtimeChannel } from "@/lib/realtime-client";
 
 export const unstable_settings = {
   initialRouteName: "chat",
@@ -72,6 +73,7 @@ function FixedTabBar({ state, navigation }: any) {
     queryFn: () => api.post<Record<string, number>>("/api/dms/unread-counts", { lastReadIds: dmUnreadLastReadIds }),
     enabled: !!session?.user && conversations.length > 0,
     refetchInterval: 5000,
+    staleTime: 0,
   });
   const unreadCount = Object.values(dmUnreadCounts).reduce((a, b) => a + b, 0);
 
@@ -86,9 +88,28 @@ function FixedTabBar({ state, navigation }: any) {
     queryKey: ["team-unread-counts", activeTeamId, teamChannelLastReadIds],
     queryFn: () => api.post<Record<string, number>>(`/api/teams/${activeTeamId}/messages/unread-counts`, { lastReadIds: teamChannelLastReadIds }),
     enabled: !!activeTeamId && !!session?.user,
-    refetchInterval: 15000,
+    refetchInterval: 5000,
+    staleTime: 0,
   });
   const teamUnreadCount = Object.values(teamUnreadCountsMap).reduce((a: number, b: number) => a + b, 0);
+
+  // Keep unread badges in sync the moment a message arrives (even when not in that chat).
+  useEffect(() => {
+    const userId = session?.user?.id;
+    if (!userId) return;
+    const channel = userRealtimeChannel(userId);
+    realtimeClient.subscribe([channel]);
+    const offInbox = realtimeClient.onInboxUpdated(() => {
+      void queryClient.invalidateQueries({ queryKey: ["dm-unread-counts"] });
+      void queryClient.invalidateQueries({ queryKey: ["team-unread-counts"] });
+      void queryClient.invalidateQueries({ queryKey: ["dms"] });
+      void queryClient.invalidateQueries({ queryKey: ["messages", activeTeamId, "general", "preview"] });
+    });
+    return () => {
+      offInbox();
+      realtimeClient.unsubscribe([channel]);
+    };
+  }, [session?.user?.id, activeTeamId, queryClient]);
 
   const { data: taskCount = 0 } = useQuery({
     queryKey: ["tasks-count", activeTeamId],

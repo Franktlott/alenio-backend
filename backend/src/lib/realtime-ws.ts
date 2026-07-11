@@ -7,6 +7,7 @@ import {
   subscribeSocket,
   teamRealtimeKey,
   unsubscribeSocket,
+  userRealtimeKey,
   type RealtimeSocketData,
 } from "./realtime-hub";
 
@@ -38,6 +39,13 @@ async function filterAllowedChannels(userId: string, channels: string[]): Promis
   const allowed: string[] = [];
   for (const key of channels) {
     if (typeof key !== "string" || !key.trim()) continue;
+
+    const userMatch = /^user:(.+)$/.exec(key);
+    if (userMatch) {
+      const targetUserId = userMatch[1]!;
+      if (targetUserId === userId) allowed.push(userRealtimeKey(userId));
+      continue;
+    }
 
     const teamMatch = /^team:([^:]+):topic:(.+)$/.exec(key);
     if (teamMatch) {

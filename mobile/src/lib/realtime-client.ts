@@ -17,15 +17,26 @@ export type RealtimeDmMessageEvent = {
   message: unknown;
 };
 
+export type RealtimeInboxUpdatedEvent = {
+  type: "inbox.updated";
+  channel: "inbox";
+  kind: "team" | "dm";
+  teamId?: string;
+  topicId?: string | null;
+  conversationId?: string;
+};
+
 export type RealtimeServerEvent =
   | { type: "ready"; userId: string }
   | { type: "pong" }
   | { type: "subscribed"; channels: string[] }
   | { type: "unsubscribed"; channels: string[] }
   | RealtimeTeamMessageEvent
-  | RealtimeDmMessageEvent;
+  | RealtimeDmMessageEvent
+  | RealtimeInboxUpdatedEvent;
 
 type MessageHandler = (event: RealtimeTeamMessageEvent | RealtimeDmMessageEvent) => void;
+type InboxHandler = (event: RealtimeInboxUpdatedEvent) => void;
 type StatusHandler = (connected: boolean) => void;
 
 function toWsUrl(token: string): string {
@@ -42,6 +53,10 @@ export function dmRealtimeChannel(conversationId: string): string {
   return `dm:${conversationId}`;
 }
 
+export function userRealtimeChannel(userId: string): string {
+  return `user:${userId}`;
+}
+
 class RealtimeClient {
   private ws: WebSocket | null = null;
   private desiredChannels = new Set<string>();
@@ -53,6 +68,7 @@ class RealtimeClient {
   private connected = false;
   private appStateSub: NativeEventSubscription | null = null;
   private messageHandlers = new Set<MessageHandler>();
+  private inboxHandlers = new Set<InboxHandler>();
   private statusHandlers = new Set<StatusHandler>();
 
   isConnected() {
@@ -62,6 +78,11 @@ class RealtimeClient {
   onMessage(handler: MessageHandler) {
     this.messageHandlers.add(handler);
     return () => this.messageHandlers.delete(handler);
+  }
+
+  onInboxUpdated(handler: InboxHandler) {
+    this.inboxHandlers.add(handler);
+    return () => this.inboxHandlers.delete(handler);
   }
 
   onStatus(handler: StatusHandler) {
@@ -140,6 +161,8 @@ class RealtimeClient {
           const data = JSON.parse(String(event.data)) as RealtimeServerEvent;
           if (data.type === "message.created") {
             for (const handler of this.messageHandlers) handler(data);
+          } else if (data.type === "inbox.updated") {
+            for (const handler of this.inboxHandlers) handler(data);
           }
         } catch {
           // ignore malformed frames

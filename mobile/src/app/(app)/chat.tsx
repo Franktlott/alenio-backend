@@ -121,7 +121,8 @@ export default function ChatScreen() {
       lastReadIds: { [`team:${activeTeamId}`]: lastReadIds[`team:${activeTeamId}`] ?? "" },
     }),
     enabled: !!activeTeamId && !!session?.user,
-    refetchInterval: 10000,
+    refetchInterval: 5000,
+    staleTime: 0,
   });
   const teamChatUnreadCount = teamUnreadCounts[`team:${activeTeamId}`] ?? 0;
 
@@ -129,7 +130,7 @@ export default function ChatScreen() {
   const { data: conversations = [], isLoading: conversationsLoading } = useQuery<Conversation[]>({
     queryKey: ["dms"],
     queryFn: () => api.get<Conversation[]>("/api/dms"),
-    refetchInterval: 10000,
+    refetchInterval: 5000,
   });
 
   const dmLastReadIds = Object.fromEntries(
@@ -139,7 +140,8 @@ export default function ChatScreen() {
     queryKey: ["dm-unread-counts", dmLastReadIds],
     queryFn: () => api.post<Record<string, number>>("/api/dms/unread-counts", { lastReadIds: dmLastReadIds }),
     enabled: conversations.length > 0 && !!session?.user,
-    refetchInterval: 10000,
+    refetchInterval: 5000,
+    staleTime: 0,
   });
 
   const onRefresh = async () => {

@@ -25,7 +25,16 @@ export type DmMessageCreatedEvent = {
   message: unknown;
 };
 
-export type RealtimeEvent = TeamMessageCreatedEvent | DmMessageCreatedEvent;
+export type InboxUpdatedEvent = {
+  type: "inbox.updated";
+  channel: "inbox";
+  kind: "team" | "dm";
+  teamId?: string;
+  topicId?: string | null;
+  conversationId?: string;
+};
+
+export type RealtimeEvent = TeamMessageCreatedEvent | DmMessageCreatedEvent | InboxUpdatedEvent;
 
 const rooms = new Map<string, Set<RealtimeSocket>>();
 
@@ -35,6 +44,10 @@ export function teamRealtimeKey(teamId: string, topicId: string | null | undefin
 
 export function dmRealtimeKey(conversationId: string): string {
   return `dm:${conversationId}`;
+}
+
+export function userRealtimeKey(userId: string): string {
+  return `user:${userId}`;
 }
 
 export function subscribeSocket(ws: RealtimeSocket, keys: string[]) {
@@ -114,4 +127,30 @@ export function publishDmMessageCreated(input: {
     },
     dmRealtimeKey(input.conversationId),
   );
+}
+
+/** Notify recipients' personal inbox channels so tab badges refresh immediately. */
+export function publishUserInboxUpdated(
+  userIds: string[],
+  detail: {
+    kind: "team" | "dm";
+    teamId?: string;
+    topicId?: string | null;
+    conversationId?: string;
+  },
+) {
+  const unique = [...new Set(userIds.filter(Boolean))];
+  for (const userId of unique) {
+    publishRealtime(
+      {
+        type: "inbox.updated",
+        channel: "inbox",
+        kind: detail.kind,
+        teamId: detail.teamId,
+        topicId: detail.topicId,
+        conversationId: detail.conversationId,
+      },
+      userRealtimeKey(userId),
+    );
+  }
 }

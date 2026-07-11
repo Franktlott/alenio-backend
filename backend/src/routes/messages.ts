@@ -3,7 +3,7 @@ import { prisma } from "../prisma";
 import { auth } from "../auth";
 import { authGuard } from "../middleware/auth-guard";
 import { sendPushToUsers } from "../lib/push";
-import { publishTeamMessageCreated } from "../lib/realtime-hub";
+import { publishTeamMessageCreated, publishUserInboxUpdated } from "../lib/realtime-hub";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -135,6 +135,20 @@ messagesRouter.post("/", async (c) => {
     topicId: message.topicId ?? null,
     message,
   });
+
+  // Notify other members' inbox channels so unread badges update immediately.
+  void prisma.teamMember
+    .findMany({
+      where: { teamId, userId: { not: user.id } },
+      select: { userId: true },
+    })
+    .then((members) => {
+      publishUserInboxUpdated(
+        members.map((m) => m.userId),
+        { kind: "team", teamId, topicId: message.topicId ?? null },
+      );
+    })
+    .catch((err) => console.error("[messages] inbox fanout failed:", err));
 
   // Fire-and-forget push notifications — do not block the response
   const senderName = user.name ?? "Someone";

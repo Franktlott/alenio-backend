@@ -202,6 +202,8 @@ function RootLayoutNav() {
       // Refresh the relevant data so the app updates automatically in the foreground
       if (data?.conversationId) {
         queryClient.invalidateQueries({ queryKey: ["dms"] });
+        queryClient.invalidateQueries({ queryKey: ["dm-unread-counts"] });
+        queryClient.invalidateQueries({ queryKey: ["dm-messages", data.conversationId] });
       } else if (data?.taskId) {
         invalidateTaskCaches(queryClient, data.teamId);
       } else if (data?.type === "video_call" || data?.type === "meeting_reminder") {
@@ -219,6 +221,8 @@ function RootLayoutNav() {
       } else if (data?.teamId) {
         // team message, poll, etc.
         queryClient.invalidateQueries({ queryKey: ["messages"] });
+        queryClient.invalidateQueries({ queryKey: ["team-unread-counts"] });
+        queryClient.invalidateQueries({ queryKey: ["dm-unread-counts"] });
         queryClient.invalidateQueries({ queryKey: ["unread-counts"] });
       }
     });

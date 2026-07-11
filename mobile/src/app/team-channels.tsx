@@ -121,7 +121,8 @@ export default function TeamChannelsScreen() {
     queryKey: ["team-unread-counts", teamId, teamChannelLastReadIds],
     queryFn: () => api.post<Record<string, number>>(`/api/teams/${teamId}/messages/unread-counts`, { lastReadIds: teamChannelLastReadIds }),
     enabled: !!teamId && !!session?.user,
-    refetchInterval: 10000,
+    refetchInterval: 5000,
+    staleTime: 0,
   });
   const teamChatUnreadCount = teamUnreadCounts[`team:${teamId}`] ?? 0;
 
