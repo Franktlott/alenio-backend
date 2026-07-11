@@ -16,13 +16,10 @@ import { StatusBar } from "expo-status-bar";
 import { router, useLocalSearchParams } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { authClient, getAccessToken, setAccessTokenFromAuthData } from "@/lib/auth/auth-client";
-import { provisionBackendUserAfterAuth } from "@/lib/auth/sync-backend-user";
 import { formatAuthFlowError } from "@/lib/auth/auth-errors";
 import { clearPendingSignUp, getPendingSignUp } from "@/lib/auth/pending-signup";
-import { clearSignedOutMark, useInvalidateSession } from "@/lib/auth/use-session";
-import { fetchMeUser, ME_QUERY_KEY } from "@/lib/auth/me-query";
-import { primeMobileAuthSession } from "@/lib/auth/finish-post-auth";
-import { mobileHomeHref } from "@/lib/auth/auth-entry";
+import { useInvalidateSession } from "@/lib/auth/use-session";
+import { completeMobileAuthEntry } from "@/lib/auth/complete-auth-entry";
 import { setPendingTeamInviteToken } from "@/lib/auth/pending-team-invite";
 
 /** Better Auth defaults to 6; some projects use longer OTPs. */
@@ -103,12 +100,13 @@ export default function VerifyOtp() {
               password: pending.password,
             });
             if (!si.error) {
-              setAccessTokenFromAuthData(si ?? null);
-              setAccessTokenFromAuthData(si.data ?? null);
-              await invalidateSession();
-              sessionRes = await authClient.getSession({
-                fetchOptions: { headers: await sessionHeaders() },
-              } as never);
+              clearPendingSignUp();
+              const completed = await completeMobileAuthEntry(queryClient, si);
+              if (!completed.ok) {
+                setError(completed.error);
+                return;
+              }
+              return;
             }
           } catch {
             /* user can sign in manually */
@@ -119,19 +117,12 @@ export default function VerifyOtp() {
       }
 
       if (sessionRes.data?.user) {
-        clearSignedOutMark();
-        void provisionBackendUserAfterAuth();
-        queryClient.removeQueries({ queryKey: ME_QUERY_KEY });
-        const me = await queryClient.fetchQuery({
-          queryKey: ME_QUERY_KEY,
-          queryFn: fetchMeUser,
-        });
-        if (!me?.id) {
+        const completed = await completeMobileAuthEntry(queryClient, sessionRes);
+        if (!completed.ok) {
+          setError(completed.error);
           router.replace("/sign-in");
           return;
         }
-        primeMobileAuthSession(queryClient, sessionRes.data, me);
-        router.replace(mobileHomeHref(me.isAdmin === true));
       } else {
         router.replace("/sign-in");
       }
@@ -254,10 +245,6 @@ export default function VerifyOtp() {
           <TouchableOpacity className="mt-6 py-2 items-center" onPress={() => router.replace("/sign-in")} testID="verify-otp-cancel">
             <Text className="text-slate-500 text-sm">Back to sign in</Text>
           </TouchableOpacity>
-
-          <View className="items-center mt-10">
-            <Image source={require("@/assets/lotttech-logo.png")} style={{ width: 185, height: 57 }} resizeMode="contain" />
-          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </View>

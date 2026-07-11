@@ -294,6 +294,7 @@ export function ChatPage() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const stickToBottomRef = useRef(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const moreMenuRef = useRef<HTMLDivElement>(null);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
@@ -513,44 +514,42 @@ export function ChatPage() {
     [isDmMode, selectedConversationId, selectedTeamId, selectedTopicId],
   );
 
-  const scrollSnapBoostRef = useRef(0);
-  useLayoutEffect(() => {
-    scrollSnapBoostRef.current = 2;
-  }, [threadKey]);
-
-  useLayoutEffect(() => {
+  const snapMessagesToBottom = useCallback(() => {
     const el = messagesContainerRef.current;
     if (!el) return;
+    el.scrollTop = el.scrollHeight;
+  }, []);
 
-    const snap = () => {
-      el.scrollTop = el.scrollHeight;
-      messagesEndRef.current?.scrollIntoView({ block: "end", behavior: "auto" });
+  useLayoutEffect(() => {
+    stickToBottomRef.current = true;
+  }, [threadKey]);
+
+  const handleMessagesScroll = useCallback(() => {
+    const el = messagesContainerRef.current;
+    if (!el) return;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    stickToBottomRef.current = distanceFromBottom < 80;
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!stickToBottomRef.current || messages.length === 0) return;
+    snapMessagesToBottom();
+    requestAnimationFrame(() => requestAnimationFrame(snapMessagesToBottom));
+    const timers = [0, 80, 200, 500].map((delay) => window.setTimeout(snapMessagesToBottom, delay));
+    return () => {
+      timers.forEach((id) => window.clearTimeout(id));
     };
-
-    if (scrollSnapBoostRef.current > 0) {
-      snap();
-      requestAnimationFrame(() => requestAnimationFrame(snap));
-      scrollSnapBoostRef.current -= 1;
-      return;
-    }
-
-    // Keep chat anchored to newest messages after refreshes.
-    requestAnimationFrame(snap);
-  }, [messages, threadKey]);
+  }, [messages, threadKey, snapMessagesToBottom]);
 
   useEffect(() => {
     const el = messagesContainerRef.current;
     if (!el) return;
-    const timers = [0, 120, 320, 700].map((delay) =>
-      window.setTimeout(() => {
-        el.scrollTop = el.scrollHeight;
-        messagesEndRef.current?.scrollIntoView({ block: "end", behavior: "auto" });
-      }, delay),
-    );
-    return () => {
-      timers.forEach((id) => window.clearTimeout(id));
-    };
-  }, [threadKey, messages.length]);
+    const observer = new ResizeObserver(() => {
+      if (stickToBottomRef.current) snapMessagesToBottom();
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [threadKey, snapMessagesToBottom]);
 
   const onTeamChange = (id: string) => {
     setSelectedTeamId(id);
@@ -1316,7 +1315,12 @@ export function ChatPage() {
                       })}
                     </div>
                   ) : null}
-                  <div ref={messagesContainerRef} className="chat-messages" data-testid="chat-message-list">
+                  <div
+                    ref={messagesContainerRef}
+                    className="chat-messages"
+                    data-testid="chat-message-list"
+                    onScroll={handleMessagesScroll}
+                  >
                     {messages.length === 0 ? (
                       <p className="chat-messages-empty">
                         {loadingMeetings

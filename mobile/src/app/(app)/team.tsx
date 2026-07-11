@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -14,11 +14,10 @@ import {
   Dimensions,
 } from "react-native";
 import { toast } from "burnt";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueries, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Copy,
   UserPlus,
-  AlertCircle,
   Clock,
   X,
   Crown,
@@ -26,8 +25,8 @@ import {
   Trash2,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   QrCode,
-  Lock,
 } from "lucide-react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -35,27 +34,29 @@ import * as Clipboard from "expo-clipboard";
 import * as ImagePicker from "expo-image-picker";
 import { uploadFile } from "@/lib/upload";
 import { api } from "@/lib/api/api";
-import { formatOverdueFollowUpTasksDisplay, formatDaysSinceCheckIn, computeTeamCompliancePercentages, formatTeamCompliancePercent, teamComplianceColor } from "@/lib/member-stats-display";
+import { formatDaysSinceCheckIn, computeTeamCompliancePercentages, formatTeamCompliancePercent, teamComplianceColor } from "@/lib/member-stats-display";
 import {
   memberStandardsBadges,
-  standardsBadgeColors,
   mergeWorkplaceStandards,
   type MemberStatsPayload,
   type MemberStandardsCompliance,
-  type StandardsBadgeDisplay,
 } from "@/lib/workplace-standards";
 import { StandardsStatusKey } from "@/components/StandardsStatusKey";
+import { TeamMemberRow, TeamMemberRowSkeleton, teamMemberListBottomPadding, TEAM_MEMBER_ROW_GAP } from "@/components/TeamMemberRow";
 import { useTeamStore } from "@/lib/state/team-store";
 import { useSession } from "@/lib/auth/use-session";
 import QRCode from "react-native-qrcode-svg";
 import { router, useFocusEffect } from "expo-router";
 import { reconcileActiveTeamAfterRemoval } from "@/lib/workspace-switch";
 import type { Team, TeamMember, Task } from "@/lib/types";
-import { NoTeamPlaceholder } from "@/components/NoTeamPlaceholder";
+import { NoWorkspaceRedirect } from "@/components/NoWorkspaceRedirect";
 import { AddMemberModal } from "@/components/AddMemberModal";
 import { PendingInvitesChip, PendingInvitesSheet } from "@/components/PendingInvitesSheet";
-import { PendingJoinRequestsChip, PendingJoinRequestsSheet } from "@/components/PendingJoinRequestsSheet";
+import { PendingJoinRequestsSheet } from "@/components/PendingJoinRequestsSheet";
 import { TeamOverviewTasksSheet, type TeamOverviewTaskFilter } from "@/components/TeamOverviewTasksSheet";
+import { AppTabHeader } from "@/components/AppTabHeader";
+import { WorkspaceTeamAvatar } from "@/components/WorkspaceTeamUI";
+import { UserAvatar } from "@/components/UserAvatar";
 import {
   cancelTeamInvite,
   fetchTeamInvites,
@@ -63,13 +64,14 @@ import {
   resendTeamInvite,
   type TeamInvite,
 } from "@/lib/team-invites-api";
-import { useDemoMode, showDemoAlert } from "@/lib/useDemo";
 import { useSubscriptionStore } from "@/lib/state/subscription-store";
+import { tabBarClearance } from "@/lib/tab-bar";
 import Svg, { Path, Circle, Line, Text as SvgText, Polyline } from "react-native-svg";
 
 type JoinRequest = {
   id: string;
   status: string;
+  teamId: string;
   team: { id: string; name: string; image: string | null };
   user?: { id: string; name: string; email: string; image: string | null };
   createdAt: string;
@@ -85,12 +87,6 @@ type FormerMemberRow = {
   user: TeamMember["user"];
   isFormer: true;
 };
-
-function memberRoleLabel(role: TeamMember["role"]): string {
-  if (role === "owner") return "Owner";
-  if (role === "team_leader") return "Team Leader";
-  return "Member";
-}
 
 function isTaskAssignedToUser(task: Task, userId: string): boolean {
   if (!userId) return false;
@@ -119,54 +115,6 @@ function sortMembersWithSelfFirst<T extends { userId: string; user: { name?: str
   const self = members.find((member) => member.userId === myId);
   const others = members.filter((member) => member.userId !== myId).sort(byName);
   return self ? [self, ...others] : others;
-}
-
-function MemberMetricColumn({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={{ flex: 1, alignItems: "center", justifyContent: "center", minWidth: 0, gap: 2 }}>
-      <Text style={{ fontSize: 9, color: "#94A3B8", textAlign: "center" }}>{label}</Text>
-      <Text
-        style={{ fontSize: 11, fontWeight: "700", color: "#0F172A", textAlign: "center", lineHeight: 14 }}
-        numberOfLines={2}
-      >
-        {value}
-      </Text>
-    </View>
-  );
-}
-
-function MemberStatusColumn({ badge }: { badge: StandardsBadgeDisplay | null }) {
-  if (!badge) {
-    return (
-      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", minWidth: 0, gap: 2 }}>
-        <Text style={{ fontSize: 9, color: "#94A3B8", textAlign: "center" }}>Status</Text>
-        <Text style={{ fontSize: 11, fontWeight: "700", color: "#94A3B8", textAlign: "center" }}>—</Text>
-      </View>
-    );
-  }
-
-  const colors = standardsBadgeColors(badge.variant);
-  return (
-    <View style={{ flex: 1, alignItems: "center", justifyContent: "center", minWidth: 0, gap: 2 }}>
-      <Text style={{ fontSize: 9, color: "#94A3B8", textAlign: "center" }}>Status</Text>
-      <View
-        style={{
-          backgroundColor: colors.bg,
-          paddingHorizontal: 6,
-          paddingVertical: 2,
-          borderRadius: 999,
-          maxWidth: "100%",
-        }}
-      >
-        <Text
-          style={{ fontSize: 9, fontWeight: "700", color: colors.text, textAlign: "center", lineHeight: 12 }}
-          numberOfLines={2}
-        >
-          {badge.label}
-        </Text>
-      </View>
-    </View>
-  );
 }
 
 function PerformanceChart({ data, dark }: { data: Array<{ label: string; completionPct: number | null }>; dark?: boolean }) {
@@ -318,12 +266,11 @@ function PerformanceChart({ data, dark }: { data: Array<{ label: string; complet
 // ------------------------------------------------------------------
 export default function TeamScreen() {
   const insets = useSafeAreaInsets();
-  const TAB_BAR_CLEARANCE = insets.bottom + 84;
+  const TAB_BAR_CLEARANCE = tabBarClearance(insets.bottom);
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
   const setActiveTeamId = useTeamStore((s) => s.setActiveTeamId);
   const hasHydrated = useTeamStore((s) => s._hasHydrated);
   const { data: session } = useSession();
-  const isDemo = useDemoMode();
   const queryClient = useQueryClient();
   const plan = useSubscriptionStore((s) => s.plan);
   const isPaid = plan === "team";
@@ -343,16 +290,15 @@ export default function TeamScreen() {
   );
 
   const currentMembership = team?.members?.find((m) => m.userId === session?.user?.id);
-  const myRole = currentMembership?.role;
+  const myRole = currentMembership?.role ?? (team as Team & { role?: string } | undefined)?.role;
   const myId = session?.user?.id ?? "";
-  const isOwner = myRole === "owner" || myRole === "team_leader";
+  const isOwnerOrLeader = myRole === "owner" || myRole === "team_leader" || myRole === "admin";
   const canViewMemberProfile = (targetUserId: string, targetRole: string) => {
     if (!myId || targetUserId === myId) return true;
     if (targetRole === "owner") return false;
     return myRole === "owner" || myRole === "team_leader";
   };
   const canManageMember = (targetUserId: string, targetRole: string) => {
-    if (isDemo) return false;
     if (!myRole || (myRole !== "owner" && myRole !== "team_leader")) return false;
     if (targetRole === "owner") return false;
     if (myRole === "team_leader" && targetRole !== "member") return false;
@@ -407,27 +353,124 @@ export default function TeamScreen() {
     refetchInterval: 10000,
   });
 
-  const { data: incomingRequests = [] } = useQuery({
-    queryKey: ["team-join-requests", activeTeamId],
-    queryFn: () => api.get<JoinRequest[]>(`/api/teams/${activeTeamId}/join-requests`),
-    enabled: !!activeTeamId && isOwner,
-    refetchInterval: 15000,
+  const { data: allTeams = [] } = useQuery({
+    queryKey: ["teams"],
+    queryFn: () => api.get<(Team & { role?: string })[]>("/api/teams"),
+    enabled: !!session?.user,
+    staleTime: 1000 * 60 * 2,
   });
+
+  const manageableTeams = useMemo(
+    () => allTeams.filter((t) => t.role === "owner" || t.role === "team_leader"),
+    [allTeams],
+  );
+
+  type ApiJoinRequest = {
+    id: string;
+    status: string;
+    teamId: string;
+    createdAt: string;
+    user?: { id: string; name: string; email: string; image: string | null };
+  };
 
   type GoLoginRequest = {
     id: string;
     status: string;
+    teamId: string;
     deviceId: string;
     deviceLabel: string | null;
     createdAt: string;
+    teamName?: string;
   };
 
-  const { data: incomingGoLoginRequests = [] } = useQuery({
+  const joinRequestQueries = useQueries({
+    queries: manageableTeams.map((t) => ({
+      queryKey: ["team-join-requests", t.id] as const,
+      queryFn: () => api.get<ApiJoinRequest[]>(`/api/teams/${t.id}/join-requests`),
+      enabled: manageableTeams.length > 0,
+      staleTime: 0,
+      refetchInterval: 15000,
+      refetchOnMount: "always" as const,
+    })),
+  });
+
+  const goLoginRequestQueries = useQueries({
+    queries: manageableTeams.map((t) => ({
+      queryKey: ["team-go-login-requests", t.id] as const,
+      queryFn: () => api.get<GoLoginRequest[]>(`/api/teams/${t.id}/go-login-requests`),
+      enabled: manageableTeams.length > 0,
+      staleTime: 0,
+      refetchInterval: 15000,
+      refetchOnMount: "always" as const,
+    })),
+  });
+
+  // Also keep a direct active-team fetch so the button never depends only on the teams list race.
+  const { data: activeTeamJoinRequests = [] } = useQuery({
+    queryKey: ["team-join-requests", activeTeamId],
+    queryFn: () => api.get<ApiJoinRequest[]>(`/api/teams/${activeTeamId}/join-requests`),
+    enabled: !!activeTeamId && isOwnerOrLeader,
+    staleTime: 0,
+    refetchInterval: 15000,
+    refetchOnMount: "always",
+  });
+
+  const { data: activeTeamGoLoginRequests = [] } = useQuery({
     queryKey: ["team-go-login-requests", activeTeamId],
     queryFn: () => api.get<GoLoginRequest[]>(`/api/teams/${activeTeamId}/go-login-requests`),
-    enabled: !!activeTeamId && isOwner,
+    enabled: !!activeTeamId && isOwnerOrLeader,
+    staleTime: 0,
     refetchInterval: 15000,
+    refetchOnMount: "always",
   });
+
+  const incomingRequests = useMemo(() => {
+    const byId = new Map<string, JoinRequest>();
+    const upsert = (req: ApiJoinRequest, teamRow: { id: string; name: string; image?: string | null }) => {
+      if (req.status && req.status !== "pending") return;
+      byId.set(req.id, {
+        ...req,
+        teamId: req.teamId || teamRow.id,
+        team: { id: teamRow.id, name: teamRow.name, image: teamRow.image ?? null },
+      });
+    };
+
+    manageableTeams.forEach((teamRow, index) => {
+      const data = joinRequestQueries[index]?.data;
+      if (!Array.isArray(data)) return;
+      for (const req of data) upsert(req, teamRow);
+    });
+
+    if (activeTeamId && Array.isArray(activeTeamJoinRequests)) {
+      const activeMeta =
+        manageableTeams.find((t) => t.id === activeTeamId) ??
+        (team ? { id: team.id, name: team.name, image: team.image } : { id: activeTeamId, name: "Workspace", image: null });
+      for (const req of activeTeamJoinRequests) upsert(req, activeMeta);
+    }
+
+    return Array.from(byId.values());
+  }, [manageableTeams, joinRequestQueries, activeTeamId, activeTeamJoinRequests, team]);
+
+  const incomingGoLoginRequests = useMemo(() => {
+    const byId = new Map<string, GoLoginRequest>();
+    const upsert = (req: GoLoginRequest, teamName: string, teamId: string) => {
+      if (req.status && req.status !== "pending") return;
+      byId.set(req.id, { ...req, teamId: req.teamId || teamId, teamName });
+    };
+
+    manageableTeams.forEach((teamRow, index) => {
+      const data = goLoginRequestQueries[index]?.data;
+      if (!Array.isArray(data)) return;
+      for (const req of data) upsert(req, teamRow.name, teamRow.id);
+    });
+
+    if (activeTeamId && Array.isArray(activeTeamGoLoginRequests)) {
+      const name = team?.name ?? "Workspace";
+      for (const req of activeTeamGoLoginRequests) upsert(req, name, activeTeamId);
+    }
+
+    return Array.from(byId.values());
+  }, [manageableTeams, goLoginRequestQueries, activeTeamId, activeTeamGoLoginRequests, team]);
 
   const pendingApprovalCount = incomingRequests.length + incomingGoLoginRequests.length;
 
@@ -437,44 +480,49 @@ export default function TeamScreen() {
   });
 
   const approveMutation = useMutation({
-    mutationFn: (requestId: string) =>
-      api.post(`/api/teams/${activeTeamId}/join-requests/${requestId}/approve`, {}),
-    onMutate: (requestId) => setJoinRequestActionId(requestId),
+    mutationFn: ({ teamId, requestId }: { teamId: string; requestId: string }) =>
+      api.post(`/api/teams/${teamId}/join-requests/${requestId}/approve`, {}),
+    onMutate: ({ requestId }) => setJoinRequestActionId(requestId),
     onSettled: () => setJoinRequestActionId(null),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["team-join-requests", activeTeamId] });
-      queryClient.invalidateQueries({ queryKey: ["team", activeTeamId] });
+    onSuccess: (_data, { teamId }) => {
+      queryClient.invalidateQueries({ queryKey: ["team-join-requests"] });
+      queryClient.invalidateQueries({ queryKey: ["team", teamId] });
+      if (teamId === activeTeamId) {
+        queryClient.invalidateQueries({ queryKey: ["team", activeTeamId] });
+      }
     },
   });
 
   const rejectMutation = useMutation({
-    mutationFn: (requestId: string) =>
-      api.post(`/api/teams/${activeTeamId}/join-requests/${requestId}/reject`, {}),
-    onMutate: (requestId) => setJoinRequestActionId(requestId),
+    mutationFn: ({ teamId, requestId }: { teamId: string; requestId: string }) =>
+      api.post(`/api/teams/${teamId}/join-requests/${requestId}/reject`, {}),
+    onMutate: ({ requestId }) => setJoinRequestActionId(requestId),
     onSettled: () => setJoinRequestActionId(null),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["team-join-requests", activeTeamId] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["team-join-requests"] });
+    },
   });
 
   const approveGoLoginMutation = useMutation({
-    mutationFn: (requestId: string) =>
-      api.post(`/api/teams/${activeTeamId}/go-login-requests/${requestId}/approve`, {}),
-    onMutate: (requestId) => setJoinRequestActionId(requestId),
+    mutationFn: ({ teamId, requestId }: { teamId: string; requestId: string }) =>
+      api.post(`/api/teams/${teamId}/go-login-requests/${requestId}/approve`, {}),
+    onMutate: ({ requestId }) => setJoinRequestActionId(requestId),
     onSettled: () => setJoinRequestActionId(null),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["team-go-login-requests", activeTeamId] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["team-go-login-requests"] }),
   });
 
   const rejectGoLoginMutation = useMutation({
-    mutationFn: (requestId: string) =>
-      api.post(`/api/teams/${activeTeamId}/go-login-requests/${requestId}/reject`, {}),
-    onMutate: (requestId) => setJoinRequestActionId(requestId),
+    mutationFn: ({ teamId, requestId }: { teamId: string; requestId: string }) =>
+      api.post(`/api/teams/${teamId}/go-login-requests/${requestId}/reject`, {}),
+    onMutate: ({ requestId }) => setJoinRequestActionId(requestId),
     onSettled: () => setJoinRequestActionId(null),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["team-go-login-requests", activeTeamId] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["team-go-login-requests"] }),
   });
 
   const { data: pendingInvites = [] } = useQuery({
     queryKey: ["team-invites", activeTeamId],
     queryFn: () => fetchTeamInvites(activeTeamId!),
-    enabled: !!activeTeamId && isOwner && !isDemo,
+    enabled: !!activeTeamId && isOwnerOrLeader,
     refetchInterval: 30000,
   });
 
@@ -527,8 +575,10 @@ export default function TeamScreen() {
   });
 
   const [refreshing, setRefreshing] = useState(false);
+  const [formerMembersOpen, setFormerMembersOpen] = useState(false);
+  const membersListRef = useRef<ScrollView>(null);
 
-  const { data: memberStatsPayload } = useQuery({
+  const { data: memberStatsPayload, isLoading: memberStatsLoading } = useQuery({
     queryKey: ["member-stats", activeTeamId],
     queryFn: () =>
       api.get<MemberStatsPayload>(`/api/teams/${activeTeamId}/tasks/member-stats`),
@@ -540,7 +590,7 @@ export default function TeamScreen() {
   const { data: formerMembers = [] } = useQuery({
     queryKey: ["former-members", activeTeamId],
     queryFn: () => api.get<FormerMemberRow[]>(`/api/teams/${activeTeamId}/former-members`),
-    enabled: !!activeTeamId && isPaid && isOwner,
+    enabled: !!activeTeamId && isPaid && isOwnerOrLeader,
   });
 
   const { data: teamTasksData } = useQuery({
@@ -559,7 +609,21 @@ export default function TeamScreen() {
     await queryClient.invalidateQueries({ queryKey: ["former-members", activeTeamId] });
     await queryClient.invalidateQueries({ queryKey: ["team-overview-tasks", activeTeamId] });
     await queryClient.invalidateQueries({ queryKey: ["team-invites", activeTeamId] });
+    await queryClient.invalidateQueries({ queryKey: ["team-join-requests"] });
+    await queryClient.invalidateQueries({ queryKey: ["team-go-login-requests"] });
     setRefreshing(false);
+  };
+
+  const toggleFormerMembers = () => {
+    setFormerMembersOpen((open) => {
+      const next = !open;
+      if (next) {
+        setTimeout(() => {
+          membersListRef.current?.scrollToEnd({ animated: true });
+        }, 120);
+      }
+      return next;
+    });
   };
 
   const handleCopyCode = async () => {
@@ -586,7 +650,7 @@ export default function TeamScreen() {
     return due >= todayStart && due <= todayEnd;
   };
 
-  const showTeamOverview = isOwner;
+  const showTeamOverview = isOwnerOrLeader;
   const overviewSourceTasks = showTeamOverview
     ? teamTasks
     : teamTasks.filter((t) => isTaskAssignedToUser(t, myId));
@@ -658,6 +722,7 @@ export default function TeamScreen() {
 
   // Logged-in user first, then everyone else alphabetically
   const sortedMembers = sortMembersWithSelfFirst(members, myId);
+  const showMemberSkeletons = isLoading || (isPaid && memberStatsLoading && !memberStatsPayload && !refreshing);
 
   // ------------------------------------------------------------------
   // Guard states
@@ -675,30 +740,21 @@ export default function TeamScreen() {
     if (myRequest) {
       return (
         <SafeAreaView style={{ flex: 1, backgroundColor: "#F2F3F7" }} edges={[]}>
-          <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ paddingTop: insets.top + 12, paddingHorizontal: 16, paddingBottom: 16 }}>
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-              <Text style={{ color: "white", fontSize: 20, fontWeight: "800", flex: 1 }}>Team</Text>
-              <View style={{ position: "absolute", left: 0, right: 0, alignItems: "center" }}>
-                <Image source={require("@/assets/alenio-logo-white.png")} style={{ height: 30, width: 104, resizeMode: "contain" }} />
-              </View>
-              <View />
-            </View>
-          </LinearGradient>
+          <AppTabHeader topInset={insets.top} testID="team-header" />
           <View style={{ flex: 1, paddingHorizontal: 20, paddingTop: 24 }}>
             <Text style={{ fontSize: 13, fontWeight: "700", color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 12 }}>
               Your Request
             </Text>
             <View style={{ backgroundColor: "white", borderRadius: 16, padding: 16, marginBottom: 12, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 2 }}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 14 }}>
-                <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: "#EEF2FF", alignItems: "center", justifyContent: "center" }}>
-                  {session?.user?.image ? (
-                    <Image source={{ uri: session.user.image }} style={{ width: 44, height: 44, borderRadius: 22 }} />
-                  ) : (
-                    <Text style={{ fontSize: 18, fontWeight: "700", color: "#4361EE" }}>
-                      {session?.user?.name?.[0]?.toUpperCase() ?? "?"}
-                    </Text>
-                  )}
-                </View>
+                <UserAvatar
+                  user={{ name: session?.user?.name, image: session?.user?.image }}
+                  size={44}
+                  radius={22}
+                  backgroundColor="#EEF2FF"
+                  textColor="#4361EE"
+                  fontSize={18}
+                />
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontSize: 15, fontWeight: "700", color: "#1E293B" }}>{session?.user?.name ?? "You"}</Text>
                 </View>
@@ -747,15 +803,7 @@ export default function TeamScreen() {
     }
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: "#F2F3F7" }} edges={["top"]}>
-        <NoTeamPlaceholder />
-      </SafeAreaView>
-    );
-  }
-
-  if (isLoading) {
-    return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: "#F2F3F7", alignItems: "center", justifyContent: "center" }} testID="loading-indicator">
-        <ActivityIndicator color="#4361EE" />
+        <NoWorkspaceRedirect />
       </SafeAreaView>
     );
   }
@@ -766,21 +814,7 @@ export default function TeamScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#F2F3F7" }} edges={[]} testID="team-screen">
 
-      {/* ── HEADER ── */}
-      <LinearGradient
-        colors={["#4361EE", "#7C3AED"]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-        style={{ paddingTop: insets.top + 12, paddingHorizontal: 16, paddingBottom: 16 }}
-      >
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-          <Text style={{ color: "white", fontWeight: "800", fontSize: 20, flex: 1 }}>Team</Text>
-          <View style={{ position: "absolute", left: 0, right: 0, alignItems: "center" }}>
-            <Image source={require("@/assets/alenio-logo-white.png")} style={{ height: 30, width: 104, resizeMode: "contain" }} />
-          </View>
-          <View />
-        </View>
-      </LinearGradient>
+      <AppTabHeader topInset={insets.top} testID="team-header" />
 
       <View style={{ flex: 1, paddingBottom: TAB_BAR_CLEARANCE }}>
         {/* ── Team info card (fixed) ── */}
@@ -804,7 +838,7 @@ export default function TeamScreen() {
           <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
             {/* Avatar */}
             <TouchableOpacity
-              onPress={() => isOwner && !isDemo ? setPhotoMenuOpen(true) : undefined}
+              onPress={() => isOwnerOrLeader ? setPhotoMenuOpen(true) : undefined}
               disabled={uploadingTeamImage}
               testID="team-photo-button"
               style={{ position: "relative" }}
@@ -820,15 +854,18 @@ export default function TeamScreen() {
               }}>
                 {uploadingTeamImage ? (
                   <ActivityIndicator color="white" />
-                ) : team?.image ? (
-                  <Image source={{ uri: team.image }} style={{ width: 64, height: 64 }} resizeMode="cover" />
                 ) : (
-                  <Text style={{ color: "white", fontWeight: "900", fontSize: 26 }}>
-                    {team?.name?.[0]?.toUpperCase() ?? "T"}
-                  </Text>
+                  <WorkspaceTeamAvatar
+                    team={{ name: team?.name ?? "Workspace", image: team?.image ?? null }}
+                    size={64}
+                    radius={32}
+                    backgroundColor="rgba(255,255,255,0.22)"
+                    textColor="#FFFFFF"
+                    borderColor="transparent"
+                  />
                 )}
               </View>
-              {isOwner && !isDemo ? (
+              {isOwnerOrLeader ? (
                 <View style={{
                   position: "absolute", bottom: 1, right: 1,
                   width: 20, height: 20, borderRadius: 10,
@@ -842,7 +879,12 @@ export default function TeamScreen() {
 
             {/* Middle: team name (primary) + invite code + subtitle */}
             <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 22, fontWeight: "800", color: "white", letterSpacing: -0.3 }} numberOfLines={2}>
+              <Text
+                style={{ fontSize: 20, fontWeight: "800", color: "white", letterSpacing: -0.3 }}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.7}
+              >
                 {team?.name ?? "Team"}
               </Text>
               <Text style={{ fontSize: 14, fontWeight: "700", color: "rgba(255,255,255,0.92)", letterSpacing: 2, marginTop: 6 }}>
@@ -854,24 +896,22 @@ export default function TeamScreen() {
             </View>
 
             {/* Right: icon buttons */}
-            {!isDemo ? (
-              <View style={{ gap: 8 }}>
-                <Pressable
-                  onPress={() => setQrModalOpen(true)}
-                  style={{ width: 44, height: 44, borderRadius: 13, backgroundColor: "rgba(255,255,255,0.18)", borderWidth: 1, borderColor: "rgba(255,255,255,0.25)", alignItems: "center", justifyContent: "center" }}
-                  testID="qr-invite-code"
-                >
-                  <QrCode size={20} color="white" />
-                </Pressable>
-                <Pressable
-                  onPress={handleShareCode}
-                  style={{ width: 44, height: 44, borderRadius: 13, backgroundColor: "rgba(255,255,255,0.25)", alignItems: "center", justifyContent: "center" }}
-                  testID="share-invite-code"
-                >
-                  <UserPlus size={20} color="white" />
-                </Pressable>
-              </View>
-            ) : null}
+            <View style={{ gap: 8 }}>
+              <Pressable
+                onPress={() => setQrModalOpen(true)}
+                style={{ width: 44, height: 44, borderRadius: 13, backgroundColor: "rgba(255,255,255,0.18)", borderWidth: 1, borderColor: "rgba(255,255,255,0.25)", alignItems: "center", justifyContent: "center" }}
+                testID="qr-invite-code"
+              >
+                <QrCode size={20} color="white" />
+              </Pressable>
+              <Pressable
+                onPress={handleShareCode}
+                style={{ width: 44, height: 44, borderRadius: 13, backgroundColor: "rgba(255,255,255,0.25)", alignItems: "center", justifyContent: "center" }}
+                testID="share-invite-code"
+              >
+                <UserPlus size={20} color="white" />
+              </Pressable>
+            </View>
           </View>
           </LinearGradient>
         </View>
@@ -978,7 +1018,6 @@ export default function TeamScreen() {
             marginBottom: 4,
             borderRadius: 20,
             backgroundColor: "white",
-            overflow: "hidden",
             shadowColor: "#000",
             shadowOpacity: 0.05,
             shadowRadius: 8,
@@ -990,26 +1029,55 @@ export default function TeamScreen() {
           <View
             style={{
               flexDirection: "row",
-              alignItems: "flex-start",
+              alignItems: "center",
               justifyContent: "space-between",
-              paddingHorizontal: 16,
-              paddingTop: 16,
-              paddingBottom: 12,
-              gap: 12,
+              paddingHorizontal: 14,
+              paddingTop: 10,
+              paddingBottom: 8,
+              gap: 8,
+              zIndex: 2,
             }}
           >
-            <View style={{ flex: 1 }}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                <Text style={{ fontSize: 18, fontWeight: "700", color: "#0F172A" }}>Team Members</Text>
-                {isPaid ? <StandardsStatusKey /> : null}
+            <View style={{ flexShrink: 1, minWidth: 0, paddingRight: 4 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <Text numberOfLines={1} style={{ fontSize: 16, fontWeight: "800", color: "#0F172A" }}>
+                  Team Members
+                </Text>
+                {isPaid ? <StandardsStatusKey iconSize={16} /> : null}
               </View>
-              <Text style={{ fontSize: 13, color: "#94A3B8", marginTop: 4 }}>
-                See your team's activity at a glance.
-              </Text>
             </View>
-            {isOwner && !isDemo ? (
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexShrink: 0 }}>
-                <PendingJoinRequestsChip count={pendingApprovalCount} onPress={() => setJoinRequestsOpen(true)} />
+            {isOwnerOrLeader ? (
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  flexShrink: 0,
+                }}
+              >
+                {pendingApprovalCount > 0 ? (
+                  <Pressable
+                    onPress={() => setJoinRequestsOpen(true)}
+                    hitSlop={8}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      marginRight: 6,
+                      backgroundColor: "#4338CA",
+                      paddingHorizontal: 10,
+                      paddingVertical: 7,
+                      borderRadius: 8,
+                      minHeight: 32,
+                    }}
+                    testID="pending-join-requests-chip"
+                    accessibilityRole="button"
+                    accessibilityLabel={`${pendingApprovalCount} pending approval${pendingApprovalCount !== 1 ? "s" : ""}, tap to review`}
+                  >
+                    <UserPlus size={13} color="#FFFFFF" />
+                    <Text style={{ marginLeft: 4, fontSize: 12, fontWeight: "800", color: "#FFFFFF" }}>
+                      {pendingApprovalCount === 1 ? "1 request" : `${pendingApprovalCount} requests`}
+                    </Text>
+                  </Pressable>
+                ) : null}
                 <PendingInvitesChip count={pendingInvites.length} onPress={() => setPendingInvitesOpen(true)} />
                 <Pressable
                   onPress={() => {
@@ -1019,18 +1087,19 @@ export default function TeamScreen() {
                   style={{
                     flexDirection: "row",
                     alignItems: "center",
-                    gap: 6,
-                    backgroundColor: "white",
+                    marginLeft: pendingApprovalCount > 0 || pendingInvites.length > 0 ? 6 : 0,
+                    backgroundColor: "#FFFFFF",
                     borderWidth: 1,
-                    borderColor: "#BFDBFE",
-                    paddingHorizontal: 12,
-                    paddingVertical: 8,
-                    borderRadius: 10,
+                    borderColor: "#C7D2FE",
+                    paddingHorizontal: 10,
+                    paddingVertical: 7,
+                    borderRadius: 8,
+                    minHeight: 32,
                   }}
                   testID="add-member-button"
                 >
-                  <UserPlus size={16} color="#4361EE" />
-                  <Text style={{ fontSize: 13, fontWeight: "700", color: "#4361EE" }}>Add</Text>
+                  <UserPlus size={13} color="#4361EE" />
+                  <Text style={{ marginLeft: 4, fontSize: 12, fontWeight: "700", color: "#4361EE" }}>Add</Text>
                 </Pressable>
               </View>
             ) : null}
@@ -1038,332 +1107,130 @@ export default function TeamScreen() {
 
           {/* Member cards (scrollable) */}
           <ScrollView
-            style={{ flex: 1 }}
+            ref={membersListRef}
+            style={{ flex: 1, overflow: "hidden", borderBottomLeftRadius: 20, borderBottomRightRadius: 20 }}
             showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 12, gap: 8 }}
+            contentContainerStyle={{
+              paddingHorizontal: 10,
+              paddingBottom: teamMemberListBottomPadding(formerMembers.length > 0),
+              gap: TEAM_MEMBER_ROW_GAP,
+            }}
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" colors={["#4361EE"]} />
             }
             testID="members-list"
           >
-          {sortedMembers.map((item: TeamMember) => {
+          {showMemberSkeletons ? (
+            Array.from({ length: 4 }, (_, index) => (
+              <TeamMemberRowSkeleton key={`member-skeleton-${index}`} paid={isPaid} />
+            ))
+          ) : (
+          sortedMembers.map((item: TeamMember) => {
             const stats = memberStats?.[item.userId];
             const compliance = stats?.standardsCompliance;
-            const followUpDisplay = formatOverdueFollowUpTasksDisplay(stats?.overdueFollowUpTasks ?? 0);
             const complianceBadges = compliance
               ? memberStandardsBadges(compliance, stats?.daysSinceLastOneOnOne)
               : [];
             const primaryBadge = complianceBadges[0] ?? null;
             const isCurrentUser = item.userId === myId;
             const hasProfilePermission = canViewMemberProfile(item.userId, item.role);
-            const canOpenProfile = isPaid && hasProfilePermission;
+            const canOpenProfile = hasProfilePermission;
             const canOpenManagement = !isPaid && canManageMember(item.userId, item.role);
             const isPressable = canOpenProfile || canOpenManagement;
-            const isOwnerMember = item.role === "owner";
-            const cardStyle = {
-              flexDirection: "row" as const,
-              alignItems: "center" as const,
-              paddingHorizontal: 10,
-              paddingVertical: 8,
-              borderRadius: 14,
-              borderWidth: 1,
-              borderColor: "#E2E8F0",
-              backgroundColor: "white",
-              shadowColor: "#000",
-              shadowOpacity: 0.03,
-              shadowRadius: 4,
-              shadowOffset: { width: 0, height: 1 },
-              elevation: 1,
-              position: "relative" as const,
-            };
-            const cardContent = isPaid ? (
-              <>
-                {/* Profile */}
-                <View style={{ width: 138, marginRight: 8, flexShrink: 0 }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                    <View style={{ position: "relative" }}>
-                      <View
-                        style={{
-                          width: 36,
-                          height: 36,
-                          borderRadius: 18,
-                          backgroundColor: "#4361EE",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          overflow: "hidden",
-                        }}
-                      >
-                        {item.user.image ? (
-                          <Image source={{ uri: item.user.image }} style={{ width: 36, height: 36 }} resizeMode="cover" />
-                        ) : (
-                          <Text style={{ color: "white", fontWeight: "700", fontSize: 14 }}>
-                            {item.user.name?.[0]?.toUpperCase() ?? "?"}
-                          </Text>
-                        )}
-                      </View>
-                      {isOwnerMember ? (
-                        <View
-                          style={{
-                            position: "absolute",
-                            bottom: -2,
-                            right: -2,
-                            width: 14,
-                            height: 14,
-                            borderRadius: 7,
-                            backgroundColor: "white",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            borderWidth: 1.5,
-                            borderColor: "#E2E8F0",
-                          }}
-                        >
-                          <Crown size={8} color="#4361EE" />
-                        </View>
-                      ) : null}
-                    </View>
-                    <View style={{ flex: 1, minWidth: 0 }}>
-                      <Text
-                        style={{ fontSize: 12, fontWeight: "700", color: "#0F172A", lineHeight: 15 }}
-                      >
-                        {item.user.name}
-                        {isCurrentUser ? " (you)" : ""}
-                      </Text>
-                      <View
-                        style={{
-                          alignSelf: "flex-start",
-                          marginTop: 2,
-                          paddingHorizontal: 6,
-                          paddingVertical: 2,
-                          borderRadius: 999,
-                          backgroundColor: isOwnerMember ? "#EEF2FF" : "#F1F5F9",
-                        }}
-                      >
-                        <Text
-                          style={{
-                            fontSize: 9,
-                            fontWeight: "700",
-                            color: isOwnerMember ? "#4361EE" : "#64748B",
-                          }}
-                        >
-                          {memberRoleLabel(item.role)}
-                        </Text>
-                      </View>
-                    </View>
-                  </View>
-                </View>
 
-                <View style={{ width: 1, alignSelf: "stretch", backgroundColor: "#E2E8F0", marginRight: 6 }} />
-                {hasProfilePermission ? (
-                  <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 2 }}>
-                    <MemberMetricColumn
-                      label="Last check-in"
-                      value={formatDaysSinceCheckIn(stats?.daysSinceLastOneOnOne)}
-                    />
-                    <MemberMetricColumn
-                      label="Goals"
-                      value={compliance?.goalsDisplay ?? "—"}
-                    />
-                    <MemberStatusColumn badge={primaryBadge} />
-                  </View>
-                ) : (
-                  <View
-                    style={{ flex: 1, alignItems: "center", justifyContent: "center" }}
-                    accessibilityLabel="Member activity is private"
-                  >
-                    <View
-                      style={{
-                        width: 28,
-                        height: 28,
-                        borderRadius: 14,
-                        backgroundColor: "#F1F5F9",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      <Lock size={14} color="#94A3B8" />
-                    </View>
-                  </View>
-                )}
-
-                {hasProfilePermission && followUpDisplay ? (
-                  <View
-                    style={{
-                      position: "absolute",
-                      top: 8,
-                      right: 8,
-                      flexDirection: "row",
-                      alignItems: "center",
-                      gap: 4,
-                    }}
-                  >
-                    <AlertCircle size={12} color="#EF4444" />
-                    <Text
-                      style={{ fontSize: 10, fontWeight: "700", color: "#EF4444" }}
-                      accessibilityLabel={followUpDisplay.title}
-                    >
-                      {followUpDisplay.value}
-                    </Text>
-                  </View>
-                ) : null}
-              </>
-            ) : (
-              <>
-                <View style={{ position: "relative", marginRight: 10 }}>
-                  <View
-                    style={{
-                      width: 36,
-                      height: 36,
-                      borderRadius: 18,
-                      backgroundColor: "#4361EE",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      overflow: "hidden",
-                    }}
-                  >
-                    {item.user.image ? (
-                      <Image source={{ uri: item.user.image }} style={{ width: 36, height: 36 }} resizeMode="cover" />
-                    ) : (
-                      <Text style={{ color: "white", fontWeight: "700", fontSize: 14 }}>
-                        {item.user.name?.[0]?.toUpperCase() ?? "?"}
-                      </Text>
-                    )}
-                  </View>
-                  {isOwnerMember ? (
-                    <View
-                      style={{
-                        position: "absolute",
-                        bottom: -2,
-                        right: -2,
-                        width: 18,
-                        height: 18,
-                        borderRadius: 9,
-                        backgroundColor: "white",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        borderWidth: 1.5,
-                        borderColor: "#E2E8F0",
-                      }}
-                    >
-                      <Crown size={10} color="#4361EE" />
-                    </View>
-                  ) : null}
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 14, fontWeight: "700", color: "#0F172A", lineHeight: 18 }}>
-                    {item.user.name}
-                    {isCurrentUser ? " (you)" : ""}
-                  </Text>
-                  <View
-                    style={{
-                      alignSelf: "flex-start",
-                      marginTop: 4,
-                      paddingHorizontal: 8,
-                      paddingVertical: 3,
-                      borderRadius: 999,
-                      backgroundColor: isOwnerMember ? "#EEF2FF" : "#F1F5F9",
-                    }}
-                  >
-                    <Text
-                      style={{
-                        fontSize: 10,
-                        fontWeight: "700",
-                        color: isOwnerMember ? "#4361EE" : "#64748B",
-                      }}
-                    >
-                      {memberRoleLabel(item.role)}
-                    </Text>
-                  </View>
-                </View>
-              </>
-            );
-            return isPressable ? (
-              <Pressable
+            return (
+              <TeamMemberRow
                 key={item.id}
-                onPress={() =>
-                  router.push({
-                    pathname: "/member-profile",
-                    params: { teamId: activeTeamId ?? "", memberUserId: item.userId },
-                  })
+                name={item.user.name ?? "Member"}
+                role={item.role}
+                image={item.user.image}
+                isCurrentUser={isCurrentUser}
+                showMetrics={isPaid}
+                hasProfilePermission={hasProfilePermission}
+                checkInValue={formatDaysSinceCheckIn(stats?.daysSinceLastOneOnOne)}
+                goalsValue={compliance?.goalsDisplay ?? "—"}
+                statusBadge={primaryBadge}
+                onPress={
+                  isPressable
+                    ? () =>
+                        router.push({
+                          pathname: "/member-profile",
+                          params: { teamId: activeTeamId ?? "", memberUserId: item.userId },
+                        })
+                    : undefined
                 }
                 testID={`member-row-${item.userId}`}
-                style={cardStyle}
-              >
-                {cardContent}
-              </Pressable>
-            ) : (
-              <View key={item.id} testID={`member-row-${item.userId}`} style={cardStyle}>
-                {cardContent}
-              </View>
+              />
             );
-          })}
+          })
+          )}
 
-          {sortedMembers.length === 0 ? (
+          {!showMemberSkeletons && sortedMembers.length === 0 ? (
             <View style={{ paddingVertical: 32, alignItems: "center" }}>
               <Text style={{ fontSize: 13, color: "#94A3B8" }}>No members yet</Text>
             </View>
           ) : null}
 
-          {isOwner && formerMembers.length > 0 ? (
-            <View style={{ marginTop: 12, gap: 8 }}>
-              <Text style={{ fontSize: 11, fontWeight: "700", color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.6 }}>
-                Former members
-              </Text>
-              {formerMembers.map((former) => (
-                <Pressable
-                  key={former.userId}
-                  onPress={() =>
-                    router.push({
-                      pathname: "/member-profile",
-                      params: { teamId: activeTeamId ?? "", memberUserId: former.userId },
-                    })
-                  }
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    paddingHorizontal: 10,
-                    paddingVertical: 10,
-                    borderRadius: 14,
-                    borderWidth: 1,
-                    borderColor: "#E2E8F0",
-                    backgroundColor: "#F8FAFC",
-                    gap: 10,
-                  }}
-                  testID={`former-member-row-${former.userId}`}
-                >
-                  <View
-                    style={{
-                      width: 36,
-                      height: 36,
-                      borderRadius: 18,
-                      backgroundColor: "#E2E8F0",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      overflow: "hidden",
-                    }}
-                  >
-                    {former.user.image ? (
-                      <Image source={{ uri: former.user.image }} style={{ width: 36, height: 36 }} resizeMode="cover" />
-                    ) : (
-                      <Text style={{ color: "#64748B", fontWeight: "700", fontSize: 14 }}>
-                        {former.user.name?.[0]?.toUpperCase() ?? "?"}
+          {isOwnerOrLeader && formerMembers.length > 0 ? (
+            <View
+              style={{
+                marginTop: 14,
+                paddingTop: 10,
+                borderTopWidth: 1,
+                borderTopColor: "#F1F5F9",
+              }}
+            >
+              <Pressable
+                onPress={toggleFormerMembers}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  paddingVertical: 4,
+                }}
+                testID="former-members-toggle"
+              >
+                <Text style={{ fontSize: 10, color: "#CBD5E1" }}>
+                  Former members ({formerMembers.length})
+                </Text>
+                <ChevronDown
+                  size={14}
+                  color="#CBD5E1"
+                  style={{ transform: [{ rotate: formerMembersOpen ? "180deg" : "0deg" }] }}
+                />
+              </Pressable>
+              {formerMembersOpen ? (
+                <View style={{ marginTop: 4, paddingBottom: 2 }}>
+                  {formerMembers.map((former, index) => (
+                    <Pressable
+                      key={former.userId}
+                      onPress={() =>
+                        router.push({
+                          pathname: "/member-profile",
+                          params: { teamId: activeTeamId ?? "", memberUserId: former.userId },
+                        })
+                      }
+                      style={{
+                        paddingVertical: 6,
+                        borderTopWidth: index === 0 ? 0 : 1,
+                        borderTopColor: "#F8FAFC",
+                      }}
+                      testID={`former-member-row-${former.userId}`}
+                    >
+                      <Text style={{ fontSize: 12, color: "#94A3B8" }} numberOfLines={1}>
+                        {former.user.name ?? former.user.email ?? "Member"}
+                        <Text style={{ color: "#CBD5E1" }}> · archived check-ins</Text>
                       </Text>
-                    )}
-                  </View>
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text style={{ fontSize: 12, fontWeight: "700", color: "#0F172A" }} numberOfLines={1}>
-                      {former.user.name ?? former.user.email ?? "Member"}
-                    </Text>
-                    <Text style={{ fontSize: 10, color: "#94A3B8", marginTop: 2 }}>View archived check-ins</Text>
-                  </View>
-                  <ChevronRight size={16} color="#CBD5E1" />
-                </Pressable>
-              ))}
+                    </Pressable>
+                  ))}
+                </View>
+              ) : null}
             </View>
           ) : null}
           </ScrollView>
         </View>
 
-        {isPaid && isOwner && !isDemo ? (
+        {isPaid && isOwnerOrLeader ? (
           <View
             style={{
               marginHorizontal: 12,
@@ -1386,7 +1253,7 @@ export default function TeamScreen() {
             </Text>
             <ChevronRight size={16} color="#4361EE" />
           </View>
-        ) : isPaid && !isDemo ? (
+        ) : isPaid ? (
           <View
             style={{
               marginHorizontal: 12,
@@ -1404,7 +1271,7 @@ export default function TeamScreen() {
               Tap your name to view your profile, growth plan, and check-in history.
             </Text>
           </View>
-        ) : !isPaid && (isOwner || myRole === "team_leader") && !isDemo ? (
+        ) : !isPaid && isOwnerOrLeader ? (
           <View
             style={{
               marginHorizontal: 12,
@@ -1422,7 +1289,7 @@ export default function TeamScreen() {
               Tap a member to change their role or remove them from the workplace.
             </Text>
           </View>
-        ) : !isPaid && !isDemo ? (
+        ) : !isPaid ? (
           <View
             style={{
               marginHorizontal: 12,
@@ -1555,12 +1422,17 @@ export default function TeamScreen() {
         visible={joinRequestsOpen}
         requests={incomingRequests}
         goLoginRequests={incomingGoLoginRequests}
+        activeTeamId={activeTeamId}
         busyRequestId={joinRequestActionId}
         onClose={() => setJoinRequestsOpen(false)}
-        onApprove={(req) => approveMutation.mutate(req.id)}
-        onDecline={(req) => rejectMutation.mutate(req.id)}
-        onApproveGo={(req) => approveGoLoginMutation.mutate(req.id)}
-        onDeclineGo={(req) => rejectGoLoginMutation.mutate(req.id)}
+        onApprove={(req) => approveMutation.mutate({ teamId: req.teamId || req.team.id, requestId: req.id })}
+        onDecline={(req) => rejectMutation.mutate({ teamId: req.teamId || req.team.id, requestId: req.id })}
+        onApproveGo={(req) =>
+          approveGoLoginMutation.mutate({ teamId: req.teamId || activeTeamId!, requestId: req.id })
+        }
+        onDeclineGo={(req) =>
+          rejectGoLoginMutation.mutate({ teamId: req.teamId || activeTeamId!, requestId: req.id })
+        }
       />
 
       <PendingInvitesSheet

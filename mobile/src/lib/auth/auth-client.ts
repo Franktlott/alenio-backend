@@ -137,8 +137,8 @@ function jwtSubPrefix(token: string | null | undefined): string | null {
   return sub ? sub.slice(0, 8) : null;
 }
 
-function agentDebugLog(message: string, data: Record<string, unknown>) {
-  console.warn("[DEBUG-4ff4c0]", JSON.stringify({ message, ...data, timestamp: Date.now() }));
+function agentDebugLog(_message: string, _data: Record<string, unknown>) {
+  // Intentionally no-op — debug instrumentation removed from production paths.
 }
 
 export { agentDebugLog, jwtSubPrefix };

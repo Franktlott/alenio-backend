@@ -15,12 +15,14 @@ import { authClient, clearAccessToken, setAccessTokenFromAuthData } from "@/lib/
 import { provisionBackendUserAfterAuth } from "@/lib/auth/sync-backend-user";
 import { setPendingSignUp } from "@/lib/auth/pending-signup";
 import { formatAuthFlowError, isEmailAlreadyRegisteredError, isEmailNotVerifiedError } from "@/lib/auth/auth-errors";
-import { clearSignedOutMark, markSessionSignedOut } from "@/lib/auth/use-session";
+import { markSessionSignedOut } from "@/lib/auth/use-session";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { StatusBar } from "expo-status-bar";
 import { router, useLocalSearchParams } from "expo-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { setPendingTeamInviteToken } from "@/lib/auth/pending-team-invite";
+import { completeMobileAuthEntry } from "@/lib/auth/complete-auth-entry";
 import { LEGAL_APP_NAME, LEGAL_COMPANY_NAME, LEGAL_PARENT_COMPANY_NAME } from "@/lib/legal-constants";
 
 export default function SignUp() {
@@ -29,6 +31,7 @@ export default function SignUp() {
     typeof params.email === "string" ? params.email : params.email?.[0] ?? "";
   const inviteToken =
     typeof params.inviteToken === "string" ? params.inviteToken : params.inviteToken?.[0] ?? "";
+  const inviteEmailLocked = Boolean(inviteToken && emailFromInvite.trim());
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState(emailFromInvite.trim().toLowerCase());
@@ -38,6 +41,7 @@ export default function SignUp() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     if (emailFromInvite) setEmail(emailFromInvite.trim().toLowerCase());
@@ -51,7 +55,9 @@ export default function SignUp() {
     setError(null);
     if (!name.trim()) { setError("Please enter your name"); return; }
     if (!email.trim()) { setError("Please enter your email address"); return; }
-    const emailNorm = email.trim().toLowerCase();
+    const emailNorm = inviteEmailLocked
+      ? emailFromInvite.trim().toLowerCase()
+      : email.trim().toLowerCase();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailNorm)) {
       setError("Please enter a valid email address");
       return;
@@ -105,9 +111,11 @@ export default function SignUp() {
               });
               return;
             }
-            clearSignedOutMark();
-            await provisionBackendUserAfterAuth();
-            router.replace("/(app)/chat");
+            const completed = await completeMobileAuthEntry(queryClient, signIn);
+            if (!completed.ok) {
+              setError(completed.error);
+              return;
+            }
             return;
           }
           setError(
@@ -150,7 +158,7 @@ export default function SignUp() {
       <SafeAreaView edges={["top"]}>
         <View className="items-center py-10 px-6">
           <Image source={require("@/assets/alenio-logo-white.png")} style={{ width: 200, height: 72 }} resizeMode="contain" />
-          <Text className="text-white/80 text-base mt-2">Connect. Workspace. Celebrate.</Text>
+          <Text className="text-white/80 text-base mt-2">Connect. Execute. Celebrate</Text>
         </View>
       </SafeAreaView>
     </LinearGradient>
@@ -196,10 +204,16 @@ export default function SignUp() {
               autoCapitalize="none"
               autoComplete="email"
               value={email}
+              editable={!inviteEmailLocked}
               onChangeText={(t) => { setEmail(t); setError(null); }}
               returnKeyType="next"
               testID="email-input"
             />
+            {inviteEmailLocked ? (
+              <Text className="text-xs text-slate-400 mt-2">
+                This invite is locked to {emailFromInvite.trim().toLowerCase()}.
+              </Text>
+            ) : null}
           </View>
 
           <View className="mb-4">
@@ -277,10 +291,6 @@ export default function SignUp() {
           <Text className="text-[10px] text-slate-400 text-center mt-2 px-4">
             {LEGAL_APP_NAME} is operated by {LEGAL_COMPANY_NAME}. Parent company: {LEGAL_PARENT_COMPANY_NAME}.
           </Text>
-
-          <View style={{ alignItems: "center", marginTop: 32, paddingBottom: 8 }}>
-            <Image source={require("@/assets/lotttech-logo.png")} style={{ width: 185, height: 57 }} resizeMode="contain" />
-          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </View>

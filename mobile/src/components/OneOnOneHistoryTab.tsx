@@ -8,14 +8,17 @@ import {
   ScrollView,
   FlatList,
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
+  Image,
 } from "react-native";
 import { toast } from "burnt";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Plus, X, ChevronLeft, MoreVertical, Check, CalendarCheck } from "lucide-react-native";
+import { Plus, X, ChevronLeft, MoreVertical, Check, CalendarCheck, PlayCircle, Calendar, Trash2, Printer, Download, Pencil } from "lucide-react-native";
+import { api } from "@/lib/api/api";
+import { invalidateTaskCaches } from "@/lib/invalidate-task-caches";
+import { bottomSheetMenu } from "@/lib/bottom-sheet-menu-styles";
 import { router, useFocusEffect } from "expo-router";
 import {
   planOneOnOneHref,
@@ -75,6 +78,18 @@ type Props = {
 };
 
 type OneOneView = "list" | "pick" | "fill";
+
+type CheckInActionMenu =
+  | { kind: "planned"; event: PlannedOneOnOneEvent }
+  | { kind: "history"; meeting: OneOnOneMeeting };
+
+function checkInActionSheetStyle(bottomInset: number) {
+  return {
+    ...bottomSheetMenu.sheet,
+    marginBottom: Math.max(bottomInset, 12),
+    paddingBottom: 12,
+  };
+}
 
 type FollowUpDraft = {
   id: string;
@@ -171,54 +186,109 @@ function CheckInEmptyState({
   error?: string | null;
   onStart?: () => void;
 }) {
+  const firstName = memberName.trim().split(/\s+/)[0] || memberName || "this teammate";
+
+  if (error) {
+    return (
+      <View
+        style={{
+          flexGrow: 1,
+          justifyContent: "center",
+          paddingHorizontal: 16,
+          paddingTop: 20,
+          paddingBottom: 16,
+          alignItems: "center",
+        }}
+        testID="check-in-empty-state-error"
+      >
+        <View
+          style={{
+            width: 56,
+            height: 56,
+            borderRadius: 28,
+            backgroundColor: "#EEF2FF",
+            alignItems: "center",
+            justifyContent: "center",
+            marginBottom: 14,
+          }}
+        >
+          <CalendarCheck size={26} color="#4361EE" />
+        </View>
+        <Text style={{ fontSize: 17, fontWeight: "800", color: "#0F172A", textAlign: "center", marginBottom: 8 }}>
+          Could not load check-ins
+        </Text>
+        <Text style={{ fontSize: 14, color: "#64748B", textAlign: "center", lineHeight: 20, maxWidth: 300 }}>
+          {error}
+        </Text>
+      </View>
+    );
+  }
+
   return (
     <View
       style={{
-        backgroundColor: "#F8FAFC",
-        borderRadius: 16,
-        padding: 28,
+        flexGrow: 1,
+        justifyContent: "center",
+        paddingHorizontal: 16,
+        paddingTop: 8,
+        paddingBottom: 16,
         alignItems: "center",
-        borderWidth: 1,
-        borderColor: "#E2E8F0",
-        borderStyle: "dashed",
       }}
+      testID="check-in-empty-state"
     >
-      <View
+      <Image
+        source={require("@/assets/checkin-empty-develop.png")}
+        style={{ width: 168, height: 168, marginBottom: 8 }}
+        resizeMode="contain"
+        accessibilityIgnoresInvertColors
+      />
+      <Text
         style={{
-          width: 56,
-          height: 56,
-          borderRadius: 28,
-          backgroundColor: "#EEF2FF",
-          alignItems: "center",
-          justifyContent: "center",
-          marginBottom: 16,
+          fontSize: 18,
+          fontWeight: "800",
+          color: "#0F172A",
+          textAlign: "center",
+          letterSpacing: -0.3,
+          lineHeight: 25,
+          marginBottom: 8,
+          maxWidth: 300,
         }}
       >
-        <CalendarCheck size={28} color="#4361EE" />
-      </View>
-      <Text style={{ fontSize: 17, fontWeight: "800", color: "#0F172A", textAlign: "center" }}>
-        {error ? "Could not load check-ins" : "No check-ins yet"}
+        Great managers are built{"\n"}
+        <Text style={{ color: "#7C3AED" }}>one conversation at a time.</Text>
       </Text>
-      <Text style={{ fontSize: 14, color: "#64748B", textAlign: "center", lineHeight: 21, marginTop: 8, maxWidth: 300 }}>
-        {error
-          ? error
-          : canCreate
-            ? `Run a structured check-in with ${memberName}. Pick a template, capture notes, and add follow-up tasks.`
-            : `When a leader publishes a check-in with ${memberName}, it will appear here.`}
+      <Text
+        style={{
+          fontSize: 13.5,
+          color: "#64748B",
+          textAlign: "center",
+          lineHeight: 20,
+          maxWidth: 300,
+          marginBottom: canCreate && onStart ? 18 : 0,
+        }}
+      >
+        {canCreate
+          ? `Use check-ins to coach ${firstName}, spot growth opportunities, and turn feedback into clear next steps.`
+          : `When a leader runs a check-in with ${firstName}, coaching notes and follow-ups will show up here.`}
       </Text>
-      {canCreate && onStart && !error ? (
+      {canCreate && onStart ? (
         <Pressable
           onPress={onStart}
           style={{
             flexDirection: "row",
             alignItems: "center",
+            justifyContent: "center",
             gap: 6,
             backgroundColor: "#4361EE",
             borderRadius: 12,
             paddingHorizontal: 18,
             paddingVertical: 12,
-            marginTop: 20,
+            width: "100%",
+            maxWidth: 280,
           }}
+          testID="check-in-empty-start-button"
+          accessibilityRole="button"
+          accessibilityLabel="Start first check-in"
         >
           <Plus size={16} color="white" />
           <Text style={{ fontSize: 14, fontWeight: "700", color: "white" }}>Start first check-in</Text>
@@ -251,7 +321,9 @@ export function OneOnOneHistoryTab({
   const [editingMeeting, setEditingMeeting] = useState<OneOnOneMeeting | null>(null);
   const [responses, setResponses] = useState<Record<string, string | number>>({});
   const [previewMeeting, setPreviewMeeting] = useState<OneOnOneMeeting | null>(null);
-  const [menuMeetingId, setMenuMeetingId] = useState<string | null>(null);
+  const [checkInActionMenu, setCheckInActionMenu] = useState<CheckInActionMenu | null>(null);
+  const [checkInActionDeleteConfirm, setCheckInActionDeleteConfirm] = useState(false);
+  const [deletingCheckInActionId, setDeletingCheckInActionId] = useState<string | null>(null);
   const [loadingMeetings, setLoadingMeetings] = useState(false);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -357,7 +429,8 @@ export function OneOnOneHistoryTab({
     setResponses({});
     setFollowUpDrafts([]);
     setPreviewMeeting(null);
-    setMenuMeetingId(null);
+    setCheckInActionMenu(null);
+    setCheckInActionDeleteConfirm(false);
     setErr(null);
     setTemplates([]);
     setLinkedPlannedEventId(null);
@@ -430,34 +503,54 @@ export function OneOnOneHistoryTab({
     }
   };
 
+  const closeCheckInActionMenu = () => {
+    setCheckInActionMenu(null);
+    setCheckInActionDeleteConfirm(false);
+  };
+
+  const deletePlannedEvent = async (event: PlannedOneOnOneEvent) => {
+    setDeletingCheckInActionId(event.id);
+    try {
+      await api.delete(`/api/teams/${teamId}/events/${event.id}`);
+      if (linkedPlannedEventId === event.id) setLinkedPlannedEventId(null);
+      void refetchPlannedOneOnOnes();
+      void queryClient.invalidateQueries({ queryKey: ["calendar-events", teamId] });
+      void queryClient.invalidateQueries({ queryKey: ["planned-one-on-ones", teamId] });
+      toast({ title: "Check-in deleted", preset: "done" });
+      closeCheckInActionMenu();
+    } catch (e) {
+      toast({
+        title: e instanceof Error ? e.message : "Could not delete check-in",
+        preset: "error",
+      });
+    } finally {
+      setDeletingCheckInActionId(null);
+    }
+  };
+
+  const deleteHistoryMeeting = async (meeting: OneOnOneMeeting) => {
+    setDeletingCheckInActionId(meeting.id);
+    try {
+      await deleteOneOnOneMeeting(teamId, memberUserId, meeting.id);
+      if (previewMeeting?.id === meeting.id) setPreviewMeeting(null);
+      await loadMeetings();
+      toast({ title: "Check-in deleted", preset: "done" });
+      closeCheckInActionMenu();
+    } catch (e) {
+      toast({ title: e instanceof Error ? e.message : "Could not delete", preset: "error" });
+    } finally {
+      setDeletingCheckInActionId(null);
+    }
+  };
+
   const openPlannedEventMenu = (event: PlannedOneOnOneEvent) => {
-    const templateTitle = event.oneOnOneTemplateId
-      ? templateTitleById.get(event.oneOnOneTemplateId) ?? null
-      : null;
-    const title = templateTitle ?? "Check-in";
-    setMenuMeetingId(null);
-    Alert.alert(title, formatScheduledOneOnOneWhen(event), [
-      {
-        text: "Start check-in",
-        onPress: () => {
-          void startPlannedOneOnOne(event);
-        },
-      },
-      {
-        text: "Edit schedule",
-        onPress: () => {
-          router.push(
-            planOneOnOneHref(teamId, {
-              eventId: event.id,
-              memberUserId,
-              templateId: event.oneOnOneTemplateId ?? undefined,
-              startDate: event.startDate,
-            }),
-          );
-        },
-      },
-      { text: "Cancel", style: "cancel" },
-    ]);
+    setCheckInActionDeleteConfirm(false);
+    setCheckInActionMenu({ kind: "planned", event });
+  };
+
+  const openHistoryMeetingMenu = (meeting: OneOnOneMeeting) => {
+    setCheckInActionDeleteConfirm(false);
+    setCheckInActionMenu({ kind: "history", meeting });
   };
 
   const renderPlannedOneOnOneRow = ({ item: event }: { item: PlannedOneOnOneEvent }) => {
@@ -583,7 +676,7 @@ export function OneOnOneHistoryTab({
 
   const startEdit = (meeting: OneOnOneMeeting) => {
     setPreviewMeeting(null);
-    setMenuMeetingId(null);
+    closeCheckInActionMenu();
     setEditingMeeting(meeting);
     setLinkedPlannedEventId(null);
     setSelectedTemplate(meetingToFillTemplate(meeting));
@@ -695,6 +788,7 @@ export function OneOnOneHistoryTab({
       void refetchPlannedOneOnOnes();
       void queryClient.invalidateQueries({ queryKey: ["calendar-events", teamId] });
       void queryClient.invalidateQueries({ queryKey: ["planned-one-on-ones", teamId] });
+      invalidateTaskCaches(queryClient, teamId);
       toast({ title: "Check-in saved", preset: "done" });
     } catch (e) {
       const message = e instanceof Error ? e.message : "Could not save check-in.";
@@ -749,7 +843,7 @@ export function OneOnOneHistoryTab({
       return;
     }
     setPrintingPdf(true);
-    setMenuMeetingId(null);
+    closeCheckInActionMenu();
     try {
       await printOneOnOneMeeting(checkInExportOptions(meeting));
     } catch (e) {
@@ -768,7 +862,7 @@ export function OneOnOneHistoryTab({
       return;
     }
     setDownloadingPdfId(meeting.id);
-    setMenuMeetingId(null);
+    closeCheckInActionMenu();
     try {
       await downloadOneOnOneMeetingPdf(checkInExportOptions(meeting));
     } catch (e) {
@@ -779,31 +873,6 @@ export function OneOnOneHistoryTab({
     } finally {
       setDownloadingPdfId(null);
     }
-  };
-
-  const onDelete = (meeting: OneOnOneMeeting) => {
-    setMenuMeetingId(null);
-    Alert.alert(
-      "Delete check-in?",
-      `Delete this check-in from ${formatMeetingDate(oneOnOneDisplayDate(meeting))}? This cannot be undone.`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await deleteOneOnOneMeeting(teamId, memberUserId, meeting.id);
-              if (previewMeeting?.id === meeting.id) setPreviewMeeting(null);
-              await loadMeetings();
-              toast({ title: "Check-in deleted", preset: "done" });
-            } catch (e) {
-              toast({ title: e instanceof Error ? e.message : "Could not delete", preset: "error" });
-            }
-          },
-        },
-      ],
-    );
   };
 
   const exitFill = () => {
@@ -1247,6 +1316,230 @@ export function OneOnOneHistoryTab({
     </View>
   );
 
+  const renderCheckInActionMenuModal = () => {
+    if (!checkInActionMenu) return null;
+
+    const isPlanned = checkInActionMenu.kind === "planned";
+    const title = isPlanned
+      ? (checkInActionMenu.event.oneOnOneTemplateId
+          ? templateTitleById.get(checkInActionMenu.event.oneOnOneTemplateId) ?? null
+          : null) ?? "Check-in"
+      : checkInActionMenu.meeting.templateTitle;
+    const whenLabel = isPlanned
+      ? formatScheduledOneOnOneWhen(checkInActionMenu.event)
+      : formatMeetingDate(oneOnOneDisplayDate(checkInActionMenu.meeting));
+    const deleteTargetId = isPlanned ? checkInActionMenu.event.id : checkInActionMenu.meeting.id;
+    const isDeleting = deletingCheckInActionId === deleteTargetId;
+    const historyMeeting = checkInActionMenu.kind === "history" ? checkInActionMenu.meeting : null;
+
+    return (
+      <Modal visible transparent animationType="slide" onRequestClose={closeCheckInActionMenu}>
+        <Pressable
+          style={{ flex: 1, backgroundColor: "rgba(15, 23, 42, 0.45)", justifyContent: "flex-end" }}
+          onPress={closeCheckInActionMenu}
+        >
+          <Pressable onPress={(e) => e.stopPropagation?.()}>
+            <View style={checkInActionSheetStyle(insets.bottom)}>
+              <View style={bottomSheetMenu.handleWrap}>
+                <View style={bottomSheetMenu.handle} />
+              </View>
+
+              <View style={{ paddingHorizontal: 20, paddingTop: 4, paddingBottom: 12 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                  <Image
+                    source={require("@/assets/alenio-icon.png")}
+                    style={{ width: 28, height: 28, borderRadius: 7 }}
+                  />
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={{ fontSize: 16, fontWeight: "700", color: "#111827" }} numberOfLines={2}>
+                      {title}
+                    </Text>
+                    <Text style={{ fontSize: 11, color: "#667085", marginTop: 2 }} numberOfLines={2}>
+                      {whenLabel}
+                    </Text>
+                  </View>
+                  <Pressable
+                    onPress={closeCheckInActionMenu}
+                    hitSlop={8}
+                    style={{
+                      width: 28,
+                      height: 28,
+                      borderRadius: 14,
+                      backgroundColor: "#F1F5F9",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <X size={15} color="#64748B" />
+                  </Pressable>
+                </View>
+              </View>
+
+              {checkInActionDeleteConfirm ? (
+                <View
+                  style={{
+                    marginHorizontal: 16,
+                    marginBottom: 12,
+                    backgroundColor: "#FEF2F2",
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: "#FECACA",
+                    padding: 14,
+                    gap: 10,
+                  }}
+                >
+                  <Text style={{ fontSize: 14, fontWeight: "700", color: "#991B1B", textAlign: "center" }}>
+                    Delete this check-in?
+                  </Text>
+                  <Text style={{ fontSize: 12, color: "#B91C1C", textAlign: "center", lineHeight: 16 }}>
+                    {isPlanned
+                      ? "This removes the scheduled check-in from both calendars. This cannot be undone."
+                      : `This removes the check-in from ${whenLabel}. This cannot be undone.`}
+                  </Text>
+                  <View style={{ flexDirection: "row", gap: 8 }}>
+                    <Pressable
+                      onPress={() => setCheckInActionDeleteConfirm(false)}
+                      style={{
+                        flex: 1,
+                        borderRadius: 10,
+                        paddingVertical: 10,
+                        alignItems: "center",
+                        backgroundColor: "#FFFFFF",
+                        borderWidth: 1,
+                        borderColor: "#E2E8F0",
+                      }}
+                    >
+                      <Text style={{ fontSize: 13, fontWeight: "600", color: "#64748B" }}>Keep it</Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={() => {
+                        if (checkInActionMenu.kind === "planned") {
+                          void deletePlannedEvent(checkInActionMenu.event);
+                        } else {
+                          void deleteHistoryMeeting(checkInActionMenu.meeting);
+                        }
+                      }}
+                      disabled={isDeleting}
+                      style={{
+                        flex: 1,
+                        borderRadius: 10,
+                        paddingVertical: 10,
+                        alignItems: "center",
+                        backgroundColor: "#EF4444",
+                        minHeight: 40,
+                        justifyContent: "center",
+                      }}
+                      testID="confirm-delete-check-in"
+                    >
+                      {isDeleting ? (
+                        <ActivityIndicator color="white" size="small" />
+                      ) : (
+                        <Text style={{ fontSize: 13, fontWeight: "700", color: "white" }}>Delete</Text>
+                      )}
+                    </Pressable>
+                  </View>
+                </View>
+              ) : isPlanned ? (
+                <View style={{ paddingBottom: 4 }}>
+                  <Pressable
+                    onPress={() => {
+                      const event = checkInActionMenu.event;
+                      closeCheckInActionMenu();
+                      void startPlannedOneOnOne(event);
+                    }}
+                    style={bottomSheetMenu.row}
+                    testID="planned-check-in-start"
+                  >
+                    <Text style={bottomSheetMenu.rowLabel}>Start check-in</Text>
+                    <PlayCircle size={bottomSheetMenu.iconSize} color="#4361EE" />
+                  </Pressable>
+                  <Pressable
+                    onPress={() => {
+                      const event = checkInActionMenu.event;
+                      closeCheckInActionMenu();
+                      router.push(
+                        planOneOnOneHref(teamId, {
+                          eventId: event.id,
+                          memberUserId,
+                          templateId: event.oneOnOneTemplateId ?? undefined,
+                          startDate: event.startDate,
+                        }),
+                      );
+                    }}
+                    style={bottomSheetMenu.row}
+                    testID="planned-check-in-edit"
+                  >
+                    <Text style={bottomSheetMenu.rowLabel}>Edit schedule</Text>
+                    <Calendar size={bottomSheetMenu.iconSize} color="#4361EE" />
+                  </Pressable>
+                  <Pressable
+                    onPress={() => setCheckInActionDeleteConfirm(true)}
+                    style={bottomSheetMenu.row}
+                    testID="planned-check-in-delete"
+                  >
+                    <Text style={bottomSheetMenu.rowLabelDestructive}>Delete check-in</Text>
+                    <Trash2 size={bottomSheetMenu.iconSize} color="#EF4444" />
+                  </Pressable>
+                </View>
+              ) : historyMeeting ? (
+                <View style={{ paddingBottom: 4 }}>
+                  {canPrintCheckIn(historyMeeting) ? (
+                    <>
+                      <Pressable
+                        onPress={() => void onPrint(historyMeeting)}
+                        disabled={printingPdf}
+                        style={bottomSheetMenu.row}
+                        testID="history-check-in-print"
+                      >
+                        <Text style={bottomSheetMenu.rowLabel}>
+                          {printingPdf ? "Printing…" : "Print"}
+                        </Text>
+                        <Printer size={bottomSheetMenu.iconSize} color="#4361EE" />
+                      </Pressable>
+                      <Pressable
+                        onPress={() => void onDownloadPdf(historyMeeting)}
+                        disabled={downloadingPdfId === historyMeeting.id}
+                        style={bottomSheetMenu.row}
+                        testID="history-check-in-download"
+                      >
+                        <Text style={bottomSheetMenu.rowLabel}>
+                          {downloadingPdfId === historyMeeting.id ? "Downloading…" : "Download PDF"}
+                        </Text>
+                        <Download size={bottomSheetMenu.iconSize} color="#4361EE" />
+                      </Pressable>
+                    </>
+                  ) : null}
+                  <Pressable
+                    onPress={() => {
+                      const meeting = historyMeeting;
+                      closeCheckInActionMenu();
+                      startEdit(meeting);
+                    }}
+                    style={bottomSheetMenu.row}
+                    testID="history-check-in-edit"
+                  >
+                    <Text style={[bottomSheetMenu.rowLabel, { color: "#4361EE" }]}>
+                      {checkInEditMenuLabel(historyMeeting)}
+                    </Text>
+                    <Pencil size={bottomSheetMenu.iconSize} color="#4361EE" />
+                  </Pressable>
+                  <Pressable
+                    onPress={() => setCheckInActionDeleteConfirm(true)}
+                    style={bottomSheetMenu.row}
+                    testID="history-check-in-delete"
+                  >
+                    <Text style={bottomSheetMenu.rowLabelDestructive}>Delete check-in</Text>
+                    <Trash2 size={bottomSheetMenu.iconSize} color="#EF4444" />
+                  </Pressable>
+                </View>
+              ) : null}
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+    );
+  };
+
   const renderPublishModals = () => (
     <>
       <Modal visible={leaderCommentsNudgeOpen} transparent animationType="fade" onRequestClose={() => setLeaderCommentsNudgeOpen(false)}>
@@ -1328,6 +1621,7 @@ export function OneOnOneHistoryTab({
       <>
         {renderFillView()}
         {renderPublishModals()}
+        {renderCheckInActionMenuModal()}
       </>
     );
   }
@@ -1337,7 +1631,7 @@ export function OneOnOneHistoryTab({
   const showEmptyState = !loadingMeetings && upcomingPlanned.length === 0 && meetings.length === 0;
 
   return (
-    <View style={{ gap: 16 }}>
+    <View style={{ gap: 16, flexGrow: showEmptyState ? 1 : undefined }}>
       {canCreate ? (
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 8 }}>
           <Pressable
@@ -1362,7 +1656,7 @@ export function OneOnOneHistoryTab({
             testID="plan-one-on-one-button"
           >
             <CalendarCheck size={16} color="#475569" />
-            <Text style={{ fontSize: 13, fontWeight: "600", color: "#334155" }}>Plan check-in</Text>
+            <Text style={{ fontSize: 13, fontWeight: "600", color: "#334155" }}>Schedule check-in</Text>
           </Pressable>
           <Pressable
             onPress={() => void startCreate()}
@@ -1380,22 +1674,6 @@ export function OneOnOneHistoryTab({
             <Plus size={16} color="white" />
             <Text style={{ fontSize: 13, fontWeight: "700", color: "white" }}>New check-in</Text>
           </Pressable>
-        </View>
-      ) : null}
-
-      {!canCreate && !canModify ? (
-        <View
-          style={{
-            backgroundColor: "#F8FAFC",
-            borderRadius: 10,
-            padding: 12,
-            borderWidth: 1,
-            borderColor: "#E2E8F0",
-          }}
-        >
-          <Text style={{ fontSize: 13, color: "#64748B", lineHeight: 18 }}>
-            View only on mobile. Create and edit check-ins from the web Team page.
-          </Text>
         </View>
       ) : null}
 
@@ -1449,142 +1727,133 @@ export function OneOnOneHistoryTab({
       {loadingMeetings ? (
         <ActivityIndicator color="#4361EE" style={{ marginVertical: 24 }} />
       ) : showEmptyState ? (
-        <CheckInEmptyState
-          memberName={memberName}
-          canCreate={canCreate}
-          error={err}
-          onStart={canCreate ? () => void startCreate() : undefined}
-        />
+        <View style={{ flexGrow: 1, justifyContent: "center" }}>
+          <CheckInEmptyState
+            memberName={memberName}
+            canCreate={canCreate}
+            error={err}
+            onStart={canCreate ? () => void startCreate() : undefined}
+          />
+        </View>
       ) : showHistorySection ? (
-        <View style={{ gap: 10 }}>
-          {upcomingPlanned.length > 0 ? (
+        <View style={{ gap: 8 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
             <Text
               style={{
                 fontSize: 11,
                 fontWeight: "700",
-                color: "#94A3B8",
+                color: "#64748B",
                 textTransform: "uppercase",
-                letterSpacing: 0.6,
+                letterSpacing: 1.1,
               }}
             >
-              History
+              {upcomingPlanned.length > 0 ? "Check-in history" : "Check-ins"}
             </Text>
-          ) : null}
-          {[...meetings]
-            .sort((a, b) => oneOnOneDisplayDateMs(b) - oneOnOneDisplayDateMs(a))
-            .map((meeting) => {
-              const isDraft = meeting.status === "draft";
-              const overdueCount = countOverdueFollowUpTasks(meeting.followUpTasks, todayStart);
-              const status = getOneOnOneMeetingStatusFromMeeting(meeting);
-              const colors = isDraft
-                ? { bg: "#EEF2FF", text: "#4338CA" }
-                : oneOnOneMeetingStatusColors(status);
-              const statusLabel = isDraft ? "Draft" : oneOnOneMeetingStatusLabel(status);
-              return (
-                <Pressable
-                  key={meeting.id}
-                  onPress={() => setPreviewMeeting(meeting)}
-                  style={{
-                    backgroundColor: "white",
-                    borderRadius: 12,
-                    padding: 14,
-                    borderWidth: 1,
-                    borderColor: "#E2E8F0",
-                  }}
-                >
-                  <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" }}>
-                    <View style={{ flex: 1 }}>
-                      <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 6 }}>
-                        <Text style={{ fontSize: 15, fontWeight: "700", color: "#0F172A", flexShrink: 1 }}>
-                          {meeting.templateTitle}
-                        </Text>
-                        {overdueCount > 0 ? (
-                          <View
+            <Text style={{ fontSize: 12, fontWeight: "700", color: "#94A3B8" }}>{meetings.length}</Text>
+          </View>
+          <View
+            style={{
+              backgroundColor: "white",
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: "#E2E8F0",
+              overflow: "hidden",
+            }}
+          >
+            {[...meetings]
+              .sort((a, b) => oneOnOneDisplayDateMs(b) - oneOnOneDisplayDateMs(a))
+              .map((meeting, index) => {
+                const isDraft = meeting.status === "draft";
+                const followUpCount = meeting.followUpTasks?.length ?? 0;
+                const overdueCount = countOverdueFollowUpTasks(meeting.followUpTasks, todayStart);
+                const openCount = (meeting.followUpTasks ?? []).filter((task) => task.status !== "done").length;
+                const status = getOneOnOneMeetingStatusFromMeeting(meeting);
+                const colors = isDraft
+                  ? { bg: "#EEF2FF", text: "#4338CA", accent: "#6366F1" }
+                  : oneOnOneMeetingStatusColors(status);
+                const statusLabel = isDraft ? "Draft" : oneOnOneMeetingStatusLabel(status);
+                const conductedBy = meeting.createdBy?.name?.trim() || null;
+                const followUpMeta =
+                  followUpCount === 0
+                    ? "0 follow-ups"
+                    : overdueCount > 0
+                      ? `${overdueCount} overdue · ${followUpCount} total`
+                      : openCount > 0
+                        ? `${openCount} open · ${followUpCount} total`
+                        : `${followUpCount} follow-up${followUpCount === 1 ? "" : "s"}`;
+                const metaParts = [
+                  formatMeetingDate(oneOnOneDisplayDate(meeting)),
+                  followUpMeta,
+                  conductedBy ? `by ${conductedBy}` : null,
+                ].filter(Boolean);
+
+                return (
+                  <Pressable
+                    key={meeting.id}
+                    onPress={() => setPreviewMeeting(meeting)}
+                    style={{
+                      flexDirection: "row",
+                      borderTopWidth: index === 0 ? 0 : 1,
+                      borderTopColor: "#F1F5F9",
+                      backgroundColor: "white",
+                    }}
+                  >
+                    <View style={{ width: 3, backgroundColor: colors.accent }} />
+                    <View style={{ flex: 1, paddingVertical: 12, paddingLeft: 12, paddingRight: 8 }}>
+                      <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 8 }}>
+                        <View style={{ flex: 1, minWidth: 0 }}>
+                          <Text
+                            style={{ fontSize: 14, fontWeight: "700", color: "#0F172A", letterSpacing: -0.2 }}
+                            numberOfLines={1}
+                          >
+                            {meeting.templateTitle}
+                          </Text>
+                          <Text
+                            style={{ fontSize: 12, color: "#64748B", marginTop: 3, lineHeight: 16 }}
+                            numberOfLines={1}
+                          >
+                            {metaParts.join(" · ")}
+                          </Text>
+                        </View>
+                        <View
+                          style={{
+                            backgroundColor: colors.bg,
+                            borderRadius: 4,
+                            paddingHorizontal: 7,
+                            paddingVertical: 3,
+                            marginTop: 1,
+                          }}
+                        >
+                          <Text
                             style={{
-                              backgroundColor: "#FEE2E2",
-                              borderRadius: 6,
-                              paddingHorizontal: 8,
-                              paddingVertical: 3,
-                              borderWidth: 1,
-                              borderColor: "#FECACA",
+                              fontSize: 9,
+                              fontWeight: "800",
+                              color: colors.text,
+                              letterSpacing: 0.5,
+                              textTransform: "uppercase",
                             }}
                           >
-                            <Text style={{ fontSize: 10, fontWeight: "700", color: "#DC2626" }}>
-                              {overdueCount} overdue
-                            </Text>
-                          </View>
+                            {statusLabel}
+                          </Text>
+                        </View>
+                        {canModify ? (
+                          <Pressable
+                            onPress={(e) => {
+                              e.stopPropagation?.();
+                              openHistoryMeetingMenu(meeting);
+                            }}
+                            hitSlop={8}
+                            style={{ paddingTop: 1 }}
+                          >
+                            <MoreVertical size={16} color="#94A3B8" />
+                          </Pressable>
                         ) : null}
                       </View>
-                      <Text style={{ fontSize: 12, color: "#64748B", marginTop: 2 }}>
-                        {formatMeetingDate(oneOnOneDisplayDate(meeting))}
-                      </Text>
-                      <View
-                        style={{
-                          alignSelf: "flex-start",
-                          marginTop: 8,
-                          backgroundColor: colors.bg,
-                          borderRadius: 8,
-                          paddingHorizontal: 8,
-                          paddingVertical: 3,
-                        }}
-                      >
-                        <Text style={{ fontSize: 11, fontWeight: "700", color: colors.text }}>
-                          {statusLabel}
-                        </Text>
-                      </View>
                     </View>
-                    {canModify ? (
-                      <Pressable
-                        onPress={(e) => {
-                          e.stopPropagation?.();
-                          setMenuMeetingId(menuMeetingId === meeting.id ? null : meeting.id);
-                        }}
-                        hitSlop={8}
-                      >
-                        <MoreVertical size={18} color="#64748B" />
-                      </Pressable>
-                    ) : null}
-                  </View>
-                  {menuMeetingId === meeting.id ? (
-                    <View style={{ marginTop: 10, backgroundColor: "#F8FAFC", borderRadius: 10, overflow: "hidden" }}>
-                      {canPrintCheckIn(meeting) ? (
-                        <>
-                          <Pressable
-                            onPress={() => void onPrint(meeting)}
-                            disabled={printingPdf}
-                            style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: "#E2E8F0" }}
-                          >
-                            <Text style={{ fontSize: 14, fontWeight: "600", color: "#334155" }}>
-                              {printingPdf ? "Printing…" : "Print"}
-                            </Text>
-                          </Pressable>
-                          <Pressable
-                            onPress={() => void onDownloadPdf(meeting)}
-                            disabled={downloadingPdfId === meeting.id}
-                            style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: "#E2E8F0" }}
-                          >
-                            <Text style={{ fontSize: 14, fontWeight: "600", color: "#334155" }}>
-                              {downloadingPdfId === meeting.id ? "Downloading…" : "Download PDF"}
-                            </Text>
-                          </Pressable>
-                        </>
-                      ) : null}
-                      <Pressable
-                        onPress={() => startEdit(meeting)}
-                        style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: "#E2E8F0" }}
-                      >
-                        <Text style={{ fontSize: 14, fontWeight: "600", color: "#4361EE" }}>
-                          {checkInEditMenuLabel(meeting)}
-                        </Text>
-                      </Pressable>
-                      <Pressable onPress={() => onDelete(meeting)} style={{ padding: 12 }}>
-                        <Text style={{ fontSize: 14, fontWeight: "600", color: "#EF4444" }}>Delete</Text>
-                      </Pressable>
-                    </View>
-                  ) : null}
-                </Pressable>
-              );
-            })}
+                  </Pressable>
+                );
+              })}
+          </View>
         </View>
       ) : null}
 
@@ -1788,6 +2057,7 @@ export function OneOnOneHistoryTab({
       </Modal>
 
       {renderPublishModals()}
+      {renderCheckInActionMenuModal()}
     </View>
   );
 }

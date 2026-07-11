@@ -99,13 +99,9 @@ export function AccountDeletionPage() {
         <Section title="What we may keep">
           <ul>
             <li>
-              <strong>Subscriptions:</strong> If you subscribed through Apple or Google Play, cancel your subscription
-              in your store account settings to avoid future charges. Account deletion does not automatically refund
-              past purchases.
-            </li>
-            <li>
-              <strong>Web billing:</strong> If your workspace is billed through Stripe on the web, cancel or transfer
-              billing before deleting your account if you are the workspace owner.
+              <strong>Billing:</strong> If your workspace has an active Team plan, cancel or transfer billing in Plan
+              &amp; Access (or the web billing dashboard) before deleting your account if you are the workspace owner.
+              Account deletion does not automatically refund past charges.
             </li>
             <li>
               <strong>Legal and financial records:</strong> We may retain information required for tax, accounting,

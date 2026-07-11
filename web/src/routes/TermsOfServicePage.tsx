@@ -86,21 +86,11 @@ export function TermsOfServicePage() {
         </Section>
 
         <Section title="6. Subscriptions and Payments">
-          <p>{LEGAL_APP_NAME} may offer premium plans. Depending on how you subscribe:</p>
-          <ul>
-            <li>
-              <strong>Mobile (App Store or Google Play):</strong> Billing follows the applicable store&apos;s terms. Manage or cancel in
-              your store account settings. Refunds follow store rules, except as required by law.
-            </li>
-            <li>
-              <strong>Web ({LEGAL_WEBSITE_LABEL}):</strong> Payment and billing for team plans started on the web are processed by Stripe.
-              You authorize charges according to the plan you select. Manage billing on {LEGAL_WEBSITE_LABEL}. Stripe&apos;s terms and
-              privacy policy apply to their processing.
-            </li>
-          </ul>
           <p>
-            Apple and Google are not parties to these Terms for in-app purchases. App Store and Play billing are governed by their
-            respective terms.
+            {LEGAL_APP_NAME} may offer premium plans. Payment and billing for team plans are processed on the web by
+            Stripe. You authorize charges according to the plan you select. Manage billing on {LEGAL_WEBSITE_LABEL} or in
+            Plan &amp; Access. Stripe&apos;s terms and privacy policy apply to their processing. The mobile app does not
+            process subscription purchases.
           </p>
         </Section>
 

@@ -28,6 +28,7 @@ import type { Task, TaskPriority, RecurrenceType, Team, TeamMember, TaskTemplate
 import { recurrenceCountHint, recurrenceDurationUnit } from "@/lib/recurring-task";
 import { ME_QUERY_KEY } from "@/lib/auth/me-query";
 import { calendarDueIso, resolveTimeZone } from "@/lib/timezone";
+import { invalidateTaskCaches } from "@/lib/invalidate-task-caches";
 
 const PRIORITIES: { label: string; value: TaskPriority; color: string }[] = [
   { label: "Low", value: "low", color: "#94A3B8" },
@@ -225,8 +226,7 @@ export default function CreateTaskScreen() {
       return tasks;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["tasks", teamId] });
-      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      invalidateTaskCaches(queryClient, teamId);
       router.back();
     },
     onError: () => setError("Failed to create task. Please try again."),

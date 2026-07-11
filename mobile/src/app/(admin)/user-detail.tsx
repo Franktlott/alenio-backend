@@ -14,8 +14,9 @@ import { LinearGradient } from "expo-linear-gradient";
 import { StatusBar } from "expo-status-bar";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams } from "expo-router";
-import { ArrowLeft, Mail, User, Trash2, Shield, Calendar, Users } from "lucide-react-native";
+import { ArrowLeft, Mail, User, Trash2, Shield, Calendar, Users, ShieldOff, ShieldPlus } from "lucide-react-native";
 import { getAuthHeaders } from "@/lib/auth/auth-client";
+import { useMobileAuthReady } from "@/lib/auth/use-session";
 import { fetch } from "expo/fetch";
 import { readJsonSafe } from "@/lib/api/api";
 import { getBackendUrl } from "@/lib/backend-url";
@@ -54,6 +55,8 @@ function formatDate(dateStr: string) {
 export default function UserDetail() {
   const { userId } = useLocalSearchParams<{ userId: string }>();
   const queryClient = useQueryClient();
+  const { data: authReady } = useMobileAuthReady();
+  const currentUserId = authReady?.me?.id;
 
   const { data: user, isLoading } = useQuery<AdminUserDetail>({
     queryKey: ["admin", "users", userId],
@@ -111,6 +114,34 @@ export default function UserDetail() {
     },
   });
 
+  const adminMutation = useMutation({
+    mutationFn: async (isAdmin: boolean) => {
+      const authHeaders = await getAuthHeaders();
+      const res = await fetch(`${BASE_URL}/api/admin-mobile/users/${userId}/admin`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...authHeaders },
+        credentials: "include",
+        body: JSON.stringify({ isAdmin }),
+      });
+      const json = await readJsonSafe<{ data: AdminUserDetail; error?: { message: string } }>(res);
+      if (!res.ok) throw new Error(json?.error?.message || "Admin update failed");
+      return json?.data as AdminUserDetail;
+    },
+    onSuccess: (_data, isAdmin) => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "users", userId] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "stats"] });
+      void queryClient.invalidateQueries({ queryKey: ["me"] });
+      toast({
+        title: isAdmin ? "Platform admin granted" : "Platform admin removed",
+        preset: "done",
+      });
+    },
+    onError: (err: Error) => {
+      toast({ title: err.message, preset: "error" });
+    },
+  });
+
   const deleteMutation = useMutation({
     mutationFn: async () => {
       const authHeaders = await getAuthHeaders();
@@ -149,6 +180,35 @@ export default function UserDetail() {
     );
   };
 
+  const handleToggleAdmin = () => {
+    if (!user) return;
+    const makingAdmin = !user.isAdmin;
+    const isSelf = currentUserId === user.id;
+
+    if (!makingAdmin && isSelf) {
+      Alert.alert("Cannot Remove Admin", "You cannot remove platform admin access from your own account.");
+      return;
+    }
+
+    Alert.alert(
+      makingAdmin ? "Make Platform Admin" : "Remove Platform Admin",
+      makingAdmin
+        ? `Grant ${user.name} full platform admin access?`
+        : `Remove platform admin access from ${user.name}?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: makingAdmin ? "Grant Admin" : "Remove Admin",
+          style: makingAdmin ? "default" : "destructive",
+          onPress: () => adminMutation.mutate(makingAdmin),
+        },
+      ]
+    );
+  };
+
+  const isSelf = currentUserId === user?.id;
+  const canRemoveAdmin = user?.isAdmin && !isSelf;
+
   return (
     <View className="flex-1 bg-white dark:bg-slate-900">
       <StatusBar style="light" />
@@ -168,10 +228,10 @@ export default function UserDetail() {
               testID="back-button"
             >
               <ArrowLeft size={18} color="rgba(255,255,255,0.85)" />
-              <Text className="text-white/85 text-sm font-medium">Dashboard</Text>
+              <Text className="text-white/85 text-sm font-medium">Users</Text>
             </Pressable>
             <Text className="text-white text-2xl font-bold">User Details</Text>
-            <Text className="text-white/70 text-sm mt-0.5">Edit or manage this user account</Text>
+            <Text className="text-white/70 text-sm mt-0.5">Edit account or grant platform admin</Text>
           </View>
         </SafeAreaView>
       </LinearGradient>
@@ -320,7 +380,47 @@ export default function UserDetail() {
             </Pressable>
           </View>
 
-          {/* Danger Zone */}
+          <View className="mx-4 mt-4 bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 p-5">
+            <Text className="text-slate-500 dark:text-slate-400 text-xs font-semibold uppercase tracking-wide mb-3">
+              Actions
+            </Text>
+            {user.isAdmin && isSelf ? (
+              <Text className="text-slate-400 text-sm mb-3">
+                You are a platform admin. Admin access cannot be removed from your own account.
+              </Text>
+            ) : null}
+            <Pressable
+              className={`flex-row items-center justify-center gap-2 rounded-xl py-3.5 ${
+                user.isAdmin
+                  ? canRemoveAdmin
+                    ? "border border-amber-200 dark:border-amber-800"
+                    : "bg-slate-100 dark:bg-slate-700"
+                  : "bg-indigo-600"
+              }`}
+              onPress={handleToggleAdmin}
+              disabled={adminMutation.isPending || (user.isAdmin && !canRemoveAdmin)}
+              testID="admin-toggle-button"
+            >
+              {adminMutation.isPending ? (
+                <ActivityIndicator color={user.isAdmin ? "#D97706" : "white"} />
+              ) : user.isAdmin ? (
+                <>
+                  <ShieldOff size={16} color={canRemoveAdmin ? "#D97706" : "#94A3B8"} />
+                  <Text
+                    className={`font-semibold ${canRemoveAdmin ? "text-amber-600 dark:text-amber-400" : "text-slate-400"}`}
+                  >
+                    Remove Platform Admin
+                  </Text>
+                </>
+              ) : (
+                <>
+                  <ShieldPlus size={16} color="white" />
+                  <Text className="text-white font-semibold">Make Platform Admin</Text>
+                </>
+              )}
+            </Pressable>
+          </View>
+
           {!user.isAdmin ? (
             <View className="mx-4 mt-4 bg-white dark:bg-slate-800 rounded-2xl border border-red-100 dark:border-red-900/30 p-5">
               <Text className="text-slate-500 dark:text-slate-400 text-xs font-semibold uppercase tracking-wide mb-3">

@@ -37,7 +37,7 @@ export async function applyTeamRemovedFromAccount(
     } else {
       setActiveTeamId(null);
       useSubscriptionStore.getState().setPlan("free");
-      router.replace("/onboarding");
+      router.replace("/no-workspace-welcome");
     }
   }
 

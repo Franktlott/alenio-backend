@@ -1,6 +1,9 @@
 import "react-native-get-random-values";
 import { randomUUID as expoRandomUUID } from "expo-crypto";
 
+// Force Metro refresh after Team Requests button fix (2026-07-10).
+void 0;
+
 // react-native-get-random-values only sets getRandomValues; some web-oriented libs call crypto.randomUUID().
 if (globalThis.crypto && typeof globalThis.crypto.randomUUID !== "function") {
   Object.assign(globalThis.crypto, {

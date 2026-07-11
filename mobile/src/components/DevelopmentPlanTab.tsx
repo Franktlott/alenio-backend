@@ -10,10 +10,11 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  Image,
 } from "react-native";
 import { toast } from "burnt";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Plus, X, Target, ChevronDown, ChevronUp, MoreVertical } from "lucide-react-native";
+import { Plus, X, Target, ChevronDown, ChevronUp } from "lucide-react-native";
 import {
   addDevelopmentGoalNote,
   createDevelopmentGoal,
@@ -79,61 +80,132 @@ function GrowthEmptyState({
   error?: string | null;
   onStart?: () => void;
 }) {
+  const firstName = memberName.trim().split(/\s+/)[0] || memberName || "this teammate";
+
+  if (error) {
+    return (
+      <View
+        style={{
+          flexGrow: 1,
+          justifyContent: "center",
+          paddingHorizontal: 16,
+          paddingTop: 20,
+          paddingBottom: 16,
+          alignItems: "center",
+        }}
+        testID="growth-empty-state-error"
+      >
+        <View
+          style={{
+            width: 56,
+            height: 56,
+            borderRadius: 28,
+            backgroundColor: "#EEF2FF",
+            alignItems: "center",
+            justifyContent: "center",
+            marginBottom: 14,
+          }}
+        >
+          <Target size={26} color="#4361EE" />
+        </View>
+        <Text style={{ fontSize: 17, fontWeight: "800", color: "#0F172A", textAlign: "center", marginBottom: 8 }}>
+          Could not load goals
+        </Text>
+        <Text style={{ fontSize: 14, color: "#64748B", textAlign: "center", lineHeight: 20, maxWidth: 300 }}>
+          {error}
+        </Text>
+      </View>
+    );
+  }
+
   return (
     <View
       style={{
-        backgroundColor: "#F8FAFC",
-        borderRadius: 16,
-        padding: 28,
+        flexGrow: 1,
+        justifyContent: "center",
+        paddingHorizontal: 16,
+        paddingTop: 8,
+        paddingBottom: 16,
         alignItems: "center",
-        borderWidth: 1,
-        borderColor: "#E2E8F0",
-        borderStyle: "dashed",
       }}
+      testID="growth-empty-state"
     >
-      <View
+      <Image
+        source={require("@/assets/growth-empty-goals.png")}
+        style={{ width: 168, height: 168, marginBottom: 8 }}
+        resizeMode="contain"
+        accessibilityIgnoresInvertColors
+      />
+      <Text
         style={{
-          width: 56,
-          height: 56,
-          borderRadius: 28,
-          backgroundColor: "#EEF2FF",
-          alignItems: "center",
-          justifyContent: "center",
-          marginBottom: 16,
+          fontSize: 18,
+          fontWeight: "800",
+          color: "#0F172A",
+          textAlign: "center",
+          letterSpacing: -0.3,
+          lineHeight: 25,
+          marginBottom: 8,
+          maxWidth: 300,
         }}
       >
-        <Target size={28} color="#4361EE" />
-      </View>
-      <Text style={{ fontSize: 17, fontWeight: "800", color: "#0F172A", textAlign: "center" }}>
-        {error ? "Could not load goals" : hasAnyGoals ? "No active goals yet" : "No goals yet"}
+        {hasAnyGoals ? (
+          <>
+            Ready for the{"\n"}
+            <Text style={{ color: "#7C3AED" }}>next growth step.</Text>
+          </>
+        ) : (
+          <>
+            Growth starts with{"\n"}
+            <Text style={{ color: "#7C3AED" }}>a clear goal.</Text>
+          </>
+        )}
       </Text>
-      <Text style={{ fontSize: 14, color: "#64748B", textAlign: "center", lineHeight: 21, marginTop: 8, maxWidth: 300 }}>
-        {error
-          ? error
-          : canCreate
-            ? hasAnyGoals
-              ? `Create a new goal for ${memberName}, or reactivate an inactive goal below.`
-              : `Set development goals for ${memberName}. Track skills, action steps, and progress over time.`
-            : `Development goals for ${memberName} will appear here once they're added.`}
+      <Text
+        style={{
+          fontSize: 13.5,
+          color: "#64748B",
+          textAlign: "center",
+          lineHeight: 20,
+          maxWidth: 300,
+          marginBottom: 10,
+        }}
+      >
+        {canCreate
+          ? hasAnyGoals
+            ? `Create a new goal for ${firstName}, or reactivate an inactive goal below to keep momentum going.`
+            : `Set development goals for ${firstName}. Build skills, track action steps, and celebrate progress over time.`
+          : `Development goals for ${firstName} will appear here once a leader adds them.`}
       </Text>
-      {!error ? (
-        <Text style={{ fontSize: 12, color: "#94A3B8", textAlign: "center", lineHeight: 17, marginTop: 10, maxWidth: 300 }}>
-          {DEVELOPMENT_GOAL_ACTIVITY_KEY.summary}
-        </Text>
-      ) : null}
-      {canCreate && onStart && !error ? (
+      <Text
+        style={{
+          fontSize: 12,
+          color: "#94A3B8",
+          textAlign: "center",
+          lineHeight: 17,
+          maxWidth: 300,
+          marginBottom: canCreate && onStart ? 16 : 0,
+        }}
+      >
+        {DEVELOPMENT_GOAL_ACTIVITY_KEY.summary}
+      </Text>
+      {canCreate && onStart ? (
         <Pressable
           onPress={onStart}
           style={{
             flexDirection: "row",
             alignItems: "center",
+            justifyContent: "center",
             gap: 6,
             backgroundColor: "#4361EE",
             borderRadius: 12,
             paddingHorizontal: 18,
             paddingVertical: 12,
-            marginTop: 20,
+            width: "100%",
+            maxWidth: 280,
           }}
+          testID="growth-empty-start-button"
+          accessibilityRole="button"
+          accessibilityLabel={hasAnyGoals ? "Add goal" : "Start first goal"}
         >
           <Plus size={16} color="white" />
           <Text style={{ fontSize: 14, fontWeight: "700", color: "white" }}>
@@ -160,8 +232,11 @@ export function DevelopmentPlanTab({
   const [err, setErr] = useState<string | null>(null);
   const [closedOpen, setClosedOpen] = useState(false);
   const [inactiveOpen, setInactiveOpen] = useState(false);
-  const [menuGoalId, setMenuGoalId] = useState<string | null>(null);
   const [statusSavingId, setStatusSavingId] = useState<string | null>(null);
+  const [noteGoal, setNoteGoal] = useState<DevelopmentGoal | null>(null);
+  const [noteDraft, setNoteDraft] = useState("");
+  const [noteSaving, setNoteSaving] = useState(false);
+  const [noteErr, setNoteErr] = useState<string | null>(null);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [updateGoal, setUpdateGoal] = useState<DevelopmentGoal | null>(null);
@@ -252,6 +327,39 @@ export function DevelopmentPlanTab({
     setModalErr(null);
   };
 
+  const openAddNote = (goal: DevelopmentGoal) => {
+    setNoteGoal(goal);
+    setNoteDraft("");
+    setNoteErr(null);
+  };
+
+  const closeNoteModal = () => {
+    setNoteGoal(null);
+    setNoteDraft("");
+    setNoteErr(null);
+  };
+
+  const onSaveProgressNote = async () => {
+    if (!noteGoal) return;
+    const body = noteDraft.trim();
+    if (!body) {
+      setNoteErr("Enter a progress note.");
+      return;
+    }
+    setNoteSaving(true);
+    setNoteErr(null);
+    try {
+      await addDevelopmentGoalNote(teamId, memberUserId, noteGoal.id, body);
+      toast({ title: "Progress note added", preset: "done" });
+      closeNoteModal();
+      await loadGoals();
+    } catch (e) {
+      setNoteErr(e instanceof Error ? e.message : "Could not save note.");
+    } finally {
+      setNoteSaving(false);
+    }
+  };
+
   const closeModal = () => {
     setCreateOpen(false);
     setUpdateGoal(null);
@@ -323,22 +431,41 @@ export function DevelopmentPlanTab({
     ]);
   };
 
-  const onReopen = async (goal: DevelopmentGoal) => {
-    setMenuGoalId(null);
-    setStatusSavingId(goal.id);
-    try {
-      await setDevelopmentGoalStatus(teamId, memberUserId, goal.id, "active");
-      await loadGoals();
-      toast({ title: "Goal reopened", preset: "done" });
-    } catch (e) {
-      toast({ title: e instanceof Error ? e.message : "Could not reopen", preset: "error" });
-    } finally {
-      setStatusSavingId(null);
-    }
+  const onReopen = (goal: DevelopmentGoal) => {
+    const isInactive = normalizeDevelopmentGoalStatus(goal.status) === "inactive";
+    Alert.alert(
+      isInactive ? "Reactivate goal?" : "Reopen goal?",
+      isInactive
+        ? `Reactivate "${goal.skill}"? Add progress updates to keep it active.`
+        : `Reopen "${goal.skill}"? It will return to the active goals list.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: isInactive ? "Reactivate" : "Reopen",
+          onPress: async () => {
+            setStatusSavingId(goal.id);
+            try {
+              await setDevelopmentGoalStatus(teamId, memberUserId, goal.id, "active");
+              await loadGoals();
+              toast({
+                title: isInactive ? "Goal reactivated" : "Goal reopened",
+                preset: "done",
+              });
+            } catch (e) {
+              toast({
+                title: e instanceof Error ? e.message : "Could not reopen goal",
+                preset: "error",
+              });
+            } finally {
+              setStatusSavingId(null);
+            }
+          },
+        },
+      ],
+    );
   };
 
   const onDelete = (goal: DevelopmentGoal) => {
-    setMenuGoalId(null);
     Alert.alert("Delete goal?", `Remove "${goal.skill}"? This cannot be undone.`, [
       { text: "Cancel", style: "cancel" },
       {
@@ -356,6 +483,166 @@ export function DevelopmentPlanTab({
       },
     ]);
   };
+
+  const renderGoalRow = (goal: DevelopmentGoal, index: number) => {
+    const status = normalizeDevelopmentGoalStatus(goal.status);
+    const isClosed = status === "closed";
+    const isInactive = status === "inactive";
+    const accent = isClosed ? "#94A3B8" : isInactive ? "#F59E0B" : "#4361EE";
+    const latestNote = [...goal.notes].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    )[0];
+    const stepPreview =
+      goal.steps.length === 0
+        ? null
+        : goal.steps.length === 1
+          ? goal.steps[0]
+          : `${goal.steps[0]} · +${goal.steps.length - 1} more`;
+
+    return (
+      <View
+        key={goal.id}
+        style={{
+          flexDirection: "row",
+          borderTopWidth: index === 0 ? 0 : 1,
+          borderTopColor: "#F1F5F9",
+          backgroundColor: "white",
+        }}
+      >
+        <View style={{ width: 3, backgroundColor: accent }} />
+        <View style={{ flex: 1, paddingVertical: 12, paddingLeft: 12, paddingRight: 10 }}>
+          <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 8 }}>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <Text
+                  style={{ fontSize: 14, fontWeight: "700", color: "#0F172A", letterSpacing: -0.2, flexShrink: 1 }}
+                  numberOfLines={1}
+                >
+                  {goal.skill}
+                </Text>
+                <View
+                  style={{
+                    backgroundColor: isClosed ? "#F1F5F9" : isInactive ? "#FFEDD5" : "#F1F5F9",
+                    borderRadius: 4,
+                    paddingHorizontal: 6,
+                    paddingVertical: 2,
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: 9,
+                      fontWeight: "800",
+                      letterSpacing: 0.5,
+                      textTransform: "uppercase",
+                      color: isClosed ? "#64748B" : isInactive ? "#C2410C" : "#475569",
+                    }}
+                  >
+                    {goalStatusLabel(status)}
+                  </Text>
+                </View>
+              </View>
+
+              <Text style={{ fontSize: 12, color: "#64748B", marginTop: 3, lineHeight: 16 }} numberOfLines={1}>
+                {[
+                  isClosed
+                    ? `Closed ${formatWhen(goal.closedAt ?? lastUpdatedAt(goal))}`
+                    : `Updated ${formatWhen(lastUpdatedAt(goal))}`,
+                  goal.createdBy ? displayUserName(goal.createdBy) : null,
+                  goal.notes.length > 0 ? `${goal.notes.length} note${goal.notes.length === 1 ? "" : "s"}` : "No notes",
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </Text>
+
+              {isInactive ? (
+                <Text style={{ marginTop: 6, fontSize: 12, color: "#B45309", lineHeight: 16 }} numberOfLines={2}>
+                  Inactive after {goal.daysSinceActivity ?? 0} days. Add a progress note to reactivate.
+                </Text>
+              ) : null}
+
+              {stepPreview ? (
+                <Text style={{ marginTop: 6, fontSize: 12, color: "#475569", lineHeight: 16 }} numberOfLines={1}>
+                  Steps: {stepPreview}
+                </Text>
+              ) : null}
+
+              {latestNote ? (
+                <Text style={{ marginTop: 4, fontSize: 12, color: "#64748B", lineHeight: 16 }} numberOfLines={2}>
+                  Latest: {latestNote.body}
+                </Text>
+              ) : null}
+            </View>
+          </View>
+
+          {canUpdate ? (
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                flexWrap: "wrap",
+                gap: 12,
+                marginTop: 10,
+                paddingTop: 10,
+                borderTopWidth: 1,
+                borderTopColor: "#F8FAFC",
+              }}
+            >
+              {!isClosed ? (
+                <Pressable onPress={() => openAddNote(goal)} hitSlop={6} testID={`add-progress-note-${goal.id}`}>
+                  <Text style={{ fontSize: 12, fontWeight: "700", color: "#4361EE" }}>Add note</Text>
+                </Pressable>
+              ) : null}
+
+              {isClosed || isInactive ? (
+                <Pressable
+                  onPress={() => onReopen(goal)}
+                  disabled={statusSavingId === goal.id}
+                  hitSlop={6}
+                  testID={`reopen-goal-${goal.id}`}
+                >
+                  <Text style={{ fontSize: 12, fontWeight: "700", color: "#4361EE" }}>
+                    {statusSavingId === goal.id ? "…" : isInactive ? "Reactivate" : "Reopen"}
+                  </Text>
+                </Pressable>
+              ) : (
+                <Pressable onPress={() => onMarkComplete(goal)} disabled={statusSavingId === goal.id} hitSlop={6}>
+                  <Text style={{ fontSize: 12, fontWeight: "700", color: "#166534" }}>
+                    {statusSavingId === goal.id ? "…" : "Complete"}
+                  </Text>
+                </Pressable>
+              )}
+
+              {canCreate && !isClosed ? (
+                <Pressable onPress={() => openUpdate(goal)} hitSlop={6}>
+                  <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748B" }}>Edit</Text>
+                </Pressable>
+              ) : null}
+
+              {canCreate ? (
+                <Pressable onPress={() => onDelete(goal)} hitSlop={6}>
+                  <Text style={{ fontSize: 12, fontWeight: "600", color: "#DC2626" }}>Delete</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          ) : null}
+        </View>
+      </View>
+    );
+  };
+
+  const renderGoalList = (list: DevelopmentGoal[]) => (
+    <View
+      style={{
+        backgroundColor: "white",
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: "#E2E8F0",
+        overflow: "hidden",
+      }}
+    >
+      {list.map((goal, index) => renderGoalRow(goal, index))}
+    </View>
+  );
 
   const saveNoteEdit = async (goalId: string, noteId: string) => {
     const trimmed = editDraft.trim();
@@ -403,163 +690,11 @@ export function DevelopmentPlanTab({
     ]);
   };
 
-  const renderGoalCard = (goal: DevelopmentGoal) => {
-    const status = normalizeDevelopmentGoalStatus(goal.status);
-    const isClosed = status === "closed";
-    const isInactive = status === "inactive";
-
-    return (
-    <View
-      key={goal.id}
-      style={{
-        backgroundColor: "white",
-        borderRadius: 14,
-        padding: 16,
-        borderWidth: 1,
-        borderColor: isClosed ? "#E2E8F0" : isInactive ? "#FDE68A" : "#C7D2FE",
-        opacity: isClosed || isInactive ? 0.9 : 1,
-      }}
-    >
-      <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 10 }}>
-        <View
-          style={{
-            width: 36,
-            height: 36,
-            borderRadius: 18,
-            backgroundColor: "#EEF2FF",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <Target size={18} color="#4361EE" />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 15, fontWeight: "800", color: "#0F172A" }}>{goal.skill}</Text>
-          <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 2 }}>
-            Added {formatWhen(goal.createdAt)}
-            {goal.createdBy ? ` · ${displayUserName(goal.createdBy)}` : ""}
-          </Text>
-        </View>
-        {canUpdate ? (
-          <Pressable onPress={() => setMenuGoalId(menuGoalId === goal.id ? null : goal.id)} hitSlop={8}>
-            <MoreVertical size={18} color="#64748B" />
-          </Pressable>
-        ) : null}
-      </View>
-
-      {menuGoalId === goal.id ? (
-        <View style={{ marginTop: 10, backgroundColor: "#F8FAFC", borderRadius: 10, overflow: "hidden" }}>
-          {!isClosed ? (
-            <Pressable
-              onPress={() => {
-                setMenuGoalId(null);
-                openUpdate(goal);
-              }}
-              style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: "#E2E8F0" }}
-            >
-              <Text style={{ fontSize: 14, fontWeight: "600", color: "#4361EE" }}>Update</Text>
-            </Pressable>
-          ) : null}
-          {isClosed || isInactive ? (
-            <Pressable onPress={() => onReopen(goal)} style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: "#E2E8F0" }}>
-              <Text style={{ fontSize: 14, fontWeight: "600", color: "#4361EE" }}>
-                {isInactive ? "Reactivate goal" : "Reopen goal"}
-              </Text>
-            </Pressable>
-          ) : null}
-          <Pressable onPress={() => onDelete(goal)} style={{ padding: 12 }}>
-            <Text style={{ fontSize: 14, fontWeight: "600", color: "#EF4444" }}>Delete goal</Text>
-          </Pressable>
-        </View>
-      ) : null}
-
-      {isInactive ? (
-        <Text style={{ marginTop: 10, fontSize: 12, color: "#B45309", lineHeight: 18 }}>
-          Inactive after {goal.daysSinceActivity ?? 0} days with no updates. Add a progress note to reactivate.
-        </Text>
-      ) : null}
-
-      {goal.steps.length > 0 ? (
-        <View style={{ marginTop: 12 }}>
-          <Text style={{ fontSize: 11, fontWeight: "700", color: "#94A3B8", textTransform: "uppercase", marginBottom: 6 }}>
-            Steps
-          </Text>
-          {goal.steps.map((step, i) => (
-            <Text key={`${goal.id}-step-${i}`} style={{ fontSize: 13, color: "#334155", marginBottom: 4 }}>
-              {i + 1}. {step}
-            </Text>
-          ))}
-        </View>
-      ) : null}
-
-      {goal.notes.length > 0 ? (
-        <View style={{ marginTop: 12 }}>
-          <Text style={{ fontSize: 11, fontWeight: "700", color: "#94A3B8", textTransform: "uppercase", marginBottom: 6 }}>
-            Notes
-          </Text>
-          {goal.notes.map((note) => (
-            <View key={note.id} style={{ marginBottom: 8, padding: 10, backgroundColor: "#F8FAFC", borderRadius: 8 }}>
-              <Text style={{ fontSize: 13, color: "#334155" }}>{note.body}</Text>
-              <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 4 }}>
-                {displayUserName(note.createdBy)} · {formatWhen(note.createdAt)}
-              </Text>
-            </View>
-          ))}
-        </View>
-      ) : null}
-
-      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 12 }}>
-        <Text style={{ fontSize: 11, color: "#94A3B8" }}>
-          {isClosed
-            ? `Closed ${formatWhen(goal.closedAt ?? lastUpdatedAt(goal))}`
-            : `Updated ${formatWhen(lastUpdatedAt(goal))}`}
-        </Text>
-        {canUpdate && !isClosed ? (
-          <Pressable
-            onPress={() => onMarkComplete(goal)}
-            disabled={statusSavingId === goal.id}
-            style={{
-              backgroundColor: "#F0FDF4",
-              borderRadius: 8,
-              paddingHorizontal: 10,
-              paddingVertical: 6,
-              borderWidth: 1,
-              borderColor: "#BBF7D0",
-            }}
-          >
-            <Text style={{ fontSize: 12, fontWeight: "700", color: "#166534" }}>
-              {statusSavingId === goal.id ? "Saving…" : "Mark complete"}
-            </Text>
-          </Pressable>
-        ) : (
-          <View
-            style={{
-              backgroundColor: isClosed ? "#F1F5F9" : isInactive ? "#FFEDD5" : "#DCFCE7",
-              borderRadius: 8,
-              paddingHorizontal: 8,
-              paddingVertical: 4,
-            }}
-          >
-            <Text
-              style={{
-                fontSize: 11,
-                fontWeight: "700",
-                color: isClosed ? "#64748B" : isInactive ? "#C2410C" : "#166534",
-              }}
-            >
-              {goalStatusLabel(status)}
-            </Text>
-          </View>
-        )}
-      </View>
-    </View>
-    );
-  };
-
   const modalVisible = createOpen || !!updateGoal;
+  const showCenteredEmpty = !loading && activeGoals.length === 0 && inactiveGoals.length === 0 && closedGoals.length === 0;
 
   return (
-    <View style={{ gap: 16 }}>
+    <View style={{ gap: 14, flexGrow: showCenteredEmpty ? 1 : undefined }}>
       {goals.length > 0 ? (
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 8, flexWrap: "wrap" }}>
           <Pressable
@@ -567,14 +702,14 @@ export function DevelopmentPlanTab({
             disabled={loading || printingPdf}
             style={{
               borderWidth: 1,
-              borderColor: "#D8DEE8",
-              borderRadius: 10,
-              paddingHorizontal: 12,
-              paddingVertical: 8,
+              borderColor: "#E2E8F0",
+              borderRadius: 8,
+              paddingHorizontal: 10,
+              paddingVertical: 7,
               opacity: loading || printingPdf ? 0.55 : 1,
             }}
           >
-            <Text style={{ fontSize: 13, fontWeight: "700", color: "#334155" }}>
+            <Text style={{ fontSize: 12, fontWeight: "600", color: "#475569" }}>
               {printingPdf ? "Printing…" : "Print"}
             </Text>
           </Pressable>
@@ -583,14 +718,14 @@ export function DevelopmentPlanTab({
             disabled={loading || downloadingPdf}
             style={{
               borderWidth: 1,
-              borderColor: "#D8DEE8",
-              borderRadius: 10,
-              paddingHorizontal: 12,
-              paddingVertical: 8,
+              borderColor: "#E2E8F0",
+              borderRadius: 8,
+              paddingHorizontal: 10,
+              paddingVertical: 7,
               opacity: loading || downloadingPdf ? 0.55 : 1,
             }}
           >
-            <Text style={{ fontSize: 13, fontWeight: "700", color: "#334155" }}>
+            <Text style={{ fontSize: 12, fontWeight: "600", color: "#475569" }}>
               {downloadingPdf ? "Downloading…" : "Download PDF"}
             </Text>
           </Pressable>
@@ -601,23 +736,17 @@ export function DevelopmentPlanTab({
                 flexDirection: "row",
                 alignItems: "center",
                 gap: 4,
-                backgroundColor: "#4361EE",
-                borderRadius: 10,
-                paddingHorizontal: 12,
-                paddingVertical: 8,
+                backgroundColor: "#0F172A",
+                borderRadius: 8,
+                paddingHorizontal: 11,
+                paddingVertical: 7,
               }}
             >
-              <Plus size={16} color="white" />
-              <Text style={{ fontSize: 13, fontWeight: "700", color: "white" }}>New goal</Text>
+              <Plus size={14} color="white" />
+              <Text style={{ fontSize: 12, fontWeight: "700", color: "white" }}>New goal</Text>
             </Pressable>
           ) : null}
         </View>
-      ) : null}
-
-      {!loading && activeGoals.length > 0 ? (
-        <Text style={{ fontSize: 12, color: "#94A3B8", lineHeight: 17 }}>
-          {DEVELOPMENT_GOAL_ACTIVITY_KEY.summary}
-        </Text>
       ) : null}
 
       {loading ? (
@@ -625,52 +754,87 @@ export function DevelopmentPlanTab({
       ) : (
         <>
           {activeGoals.length === 0 ? (
-            <GrowthEmptyState
-              memberName={memberName}
-              canCreate={canCreate}
-              hasAnyGoals={goals.length > 0}
-              error={err}
-              onStart={canCreate ? openCreate : undefined}
-            />
+            <View style={showCenteredEmpty ? { flexGrow: 1, justifyContent: "center" } : undefined}>
+              <GrowthEmptyState
+                memberName={memberName}
+                canCreate={canCreate}
+                hasAnyGoals={goals.length > 0}
+                error={err}
+                onStart={canCreate ? openCreate : undefined}
+              />
+            </View>
           ) : (
-            <View style={{ gap: 12 }}>{activeGoals.map((g) => renderGoalCard(g))}</View>
+            <View style={{ gap: 8 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                <Text
+                  style={{
+                    fontSize: 11,
+                    fontWeight: "700",
+                    color: "#64748B",
+                    textTransform: "uppercase",
+                    letterSpacing: 1.1,
+                  }}
+                >
+                  Active goals
+                </Text>
+                <Text style={{ fontSize: 12, fontWeight: "700", color: "#94A3B8" }}>{activeGoals.length}</Text>
+              </View>
+              <Text style={{ fontSize: 12, color: "#94A3B8", lineHeight: 17, marginTop: -2 }}>
+                {DEVELOPMENT_GOAL_ACTIVITY_KEY.summary}
+              </Text>
+              {renderGoalList(activeGoals)}
+            </View>
           )}
 
           {inactiveGoals.length > 0 ? (
-            <View>
+            <View style={{ gap: 8 }}>
               <Pressable
                 onPress={() => setInactiveOpen(!inactiveOpen)}
-                style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 8 }}
+                style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}
               >
-                <Text style={{ fontSize: 14, fontWeight: "700", color: "#B45309" }}>
-                  Inactive goals ({inactiveGoals.length})
-                </Text>
-                {inactiveOpen ? <ChevronUp size={18} color="#B45309" /> : <ChevronDown size={18} color="#B45309" />}
-              </Pressable>
-              {inactiveOpen ? (
-                <View style={{ gap: 10, marginTop: 4 }}>
-                  {inactiveGoals.map((g) => renderGoalCard(g))}
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                  <Text
+                    style={{
+                      fontSize: 11,
+                      fontWeight: "700",
+                      color: "#64748B",
+                      textTransform: "uppercase",
+                      letterSpacing: 1.1,
+                    }}
+                  >
+                    Inactive goals
+                  </Text>
+                  <Text style={{ fontSize: 12, fontWeight: "700", color: "#94A3B8" }}>{inactiveGoals.length}</Text>
                 </View>
-              ) : null}
+                {inactiveOpen ? <ChevronUp size={16} color="#94A3B8" /> : <ChevronDown size={16} color="#94A3B8" />}
+              </Pressable>
+              {inactiveOpen ? renderGoalList(inactiveGoals) : null}
             </View>
           ) : null}
 
           {closedGoals.length > 0 ? (
-            <View>
+            <View style={{ gap: 8 }}>
               <Pressable
                 onPress={() => setClosedOpen(!closedOpen)}
-                style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 8 }}
+                style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}
               >
-                <Text style={{ fontSize: 14, fontWeight: "700", color: "#64748B" }}>
-                  Closed goals ({closedGoals.length})
-                </Text>
-                {closedOpen ? <ChevronUp size={18} color="#64748B" /> : <ChevronDown size={18} color="#64748B" />}
-              </Pressable>
-              {closedOpen ? (
-                <View style={{ gap: 10, marginTop: 4 }}>
-                  {closedGoals.map((g) => renderGoalCard(g))}
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                  <Text
+                    style={{
+                      fontSize: 11,
+                      fontWeight: "700",
+                      color: "#64748B",
+                      textTransform: "uppercase",
+                      letterSpacing: 1.1,
+                    }}
+                  >
+                    Closed goals
+                  </Text>
+                  <Text style={{ fontSize: 12, fontWeight: "700", color: "#94A3B8" }}>{closedGoals.length}</Text>
                 </View>
-              ) : null}
+                {closedOpen ? <ChevronUp size={16} color="#94A3B8" /> : <ChevronDown size={16} color="#94A3B8" />}
+              </Pressable>
+              {closedOpen ? renderGoalList(closedGoals) : null}
             </View>
           ) : null}
         </>
@@ -879,6 +1043,108 @@ export function DevelopmentPlanTab({
               }}
             >
               <Text style={{ fontWeight: "700", color: "white" }}>{saving ? "Saving…" : "Save changes"}</Text>
+            </Pressable>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      <Modal
+        visible={!!noteGoal}
+        animationType="slide"
+        presentationStyle={Platform.OS === "ios" ? "pageSheet" : "fullScreen"}
+        onRequestClose={closeNoteModal}
+      >
+        <KeyboardAvoidingView
+          style={{
+            flex: 1,
+            backgroundColor: "white",
+            paddingTop: insets.top,
+            paddingBottom: insets.bottom,
+          }}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+        >
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              paddingHorizontal: 16,
+              paddingVertical: 14,
+              borderBottomWidth: 1,
+              borderBottomColor: "#F1F5F9",
+            }}
+          >
+            <View style={{ flex: 1, paddingRight: 12 }}>
+              <Text style={{ fontSize: 17, fontWeight: "800", color: "#0F172A" }}>Add progress note</Text>
+              <Text style={{ fontSize: 12, color: "#64748B", marginTop: 2 }} numberOfLines={1}>
+                {noteGoal?.skill}
+              </Text>
+            </View>
+            <Pressable onPress={closeNoteModal} hitSlop={12}>
+              <X size={22} color="#64748B" />
+            </Pressable>
+          </View>
+
+          <ScrollView contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
+            {noteErr ? <Text style={{ fontSize: 13, color: "#DC2626" }}>{noteErr}</Text> : null}
+            <Text style={{ fontSize: 13, color: "#64748B", lineHeight: 18 }}>
+              Capture progress, coaching notes, or next steps. This keeps the goal active.
+            </Text>
+            <TextInput
+              value={noteDraft}
+              onChangeText={setNoteDraft}
+              placeholder="What progress was made?"
+              multiline
+              autoFocus
+              style={{
+                borderWidth: 1,
+                borderColor: "#E2E8F0",
+                borderRadius: 10,
+                padding: 14,
+                fontSize: 15,
+                minHeight: 140,
+                color: "#0F172A",
+                textAlignVertical: "top",
+              }}
+              testID="progress-note-input"
+            />
+          </ScrollView>
+
+          <View
+            style={{
+              flexDirection: "row",
+              gap: 10,
+              padding: 16,
+              borderTopWidth: 1,
+              borderTopColor: "#F1F5F9",
+            }}
+          >
+            <Pressable
+              onPress={closeNoteModal}
+              style={{
+                flex: 1,
+                paddingVertical: 14,
+                borderRadius: 12,
+                backgroundColor: "#F1F5F9",
+                alignItems: "center",
+              }}
+            >
+              <Text style={{ fontWeight: "700", color: "#64748B" }}>Cancel</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => void onSaveProgressNote()}
+              disabled={noteSaving}
+              style={{
+                flex: 1,
+                paddingVertical: 14,
+                borderRadius: 12,
+                backgroundColor: "#4361EE",
+                alignItems: "center",
+                opacity: noteSaving ? 0.6 : 1,
+              }}
+              testID="save-progress-note"
+            >
+              <Text style={{ fontWeight: "700", color: "white" }}>{noteSaving ? "Saving…" : "Save note"}</Text>
             </Pressable>
           </View>
         </KeyboardAvoidingView>

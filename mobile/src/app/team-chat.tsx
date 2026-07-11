@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import {
   View,
   Text,
@@ -10,12 +10,11 @@ import {
   Modal,
   Image,
   ScrollView,
-  type NativeScrollEvent,
-  type NativeSyntheticEvent,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { usePaginatedTeamMessages } from "@/lib/chat-message-pagination";
+import { useChatListScroll } from "@/hooks/use-chat-scroll";
 import { LinearGradient } from "expo-linear-gradient";
 import { ArrowLeft, Send, Paperclip, X, Video, Camera, ImageIcon, BarChart2, Reply, Copy, Pencil, Trash2 } from "lucide-react-native";
 import { router, useLocalSearchParams } from "expo-router";
@@ -30,10 +29,9 @@ import { MessageLongPressRow } from "@/components/MessageLongPressRow";
 import { ImageSendPreview } from "@/components/ImageSendPreview";
 import { MentionPicker } from "@/components/MentionPicker";
 import type { Message, Team, MessageReaction } from "@/lib/types";
-import { useDemoMode, showDemoAlert } from "@/lib/useDemo";
 import { useMention } from "@/lib/useMention";
 import { SafeKeyboardAvoidingView } from "@/lib/safe-keyboard-controller";
-import { resolveUserImageUrl } from "@/lib/user-avatar";
+import { WorkspaceTeamAvatar } from "@/components/WorkspaceTeamUI";
 import * as Clipboard from "expo-clipboard";
 
 function formatDateLabel(dateStr: string) {
@@ -219,7 +217,6 @@ function PollCard({
 export default function TeamChatScreen() {
   const { teamId, teamName, topicId, topicName } = useLocalSearchParams<{ teamId: string; teamName: string; topicId?: string; topicName?: string }>();
   const { data: session } = useSession();
-  const isDemo = useDemoMode();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const [input, setInput] = useState("");
@@ -239,16 +236,14 @@ export default function TeamChatScreen() {
   const [pollAllowLeaderDelete, setPollAllowLeaderDelete] = useState<boolean>(true);
   const [confirmDeletePollId, setConfirmDeletePollId] = useState<string | null>(null);
   const [confirmEndPollId, setConfirmEndPollId] = useState<string | null>(null);
-  const flatListRef = useRef<FlatList>(null);
   const currentUserId = session?.user?.id ?? "";
   const prevMsgCountRef = useRef<number>(0);
-  const isNearBottomRef = useRef(true);
   const lastMessageIdRef = useRef<string | null>(null);
-  const didInitialScrollRef = useRef(false);
-
-  const { mentionedUserIds, mentionQuery, onTextChange: onMentionTextChange, selectMention, resetMentions } = useMention();
 
   const topicKey = topicId ?? "general";
+  const threadKey = `${teamId}:${topicKey}`;
+
+  const { mentionedUserIds, mentionQuery, onTextChange: onMentionTextChange, selectMention, resetMentions } = useMention();
 
   const markAsRead = useUnreadStore((s) => s.markAsRead);
 
@@ -267,6 +262,18 @@ export default function TeamChatScreen() {
     refetchInterval: 5000,
     select: (data) => data.map((p) => ({ ...p, _isPoll: true as const })),
   });
+
+  const items = useMemo(() => buildChatList(messages, polls), [messages, polls]);
+
+  const {
+    listRef: flatListRef,
+    handleScroll,
+    handleContentSizeChange,
+    handleListLayout,
+    handleScrollToIndexFailed,
+    followLatestIfNearBottom,
+    initialScrollIndex,
+  } = useChatListScroll(threadKey, items.length);
 
   const { data: team } = useQuery({
     queryKey: ["team", teamId],
@@ -400,12 +407,6 @@ export default function TeamChatScreen() {
     setMessageMenu({ message: msg, layout });
   }, []);
 
-  const handleScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
-    const distanceFromBottom = contentSize.height - layoutMeasurement.height - contentOffset.y;
-    isNearBottomRef.current = distanceFromBottom < 80;
-  }, []);
-
   const handleLoadOlder = useCallback(() => {
     if (hasNextPage && !isFetchingNextPage) {
       void fetchNextPage();
@@ -413,26 +414,18 @@ export default function TeamChatScreen() {
   }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
 
   useEffect(() => {
-    didInitialScrollRef.current = false;
-    isNearBottomRef.current = true;
     lastMessageIdRef.current = null;
   }, [teamId, topicKey]);
-
-  useEffect(() => {
-    if (isLoading || messages.length === 0 || didInitialScrollRef.current) return;
-    didInitialScrollRef.current = true;
-    requestAnimationFrame(() => flatListRef.current?.scrollToEnd({ animated: false }));
-  }, [isLoading, messages.length, teamId, topicKey]);
 
   useEffect(() => {
     const lastMsg = messages[messages.length - 1];
     if (!lastMsg) return;
     const prevId = lastMessageIdRef.current;
     lastMessageIdRef.current = lastMsg.id;
-    if (prevId !== lastMsg.id && isNearBottomRef.current) {
-      requestAnimationFrame(() => flatListRef.current?.scrollToEnd({ animated: true }));
+    if (prevId !== lastMsg.id) {
+      followLatestIfNearBottom(true);
     }
-  }, [messages]);
+  }, [messages, followLatestIfNearBottom]);
 
   useEffect(() => {
     const lastMsg = messages[messages.length - 1];
@@ -446,8 +439,7 @@ export default function TeamChatScreen() {
     prevMsgCountRef.current = messages.length;
   }, [messages]);
 
-  const items = buildChatList(messages, polls);
-  const teamPhotoUrl = resolveUserImageUrl(team?.image);
+  const headerTeamName = Array.isArray(teamName) ? teamName[0] : (teamName ?? team?.name ?? "Team Chat");
 
   return (
     <SafeAreaView testID="team-chat-screen" className="flex-1 bg-slate-50 dark:bg-slate-900" edges={["top"]}>
@@ -456,38 +448,44 @@ export default function TeamChatScreen() {
           <TouchableOpacity onPress={() => router.back()} className="mr-3" testID="back-button">
             <ArrowLeft size={22} color="white" />
           </TouchableOpacity>
-          <View className="w-9 h-9 rounded-full bg-white/20 items-center justify-center mr-3 overflow-hidden">
-            {teamPhotoUrl ? (
-              <Image source={{ uri: teamPhotoUrl }} style={{ width: 36, height: 36 }} resizeMode="cover" />
-            ) : (
-              <Text className="text-white font-bold text-base">{(Array.isArray(teamName) ? teamName[0] : (teamName ?? "T"))[0].toUpperCase()}</Text>
-            )}
+          <View style={{ marginRight: 12 }}>
+            <WorkspaceTeamAvatar
+              team={{ name: headerTeamName, image: team?.image ?? null }}
+              size={36}
+              radius={18}
+              backgroundColor="rgba(255,255,255,0.2)"
+              textColor="#FFFFFF"
+              borderColor="transparent"
+            />
           </View>
           <View className="flex-1">
-            <Text style={{ color: "white", fontSize: 18, fontWeight: "700" }}>{teamName ?? "Team Chat"}</Text>
+            <Text
+              style={{ color: "white", fontSize: 18, fontWeight: "700", letterSpacing: -0.3 }}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.7}
+            >
+              {headerTeamName}
+            </Text>
             <Text className="text-white/70 text-xs">{topicName ? `# ${topicName}` : "Team Chat"}</Text>
           </View>
-          {!isDemo ? (
-            <TouchableOpacity
-              testID="create-poll-button"
-              onPress={() => setShowPollModal(true)}
-              className="w-9 h-9 rounded-full bg-white/20 items-center justify-center mr-2"
-            >
-              <BarChart2 size={18} color="white" />
-            </TouchableOpacity>
-          ) : null}
-          {!isDemo ? (
-            <TouchableOpacity
-              testID="start-video-call-button"
-              onPress={() => router.push({
-                pathname: "/video-call",
-                params: { roomId: teamId, roomName: `${teamName ?? "Team"} Call` },
-              })}
-              className="w-9 h-9 rounded-full bg-white/20 items-center justify-center mr-2"
-            >
-              <Video size={18} color="white" />
-            </TouchableOpacity>
-          ) : null}
+          <TouchableOpacity
+            testID="create-poll-button"
+            onPress={() => setShowPollModal(true)}
+            className="w-9 h-9 rounded-full bg-white/20 items-center justify-center mr-2"
+          >
+            <BarChart2 size={18} color="white" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            testID="start-video-call-button"
+            onPress={() => router.push({
+              pathname: "/video-call",
+              params: { roomId: teamId, roomName: `${teamName ?? "Team"} Call` },
+            })}
+            className="w-9 h-9 rounded-full bg-white/20 items-center justify-center mr-2"
+          >
+            <Video size={18} color="white" />
+          </TouchableOpacity>
           <Image source={require("@/assets/alenio-icon.png")} style={{ width: 30, height: 30, borderRadius: 6 }} />
         </View>
       </LinearGradient>
@@ -925,6 +923,7 @@ export default function TeamChatScreen() {
           </View>
         ) : (
           <FlatList
+            key={threadKey}
             ref={flatListRef}
             style={{ flex: 1 }}
             testID="team-chat-message-list"
@@ -932,9 +931,12 @@ export default function TeamChatScreen() {
             keyExtractor={(item) => ("type" in item ? item.id : item.id)}
             contentContainerStyle={{ paddingVertical: 12, paddingHorizontal: 12 }}
             showsVerticalScrollIndicator={false}
-            maintainVisibleContentPosition={{ minIndexForVisible: 0, autoscrollToTopThreshold: 10 }}
+            initialScrollIndex={initialScrollIndex}
+            onScrollToIndexFailed={handleScrollToIndexFailed}
+            onLayout={handleListLayout}
             onScroll={handleScroll}
             scrollEventThrottle={16}
+            onContentSizeChange={handleContentSizeChange}
             onStartReached={handleLoadOlder}
             onStartReachedThreshold={0.15}
             ListHeaderComponent={
@@ -954,7 +956,6 @@ export default function TeamChatScreen() {
                   </View>
                 );
               }
-              // Poll card
               if ("_isPoll" in item) {
                 const poll = item as PollType;
                 const canDeletePoll =
@@ -972,7 +973,6 @@ export default function TeamChatScreen() {
                   />
                 );
               }
-              // Regular message
               const msg = item as Message;
               return (
                 <MessageLongPressRow
@@ -1047,19 +1047,17 @@ export default function TeamChatScreen() {
             paddingBottom: insets.bottom + 8,
           }}
         >
-          {!isDemo ? (
-            <TouchableOpacity
-              onPress={() => setShowMediaPicker(true)}
-              className="w-10 h-10 rounded-full items-center justify-center mr-2"
-              style={{ backgroundColor: "#F1F5F9" }}
-            >
-              <Paperclip size={18} color="#64748B" />
-            </TouchableOpacity>
-          ) : null}
+          <TouchableOpacity
+            onPress={() => setShowMediaPicker(true)}
+            className="w-10 h-10 rounded-full items-center justify-center mr-2"
+            style={{ backgroundColor: "#F1F5F9" }}
+          >
+            <Paperclip size={18} color="#64748B" />
+          </TouchableOpacity>
           <TextInput
             testID="team-chat-text-input"
             className="flex-1 bg-slate-100 dark:bg-slate-700 rounded-2xl px-4 py-2.5 text-base text-slate-900 dark:text-white mr-2"
-            placeholder={isDemo ? "Read-only demo account" : "Message..."}
+            placeholder="Message..."
             placeholderTextColor="#94A3B8"
             value={input}
             onChangeText={(text) => {
@@ -1069,24 +1067,20 @@ export default function TeamChatScreen() {
             multiline
             maxLength={2000}
             style={{ maxHeight: 120 }}
-            editable={!isDemo}
-            onPressIn={isDemo ? showDemoAlert : undefined}
           />
-          {!isDemo ? (
-            <TouchableOpacity
-              testID="team-chat-send-button"
-              onPress={handleSend}
-              disabled={!input.trim() || sendMutation.isPending || uploading}
-              className="w-10 h-10 rounded-full items-center justify-center"
-              style={{ backgroundColor: input.trim() ? "#4361EE" : "#E2E8F0" }}
-            >
-              {sendMutation.isPending || uploading ? (
-                <ActivityIndicator size="small" color={input.trim() ? "white" : "#94A3B8"} />
-              ) : (
-                <Send size={18} color={input.trim() ? "white" : "#94A3B8"} />
-              )}
-            </TouchableOpacity>
-          ) : null}
+          <TouchableOpacity
+            testID="team-chat-send-button"
+            onPress={handleSend}
+            disabled={!input.trim() || sendMutation.isPending || uploading}
+            className="w-10 h-10 rounded-full items-center justify-center"
+            style={{ backgroundColor: input.trim() ? "#4361EE" : "#E2E8F0" }}
+          >
+            {sendMutation.isPending || uploading ? (
+              <ActivityIndicator size="small" color={input.trim() ? "white" : "#94A3B8"} />
+            ) : (
+              <Send size={18} color={input.trim() ? "white" : "#94A3B8"} />
+            )}
+          </TouchableOpacity>
         </View>
       </SafeKeyboardAvoidingView>
       <ImageSendPreview

@@ -1,16 +1,22 @@
 import React, { useState } from "react";
-import { View, Text, Pressable, ActivityIndicator, Modal, ScrollView, Image } from "react-native";
+import { View, Text, Pressable, ActivityIndicator, Modal, ScrollView } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Building2, Check, ChevronDown, LogOut, X } from "lucide-react-native";
 import type { Team } from "@/lib/types";
-import { resolveUserImageUrl } from "@/lib/user-avatar";
 import {
   formatTeamRole,
+  WorkspaceTeamAvatar,
 } from "@/components/WorkspaceTeamUI";
 import {
   PROFILE_UI,
   ProfileCard,
 } from "@/components/profile/ProfileEnterpriseUI";
+
+export type PendingJoinRequest = {
+  id: string;
+  status: string;
+  team: { id: string; name: string; image: string | null };
+};
 
 type TeamWithRole = Team & { role?: string };
 
@@ -18,8 +24,10 @@ type ProfileWorkspaceListProps = {
   teams: TeamWithRole[];
   activeTeamId: string | null;
   teamsLoading: boolean;
-  isDemo: boolean;
   pendingCountMap: Record<string, number>;
+  pendingJoinRequests?: PendingJoinRequest[];
+  cancelingRequestId?: string | null;
+  onCancelPendingRequest?: (requestId: string) => void;
   onSelectTeam: (teamId: string) => void;
   onManageActive?: () => void;
   onLeaveActive?: () => void;
@@ -30,27 +38,9 @@ const MAX_VISIBLE_ROWS = 4;
 const ROW_HEIGHT = 52;
 
 function WorkspaceRowIcon({ team, active }: { team: Pick<Team, "name" | "image">; active: boolean }) {
-  const imageUrl = resolveUserImageUrl(team.image);
   return (
-    <View
-      style={[
-        PROFILE_UI.iconBox,
-        {
-          marginRight: 12,
-          overflow: "hidden",
-          padding: 0,
-          backgroundColor: "#EEF2FF",
-          borderColor: active ? "#6366F1" : "#E2E8F0",
-        },
-      ]}
-    >
-      {imageUrl ? (
-        <Image source={{ uri: imageUrl }} style={{ width: 36, height: 36 }} resizeMode="cover" />
-      ) : (
-        <Text style={{ fontSize: 15, fontWeight: "700", color: "#4361EE" }}>
-          {team.name?.[0]?.toUpperCase() ?? "?"}
-        </Text>
-      )}
+    <View style={{ marginRight: 12 }}>
+      <WorkspaceTeamAvatar team={team} size={36} active={active} radius={8} />
     </View>
   );
 }
@@ -166,8 +156,10 @@ export function ProfileWorkspaceList({
   teams,
   activeTeamId,
   teamsLoading,
-  isDemo,
   pendingCountMap,
+  pendingJoinRequests = [],
+  cancelingRequestId = null,
+  onCancelPendingRequest,
   onSelectTeam,
   onManageActive,
   onLeaveActive,
@@ -185,6 +177,80 @@ export function ProfileWorkspaceList({
   const canSwitch = teams.length > 1;
   const listMaxHeight = Math.min(sortedTeams.length, MAX_VISIBLE_ROWS) * ROW_HEIGHT;
   const needsScroll = sortedTeams.length > MAX_VISIBLE_ROWS;
+  const pendingSent = pendingJoinRequests.filter((r) => r.status === "pending");
+
+  const pendingSentRows =
+    pendingSent.length > 0 ? (
+      <View testID="pending-join-requests-sent">
+        <Text
+          style={[
+            PROFILE_UI.sectionLabel,
+            {
+              letterSpacing: 0.8,
+              paddingHorizontal: 14,
+              paddingTop: 8,
+              paddingBottom: 2,
+            },
+          ]}
+        >
+          Pending · {pendingSent.length}
+        </Text>
+        {pendingSent.map((request, index) => {
+          const isCanceling = cancelingRequestId === request.id;
+          return (
+            <View key={request.id}>
+              {index > 0 ? <View style={[PROFILE_UI.divider, { marginLeft: 46 }]} /> : null}
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  paddingHorizontal: 14,
+                  paddingVertical: 8,
+                  minHeight: 40,
+                }}
+              >
+                <View style={{ marginRight: 10 }}>
+                  <WorkspaceTeamAvatar team={request.team} size={28} radius={6} />
+                </View>
+                <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
+                  <Text style={{ fontSize: 13, fontWeight: "600", color: "#0F172A" }} numberOfLines={1}>
+                    {request.team.name}
+                  </Text>
+                  <Text style={{ fontSize: 11, color: "#64748B", marginTop: 1 }} numberOfLines={1}>
+                    Waiting for approval
+                  </Text>
+                </View>
+                {onCancelPendingRequest ? (
+                  <Pressable
+                    onPress={() => onCancelPendingRequest(request.id)}
+                    disabled={isCanceling}
+                    hitSlop={8}
+                    style={({ pressed }) => ({
+                      paddingHorizontal: 8,
+                      paddingVertical: 4,
+                      borderRadius: 6,
+                      backgroundColor: pressed ? "#F8FAFC" : "transparent",
+                      borderWidth: 1,
+                      borderColor: "#E2E8F0",
+                      opacity: isCanceling ? 0.55 : 1,
+                    })}
+                    testID={`cancel-pending-join-${request.id}`}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Withdraw join request for ${request.team.name}`}
+                  >
+                    {isCanceling ? (
+                      <ActivityIndicator size="small" color="#64748B" />
+                    ) : (
+                      <Text style={{ fontSize: 11, fontWeight: "600", color: "#64748B" }}>Withdraw</Text>
+                    )}
+                  </Pressable>
+                ) : null}
+              </View>
+            </View>
+          );
+        })}
+      </View>
+    ) : null;
 
   if (teamsLoading) {
     return (
@@ -207,21 +273,25 @@ export function ProfileWorkspaceList({
           <Text style={{ fontSize: 12, color: "#64748B", textAlign: "center", lineHeight: 17, marginBottom: 16 }}>
             Create a workspace for your team or join with an invite code.
           </Text>
-          {!isDemo ? (
-            <Pressable
-              onPress={onAddWorkspace}
-              testID="create-join-team-button"
-              style={{
-                paddingHorizontal: 18,
-                paddingVertical: 10,
-                borderRadius: 8,
-                backgroundColor: "#4338CA",
-              }}
-            >
-              <Text style={{ fontSize: 13, fontWeight: "600", color: "#FFFFFF" }}>Get started</Text>
-            </Pressable>
-          ) : null}
+          <Pressable
+            onPress={onAddWorkspace}
+            testID="create-join-team-button"
+            style={{
+              paddingHorizontal: 18,
+              paddingVertical: 10,
+              borderRadius: 8,
+              backgroundColor: "#4338CA",
+            }}
+          >
+            <Text style={{ fontSize: 13, fontWeight: "600", color: "#FFFFFF" }}>Get started</Text>
+          </Pressable>
         </View>
+        {pendingSentRows ? (
+          <>
+            <View style={PROFILE_UI.divider} />
+            {pendingSentRows}
+          </>
+        ) : null}
       </ProfileCard>
     );
   }
@@ -241,6 +311,12 @@ export function ProfileWorkspaceList({
           onManageActive={onManageActive}
           onLeaveActive={onLeaveActive}
         />
+        {pendingSentRows ? (
+          <>
+            <View style={PROFILE_UI.divider} />
+            {pendingSentRows}
+          </>
+        ) : null}
       </ProfileCard>
 
       <Modal visible={pickerOpen} transparent animationType="slide" onRequestClose={() => setPickerOpen(false)}>
@@ -338,18 +414,16 @@ export function ProfileWorkspaceList({
                     })}
                   </ScrollView>
                 </View>
-                {!isDemo ? (
-                  <Pressable
-                    onPress={() => {
-                      setPickerOpen(false);
-                      onAddWorkspace();
-                    }}
-                    style={{ paddingHorizontal: 20, paddingTop: 14, alignItems: "center" }}
-                    testID="create-join-team-button"
-                  >
-                    <Text style={{ fontSize: 14, fontWeight: "600", color: "#4338CA" }}>Add workspace</Text>
-                  </Pressable>
-                ) : null}
+                <Pressable
+                  onPress={() => {
+                    setPickerOpen(false);
+                    onAddWorkspace();
+                  }}
+                  style={{ paddingHorizontal: 20, paddingTop: 14, alignItems: "center" }}
+                  testID="create-join-team-button"
+                >
+                  <Text style={{ fontSize: 14, fontWeight: "600", color: "#4338CA" }}>Add workspace</Text>
+                </Pressable>
               </View>
             </View>
           </Pressable>

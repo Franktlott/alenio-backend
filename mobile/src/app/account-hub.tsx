@@ -954,7 +954,7 @@ export default function AccountHubScreen() {
               Create or join a workplace from your profile to manage billing here.
             </Text>
             <TouchableOpacity
-              onPress={() => router.push({ pathname: "/onboarding", params: { intent: "add", mode: "create" } })}
+              onPress={() => router.push({ pathname: "/onboarding", params: { intent: "add" } })}
               style={{ backgroundColor: "#4361EE", borderRadius: 10, paddingHorizontal: 18, paddingVertical: 10 }}
             >
               <Text style={{ color: "white", fontWeight: "600", fontSize: 14 }}>Add workspace</Text>
@@ -982,7 +982,7 @@ export default function AccountHubScreen() {
                 </View>
               </View>
               <Pressable
-                onPress={() => router.push({ pathname: "/onboarding", params: { intent: "add", mode: "create" } })}
+                onPress={() => router.push({ pathname: "/onboarding", params: { intent: "add" } })}
                 testID="account-hub-add-workspace"
                 style={{
                   flexDirection: "row",

@@ -3,6 +3,7 @@ import { prisma } from "../prisma";
 import { auth } from "../auth";
 import { authGuard } from "../middleware/auth-guard";
 import { sendPushToUsers } from "../lib/push";
+import { publishTeamMessageCreated } from "../lib/realtime-hub";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -127,6 +128,12 @@ messagesRouter.post("/", async (c) => {
         },
       },
     },
+  });
+
+  publishTeamMessageCreated({
+    teamId,
+    topicId: message.topicId ?? null,
+    message,
   });
 
   // Fire-and-forget push notifications — do not block the response

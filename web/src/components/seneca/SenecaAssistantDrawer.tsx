@@ -330,7 +330,7 @@ export function SenecaAssistantDrawer({ open, onClose }: Props) {
                   <h2 id="seneca-drawer-title" className="seneca-drawer-title">
                     Seneca
                   </h2>
-                  <p className="seneca-drawer-kicker">AI Leadership Assistant</p>
+                  <p className="seneca-drawer-kicker">BETA mode</p>
                   <p
                     className={`seneca-drawer-status${
                       snapshot?.fromLiveData ? " seneca-drawer-status--live" : snapshotLoading ? " seneca-drawer-status--loading" : ""

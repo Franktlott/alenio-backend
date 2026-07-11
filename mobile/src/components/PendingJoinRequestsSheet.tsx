@@ -14,6 +14,7 @@ import { Check, Smartphone, UserPlus, X } from "lucide-react-native";
 export type JoinRequestRow = {
   id: string;
   status: string;
+  teamId?: string;
   team: { id: string; name: string; image: string | null };
   user?: { id: string; name: string; email: string; image: string | null };
   createdAt: string;
@@ -22,6 +23,8 @@ export type JoinRequestRow = {
 export type GoLoginRequestRow = {
   id: string;
   status: string;
+  teamId?: string;
+  teamName?: string;
   deviceId: string;
   deviceLabel: string | null;
   createdAt: string;
@@ -31,6 +34,7 @@ type Props = {
   visible: boolean;
   requests: JoinRequestRow[];
   goLoginRequests?: GoLoginRequestRow[];
+  activeTeamId?: string | null;
   busyRequestId: string | null;
   onClose: () => void;
   onApprove: (request: JoinRequestRow) => void;
@@ -98,6 +102,7 @@ export function PendingJoinRequestsSheet({
   visible,
   requests,
   goLoginRequests = [],
+  activeTeamId = null,
   busyRequestId,
   onClose,
   onApprove,
@@ -145,6 +150,8 @@ export function PendingJoinRequestsSheet({
                 {goLoginRequests.map((req) => {
                   const busy = busyRequestId === req.id;
                   const label = req.deviceLabel?.trim() || "A device";
+                  const workspaceLabel =
+                    req.teamName && req.teamId && req.teamId !== activeTeamId ? req.teamName : null;
                   return (
                     <View
                       key={`go-${req.id}`}
@@ -176,6 +183,7 @@ export function PendingJoinRequestsSheet({
                           {label}
                         </Text>
                         <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 2 }} numberOfLines={2}>
+                          {workspaceLabel ? `${workspaceLabel} · ` : ""}
                           Alenio Go access · Requested {formatRequestDate(req.createdAt)}
                         </Text>
                       </View>
@@ -192,6 +200,8 @@ export function PendingJoinRequestsSheet({
                   const busy = busyRequestId === req.id;
                   const name = req.user?.name ?? "Unknown";
                   const email = req.user?.email;
+                  const workspaceLabel =
+                    req.team?.name && req.team.id !== activeTeamId ? req.team.name : null;
                   return (
                     <View
                       key={req.id}
@@ -230,7 +240,9 @@ export function PendingJoinRequestsSheet({
                           {name}
                         </Text>
                         <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 2 }} numberOfLines={1}>
-                          {email ? `${email} · ` : ""}Requested {formatRequestDate(req.createdAt)}
+                          {workspaceLabel ? `${workspaceLabel} · ` : ""}
+                          {email ? `${email} · ` : ""}
+                          Requested {formatRequestDate(req.createdAt)}
                         </Text>
                       </View>
                       <ActionButtons
@@ -251,34 +263,51 @@ export function PendingJoinRequestsSheet({
   );
 }
 
-/** Compact tappable chip for the team members header. */
+/** Compact tappable chip for the team members header. Always visible for managers. */
 export function PendingJoinRequestsChip({
   count,
   onPress,
+  alwaysShow = false,
 }: {
   count: number;
   onPress: () => void;
+  alwaysShow?: boolean;
 }) {
-  if (count <= 0) return null;
+  if (!alwaysShow && count <= 0) return null;
+  const hasPending = count > 0;
+  const label = hasPending ? (count === 1 ? "1 request" : `${count} requests`) : "Requests";
   return (
     <Pressable
       onPress={onPress}
-      style={{
+      style={({ pressed }) => ({
         flexDirection: "row",
         alignItems: "center",
-        gap: 5,
-        backgroundColor: "#EEF2FF",
-        borderWidth: 1,
-        borderColor: "#C7D2FE",
+        flexShrink: 0,
+        backgroundColor: hasPending
+          ? pressed
+            ? "#3730A3"
+            : "#4338CA"
+          : pressed
+            ? "#E0E7FF"
+            : "#EEF2FF",
         paddingHorizontal: 10,
-        paddingVertical: 8,
-        borderRadius: 10,
-      }}
+        paddingVertical: 6,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: hasPending ? "#3730A3" : "#C7D2FE",
+      })}
       testID="pending-join-requests-chip"
-      accessibilityLabel={`${count} pending approval${count !== 1 ? "s" : ""}, tap to review`}
+      accessibilityRole="button"
+      accessibilityLabel={
+        hasPending
+          ? `${count} pending approval${count !== 1 ? "s" : ""}, tap to review`
+          : "Review join requests"
+      }
     >
-      <UserPlus size={14} color="#4361EE" />
-      <Text style={{ fontSize: 12, fontWeight: "700", color: "#4361EE" }}>{count} requests</Text>
+      <UserPlus size={13} color={hasPending ? "#FFFFFF" : "#4338CA"} style={{ marginRight: 4 }} />
+      <Text style={{ fontSize: 12, fontWeight: "700", color: hasPending ? "#FFFFFF" : "#4338CA" }}>
+        {label}
+      </Text>
     </Pressable>
   );
 }

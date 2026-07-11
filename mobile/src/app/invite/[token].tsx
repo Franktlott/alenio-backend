@@ -43,6 +43,17 @@ export default function TeamInviteScreen() {
         setPendingTeamInviteToken(token);
 
         if (session?.user) {
+          const sessionEmail =
+            typeof (session.user as { email?: unknown }).email === "string"
+              ? (session.user as { email: string }).email.trim().toLowerCase()
+              : "";
+          const inviteEmail = data.email.trim().toLowerCase();
+          if (sessionEmail && inviteEmail && sessionEmail !== inviteEmail) {
+            setError(
+              `This invite is for ${data.email}. You're signed in as ${sessionEmail}. Sign out and continue with the invited email.`,
+            );
+            return;
+          }
           await finishMobilePostAuth(queryClient);
           router.replace("/(app)/chat");
         }

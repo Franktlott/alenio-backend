@@ -420,6 +420,7 @@ async function createFollowUpTasks(
 ) {
   if (tasks.length === 0) return;
   const tz = resolveTimeZone(timeZone);
+  const createdForPush: { id: string; title: string; assigneeUserId: string }[] = [];
 
   for (const task of tasks) {
     const dueDate =
@@ -438,12 +439,13 @@ async function createFollowUpTasks(
     };
 
     try {
-      await prisma.task.create({
+      const created = await prisma.task.create({
         data: {
           ...baseData,
           oneOnOneMeetingId: meetingId,
         },
       });
+      createdForPush.push({ id: created.id, title: created.title, assigneeUserId: task.assigneeUserId });
     } catch (err) {
       console.error("[one-on-one-meetings] linked task create failed, retrying link update:", err);
       const created = await prisma.task.create({ data: baseData });
@@ -457,7 +459,20 @@ async function createFollowUpTasks(
         console.error("[one-on-one-meetings] task link update failed:", linkErr);
         throw new Error("Could not link follow-up task to this check-in.");
       }
+      createdForPush.push({ id: created.id, title: created.title, assigneeUserId: task.assigneeUserId });
     }
+  }
+
+  for (const created of createdForPush) {
+    if (created.assigneeUserId === creatorId) continue;
+    await sendPushToUsers(
+      [created.assigneeUserId],
+      "New task assigned",
+      created.title,
+      { taskId: created.id, teamId, type: "task_assigned" },
+      "notifTaskAssigned",
+      teamId,
+    );
   }
 }
 

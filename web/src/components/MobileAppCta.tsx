@@ -4,7 +4,6 @@ import {
   getMobileStoreUrl,
   openNativeApp,
 } from "../lib/app-links";
-import { isAndroidBrowser, isIosBrowser } from "../lib/mobile-browser";
 
 type Props = {
   appUrl: string;
@@ -39,7 +38,7 @@ export function MobileAppCta({
           rel="noopener noreferrer"
           data-testid="mobile-store-link"
         >
-          {isIosBrowser() ? "Download on the App Store" : isAndroidBrowser() ? "Get it on Google Play" : "Download the app"}
+          Download the app
         </a>
       ) : null}
 
@@ -47,12 +46,12 @@ export function MobileAppCta({
         <div className="mobile-app-cta-store-row">
           {iosStore ? (
             <a href={iosStore} className="auth-btn-secondary mobile-app-cta-store" target="_blank" rel="noopener noreferrer">
-              App Store
+              Download for iOS
             </a>
           ) : null}
           {androidStore ? (
             <a href={androidStore} className="auth-btn-secondary mobile-app-cta-store" target="_blank" rel="noopener noreferrer">
-              Google Play
+              Download for Android
             </a>
           ) : null}
         </div>

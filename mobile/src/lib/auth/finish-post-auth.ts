@@ -4,12 +4,16 @@ import { useTeamStore } from "@/lib/state/team-store";
 import {
   clearPendingTeamInviteToken,
   getPendingTeamInviteToken,
+  hydratePendingTeamInviteToken,
 } from "@/lib/auth/pending-team-invite";
+import { hydratePendingJoinCode } from "@/lib/auth/pending-join-code";
 import { primeMobileAuthReady, type MobileAuthReady } from "@/lib/auth/use-session";
 import type { MeUser } from "@/lib/auth/me-query";
 
 /** Redeem a stored invite token and select that workspace when possible. */
 export async function finishMobilePostAuth(queryClient: QueryClient): Promise<string | null> {
+  await Promise.all([hydratePendingTeamInviteToken(), hydratePendingJoinCode()]);
+
   const token = getPendingTeamInviteToken();
   let teamId: string | null = null;
 
@@ -22,9 +26,9 @@ export async function finishMobilePostAuth(queryClient: QueryClient): Promise<st
       /* pending invites may already be redeemed by email on the server */
     }
     clearPendingTeamInviteToken();
+    await queryClient.invalidateQueries({ queryKey: ["teams"] });
   }
 
-  await queryClient.invalidateQueries({ queryKey: ["teams"] });
   return teamId;
 }
 
@@ -35,6 +39,6 @@ export async function primeMobileAuthSession(
   me: MeUser
 ): Promise<MobileAuthReady> {
   const authReady = await primeMobileAuthReady(queryClient, sessionData, me);
-  void finishMobilePostAuth(queryClient);
+  await finishMobilePostAuth(queryClient);
   return authReady;
 }

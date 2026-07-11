@@ -19,7 +19,6 @@ import { api } from "@/lib/api/api";
 import { useTeamStore } from "@/lib/state/team-store";
 import { useSession } from "@/lib/auth/use-session";
 import type { Task, Team } from "@/lib/types";
-import { useDemoMode } from "@/lib/useDemo";
 import { getUSHolidays, type USFederalHoliday } from "@/lib/us-federal-holidays";
 import { eventShowsScheduledTime, formatEventDateAndTime, formatEventDateLabel, formatEventTimeRange } from "@/lib/format-event-time";
 import { CALENDAR_WEEKDAY_LABELS, eventCalendarDayRange, getDaysInMonth } from "@/lib/calendar-grid";
@@ -63,6 +62,11 @@ const MONTHS = [
   "January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December",
 ];
+
+const WEEK_DAY_ROW_HEIGHT = 28;
+const WEEK_EVENT_TRACK_HEIGHT = 14;
+const WEEK_ROW_PADDING = 4;
+const FIXED_CALENDAR_WEEK_HEIGHT = WEEK_DAY_ROW_HEIGHT + WEEK_EVENT_TRACK_HEIGHT + WEEK_ROW_PADDING;
 
 function isSameDay(a: Date, b: Date): boolean {
   return (
@@ -153,7 +157,6 @@ export default function CalendarScreen() {
     enabled: !!session?.user,
   });
 
-  const isDemo = useDemoMode();
   const activeTeam = teams?.find((t) => t.id === activeTeamId);
   const myRole = (activeTeam as (Team & { role?: string }) | undefined)?.role ?? "";
   const isOwnerOrLeader = myRole === "owner" || myRole === "team_leader";
@@ -251,6 +254,11 @@ export default function CalendarScreen() {
 
   const prevMonth = () => setCurrentMonth((m) => new Date(m.getFullYear(), m.getMonth() - 1, 1));
   const nextMonth = () => setCurrentMonth((m) => new Date(m.getFullYear(), m.getMonth() + 1, 1));
+  const goToToday = () => {
+    const now = new Date();
+    setCurrentMonth(new Date(now.getFullYear(), now.getMonth(), 1));
+    setSelectedDate(now);
+  };
 
   const getEventsForDay = (day: Date) =>
     events.filter((e) => {
@@ -272,6 +280,10 @@ export default function CalendarScreen() {
 
   const days = getDaysInMonth(currentMonth);
   const today = new Date();
+  const isViewingTodayMonth =
+    currentMonth.getFullYear() === today.getFullYear() && currentMonth.getMonth() === today.getMonth();
+  const isSelectedToday = selectedDate ? isSameDay(selectedDate, today) : false;
+  const showTodayButton = !isViewingTodayMonth || !isSelectedToday;
 
   const holidayYears = useMemo(() => {
     const ys = new Set<number>();
@@ -348,7 +360,7 @@ export default function CalendarScreen() {
                 <Text style={{ color: "white", fontSize: 13, fontWeight: "700" }}>{pendingEvents.length} pending</Text>
               </Pressable>
             ) : null}
-            {activeTeamId && !isDemo && isOwnerOrLeader ? (
+            {activeTeamId && isOwnerOrLeader ? (
               <Pressable
                 onPress={() =>
                   router.push(
@@ -370,10 +382,10 @@ export default function CalendarScreen() {
                 testID="header-plan-one-on-one-button"
               >
                 <UserRound size={14} color="white" />
-                <Text style={{ color: "white", fontSize: 12, fontWeight: "600" }}>Plan check-in</Text>
+                <Text style={{ color: "white", fontSize: 12, fontWeight: "600" }}>Schedule check-in</Text>
               </Pressable>
             ) : null}
-            {activeTeamId && !isDemo ? (
+            {activeTeamId ? (
               <Pressable
                 onPress={() =>
                   router.push({
@@ -402,6 +414,32 @@ export default function CalendarScreen() {
       <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" colors={["#4361EE"]} />}>
         {/* Calendar grid */}
         <View style={{ backgroundColor: "white", marginHorizontal: 12, marginTop: 12, borderRadius: 16, shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 2, overflow: "hidden" }}>
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 8, paddingTop: 10, paddingBottom: 4 }}>
+            <Pressable
+              onPress={prevMonth}
+              style={{ width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" }}
+              testID="calendar-grid-prev-month-button"
+            >
+              <ChevronLeft size={20} color="#64748B" />
+            </Pressable>
+            <View style={{ alignItems: "center", gap: 2 }}>
+              <Text style={{ fontSize: 16, fontWeight: "700", color: "#0F172A" }}>
+                {MONTHS[currentMonth.getMonth()]} {currentMonth.getFullYear()}
+              </Text>
+              {showTodayButton ? (
+                <Pressable onPress={goToToday} hitSlop={8} testID="calendar-today-button">
+                  <Text style={{ color: "#4361EE", fontSize: 12, fontWeight: "700" }}>Today</Text>
+                </Pressable>
+              ) : null}
+            </View>
+            <Pressable
+              onPress={nextMonth}
+              style={{ width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" }}
+              testID="calendar-grid-next-month-button"
+            >
+              <ChevronRight size={20} color="#64748B" />
+            </Pressable>
+          </View>
           {/* Day of week headers */}
           <View style={{ flexDirection: "row", paddingTop: 10, paddingBottom: 6, borderBottomWidth: 1, borderBottomColor: "#F1F5F9" }}>
             {CALENDAR_WEEKDAY_LABELS.map((d) => (
@@ -414,8 +452,7 @@ export default function CalendarScreen() {
           {/* Week rows */}
           {weeks.map((week, weekIndex) => {
             const tracks = computeWeekBars(week, calendarBarEvents);
-            const numTracks = tracks.length;
-            const rowHeight = 32 + numTracks * 18 + 6;
+            const primaryTrack = tracks[0] ?? [];
 
             return (
               <View
@@ -427,7 +464,7 @@ export default function CalendarScreen() {
                   flexDirection: "column",
                   borderTopWidth: weekIndex === 0 ? 0 : 0.5,
                   borderTopColor: "#F1F5F9",
-                  minHeight: rowHeight,
+                  height: FIXED_CALENDAR_WEEK_HEIGHT,
                 }}
               >
                 {/* Day number row */}
@@ -484,90 +521,87 @@ export default function CalendarScreen() {
                   })}
                 </View>
 
-                {/* Event tracks — spanning bars */}
-                {tracks.map((track, trackIndex) => (
-                  <View key={trackIndex} style={{ flexDirection: "row", height: 16, marginBottom: 2 }}>
-                    {week.map((day, colIndex) => {
-                      const bar = track.find((b) => b.startCol <= colIndex && b.endCol >= colIndex);
+                {/* Event track — fixed single row so calendar height stays stable */}
+                <View style={{ flexDirection: "row", height: 16, marginBottom: 2, position: "relative" }}>
+                  {week.map((day, colIndex) => {
+                    const bar = primaryTrack.find((b) => b.startCol <= colIndex && b.endCol >= colIndex);
 
-                      if (!bar) {
-                        return <View key={colIndex} style={{ flex: 1, borderLeftWidth: colIndex === 0 ? 0 : 0, borderLeftColor: "transparent" }} />;
-                      }
+                    if (!bar) {
+                      return <View key={colIndex} style={{ flex: 1, borderLeftWidth: colIndex === 0 ? 0 : 0, borderLeftColor: "transparent" }} />;
+                    }
 
-                      const isBarStart = colIndex === bar.startCol;
-                      const isBarEnd = colIndex === bar.endCol;
+                    const isBarStart = colIndex === bar.startCol;
+                    const isBarEnd = colIndex === bar.endCol;
 
-                      return (
-                        <Pressable
-                          key={colIndex}
-                          onPress={() => {
-                            const event = events.find((e) => e.id === bar.id);
-                            if (event && canManageEvent(event)) {
-                              router.push({
-                                pathname: "/create-event",
-                                params: {
-                                  teamId: activeTeamId!,
-                                  eventId: event.id,
-                                  eventTitle: event.title,
-                                  eventDescription: event.description ?? "",
-                                  eventColor: event.color,
-                                  startDate: event.startDate,
-                                  eventEndDate: event.endDate ?? event.startDate,
-                                  eventIsHidden: String(event.isHidden ?? false),
-                                  eventIsVideoMeeting: String(event.isVideoMeeting ?? false),
-                                  myRole,
-                                },
-                              });
-                            }
-                          }}
-                          style={{
-                            flex: 1,
-                            height: 14,
-                            backgroundColor: bar.color,
-                            opacity: 1,
-                            borderTopLeftRadius: isBarStart ? 3 : 0,
-                            borderBottomLeftRadius: isBarStart ? 3 : 0,
-                            borderTopRightRadius: isBarEnd ? 3 : 0,
-                            borderBottomRightRadius: isBarEnd ? 3 : 0,
-                            marginLeft: isBarStart ? 2 : 0,
-                            marginRight: isBarEnd ? 2 : 0,
-                            justifyContent: "center",
-                            overflow: "hidden",
-                          }}
-                        />
-                      );
-                    })}
-                    {/* Title overlays — one per bar, spanning full bar width */}
-                    {track.map((bar) => {
-                      if (weekRowWidth === 0) return null;
-                      const colWidth = weekRowWidth / 7;
-                      const left = bar.startCol * colWidth + 2; // +2 for marginLeft
-                      const width = (bar.endCol - bar.startCol + 1) * colWidth - 4; // -4 for margins
-                      return (
-                        <View
-                          key={`title-${bar.id}`}
-                          pointerEvents="none"
-                          style={{
-                            position: "absolute",
-                            left,
-                            width,
-                            top: 0,
-                            height: 14,
-                            justifyContent: "center",
-                            overflow: "hidden",
-                          }}
-                        >
-                          <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 3 }}>
-                            {bar.isVideoMeeting ? <Video size={9} color="white" style={{ marginRight: 2 }} /> : null}
-                            <Text style={{ color: "white", fontSize: 9, fontWeight: "600", lineHeight: 13, flex: 1 }} numberOfLines={1}>
-                              {bar.title}
-                            </Text>
-                          </View>
+                    return (
+                      <Pressable
+                        key={colIndex}
+                        onPress={() => {
+                          const event = events.find((e) => e.id === bar.id);
+                          if (event && canManageEvent(event)) {
+                            router.push({
+                              pathname: "/create-event",
+                              params: {
+                                teamId: activeTeamId!,
+                                eventId: event.id,
+                                eventTitle: event.title,
+                                eventDescription: event.description ?? "",
+                                eventColor: event.color,
+                                startDate: event.startDate,
+                                eventEndDate: event.endDate ?? event.startDate,
+                                eventIsHidden: String(event.isHidden ?? false),
+                                eventIsVideoMeeting: String(event.isVideoMeeting ?? false),
+                                myRole,
+                              },
+                            });
+                          }
+                        }}
+                        style={{
+                          flex: 1,
+                          height: 14,
+                          backgroundColor: bar.color,
+                          opacity: 1,
+                          borderTopLeftRadius: isBarStart ? 3 : 0,
+                          borderBottomLeftRadius: isBarStart ? 3 : 0,
+                          borderTopRightRadius: isBarEnd ? 3 : 0,
+                          borderBottomRightRadius: isBarEnd ? 3 : 0,
+                          marginLeft: isBarStart ? 2 : 0,
+                          marginRight: isBarEnd ? 2 : 0,
+                          justifyContent: "center",
+                          overflow: "hidden",
+                        }}
+                      />
+                    );
+                  })}
+                  {primaryTrack.map((bar) => {
+                    if (weekRowWidth === 0) return null;
+                    const colWidth = weekRowWidth / 7;
+                    const left = bar.startCol * colWidth + 2;
+                    const width = (bar.endCol - bar.startCol + 1) * colWidth - 4;
+                    return (
+                      <View
+                        key={`title-${bar.id}`}
+                        pointerEvents="none"
+                        style={{
+                          position: "absolute",
+                          left,
+                          width,
+                          top: 0,
+                          height: 14,
+                          justifyContent: "center",
+                          overflow: "hidden",
+                        }}
+                      >
+                        <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 3 }}>
+                          {bar.isVideoMeeting ? <Video size={9} color="white" style={{ marginRight: 2 }} /> : null}
+                          <Text style={{ color: "white", fontSize: 9, fontWeight: "600", lineHeight: 13, flex: 1 }} numberOfLines={1}>
+                            {bar.title}
+                          </Text>
                         </View>
-                      );
-                    })}
-                  </View>
-                ))}
+                      </View>
+                    );
+                  })}
+                </View>
               </View>
             );
           })}
@@ -600,7 +634,7 @@ export default function CalendarScreen() {
               <Text style={{ fontSize: 14, fontWeight: "700", color: "#0F172A" }}>
                 {selectedDate.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
               </Text>
-              {activeTeamId && !isDemo ? (
+              {activeTeamId ? (
                 <Pressable
                   onPress={() =>
                     router.push({

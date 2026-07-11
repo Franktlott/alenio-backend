@@ -1,0 +1,20 @@
+/** Shared Workspace Calendar/Tasks density — keep both modes visually aligned. */
+export const WS = {
+  pageGutter: 16,
+  sectionGap: 8,
+  cardRadius: 10,
+  cardBorder: "#E8EDF3",
+  title: 13,
+  titleWeight: "700" as const,
+  body: 11,
+  meta: 10,
+  control: 12,
+  controlWeight: "700" as const,
+  ink: "#0F172A",
+  muted: "#64748B",
+  faint: "#94A3B8",
+  surface: "#FFFFFF",
+  pageBg: "#F8FAFC",
+  chipBg: "#F1F5F9",
+  accent: "#4361EE",
+};

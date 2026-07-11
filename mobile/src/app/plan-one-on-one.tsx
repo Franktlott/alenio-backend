@@ -161,7 +161,7 @@ export default function PlanOneOnOneScreen() {
 
   const handleSave = () => {
     if (!isOwnerOrLeader) {
-      setFormError("Only workspace owners and team leaders can plan check-ins.");
+      setFormError("Only workspace owners and team leaders can schedule check-ins.");
       return;
     }
     if (!selectedMemberUserId) {
@@ -202,7 +202,7 @@ export default function PlanOneOnOneScreen() {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: "#F8FAFC", justifyContent: "center", padding: 24 }}>
         <Text style={{ fontSize: 16, fontWeight: "700", color: "#0F172A", textAlign: "center" }}>
-          Only leaders can plan check-ins
+          Only leaders can schedule check-ins
         </Text>
         <Pressable onPress={() => router.back()} style={{ marginTop: 16, alignSelf: "center" }}>
           <Text style={{ color: "#4361EE", fontWeight: "700" }}>Go back</Text>
@@ -240,7 +240,7 @@ export default function PlanOneOnOneScreen() {
           </Pressable>
 
           <Text style={{ color: "white", fontSize: 17, fontWeight: "700" }}>
-            {isEditing ? "Edit check-in plan" : "Plan check-in"}
+            {isEditing ? "Edit scheduled check-in" : "Schedule check-in"}
           </Text>
 
           <Pressable

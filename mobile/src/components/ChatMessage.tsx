@@ -16,6 +16,8 @@ import { renderMentionText } from "@/lib/renderMentions";
 import { useQuery } from "@tanstack/react-query";
 import { readJsonSafe } from "@/lib/api/api";
 import { getBackendUrl } from "@/lib/backend-url";
+import { getAuthHeaders } from "@/lib/auth/auth-client";
+import { UserAvatar } from "@/components/UserAvatar";
 
 const URL_REGEX = /https?:\/\/[^\s<>"{}|\\^`[\]]+/gi;
 
@@ -29,8 +31,10 @@ function LinkPreview({ url, isOwn }: { url: string; isOwn: boolean }) {
   const { data } = useQuery<OgData>({
     queryKey: ["og-preview", url],
     queryFn: async () => {
+      const authHeaders = await getAuthHeaders();
       const res = await fetch(
-        `${getBackendUrl()}/api/og-preview?url=${encodeURIComponent(url)}`
+        `${getBackendUrl()}/api/og-preview?url=${encodeURIComponent(url)}`,
+        { headers: { ...authHeaders } },
       );
       const json = await readJsonSafe<{ data: OgData }>(res);
       return json?.data as OgData;
@@ -353,12 +357,13 @@ export function ChatMessage({
     <View>
       <View className={`flex-row mb-1 ${isOwn ? "justify-end" : "justify-start"}`}>
       {!isOwn && (
-        <View className="w-8 h-8 rounded-full bg-indigo-500 items-center justify-center mr-2 mt-1 flex-shrink-0 overflow-hidden">
-          {senderImage ? (
-            <Image source={{ uri: senderImage }} style={{ width: 32, height: 32 }} resizeMode="cover" />
-          ) : (
-            <Text className="text-white text-xs font-bold">{senderInitial}</Text>
-          )}
+        <View className="mr-2 mt-1 flex-shrink-0">
+          <UserAvatar
+            user={{ name: senderName, image: senderImage }}
+            size={32}
+            radius={16}
+            fontSize={12}
+          />
         </View>
       )}
 
@@ -457,12 +462,13 @@ export function ChatMessage({
       </View>
 
       {isOwn ? (
-        <View className="w-8 h-8 rounded-full bg-indigo-500 items-center justify-center ml-2 mt-1 flex-shrink-0 overflow-hidden">
-          {senderImage ? (
-            <Image source={{ uri: senderImage }} style={{ width: 32, height: 32 }} resizeMode="cover" />
-          ) : (
-            <Text className="text-white text-xs font-bold">{senderInitial}</Text>
-          )}
+        <View className="ml-2 mt-1 flex-shrink-0">
+          <UserAvatar
+            user={{ name: senderName, image: senderImage }}
+            size={32}
+            radius={16}
+            fontSize={12}
+          />
         </View>
       ) : null}
       </View>

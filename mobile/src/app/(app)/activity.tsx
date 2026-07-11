@@ -9,11 +9,12 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Image as ExpoImage } from "expo-image";
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useSession } from "@/lib/auth/use-session";
-import { NoTeamPlaceholder } from "@/components/NoTeamPlaceholder";
+import { NoWorkspaceRedirect } from "@/components/NoWorkspaceRedirect";
 import { router } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useDemoMode } from "@/lib/useDemo";
 import { SafeKeyboardAvoidingView } from "@/lib/safe-keyboard-controller";
+import { tabBarClearance } from "@/lib/tab-bar";
+import { AppTabHeader } from "@/components/AppTabHeader";
 
 type CalendarEvent = {
   id: string;
@@ -311,7 +312,7 @@ function ReactionRow({
 
 const NUM_CELEBRATION_VARIANTS = 4;
 
-function CelebrationCard({ item, activeTeamId, currentUserId, isDemo, showPicker, onOpenPicker, onClosePicker }: { item: ActivityEvent; activeTeamId: string | null; currentUserId: string | undefined; isDemo: boolean; showPicker: boolean; onOpenPicker: () => void; onClosePicker: () => void }) {
+function CelebrationCard({ item, activeTeamId, currentUserId, showPicker, onOpenPicker, onClosePicker }: { item: ActivityEvent; activeTeamId: string | null; currentUserId: string | undefined; showPicker: boolean; onOpenPicker: () => void; onClosePicker: () => void }) {
   const count = item.metadata?.count ?? 10;
   const name = item.user?.name ?? "Someone";
   const queryClient = useQueryClient();
@@ -392,7 +393,7 @@ function CelebrationCard({ item, activeTeamId, currentUserId, isDemo, showPicker
 
   return (
     <Pressable
-      onLongPress={isDemo ? undefined : onOpenPicker}
+      onLongPress={onOpenPicker}
       style={{ marginHorizontal: 16, marginVertical: 6, shadowColor: "#F59E0B", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 8 }}
       testID={`milestone-card-${item.id}`}
     >
@@ -454,7 +455,7 @@ function CelebrationCard({ item, activeTeamId, currentUserId, isDemo, showPicker
 
 const NUM_PERSONAL_BEST_VARIANTS = 3;
 
-function PersonalBestCard({ item, activeTeamId, currentUserId, isDemo, showPicker, onOpenPicker, onClosePicker }: { item: ActivityEvent; activeTeamId: string | null; currentUserId: string | undefined; isDemo: boolean; showPicker: boolean; onOpenPicker: () => void; onClosePicker: () => void }) {
+function PersonalBestCard({ item, activeTeamId, currentUserId, showPicker, onOpenPicker, onClosePicker }: { item: ActivityEvent; activeTeamId: string | null; currentUserId: string | undefined; showPicker: boolean; onOpenPicker: () => void; onClosePicker: () => void }) {
   const count = item.metadata?.count ?? 0;
   const name = item.user?.name ?? "Someone";
   const queryClient = useQueryClient();
@@ -536,7 +537,7 @@ function PersonalBestCard({ item, activeTeamId, currentUserId, isDemo, showPicke
   return (
     <Pressable
       onPress={() => router.push("/(app)" as any)}
-      onLongPress={isDemo ? undefined : onOpenPicker}
+      onLongPress={onOpenPicker}
       style={{ marginHorizontal: 16, marginVertical: 6 }}
       testID={`personal-best-card-${item.id}`}
     >
@@ -640,7 +641,7 @@ const CELEBRATION_TYPES = [
   { key: "grateful",   Icon: Heart,       label: "Grateful",        tag: "Team Spirit",    color: "#E11D48", bg: "#FDF2F8", gradient: ["#881337", "#BE123C"] as [string,string] },
 ];
 
-function CelebrationPostCard({ item, activeTeamId, currentUserId, isDemo, showPicker, onOpenPicker, onClosePicker }: { item: ActivityEvent; activeTeamId: string | null; currentUserId: string | undefined; isDemo: boolean; showPicker: boolean; onOpenPicker: () => void; onClosePicker: () => void }) {
+function CelebrationPostCard({ item, activeTeamId, currentUserId, showPicker, onOpenPicker, onClosePicker }: { item: ActivityEvent; activeTeamId: string | null; currentUserId: string | undefined; showPicker: boolean; onOpenPicker: () => void; onClosePicker: () => void }) {
   const queryClient = useQueryClient();
   const meta = item.metadata;
   const celebType = CELEBRATION_TYPES.find((t) => t.key === meta?.celebrationType) ?? CELEBRATION_TYPES[0]!;
@@ -658,7 +659,7 @@ function CelebrationPostCard({ item, activeTeamId, currentUserId, isDemo, showPi
 
   return (
     <Pressable
-      onLongPress={isDemo ? undefined : onOpenPicker}
+      onLongPress={onOpenPicker}
       style={{ marginHorizontal: 16, marginVertical: 6 }}
       testID={`celebration-post-card-${item.id}`}
     >
@@ -732,7 +733,7 @@ function CelebrationPostCard({ item, activeTeamId, currentUserId, isDemo, showPi
   );
 }
 
-function ActivityItem({ item, activeTeamId, currentUserId, isDemo, showPicker, onOpenPicker, onClosePicker }: { item: ActivityEvent; activeTeamId: string | null; currentUserId: string | undefined; isDemo: boolean; showPicker: boolean; onOpenPicker: () => void; onClosePicker: () => void }) {
+function ActivityItem({ item, activeTeamId, currentUserId, showPicker, onOpenPicker, onClosePicker }: { item: ActivityEvent; activeTeamId: string | null; currentUserId: string | undefined; showPicker: boolean; onOpenPicker: () => void; onClosePicker: () => void }) {
   const queryClient = useQueryClient();
 
   const { mutate: toggleReaction } = useMutation({
@@ -745,15 +746,15 @@ function ActivityItem({ item, activeTeamId, currentUserId, isDemo, showPicker, o
   });
 
   if (item.type === "task_milestone") {
-    return <CelebrationCard item={item} activeTeamId={activeTeamId} currentUserId={currentUserId} isDemo={isDemo} showPicker={showPicker} onOpenPicker={onOpenPicker} onClosePicker={onClosePicker} />;
+    return <CelebrationCard item={item} activeTeamId={activeTeamId} currentUserId={currentUserId} showPicker={showPicker} onOpenPicker={onOpenPicker} onClosePicker={onClosePicker} />;
   }
 
   if (item.type === "personal_best") {
-    return <PersonalBestCard item={item} activeTeamId={activeTeamId} currentUserId={currentUserId} isDemo={isDemo} showPicker={showPicker} onOpenPicker={onOpenPicker} onClosePicker={onClosePicker} />;
+    return <PersonalBestCard item={item} activeTeamId={activeTeamId} currentUserId={currentUserId} showPicker={showPicker} onOpenPicker={onOpenPicker} onClosePicker={onClosePicker} />;
   }
 
   if (item.type === "celebration") {
-    return <CelebrationPostCard item={item} activeTeamId={activeTeamId} currentUserId={currentUserId} isDemo={isDemo} showPicker={showPicker} onOpenPicker={onOpenPicker} onClosePicker={onClosePicker} />;
+    return <CelebrationPostCard item={item} activeTeamId={activeTeamId} currentUserId={currentUserId} showPicker={showPicker} onOpenPicker={onOpenPicker} onClosePicker={onClosePicker} />;
   }
 
   const config = EVENT_CONFIG[item.type] ?? {
@@ -767,7 +768,7 @@ function ActivityItem({ item, activeTeamId, currentUserId, isDemo, showPicker, o
 
   return (
     <Pressable
-      onLongPress={isDemo ? undefined : onOpenPicker}
+      onLongPress={onOpenPicker}
       style={{ paddingHorizontal: 20, paddingVertical: 14 }}
       testID={`activity-item-${item.id}`}
     >
@@ -919,7 +920,6 @@ export default function ActivityScreen() {
   const insets = useSafeAreaInsets();
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
   const { data: session } = useSession();
-  const isDemo = useDemoMode();
   const queryClient = useQueryClient();
   const currentUserId = session?.user?.id;
   const [showReactionHint, setShowReactionHint] = useState<boolean>(false);
@@ -1010,39 +1010,27 @@ export default function ActivityScreen() {
   if (!activeTeamId) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: "#F8FAFC" }} edges={["top"]}>
-        <NoTeamPlaceholder />
+        <NoWorkspaceRedirect />
       </SafeAreaView>
     );
   }
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#F8FAFC" }} edges={[]} testID="activity-screen">
-      {/* Header */}
-      <LinearGradient
-        colors={["#4361EE", "#7C3AED"]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-        style={{ paddingTop: insets.top + 12, paddingHorizontal: 16, paddingBottom: 16 }}
-      >
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-          <Text style={{ color: "white", fontSize: 20, fontWeight: "800", flex: 1 }}>Activity</Text>
-          <View style={{ position: "absolute", left: 0, right: 0, alignItems: "center" }}>
-            <Image source={require("@/assets/alenio-logo-white.png")} style={{ height: 30, width: 104, resizeMode: "contain" }} />
-          </View>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            {!isDemo ? (
-              <TouchableOpacity
-                testID="celebrate-button"
-                onPress={() => { setShowCelebrateModal(true); setCelebrateStep(1); setCelebrateMemberSearch(""); }}
-                style={{ backgroundColor: "rgba(255,255,255,0.2)", borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5, flexDirection: "row", alignItems: "center", gap: 5 }}
-              >
-                <Text style={{ fontSize: 12 }}>🎉</Text>
-                <Text style={{ color: "white", fontSize: 12, fontWeight: "700" }}>Celebrate</Text>
-              </TouchableOpacity>
-            ) : null}
-          </View>
-        </View>
-      </LinearGradient>
+      <AppTabHeader
+        topInset={insets.top}
+        testID="activity-header"
+        rightAction={
+          <TouchableOpacity
+            testID="celebrate-button"
+            onPress={() => { setShowCelebrateModal(true); setCelebrateStep(1); setCelebrateMemberSearch(""); }}
+            style={{ backgroundColor: "rgba(255,255,255,0.2)", borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5, flexDirection: "row", alignItems: "center", gap: 5 }}
+          >
+            <Text style={{ fontSize: 12 }}>🎉</Text>
+            <Text style={{ color: "white", fontSize: 12, fontWeight: "700" }}>Celebrate</Text>
+          </TouchableOpacity>
+        }
+      />
 
       {/* Celebrate modal */}
       <Modal visible={showCelebrateModal} transparent animationType="slide" onRequestClose={closeCelebrateModal}>
@@ -1275,7 +1263,7 @@ export default function ActivityScreen() {
           keyExtractor={(item) => item.id}
           renderItem={({ item, index }) => (
             <>
-              <ActivityItem item={item} activeTeamId={activeTeamId} currentUserId={currentUserId} isDemo={isDemo} showPicker={openPickerId === item.id} onOpenPicker={() => setOpenPickerId(item.id)} onClosePicker={() => setOpenPickerId(null)} />
+              <ActivityItem item={item} activeTeamId={activeTeamId} currentUserId={currentUserId} showPicker={openPickerId === item.id} onOpenPicker={() => setOpenPickerId(item.id)} onClosePicker={() => setOpenPickerId(null)} />
               {index === 0 && showReactionHint ? (
                 <Text style={{ fontSize: 10, color: "rgba(100,116,139,0.7)", textAlign: "center", marginTop: 2 }}>
                   Long press to react
@@ -1290,7 +1278,7 @@ export default function ActivityScreen() {
           }
           onRefresh={refetch}
           refreshing={isLoading}
-          contentContainerStyle={{ paddingBottom: insets.bottom + 88 }}
+          contentContainerStyle={{ paddingBottom: tabBarClearance(insets.bottom) }}
           showsVerticalScrollIndicator={false}
           testID="activity-list"
         />

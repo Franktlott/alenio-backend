@@ -215,10 +215,6 @@ export default function ResetPassword() {
           </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
-
-      <View style={{ alignItems: "center", paddingBottom: 16 }}>
-        <Image source={require("@/assets/lotttech-logo.png")} style={{ width: 185, height: 57 }} resizeMode="contain" />
-      </View>
     </SafeAreaView>
   );
 }

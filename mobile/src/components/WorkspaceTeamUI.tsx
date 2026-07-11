@@ -2,7 +2,7 @@ import React from "react";
 import { View, Text, Image, Pressable, type ViewStyle } from "react-native";
 import { ChevronRight } from "lucide-react-native";
 import type { Team } from "@/lib/types";
-import { resolveUserImageUrl } from "@/lib/user-avatar";
+import { resolveUserImageUrl, teamInitials } from "@/lib/user-avatar";
 
 export const WORKSPACE_SWITCH_HINT = "Tap a workspace to switch.";
 
@@ -44,37 +44,55 @@ export function WorkspaceTeamAvatar({
   team,
   size = 48,
   active = false,
+  backgroundColor = "#EEF2FF",
+  textColor = "#4361EE",
+  borderColor,
+  radius,
 }: {
   team: Pick<Team, "name" | "image">;
   size?: number;
   active?: boolean;
+  backgroundColor?: string;
+  textColor?: string;
+  borderColor?: string;
+  radius?: number;
 }) {
-  const radius = size >= 48 ? 14 : 8;
+  const uri = resolveUserImageUrl(team.image);
+  const [failedUri, setFailedUri] = React.useState<string | null>(null);
+  const corner = radius ?? (size >= 48 ? 14 : size >= 36 ? 12 : 8);
+  const showImage = !!uri && failedUri !== uri;
+
+  React.useEffect(() => {
+    setFailedUri(null);
+  }, [uri]);
+
   return (
     <View
       style={{
         width: size,
         height: size,
-        borderRadius: radius,
-        backgroundColor: "#EEF2FF",
+        borderRadius: corner,
+        backgroundColor,
         alignItems: "center",
         justifyContent: "center",
         overflow: "hidden",
         borderWidth: 1,
-        borderColor: active ? "#6366F1" : "#E2E8F0",
+        borderColor: borderColor ?? (active ? "#6366F1" : "#E2E8F0"),
         flexShrink: 0,
       }}
     >
-      {(() => {
-        const imageUrl = resolveUserImageUrl(team.image);
-        return imageUrl ? (
-          <Image source={{ uri: imageUrl }} style={{ width: size, height: size }} resizeMode="cover" />
-        ) : (
-          <Text style={{ fontSize: size * 0.42, fontWeight: "700", color: "#4361EE" }}>
-            {team.name?.[0]?.toUpperCase() ?? "?"}
-          </Text>
-        );
-      })()}
+      {showImage ? (
+        <Image
+          source={{ uri }}
+          style={{ width: size, height: size }}
+          resizeMode="cover"
+          onError={() => setFailedUri(uri)}
+        />
+      ) : (
+        <Text style={{ fontSize: Math.round(size * 0.42), fontWeight: "700", color: textColor }}>
+          {teamInitials(team)}
+        </Text>
+      )}
     </View>
   );
 }

@@ -61,8 +61,8 @@ topicsRouter.post("/:teamId/topics", async (c) => {
   }
 
   const member = await getMembership(user.id, teamId);
-  if (!member || (member.role !== "owner" && member.role !== "admin")) {
-    return c.json({ error: { message: "Only owners and admins can create topics", code: "FORBIDDEN" } }, 403);
+  if (!member || !["owner", "team_leader", "admin"].includes(member.role)) {
+    return c.json({ error: { message: "Only owners and leaders can create topics", code: "FORBIDDEN" } }, 403);
   }
 
   const channelCount = await prisma.topic.count({ where: { teamId } });
@@ -94,8 +94,8 @@ topicsRouter.patch("/:teamId/topics/:topicId", async (c) => {
   const { name, description, color } = await c.req.json();
 
   const member = await getMembership(user.id, teamId);
-  if (!member || (member.role !== "owner" && member.role !== "admin")) {
-    return c.json({ error: { message: "Only owners and admins can edit topics", code: "FORBIDDEN" } }, 403);
+  if (!member || !["owner", "team_leader", "admin"].includes(member.role)) {
+    return c.json({ error: { message: "Only owners and leaders can edit topics", code: "FORBIDDEN" } }, 403);
   }
 
   const topic = await prisma.topic.update({
@@ -120,8 +120,8 @@ topicsRouter.delete("/:teamId/topics/:topicId", async (c) => {
   const { teamId, topicId } = c.req.param();
 
   const member = await getMembership(user.id, teamId);
-  if (!member || (member.role !== "owner" && member.role !== "admin")) {
-    return c.json({ error: { message: "Only owners and admins can delete topics", code: "FORBIDDEN" } }, 403);
+  if (!member || !["owner", "team_leader", "admin"].includes(member.role)) {
+    return c.json({ error: { message: "Only owners and leaders can delete topics", code: "FORBIDDEN" } }, 403);
   }
 
   await prisma.topic.delete({ where: { id: topicId, teamId } });

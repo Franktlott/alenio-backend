@@ -1,11 +1,12 @@
 import React from "react";
-import { View, Text, Pressable, Image, ScrollView, StyleSheet } from "react-native";
+import { View, Text, Pressable, Image, StyleSheet, useWindowDimensions } from "react-native";
 import MaskedView from "@react-native-masked-view/masked-view";
 import { LinearGradient } from "expo-linear-gradient";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import { ArrowRight, Calendar, CheckSquare, MessageCircle, Users } from "lucide-react-native";
+import { ArrowRight, CheckSquare, MessageCircle, TrendingUp, Users } from "lucide-react-native";
+import { LandingHeroSection } from "@/components/landing/LandingHeroSection";
 
 const GRADIENT = ["#4361EE", "#7C3AED"] as const;
 
@@ -32,11 +33,11 @@ const FEATURES = [
     iconColor: "#7C3AED",
   },
   {
-    Icon: Calendar,
-    title: "Calendar",
-    description: "View schedules and never miss a beat.",
-    iconBg: "#EFF6FF",
-    iconColor: "#3B82F6",
+    Icon: TrendingUp,
+    title: "Development",
+    description: "Set goals, track growth, and coach your team.",
+    iconBg: "#FFF7ED",
+    iconColor: "#EA580C",
   },
 ] as const;
 
@@ -51,67 +52,67 @@ function GradientText({ children, style }: { children: string; style?: object })
 }
 
 export default function WelcomeScreen() {
+  const { height } = useWindowDimensions();
+  const isShort = height < 780;
+
   return (
     <View style={styles.root}>
       <StatusBar style="dark" />
       <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
-        <ScrollView
-          contentContainerStyle={styles.scroll}
-          showsVerticalScrollIndicator={false}
-          bounces={false}
-        >
-          <View style={styles.logoRow}>
+        <View style={styles.page}>
+          <View style={styles.top}>
             <Image source={require("@/assets/alenio-logo.png")} style={styles.logo} resizeMode="contain" />
-          </View>
 
-          <View style={styles.headlineRow}>
-            <Text style={styles.headline}>The workspace built for </Text>
-            <GradientText style={styles.headlineGradient}>frontline teams.</GradientText>
-          </View>
+            <Text style={[styles.headline, isShort && styles.headlineShort]}>The workspace built for</Text>
+            <GradientText style={[styles.headlineGradient, isShort && styles.headlineShort]}>
+              frontline teams.
+            </GradientText>
 
-          <Text style={styles.subheadline}>
-            Connect your people, manage work, and stay aligned — all in one place.
-          </Text>
+            <Text style={[styles.subheadline, isShort && styles.subheadlineShort]} numberOfLines={2}>
+              Connect your people, manage work, and stay aligned — all in one place.
+            </Text>
+
+            <LandingHeroSection fill />
+          </View>
 
           <View style={styles.grid}>
             {FEATURES.map(({ Icon, title, description, iconBg, iconColor }) => (
-              <View key={title} style={styles.card}>
+              <View key={title} style={[styles.card, isShort && styles.cardShort]}>
                 <View style={[styles.iconWrap, { backgroundColor: iconBg }]}>
-                  <Icon size={22} color={iconColor} strokeWidth={2.2} />
+                  <Icon size={17} color={iconColor} strokeWidth={2.2} />
                 </View>
                 <Text style={styles.cardTitle}>{title}</Text>
-                <Text style={styles.cardDesc}>{description}</Text>
+                <Text style={styles.cardDesc} numberOfLines={2}>
+                  {description}
+                </Text>
               </View>
             ))}
           </View>
 
-          <Pressable onPress={() => router.push("/sign-up")} testID="welcome-get-started">
-            <LinearGradient
-              colors={[...GRADIENT]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.cta}
-            >
-              <Text style={styles.ctaText}>Get Started</Text>
-              <ArrowRight size={20} color="#fff" strokeWidth={2.5} />
-            </LinearGradient>
-          </Pressable>
-
-          <Pressable onPress={() => router.push("/sign-in")} style={styles.signInRow} testID="welcome-sign-in">
-            <Text style={styles.signInMuted}>Already have an account? </Text>
-            <Text style={styles.signInLink}>Sign in</Text>
-          </Pressable>
-
-          <View style={styles.legalRow}>
-            <Pressable onPress={() => router.push("/terms-of-service")}>
-              <Text style={styles.legalLink}>Terms of Service</Text>
+          <View style={styles.bottom}>
+            <Pressable onPress={() => router.push("/sign-up")} testID="welcome-get-started">
+              <LinearGradient colors={[...GRADIENT]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.cta}>
+                <Text style={styles.ctaText}>Get Started</Text>
+                <ArrowRight size={18} color="#fff" strokeWidth={2.5} />
+              </LinearGradient>
             </Pressable>
-            <Text style={styles.legalDot}> · </Text>
-            <Pressable onPress={() => router.push("/privacy-policy")}>
-              <Text style={styles.legalLink}>Privacy Policy</Text>
+
+            <Pressable onPress={() => router.push("/sign-in")} style={styles.signInRow} testID="welcome-sign-in">
+              <Text style={styles.signInMuted}>Already have an account? </Text>
+              <Text style={styles.signInLink}>Sign in</Text>
             </Pressable>
+
+            <View style={styles.legalRow}>
+              <Pressable onPress={() => router.push("/terms-of-service")}>
+                <Text style={styles.legalLink}>Terms of Service</Text>
+              </Pressable>
+              <Text style={styles.legalDot}> · </Text>
+              <Pressable onPress={() => router.push("/privacy-policy")}>
+                <Text style={styles.legalLink}>Privacy Policy</Text>
+              </Pressable>
+            </View>
           </View>
-        </ScrollView>
+        </View>
       </SafeAreaView>
     </View>
   );
@@ -125,85 +126,101 @@ const styles = StyleSheet.create({
   safe: {
     flex: 1,
   },
-  scroll: {
-    flexGrow: 1,
+  page: {
+    flex: 1,
     paddingHorizontal: 24,
-    paddingTop: 12,
-    paddingBottom: 24,
+    paddingTop: 4,
+    paddingBottom: 8,
+    justifyContent: "space-between",
   },
-  logoRow: {
-    marginBottom: 28,
+  top: {
+    flex: 1,
+    minHeight: 0,
   },
   logo: {
-    width: 130,
-    height: 40,
-  },
-  headlineRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    alignItems: "baseline",
-    marginBottom: 12,
+    width: 108,
+    height: 32,
+    marginBottom: 10,
   },
   headline: {
-    fontSize: 30,
+    fontSize: 26,
     fontWeight: "800",
     color: "#0F172A",
-    lineHeight: 38,
+    lineHeight: 30,
     letterSpacing: -0.5,
+  },
+  headlineShort: {
+    fontSize: 24,
+    lineHeight: 28,
   },
   headlineGradient: {
-    fontSize: 30,
+    fontSize: 26,
     fontWeight: "800",
-    lineHeight: 38,
+    lineHeight: 30,
     letterSpacing: -0.5,
+    marginBottom: 6,
   },
   subheadline: {
-    fontSize: 15,
+    fontSize: 14,
     color: "#64748B",
-    lineHeight: 22,
-    marginBottom: 24,
+    lineHeight: 19,
+    marginBottom: 2,
+    maxWidth: 320,
+  },
+  subheadlineShort: {
+    fontSize: 13,
+    lineHeight: 18,
   },
   grid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 12,
-    marginBottom: 28,
+    gap: 8,
+    marginTop: 6,
+    marginBottom: 8,
   },
   card: {
-    width: "47.5%",
+    width: "48%",
     backgroundColor: "#FFFFFF",
-    borderRadius: 16,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#F1F5F9",
-    padding: 16,
+    borderColor: "#EEF2F6",
+    padding: 10,
+    minHeight: 96,
     shadowColor: "#0F172A",
     shadowOpacity: 0.04,
-    shadowRadius: 8,
+    shadowRadius: 6,
     shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
+    elevation: 1,
+  },
+  cardShort: {
+    minHeight: 88,
+    padding: 9,
   },
   iconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
+    width: 32,
+    height: 32,
+    borderRadius: 9,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 12,
+    marginBottom: 7,
   },
   cardTitle: {
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: "700",
     color: "#0F172A",
-    marginBottom: 4,
+    marginBottom: 2,
   },
   cardDesc: {
-    fontSize: 12,
+    fontSize: 10,
     color: "#64748B",
-    lineHeight: 17,
+    lineHeight: 13,
+  },
+  bottom: {
+    flexShrink: 0,
   },
   cta: {
-    borderRadius: 14,
-    paddingVertical: 16,
+    borderRadius: 12,
+    paddingVertical: 14,
     paddingHorizontal: 24,
     flexDirection: "row",
     alignItems: "center",
@@ -212,21 +229,21 @@ const styles = StyleSheet.create({
   },
   ctaText: {
     color: "#FFFFFF",
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: "700",
   },
   signInRow: {
     flexDirection: "row",
     justifyContent: "center",
-    marginTop: 18,
-    marginBottom: 20,
+    marginTop: 10,
+    marginBottom: 8,
   },
   signInMuted: {
-    fontSize: 14,
+    fontSize: 13,
     color: "#64748B",
   },
   signInLink: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "600",
     color: "#4361EE",
   },
@@ -236,11 +253,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   legalLink: {
-    fontSize: 12,
+    fontSize: 11,
     color: "#94A3B8",
   },
   legalDot: {
-    fontSize: 12,
+    fontSize: 11,
     color: "#CBD5E1",
   },
 });

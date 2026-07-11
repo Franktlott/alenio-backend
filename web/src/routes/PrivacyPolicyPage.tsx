@@ -80,8 +80,7 @@ export function PrivacyPolicyPage() {
             <li>Enable team communication, task management, collaboration, and video meetings.</li>
             <li>Send push notifications for messages, tasks, and reminders (you may opt out in Settings).</li>
             <li>
-              Process payments: in-app purchases via the applicable app store; on the web, via Stripe when you subscribe or manage billing
-              at {LEGAL_WEBSITE_LABEL}.
+              Process payments via Stripe when you subscribe or manage billing at {LEGAL_WEBSITE_LABEL}.
             </li>
             <li>Respond to your support requests and communicate important updates.</li>
             <li>Monitor and analyse usage to improve performance and features.</li>

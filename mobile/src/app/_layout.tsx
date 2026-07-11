@@ -13,6 +13,7 @@ import { useEffect, useRef, useState } from 'react';
 import * as Notifications from 'expo-notifications';
 import * as Haptics from 'expo-haptics';
 import { registerForPushNotificationsAsync } from '@/lib/notifications';
+import { invalidateTaskCaches } from '@/lib/invalidate-task-caches';
 import { ensureSessionFreshOnForeground, agentDebugLog } from '@/lib/auth/auth-client';
 import { isAuthEntryPath, navigateToMobileHomeWithRetry } from '@/lib/auth/auth-entry';
 import Animated, {
@@ -182,7 +183,7 @@ function RootLayoutNav() {
       userIdPrefix: userId.slice(0, 8),
       pathname,
     });
-    return navigateToMobileHomeWithRetry(isAdmin);
+    return navigateToMobileHomeWithRetry(isAdmin, queryClient);
   }, [hasBackendSession, isAdmin, authReady?.me?.id, pathname]);
 
   useEffect(() => {
@@ -192,6 +193,7 @@ function RootLayoutNav() {
     const appStateSubscription = AppState.addEventListener("change", (nextState) => {
       if (nextState === "active") {
         registerForPushNotificationsAsync();
+        invalidateTaskCaches(queryClient);
       }
     });
     notificationListener.current = Notifications.addNotificationReceivedListener((notification) => {
@@ -201,7 +203,7 @@ function RootLayoutNav() {
       if (data?.conversationId) {
         queryClient.invalidateQueries({ queryKey: ["dms"] });
       } else if (data?.taskId) {
-        queryClient.invalidateQueries({ queryKey: ["tasks"] });
+        invalidateTaskCaches(queryClient, data.teamId);
       } else if (data?.type === "video_call" || data?.type === "meeting_reminder") {
         queryClient.invalidateQueries({ queryKey: ["video"] });
         queryClient.invalidateQueries({ queryKey: ["calendar"] });
@@ -209,6 +211,8 @@ function RootLayoutNav() {
         queryClient.invalidateQueries({ queryKey: ["teams"] });
         queryClient.invalidateQueries({ queryKey: ["join-requests"] });
         queryClient.invalidateQueries({ queryKey: ["team-join-requests"] });
+      } else if (data?.type === "admin_alert") {
+        queryClient.invalidateQueries({ queryKey: ["admin"] });
       } else if (data?.type === "go_login_request") {
         queryClient.invalidateQueries({ queryKey: ["team-go-login-requests"] });
         queryClient.invalidateQueries({ queryKey: ["team-join-requests"] });
@@ -221,7 +225,13 @@ function RootLayoutNav() {
 
     const responseListener = Notifications.addNotificationResponseReceivedListener((response) => {
       const data = response.notification.request.content.data as Record<string, string>;
-      if (data?.taskId && data?.teamId) {
+      if (data?.type === "admin_alert") {
+        if (data.entityKind === "user" && data.entityId) {
+          router.push({ pathname: "/(admin)/user-detail", params: { userId: data.entityId } });
+        } else {
+          router.push("/(admin)/(tabs)/activity");
+        }
+      } else if (data?.taskId && data?.teamId) {
         router.push({ pathname: '/task-detail', params: { taskId: data.taskId, teamId: data.teamId } });
       } else if (data?.conversationId) {
         // DM notification — go to the conversation
@@ -251,6 +261,13 @@ function RootLayoutNav() {
           <Stack.Protected guard={hasBackendSession}>
             <Stack.Screen name="(app)" />
             <Stack.Screen name="(admin)" />
+            <Stack.Screen
+              name="no-workspace-welcome"
+              options={{
+                headerShown: false,
+                animation: "fade",
+              }}
+            />
             <Stack.Screen
               name="onboarding"
               options={{
@@ -329,6 +346,7 @@ function RootLayoutNav() {
             <Stack.Screen name="verify-otp" />
           </Stack.Protected>
           <Stack.Screen name="invite/[token]" />
+          <Stack.Screen name="join/[code]" />
           <Stack.Screen name="privacy-policy" />
           <Stack.Screen name="terms-of-service" />
         </Stack>

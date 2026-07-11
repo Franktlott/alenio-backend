@@ -73,6 +73,12 @@ export async function clearMobileAuthCaches(queryClient: QueryClient) {
 
 /** Cold start only — sign-in/logout set `AUTH_READY_QUERY_KEY` directly. */
 export async function bootstrapMobileAuth(): Promise<MobileAuthReady | null> {
+  const [{ hydratePendingTeamInviteToken }, { hydratePendingJoinCode }] = await Promise.all([
+    import("@/lib/auth/pending-team-invite"),
+    import("@/lib/auth/pending-join-code"),
+  ]);
+  await Promise.all([hydratePendingTeamInviteToken(), hydratePendingJoinCode()]);
+
   const session = await fetchAuthSession();
   if (!(session as { user?: unknown } | null)?.user) return null;
   const me = await fetchMeUser();
@@ -96,6 +102,22 @@ export async function primeMobileAuthReady(
     userIdPrefix: me.id.slice(0, 8),
   });
   return authReady;
+}
+
+/** Refetch `/api/me` and keep auth-ready + me caches aligned (e.g. after isAdmin changes). */
+export async function refreshMeInAuthCaches(queryClient: QueryClient): Promise<MeUser | null> {
+  const me = await fetchMeUser();
+  if (!me?.id) return null;
+  queryClient.setQueryData(ME_QUERY_KEY, me);
+  const ready = queryClient.getQueryData<MobileAuthReady | null>(AUTH_READY_QUERY_KEY);
+  if (ready?.me?.id === me.id) {
+    queryClient.setQueryData(
+      AUTH_READY_QUERY_KEY,
+      { ...ready, me },
+      { updatedAt: Date.now() }
+    );
+  }
+  return me;
 }
 
 /** Subscribe to auth-ready cache; bootstrap runs once from root layout (never auto-refetch). */

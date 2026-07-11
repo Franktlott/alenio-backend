@@ -28,21 +28,22 @@ export function oneOnOneMeetingStatusLabel(status: OneOnOneMeetingStatus): strin
     case "completed":
       return "Completed";
     case "no_follow_up":
-      return "No follow-up tasks";
+      return "No follow-ups";
   }
 }
 
 export function oneOnOneMeetingStatusColors(status: OneOnOneMeetingStatus): {
   bg: string;
   text: string;
+  accent: string;
 } {
   switch (status) {
     case "open":
-      return { bg: "#FEF3C7", text: "#92400E" };
+      return { bg: "#FEF3C7", text: "#92400E", accent: "#F59E0B" };
     case "completed":
-      return { bg: "#DCFCE7", text: "#166534" };
+      return { bg: "#DCFCE7", text: "#166534", accent: "#16A34A" };
     case "no_follow_up":
-      return { bg: "#F1F5F9", text: "#64748B" };
+      return { bg: "#F1F5F9", text: "#64748B", accent: "#94A3B8" };
   }
 }
 

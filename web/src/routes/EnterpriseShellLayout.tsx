@@ -303,7 +303,11 @@ export function EnterpriseShellLayout() {
         ) : (
           <Outlet />
         )}
-        {teams !== null ? <SenecaFloatingLauncher /> : null}
+        {teams !== null &&
+        (teams.find((t) => t.id === effectiveTeamId)?.role === "owner" ||
+          teams.find((t) => t.id === effectiveTeamId)?.role === "team_leader") ? (
+          <SenecaFloatingLauncher />
+        ) : null}
       </EnterpriseLayout>
     </EnterpriseShellContext.Provider>
   );

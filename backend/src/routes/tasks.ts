@@ -994,6 +994,19 @@ tasksRouter.patch("/:taskId", async (c) => {
     }
   }
 
+  // Check-in follow-up tasks can only be completed by submitting the feedback form.
+  if (status === "done" && task.status !== "done" && isFeedbackTaskDescription(task.description)) {
+    return c.json(
+      {
+        error: {
+          message: "Complete this follow-up by sharing your check-in notes.",
+          code: "FEEDBACK_FORM_REQUIRED",
+        },
+      },
+      400,
+    );
+  }
+
   if (status === "done") {
     if (task.isJoint) {
       // For joint tasks, check if the current user has completed all subtasks via SubtaskCompletion

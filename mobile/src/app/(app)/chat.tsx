@@ -11,9 +11,9 @@ import {
   RefreshControl,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { LinearGradient } from "expo-linear-gradient";
-import { MessageCircle, Users, Lock, Plus, Sparkles, ChevronRight } from "lucide-react-native";
+import { MessageCircle, Users, Lock, Plus, ChevronRight } from "lucide-react-native";
 import { router } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
@@ -24,13 +24,17 @@ import { useSession } from "@/lib/auth/use-session";
 import { useTeamStore } from "@/lib/state/team-store";
 import { useUnreadStore } from "@/lib/state/unread-store";
 import type { Conversation, Team } from "@/lib/types";
-import { NoTeamPlaceholder } from "@/components/NoTeamPlaceholder";
-import { useDemoMode } from "@/lib/useDemo";
+import { NoWorkspaceRedirect } from "@/components/NoWorkspaceRedirect";
 import { useSubscriptionStore } from "@/lib/state/subscription-store";
 import { PAYWALL_BODY, PAYWALL_TITLE } from "@/lib/plan-access-copy";
+import { tabBarClearance } from "@/lib/tab-bar";
 import { dmOtherParticipant, resolveUserImageUrl } from "@/lib/user-avatar";
 import { UserAvatar } from "@/components/UserAvatar";
+import { WorkspaceTeamAvatar } from "@/components/WorkspaceTeamUI";
 import { groupWorkspaceLabel } from "@/lib/group-workspace-label";
+import { AppTabHeader } from "@/components/AppTabHeader";
+import { AddMemberModal } from "@/components/AddMemberModal";
+import { inviteMemberByEmail } from "@/lib/team-invites-api";
 
 const PINNED_DMS_KEY = "pinned_dms";
 
@@ -49,25 +53,18 @@ function AvatarStack({ members }: { members: { image: string | null; name: strin
   return (
     <View style={{ flexDirection: "row" }}>
       {shown.map((m, i) => (
-        <View
-          key={i}
+        <UserAvatar
+          key={`${m.name ?? "u"}-${i}`}
+          user={m}
+          size={28}
+          radius={14}
           style={{
-            width: 28, height: 28, borderRadius: 14,
-            backgroundColor: "#4361EE",
-            borderWidth: 2, borderColor: "white",
             marginLeft: i === 0 ? 0 : -8,
-            alignItems: "center", justifyContent: "center",
-            overflow: "hidden", zIndex: shown.length - i,
+            borderWidth: 2,
+            borderColor: "white",
+            zIndex: shown.length - i,
           }}
-        >
-          {m.image ? (
-            <Image source={{ uri: m.image }} style={{ width: 28, height: 28 }} />
-          ) : (
-            <Text style={{ color: "white", fontSize: 11, fontWeight: "700" }}>
-              {m.name?.[0]?.toUpperCase() ?? "?"}
-            </Text>
-          )}
-        </View>
+        />
       ))}
     </View>
   );
@@ -78,9 +75,10 @@ export default function ChatScreen() {
   const { data: session } = useSession();
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
   const queryClient = useQueryClient();
-  const isDemo = useDemoMode();
   const [showGroupPaywall, setShowGroupPaywall] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [inviteError, setInviteError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [pinnedDmIds, setPinnedDmIds] = useState<string[]>([]);
 
@@ -151,10 +149,24 @@ export default function ChatScreen() {
     setRefreshing(false);
   };
 
+  const inviteMemberMutation = useMutation({
+    mutationFn: (email: string) => inviteMemberByEmail(activeTeamId!, email),
+    onSuccess: () => {
+      setShowInviteModal(false);
+      setInviteError(null);
+      queryClient.invalidateQueries({ queryKey: ["team-invites", activeTeamId] });
+      queryClient.invalidateQueries({ queryKey: ["team", activeTeamId] });
+      toast({ title: "Invite sent", preset: "done" });
+    },
+    onError: (err: Error) => {
+      setInviteError(err.message || "Could not send invite.");
+    },
+  });
+
   if (!activeTeamId) {
     return (
       <SafeAreaView className="flex-1 bg-slate-50" edges={["top"]}>
-        <NoTeamPlaceholder />
+        <NoWorkspaceRedirect />
       </SafeAreaView>
     );
   }
@@ -163,46 +175,45 @@ export default function ChatScreen() {
   const memberCount = members.length;
   const topThreeMembers = members.slice(0, 3).map((m) => ({ image: m.user.image ?? null, name: m.user.name ?? null }));
   const lastGeneralMessage = teamGeneralMessages[0];
-  const teamPhotoUrl = resolveUserImageUrl(teamDetail?.image);
+  const myRole = members.find((m) => m.userId === session?.user?.id || m.user.id === session?.user?.id)?.role ?? (teamDetail as Team & { role?: string } | undefined)?.role;
+  const canInviteMembers = myRole === "owner" || myRole === "team_leader" || myRole === "admin";
+
+  const openInviteTeamMembers = () => {
+    if (canInviteMembers) {
+      setInviteError(null);
+      setShowInviteModal(true);
+      return;
+    }
+    // Members can share the workspace invite code from the Team tab.
+    router.push("/(app)/team");
+  };
 
   return (
     <SafeAreaView testID="chat-screen" style={{ flex: 1, backgroundColor: "#F2F3F7" }} edges={[]}>
-      {/* Header */}
-      <LinearGradient
-        colors={["#4361EE", "#7C3AED"]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-        style={{ paddingTop: insets.top + 12, paddingHorizontal: 16, paddingBottom: 16 }}
-      >
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-          <Text style={{ color: "white", fontSize: 20, fontWeight: "800", flex: 1 }}>Chat</Text>
-          <View style={{ position: "absolute", left: 0, right: 0, alignItems: "center" }}>
-            <Image source={require("@/assets/alenio-logo-white.png")} style={{ height: 30, width: 104, resizeMode: "contain" }} />
-          </View>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            {activeTeamId && !isDemo ? (
-              <Pressable
-                onPress={() => setShowAddModal(true)}
-                style={{ flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "rgba(255,255,255,0.22)", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 }}
-                testID="chat-header-add-button"
-              >
-                <Plus size={13} color="white" />
-                <Text style={{ color: "white", fontSize: 12, fontWeight: "600" }}>Add</Text>
-              </Pressable>
-            ) : null}
-          </View>
-        </View>
-      </LinearGradient>
+      <AppTabHeader
+        topInset={insets.top}
+        testID="chat-header"
+        rightAction={
+          activeTeamId ? (
+            <Pressable
+              onPress={() => setShowAddModal(true)}
+              style={{ flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "rgba(255,255,255,0.22)", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 }}
+              testID="chat-header-add-button"
+            >
+              <Plus size={13} color="white" />
+              <Text style={{ color: "white", fontSize: 12, fontWeight: "600" }}>Add</Text>
+            </Pressable>
+          ) : null
+        }
+      />
 
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: insets.bottom + 100 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" />}
-      >
-        {/* Current workspace */}
+      <View style={{ flex: 1, minHeight: 0, paddingBottom: tabBarClearance(insets.bottom, 8) }}>
+        {/* Current workspace — fixed */}
         <Pressable
           testID="team-chat-button"
           onPress={() => router.push({ pathname: "/team-channels", params: { teamId: activeTeamId, teamName: teamDetail?.name ?? "" } })}
+          accessibilityRole="button"
+          accessibilityLabel="Open Team Chat"
           style={{
             marginHorizontal: 16,
             marginTop: 20,
@@ -213,203 +224,248 @@ export default function ChatScreen() {
             shadowRadius: 12,
             shadowOffset: { width: 0, height: 4 },
             elevation: 5,
+            flexShrink: 0,
           }}
         >
           <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ padding: 16 }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-              {teamPhotoUrl ? (
-                <Image
-                  source={{ uri: teamPhotoUrl }}
-                  style={{ width: 48, height: 48, borderRadius: 14, borderWidth: 2, borderColor: "rgba(255,255,255,0.3)" }}
-                />
-              ) : (
-                <View style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: "rgba(255,255,255,0.18)", alignItems: "center", justifyContent: "center" }}>
-                  <MessageCircle size={22} color="white" />
-                </View>
-              )}
-              <View style={{ flex: 1 }}>
+              <WorkspaceTeamAvatar
+                team={{ name: teamDetail?.name ?? "Workspace", image: teamDetail?.image ?? null }}
+                size={48}
+                backgroundColor="rgba(255,255,255,0.18)"
+                textColor="#FFFFFF"
+                borderColor="rgba(255,255,255,0.3)"
+                radius={14}
+              />
+              <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={{ fontSize: 12, color: "rgba(255,255,255,0.75)", fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.6 }}>
-                  Current workspace
+                  Team Chat
                 </Text>
                 <Text style={{ fontSize: 16, fontWeight: "700", color: "white", marginTop: 2 }} numberOfLines={1}>
                   {teamDetail?.name ?? "Workspace"}
                 </Text>
               </View>
               {topThreeMembers.length > 0 ? <AvatarStack members={topThreeMembers} /> : null}
+              {teamChatUnreadCount > 0 ? (
+                <View style={{ backgroundColor: "#EF4444", borderRadius: 10, minWidth: 20, height: 20, alignItems: "center", justifyContent: "center", paddingHorizontal: 6 }}>
+                  <Text style={{ color: "white", fontSize: 11, fontWeight: "700" }}>{teamChatUnreadCount}</Text>
+                </View>
+              ) : null}
             </View>
             <View style={{ height: 1, backgroundColor: "rgba(255,255,255,0.15)", marginTop: 14, marginBottom: 10 }} />
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 16, marginBottom: 12 }}>
-              <Text style={{ fontSize: 12, color: "rgba(255,255,255,0.7)" }}>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+              <Text style={{ fontSize: 12, color: "rgba(255,255,255,0.7)", flex: 1 }} numberOfLines={1}>
                 {memberCount} {memberCount === 1 ? "member" : "members"}
-              </Text>
-              <Text style={{ fontSize: 12, color: "rgba(255,255,255,0.7)" }}>
+                {" · "}
                 {lastGeneralMessage
                   ? `Last activity: ${formatTime(lastGeneralMessage.createdAt)}`
                   : "No activity yet"}
               </Text>
-            </View>
-            <View
-              style={{
-                alignSelf: "stretch",
-                width: "100%",
-                backgroundColor: "rgba(255,255,255,0.18)",
-                borderWidth: 1,
-                borderColor: "rgba(255,255,255,0.35)",
-                borderRadius: 14,
-                overflow: "hidden",
-              }}
-            >
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  width: "100%",
-                  paddingVertical: 12,
-                  paddingHorizontal: 14,
-                  gap: 10,
-                }}
-              >
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
-                  <MessageCircle size={16} color="white" strokeWidth={2.5} />
-                  <Text style={{ color: "white", fontSize: 14, fontWeight: "700" }} numberOfLines={1}>
-                    Open Team Chat
-                  </Text>
-                </View>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexShrink: 0 }}>
-                  {teamChatUnreadCount > 0 ? (
-                    <View style={{ backgroundColor: "#EF4444", borderRadius: 10, minWidth: 20, height: 20, alignItems: "center", justifyContent: "center", paddingHorizontal: 6 }}>
-                      <Text style={{ color: "white", fontSize: 11, fontWeight: "700" }}>{teamChatUnreadCount}</Text>
-                    </View>
-                  ) : null}
-                  <ChevronRight size={16} color="rgba(255,255,255,0.9)" strokeWidth={2.5} />
-                </View>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 5, flexShrink: 0 }}>
+                <MessageCircle size={14} color="rgba(255,255,255,0.95)" strokeWidth={2.4} />
+                <Text style={{ color: "white", fontSize: 13, fontWeight: "700" }}>Open</Text>
+                <ChevronRight size={15} color="rgba(255,255,255,0.9)" strokeWidth={2.5} />
               </View>
             </View>
           </LinearGradient>
         </Pressable>
 
-        {/* Messages section */}
-        <View style={{ marginHorizontal: 16, marginTop: 28, marginBottom: 10, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+        {/* Messages section header — fixed */}
+        <View style={{ marginHorizontal: 16, marginTop: 16, marginBottom: 6, flexDirection: "row", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
           <View>
-            <Text style={{ fontSize: 20, fontWeight: "700", color: "#0F172A" }}>Messages</Text>
-            <Text style={{ fontSize: 13, color: "#6B7280", marginTop: 2 }}>Direct & group conversations</Text>
+            <Text style={{ fontSize: 18, fontWeight: "700", color: "#0F172A" }}>Messages</Text>
+            <Text style={{ fontSize: 12, color: "#6B7280", marginTop: 1 }}>Direct & group conversations</Text>
           </View>
         </View>
 
-        {conversationsLoading ? (
-          <View style={{ paddingVertical: 24, alignItems: "center" }}>
-            <ActivityIndicator color="#4361EE" />
-          </View>
-        ) : conversations.length === 0 ? (
-          <View style={{ alignItems: "center", paddingHorizontal: 20, paddingVertical: 8, marginBottom: 8 }} testID="conversations-empty-state">
-            <View style={{ width: 88, height: 88, borderRadius: 44, backgroundColor: "#E8EEFF", alignItems: "center", justifyContent: "center", marginBottom: 14 }}>
-              <MessageCircle size={40} color="#4361EE" strokeWidth={2} />
-              <View
+        {/* Conversations list — only this area scrolls (disabled when empty so CTAs stay visible) */}
+        <ScrollView
+          style={{ flex: 1, minHeight: 0 }}
+          showsVerticalScrollIndicator={false}
+          scrollEnabled={conversationsLoading || conversations.length > 0}
+          contentContainerStyle={{ paddingBottom: conversations.length === 0 ? 8 : 16, flexGrow: 1 }}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" />}
+          keyboardShouldPersistTaps="handled"
+        >
+          {conversationsLoading ? (
+            <View style={{ paddingVertical: 24, alignItems: "center" }}>
+              <ActivityIndicator color="#4361EE" />
+            </View>
+          ) : conversations.length === 0 ? (
+            <View
+              style={{
+                flex: 1,
+                alignItems: "center",
+                justifyContent: "center",
+                paddingHorizontal: 20,
+                paddingTop: 4,
+                paddingBottom: 8,
+              }}
+              testID="conversations-empty-state"
+            >
+              <Image
+                source={require("@/assets/messages-empty-team.png")}
+                style={{ width: "100%", maxWidth: 260, height: 132, marginBottom: 10 }}
+                resizeMode="contain"
+                accessibilityIgnoresInvertColors
+              />
+              <Text
                 style={{
-                  position: "absolute",
-                  bottom: 6,
-                  right: 6,
-                  width: 28,
-                  height: 28,
-                  borderRadius: 14,
-                  backgroundColor: "#4361EE",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  borderWidth: 2,
-                  borderColor: "#E8EEFF",
+                  fontSize: 17,
+                  fontWeight: "800",
+                  color: "#0F172A",
+                  textAlign: "center",
+                  letterSpacing: -0.3,
+                  lineHeight: 23,
+                  marginBottom: 6,
+                  maxWidth: 300,
                 }}
               >
-                <Sparkles size={14} color="white" strokeWidth={2} />
-              </View>
-            </View>
-            <Text style={{ fontSize: 17, fontWeight: "700", color: "#0F172A", marginBottom: 4, textAlign: "center" }}>
-              No conversations yet
-            </Text>
-            <Text style={{ fontSize: 13, color: "#64748B", textAlign: "center", lineHeight: 18, maxWidth: 280 }}>
-              Big moments often begin as small hellos. Reach out to a teammate—alignment, ideas, and wins start in threads like these.
-            </Text>
-          </View>
-        ) : (
-          conversations.map((conv) => {
-            const unreadCount = dmUnreadCounts[`conv:${conv.id}`] ?? 0;
-            const isGroup = conv.isGroup;
-            const otherUser = !isGroup ? dmOtherParticipant(conv, session?.user?.id ?? "") : null;
-            const displayName = isGroup
-              ? (conv.name ?? conv.participants?.map((p) => p.name ?? "").filter(Boolean).join(", ") ?? "Group")
-              : (otherUser?.name?.trim() || otherUser?.email?.trim() || "Direct Message");
-            const groupWorkspace = isGroup ? groupWorkspaceLabel(conv.workspaceContext) : null;
-            const lastMsg = conv.lastMessage;
-            const timeStr = lastMsg ? formatTime(lastMsg.createdAt) : (conv.updatedAt ? formatTime(conv.updatedAt) : "");
-
-            return (
+                Every great team starts with{"\n"}
+                <Text style={{ color: "#7C3AED" }}>one conversation.</Text>
+              </Text>
+              <Text
+                style={{
+                  fontSize: 12.5,
+                  color: "#64748B",
+                  textAlign: "center",
+                  lineHeight: 18,
+                  maxWidth: 290,
+                  marginBottom: 14,
+                }}
+              >
+                Keep questions, updates, wins, and decisions in one place so your team always stays connected.
+              </Text>
               <Pressable
-                key={conv.id}
-                testID={`dm-card-${conv.id}`}
                 onPress={() =>
                   router.push({
-                    pathname: "/dm-chat",
-                    params: {
-                      conversationId: conv.id,
-                      recipientName: displayName,
-                      recipientImage: resolveUserImageUrl(otherUser?.image) ?? "",
-                      isGroup: isGroup ? "true" : "false",
-                    },
+                    pathname: "/team-channels",
+                    params: { teamId: activeTeamId, teamName: teamDetail?.name ?? "" },
                   })
                 }
-                style={{ marginHorizontal: 16, marginBottom: 10, backgroundColor: "white", borderRadius: 20, padding: 14, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 6, shadowOffset: { width: 0, height: 1 }, elevation: 1 }}
+                style={{
+                  width: "100%",
+                  maxWidth: 300,
+                  borderRadius: 12,
+                  overflow: "hidden",
+                  marginBottom: 10,
+                  shadowColor: "#4361EE",
+                  shadowOpacity: 0.22,
+                  shadowRadius: 8,
+                  shadowOffset: { width: 0, height: 3 },
+                  elevation: 3,
+                }}
+                testID="empty-start-team-chat"
+                accessibilityRole="button"
+                accessibilityLabel="Start Team Chat"
               >
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-                  {/* Avatar */}
-                  {isGroup ? (
-                    <View style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: "#F5F3FF", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                      <Users size={22} color="#7C3AED" />
-                    </View>
-                  ) : otherUser ? (
-                    <UserAvatar
-                      user={otherUser}
-                      size={48}
-                      radius={14}
-                      backgroundColor="#EEF2FF"
-                      textColor="#4361EE"
-                      fontSize={18}
-                    />
-                  ) : (
-                    <View style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: "#EEF2FF", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                      <MessageCircle size={22} color="#4361EE" />
-                    </View>
-                  )}
+                <LinearGradient
+                  colors={["#4361EE", "#7C3AED"]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 7,
+                    paddingVertical: 12,
+                    paddingHorizontal: 16,
+                  }}
+                >
+                  <MessageCircle size={16} color="#FFFFFF" strokeWidth={2.4} />
+                  <Text style={{ color: "#FFFFFF", fontSize: 14, fontWeight: "700" }}>Start Team Chat</Text>
+                </LinearGradient>
+              </Pressable>
+              <Pressable
+                onPress={openInviteTeamMembers}
+                style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 4 }}
+                testID="empty-invite-team-members"
+                accessibilityRole="button"
+                accessibilityLabel="Invite Team Members"
+              >
+                <Users size={14} color="#4361EE" strokeWidth={2.3} />
+                <Text style={{ color: "#4361EE", fontSize: 13, fontWeight: "600" }}>Invite Team Members</Text>
+              </Pressable>
+            </View>
+          ) : (
+            conversations.map((conv) => {
+              const unreadCount = dmUnreadCounts[`conv:${conv.id}`] ?? 0;
+              const isGroup = conv.isGroup;
+              const otherUser = !isGroup ? dmOtherParticipant(conv, session?.user?.id ?? "") : null;
+              const displayName = isGroup
+                ? (conv.name ?? conv.participants?.map((p) => p.name ?? "").filter(Boolean).join(", ") ?? "Group")
+                : (otherUser?.name?.trim() || otherUser?.email?.trim() || "Direct Message");
+              const groupWorkspace = isGroup ? groupWorkspaceLabel(conv.workspaceContext) : null;
+              const lastMsg = conv.lastMessage;
+              const timeStr = lastMsg ? formatTime(lastMsg.createdAt) : (conv.updatedAt ? formatTime(conv.updatedAt) : "");
 
-                  {/* Content */}
+              return (
+                <Pressable
+                  key={conv.id}
+                  testID={`dm-card-${conv.id}`}
+                  onPress={() =>
+                    router.push({
+                      pathname: "/dm-chat",
+                      params: {
+                        conversationId: conv.id,
+                        recipientName: displayName,
+                        recipientImage: resolveUserImageUrl(otherUser?.image) ?? "",
+                        isGroup: isGroup ? "true" : "false",
+                      },
+                    })
+                  }
+                  style={{ marginHorizontal: 16, marginBottom: 10, backgroundColor: "white", borderRadius: 20, padding: 14, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 6, shadowOffset: { width: 0, height: 1 }, elevation: 1 }}
+                >
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                    {isGroup ? (
+                      <View style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: "#F5F3FF", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                        <Users size={22} color="#7C3AED" />
+                      </View>
+                    ) : otherUser ? (
+                      <UserAvatar
+                        user={otherUser}
+                        size={48}
+                        radius={14}
+                        backgroundColor="#EEF2FF"
+                        textColor="#4361EE"
+                        fontSize={18}
+                      />
+                    ) : (
+                      <View style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: "#EEF2FF", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                        <MessageCircle size={22} color="#4361EE" />
+                      </View>
+                    )}
+
                     <View style={{ flex: 1 }}>
-                    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 3 }}>
-                      <Text style={{ fontSize: 15, fontWeight: "700", color: "#0F172A", flex: 1 }} numberOfLines={1}>{displayName}</Text>
-                      <Text style={{ fontSize: 11, color: "#94A3B8", marginLeft: 8, flexShrink: 0 }}>{timeStr}</Text>
-                    </View>
-                    {groupWorkspace ? (
-                      <Text style={{ fontSize: 11, fontWeight: "600", color: "#6366F1", marginBottom: 3 }} numberOfLines={1}>
-                        {groupWorkspace}
-                      </Text>
-                    ) : null}
-                    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                      <Text style={{ fontSize: 13, color: "#6B7280", flex: 1 }} numberOfLines={1}>
-                        {lastMsg
-                          ? (lastMsg.sender.id === session?.user?.id ? `You: ${lastMsg.content}` : lastMsg.content ?? "Attachment")
-                          : "No messages yet"}
-                      </Text>
-                      {unreadCount > 0 ? (
-                        <View style={{ backgroundColor: "#EF4444", borderRadius: 10, minWidth: 20, height: 20, alignItems: "center", justifyContent: "center", paddingHorizontal: 6, marginLeft: 8, flexShrink: 0 }}>
-                          <Text style={{ color: "white", fontSize: 11, fontWeight: "700" }}>{unreadCount}</Text>
-                        </View>
+                      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 3 }}>
+                        <Text style={{ fontSize: 15, fontWeight: "700", color: "#0F172A", flex: 1 }} numberOfLines={1}>{displayName}</Text>
+                        <Text style={{ fontSize: 11, color: "#94A3B8", marginLeft: 8, flexShrink: 0 }}>{timeStr}</Text>
+                      </View>
+                      {groupWorkspace ? (
+                        <Text style={{ fontSize: 11, fontWeight: "600", color: "#6366F1", marginBottom: 3 }} numberOfLines={1}>
+                          {groupWorkspace}
+                        </Text>
                       ) : null}
+                      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                        <Text style={{ fontSize: 13, color: "#6B7280", flex: 1 }} numberOfLines={1}>
+                          {lastMsg
+                            ? (lastMsg.sender.id === session?.user?.id ? `You: ${lastMsg.content}` : lastMsg.content ?? "Attachment")
+                            : "No messages yet"}
+                        </Text>
+                        {unreadCount > 0 ? (
+                          <View style={{ backgroundColor: "#EF4444", borderRadius: 10, minWidth: 20, height: 20, alignItems: "center", justifyContent: "center", paddingHorizontal: 6, marginLeft: 8, flexShrink: 0 }}>
+                            <Text style={{ color: "white", fontSize: 11, fontWeight: "700" }}>{unreadCount}</Text>
+                          </View>
+                        ) : null}
+                      </View>
                     </View>
                   </View>
-                </View>
-              </Pressable>
-            );
-          })
-        )}
-      </ScrollView>
+                </Pressable>
+              );
+            })
+          )}
+        </ScrollView>
+      </View>
 
       {/* Add / New Conversation modal */}
       <Modal visible={showAddModal} transparent animationType="fade" onRequestClose={() => setShowAddModal(false)}>
@@ -452,6 +508,20 @@ export default function ChatScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      <AddMemberModal
+        visible={showInviteModal}
+        teamId={activeTeamId ?? ""}
+        teamName={teamDetail?.name ?? "Team"}
+        confirming={inviteMemberMutation.isPending}
+        error={inviteError}
+        onClose={() => {
+          setInviteError(null);
+          setShowInviteModal(false);
+        }}
+        onClearError={() => setInviteError(null)}
+        onConfirm={(email) => inviteMemberMutation.mutate(email)}
+      />
 
       {/* Group chat paywall modal */}
       <Modal visible={showGroupPaywall} transparent animationType="fade" onRequestClose={() => setShowGroupPaywall(false)}>

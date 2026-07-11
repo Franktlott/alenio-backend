@@ -13,8 +13,9 @@ export type MeUser = {
 
 /** Shared with root `_layout`, `app/index`, and post-login prefetch — single cache key `["me"]`. */
 export async function fetchMeUser(bearerToken?: string | null): Promise<MeUser | null> {
-  const authHeaders = bearerToken?.trim()
-    ? authHeadersFromToken(bearerToken)
+  const token = typeof bearerToken === "string" ? bearerToken.trim() : "";
+  const authHeaders = token
+    ? authHeadersFromToken(token)
     : await getAuthHeaders();
   let base: string;
   try {

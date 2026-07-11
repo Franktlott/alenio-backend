@@ -3,14 +3,14 @@ export const NO_FEEDBACK_VALUE = "__no_feedback__";
 export const ASSOCIATE_FEEDBACK_FIELD_ID = "__oneone_associate_feedback__";
 export const ASSOCIATE_FEEDBACK_LABEL = "Associate feedback and commitments";
 export const ASSOCIATE_FEEDBACK_INTRO =
-  "This is your time to capture key takeaways, commitments, and next steps from your conversation.";
+  "Jot down important takeaways, commitments, and next steps from your conversation.";
 export const ASSOCIATE_FEEDBACK_PLACEHOLDER = "Key takeaways, commitments, and next steps…";
 export const ASSOCIATE_FEEDBACK_SECTION_TITLE = "Your notes";
 export const ASSOCIATE_FEEDBACK_MODE_LABEL = "Share notes";
 export const ASSOCIATE_FEEDBACK_NONE_LABEL = "Nothing to add";
 export const ASSOCIATE_FEEDBACK_SUBMIT_LABEL = "Save notes";
 export const ASSOCIATE_FEEDBACK_COMPLETE_MESSAGE = "Thank you for completing this check-in.";
-export const ASSOCIATE_FEEDBACK_COMPLETE_DELAY_MS = 4000;
+export const ASSOCIATE_FEEDBACK_COMPLETE_DELAY_MS = 7500;
 export const LEADER_COMMENTS_PREVIEW_TITLE = "Leader comments";
 
 export function formatLeaderCommentsFrom(leaderName: string | null | undefined): string {

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -25,7 +25,6 @@ import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
 import { useTeamStore } from "@/lib/state/team-store";
 import { useSubscriptionStore } from "@/lib/state/subscription-store";
-import { useDemoMode } from "@/lib/useDemo";
 import type { Team, TeamMember, TeamRole } from "@/lib/types";
 import { ProfileOverviewTab } from "@/components/ProfileOverviewTab";
 import { DevelopmentPlanTab } from "@/components/DevelopmentPlanTab";
@@ -38,11 +37,12 @@ import {
 } from "@/components/profile/ProfileEnterpriseUI";
 
 const PROFILE_TABS = ["Overview", "Growth", "Check-In"] as const;
+const FORMER_MEMBER_TABS = ["Check-In"] as const;
 const PAGE_BG = "#F3F5FC";
 const PAGE_HEADER_BG = "#FAFBFF";
 const PAGE_BORDER = "#E0E7FF";
 const TAB_TRACK_BG = "#E8ECFA";
-type ProfileTab = (typeof PROFILE_TABS)[number];
+type ProfileTab = (typeof PROFILE_TABS)[number] | (typeof FORMER_MEMBER_TABS)[number];
 
 function roleLabel(role: TeamRole): string {
   switch (role) {
@@ -134,7 +134,6 @@ export default function MemberProfileScreen() {
   const memberUserId = params.memberUserId ?? "";
   const { data: session } = useSession();
   const queryClient = useQueryClient();
-  const isDemo = useDemoMode();
   const plan = useSubscriptionStore((s) => s.plan);
   const isPaid = plan === "team";
 
@@ -211,6 +210,12 @@ export default function MemberProfileScreen() {
 
   const stats = memberStats?.[memberUserId];
   const displayName = profileMember?.user.name ?? profileMember?.user.email ?? "Member";
+
+  useEffect(() => {
+    if (isFormerMember) {
+      setActiveTab("Check-In");
+    }
+  }, [isFormerMember, memberUserId]);
 
   const removeMutation = useMutation({
     mutationFn: (userId: string) => api.delete(`/api/teams/${teamId}/members/${userId}`),
@@ -289,20 +294,16 @@ export default function MemberProfileScreen() {
     );
   }
 
-  if (!isPaid && !canManage) {
-    return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: PAGE_BG, alignItems: "center", justifyContent: "center", paddingHorizontal: 24 }}>
-        <Text style={{ color: "#64748B", textAlign: "center", lineHeight: 22 }}>
-          Growth plans and check-in history require Team access for this workplace.
-        </Text>
-        <Pressable onPress={() => router.back()} style={{ marginTop: 16 }}>
-          <Text style={{ color: "#4361EE", fontWeight: "700" }}>Go back</Text>
-        </Pressable>
-      </SafeAreaView>
-    );
-  }
-
-  const showDevelopmentTabs = isPaid;
+  const visibleTabs = isFormerMember
+    ? isPaid
+      ? FORMER_MEMBER_TABS
+      : ([] as const)
+    : isPaid
+      ? PROFILE_TABS
+      : (["Overview"] as const);
+  const activeTabSafe = (visibleTabs as readonly string[]).includes(activeTab)
+    ? activeTab
+    : (visibleTabs[0] ?? "Overview");
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: PAGE_BG }} edges={["top", "bottom"]}>
@@ -343,7 +344,7 @@ export default function MemberProfileScreen() {
             {isSelf ? " (you)" : ""}
           </Text>
         </View>
-        {canManage && !isDemo ? (
+        {canManage ? (
           <Pressable
             onPress={() => setManageOpen(true)}
             style={{
@@ -363,12 +364,7 @@ export default function MemberProfileScreen() {
         ) : null}
       </View>
 
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{ paddingBottom: Math.max(24, insets.bottom), paddingTop: 12 }}
-        stickyHeaderIndices={[1]}
-        nestedScrollEnabled
-      >
+      <View style={{ flex: 1, paddingTop: 12 }}>
         <View style={{ paddingHorizontal: 12, paddingBottom: 10 }}>
           <View
             style={{
@@ -453,123 +449,105 @@ export default function MemberProfileScreen() {
         </View>
 
         <View style={{ paddingHorizontal: 12, paddingBottom: 10 }}>
-          {showDevelopmentTabs ? (
-          <View
-            style={{
-              flexDirection: "row",
-              backgroundColor: TAB_TRACK_BG,
-              borderRadius: 12,
-              padding: 3,
-              gap: 3,
-            }}
-          >
-            {PROFILE_TABS.map((tab) => (
-              <Pressable
-                key={tab}
-                onPress={() => setActiveTab(tab)}
-                style={{
-                  flex: 1,
-                  paddingVertical: 8,
-                  borderRadius: 10,
-                  backgroundColor: activeTab === tab ? "white" : "transparent",
-                  alignItems: "center",
-                  shadowColor: activeTab === tab ? "#0F172A" : "transparent",
-                  shadowOpacity: activeTab === tab ? 0.06 : 0,
-                  shadowRadius: 4,
-                  shadowOffset: { width: 0, height: 1 },
-                  elevation: activeTab === tab ? 1 : 0,
-                }}
-                testID={`member-profile-tab-${tab}`}
-              >
-                <Text
-                  style={{
-                    fontSize: 12,
-                    fontWeight: "700",
-                    color: activeTab === tab ? "#0F172A" : "#64748B",
-                  }}
-                >
-                  {tab}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-          ) : (
+          {visibleTabs.length > 1 ? (
             <View
               style={{
-                backgroundColor: "#FFFFFF",
+                flexDirection: "row",
+                backgroundColor: TAB_TRACK_BG,
                 borderRadius: 12,
-                borderWidth: 1,
-                borderColor: PAGE_BORDER,
-                overflow: "hidden",
+                padding: 3,
+                gap: 3,
               }}
             >
-              <View style={{ paddingHorizontal: 14, paddingVertical: 12, backgroundColor: "#F8FAFC", borderBottomWidth: 1, borderBottomColor: PAGE_BORDER }}>
-                <Text style={{ fontSize: 11, fontWeight: "700", color: "#64748B", letterSpacing: 1, textTransform: "uppercase" }}>
-                  Workplace access
-                </Text>
-                <Text style={{ fontSize: 13, color: "#64748B", lineHeight: 19, marginTop: 6 }}>
-                  Growth plans and check-in history require Team access. Use member settings to update role or remove
-                  access.
-                </Text>
-              </View>
-              {canManage && !isDemo ? (
+              {visibleTabs.map((tab) => (
                 <Pressable
-                  onPress={() => setManageOpen(true)}
+                  key={tab}
+                  onPress={() => setActiveTab(tab)}
                   style={{
-                    margin: 12,
-                    backgroundColor: "#0F172A",
+                    flex: 1,
+                    paddingVertical: 8,
                     borderRadius: 10,
-                    paddingVertical: 12,
+                    backgroundColor: activeTabSafe === tab ? "white" : "transparent",
                     alignItems: "center",
+                    shadowColor: activeTabSafe === tab ? "#0F172A" : "transparent",
+                    shadowOpacity: activeTabSafe === tab ? 0.06 : 0,
+                    shadowRadius: 4,
+                    shadowOffset: { width: 0, height: 1 },
+                    elevation: activeTabSafe === tab ? 1 : 0,
                   }}
-                  testID="member-profile-manage-cta"
+                  testID={`member-profile-tab-${tab}`}
                 >
-                  <Text style={{ color: "white", fontSize: 14, fontWeight: "700" }}>Member settings</Text>
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      fontWeight: "700",
+                      color: activeTabSafe === tab ? "#0F172A" : "#64748B",
+                    }}
+                  >
+                    {tab}
+                  </Text>
                 </Pressable>
-              ) : null}
+              ))}
             </View>
-          )}
+          ) : null}
         </View>
 
-        {showDevelopmentTabs ? (
-        <View style={{ paddingHorizontal: 12, paddingTop: 2 }}>
-          {activeTab === "Overview" ? (
+        {visibleTabs.length === 0 ? (
+          <View style={{ flex: 1, paddingHorizontal: 24, alignItems: "center", justifyContent: "center" }}>
+            <Text style={{ color: "#64748B", textAlign: "center", lineHeight: 22 }}>
+              Check-in history for former members requires Team access.
+            </Text>
+          </View>
+        ) : activeTabSafe === "Overview" ? (
+          <View style={{ flex: 1, paddingHorizontal: 12, paddingBottom: Math.max(12, insets.bottom) }}>
             <ProfileOverviewTab
               teamId={teamId}
               memberUserId={memberUserId}
-              streak={isPaid ? stats?.streak : undefined}
+              streak={stats?.streak}
               overdueFollowUpTasks={stats?.overdueFollowUpTasks}
               workplaceStandards={workplaceStandards}
               standardsCompliance={stats?.standardsCompliance}
               daysSinceLastCheckIn={stats?.daysSinceLastOneOnOne}
             />
-          ) : activeTab === "Growth" ? (
-            <DevelopmentPlanTab
-              teamId={teamId}
-              memberUserId={memberUserId}
-              memberName={displayName}
-              managerName={managerName}
-              canCreate={canCreateDevGoal}
-              canAddNotes={canAddDevNotes}
-            />
-          ) : (
-            <OneOnOneHistoryTab
-              teamId={teamId}
-              memberUserId={memberUserId}
-              memberName={displayName}
-              managerName={managerName}
-              leaderUserId={leaderUserId}
-              canCreate={canCreateOneOne}
-              canModify={canCreateOneOne}
-              isSelf={isSelf}
-              autoStartCheckIn={shouldAutoStartCheckIn}
-              preferredTemplateId={preferredCheckInTemplateId}
-              plannedEventId={plannedCheckInEventId}
-            />
-          )}
-        </View>
-        ) : null}
-      </ScrollView>
+          </View>
+        ) : (
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={{
+              flexGrow: 1,
+              paddingHorizontal: 12,
+              paddingBottom: Math.max(24, insets.bottom),
+              paddingTop: 2,
+            }}
+            nestedScrollEnabled
+          >
+            {activeTabSafe === "Growth" ? (
+              <DevelopmentPlanTab
+                teamId={teamId}
+                memberUserId={memberUserId}
+                memberName={displayName}
+                managerName={managerName}
+                canCreate={canCreateDevGoal}
+                canAddNotes={canAddDevNotes}
+              />
+            ) : (
+              <OneOnOneHistoryTab
+                teamId={teamId}
+                memberUserId={memberUserId}
+                memberName={displayName}
+                managerName={managerName}
+                leaderUserId={leaderUserId}
+                canCreate={canCreateOneOne}
+                canModify={canCreateOneOne}
+                isSelf={isSelf}
+                autoStartCheckIn={shouldAutoStartCheckIn}
+                preferredTemplateId={preferredCheckInTemplateId}
+                plannedEventId={plannedCheckInEventId}
+              />
+            )}
+          </ScrollView>
+        )}
+      </View>
 
       <Modal visible={manageOpen} transparent animationType="slide" onRequestClose={() => setManageOpen(false)}>
         <Pressable
@@ -621,7 +599,7 @@ export default function MemberProfileScreen() {
                       }}
                     >
                       <Text style={{ fontSize: 10, fontWeight: "700", letterSpacing: 0.4, color: "#4338CA" }}>
-                        {roleLabel(member.role).toUpperCase()}
+                        {roleLabel(profileMember.role).toUpperCase()}
                       </Text>
                     </View>
                   </View>
@@ -634,7 +612,7 @@ export default function MemberProfileScreen() {
               <View style={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8 }}>
                 <ProfileSection title="Actions">
                   <ProfileCard>
-                    {myRole === "owner" && member.role === "team_leader" ? (
+                    {member && myRole === "owner" && member.role === "team_leader" ? (
                       <>
                         <ManageActionRow
                           icon={Shield}
@@ -660,7 +638,7 @@ export default function MemberProfileScreen() {
                       </>
                     ) : null}
 
-                    {myRole === "owner" && member.role === "member" ? (
+                    {member && myRole === "owner" && member.role === "member" ? (
                       <>
                         <ManageActionRow
                           icon={Crown}
@@ -686,7 +664,7 @@ export default function MemberProfileScreen() {
                       </>
                     ) : null}
 
-                    {(myRole === "owner" || myRole === "team_leader") && member.role !== "owner" ? (
+                    {member && (myRole === "owner" || myRole === "team_leader") && member.role !== "owner" ? (
                       <ManageActionRow
                         icon={UserMinus}
                         title="Remove from workplace"

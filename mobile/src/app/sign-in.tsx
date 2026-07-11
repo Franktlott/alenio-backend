@@ -11,7 +11,7 @@ import {
   Image,
   ScrollView,
 } from "react-native";
-import { agentDebugLog, authClient, clearAccessToken, jwtSubPrefix, resolveBackendBearerToken, setAccessTokenFromAuthData } from "@/lib/auth/auth-client";
+import { agentDebugLog, authClient, clearAccessToken } from "@/lib/auth/auth-client";
 import { formatAuthFlowError, isEmailNotVerifiedError } from "@/lib/auth/auth-errors";
 import { clearSignedOutMark, markSessionSignedOut, cancelMobileAuthQueries } from "@/lib/auth/use-session";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -20,23 +20,24 @@ import { StatusBar } from "expo-status-bar";
 import { router, useLocalSearchParams } from "expo-router";
 import { LEGAL_APP_NAME, LEGAL_COMPANY_NAME, LEGAL_PARENT_COMPANY_NAME } from "@/lib/legal-constants";
 import { useQueryClient } from "@tanstack/react-query";
-import { provisionBackendUserAfterAuth } from "@/lib/auth/sync-backend-user";
-import { fetchMeUser } from "@/lib/auth/me-query";
 import { setPendingTeamInviteToken } from "@/lib/auth/pending-team-invite";
-import { primeMobileAuthSession } from "@/lib/auth/finish-post-auth";
-import { navigateToMobileHomeWithRetry } from "@/lib/auth/auth-entry";
+import { setPendingJoinCode } from "@/lib/auth/pending-join-code";
+import { completeMobileAuthEntry } from "@/lib/auth/complete-auth-entry";
 
 export default function SignIn() {
   const params = useLocalSearchParams<{
     reason?: string;
     email?: string | string[];
     inviteToken?: string | string[];
+    joinCode?: string | string[];
   }>();
   const { reason } = params;
   const emailFromInvite =
     typeof params.email === "string" ? params.email : params.email?.[0] ?? "";
   const inviteToken =
     typeof params.inviteToken === "string" ? params.inviteToken : params.inviteToken?.[0] ?? "";
+  const joinCode =
+    typeof params.joinCode === "string" ? params.joinCode : params.joinCode?.[0] ?? "";
   const [email, setEmail] = useState(emailFromInvite.trim().toLowerCase());
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -63,68 +64,9 @@ export default function SignIn() {
     if (inviteToken) setPendingTeamInviteToken(inviteToken);
   }, [inviteToken]);
 
-  const resolveSessionAfterSignIn = async (result: { data?: { user?: unknown } | null }) => {
-    setAccessTokenFromAuthData(result ?? null);
-    setAccessTokenFromAuthData(result.data ?? null);
-    let token =
-      setAccessTokenFromAuthData(result.data ?? null) ??
-      setAccessTokenFromAuthData(result ?? null);
-
-    // Always materialize a fresh Neon session/JWT once — sign-in payload alone is not enough for /api/me.
-    const sessionRes = await authClient.getSession({
-      fetchOptions: {
-        headers: {
-          "X-Force-Fetch": "1",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-      },
-    } as never);
-    token =
-      setAccessTokenFromAuthData(sessionRes ?? null) ??
-      setAccessTokenFromAuthData(sessionRes.data ?? null) ??
-      token;
-    const sessionData = (sessionRes.data ?? null) as { user: unknown } | null;
-    const sessionUserId = (sessionData?.user as { id?: string } | undefined)?.id;
-    const backendToken = await resolveBackendBearerToken({
-      fresh: true,
-      expectedUserId: sessionUserId,
-    });
-    if (!sessionData?.user || !backendToken) {
-      agentDebugLog("session resolve failed", {
-        runId: "account-switch-v3",
-        hypothesisId: "H1",
-        hasUser: !!sessionData?.user,
-        hasToken: !!backendToken,
-      });
-      return null;
-    }
-    agentDebugLog("session resolved", {
-      runId: "account-switch-v3",
-      hypothesisId: "H1",
-      userIdPrefix: sessionUserId?.slice(0, 8) ?? null,
-      jwtSubPrefix: jwtSubPrefix(backendToken),
-    });
-    return { sessionData, token: backendToken };
-  };
-
-  const loadProfileAfterAuth = async (token: string) => {
-    const syncOk = await provisionBackendUserAfterAuth(token);
-    agentDebugLog("loadProfile sync-user", { runId: "account-switch-v3", hypothesisId: "H2", syncOk });
-    for (let attempt = 0; attempt < 5; attempt += 1) {
-      const me = await fetchMeUser(token);
-      if (me?.id) {
-        agentDebugLog("loadProfile success", { runId: "account-switch-v3", hypothesisId: "H3", attempt, syncOk });
-        return me;
-      }
-      agentDebugLog("loadProfile attempt miss", { runId: "account-switch-v3", hypothesisId: "H3", attempt, syncOk });
-      if (attempt < 4) {
-        await provisionBackendUserAfterAuth(token);
-        await new Promise((resolve) => setTimeout(resolve, 200 * (attempt + 1)));
-      }
-    }
-    agentDebugLog("loadProfile exhausted", { runId: "account-switch-v3", hypothesisId: "H3", syncOk, attempts: 5 });
-    return null;
-  };
+  useEffect(() => {
+    if (joinCode) setPendingJoinCode(joinCode);
+  }, [joinCode]);
 
   const handleSignIn = async () => {
     if (loading) return;
@@ -188,24 +130,16 @@ export default function SignIn() {
         const msg = result.error.message ?? "";
         setError(msg || "Invalid email or password. Please try again.");
       } else {
-        const resolved = await resolveSessionAfterSignIn(result);
-        if (!resolved) {
-          setError("Sign-in did not establish a session. Please try again.");
+        const completed = await completeMobileAuthEntry(queryClient, result);
+        if (!completed.ok) {
+          setError(completed.error);
           return;
         }
-        const { sessionData, token } = resolved;
-        const me = await loadProfileAfterAuth(token);
-        if (!me?.id) {
-          setError("Could not load your profile. Try signing in again.");
-          return;
-        }
-        await primeMobileAuthSession(queryClient, sessionData, me);
         agentDebugLog("sign-in complete awaiting layout nav", {
           runId: "auth-simplify-v4",
           hypothesisId: "H4",
-          meIdPrefix: me.id.slice(0, 8),
+          meIdPrefix: completed.me.id.slice(0, 8),
         });
-        navigateToMobileHomeWithRetry(me.isAdmin === true);
       }
     } catch (err) {
       setError(formatAuthFlowError(err));
@@ -226,7 +160,7 @@ export default function SignIn() {
               style={{ width: 200, height: 72 }}
               resizeMode="contain"
             />
-            <Text className="text-white/80 text-base mt-2">Connect. Workspace. Celebrate.</Text>
+            <Text className="text-white/80 text-base mt-2">Connect. Execute. Celebrate</Text>
           </View>
         </SafeAreaView>
       </LinearGradient>
@@ -256,10 +190,16 @@ export default function SignIn() {
                   autoCapitalize="none"
                   autoComplete="email"
                   value={email}
+                  editable={!inviteToken}
                   onChangeText={(t) => { setEmail(t); setError(null); }}
                   returnKeyType="next"
                   testID="email-input"
                 />
+                {inviteToken && emailFromInvite ? (
+                  <Text className="text-xs text-slate-400 mt-2">
+                    This invite is locked to {emailFromInvite.trim().toLowerCase()}.
+                  </Text>
+                ) : null}
               </View>
 
               <View className="mb-2">
@@ -335,10 +275,6 @@ export default function SignIn() {
                 {LEGAL_APP_NAME} is operated by {LEGAL_COMPANY_NAME}. Parent company: {LEGAL_PARENT_COMPANY_NAME}.
               </Text>
           </>
-
-          <View style={{ alignItems: "center", marginTop: 32, paddingBottom: 8 }}>
-            <Image source={require("@/assets/lotttech-logo.png")} style={{ width: 185, height: 57 }} resizeMode="contain" />
-          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </View>

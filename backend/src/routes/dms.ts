@@ -3,6 +3,7 @@ import { prisma } from "../prisma";
 import { auth } from "../auth";
 import { authGuard } from "../middleware/auth-guard";
 import { sendPushToUsers } from "../lib/push";
+import { publishDmMessageCreated } from "../lib/realtime-hub";
 import { env } from "../env";
 import {
   assertParticipantsShareWorkspaceWithCreator,
@@ -398,6 +399,11 @@ dmsRouter.post("/:conversationId/messages", async (c) => {
   await prisma.conversation.update({
     where: { id: conversationId },
     data: { updatedAt: new Date() },
+  });
+
+  publishDmMessageCreated({
+    conversationId,
+    message,
   });
 
   // Fire-and-forget push — never block the message response on Expo

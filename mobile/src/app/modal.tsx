@@ -1,5 +1,5 @@
 // WARNING: Stub screen left over from the Expo project template.
-// Commented out for App Store compliance (Section 4.2 — Minimum Functionality).
+// Commented out — unused demo screen.
 // Implement with real content before publishing if this route is needed.
 
 // Original stub:

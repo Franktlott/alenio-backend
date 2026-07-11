@@ -14,6 +14,7 @@ import {
   Platform,
   Switch,
   Alert,
+  ActionSheetIOS,
   Dimensions,
 } from "react-native";
 
@@ -23,24 +24,47 @@ const MEETING_ASSIGNEE_SHEET_MAX_HEIGHT = Math.round(SCREEN_HEIGHT * 0.62);
 const MEETING_DURATION_SHEET_MAX_HEIGHT = Math.round(SCREEN_HEIGHT * 0.55);
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams, Redirect, useFocusEffect } from "expo-router";
-import { Plus, User, Users, ArrowUpDown, ChevronLeft, ChevronRight, ChevronDown, X, CalendarDays, CheckSquare, Calendar, Check, UserRound, Video, VideoOff, Clock, Lock, Globe, ClipboardList } from "lucide-react-native";
+import { Plus, User, Users, ChevronLeft, ChevronRight, ChevronDown, X, CalendarDays, CheckSquare, Calendar, Check, UserRound, Video, VideoOff, Clock, Lock, Globe, Trash2 } from "lucide-react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { calendarMondayColumnIndex } from "@/lib/calendar-grid";
 import { useSession } from "@/lib/auth/use-session";
 import { api } from "@/lib/api/api";
 import { useTeamStore } from "@/lib/state/team-store";
 import { useSubscriptionStore } from "@/lib/state/subscription-store";
 import { useTaskStore } from "@/lib/state/task-store";
 import type { Task, Team, TeamMember, CalendarEvent } from "@/lib/types";
-import { NoTeamPlaceholder } from "@/components/NoTeamPlaceholder";
-import { useDemoMode, showDemoAlert } from "@/lib/useDemo";
+import { NoWorkspaceRedirect } from "@/components/NoWorkspaceRedirect";
 import { isFeedbackTaskDescription } from "@/lib/one-on-one-feedback";
+import { invalidateTaskCaches } from "@/lib/invalidate-task-caches";
 import { hasTeamPlan, hasWorkspaceTaskAccess } from "@/lib/plan-access-copy";
+import { workspaceTaskClearance } from "@/lib/tab-bar";
+import { WorkspaceHeader } from "@/components/workspace/WorkspaceHeader";
+import { WorkspaceViewToggle, type WorkspaceViewMode } from "@/components/workspace/WorkspaceViewToggle";
+import { CalendarCard } from "@/components/workspace/CalendarCard";
+import { EventsSection } from "@/components/workspace/EventsSection";
+import { TaskStatusTabs } from "@/components/workspace/TaskStatusTabs";
+import { TaskFilterBar } from "@/components/workspace/TaskFilterBar";
+import { TaskListCard } from "@/components/workspace/TaskListCard";
+import { MemberTasksEmptyState } from "@/components/workspace/MemberTasksEmptyState";
+import {
+  DEFAULT_WORKSPACE_FILTERS,
+  type FilterPicker,
+  type TaskStatusTab,
+  type WorkspaceFiltersState,
+} from "@/components/workspace/workspace-types";
+import { WorkspaceFilterPicker } from "@/components/workspace/WorkspaceFilterPicker";
+import { WS } from "@/components/workspace/workspace-ui";
+import {
+  assignedToQueryKey,
+  buildWorkspaceTasksPath,
+  filterTasksClientSide,
+  isSameDay,
+  startOfDay,
+  toLocalIso,
+} from "@/components/workspace/workspace-utils";
 import { SafeKeyboardAvoidingView } from "@/lib/safe-keyboard-controller";
 import { getUSHolidays, type USFederalHoliday } from "@/lib/us-federal-holidays";
-import { formatEventDateAndTime, formatEventDateLabel, eventShowsScheduledTime } from "@/lib/format-event-time";
 import {
   VIDEO_MEETING_DURATION_OPTIONS,
   durationMinutesFromRange,
@@ -49,587 +73,16 @@ import {
   videoMeetingEndFromDuration,
 } from "@/lib/video-meeting-duration";
 
-type FilterTab = "all" | "assigned" | "completed";
-type SortMode = "due" | "priority" | "completed";
-
-const DAY_LABELS = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
-const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-
-type WeekBar = { id: string; title: string; color: string; startCol: number; endCol: number; isVideoMeeting?: boolean };
-
-function computeWeekBars(week: (Date | null)[], events: CalendarEvent[]): WeekBar[][] {
-  const bars: WeekBar[] = [];
-  for (const event of events) {
-    const evStart = startOfDay(new Date(event.startDate));
-    const evEnd = event.endDate ? startOfDay(new Date(event.endDate)) : evStart;
-    let startCol = -1, endCol = -1;
-    for (let i = 0; i < week.length; i++) {
-      const day = week[i];
-      if (!day) continue;
-      const d = startOfDay(day);
-      if (d >= evStart && d <= evEnd) {
-        if (startCol === -1) startCol = i;
-        endCol = i;
-      }
-    }
-    if (startCol === -1) continue;
-    bars.push({ id: event.id, title: event.title, color: event.color, startCol, endCol, isVideoMeeting: event.isVideoMeeting });
-  }
-  bars.sort((a, b) => (b.endCol - b.startCol) - (a.endCol - a.startCol) || a.startCol - b.startCol);
-  const tracks: WeekBar[][] = [];
-  for (const bar of bars) {
-    let placed = false;
-    for (const track of tracks) {
-      if (!track.some((b) => b.startCol <= bar.endCol && b.endCol >= bar.startCol)) {
-        track.push(bar); placed = true; break;
-      }
-    }
-    if (!placed) tracks.push([bar]);
-  }
-  return tracks;
-}
-
-function startOfDay(d: Date): Date {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
-}
-
-function isSameDay(a: Date, b: Date): boolean {
-  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-}
-
-// Always use local date parts — toISOString() returns UTC which shifts the date in UTC+ timezones
-function toLocalIso(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-function taskMatchesCalendarMonth(task: Task, year: number, month: number): boolean {
-  if (!task.dueDate) {
-    const now = new Date();
-    return year === now.getFullYear() && month === now.getMonth();
-  }
-  const due = new Date(task.dueDate);
-  return due.getFullYear() === year && due.getMonth() === month;
-}
-
-function buildWorkspaceTasksPath(
-  teamId: string,
-  opts: {
-    filter: FilterTab;
-    calendarYear: number;
-    calendarMonth: number;
-    cursor?: string;
-    myTasks?: boolean;
-    creatorIdMe?: boolean;
-  },
-): string {
-  const params = new URLSearchParams({ limit: "200" });
-  if (opts.myTasks) params.set("myTasks", "true");
-  if (opts.creatorIdMe) params.set("creatorId", "me");
-  if (opts.filter === "completed") {
-    params.set("completedYear", String(opts.calendarYear));
-    params.set("completedMonth", String(opts.calendarMonth));
-    params.set("status", "done");
-  } else {
-    params.set("activeOnly", "true");
-    params.set("dueYear", String(opts.calendarYear));
-    params.set("dueMonth", String(opts.calendarMonth));
-  }
-  if (opts.cursor) params.set("cursor", opts.cursor);
-  return `/api/teams/${teamId}/tasks?${params.toString()}`;
-}
-
-function MiniCalendar({
-  tasks,
-  events,
-  holidays,
-  selectedDay,
-  onSelectDay,
-  viewYear,
-  viewMonth,
-  onViewMonthChange,
-}: {
-  tasks: Task[];
-  events: CalendarEvent[];
-  holidays: USFederalHoliday[];
-  selectedDay: string | null;
-  onSelectDay: (iso: string | null) => void;
-  viewYear: number;
-  viewMonth: number;
-  onViewMonthChange: (year: number, month: number) => void;
-}) {
-  const today = new Date();
-  const [weekRowWidth, setWeekRowWidth] = useState(0);
-
-  const firstDay = calendarMondayColumnIndex(new Date(viewYear, viewMonth, 1).getDay());
-  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
-
-  // Build set of days that have tasks due
-  const taskDays = new Set(
-    tasks
-      .filter((t) => t.dueDate && t.status !== "done")
-      .map((t) => toLocalIso(new Date(t.dueDate!)))
-  );
-
-  // Build per-day event count map
-  const dayEventMap = new Map<string, { count: number; color: string; title: string }>();
-  for (const ev of events) {
-    const evStart = startOfDay(new Date(ev.startDate));
-    const evEnd = ev.endDate ? startOfDay(new Date(ev.endDate)) : evStart;
-    const cur = new Date(evStart);
-    while (cur <= evEnd) {
-      const iso = toLocalIso(cur);
-      const existing = dayEventMap.get(iso);
-      dayEventMap.set(iso, { count: (existing?.count ?? 0) + 1, color: existing?.color ?? ev.color, title: existing?.title ?? ev.title });
-      cur.setDate(cur.getDate() + 1);
-    }
-  }
-
-  // Build day cells padded into full weeks
-  const allCells: (Date | null)[] = [
-    ...Array(firstDay).fill(null),
-    ...Array.from({ length: daysInMonth }, (_, i) => new Date(viewYear, viewMonth, i + 1)),
-  ];
-  while (allCells.length % 7 !== 0) allCells.push(null);
-  const weeks: (Date | null)[][] = [];
-  for (let i = 0; i < allCells.length; i += 7) weeks.push(allCells.slice(i, i + 7));
-
-  const prevMonth = () => {
-    if (viewMonth === 0) onViewMonthChange(viewYear - 1, 11);
-    else onViewMonthChange(viewYear, viewMonth - 1);
-  };
-  const nextMonth = () => {
-    if (viewMonth === 11) onViewMonthChange(viewYear + 1, 0);
-    else onViewMonthChange(viewYear, viewMonth + 1);
-  };
-  const goToToday = () => {
-    onViewMonthChange(today.getFullYear(), today.getMonth());
-    onSelectDay(toLocalIso(today));
-  };
-  const showTodayButton =
-    viewYear !== today.getFullYear() ||
-    viewMonth !== today.getMonth() ||
-    selectedDay !== toLocalIso(today);
-
-  return (
-    <View style={{ backgroundColor: "white", marginHorizontal: 16, marginTop: 10, marginBottom: 4, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 10, shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 2 }}>
-      {/* Month nav */}
-      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: showTodayButton ? 2 : 8 }}>
-        <TouchableOpacity onPress={prevMonth} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} testID="workspace-calendar-prev-month">
-          <ChevronLeft size={18} color="#64748B" />
-        </TouchableOpacity>
-        <View style={{ alignItems: "center", gap: 2 }}>
-          <Text style={{ fontSize: 14, fontWeight: "700", color: "#0F172A" }}>
-            {MONTH_NAMES[viewMonth]} {viewYear}
-          </Text>
-          {showTodayButton ? (
-            <TouchableOpacity onPress={goToToday} hitSlop={{ top: 6, bottom: 6, left: 8, right: 8 }} testID="workspace-calendar-today-button">
-              <Text style={{ color: "#4361EE", fontSize: 12, fontWeight: "700" }}>Today</Text>
-            </TouchableOpacity>
-          ) : null}
-        </View>
-        <TouchableOpacity onPress={nextMonth} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} testID="workspace-calendar-next-month">
-          <ChevronRight size={18} color="#64748B" />
-        </TouchableOpacity>
-      </View>
-
-      {/* Day headers */}
-      <View style={{ flexDirection: "row", marginBottom: 2, marginTop: showTodayButton ? 6 : 0 }}>
-        {DAY_LABELS.map((d) => (
-          <Text key={d} style={{ flex: 1, textAlign: "center", fontSize: 11, fontWeight: "600", color: "#94A3B8" }}>{d}</Text>
-        ))}
-      </View>
-
-      {/* Week rows */}
-      {weeks.map((week, weekIdx) => {
-        const tracks = computeWeekBars(week, events);
-        return (
-          <View key={weekIdx}>
-            {/* Day numbers */}
-            <View style={{ flexDirection: "row" }}>
-              {week.map((day, colIdx) => {
-                if (!day) return <View key={`e-${weekIdx}-${colIdx}`} style={{ flex: 1, height: 34 }} />;
-                const iso = toLocalIso(day);
-                const isToday = isSameDay(day, today);
-                const isSelected = selectedDay === iso;
-                const hasTasks = taskDays.has(iso);
-                const isHoliday = holidays.some((h) => isSameDay(h.date, day));
-                const evInfo = dayEventMap.get(iso);
-                return (
-                  <TouchableOpacity
-                    key={iso}
-                    onPress={() => onSelectDay(isSelected ? null : iso)}
-                    style={{ flex: 1, height: 34, alignItems: "center", justifyContent: "center" }}
-                  >
-                    <View style={{
-                      width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center",
-                      backgroundColor: isSelected ? "#4361EE" : isToday ? "#EEF2FF" : "transparent",
-                    }}>
-                      <Text style={{ fontSize: 12, fontWeight: isToday || isSelected ? "700" : "400", color: isSelected ? "white" : isToday ? "#4361EE" : "#334155" }}>
-                        {day.getDate()}
-                      </Text>
-                    </View>
-                    <View style={{ position: "absolute", bottom: 3, flexDirection: "row", gap: 2, alignItems: "center" }}>
-                      {hasTasks && !isSelected ? <View style={{ width: 3, height: 3, borderRadius: 1.5, backgroundColor: "#4361EE" }} /> : null}
-                      {isHoliday && !isSelected ? <View style={{ width: 3, height: 3, borderRadius: 1.5, backgroundColor: "#EF4444" }} /> : null}
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-
-            {/* Event bars — title bar for 1 event, count pill for multiple */}
-            {tracks.length > 0 ? (
-              <View
-                onLayout={(e) => setWeekRowWidth(e.nativeEvent.layout.width)}
-                style={{ position: "relative", marginBottom: 3 }}
-              >
-                {/* Only render the first track — avoids multi-row stacking */}
-                <View style={{ flexDirection: "row", height: 15, marginBottom: 2 }}>
-                  {week.map((day, colIdx) => {
-                    const track0 = tracks[0] ?? [];
-                    const bar = track0.find((b) => b.startCol <= colIdx && b.endCol >= colIdx);
-                    const iso = day ? toLocalIso(day) : null;
-                    const evInfo = iso ? dayEventMap.get(iso) : null;
-
-                    if (!bar) {
-                      if (evInfo && evInfo.count === 1) {
-                        // Single event not in track 0 — show a proper bar segment
-                        return (
-                          <View key={colIdx} style={{ flex: 1, height: 15, backgroundColor: evInfo.color, borderRadius: 4, marginHorizontal: 2 }} />
-                        );
-                      }
-                      if (evInfo && evInfo.count > 1) {
-                        // Multiple events, none in track 0 — show count circle
-                        return (
-                          <View key={colIdx} style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-                            <View style={{ width: 15, height: 15, borderRadius: 7.5, backgroundColor: evInfo.color, alignItems: "center", justifyContent: "center" }}>
-                              <Text style={{ color: "white", fontSize: 8, fontWeight: "700", lineHeight: 15 }}>{evInfo.count}</Text>
-                            </View>
-                          </View>
-                        );
-                      }
-                      return <View key={colIdx} style={{ flex: 1 }} />;
-                    }
-
-                    const evCount = evInfo?.count ?? 1;
-                    if (evCount > 1) {
-                      // Multi-event day: show a small filled count circle
-                      return (
-                        <View key={colIdx} style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-                          <View style={{ width: 15, height: 15, borderRadius: 7.5, backgroundColor: evInfo?.color ?? bar.color, alignItems: "center", justifyContent: "center" }}>
-                            <Text style={{ color: "white", fontSize: 8, fontWeight: "700", lineHeight: 15 }}>{evCount}</Text>
-                          </View>
-                        </View>
-                      );
-                    }
-
-                    const isStart = colIdx === bar.startCol;
-                    const isEnd = colIdx === bar.endCol;
-                    return (
-                      <View
-                        key={colIdx}
-                        style={{
-                          flex: 1, height: 15,
-                          backgroundColor: bar.color,
-                          borderTopLeftRadius: isStart ? 4 : 0,
-                          borderBottomLeftRadius: isStart ? 4 : 0,
-                          borderTopRightRadius: isEnd ? 4 : 0,
-                          borderBottomRightRadius: isEnd ? 4 : 0,
-                          marginLeft: isStart ? 2 : 0,
-                          marginRight: isEnd ? 2 : 0,
-                        }}
-                      />
-                    );
-                  })}
-                  {weekRowWidth > 0 && (tracks[0] ?? []).map((bar) => {
-                    const colWidth = weekRowWidth / 7;
-                    // Clip title width to contiguous single-event columns from bar.startCol
-                    let effectiveEndCol = bar.startCol - 1;
-                    for (let col = bar.startCol; col <= bar.endCol; col++) {
-                      const d = week[col];
-                      const count = d ? (dayEventMap.get(toLocalIso(d))?.count ?? 1) : 1;
-                      if (count > 1) break;
-                      effectiveEndCol = col;
-                    }
-                    if (effectiveEndCol < bar.startCol) return null;
-                    const titleWidth = (effectiveEndCol - bar.startCol + 1) * colWidth - 4;
-                    return (
-                      <View
-                        key={`t-${bar.id}`}
-                        pointerEvents="none"
-                        style={{ position: "absolute", left: bar.startCol * colWidth + 2, width: titleWidth, top: 0, height: 15, justifyContent: "center", overflow: "hidden" }}
-                      >
-                        <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 4 }}>
-                          {bar.isVideoMeeting ? <Video size={8} color="white" style={{ marginRight: 2 }} /> : null}
-                          <Text style={{ color: "white", fontSize: 9, fontWeight: "600", lineHeight: 14, flex: 1 }} numberOfLines={1}>
-                            {bar.title}
-                          </Text>
-                        </View>
-                      </View>
-                    );
-                  })}
-                </View>
-              </View>
-            ) : <View style={{ height: 2 }} />}
-          </View>
-        );
-      })}
-    </View>
-  );
-}
-
-const PRIORITY_CONFIG = {
-  urgent: { label: "Urgent", bg: "#FEE2E2", text: "#DC2626", flagColor: "#DC2626", accentColor: "#DC2626" },
-  high: { label: "High", bg: "#FEE2E2", text: "#DC2626", flagColor: "#DC2626", accentColor: "#DC2626" },
-  medium: { label: "Medium", bg: "#FEF9C3", text: "#B45309", flagColor: "#F59E0B", accentColor: "#F59E0B" },
-  low: { label: "Low", bg: "#DCFCE7", text: "#15803D", flagColor: "#16A34A", accentColor: "#16A34A" },
-};
-
-function EventRow({ event, onLongPress }: { event: CalendarEvent; onLongPress?: () => void }) {
-  const start = new Date(event.startDate);
-  const end = event.endDate ? new Date(event.endDate) : start;
-  const isSingleDay = toLocalIso(start) === toLocalIso(end);
-  const dateText = isSingleDay
-    ? start.toLocaleDateString("en-US", { month: "short", day: "numeric" })
-    : `${start.toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${end.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
-
-  return (
-    <Pressable
-      onLongPress={onLongPress}
-      delayLongPress={400}
-      style={{ paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: "#F1F5F9", backgroundColor: "white", flexDirection: "row", alignItems: "center" }}
-    >
-      <View style={{ width: 4, borderRadius: 2, alignSelf: "stretch", backgroundColor: event.color, marginRight: 12 }} />
-      <View style={{ flex: 1 }}>
-        <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 3 }}>
-          {event.isVideoMeeting ? <Video size={13} color="#4361EE" style={{ marginRight: 5 }} /> : null}
-          <Text style={{ fontSize: 14, fontWeight: "600", color: "#0F172A", flex: 1 }} numberOfLines={1}>{event.title}</Text>
-        </View>
-        {event.description ? (
-          <Text numberOfLines={1} style={{ fontSize: 12, color: "#94A3B8", marginBottom: 4 }}>{event.description}</Text>
-        ) : null}
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-          <CalendarDays size={11} color="#64748B" />
-          <Text style={{ fontSize: 11, color: "#64748B", fontWeight: "500" }}>{dateText}</Text>
-        </View>
-      </View>
-    </Pressable>
-  );
-}
-
-function TaskRow({ task, onToggle, onPress, onLongPress }: { task: Task; onToggle: () => void; onPress: () => void; onLongPress?: () => void }) {
-  const isDone = task.status === "done";
-  const isLockedFeedbackTask = isDone && isFeedbackTaskDescription(task.description);
-  const priority = PRIORITY_CONFIG[task.priority as keyof typeof PRIORITY_CONFIG] ?? PRIORITY_CONFIG.medium;
-
-  const fmtDate = (d: string | Date) =>
-    new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric" });
-
-  const fmtTime = (d: string | Date) =>
-    new Date(d).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
-
-  const completedDate = isDone ? (task.completedAt ?? task.updatedAt) : null;
-  const dueDate = task.dueDate ?? null;
-
-  const getDueStatus = (): { overdue: boolean; today: boolean } => {
-    if (!dueDate) return { overdue: false, today: false };
-    const due = new Date(dueDate);
-    const now = new Date();
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const dueStart = new Date(due.getFullYear(), due.getMonth(), due.getDate());
-    return {
-      overdue: dueStart < todayStart,
-      today: dueStart.getTime() === todayStart.getTime(),
-    };
-  };
-
-  const { overdue, today } = getDueStatus();
-
-  // First assignee name
-  const firstAssigneeName = task.assignments?.[0]?.user?.name ?? null;
-
-  // Due time color
-  const dueTimeColor = overdue || today ? "#EF4444" : "#64748B";
-
-  // Done status label
-  const getDoneLabel = (): { label: string; color: string } => {
-    const wasLate = task.dueDate && task.completedAt && new Date(task.completedAt) > new Date(task.dueDate);
-    const color = wasLate ? "#F97316" : "#10B981";
-    const label = wasLate
-      ? (completedDate ? `Done overdue · ${fmtDate(completedDate)}` : "Done overdue")
-      : (completedDate ? `Done · ${fmtDate(completedDate)}` : "Done");
-    return { label, color };
-  };
-
-  const getStatusPill = (): { label: string; textColor: string; backgroundColor: string } => {
-    if (isDone) {
-      return {
-        label: "Completed",
-        textColor: "#0F172A",
-        backgroundColor: "#D1FAE5",
-      };
-    }
-
-    if (overdue) {
-      return {
-        label: "Overdue",
-        textColor: "#B91C1C",
-        backgroundColor: "#FEE2E2",
-      };
-    }
-
-    return {
-      label: "Open",
-      textColor: "#0F172A",
-      backgroundColor: "#DCFCE7",
-    };
-  };
-
-  const statusPill = getStatusPill();
-
-  return (
-    <Pressable
-      onPress={onPress}
-      onLongPress={onLongPress}
-      delayLongPress={400}
-      testID="task-row"
-      style={{
-        marginHorizontal: 12,
-        marginBottom: 6,
-        borderRadius: 14,
-        backgroundColor: "white",
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.07,
-        shadowRadius: 4,
-        elevation: 2,
-      }}
-    >
-      <View style={{ paddingHorizontal: 12, paddingVertical: 9, flexDirection: "row", alignItems: "center" }}>
-        <View style={{ flex: 1 }}>
-          {/* Row 1: completion control + title */}
-          <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
-            <Pressable
-              onPress={isLockedFeedbackTask ? undefined : onToggle}
-              disabled={isLockedFeedbackTask}
-              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-              style={{
-                width: 24,
-                height: 24,
-                borderRadius: 6,
-                borderWidth: 2,
-                borderColor: isDone ? "#10B981" : "#CBD5E1",
-                backgroundColor: isDone ? "#D1FAE5" : "transparent",
-                alignItems: "center",
-                justifyContent: "center",
-                marginRight: 10,
-                marginTop: 2,
-                flexShrink: 0,
-                opacity: isLockedFeedbackTask ? 0.85 : 1,
-              }}
-              accessibilityRole="checkbox"
-              accessibilityState={{ checked: isDone, disabled: isLockedFeedbackTask }}
-            >
-              {isDone ? <Text style={{ fontSize: 12, color: "#10B981", fontWeight: "700" }}>✓</Text> : null}
-            </Pressable>
-
-            {/* Title + assignee */}
-            <View style={{ flex: 1, marginRight: 6 }}>
-              <View style={{ flexDirection: "row", alignItems: "center" }}>
-                {task.isJoint ? <Text style={{ fontSize: 12, marginRight: 3 }}>🤝</Text> : null}
-                <Text
-                  numberOfLines={2}
-                  style={{
-                    fontSize: 14,
-                    fontWeight: "600",
-                    color: isDone ? "#94A3B8" : "#0F172A",
-                    textDecorationLine: isDone ? "line-through" : "none",
-                    lineHeight: 19,
-                    flex: 1,
-                  }}
-                >
-                  {task.title}
-                </Text>
-              </View>
-              {firstAssigneeName ? (
-                <Text numberOfLines={1} style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>
-                  {"Assigned to: "}
-                  {firstAssigneeName}
-                </Text>
-              ) : null}
-            </View>
-
-          </View>
-
-          {/* Row 2: Priority pill | clock + due time | recurrence */}
-          <View style={{ flexDirection: "row", alignItems: "center", marginTop: 7, gap: 6 }}>
-            {/* Priority pill */}
-            <View style={{
-              flexDirection: "row",
-              alignItems: "center",
-              paddingHorizontal: 7,
-              paddingVertical: 2,
-              borderRadius: 20,
-              backgroundColor: priority.bg,
-            }}>
-              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: priority.accentColor, marginRight: 4 }} />
-              <Text style={{ fontSize: 11, fontWeight: "600", color: priority.text }}>{priority.label}</Text>
-            </View>
-
-            {/* Due date */}
-            {dueDate && !isDone ? (
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
-                <Clock size={11} color={dueTimeColor} />
-                <Text style={{ fontSize: 11, fontWeight: "500", color: dueTimeColor }}>
-                  {overdue
-                    ? `Overdue · ${fmtDate(dueDate)}`
-                    : today
-                    ? "Due today"
-                    : fmtDate(dueDate)}
-                </Text>
-              </View>
-            ) : null}
-
-            {/* Recurrence indicator */}
-            {(task.recurrenceRule || task.recurrenceSeriesId) && !isDone ? (
-              <Text style={{ fontSize: 11, color: "#818CF8" }}>{"↺"}</Text>
-            ) : null}
-          </View>
-        </View>
-
-        {/* Right-aligned status pill */}
-        <View style={{ marginLeft: 10, alignSelf: "center" }}>
-          <View style={{
-            flexDirection: "row",
-            alignItems: "center",
-            paddingHorizontal: 9,
-            paddingVertical: 4,
-            borderRadius: 20,
-            backgroundColor: statusPill.backgroundColor,
-          }}>
-            <Text style={{ fontSize: 11, fontWeight: "600", color: statusPill.textColor }}>
-              {statusPill.label}
-            </Text>
-          </View>
-        </View>
-      </View>
-    </Pressable>
-  );
-}
-
-
 export default function TasksScreen() {
   const insets = useSafeAreaInsets();
   const { openModal } = useLocalSearchParams<{ openModal?: string }>();
-  const [filter, setFilter] = useState<FilterTab>("all");
-  const [sort, setSort] = useState<SortMode>("due");
-  const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
-  const [memberDropdownOpen, setMemberDropdownOpen] = useState(false);
-  const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const [filters, setFilters] = useState<WorkspaceFiltersState>(DEFAULT_WORKSPACE_FILTERS);
+  const [filterPicker, setFilterPicker] = useState<FilterPicker>(null);
+  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceViewMode>("calendar");
+  const [selectedDay, setSelectedDay] = useState<string | null>(toLocalIso(new Date()));
   const [calendarYear, setCalendarYear] = useState(() => new Date().getFullYear());
   const [calendarMonth, setCalendarMonth] = useState(() => new Date().getMonth());
 
-  const [teamCompletedExpanded, setTeamCompletedExpanded] = useState(false);
   const [confirmCompleteTask, setConfirmCompleteTask] = useState<Task | null>(null);
   const [actionMenuTask, setActionMenuTask] = useState<Task | null>(null);
   const [reassignTask, setReassignTask] = useState<Task | null>(null);
@@ -642,6 +95,7 @@ export default function TasksScreen() {
   const [showEventModal, setShowEventModal] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
+  const [eventModalReadOnly, setEventModalReadOnly] = useState(false);
   const [eventModalType, setEventModalType] = useState<"event" | "meeting">("event");
   const [eventTitle, setEventTitle] = useState("");
   const [eventDescription, setEventDescription] = useState("");
@@ -661,28 +115,25 @@ export default function TasksScreen() {
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState<boolean>(false);
   const { data: session } = useSession();
-  const isDemo = useDemoMode();
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
   const setActiveTeamId = useTeamStore((s) => s.setActiveTeamId);
   const queryClient = useQueryClient();
   const acknowledge = useTaskStore((s) => s.acknowledge);
+  const acknowledgeEvents = useTaskStore((s) => s.acknowledgeEvents);
+  const acknowledgedCounts = useTaskStore((s) => s.acknowledgedCounts);
+  const acknowledgedEventCounts = useTaskStore((s) => s.acknowledgedEventCounts);
   const [isScreenFocused, setIsScreenFocused] = useState(true);
   const workspacePollInterval = isScreenFocused ? 15_000 : false;
 
   useFocusEffect(
     useCallback(() => {
       setIsScreenFocused(true);
+      if (activeTeamId) {
+        invalidateTaskCaches(queryClient, activeTeamId);
+        void queryClient.invalidateQueries({ queryKey: ["calendar-events", activeTeamId] });
+      }
       return () => setIsScreenFocused(false);
-    }, [])
-  );
-
-  // Clear the task badge when this page is opened
-  useFocusEffect(
-    useCallback(() => {
-      if (!activeTeamId) return;
-      const count = queryClient.getQueryData<number>(["tasks-count", activeTeamId]) ?? 0;
-      acknowledge(activeTeamId, count);
-    }, [activeTeamId, acknowledge, queryClient])
+    }, [activeTeamId, queryClient])
   );
 
   const [refreshing, setRefreshing] = useState(false);
@@ -698,7 +149,10 @@ export default function TasksScreen() {
   const handleViewMonthChange = useCallback((year: number, month: number) => {
     setCalendarYear(year);
     setCalendarMonth(month);
-    setSelectedDay(null);
+    const now = new Date();
+    const keepToday =
+      now.getFullYear() === year && now.getMonth() === month ? toLocalIso(now) : toLocalIso(new Date(year, month, 1));
+    setSelectedDay(keepToday);
     setVisibleCount(5);
     setNextCursor(null);
   }, []);
@@ -707,43 +161,44 @@ export default function TasksScreen() {
     const now = new Date();
     setCalendarYear(now.getFullYear());
     setCalendarMonth(now.getMonth());
-    setSelectedDay(null);
+    setSelectedDay(toLocalIso(now));
     setNextCursor(null);
   }, [activeTeamId]);
 
   const onRefresh = async () => {
     setRefreshing(true);
     setNextCursor(null);
-    await queryClient.invalidateQueries({ queryKey: ["tasks", activeTeamId] });
+    invalidateTaskCaches(queryClient, activeTeamId);
     await queryClient.invalidateQueries({ queryKey: ["calendar-events", activeTeamId] });
     await queryClient.invalidateQueries({ queryKey: ["upcoming-video-meetings"] });
     setRefreshing(false);
   };
 
   const handleLoadMore = async () => {
-    if (!activeTeamId || !nextCursor || loadingMore || filter === "assigned") return;
+    if (!activeTeamId || !nextCursor || loadingMore) return;
     setLoadingMore(true);
-    const queryKey =
-      filter === "completed"
-        ? (["tasks", activeTeamId, "mine", calendarYear, calendarMonth, "completed"] as const)
-        : (["tasks", activeTeamId, "mine", calendarYear, calendarMonth, "active"] as const);
+    const queryKey = [
+      "tasks",
+      activeTeamId,
+      assignedToQueryKey(filters.assignedTo),
+      calendarYear,
+      calendarMonth,
+      filters.statusTab,
+    ] as const;
     try {
       const result = await api.get<{ tasks: Task[]; nextCursor: string | null }>(
         buildWorkspaceTasksPath(activeTeamId, {
-          filter,
+          statusTab: filters.statusTab,
           calendarYear,
           calendarMonth,
+          assignedTo: filters.assignedTo,
           cursor: nextCursor,
-          myTasks: true,
         }),
       );
-      queryClient.setQueryData<{ tasks: Task[]; nextCursor: string | null }>(
-        queryKey,
-        (prev) => ({
-          tasks: [...(prev?.tasks ?? []), ...result.tasks],
-          nextCursor: result.nextCursor,
-        }),
-      );
+      queryClient.setQueryData<{ tasks: Task[]; nextCursor: string | null }>(queryKey, (prev) => ({
+        tasks: [...(prev?.tasks ?? []), ...result.tasks],
+        nextCursor: result.nextCursor,
+      }));
       setNextCursor(result.nextCursor);
     } finally {
       setLoadingMore(false);
@@ -759,6 +214,29 @@ export default function TasksScreen() {
   const currentRole = teams?.find((t) => t.id === activeTeamId)?.role ?? "member";
   const isRegularMember = currentRole === "member";
   const isOwnerOrLeader = currentRole === "owner" || currentRole === "team_leader";
+  const isCalendarManager = isOwnerOrLeader || currentRole === "admin";
+  const canManageTaskMenu = useCallback(
+    (task: Task) => {
+      // Check-in follow-ups are completed via the form, not the edit menu.
+      if (isFeedbackTaskDescription(task.description)) return false;
+      if (currentRole === "owner" || currentRole === "team_leader" || currentRole === "admin") return true;
+      const creatorId = task.creator?.id;
+      return !!session?.user?.id && creatorId === session.user.id;
+    },
+    [currentRole, session?.user?.id],
+  );
+
+  const canManageEvent = useCallback(
+    (ev: CalendarEvent) => {
+      const creatorId = ev.createdById ?? ev.createdBy?.id;
+      if (!session?.user?.id) return false;
+      if (isCalendarManager) return true;
+      // Members: only their own non-meeting entries (matches backend calendar permissions).
+      if (ev.isVideoMeeting) return false;
+      return creatorId === session.user.id;
+    },
+    [isCalendarManager, session?.user?.id],
+  );
 
   React.useEffect(() => {
     if (teams && teams.length > 0 && !activeTeamId) {
@@ -780,22 +258,21 @@ export default function TasksScreen() {
     }
   }, [subscription]);
 
-  // Prefetch my active + completed tasks so tab switches use cache (no full reload).
   const {
-    data: myActiveTasksData,
-    isPending: myActivePending,
-    isError: myActiveError,
-    error: myActiveLoadError,
-    refetch: refetchMyActiveTasks,
+    data: activeTasksData,
+    isPending: activePending,
+    isError: activeError,
+    error: activeLoadError,
+    refetch: refetchActiveTasks,
   } = useQuery({
-    queryKey: ["tasks", activeTeamId, "mine", calendarYear, calendarMonth, "active"],
+    queryKey: ["tasks", activeTeamId, assignedToQueryKey(filters.assignedTo), calendarYear, calendarMonth, "active"],
     queryFn: async () =>
       api.get<{ tasks: Task[]; nextCursor: string | null }>(
         buildWorkspaceTasksPath(activeTeamId!, {
-          filter: "all",
+          statusTab: "active",
           calendarYear,
           calendarMonth,
-          myTasks: true,
+          assignedTo: filters.assignedTo,
         }),
       ),
     enabled: !!activeTeamId && hasTaskAccess,
@@ -803,15 +280,15 @@ export default function TasksScreen() {
     refetchIntervalInBackground: false,
   });
 
-  const { data: myCompletedTasksData, isPending: myCompletedPending } = useQuery({
-    queryKey: ["tasks", activeTeamId, "mine", calendarYear, calendarMonth, "completed"],
+  const { data: completedTasksData, isPending: completedPending } = useQuery({
+    queryKey: ["tasks", activeTeamId, assignedToQueryKey(filters.assignedTo), calendarYear, calendarMonth, "completed"],
     queryFn: async () =>
       api.get<{ tasks: Task[]; nextCursor: string | null }>(
         buildWorkspaceTasksPath(activeTeamId!, {
-          filter: "completed",
+          statusTab: "completed",
           calendarYear,
           calendarMonth,
-          myTasks: true,
+          assignedTo: filters.assignedTo,
         }),
       ),
     enabled: !!activeTeamId && hasTaskAccess,
@@ -819,48 +296,8 @@ export default function TasksScreen() {
     refetchIntervalInBackground: false,
   });
 
-  const allTasks: Task[] =
-    filter === "completed" ? (myCompletedTasksData?.tasks ?? []) : (myActiveTasksData?.tasks ?? []);
-
-  // Tasks I created — Team tab (prefetched for leaders so switching tabs is instant)
-  const { data: teamTasksData, isPending: teamTasksPending } = useQuery({
-    queryKey: ["tasks", activeTeamId, "team", calendarYear, calendarMonth],
-    queryFn: async () => {
-      const result = await api.get<{ tasks: Task[]; nextCursor: string | null }>(
-        buildWorkspaceTasksPath(activeTeamId!, {
-          filter: "all",
-          calendarYear,
-          calendarMonth,
-          creatorIdMe: true,
-        }),
-      );
-      return result;
-    },
-    enabled: !!activeTeamId && hasTaskAccess && isOwnerOrLeader,
-    refetchInterval: workspacePollInterval,
-    refetchIntervalInBackground: false,
-  });
-  const teamTasks: Task[] = teamTasksData?.tasks ?? [];
-
-  const { data: teamCompletedTasksData } = useQuery({
-    queryKey: ["tasks", activeTeamId, "team-completed", calendarYear, calendarMonth],
-    queryFn: async () => {
-      const result = await api.get<{ tasks: Task[]; nextCursor: string | null }>(
-        buildWorkspaceTasksPath(activeTeamId!, {
-          filter: "completed",
-          calendarYear,
-          calendarMonth,
-          creatorIdMe: true,
-        }),
-      );
-      return result;
-    },
-    enabled: !!activeTeamId && hasTaskAccess && isOwnerOrLeader,
-    refetchInterval: workspacePollInterval,
-    refetchIntervalInBackground: false,
-  });
-
-  // Team members for the member filter (Team tab only)
+  const rawTasks: Task[] =
+    filters.statusTab === "completed" ? (completedTasksData?.tasks ?? []) : (activeTasksData?.tasks ?? []);
   const { data: teamData } = useQuery({
     queryKey: ["team", activeTeamId],
     queryFn: () => api.get<Team>(`/api/teams/${activeTeamId}`),
@@ -896,13 +333,43 @@ export default function TasksScreen() {
     refetchIntervalInBackground: false,
   });
 
+  const { data: taskCount = 0 } = useQuery({
+    queryKey: ["tasks-count", activeTeamId],
+    queryFn: () => api.get<number>(`/api/teams/${activeTeamId}/tasks/count`),
+    enabled: !!activeTeamId && hasTaskAccess,
+    refetchInterval: workspacePollInterval,
+    refetchIntervalInBackground: false,
+  });
+
+  const eventCount = calendarEvents.length;
+  const tasksBadge = Math.max(0, taskCount - (acknowledgedCounts[activeTeamId ?? ""] ?? 0));
+  const calendarBadge = Math.max(0, eventCount - (acknowledgedEventCounts[activeTeamId ?? ""] ?? 0));
+
+  // Clear the badge for the active Calendar/Tasks view when opened or switched
+  useEffect(() => {
+    if (!activeTeamId || !hasTaskAccess) return;
+    if (workspaceMode === "tasks") {
+      acknowledge(activeTeamId, taskCount);
+    } else {
+      acknowledgeEvents(activeTeamId, eventCount);
+    }
+  }, [
+    activeTeamId,
+    hasTaskAccess,
+    workspaceMode,
+    taskCount,
+    eventCount,
+    acknowledge,
+    acknowledgeEvents,
+  ]);
+
   const toggleMutation = useMutation({
     mutationFn: (task: Task) =>
       api.patchFull<Task>(`/api/teams/${activeTeamId}/tasks/${task.id}`, {
         status: task.status === "done" ? "todo" : "done",
       }),
     onSuccess: (result) => {
-      queryClient.invalidateQueries({ queryKey: ["tasks", activeTeamId] });
+      invalidateTaskCaches(queryClient, activeTeamId);
       if (result.milestone) {
         setMilestoneModal({ count: result.milestone, userName: session?.user?.name ?? "You" });
       }
@@ -916,8 +383,13 @@ export default function TasksScreen() {
   });
 
   const handleToggleTask = (task: Task) => {
-    if (isDemo) { showDemoAlert(); return; }
-    if (task.status === "done" && isFeedbackTaskDescription(task.description)) return;
+    if (isFeedbackTaskDescription(task.description)) {
+      // Check-in follow-ups must be completed via the feedback form, not the quick toggle.
+      if (task.status === "done") return;
+      if (!activeTeamId) return;
+      router.push({ pathname: "/task-detail", params: { taskId: task.id, teamId: activeTeamId } });
+      return;
+    }
     setConfirmCompleteTask(task);
   };
 
@@ -929,7 +401,7 @@ export default function TasksScreen() {
       await api.post(`/api/teams/${activeTeamId}/tasks/${task.id}/assign`, { userIds: [newUserId] });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["tasks", activeTeamId] });
+      invalidateTaskCaches(queryClient, activeTeamId);
       setReassignTask(null);
     },
   });
@@ -974,10 +446,14 @@ export default function TasksScreen() {
       setMeetingAssigneeIds([]);
       setShowMeetingAssigneeDropdown(false);
     },
+    onError: (err: Error) => {
+      Alert.alert("Could not delete event", err.message || "Something went wrong. Try again.");
+    },
   });
 
   const openEventModal = () => {
     setEditingEvent(null);
+    setEventModalReadOnly(false);
     setEventModalType("event");
     const d = selectedDay
       ? (() => { const [y, m, day] = selectedDay.split("-").map(Number); return new Date(y, m - 1, day); })()
@@ -994,6 +470,7 @@ export default function TasksScreen() {
 
   const openPersonalEventModal = () => {
     setEditingEvent(null);
+    setEventModalReadOnly(false);
     setEventModalType("event");
     const d = selectedDay
       ? (() => { const [y, m, day] = selectedDay.split("-").map(Number); return new Date(y, m - 1, day); })()
@@ -1010,6 +487,7 @@ export default function TasksScreen() {
 
   const openMeetingModal = () => {
     setEditingEvent(null);
+    setEventModalReadOnly(false);
     setEventModalType("meeting");
     const now = new Date();
     const d = selectedDay
@@ -1028,8 +506,9 @@ export default function TasksScreen() {
     setShowEventModal(true);
   };
 
-  const openEditEventModal = (ev: CalendarEvent) => {
+  const openEditEventModal = (ev: CalendarEvent, opts?: { readOnly?: boolean }) => {
     setEditingEvent(ev);
+    setEventModalReadOnly(opts?.readOnly === true || !canManageEvent(ev));
     setEventModalType(ev.isVideoMeeting ? "meeting" : "event");
     setEventTitle(ev.title);
     setEventDescription(ev.description ?? "");
@@ -1050,7 +529,54 @@ export default function TasksScreen() {
     setShowEventModal(true);
   };
 
+  const openEventDetails = (ev: CalendarEvent) => {
+    openEditEventModal(ev, { readOnly: !canManageEvent(ev) });
+  };
+
+  const confirmAndDeleteEvent = (ev: CalendarEvent) => {
+    if (!canManageEvent(ev)) {
+      Alert.alert("View only", "You can only edit or delete events you created.");
+      return;
+    }
+    Alert.alert("Delete this event?", `"${ev.title}" will be removed. This cannot be undone.`, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: () => deleteEventMutation.mutate(ev.id),
+      },
+    ]);
+  };
+
+  const openEventActions = (ev: CalendarEvent) => {
+    if (!canManageEvent(ev)) {
+      openEventDetails(ev);
+      return;
+    }
+    if (Platform.OS === "ios") {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options: ["Edit", "Delete", "Cancel"],
+          destructiveButtonIndex: 1,
+          cancelButtonIndex: 2,
+          userInterfaceStyle: "light",
+        },
+        (buttonIndex) => {
+          if (buttonIndex === 0) openEditEventModal(ev);
+          if (buttonIndex === 1) confirmAndDeleteEvent(ev);
+        },
+      );
+      return;
+    }
+    Alert.alert(ev.title, undefined, [
+      { text: "Edit", onPress: () => openEditEventModal(ev) },
+      { text: "Delete", style: "destructive", onPress: () => confirmAndDeleteEvent(ev) },
+      { text: "Cancel", style: "cancel" },
+    ]);
+  };
+
   const handleSaveEvent = () => {
+    if (eventModalReadOnly) return;
     if (!eventTitle.trim()) { setFormError("Please enter a title"); return; }
     const isMeeting = eventModalType === "meeting";
     if (isMeeting && !isOwnerOrLeader) {
@@ -1110,86 +636,75 @@ export default function TasksScreen() {
 
   const currentUserId = session?.user?.id ?? null;
 
-  React.useEffect(() => {
-    if (filter === "assigned" && isRegularMember) setFilter("all");
-    if (filter === "assigned" && !currentUserId) setFilter("all");
-    if (filter !== "assigned") setSelectedMemberId(null);
-  }, [currentUserId, filter, isRegularMember]);
+  const teamMembers: TeamMember[] = teamData?.members ?? [];
+
+  const handleSelectDay = useCallback((iso: string | null) => {
+    setSelectedDay(iso);
+  }, []);
+
+  const handleStatusTabChange = useCallback((tab: TaskStatusTab) => {
+    setFilters((f) => ({
+      ...f,
+      statusTab: tab,
+      sort: tab === "completed" ? "completed" : f.sort === "completed" ? "due" : f.sort,
+    }));
+    setVisibleCount(5);
+  }, []);
 
   const showTasksLoading =
-    filter === "assigned"
-      ? teamTasksPending && teamTasks.length === 0
-      : filter === "completed"
-        ? myCompletedPending && allTasks.length === 0
-        : myActivePending && allTasks.length === 0;
-
-  useEffect(() => {
-    if (filter === "completed") setSort("completed");
-    else if (sort === "completed") setSort("due");
-  }, [filter]);
+    filters.statusTab === "completed"
+      ? completedPending && rawTasks.length === 0
+      : activePending && rawTasks.length === 0;
 
   useEffect(() => {
     setVisibleCount(5);
-    if (filter === "completed") {
-      setNextCursor(myCompletedTasksData?.nextCursor ?? null);
-    } else if (filter === "all") {
-      setNextCursor(myActiveTasksData?.nextCursor ?? null);
-    } else {
-      setNextCursor(null);
-    }
-  }, [filter, calendarYear, calendarMonth, myActiveTasksData?.nextCursor, myCompletedTasksData?.nextCursor]);
+    const source = filters.statusTab === "completed" ? completedTasksData : activeTasksData;
+    setNextCursor(source?.nextCursor ?? null);
+  }, [filters.statusTab, filters.assignedTo, calendarYear, calendarMonth, activeTasksData?.nextCursor, completedTasksData?.nextCursor]);
 
-  // Active: tasks assigned to me (or mine with no assignment), open
-  // Completed: same pool, done only
-  // Team: tasks I created that are assigned to someone else, open
-  const filteredTasks = (filter === "assigned" ? teamTasks : allTasks).filter((t) => {
-    if (filter === "assigned") {
-      // Show tasks I created that have at least one assignment to someone other than me
-      if ((t.assignments ?? []).length === 0) return false;
-      if (!(t.assignments ?? []).some((a) => a.userId !== currentUserId)) return false;
-      if (t.status === "done") return false;
-      // Member filter
-      if (selectedMemberId && !(t.assignments ?? []).some((a) => a.userId === selectedMemberId)) return false;
-    } else if (filter === "completed") {
-      if (t.status !== "done") return false;
-    } else {
-      if (t.status === "done") return false;
-    }
-    return true;
-  });
+  const tasks = React.useMemo(
+    () =>
+      filterTasksClientSide(rawTasks, {
+        filters,
+        currentUserId,
+        members: teamMembers,
+        selectedDay,
+        calendarYear,
+        calendarMonth,
+        isLeader: isOwnerOrLeader,
+      }),
+    [rawTasks, filters, currentUserId, teamMembers, selectedDay, calendarYear, calendarMonth, isOwnerOrLeader],
+  );
 
-  const monthScopedTasks =
-    filter === "completed" || selectedDay
-      ? filteredTasks
-      : filteredTasks.filter((t) => taskMatchesCalendarMonth(t, calendarYear, calendarMonth));
+  const activeCount = React.useMemo(
+    () =>
+      filterTasksClientSide(activeTasksData?.tasks ?? [], {
+        filters: { ...filters, statusTab: "active", dueDate: "all" },
+        currentUserId,
+        members: teamMembers,
+        selectedDay: null,
+        calendarYear,
+        calendarMonth,
+        isLeader: isOwnerOrLeader,
+      }).length,
+    [activeTasksData?.tasks, filters, currentUserId, teamMembers, calendarYear, calendarMonth, isOwnerOrLeader],
+  );
 
-  const dayScopedTasks = selectedDay
-    ? monthScopedTasks.filter((t) => {
-        if (filter === "completed") {
-          return t.completedAt ? toLocalIso(new Date(t.completedAt)) === selectedDay : false;
-        }
-        if (!t.dueDate) return false;
-        return toLocalIso(new Date(t.dueDate)) === selectedDay;
-      })
-    : monthScopedTasks;
+  const completedCount = React.useMemo(
+    () =>
+      filterTasksClientSide(completedTasksData?.tasks ?? [], {
+        filters: { ...filters, statusTab: "completed", dueDate: "all" },
+        currentUserId,
+        members: teamMembers,
+        selectedDay: null,
+        calendarYear,
+        calendarMonth,
+        isLeader: isOwnerOrLeader,
+      }).length,
+    [completedTasksData?.tasks, filters, currentUserId, teamMembers, calendarYear, calendarMonth, isOwnerOrLeader],
+  );
 
-  const tasks: Task[] = dayScopedTasks.slice().sort((a, b) => {
-    if (sort === "priority") {
-      const order = { urgent: 0, high: 1, medium: 2, low: 3 };
-      return (order[a.priority as keyof typeof order] ?? 2) - (order[b.priority as keyof typeof order] ?? 2);
-    }
-    if (sort === "completed") {
-      const aDate = a.completedAt ? new Date(a.completedAt).getTime() : 0;
-      const bDate = b.completedAt ? new Date(b.completedAt).getTime() : 0;
-      return bDate - aDate;
-    }
-    if (!a.dueDate && !b.dueDate) return 0;
-    if (!a.dueDate) return 1;
-    if (!b.dueDate) return -1;
-    return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
-  });
-
-  const showTasksEmptyState = !showTasksLoading && tasks.length === 0;
+  const visibleTasks = tasks.slice(0, visibleCount);
 
   const holidays = React.useMemo(() => {
     const years = new Set([calendarYear, calendarYear - 1, calendarYear + 1, new Date().getFullYear()]);
@@ -1205,7 +720,6 @@ export default function TasksScreen() {
   const dayEvents = calendarEvents.filter((ev) => {
     const evStart = startOfDay(new Date(ev.startDate));
     const evEnd = ev.endDate ? startOfDay(new Date(ev.endDate)) : evStart;
-    // Parse as local midnight (not UTC) to match startOfDay output
     const [ty, tm, td] = targetIso.split("-").map(Number);
     const target = new Date(ty, tm - 1, td);
     return evStart <= target && target <= evEnd;
@@ -1216,31 +730,12 @@ export default function TasksScreen() {
     return isSameDay(h.date, new Date(ty, tm - 1, td));
   });
 
-  // Completed tasks delegated to others (for Team tab collapsed section)
-  const teamCompletedTasks = (teamCompletedTasksData?.tasks ?? []).filter((t) => {
-    if ((t.assignments ?? []).length === 0) return false;
-    if (!(t.assignments ?? []).some((a) => a.userId !== currentUserId)) return false;
-    return true;
-  });
-
-  const calendarTasks = filter === "assigned" ? teamTasks : allTasks;
-
-  const assignedCount = allTasks.filter((t) =>
-    t.creator?.id === currentUserId &&
-    (t.assignments ?? []).some((a) => a.userId !== currentUserId)
-  ).length;
-  const completedCount = allTasks.filter((t) => t.status === "done").length;
-
-  const myActiveTasks = allTasks.filter((t) => t.status !== "done");
-  const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
-  const todayEnd = new Date(); todayEnd.setHours(23, 59, 59, 999);
-  const dueTodayCount = myActiveTasks.filter((t) => t.dueDate && new Date(t.dueDate) >= todayStart && new Date(t.dueDate) <= todayEnd).length;
-  const overdueCount = myActiveTasks.filter((t) => t.dueDate && new Date(t.dueDate) < todayStart).length;
+  const calendarTasks = rawTasks;
 
   if (!activeTeamId) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: "#F8FAFC" }} edges={["top"]}>
-        <NoTeamPlaceholder />
+        <NoWorkspaceRedirect />
       </SafeAreaView>
     );
   }
@@ -1258,462 +753,221 @@ export default function TasksScreen() {
   }
 
   const tasksLoadError =
-    filter === "completed"
+    filters.statusTab === "completed"
       ? null
-      : myActiveError
-        ? myActiveLoadError instanceof Error
-          ? myActiveLoadError.message
+      : activeError
+        ? activeLoadError instanceof Error
+          ? activeLoadError.message
           : "Could not load tasks."
         : null;
 
+  const showMemberTasksEmpty =
+    !isOwnerOrLeader &&
+    !showTasksLoading &&
+    !tasksLoadError &&
+    filters.statusTab === "active" &&
+    tasks.length === 0;
+
   if (!teamsLoading && (!teams || teams.length === 0)) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: "white" }} edges={[]} testID="no-teams-screen">
-        <LinearGradient
-          colors={["#4361EE", "#7C3AED"]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={{ paddingTop: insets.top + 12, paddingHorizontal: 16, paddingBottom: 16 }}
-        >
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-            <Text style={{ color: "white", fontSize: 20, fontWeight: "800", flex: 1 }}>Workspace</Text>
-            <View style={{ position: "absolute", left: 0, right: 0, alignItems: "center" }}>
-              <Image source={require("@/assets/alenio-logo-white.png")} style={{ height: 30, width: 104, resizeMode: "contain" }} />
-            </View>
-            <View />
-          </View>
-        </LinearGradient>
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 24 }}>
-          <Image
-            source={require("@/assets/alenio-logo.png")}
-            style={{ width: 180, height: 68, marginBottom: 16 }}
-            resizeMode="contain"
-          />
-          <Text style={{ fontSize: 20, fontWeight: "700", color: "#0F172A", marginBottom: 8, textAlign: "center" }}>
-            Welcome to Alenio
-          </Text>
-          <Text style={{ color: "#64748B", textAlign: "center", marginBottom: 24 }}>
-            Create or join a team to start managing tasks together
-          </Text>
-          <TouchableOpacity
-            style={{ backgroundColor: "#4361EE", borderRadius: 12, paddingHorizontal: 24, paddingVertical: 12 }}
-            onPress={() => router.push("/onboarding")}
-            testID="get-started-button"
-          >
-            <Text style={{ color: "white", fontWeight: "600" }}>Get started</Text>
-          </TouchableOpacity>
-        </View>
+      <SafeAreaView style={{ flex: 1, backgroundColor: "#F8FAFC", alignItems: "center", justifyContent: "center" }} edges={[]}>
+        <ActivityIndicator color="#4361EE" />
       </SafeAreaView>
     );
   }
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#F8FAFC" }} edges={[]} testID="tasks-screen">
-      {/* Header */}
-      <LinearGradient
-        colors={["#4361EE", "#7C3AED"]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-        style={{ paddingTop: insets.top + 12, paddingHorizontal: 16, paddingBottom: 16 }}
-      >
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-          <Text style={{ color: "white", fontSize: 20, fontWeight: "800", flex: 1 }}>Workspace</Text>
-          <View style={{ position: "absolute", left: 0, right: 0, alignItems: "center" }}>
-            <Image source={require("@/assets/alenio-logo-white.png")} style={{ height: 30, width: 104, resizeMode: "contain" }} />
-          </View>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            {activeTeamId && !isDemo ? (
-              <Pressable
-                onPress={() => setShowAddModal(true)}
-                style={{ flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "rgba(255,255,255,0.22)", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 }}
-                testID="header-add-button"
-              >
-                <Plus size={13} color="white" />
-                <Text style={{ color: "white", fontSize: 12, fontWeight: "600" }}>Add</Text>
-              </Pressable>
-            ) : null}
-          </View>
-        </View>
-      </LinearGradient>
+      <WorkspaceHeader
+        topInset={insets.top}
+        showAdd={!!activeTeamId}
+        addLabel={workspaceMode === "calendar" ? "Add Event" : "Add"}
+        onAddPress={() => {
+          if (workspaceMode === "calendar") {
+            openEventModal();
+            return;
+          }
+          setShowAddModal(true);
+        }}
+        addTestID="workspace-header-add-button"
+      />
+
+      <WorkspaceViewToggle
+        mode={workspaceMode}
+        onChange={setWorkspaceMode}
+        calendarBadge={calendarBadge}
+        tasksBadge={tasksBadge}
+      />
 
       <View style={{ flex: 1 }}>
-        {/* Fixed top section: calendar, events, filter tabs */}
-        <View style={{ flexShrink: 0 }}>
-          {/* Mini Calendar */}
-          <MiniCalendar
-            tasks={calendarTasks}
-            events={calendarEvents}
-            holidays={holidays}
-            selectedDay={selectedDay}
-            onSelectDay={setSelectedDay}
-            viewYear={calendarYear}
-            viewMonth={calendarMonth}
-            onViewMonthChange={handleViewMonthChange}
-          />
-
-          {/* Events section — below calendar, above filter tabs */}
-          {(dayEvents.length > 0 || dayHolidays.length > 0) ? (
-          <View style={{ backgroundColor: "white", marginTop: 10 }}>
-            <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 6, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: 1, borderBottomColor: "#F1F5F9" }}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                <CalendarDays size={13} color="#64748B" />
-                <Text style={{ fontSize: 11, fontWeight: "700", color: "#64748B", textTransform: "uppercase", letterSpacing: 0.5 }}>Events</Text>
-              </View>
-              {(dayEvents.length + dayHolidays.length) > 1 ? (
-                <Text style={{ fontSize: 11, fontWeight: "600", color: "#4361EE" }}>{dayEvents.length + dayHolidays.length} events</Text>
-              ) : null}
-            </View>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={{ paddingHorizontal: 12, paddingVertical: 8, gap: 8, flexDirection: "row" }}>
-              {dayHolidays.map((h) => (
-                <View key={h.name} style={{ backgroundColor: "#FEF2F2", borderRadius: 12, padding: 12, minWidth: 180, flexDirection: "row", alignItems: "center", gap: 8 }}>
-                  <View style={{ width: 3, borderRadius: 2, alignSelf: "stretch", backgroundColor: "#EF4444" }} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 13, fontWeight: "600", color: "#0F172A" }} numberOfLines={1}>{h.name}</Text>
-                    <Text style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>Federal Holiday 🇺🇸</Text>
-                  </View>
-                </View>
-              ))}
-              {dayEvents.map((ev) => {
-                const dateText = formatEventDateLabel(ev.startDate, ev.endDate);
-                const scheduleText = eventShowsScheduledTime(ev)
-                  ? formatEventDateAndTime(ev.startDate, ev.endDate)
-                  : dateText;
-                const showTimedStyle = eventShowsScheduledTime(ev);
-                return (
-                  <Pressable
-                    key={ev.id}
-                    onLongPress={!isDemo && (isOwnerOrLeader || ev.createdById === currentUserId) ? () => openEditEventModal(ev) : undefined}
-                    delayLongPress={400}
-                    style={{ backgroundColor: ev.isHidden ? "#F8FAFC" : `${ev.color}18`, borderRadius: 12, padding: 12, minWidth: 180, flexDirection: "row", alignItems: "center", gap: 8 }}
-                  >
-                    <View style={{ width: 3, borderRadius: 2, alignSelf: "stretch", backgroundColor: ev.isHidden ? "#94A3B8" : ev.color }} />
-                    <View style={{ flex: 1 }}>
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 5, marginBottom: 2 }}>
-                        {ev.isVideoMeeting ? <Video size={12} color="#4361EE" /> : null}
-                        <Text style={{ fontSize: 13, fontWeight: "600", color: ev.isHidden ? "#64748B" : "#0F172A", flex: 1 }} numberOfLines={1}>{ev.title}</Text>
-                        <View style={{ flexDirection: "row", alignItems: "center", gap: 2, backgroundColor: ev.isHidden ? "#E2E8F0" : "#DCFCE7", paddingHorizontal: 5, paddingVertical: 1, borderRadius: 6 }}>
-                          {ev.isHidden ? <Lock size={8} color="#64748B" /> : <Globe size={8} color="#16A34A" />}
-                          <Text style={{ fontSize: 9, fontWeight: "700", color: ev.isHidden ? "#64748B" : "#16A34A" }}>{ev.isHidden ? "Private" : "Public"}</Text>
-                        </View>
-                      </View>
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                        {showTimedStyle ? <Clock size={10} color="#4361EE" /> : <CalendarDays size={10} color="#64748B" />}
-                        <Text
-                          style={{
-                            fontSize: 11,
-                            color: showTimedStyle ? "#4361EE" : "#64748B",
-                            fontWeight: showTimedStyle ? "600" : "400",
-                            flexShrink: 1,
-                          }}
-                          numberOfLines={1}
-                        >
-                          {scheduleText}
-                        </Text>
-                      </View>
-                    </View>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          </View>
-        ) : null}
-
-        {/* Sticky section: filter tabs + sort */}
-        <View style={{ backgroundColor: "#F8FAFC", paddingTop: 10 }}>
-          <View style={{ paddingHorizontal: 16, marginBottom: 10 }}>
-            <View style={{ flexDirection: "row", alignSelf: "stretch", backgroundColor: "#E2E8F0", borderRadius: 12, padding: 4, marginBottom: 8 }}>
-              {(["all", "completed", ...(isRegularMember ? [] : ["assigned"])] as FilterTab[]).map((f) => {
-                const isSelected = filter === f;
-                return (
-                  <TouchableOpacity
-                    key={f}
-                    activeOpacity={0.85}
-                    onPress={() => setFilter(f)}
-                    style={{
-                      flex: 1,
-                      minWidth: 0,
-                      paddingVertical: 10,
-                      borderRadius: 10,
-                      alignItems: "center",
-                      justifyContent: "center",
-                      backgroundColor: isSelected ? "#FFFFFF" : "transparent",
-                      ...(isSelected
-                        ? {
-                            shadowColor: "#0F172A",
-                            shadowOffset: { width: 0, height: 1 },
-                            shadowOpacity: 0.08,
-                            shadowRadius: 3,
-                            elevation: 2,
-                          }
-                        : {}),
-                    }}
-                    testID={`filter-${f}`}
-                  >
-                    <Text
-                      numberOfLines={1}
-                      style={{
-                        fontSize: 14,
-                        fontWeight: isSelected ? "700" : "600",
-                        color: isSelected ? "#4361EE" : "#64748B",
-                      }}
-                    >
-                      {f === "all" ? "Active" : f === "assigned" ? "Team" : "Completed"}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 6 }}>
-              <ArrowUpDown size={12} color="#94A3B8" />
-              <Text style={{ fontSize: 12, color: "#94A3B8" }}>Sort:</Text>
-              {filter === "assigned" && nonOwnerMembers.length > 0 ? (
-                <TouchableOpacity
-                  onPress={() => setMemberDropdownOpen(true)}
-                  style={{
-                    flexDirection: "row", alignItems: "center", gap: 4,
-                    paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8,
-                    backgroundColor: selectedMemberId ? "#EEF2FF" : "#F1F5F9",
-                    borderWidth: selectedMemberId ? 1 : 0, borderColor: "#4361EE",
-                  }}
-                  testID="member-dropdown-trigger"
-                >
-                  <Text style={{ fontSize: 12, fontWeight: "600", color: selectedMemberId ? "#4361EE" : "#64748B" }}>
-                    {selectedMemberId ? nonOwnerMembers.find((m) => m.userId === selectedMemberId)?.user.name ?? "Member" : "All Members"}
-                  </Text>
-                  <ChevronRight size={11} color={selectedMemberId ? "#4361EE" : "#94A3B8"} style={{ transform: [{ rotate: "90deg" }] }} />
-                </TouchableOpacity>
-              ) : null}
-              {(filter === "completed"
-                ? (["completed", "priority"] as SortMode[])
-                : (["due", "priority"] as SortMode[])
-              ).map((s) => (
-                <TouchableOpacity
-                  key={s}
-                  onPress={() => setSort(s)}
-                  style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, backgroundColor: sort === s ? "#4361EE" : "#F1F5F9" }}
-                  testID={`sort-${s}`}
-                >
-                  <Text style={{ fontSize: 12, fontWeight: "600", color: sort === s ? "white" : "#64748B" }}>
-                    {s === "due" ? "Due Date" : s === "completed" ? "Completion" : "Priority"}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            {/* Member dropdown modal */}
-            {filter === "assigned" && nonOwnerMembers.length > 0 ? (
-              <Modal visible={memberDropdownOpen} transparent animationType="fade" onRequestClose={() => setMemberDropdownOpen(false)}>
-                <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.35)", justifyContent: "flex-end" }} onPress={() => setMemberDropdownOpen(false)}>
-                  <Pressable onPress={(e) => e.stopPropagation()}>
-                    <View style={{ backgroundColor: "white", borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingTop: 12, paddingBottom: 32 }}>
-                      <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: "#E2E8F0", alignSelf: "center", marginBottom: 16 }} />
-                      <Text style={{ fontSize: 13, fontWeight: "700", color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.8, paddingHorizontal: 20, marginBottom: 8 }}>Filter by Member</Text>
-                      <TouchableOpacity
-                        onPress={() => { setSelectedMemberId(null); setMemberDropdownOpen(false); }}
-                        style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 20, paddingVertical: 14, gap: 12, backgroundColor: !selectedMemberId ? "#F5F7FF" : "transparent" }}
-                        testID="member-option-all"
-                      >
-                        <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#EEF2FF", alignItems: "center", justifyContent: "center" }}>
-                          <Users size={16} color="#4361EE" />
-                        </View>
-                        <Text style={{ fontSize: 15, fontWeight: "600", color: !selectedMemberId ? "#4361EE" : "#0F172A", flex: 1 }}>All Members</Text>
-                        {!selectedMemberId ? <Check size={16} color="#4361EE" /> : null}
-                      </TouchableOpacity>
-                      <View style={{ height: 1, backgroundColor: "#F1F5F9", marginHorizontal: 20, marginBottom: 4 }} />
-                      {nonOwnerMembers.map((m) => {
-                        const isSelected = selectedMemberId === m.userId;
-                        return (
-                          <TouchableOpacity
-                            key={m.userId}
-                            onPress={() => { setSelectedMemberId(m.userId); setMemberDropdownOpen(false); }}
-                            style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 20, paddingVertical: 12, gap: 12, backgroundColor: isSelected ? "#F5F7FF" : "transparent" }}
-                            testID={`member-option-${m.userId}`}
-                          >
-                            <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#EEF2FF", overflow: "hidden", alignItems: "center", justifyContent: "center" }}>
-                              {m.user.image
-                                ? <Image source={{ uri: m.user.image }} style={{ width: 36, height: 36 }} resizeMode="cover" />
-                                : <Text style={{ fontSize: 15, fontWeight: "700", color: "#4361EE" }}>{m.user.name?.[0]?.toUpperCase()}</Text>}
-                            </View>
-                            <View style={{ flex: 1 }}>
-                              <Text style={{ fontSize: 15, fontWeight: "600", color: isSelected ? "#4361EE" : "#0F172A" }}>{m.user.name}</Text>
-                              <Text style={{ fontSize: 12, color: "#94A3B8" }}>{m.user.email}</Text>
-                            </View>
-                            {isSelected ? <Check size={16} color="#4361EE" /> : null}
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </View>
-                  </Pressable>
-                </Pressable>
-              </Modal>
-            ) : null}
-          </View>
-        </View>
-        </View>
-
-        {/* Scrollable task list */}
-        <ScrollView
-          style={{ flex: 1 }}
-          showsVerticalScrollIndicator={false}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" colors={["#4361EE"]} />}
-          contentContainerStyle={
-            showTasksEmptyState
-              ? {
-                  flexGrow: 1,
-                  justifyContent: "center",
-                  paddingTop: 8,
-                  // Floating tab bar: absolute bottom insets.bottom+12, height 64 — keep empty state clear
-                  paddingBottom: insets.bottom + 12 + 64 + 16,
-                }
-              : undefined
-          }
-        >
-          {/* Task list */}
-          {showTasksLoading ? (
-            <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: 40 }} testID="loading-indicator">
-              <ActivityIndicator color="#4361EE" />
-            </View>
-          ) : tasks.length === 0 ? (
-            <View style={{ alignItems: "center", paddingHorizontal: 20, paddingVertical: 12 }} testID="empty-state">
-              <View style={{ width: 88, height: 88, borderRadius: 44, backgroundColor: "#E8EEFF", alignItems: "center", justifyContent: "center", marginBottom: 14 }}>
-                <ClipboardList size={40} color="#4361EE" strokeWidth={2} />
-                <View
-                  style={{
-                    position: "absolute",
-                    bottom: 6,
-                    right: 6,
-                    width: 28,
-                    height: 28,
-                    borderRadius: 14,
-                    backgroundColor: "#4361EE",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    borderWidth: 2,
-                    borderColor: "#E8EEFF",
-                  }}
-                >
-                  <Check size={14} color="white" strokeWidth={3} />
-                </View>
-              </View>
-              {tasksLoadError ? (
-                <>
-                  <Text style={{ fontSize: 17, fontWeight: "700", color: "#0F172A", marginBottom: 4, textAlign: "center" }}>
-                    Couldn't load tasks
-                  </Text>
-                  <Text style={{ fontSize: 13, color: "#64748B", textAlign: "center", lineHeight: 18, maxWidth: 280, marginBottom: 12 }}>
-                    {tasksLoadError}
-                  </Text>
-                  <TouchableOpacity
-                    onPress={() => void refetchMyActiveTasks()}
-                    style={{ backgroundColor: "#4361EE", borderRadius: 10, paddingHorizontal: 16, paddingVertical: 10 }}
-                  >
-                    <Text style={{ color: "white", fontWeight: "600", fontSize: 14 }}>Try again</Text>
-                  </TouchableOpacity>
-                </>
-              ) : selectedDay ? (
-                <>
-                  <Text style={{ fontSize: 17, fontWeight: "700", color: "#0F172A", marginBottom: 4, textAlign: "center" }}>
-                    No tasks on this day
-                  </Text>
-                  <Text style={{ fontSize: 13, color: "#64748B", textAlign: "center", lineHeight: 18, maxWidth: 280, marginBottom: 12 }}>
-                    Tasks without a due date on {selectedDay} are hidden while a calendar day is selected.
-                  </Text>
-                  <TouchableOpacity
-                    onPress={() => setSelectedDay(null)}
-                    style={{ backgroundColor: "#EEF2FF", borderRadius: 10, paddingHorizontal: 16, paddingVertical: 10 }}
-                  >
-                    <Text style={{ color: "#4361EE", fontWeight: "600", fontSize: 14 }}>Show all tasks</Text>
-                  </TouchableOpacity>
-                </>
-              ) : (
-                <>
-                  <Text style={{ fontSize: 17, fontWeight: "700", color: "#0F172A", marginBottom: 4, textAlign: "center" }}>
-                    {filter === "completed" ? "No completed tasks" : filter === "assigned" ? "No tasks assigned to others" : "No active tasks"}
-                  </Text>
-                  <Text style={{ fontSize: 13, color: "#64748B", textAlign: "center", lineHeight: 18, maxWidth: 280 }}>
-                    {filter === "completed"
-                      ? "Finished tasks will appear here when you complete them."
-                      : filter === "assigned"
-                        ? "Create a task and assign it to a teammate to see it here."
-                        : "You're all caught up. Time to plan your next win."}
-                  </Text>
-                </>
-              )}
-            </View>
-          ) : (
-            tasks.slice(0, filter === "all" ? tasks.length : visibleCount).map((task) => (
-              <TaskRow
-                key={task.id}
-                task={task}
-                onToggle={() => handleToggleTask(task)}
-                onPress={() => router.push({ pathname: "/task-detail", params: { taskId: task.id, teamId: activeTeamId! } })}
-                onLongPress={!isDemo ? () => setActionMenuTask(task) : undefined}
+        {workspaceMode === "calendar" ? (
+          <View style={{ flex: 1, minHeight: 0 }}>
+            <View style={{ flexShrink: 0 }}>
+              <CalendarCard
+                tasks={calendarTasks}
+                events={calendarEvents}
+                holidays={holidays}
+                selectedDay={selectedDay}
+                onSelectDay={handleSelectDay}
+                viewYear={calendarYear}
+                viewMonth={calendarMonth}
+                onViewMonthChange={handleViewMonthChange}
               />
-            ))
-          )}
-          {filter !== "all" && tasks.length > visibleCount ? (
-            <Pressable
-              onPress={() => setVisibleCount(v => v + 5)}
-              className="mx-4 mb-2 py-3 rounded-2xl items-center"
-              style={{ backgroundColor: '#F1F5F9' }}
-              testID="show-more-button"
-            >
-              <Text className="text-sm font-semibold text-slate-600">
-                Show {Math.min(5, tasks.length - visibleCount)} more
-              </Text>
-            </Pressable>
-          ) : null}
-          {filter !== "assigned" && nextCursor !== null ? (
-            <Pressable
-              onPress={handleLoadMore}
-              style={{ marginHorizontal: 16, marginBottom: 4, paddingVertical: 12, borderRadius: 16, alignItems: "center", backgroundColor: "#EEF2FF", flexDirection: "row", justifyContent: "center", gap: 8 }}
-              testID="load-more-button"
-              disabled={loadingMore}
-            >
-              {loadingMore ? (
-                <ActivityIndicator size="small" color="#4361EE" testID="load-more-indicator" />
-              ) : null}
-              <Text style={{ fontSize: 13, fontWeight: "600", color: "#4361EE" }}>
-                {loadingMore ? "Loading..." : "Load more tasks"}
-              </Text>
-            </Pressable>
-          ) : null}
-
-          {/* Team tab: collapsed completed section */}
-          {filter === "assigned" && teamCompletedTasks.length > 0 ? (
-            <View style={{ marginTop: 8 }}>
-              <Pressable
-                onPress={() => setTeamCompletedExpanded((v) => !v)}
-                style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12, gap: 8 }}
-                testID="team-completed-toggle"
-              >
-                <View style={{ flex: 1, height: 1, backgroundColor: "#E2E8F0" }} />
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                  <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: "#10B981", alignItems: "center", justifyContent: "center" }}>
-                    <Text style={{ color: "white", fontSize: 10, fontWeight: "bold" }}>✓</Text>
-                  </View>
-                  <Text style={{ fontSize: 13, fontWeight: "600", color: "#64748B" }}>
-                    Completed ({teamCompletedTasks.length})
-                  </Text>
-                  <Text style={{ fontSize: 12, color: "#94A3B8" }}>{teamCompletedExpanded ? "▲" : "▼"}</Text>
-                </View>
-                <View style={{ flex: 1, height: 1, backgroundColor: "#E2E8F0" }} />
-              </Pressable>
-              {teamCompletedExpanded ? teamCompletedTasks.map((item) => (
-                <TaskRow
-                  key={item.id}
-                  task={item}
-                  onToggle={() => handleToggleTask(item)}
-                  onPress={() => router.push({ pathname: "/task-detail", params: { taskId: item.id, teamId: activeTeamId! } })}
-                  onLongPress={isOwnerOrLeader && !isDemo && item.assignments.length > 0 && item.status !== "done" ? () => setReassignTask(item) : undefined}
-                />
-              )) : null}
             </View>
-          ) : null}
 
-          <View style={{ height: insets.bottom + 88 }} />
-        </ScrollView>
+            <EventsSection
+              dayEvents={dayEvents}
+              dayHolidays={dayHolidays}
+              selectedDayIso={targetIso}
+              variant="dayList"
+              fillRemaining
+              canManageEvent={canManageEvent}
+              onEventLongPress={openEventActions}
+              onEventPress={openEventDetails}
+              onEventMenu={openEventActions}
+              onAddEvent={openEventModal}
+              listPaddingBottom={workspaceTaskClearance(insets.bottom)}
+              refreshControl={
+                <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" colors={["#4361EE"]} />
+              }
+            />
+          </View>
+        ) : showMemberTasksEmpty ? (
+          <ScrollView
+            style={{
+              flex: 1,
+              backgroundColor: WS.surface,
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+            }}
+            showsVerticalScrollIndicator={false}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" colors={["#4361EE"]} />}
+            contentContainerStyle={{
+              flexGrow: 1,
+              paddingBottom: workspaceTaskClearance(insets.bottom),
+            }}
+          >
+            <MemberTasksEmptyState />
+          </ScrollView>
+        ) : (
+          <>
+            <View
+              style={{
+                flexShrink: 0,
+                paddingHorizontal: WS.pageGutter,
+                paddingTop: 4,
+                paddingBottom: WS.sectionGap,
+                backgroundColor: WS.pageBg,
+              }}
+            >
+              <TaskStatusTabs
+                statusTab={filters.statusTab}
+                activeCount={activeCount}
+                completedCount={completedCount}
+                onChange={handleStatusTabChange}
+              />
+
+              <View style={{ marginTop: 6 }}>
+                <TaskFilterBar
+                  filters={filters}
+                  selectedDay={selectedDay}
+                  onOpenPicker={setFilterPicker}
+                  directReportsDisabled={!isOwnerOrLeader}
+                  unassignedDisabled={!isOwnerOrLeader}
+                  entireTeamDisabled={!isOwnerOrLeader}
+                />
+              </View>
+            </View>
+
+            <View style={{ flex: 1, minHeight: 140, paddingHorizontal: WS.pageGutter }}>
+              <ScrollView
+                style={{ flex: 1 }}
+                showsVerticalScrollIndicator={false}
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" colors={["#4361EE"]} />}
+                contentContainerStyle={{
+                  paddingTop: 4,
+                  paddingBottom: workspaceTaskClearance(insets.bottom),
+                  flexGrow: 1,
+                }}
+              >
+                <TaskListCard
+                  tasks={visibleTasks}
+                  loading={showTasksLoading}
+                  loadError={tasksLoadError}
+                  onRetry={() => void refetchActiveTasks()}
+                  onToggle={handleToggleTask}
+                  onPress={(task) => router.push({ pathname: "/task-detail", params: { taskId: task.id, teamId: activeTeamId! } })}
+                  onLongPress={(task) => {
+                    if (!canManageTaskMenu(task)) return;
+                    setActionMenuTask(task);
+                  }}
+                  emptyTitle={
+                    filters.statusTab === "completed"
+                      ? filters.dueDate === "calendar_day"
+                        ? "No completed tasks for this day"
+                        : "No completed tasks"
+                      : filters.dueDate === "calendar_day"
+                        ? "No active tasks for this day"
+                        : "No active tasks"
+                  }
+                  emptySubtitle={
+                    filters.dueDate === "calendar_day" && selectedDay
+                      ? "Try viewing upcoming tasks or adjust your filters."
+                      : "You're all caught up for the current filters."
+                  }
+                  emptyActionLabel={filters.dueDate === "calendar_day" ? "View upcoming tasks" : undefined}
+                  onEmptyAction={
+                    filters.dueDate === "calendar_day"
+                      ? () => setFilters((f) => ({ ...f, dueDate: "all" }))
+                      : undefined
+                  }
+                  footer={
+                    <>
+                      {tasks.length > visibleCount ? (
+                        <Pressable
+                          onPress={() => setVisibleCount((v) => v + 5)}
+                          style={{ margin: 12, paddingVertical: 12, borderRadius: 10, alignItems: "center", backgroundColor: "#F1F5F9" }}
+                          testID="show-more-button"
+                        >
+                          <Text style={{ fontSize: 13, fontWeight: "600", color: "#64748B" }}>
+                            Show {Math.min(5, tasks.length - visibleCount)} more
+                          </Text>
+                        </Pressable>
+                      ) : null}
+                      {nextCursor !== null ? (
+                        <Pressable
+                          onPress={handleLoadMore}
+                          style={{ margin: 12, marginTop: 0, paddingVertical: 12, borderRadius: 10, alignItems: "center", backgroundColor: "#EEF2FF", flexDirection: "row", justifyContent: "center", gap: 8 }}
+                          testID="load-more-button"
+                          disabled={loadingMore}
+                        >
+                          {loadingMore ? <ActivityIndicator size="small" color="#4361EE" testID="load-more-indicator" /> : null}
+                          <Text style={{ fontSize: 13, fontWeight: "600", color: "#4361EE" }}>
+                            {loadingMore ? "Loading..." : "Load more tasks"}
+                          </Text>
+                        </Pressable>
+                      ) : null}
+                    </>
+                  }
+                />
+              </ScrollView>
+            </View>
+          </>
+        )}
       </View>
+
+      <WorkspaceFilterPicker
+        picker={filterPicker}
+        filters={filters}
+        members={teamMembers}
+        isLeader={isOwnerOrLeader}
+        onClose={() => setFilterPicker(null)}
+        onApply={(next) => {
+          setFilters((f) => ({ ...f, ...next }));
+          setFilterPicker(null);
+          setVisibleCount(5);
+        }}
+      />
 
       {/* Task completion confirmation modal */}
       {confirmCompleteTask ? (
@@ -1727,7 +981,23 @@ export default function TasksScreen() {
               "{confirmCompleteTask.title}"
             </Text>
             <Pressable
-              onPress={() => { toggleMutation.mutate(confirmCompleteTask); setConfirmCompleteTask(null); }}
+              onPress={() => {
+                if (
+                  confirmCompleteTask.status !== "done" &&
+                  isFeedbackTaskDescription(confirmCompleteTask.description)
+                ) {
+                  setConfirmCompleteTask(null);
+                  if (activeTeamId) {
+                    router.push({
+                      pathname: "/task-detail",
+                      params: { taskId: confirmCompleteTask.id, teamId: activeTeamId },
+                    });
+                  }
+                  return;
+                }
+                toggleMutation.mutate(confirmCompleteTask);
+                setConfirmCompleteTask(null);
+              }}
               style={{ backgroundColor: confirmCompleteTask.status === "done" ? "#F59E0B" : "#10B981", borderRadius: 12, paddingVertical: 14, alignItems: "center", marginBottom: 10 }}
               testID="complete-confirm-yes"
             >
@@ -1774,17 +1044,20 @@ export default function TasksScreen() {
             <Text style={{ fontSize: 13, fontWeight: "600", color: "#94A3B8", paddingHorizontal: 20, marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 }} numberOfLines={1}>
               {actionMenuTask?.title}
             </Text>
-            {/* Edit */}
-            <Pressable
-              onPress={() => {
-                setActionMenuTask(null);
-                router.push({ pathname: "/task-detail", params: { taskId: actionMenuTask!.id, teamId: activeTeamId!, startEdit: "1" } });
-              }}
-              style={{ flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: 20, paddingVertical: 16 }}
-            >
-              <Text style={{ fontSize: 20 }}>✏️</Text>
-              <Text style={{ fontSize: 16, fontWeight: "500", color: "#0F172A" }}>Edit</Text>
-            </Pressable>
+            {/* Edit — creators and leaders only */}
+            {actionMenuTask && canManageTaskMenu(actionMenuTask) ? (
+              <Pressable
+                onPress={() => {
+                  setActionMenuTask(null);
+                  router.push({ pathname: "/task-detail", params: { taskId: actionMenuTask.id, teamId: activeTeamId!, startEdit: "1" } });
+                }}
+                style={{ flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: 20, paddingVertical: 16 }}
+                testID="task-action-edit"
+              >
+                <Text style={{ fontSize: 20 }}>✏️</Text>
+                <Text style={{ fontSize: 16, fontWeight: "500", color: "#0F172A" }}>Edit</Text>
+              </Pressable>
+            ) : null}
             {/* Reassign — owners/leaders only, undone tasks with assignees */}
             {isOwnerOrLeader && actionMenuTask?.status !== "done" && (actionMenuTask?.assignments.length ?? 0) > 0 ? (
               <Pressable
@@ -1982,9 +1255,9 @@ export default function TasksScreen() {
       </Modal>
 
       {/* New / Edit Event Modal */}
-      <Modal visible={showEventModal} transparent animationType="slide" onRequestClose={() => { setShowEventModal(false); setEditingEvent(null); setConfirmDeleteEvent(false); }}>
+      <Modal visible={showEventModal} transparent animationType="slide" onRequestClose={() => { setShowEventModal(false); setEditingEvent(null); setEventModalReadOnly(false); setConfirmDeleteEvent(false); }}>
         <SafeKeyboardAvoidingView style={{ flex: 1, justifyContent: "flex-end" }}>
-          <Pressable style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.5)" }} onPress={() => { setShowEventModal(false); setEditingEvent(null); setConfirmDeleteEvent(false); }} />
+          <Pressable style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.5)" }} onPress={() => { setShowEventModal(false); setEditingEvent(null); setEventModalReadOnly(false); setConfirmDeleteEvent(false); }} />
           <Pressable
             style={{
               backgroundColor: "white",
@@ -2001,21 +1274,31 @@ export default function TasksScreen() {
                 <Image source={require("@/assets/alenio-icon.png")} style={{ width: 28, height: 28, borderRadius: 7 }} />
                 <Text style={{ fontSize: 17, fontWeight: "700", color: "#0F172A" }}>
                   {editingEvent
-                    ? eventModalType === "meeting" ? "Edit Virtual Meeting" : "Edit Event"
-                    : eventModalType === "meeting" ? "New Virtual Meeting" : "New Event"}
+                    ? eventModalReadOnly
+                      ? eventModalType === "meeting"
+                        ? "Meeting details"
+                        : "Event details"
+                      : eventModalType === "meeting"
+                        ? "Edit Virtual Meeting"
+                        : "Edit Event"
+                    : eventModalType === "meeting"
+                      ? "New Virtual Meeting"
+                      : "New Event"}
                 </Text>
               </View>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                {editingEvent ? (
+                {editingEvent && !eventModalReadOnly ? (
                   <Pressable
-                    onPress={() => setConfirmDeleteEvent(true)}
+                    onPress={() => editingEvent && confirmAndDeleteEvent(editingEvent)}
                     style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "#FEF2F2", alignItems: "center", justifyContent: "center" }}
                     testID="delete-event-button"
+                    accessibilityRole="button"
+                    accessibilityLabel="Delete event"
                   >
-                    <Text style={{ fontSize: 15 }}>🗑</Text>
+                    <Trash2 size={15} color="#DC2626" strokeWidth={2.25} />
                   </Pressable>
                 ) : null}
-                <Pressable onPress={() => { setShowEventModal(false); setEditingEvent(null); setConfirmDeleteEvent(false); }} style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "#F1F5F9", alignItems: "center", justifyContent: "center" }}>
+                <Pressable onPress={() => { setShowEventModal(false); setEditingEvent(null); setEventModalReadOnly(false); setConfirmDeleteEvent(false); }} style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "#F1F5F9", alignItems: "center", justifyContent: "center" }}>
                   <X size={16} color="#64748B" />
                 </Pressable>
               </View>
@@ -2059,22 +1342,24 @@ export default function TasksScreen() {
             >
               <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748B", marginBottom: 6 }}>Title</Text>
               <TextInput
-                style={{ borderWidth: 1.5, borderColor: "#E2E8F0", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: "#0F172A", marginBottom: 14 }}
+                style={{ borderWidth: 1.5, borderColor: "#E2E8F0", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: "#0F172A", marginBottom: 14, backgroundColor: eventModalReadOnly ? "#F8FAFC" : "white" }}
                 placeholder="Event title..."
                 placeholderTextColor="#CBD5E1"
                 value={eventTitle}
                 onChangeText={(t) => { setEventTitle(t); setFormError(null); }}
+                editable={!eventModalReadOnly}
                 testID="event-title-input"
               />
 
               <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748B", marginBottom: 6 }}>Description (optional)</Text>
               <TextInput
-                style={{ borderWidth: 1.5, borderColor: "#E2E8F0", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: "#0F172A", marginBottom: 14, minHeight: 60, textAlignVertical: "top" }}
+                style={{ borderWidth: 1.5, borderColor: "#E2E8F0", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: "#0F172A", marginBottom: 14, minHeight: 60, textAlignVertical: "top", backgroundColor: eventModalReadOnly ? "#F8FAFC" : "white" }}
                 placeholder="Add a description..."
                 placeholderTextColor="#CBD5E1"
                 value={eventDescription}
                 onChangeText={setEventDescription}
                 multiline
+                editable={!eventModalReadOnly}
               />
 
               <View style={{ flexDirection: "row", gap: 10, marginBottom: 20 }}>
@@ -2082,7 +1367,14 @@ export default function TasksScreen() {
                   <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748B", marginBottom: 6 }}>
                     {eventModalType === "meeting" ? "Date" : "Start Date"}
                   </Text>
-                  <Pressable onPress={() => { setShowEndPicker(false); setShowStartPicker(true); }} style={{ borderWidth: 1.5, borderColor: "#4361EE", borderRadius: 12, paddingHorizontal: 10, paddingVertical: 10, flexDirection: "row", alignItems: "center", backgroundColor: "#4361EE0D" }}>
+                  <Pressable
+                    onPress={() => {
+                      if (eventModalReadOnly) return;
+                      setShowEndPicker(false);
+                      setShowStartPicker(true);
+                    }}
+                    style={{ borderWidth: 1.5, borderColor: eventModalReadOnly ? "#E2E8F0" : "#4361EE", borderRadius: 12, paddingHorizontal: 10, paddingVertical: 10, flexDirection: "row", alignItems: "center", backgroundColor: eventModalReadOnly ? "#F8FAFC" : "#4361EE0D" }}
+                  >
                     <Calendar size={13} color="#4361EE" />
                     <Text style={{ fontSize: 12, fontWeight: "500", color: "#4361EE", marginLeft: 6 }}>
                       {eventStart.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
@@ -2092,7 +1384,14 @@ export default function TasksScreen() {
                 {eventModalType === "event" ? (
                   <View style={{ flex: 1 }}>
                     <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748B", marginBottom: 6 }}>End Date</Text>
-                    <Pressable onPress={() => { setShowStartPicker(false); setShowEndPicker(true); }} style={{ borderWidth: 1.5, borderColor: "#7C3AED", borderRadius: 12, paddingHorizontal: 10, paddingVertical: 10, flexDirection: "row", alignItems: "center", backgroundColor: "#7C3AED0D" }}>
+                    <Pressable
+                      onPress={() => {
+                        if (eventModalReadOnly) return;
+                        setShowStartPicker(false);
+                        setShowEndPicker(true);
+                      }}
+                      style={{ borderWidth: 1.5, borderColor: eventModalReadOnly ? "#E2E8F0" : "#7C3AED", borderRadius: 12, paddingHorizontal: 10, paddingVertical: 10, flexDirection: "row", alignItems: "center", backgroundColor: eventModalReadOnly ? "#F8FAFC" : "#7C3AED0D" }}
+                    >
                       <Calendar size={13} color="#7C3AED" />
                       <Text style={{ fontSize: 12, fontWeight: "500", color: "#7C3AED", marginLeft: 6 }}>
                         {eventEnd.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
@@ -2112,8 +1411,7 @@ export default function TasksScreen() {
                   <DateTimePicker
                     value={eventStart}
                     mode="date"
-                    display="spinner"
-                    style={{ height: 180 }}
+                    display={Platform.OS === "ios" ? "inline" : "calendar"}
                     onChange={(e, d) => {
                       if (Platform.OS === "android") setShowStartPicker(false);
                       if (e.type === "dismissed") return;
@@ -2136,9 +1434,8 @@ export default function TasksScreen() {
                   <DateTimePicker
                     value={eventEnd}
                     mode="date"
-                    display="spinner"
+                    display={Platform.OS === "ios" ? "inline" : "calendar"}
                     minimumDate={eventStart}
-                    style={{ height: 180 }}
                     onChange={(e, d) => {
                       if (Platform.OS === "android") setShowEndPicker(false);
                       if (e.type === "dismissed") return;
@@ -2154,7 +1451,14 @@ export default function TasksScreen() {
                   <View style={{ flexDirection: "row", gap: 10 }}>
                     <View style={{ flex: 1 }}>
                       <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748B", marginBottom: 6 }}>Start Time</Text>
-                      <Pressable onPress={() => { setShowStartTimePicker(!showStartTimePicker); setShowDurationPicker(false); }} style={{ borderWidth: 1.5, borderColor: showStartTimePicker ? "#4361EE" : "#4361EE", borderRadius: 12, paddingHorizontal: 10, paddingVertical: 10, flexDirection: "row", alignItems: "center", backgroundColor: showStartTimePicker ? "#4361EE22" : "#4361EE0D" }}>
+                      <Pressable
+                        onPress={() => {
+                          if (eventModalReadOnly) return;
+                          setShowStartTimePicker(!showStartTimePicker);
+                          setShowDurationPicker(false);
+                        }}
+                        style={{ borderWidth: 1.5, borderColor: "#4361EE", borderRadius: 12, paddingHorizontal: 10, paddingVertical: 10, flexDirection: "row", alignItems: "center", backgroundColor: eventModalReadOnly ? "#F8FAFC" : showStartTimePicker ? "#4361EE22" : "#4361EE0D" }}
+                      >
                         <Clock size={13} color="#4361EE" />
                         <Text style={{ fontSize: 12, fontWeight: "500", color: "#4361EE", marginLeft: 6 }}>
                           {eventStart.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}
@@ -2163,7 +1467,14 @@ export default function TasksScreen() {
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748B", marginBottom: 6 }}>Duration</Text>
-                      <Pressable onPress={() => { setShowStartTimePicker(false); setShowDurationPicker(true); }} style={{ borderWidth: 1.5, borderColor: "#7C3AED", borderRadius: 12, paddingHorizontal: 10, paddingVertical: 10, flexDirection: "row", alignItems: "center", backgroundColor: showDurationPicker ? "#7C3AED22" : "#7C3AED0D" }}>
+                      <Pressable
+                        onPress={() => {
+                          if (eventModalReadOnly) return;
+                          setShowStartTimePicker(false);
+                          setShowDurationPicker(true);
+                        }}
+                        style={{ borderWidth: 1.5, borderColor: "#7C3AED", borderRadius: 12, paddingHorizontal: 10, paddingVertical: 10, flexDirection: "row", alignItems: "center", backgroundColor: eventModalReadOnly ? "#F8FAFC" : showDurationPicker ? "#7C3AED22" : "#7C3AED0D" }}
+                      >
                         <Clock size={13} color="#7C3AED" />
                         <Text style={{ fontSize: 12, fontWeight: "500", color: "#7C3AED", marginLeft: 6 }}>
                           {formatVideoMeetingDuration(meetingDurationMinutes)}
@@ -2258,7 +1569,9 @@ export default function TasksScreen() {
                 </View>
                 <Switch
                   value={!eventIsHidden}
+                  disabled={eventModalReadOnly}
                   onValueChange={(v) => {
+                    if (eventModalReadOnly) return;
                     const nextHidden = !v;
                     setEventIsHidden(nextHidden);
                     if (!nextHidden) {
@@ -2272,7 +1585,7 @@ export default function TasksScreen() {
                 />
               </View>
               ) : null}
-              {!isOwnerOrLeader && eventModalType !== "meeting" && !eventIsHidden ? (
+              {!eventModalReadOnly && !isOwnerOrLeader && eventModalType !== "meeting" && !eventIsHidden ? (
                 <Text style={{ fontSize: 12, color: "#B45309", marginBottom: 16, marginTop: -12 }}>
                   Public events are sent to your team leader or owner for approval.
                 </Text>
@@ -2283,14 +1596,31 @@ export default function TasksScreen() {
                 {["#4361EE", "#7C3AED", "#EC4899", "#EF4444", "#F59E0B", "#10B981", "#06B6D4", "#64748B"].map((c) => (
                   <Pressable
                     key={c}
-                    onPress={() => setEventColor(c)}
-                    style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: c, alignItems: "center", justifyContent: "center", borderWidth: eventColor === c ? 3 : 0, borderColor: "white", shadowColor: eventColor === c ? c : "transparent", shadowOpacity: 0.5, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: eventColor === c ? 4 : 0 }}
+                    onPress={() => {
+                      if (eventModalReadOnly) return;
+                      setEventColor(c);
+                    }}
+                    style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: c, alignItems: "center", justifyContent: "center", borderWidth: eventColor === c ? 3 : 0, borderColor: "white", shadowColor: eventColor === c ? c : "transparent", shadowOpacity: 0.5, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: eventColor === c ? 4 : 0, opacity: eventModalReadOnly && eventColor !== c ? 0.45 : 1 }}
                   >
                     {eventColor === c ? <Text style={{ color: "white", fontSize: 16, fontWeight: "700" }}>✓</Text> : null}
                   </Pressable>
                 ))}
               </View>
 
+              {eventModalReadOnly ? (
+                <TouchableOpacity
+                  onPress={() => {
+                    setShowEventModal(false);
+                    setEditingEvent(null);
+                    setEventModalReadOnly(false);
+                    setConfirmDeleteEvent(false);
+                  }}
+                  style={{ backgroundColor: "#F1F5F9", borderRadius: 14, paddingVertical: 14, alignItems: "center" }}
+                  testID="close-event-details-button"
+                >
+                  <Text style={{ color: "#334155", fontSize: 15, fontWeight: "700" }}>Close</Text>
+                </TouchableOpacity>
+              ) : (
               <TouchableOpacity
                 onPress={handleSaveEvent}
                 disabled={createEventMutation.isPending || updateEventMutation.isPending}
@@ -2303,6 +1633,7 @@ export default function TasksScreen() {
                   <Text style={{ color: "white", fontSize: 15, fontWeight: "700" }}>{editingEvent ? "Update Event" : "Save Event"}</Text>
                 )}
               </TouchableOpacity>
+              )}
             </ScrollView>
           </Pressable>
         </SafeKeyboardAvoidingView>

@@ -62,6 +62,57 @@ function formatUpdatedWithDays(iso: string): string {
   return `${formatDateOnly(iso)} · ${daysSinceText(days)}`;
 }
 
+function SectionCard({
+  title,
+  trailing,
+  children,
+  flex,
+}: {
+  title: string;
+  trailing?: React.ReactNode;
+  children: React.ReactNode;
+  flex?: number;
+}) {
+  return (
+    <View
+      style={{
+        flex: flex ?? undefined,
+        backgroundColor: "white",
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: "#E0E7FF",
+        overflow: "hidden",
+        shadowColor: "#0F172A",
+        shadowOpacity: 0.04,
+        shadowRadius: 8,
+        shadowOffset: { width: 0, height: 2 },
+        elevation: 2,
+      }}
+    >
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 6,
+          paddingHorizontal: 14,
+          paddingVertical: 10,
+          borderBottomWidth: 1,
+          borderBottomColor: "#E8ECFA",
+          backgroundColor: "#FAFBFF",
+        }}
+      >
+        <Text style={{ fontSize: 13, fontWeight: "800", color: "#0F172A", flex: 1 }} numberOfLines={1}>
+          {title}
+        </Text>
+        {trailing}
+      </View>
+      <View style={{ flex: flex ? 1 : undefined, paddingHorizontal: 14, paddingVertical: 12 }}>
+        {children}
+      </View>
+    </View>
+  );
+}
+
 function KpiCell({
   label,
   value,
@@ -72,22 +123,14 @@ function KpiCell({
   warning?: boolean;
 }) {
   return (
-    <View
-      style={{
-        flex: 1,
-        minWidth: "30%",
-        paddingVertical: 8,
-        paddingHorizontal: 10,
-        backgroundColor: warning ? "#FEF2F2" : "white",
-      }}
-    >
+    <View style={{ flex: 1, minWidth: 0 }}>
       <Text
         style={{
           fontSize: 9,
           fontWeight: "700",
           color: "#94A3B8",
           textTransform: "uppercase",
-          letterSpacing: 0.6,
+          letterSpacing: 0.5,
         }}
         numberOfLines={1}
       >
@@ -95,10 +138,10 @@ function KpiCell({
       </Text>
       <Text
         style={{
-          fontSize: 13,
-          fontWeight: "700",
+          fontSize: 15,
+          fontWeight: "800",
           color: warning ? "#B91C1C" : "#0F172A",
-          marginTop: 2,
+          marginTop: 3,
         }}
         numberOfLines={1}
       >
@@ -163,126 +206,79 @@ export function ProfileOverviewTab({
     return lastOneOnOneDate ? daysSinceDate(lastOneOnOneDate) : null;
   }, [daysSinceLastCheckIn, lastOneOnOneDate]);
 
-  const kpis = [
-    { label: "Active goals", value: loading ? "—" : String(activeGoals.length) },
-    {
-      label: "Last check-in",
-      value: loading ? "—" : lastOneOnOneDate ? formatDateOnly(lastOneOnOneDate) : "None",
-    },
-    {
-      label: "Days since",
-      value: loading ? "—" : lastOneOnOneDate ? daysSinceText(daysSinceOneOnOne ?? 0) : "—",
-    },
-    { label: "Check-ins", value: loading ? "—" : String(oneOnOneCount) },
-    ...(streak != null && streak > 0 ? [{ label: "Streak", value: `${streak}d` }] : []),
-    ...(overdueFollowUpTasks != null && overdueFollowUpTasks > 0
-      ? [{ label: "Overdue", value: String(overdueFollowUpTasks), warning: true as const }]
-      : []),
-  ];
+  const snapshotGoals = activeGoals.slice(0, 3);
 
   if (loading && activeGoals.length === 0 && !err) {
     return (
-      <View
-        style={{
-          backgroundColor: "white",
-          borderRadius: 14,
-          borderWidth: 1,
-          borderColor: "#E0E7FF",
-          paddingVertical: 28,
-          alignItems: "center",
-        }}
-      >
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
         <ActivityIndicator color="#4361EE" />
       </View>
     );
   }
 
   return (
-    <View
-      style={{
-        backgroundColor: "white",
-        borderRadius: 14,
-        borderWidth: 1,
-        borderColor: "#E0E7FF",
-        overflow: "hidden",
-        shadowColor: "#0F172A",
-        shadowOpacity: 0.04,
-        shadowRadius: 8,
-        shadowOffset: { width: 0, height: 2 },
-        elevation: 2,
-      }}
-    >
-      <View
-        style={{
-          paddingHorizontal: 14,
-          paddingVertical: 10,
-          borderBottomWidth: 1,
-          borderBottomColor: "#E8ECFA",
-          backgroundColor: "#FAFBFF",
-        }}
-      >
-        <Text style={{ fontSize: 9, fontWeight: "700", color: "#64748B", letterSpacing: 1.2, textTransform: "uppercase" }}>
-          Overview
-        </Text>
-        <Text style={{ fontSize: 14, fontWeight: "700", color: "#0F172A", marginTop: 2 }}>
-          Member snapshot
-        </Text>
-      </View>
+    <View style={{ flex: 1, gap: 10 }}>
+      <SectionCard title="Member snapshot">
+        {err ? (
+          <Text style={{ fontSize: 12, color: "#DC2626" }}>{err}</Text>
+        ) : (
+          <View style={{ gap: 12 }}>
+            <View style={{ flexDirection: "row", gap: 12 }}>
+              <KpiCell label="Active goals" value={loading ? "—" : String(activeGoals.length)} />
+              <KpiCell
+                label="Last check-in"
+                value={loading ? "—" : lastOneOnOneDate ? formatDateOnly(lastOneOnOneDate) : "None"}
+              />
+            </View>
+            <View style={{ flexDirection: "row", gap: 12 }}>
+              <KpiCell
+                label="Days since"
+                value={loading ? "—" : lastOneOnOneDate ? daysSinceText(daysSinceOneOnOne ?? 0) : "—"}
+              />
+              <KpiCell label="Check-ins" value={loading ? "—" : String(oneOnOneCount)} />
+            </View>
+            {(streak != null && streak > 0) || (overdueFollowUpTasks != null && overdueFollowUpTasks > 0) ? (
+              <View style={{ flexDirection: "row", gap: 12 }}>
+                {streak != null && streak > 0 ? <KpiCell label="Streak" value={`${streak}d`} /> : <View style={{ flex: 1 }} />}
+                {overdueFollowUpTasks != null && overdueFollowUpTasks > 0 ? (
+                  <KpiCell label="Overdue" value={String(overdueFollowUpTasks)} warning />
+                ) : (
+                  <View style={{ flex: 1 }} />
+                )}
+              </View>
+            ) : null}
+          </View>
+        )}
+      </SectionCard>
 
-      <View
-        style={{
-          flexDirection: "row",
-          flexWrap: "wrap",
-          backgroundColor: "#E8ECFA",
-          gap: 1,
-        }}
+      <SectionCard
+        title="Standards status"
+        trailing={<StandardsStatusKey iconSize={14} />}
       >
-        {kpis.map((kpi) => (
-          <KpiCell key={kpi.label} label={kpi.label} value={kpi.value} warning={"warning" in kpi ? kpi.warning : false} />
-        ))}
-      </View>
-
-      {err ? (
-        <Text style={{ fontSize: 12, color: "#DC2626", paddingHorizontal: 14, paddingTop: 10 }}>{err}</Text>
-      ) : null}
-
-      <View
-        style={{
-          marginHorizontal: 14,
-          marginTop: 10,
-          marginBottom: 4,
-          padding: 12,
-          borderRadius: 12,
-          borderWidth: 1,
-          borderColor: "#E8EDF3",
-          backgroundColor: "#FFFFFF",
-        }}
-      >
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 }}>
-          <Text style={{ fontSize: 9, fontWeight: "700", color: "#64748B", letterSpacing: 1.1, textTransform: "uppercase" }}>
-            Standards Status
-          </Text>
-          <StandardsStatusKey />
-        </View>
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12, marginTop: 10 }}>
-          <View style={{ minWidth: "40%" }}>
-            <Text style={{ fontSize: 9, fontWeight: "700", color: "#94A3B8", textTransform: "uppercase" }}>Check-in</Text>
-            <Text style={{ fontSize: 13, fontWeight: "600", color: "#0F172A", marginTop: 2 }}>
+        <View style={{ flexDirection: "row", gap: 16, marginBottom: 10 }}>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 9, fontWeight: "700", color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.5 }}>
+              Check-in
+            </Text>
+            <Text style={{ fontSize: 13, fontWeight: "600", color: "#0F172A", marginTop: 2 }} numberOfLines={1}>
               {standards.checkInRequired ? formatCheckInFrequencySummary(standards) : "Not required"}
             </Text>
           </View>
-          <View style={{ minWidth: "40%" }}>
-            <Text style={{ fontSize: 9, fontWeight: "700", color: "#94A3B8", textTransform: "uppercase" }}>Goals</Text>
-            <Text style={{ fontSize: 13, fontWeight: "600", color: "#0F172A", marginTop: 2 }}>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 9, fontWeight: "700", color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.5 }}>
+              Goals
+            </Text>
+            <Text style={{ fontSize: 13, fontWeight: "600", color: "#0F172A", marginTop: 2 }} numberOfLines={1}>
               {standards.goalsRequired
                 ? `${standards.minimumActiveGoals} active goal${standards.minimumActiveGoals === 1 ? "" : "s"}`
                 : "Not required"}
             </Text>
           </View>
         </View>
+
         {standardsCompliance ? (
           <>
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 10 }}>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
               {memberStandardsBadges(standardsCompliance, daysSinceOneOnOne).map((badge) => {
                 const colors = standardsBadgeColors(badge.variant);
                 return (
@@ -310,35 +306,48 @@ export function ProfileOverviewTab({
                 );
               })}
             </View>
-            <View style={{ marginTop: 8, gap: 4 }}>
+            <View style={{ marginTop: 8, gap: 2 }}>
               {standardsCompliance.checkInStatus !== "not_required" ? (
-                <Text style={{ fontSize: 12, color: "#475569" }}>{standardsCompliance.checkInActionText}</Text>
+                <Text style={{ fontSize: 12, color: "#475569" }} numberOfLines={2}>
+                  {standardsCompliance.checkInActionText}
+                </Text>
               ) : null}
               {standardsCompliance.goalsStatus !== "not_required" ? (
-                <Text style={{ fontSize: 12, color: "#475569" }}>{standardsCompliance.goalsActionText}</Text>
+                <Text style={{ fontSize: 12, color: "#475569" }} numberOfLines={2}>
+                  {standardsCompliance.goalsActionText}
+                </Text>
               ) : null}
             </View>
           </>
         ) : null}
-      </View>
+      </SectionCard>
 
-      <View style={{ paddingHorizontal: 14, paddingVertical: 10 }}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 }}>
-          <Text style={{ fontSize: 11, fontWeight: "700", color: "#64748B", letterSpacing: 0.6, textTransform: "uppercase" }}>
-            Active development goals
-          </Text>
-          {activeGoals.length > 0 ? (
-            <View style={{ backgroundColor: "#EEF2FF", borderRadius: 999, minWidth: 18, height: 18, alignItems: "center", justifyContent: "center", paddingHorizontal: 5 }}>
-              <Text style={{ fontSize: 10, fontWeight: "700", color: "#4361EE" }}>{activeGoals.length}</Text>
+      <SectionCard
+        title="Development goals"
+        flex={1}
+        trailing={
+          activeGoals.length > 0 ? (
+            <View
+              style={{
+                backgroundColor: "#EEF2FF",
+                borderRadius: 999,
+                minWidth: 20,
+                height: 20,
+                alignItems: "center",
+                justifyContent: "center",
+                paddingHorizontal: 6,
+              }}
+            >
+              <Text style={{ fontSize: 11, fontWeight: "700", color: "#4361EE" }}>{activeGoals.length}</Text>
             </View>
-          ) : null}
-        </View>
-
+          ) : null
+        }
+      >
         {activeGoals.length === 0 ? (
-          <Text style={{ fontSize: 12, color: "#94A3B8" }}>No active development goals.</Text>
+          <Text style={{ fontSize: 13, color: "#94A3B8" }}>No active development goals.</Text>
         ) : (
-          <View style={{ gap: 0 }}>
-            {activeGoals.map((goal, index) => (
+          <View style={{ gap: 0, flex: 1 }}>
+            {snapshotGoals.map((goal, index) => (
               <View
                 key={goal.id}
                 style={{
@@ -370,9 +379,14 @@ export function ProfileOverviewTab({
                 </View>
               </View>
             ))}
+            {activeGoals.length > snapshotGoals.length ? (
+              <Text style={{ fontSize: 12, color: "#64748B", marginTop: 4 }}>
+                +{activeGoals.length - snapshotGoals.length} more on Growth
+              </Text>
+            ) : null}
           </View>
         )}
-      </View>
+      </SectionCard>
     </View>
   );
 }

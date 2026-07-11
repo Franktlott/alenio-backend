@@ -14,7 +14,7 @@ export const DEVELOPMENT_GOAL_ACTIVITY_KEY = {
   activityCountsAs: [
     "Adding or editing progress notes",
     "Updating the skill or action steps",
-    "Reopening an inactive goal",
+    "Reopening a closed or inactive goal",
   ],
 } as const;
 

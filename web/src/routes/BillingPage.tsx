@@ -455,10 +455,10 @@ export function BillingPage() {
                   </dl>
                   {mobileManaged ? (
                     <div className="enterprise-billing-mobile-notice">
-                      <p className="enterprise-billing-mobile-notice-title">Mobile app billing</p>
+                      <p className="enterprise-billing-mobile-notice-title">Active Team plan</p>
                       <p>
-                        Team is billed through the App Store or Google Play. Manage payment and cancellation in your
-                        device subscription settings.
+                        This workspace has an active Team plan that is not managed through web Stripe billing. Cancel or
+                        change it in Plan & Access on mobile, or contact support if you need help.
                       </p>
                     </div>
                   ) : null}

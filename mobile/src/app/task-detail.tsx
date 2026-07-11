@@ -20,17 +20,16 @@ import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
 import { toast } from "burnt";
 import type { Task, Team, Subtask, SubtaskCompletion } from "@/lib/types";
-import { useDemoMode } from "@/lib/useDemo";
 import { OneOnOneAssociateFeedbackForm } from "@/components/OneOnOneAssociateFeedbackForm";
 import type { OneOnOneAssociateFeedbackContext } from "@/lib/one-on-one-feedback-api";
 import { fetchOneOnOneAssociateFeedbackContext } from "@/lib/one-on-one-feedback-api";
 import {
-  ASSOCIATE_FEEDBACK_SECTION_TITLE,
   formatTaskDescriptionForDisplay,
   isFeedbackTaskDescription,
   parseFeedbackTaskDescription,
 } from "@/lib/one-on-one-feedback";
 import { isRecurringTask, type RecurrenceScope } from "@/lib/recurring-task";
+import { invalidateTaskCaches } from "@/lib/invalidate-task-caches";
 import { isTaskOverdue } from "@/lib/seneca-task-display";
 import { formatTaskDueDateLabel, resolveTimeZone } from "@/lib/timezone";
 
@@ -44,7 +43,6 @@ const PRIORITY_COLORS: Record<string, string> = {
 export default function TaskDetailScreen() {
   const { taskId, teamId, startEdit } = useLocalSearchParams<{ taskId: string; teamId: string; startEdit?: string }>();
   const { data: session } = useSession();
-  const isDemo = useDemoMode();
   const queryClient = useQueryClient();
   const userTimeZone = resolveTimeZone();
   const insets = useSafeAreaInsets();
@@ -81,8 +79,7 @@ export default function TaskDetailScreen() {
       api.patch<Task>(`/api/teams/${teamId}/tasks/${taskId}`, updates),
     onSuccess: (updated) => {
       queryClient.setQueryData(["task", taskId, teamId], updated);
-      queryClient.invalidateQueries({ queryKey: ["tasks", teamId] });
-      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      invalidateTaskCaches(queryClient, teamId);
     },
     onError: (error: Error) => {
       toast({ title: error.message, preset: "error" });
@@ -93,8 +90,7 @@ export default function TaskDetailScreen() {
     mutationFn: (scope: RecurrenceScope) =>
       api.delete(`/api/teams/${teamId}/tasks/${taskId}?scope=${scope}`),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["tasks", teamId] });
-      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      invalidateTaskCaches(queryClient, teamId);
       router.back();
     },
   });
@@ -104,7 +100,7 @@ export default function TaskDetailScreen() {
       api.post(`/api/teams/${teamId}/tasks/${taskId}/assign`, { userIds }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["task", taskId, teamId] });
-      queryClient.invalidateQueries({ queryKey: ["tasks", teamId] });
+      invalidateTaskCaches(queryClient, teamId);
     },
   });
 
@@ -113,7 +109,7 @@ export default function TaskDetailScreen() {
       api.delete(`/api/teams/${teamId}/tasks/${taskId}/assign/${userId}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["task", taskId, teamId] });
-      queryClient.invalidateQueries({ queryKey: ["tasks", teamId] });
+      invalidateTaskCaches(queryClient, teamId);
     },
   });
 
@@ -173,10 +169,10 @@ export default function TaskDetailScreen() {
     feedbackContextLoading &&
     !feedbackContext;
   const showFocusedFeedbackTask = isFeedbackTask && isFeedbackAssignee;
-  const isCreator = !!currentUserId && task?.creator?.id === currentUserId && !isDemo;
+  const isCreator = !!currentUserId && task?.creator?.id === currentUserId;
   const isOwnerOrLeader = team?.role === "owner" || team?.role === "team_leader" || team?.role === "admin";
   const canEdit = (isCreator || isOwnerOrLeader) && !isCompleted;
-  const canComplete = !isCompleted && (isSelfAssigned || canEdit || isCreator);
+  const canComplete = !isCompleted && !isFeedbackTask && (isSelfAssigned || canEdit || isCreator);
   const isEditable = canEdit && isEditMode;
 
   const taskIsRecurring = !!task && isRecurringTask(task);
@@ -185,7 +181,8 @@ export default function TaskDetailScreen() {
     !!task && (draftTitle.trim() !== task.title.trim() || draftPriority !== task.priority);
 
   const handleMarkComplete = () => {
-    if (!task || isDemo) return;
+    if (!task) return;
+    if (isFeedbackTaskDescription(task.description)) return;
     const subtasks = task.subtasks ?? [];
     const isJointTask = task.isJoint === true;
     const incomplete = subtasks.filter((st) =>
@@ -302,7 +299,7 @@ export default function TaskDetailScreen() {
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-white dark:bg-slate-900" edges={["top"]} testID="task-detail-screen">
+    <SafeAreaView className="flex-1 bg-white dark:bg-slate-900" edges={["top"]} testID="task-detail-screen" style={showFocusedFeedbackTask ? { backgroundColor: "#F8FAFC" } : undefined}>
       {/* Header */}
       <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
         <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 14, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
@@ -340,7 +337,7 @@ export default function TaskDetailScreen() {
                 </TouchableOpacity>
               </View>
             ) : null}
-            {canEdit && !isEditMode ? (
+            {canEdit && !isEditMode && !showFocusedFeedbackTask ? (
               <TouchableOpacity onPress={() => {
                 setDraftTitle(task.title);
                 setDraftPriority(task.priority);
@@ -362,13 +359,18 @@ export default function TaskDetailScreen() {
                 )}
               </TouchableOpacity>
             ) : null}
-            {!isCreator ? <View style={{ width: 20 }} /> : null}
+            {!isCreator && !showFocusedFeedbackTask ? <View style={{ width: 20 }} /> : null}
             <Image source={require("@/assets/alenio-icon.png")} style={{ width: 30, height: 30, borderRadius: 6 }} />
           </View>
         </View>
       </LinearGradient>
 
-      <ScrollView className="flex-1 px-4" showsVerticalScrollIndicator={false}>
+      <ScrollView
+        className="flex-1 px-4"
+        showsVerticalScrollIndicator={false}
+        style={showFocusedFeedbackTask ? { backgroundColor: "#F8FAFC" } : undefined}
+        contentContainerStyle={showFocusedFeedbackTask ? { paddingBottom: 32, flexGrow: 1 } : undefined}
+      >
         {/* Priority indicator */}
         {!showFocusedFeedbackTask ? (
         <View className="flex-row items-center mt-4 mb-2" style={{ gap: 8 }}>
@@ -408,8 +410,9 @@ export default function TaskDetailScreen() {
         </View>
         ) : null}
 
-        {/* Title */}
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: task.isJoint ? 8 : 12, marginTop: showFocusedFeedbackTask ? 16 : 0 }}>
+        {/* Title — hidden for focused check-in follow-up (title is in the header) */}
+        {!showFocusedFeedbackTask ? (
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: task.isJoint ? 8 : 12, marginTop: 0 }}>
           {isEditMode ? (
             <TextInput
               value={draftTitle}
@@ -423,7 +426,8 @@ export default function TaskDetailScreen() {
             <Text className="text-2xl font-bold text-slate-900 dark:text-white" style={{ flex: 1 }}>{task.title}</Text>
           )}
         </View>
-        {task.isJoint ? (
+        ) : null}
+        {!showFocusedFeedbackTask && task.isJoint ? (
           <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 12 }}>
             <View
               style={{ flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, backgroundColor: "#4338CA" }}
@@ -446,7 +450,7 @@ export default function TaskDetailScreen() {
             onSubmitted={() => {
               setFeedbackCompletionActive(false);
               void queryClient.invalidateQueries({ queryKey: ["task", taskId, teamId] });
-              void queryClient.invalidateQueries({ queryKey: ["tasks", teamId] });
+              invalidateTaskCaches(queryClient, teamId);
               router.back();
             }}
           />
@@ -455,19 +459,21 @@ export default function TaskDetailScreen() {
         {showFeedbackFormLoading ? (
           <View
             style={{
-              borderWidth: 1,
-              borderColor: "#E2E8F0",
-              borderRadius: 12,
-              padding: 16,
+              borderRadius: 20,
+              backgroundColor: "#FFFFFF",
+              marginTop: 8,
               marginBottom: 16,
+              padding: 28,
               alignItems: "center",
-              gap: 8,
+              gap: 12,
+              borderWidth: 1,
+              borderColor: "#EEF2FF",
             }}
           >
-            <Text style={{ fontSize: 15, fontWeight: "700", color: "#0F172A", alignSelf: "flex-start" }}>
-              {ASSOCIATE_FEEDBACK_SECTION_TITLE}
+            <ActivityIndicator color="#7C3AED" />
+            <Text style={{ fontSize: 14, fontWeight: "600", color: "#64748B" }}>
+              Loading your follow-up…
             </Text>
-            <ActivityIndicator color="#4361EE" />
           </View>
         ) : null}
 
@@ -497,9 +503,9 @@ export default function TaskDetailScreen() {
             </Text>
             {!isFeedbackTask ? (
               <TouchableOpacity
-                onPress={() => { if (!isDemo) setShowRecallConfirm(true); }}
-                disabled={updateMutation.isPending || isDemo}
-                className={`px-3 py-1 rounded-full ${isDemo ? "bg-emerald-300 dark:bg-emerald-800" : "bg-emerald-600"}`}
+                onPress={() => setShowRecallConfirm(true)}
+                disabled={updateMutation.isPending}
+                className="px-3 py-1 rounded-full bg-emerald-600"
               >
                 {updateMutation.isPending ? (
                   <ActivityIndicator size="small" color="white" />
@@ -541,7 +547,7 @@ export default function TaskDetailScreen() {
                     <TouchableOpacity
                       key={subtask.id}
                       onPress={() => toggleSubtaskMutation.mutate({ subtaskId: subtask.id, completed: !doneForMe })}
-                      disabled={isCompleted || toggleSubtaskMutation.isPending || isDemo}
+                      disabled={isCompleted || toggleSubtaskMutation.isPending}
                       testID={`subtask-toggle-${subtask.id}`}
                       style={{ flexDirection: "row", alignItems: "center", paddingVertical: 10, paddingHorizontal: 4, gap: 10 }}
                       activeOpacity={0.6}
@@ -738,9 +744,14 @@ export default function TaskDetailScreen() {
                 style={{ backgroundColor: overdue ? "#FEF2F2" : dueToday ? "#FFF7ED" : "#F8FAFC", gap: 6 }}
               >
                 <Text style={{ fontSize: 14 }}>{overdue ? "⚠️" : "📅"}</Text>
-                <Text className="text-sm font-medium" style={{ color: overdue ? "#EF4444" : dueToday ? "#EA580C" : "#64748B" }}>
-                  {dueToday ? "Due today" : `Due ${dueLabel}`}
-                </Text>
+                {dueToday ? (
+                  <Text className="text-sm font-medium" style={{ color: "#EA580C" }}>Due today</Text>
+                ) : (
+                  <View style={{ flexDirection: "row", alignItems: "center" }}>
+                    <Text className="text-sm font-medium" style={{ color: "#0F172A" }}>Due </Text>
+                    <Text className="text-sm font-medium" style={{ color: "#0F172A" }}>{dueLabel}</Text>
+                  </View>
+                )}
                 {overdue ? (
                   <Text className="text-xs font-semibold" style={{ color: "#EF4444" }}>Overdue</Text>
                 ) : null}
@@ -758,7 +769,7 @@ export default function TaskDetailScreen() {
           {task.dueDate ? (
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
               <Text style={{ fontSize: 11, color: "#94A3B8" }}>⏱</Text>
-              <Text className="text-xs text-slate-400">
+              <Text className="text-xs" style={{ color: "#0F172A" }}>
                 Due {formatTaskDueDateLabel(task.dueDate, userTimeZone)}
               </Text>
             </View>
@@ -770,8 +781,14 @@ export default function TaskDetailScreen() {
             return (
               <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                 <Text style={{ fontSize: 11, color: completedOverdue ? "#F97316" : "#10B981" }}>✓</Text>
-                <Text className={completedOverdue ? "text-xs text-orange-500" : "text-xs text-emerald-500"}>
-                  {completedOverdue ? "Completed overdue" : "Completed"} {new Date(task.completedAt).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })}
+                <Text className="text-xs">
+                  <Text style={{ color: completedOverdue ? "#F97316" : "#10B981" }}>
+                    {completedOverdue ? "Completed overdue" : "Completed"}
+                  </Text>
+                  {" "}
+                  <Text style={{ color: "#0F172A" }}>
+                    {new Date(task.completedAt).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })}
+                  </Text>
                 </Text>
               </View>
             );
@@ -795,7 +812,7 @@ export default function TaskDetailScreen() {
         >
           <TouchableOpacity
             onPress={handleMarkComplete}
-            disabled={updateMutation.isPending || isDemo}
+            disabled={updateMutation.isPending}
             style={{
               backgroundColor: "#4361EE",
               borderRadius: 12,

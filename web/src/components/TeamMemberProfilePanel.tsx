@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { WebTeamMemberRow } from "../lib/api";
 import type { MemberStandardsCompliance, WorkplaceStandards } from "../lib/workplace-standards";
 import { DevelopmentPlanTab } from "./DevelopmentPlanTab";
@@ -6,8 +6,9 @@ import { OneOnOneHistoryTab } from "./OneOnOneHistoryTab";
 import { ProfileOverviewTab } from "./ProfileOverviewTab";
 
 const PROFILE_TABS = ["Overview", "Growth", "Check-In"] as const;
+const FORMER_MEMBER_TABS = ["Check-In"] as const;
 
-type ProfileTab = (typeof PROFILE_TABS)[number];
+type ProfileTab = (typeof PROFILE_TABS)[number] | (typeof FORMER_MEMBER_TABS)[number];
 
 type Props = {
   teamId: string;
@@ -58,6 +59,13 @@ export function TeamMemberProfilePanel({
 }: Props) {
   const [activeTab, setActiveTab] = useState<ProfileTab>("Overview");
   const displayName = member.user.name ?? member.user.email ?? "Member";
+  const profileTabs = isFormerMember ? FORMER_MEMBER_TABS : PROFILE_TABS;
+
+  useEffect(() => {
+    if (isFormerMember) {
+      setActiveTab("Check-In");
+    }
+  }, [isFormerMember, member.userId]);
 
   return (
     <div
@@ -116,8 +124,9 @@ export function TeamMemberProfilePanel({
         ) : null}
       </header>
 
+      {!isFormerMember ? (
       <nav className="enterprise-team-profile-tabs" aria-label="Member profile sections">
-        {PROFILE_TABS.map((tab) => (
+        {profileTabs.map((tab) => (
           <button
             key={tab}
             type="button"
@@ -129,6 +138,7 @@ export function TeamMemberProfilePanel({
           </button>
         ))}
       </nav>
+      ) : null}
 
       <div
         className={`enterprise-team-profile-body${activeTab === "Check-In" ? " enterprise-team-profile-body--check-in" : ""}`}

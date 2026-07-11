@@ -9,12 +9,11 @@ import {
   ActivityIndicator,
   Modal,
   Image,
-  type NativeScrollEvent,
-  type NativeSyntheticEvent,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { usePaginatedDmMessages } from "@/lib/chat-message-pagination";
+import { useChatListScroll } from "@/hooks/use-chat-scroll";
 import { LinearGradient } from "expo-linear-gradient";
 import { ArrowLeft, Send, Paperclip, X, Users, Video, Trash2, Download, Reply, Copy, Camera, ImageIcon, MoreVertical, LogOut, UserPlus, UserMinus, Crown, Shield } from "lucide-react-native";
 import { router, useLocalSearchParams } from "expo-router";
@@ -30,13 +29,20 @@ import { MentionPicker } from "@/components/MentionPicker";
 import type { DirectMessage, MessageReaction, Conversation, GroupParticipantRole } from "@/lib/types";
 import * as Clipboard from "expo-clipboard";
 import ReanimatedSwipeable from "react-native-gesture-handler/ReanimatedSwipeable";
-import Reanimated, { useAnimatedStyle, interpolate, type SharedValue } from "react-native-reanimated";
+import Reanimated, {
+  useAnimatedStyle,
+  interpolate,
+  useSharedValue,
+  withRepeat,
+  withTiming,
+  Easing,
+  type SharedValue,
+} from "react-native-reanimated";
 import * as FileSystem from "expo-file-system";
 import * as MediaLibrary from "expo-media-library";
 import { useUnreadStore } from "@/lib/state/unread-store";
 import * as Haptics from "expo-haptics";
 import { toast } from "burnt";
-import { useDemoMode, showDemoAlert } from "@/lib/useDemo";
 import { useMention } from "@/lib/useMention";
 import { SafeKeyboardAvoidingView } from "@/lib/safe-keyboard-controller";
 import { dmOtherParticipant, resolveUserImageUrl, userInitials } from "@/lib/user-avatar";
@@ -44,6 +50,121 @@ import { UserAvatar } from "@/components/UserAvatar";
 import { groupWorkspaceLabel } from "@/lib/group-workspace-label";
 import { GroupManageModals } from "@/components/GroupManageModals";
 import { bottomSheetMenu } from "@/lib/bottom-sheet-menu-styles";
+
+function DmChatEmptyState({
+  user,
+  isGroup,
+}: {
+  user: { name?: string | null; email?: string | null; image?: string | null };
+  isGroup: boolean;
+}) {
+  const float = useSharedValue(0);
+
+  useEffect(() => {
+    float.value = withRepeat(
+      withTiming(1, { duration: 2400, easing: Easing.inOut(Easing.sin) }),
+      -1,
+      true,
+    );
+  }, [float]);
+
+  const illustrationStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: interpolate(float.value, [0, 1], [0, -7]) }],
+  }));
+
+  const displayName = user.name?.trim() || (isGroup ? "this group" : "your teammate");
+
+  return (
+    <View
+      testID="dm-chat-empty"
+      style={{
+        flex: 1,
+        alignItems: "center",
+        justifyContent: "center",
+        paddingHorizontal: 28,
+        paddingBottom: 24,
+      }}
+    >
+      <Reanimated.View style={[{ marginBottom: 4 }, illustrationStyle]}>
+        <Image
+          source={require("@/assets/dm-empty-start.png")}
+          style={{ width: 180, height: 180 }}
+          resizeMode="contain"
+          accessibilityIgnoresInvertColors
+        />
+      </Reanimated.View>
+
+      <View style={{ marginBottom: 12, alignItems: "center" }}>
+        {isGroup ? (
+          <View
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 20,
+              backgroundColor: "#EEF2FF",
+              alignItems: "center",
+              justifyContent: "center",
+              marginBottom: 6,
+            }}
+          >
+            <Users size={18} color="#4361EE" />
+          </View>
+        ) : (
+          <View style={{ marginBottom: 6 }}>
+            <UserAvatar
+              user={user}
+              size={40}
+              radius={20}
+              backgroundColor="#E0E7FF"
+              textColor="#4361EE"
+              fontSize={15}
+            />
+          </View>
+        )}
+        <Text
+          style={{
+            fontSize: 14,
+            fontWeight: "700",
+            color: "#0F172A",
+            textAlign: "center",
+          }}
+          numberOfLines={1}
+        >
+          {user.name?.trim() || (isGroup ? "Group chat" : "Direct message")}
+        </Text>
+      </View>
+
+      <Text
+        style={{
+          fontSize: 17,
+          fontWeight: "800",
+          color: "#0F172A",
+          textAlign: "center",
+          letterSpacing: -0.3,
+          lineHeight: 24,
+          marginBottom: 8,
+          maxWidth: 300,
+        }}
+      >
+        This is the start of{"\n"}
+        <Text style={{ color: "#7C3AED" }}>something great.</Text>
+      </Text>
+      <Text
+        style={{
+          fontSize: 13,
+          color: "#64748B",
+          textAlign: "center",
+          lineHeight: 19,
+          maxWidth: 280,
+        }}
+      >
+        {isGroup
+          ? `Say hello and get ${displayName} aligned on updates, questions, and wins.`
+          : `Send the first message to ${displayName} — questions, updates, and wins start here.`}
+      </Text>
+    </View>
+  );
+}
 
 function DeleteAction({ drag, onDelete }: { drag: SharedValue<number>; onDelete: () => void }) {
   const styleAnimation = useAnimatedStyle(() => ({
@@ -99,7 +220,6 @@ export default function DMChatScreen() {
   const { data: session } = useSession();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
-  const isDemo = useDemoMode();
   const [input, setInput] = useState("");
   const [replyTo, setReplyTo] = useState<DirectMessage | null>(null);
   const [messageMenu, setMessageMenu] = useState<{ message: DirectMessage; layout: MessageAnchorLayout } | null>(null);
@@ -112,13 +232,10 @@ export default function DMChatScreen() {
   const [mediaPreview, setMediaPreview] = useState<{ uri: string; mimeType: string; filename: string } | null>(null);
   const [uploading, setUploading] = useState(false);
   const [showMediaPicker, setShowMediaPicker] = useState(false);
-  const flatListRef = useRef<FlatList>(null);
   const currentUserId = session?.user?.id ?? "";
   const markAsRead = useUnreadStore((s) => s.markAsRead);
   const prevMsgCountRef = useRef<number>(0);
-  const isNearBottomRef = useRef(true);
   const lastMessageIdRef = useRef<string | null>(null);
-  const didInitialScrollRef = useRef(false);
 
   const { mentionedUserIds, mentionQuery, onTextChange: onMentionTextChange, selectMention, resetMentions } = useMention();
 
@@ -164,6 +281,18 @@ export default function DMChatScreen() {
     hasNextPage,
     isFetchingNextPage,
   } = usePaginatedDmMessages<DirectMessage>(conversationId);
+
+  const items = useMemo(() => buildMessageList(messages), [messages]);
+
+  const {
+    listRef: flatListRef,
+    handleScroll,
+    handleContentSizeChange,
+    handleListLayout,
+    handleScrollToIndexFailed,
+    followLatestIfNearBottom,
+    initialScrollIndex,
+  } = useChatListScroll(conversationId, items.length);
 
   const sendMutation = useMutation({
     mutationFn: (payload: { content?: string; mediaUrl?: string; mediaType?: string; replyToId?: string; mentionedUserIds?: string[] }) =>
@@ -295,12 +424,6 @@ export default function DMChatScreen() {
     setMessageMenu({ message: msg, layout });
   }, []);
 
-  const handleScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
-    const distanceFromBottom = contentSize.height - layoutMeasurement.height - contentOffset.y;
-    isNearBottomRef.current = distanceFromBottom < 80;
-  }, []);
-
   const handleLoadOlder = useCallback(() => {
     if (hasNextPage && !isFetchingNextPage) {
       void fetchNextPage();
@@ -308,26 +431,18 @@ export default function DMChatScreen() {
   }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
 
   useEffect(() => {
-    didInitialScrollRef.current = false;
-    isNearBottomRef.current = true;
     lastMessageIdRef.current = null;
   }, [conversationId]);
-
-  useEffect(() => {
-    if (isLoading || messages.length === 0 || didInitialScrollRef.current) return;
-    didInitialScrollRef.current = true;
-    requestAnimationFrame(() => flatListRef.current?.scrollToEnd({ animated: false }));
-  }, [isLoading, messages.length, conversationId]);
 
   useEffect(() => {
     const lastMsg = messages[messages.length - 1];
     if (!lastMsg) return;
     const prevId = lastMessageIdRef.current;
     lastMessageIdRef.current = lastMsg.id;
-    if (prevId !== lastMsg.id && isNearBottomRef.current) {
-      requestAnimationFrame(() => flatListRef.current?.scrollToEnd({ animated: true }));
+    if (prevId !== lastMsg.id) {
+      followLatestIfNearBottom(true);
     }
-  }, [messages]);
+  }, [messages, followLatestIfNearBottom]);
 
   useEffect(() => {
     if (messages.length > 0) {
@@ -340,8 +455,6 @@ export default function DMChatScreen() {
     if (!messages) return;
     prevMsgCountRef.current = messages.length;
   }, [messages]);
-
-  const items = buildMessageList(messages);
 
   return (
     <SafeAreaView testID="dm-chat-screen" className="flex-1 bg-slate-50 dark:bg-slate-900" edges={["top"]}>
@@ -370,27 +483,23 @@ export default function DMChatScreen() {
               {isGroup ? (groupWorkspace ?? "Group chat") : "Direct message"}
             </Text>
           </View>
-          {!isDemo ? (
-            <TouchableOpacity
-              testID="start-video-call-button"
-              onPress={() => router.push({
-                pathname: "/video-call",
-                params: { roomId: conversationId, roomName: `${headerUser.name ?? "Call"}` },
-              })}
-              className="w-9 h-9 rounded-full bg-white/20 items-center justify-center mr-2"
-            >
-              <Video size={18} color="white" />
-            </TouchableOpacity>
-          ) : null}
-          {!isDemo ? (
-            <TouchableOpacity
-              testID="conversation-options-button"
-              onPress={() => setShowOptions(true)}
-              className="w-9 h-9 rounded-full bg-white/20 items-center justify-center mr-2"
-            >
-              <MoreVertical size={18} color="white" />
-            </TouchableOpacity>
-          ) : null}
+          <TouchableOpacity
+            testID="start-video-call-button"
+            onPress={() => router.push({
+              pathname: "/video-call",
+              params: { roomId: conversationId, roomName: `${headerUser.name ?? "Call"}` },
+            })}
+            className="w-9 h-9 rounded-full bg-white/20 items-center justify-center mr-2"
+          >
+            <Video size={18} color="white" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            testID="conversation-options-button"
+            onPress={() => setShowOptions(true)}
+            className="w-9 h-9 rounded-full bg-white/20 items-center justify-center mr-2"
+          >
+            <MoreVertical size={18} color="white" />
+          </TouchableOpacity>
           <Image source={require("@/assets/alenio-icon.png")} style={{ width: 30, height: 30, borderRadius: 6 }} />
         </View>
       </LinearGradient>
@@ -674,22 +783,10 @@ export default function DMChatScreen() {
             <ActivityIndicator color="#4361EE" />
           </View>
         ) : messages.length === 0 ? (
-          <View testID="dm-chat-empty" className="flex-1 items-center justify-center px-6">
-            <UserAvatar
-              user={headerUser}
-              size={64}
-              radius={32}
-              backgroundColor="#E0E7FF"
-              textColor="#4361EE"
-              fontSize={24}
-            />
-            <Text className="text-lg font-semibold text-slate-700 dark:text-white mt-4">{headerUser.name}</Text>
-            <Text className="text-slate-400 text-sm mt-1 text-center">
-              This is the beginning of your conversation
-            </Text>
-          </View>
+          <DmChatEmptyState user={headerUser} isGroup={isGroup} />
         ) : (
           <FlatList
+            key={conversationId}
             ref={flatListRef}
             style={{ flex: 1 }}
             testID="dm-chat-message-list"
@@ -697,9 +794,12 @@ export default function DMChatScreen() {
             keyExtractor={(item) => ("type" in item ? item.id : item.id)}
             contentContainerStyle={{ paddingVertical: 12, paddingHorizontal: 12 }}
             showsVerticalScrollIndicator={false}
-            maintainVisibleContentPosition={{ minIndexForVisible: 0, autoscrollToTopThreshold: 10 }}
+            initialScrollIndex={initialScrollIndex}
+            onScrollToIndexFailed={handleScrollToIndexFailed}
+            onLayout={handleListLayout}
             onScroll={handleScroll}
             scrollEventThrottle={16}
+            onContentSizeChange={handleContentSizeChange}
             onStartReached={handleLoadOlder}
             onStartReachedThreshold={0.15}
             ListHeaderComponent={
@@ -800,19 +900,17 @@ export default function DMChatScreen() {
             paddingBottom: insets.bottom + 8,
           }}
         >
-          {!isDemo ? (
-            <TouchableOpacity
-              onPress={() => setShowMediaPicker(true)}
-              className="w-10 h-10 rounded-full items-center justify-center mr-2"
-              style={{ backgroundColor: "#F1F5F9" }}
-            >
-              <Paperclip size={18} color="#64748B" />
-            </TouchableOpacity>
-          ) : null}
+          <TouchableOpacity
+            onPress={() => setShowMediaPicker(true)}
+            className="w-10 h-10 rounded-full items-center justify-center mr-2"
+            style={{ backgroundColor: "#F1F5F9" }}
+          >
+            <Paperclip size={18} color="#64748B" />
+          </TouchableOpacity>
           <TextInput
             testID="dm-chat-text-input"
             className="flex-1 bg-slate-100 dark:bg-slate-700 rounded-2xl px-4 py-2.5 text-base text-slate-900 dark:text-white mr-2"
-            placeholder={isDemo ? "Read-only demo account" : `Message ${headerUser.name ?? ""}...`}
+            placeholder={`Message ${headerUser.name ?? ""}...`}
             placeholderTextColor="#94A3B8"
             value={input}
             onChangeText={(text) => {
@@ -822,24 +920,20 @@ export default function DMChatScreen() {
             multiline
             maxLength={2000}
             style={{ maxHeight: 120 }}
-            editable={!isDemo}
-            onPressIn={isDemo ? showDemoAlert : undefined}
           />
-          {!isDemo ? (
-            <TouchableOpacity
-              testID="dm-chat-send-button"
-              onPress={handleSend}
-              disabled={!input.trim() || sendMutation.isPending || uploading}
-              className="w-10 h-10 rounded-full items-center justify-center"
-              style={{ backgroundColor: input.trim() ? "#4361EE" : "#E2E8F0" }}
-            >
-              {sendMutation.isPending || uploading ? (
-                <ActivityIndicator size="small" color={input.trim() ? "white" : "#94A3B8"} />
-              ) : (
-                <Send size={18} color={input.trim() ? "white" : "#94A3B8"} />
-              )}
-            </TouchableOpacity>
-          ) : null}
+          <TouchableOpacity
+            testID="dm-chat-send-button"
+            onPress={handleSend}
+            disabled={!input.trim() || sendMutation.isPending || uploading}
+            className="w-10 h-10 rounded-full items-center justify-center"
+            style={{ backgroundColor: input.trim() ? "#4361EE" : "#E2E8F0" }}
+          >
+            {sendMutation.isPending || uploading ? (
+              <ActivityIndicator size="small" color={input.trim() ? "white" : "#94A3B8"} />
+            ) : (
+              <Send size={18} color={input.trim() ? "white" : "#94A3B8"} />
+            )}
+          </TouchableOpacity>
         </View>
       </SafeKeyboardAvoidingView>
       <ImageSendPreview

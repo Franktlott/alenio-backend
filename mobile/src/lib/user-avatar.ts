@@ -24,6 +24,14 @@ export function userInitials(user: { name?: string | null; email?: string | null
   return "?";
 }
 
+export function teamInitials(team: { name?: string | null }): string {
+  const label = team.name?.trim() || "";
+  const parts = label.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) return (parts[0]![0]! + parts[1]![0]!).toUpperCase();
+  if (parts.length === 1) return parts[0]![0]!.toUpperCase();
+  return "W";
+}
+
 export function dmOtherParticipant(
   conv: {
     recipient?: { id: string; name?: string | null; email?: string | null; image?: string | null } | null;

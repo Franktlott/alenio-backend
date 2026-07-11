@@ -14,8 +14,8 @@ type Props = {
   onTaskPress: (task: Task) => void;
 };
 
-const MAX_VISIBLE_ROWS = 4;
-const ROW_HEIGHT = 68;
+const MAX_VISIBLE_ROWS = 5;
+const ROW_HEIGHT = 52;
 
 const FILTER_CONFIG: Record<
   TeamOverviewTaskFilter,
@@ -90,51 +90,51 @@ export function TeamOverviewTasksSheet({ visible, filter, tasks, onClose, onTask
           <View
             style={{
               backgroundColor: "white",
-              borderTopLeftRadius: 20,
-              borderTopRightRadius: 20,
-              paddingTop: 12,
-              paddingBottom: Math.max(insets.bottom, 16),
+              borderTopLeftRadius: 16,
+              borderTopRightRadius: 16,
+              paddingTop: 8,
+              paddingBottom: Math.max(insets.bottom, 12),
             }}
           >
-            <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: "#E2E8F0", alignSelf: "center" }} />
+            <View style={{ width: 32, height: 4, borderRadius: 2, backgroundColor: "#E2E8F0", alignSelf: "center" }} />
             <View
               style={{
                 flexDirection: "row",
                 alignItems: "flex-start",
                 justifyContent: "space-between",
-                paddingHorizontal: 20,
-                paddingTop: 16,
-                paddingBottom: 12,
+                paddingHorizontal: 16,
+                paddingTop: 10,
+                paddingBottom: 8,
               }}
             >
-              <View style={{ flex: 1, paddingRight: 12 }}>
-                <Text style={{ fontSize: 18, fontWeight: "800", color: "#0F172A" }}>{config.title}</Text>
-                <Text style={{ fontSize: 13, color: "#64748B", marginTop: 4 }}>{config.subtitle(tasks.length)}</Text>
+              <View style={{ flex: 1, paddingRight: 10 }}>
+                <Text style={{ fontSize: 16, fontWeight: "700", color: "#111827" }}>{config.title}</Text>
+                <Text style={{ fontSize: 11, color: "#667085", marginTop: 2 }}>{config.subtitle(tasks.length)}</Text>
               </View>
               <Pressable
                 onPress={onClose}
                 hitSlop={8}
                 style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: 16,
+                  width: 28,
+                  height: 28,
+                  borderRadius: 14,
                   backgroundColor: "#F1F5F9",
                   alignItems: "center",
                   justifyContent: "center",
                 }}
               >
-                <X size={18} color="#64748B" />
+                <X size={15} color="#64748B" />
               </Pressable>
             </View>
 
             {tasks.length === 0 ? (
-              <View style={{ paddingHorizontal: 20, paddingVertical: 24, alignItems: "center" }}>
-                <Text style={{ fontSize: 14, color: "#64748B" }}>{config.empty}</Text>
+              <View style={{ paddingHorizontal: 16, paddingVertical: 16, alignItems: "center" }}>
+                <Text style={{ fontSize: 12, color: "#667085" }}>{config.empty}</Text>
               </View>
             ) : (
               <ScrollView
                 style={{ maxHeight: listMaxHeight }}
-                contentContainerStyle={{ paddingHorizontal: 16 }}
+                contentContainerStyle={{ paddingHorizontal: 12 }}
                 showsVerticalScrollIndicator={hasMore}
                 nestedScrollEnabled
               >
@@ -145,34 +145,35 @@ export function TeamOverviewTasksSheet({ visible, filter, tasks, onClose, onTask
                     style={{
                       flexDirection: "row",
                       alignItems: "center",
-                      paddingVertical: 12,
+                      paddingVertical: 8,
                       paddingHorizontal: 4,
                       borderTopWidth: index === 0 ? 0 : 1,
-                      borderTopColor: "#F1F5F9",
-                      gap: 12,
+                      borderTopColor: "#EEF2F6",
+                      gap: 8,
                     }}
                   >
                     <View
                       style={{
-                        width: 36,
-                        height: 36,
-                        borderRadius: 18,
+                        width: 28,
+                        height: 28,
+                        borderRadius: 14,
                         backgroundColor: config.iconBg,
                         alignItems: "center",
                         justifyContent: "center",
+                        flexShrink: 0,
                       }}
                     >
-                      <Icon size={18} color={config.iconColor} />
+                      <Icon size={14} color={config.iconColor} />
                     </View>
-                    <View style={{ flex: 1 }}>
-                      <Text numberOfLines={1} style={{ fontSize: 15, fontWeight: "700", color: "#0F172A" }}>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text numberOfLines={1} style={{ fontSize: 13, fontWeight: "700", color: "#111827", lineHeight: 16 }}>
                         {task.title}
                       </Text>
-                      <Text numberOfLines={1} style={{ fontSize: 12, color: "#64748B", marginTop: 2 }}>
+                      <Text numberOfLines={1} style={{ fontSize: 10, color: "#667085", marginTop: 1, lineHeight: 13 }}>
                         {taskMeta(task, filter)}
                       </Text>
                     </View>
-                    <ChevronRight size={18} color="#CBD5E1" />
+                    <ChevronRight size={14} color="#CBD5E1" />
                   </Pressable>
                 ))}
               </ScrollView>

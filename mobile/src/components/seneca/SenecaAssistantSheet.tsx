@@ -13,7 +13,7 @@ import {
   type NativeSyntheticEvent,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ArrowUp, Briefcase, ChevronRight, Lock, MoreHorizontal, Sparkles, X } from "lucide-react-native";
+import { ArrowUp, Briefcase, ChevronRight, Lock, MoreHorizontal, X } from "lucide-react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
 import { SenecaIcon } from "./SenecaIcon";
@@ -321,11 +321,10 @@ export function SenecaAssistantSheet({ open, onClose, teamId: teamIdProp }: Prop
                 <View style={styles.headerTitleRow}>
                   <Text style={styles.headerTitle}>Seneca</Text>
                   <View style={styles.headerBadge}>
-                    <Sparkles size={10} color={COLORS.brand} strokeWidth={2.4} />
-                    <Text style={styles.headerBadgeText}>AI Assistant</Text>
+                    <Text style={styles.headerBadgeText}>BETA mode</Text>
                   </View>
                 </View>
-                <Text style={styles.headerSubtitle}>Leadership coaching for your workspace</Text>
+                <Text style={styles.headerSubtitle}>Early access AI leadership assistant</Text>
               </View>
               <View style={styles.headerActions}>
                 <Pressable
@@ -394,10 +393,10 @@ export function SenecaAssistantSheet({ open, onClose, teamId: teamIdProp }: Prop
                   <View style={styles.welcomeIconWrap}>
                     <Briefcase size={22} color={COLORS.brand} strokeWidth={2} />
                   </View>
-                  <Text style={styles.welcomeEyebrow}>Workspace assistant</Text>
+                  <Text style={styles.welcomeEyebrow}>BETA mode</Text>
                   <Text style={styles.welcomeTitle}>How can I support your team today?</Text>
                   <Text style={styles.welcomeText}>
-                    Get coaching guidance, plan check-ins, and prepare for leadership conversations.
+                    Get coaching guidance, schedule check-ins, and prepare for leadership conversations.
                   </Text>
                   <Text style={styles.starterLabel}>Suggested prompts</Text>
                   <View style={styles.starterList}>
@@ -566,16 +565,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 999,
-    backgroundColor: COLORS.brandSoft,
+    backgroundColor: "#FFF7ED",
     borderWidth: 1,
-    borderColor: COLORS.brandBorder,
+    borderColor: "#FDBA74",
   },
   headerBadgeText: {
     fontSize: 10,
     fontWeight: "700",
-    color: COLORS.brand,
-    letterSpacing: 0.4,
-    textTransform: "uppercase",
+    color: "#C2410C",
+    letterSpacing: 0.3,
   },
   headerSubtitle: {
     fontSize: 13,

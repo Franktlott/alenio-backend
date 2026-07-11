@@ -1,5 +1,8 @@
 /** Calendar grids start on Monday (ISO-style week). */
 
+export const CALENDAR_GRID_WEEKS = 6;
+export const CALENDAR_GRID_DAYS = CALENDAR_GRID_WEEKS * 7;
+
 export const CALENDAR_WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
 
 /** Column index when week starts Monday: 0=Mon … 6=Sun. `dayOfWeek` is JS `Date#getDay()` (0=Sun). */
@@ -28,6 +31,11 @@ export function getDaysInMonth(date: Date): Date[] {
     for (let d = 1; d <= 7 - remaining; d++) {
       days.push(new Date(year, month + 1, d));
     }
+  }
+
+  while (days.length < CALENDAR_GRID_DAYS) {
+    const last = days[days.length - 1]!;
+    days.push(new Date(last.getFullYear(), last.getMonth(), last.getDate() + 1));
   }
 
   return days;

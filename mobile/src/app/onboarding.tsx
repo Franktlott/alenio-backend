@@ -4,51 +4,34 @@ import {
   Text,
   TextInput,
   ActivityIndicator,
-  Platform,
   Modal,
   Pressable,
-  ScrollView,
+  Alert,
+  StyleSheet,
+  TouchableOpacity,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { SafeKeyboardAvoidingView } from "@/lib/safe-keyboard-controller";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams } from "expo-router";
-import { Clock, ScanLine, X } from "lucide-react-native";
+import { ScanLine, Building2, Users, X } from "lucide-react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { api } from "@/lib/api/api";
 import { useTeamStore } from "@/lib/state/team-store";
 import type { Team } from "@/lib/types";
 import { useSession } from "@/lib/auth/use-session";
+import { NO_WORKSPACE_WELCOME_PATH } from "@/lib/no-workspace-routing";
+import { WELCOME_UI } from "@/components/no-workspace-welcome/welcome-ui";
+import {
+  AlenioBottomSheet,
+  AlenioSheetCard,
+  AlenioSheetIcon,
+  alenioSheetStyles,
+} from "@/components/AlenioBottomSheet";
+
+const INVITE_CODE_MAX_LENGTH = 12;
 type JoinResult =
   | { status: "pending"; teamName: string; requestId: string }
   | (Team & { status?: undefined });
-
-type MineRequest = {
-  id: string;
-  status: string;
-  team: { id: string; name: string; image: string | null };
-};
-
-const UI = {
-  pageBg: "#F1F5F9",
-  headerBg: "#FAFBFF",
-  headerBorder: "#E0E7FF",
-  border: "#E2E8F0",
-  muted: "#64748B",
-  text: "#0F172A",
-  subtext: "#475569",
-  accent: "#4338CA",
-  errorBg: "#FEF2F2",
-  errorBorder: "#FECACA",
-  errorText: "#B91C1C",
-  card: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    overflow: "hidden" as const,
-  },
-};
 
 function ModeToggle({
   mode,
@@ -58,40 +41,21 @@ function ModeToggle({
   onChange: (mode: "create" | "join") => void;
 }) {
   return (
-    <View
-      style={{
-        flexDirection: "row",
-        borderWidth: 1,
-        borderColor: UI.border,
-        borderRadius: 10,
-        overflow: "hidden",
-        marginBottom: 16,
-      }}
-    >
+    <View style={styles.modeToggle}>
       {(["create", "join"] as const).map((value) => {
         const selected = mode === value;
         return (
-          <Pressable
+          <TouchableOpacity
             key={value}
             onPress={() => onChange(value)}
             testID={value === "create" ? "mode-create" : "mode-join"}
-            style={{
-              flex: 1,
-              paddingVertical: 10,
-              alignItems: "center",
-              backgroundColor: selected ? "#0F172A" : "#FFFFFF",
-            }}
+            style={[styles.modeOption, selected ? styles.modeOptionActive : null]}
+            activeOpacity={0.9}
           >
-            <Text
-              style={{
-                fontSize: 13,
-                fontWeight: "600",
-                color: selected ? "#FFFFFF" : "#64748B",
-              }}
-            >
+            <Text style={[styles.modeOptionText, selected ? styles.modeOptionTextActive : null]}>
               {value === "create" ? "Create" : "Join"}
             </Text>
-          </Pressable>
+          </TouchableOpacity>
         );
       })}
     </View>
@@ -99,35 +63,27 @@ function ModeToggle({
 }
 
 function FieldLabel({ children }: { children: string }) {
-  return (
-    <Text style={{ fontSize: 12, fontWeight: "600", color: "#475569", marginBottom: 6 }}>{children}</Text>
-  );
+  return <Text style={alenioSheetStyles.fieldLabel}>{children}</Text>;
 }
-
-const fieldInputStyle = {
-  backgroundColor: "#FFFFFF",
-  borderWidth: 1,
-  borderColor: "#DCE3EB",
-  borderRadius: 10,
-  paddingHorizontal: 12,
-  paddingVertical: 11,
-  fontSize: 15,
-  color: UI.text,
-} as const;
 
 export default function OnboardingScreen() {
   const { data: session, isLoading: isSessionLoading } = useSession();
-  const { intent, mode: modeParam } = useLocalSearchParams<{ intent?: string; mode?: string }>();
+  const { intent, mode: modeParam, focus: focusParam, action: actionParam, code: codeParam } = useLocalSearchParams<{
+    intent?: string;
+    mode?: string;
+    focus?: string;
+    action?: string;
+    code?: string;
+  }>();
   const isAddFlow = intent === "add";
-  const [mode, setMode] = useState<"create" | "join">(modeParam === "join" ? "join" : "create");
+  const initialCode =
+    typeof codeParam === "string"
+      ? codeParam.trim().toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, INVITE_CODE_MAX_LENGTH)
+      : "";
+  const [mode, setMode] = useState<"create" | "join">(modeParam === "join" || !!initialCode ? "join" : "create");
   const [teamName, setTeamName] = useState("");
-  const [inviteCode, setInviteCode] = useState("");
+  const [inviteCode, setInviteCode] = useState(initialCode);
   const [error, setError] = useState<string | null>(null);
-  const [pendingRequest, setPendingRequest] = useState<{
-    requestId: string;
-    teamName: string;
-  } | null>(null);
-  const [isPolling, setIsPolling] = useState(false);
   const [cooldownUntilMs, setCooldownUntilMs] = useState<number>(0);
   const queryClient = useQueryClient();
   const setActiveTeamId = useTeamStore((s) => s.setActiveTeamId);
@@ -136,6 +92,20 @@ export default function OnboardingScreen() {
   const [scannerOpen, setScannerOpen] = useState(false);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const scannedRef = useRef(false);
+  const inviteCodeInputRef = useRef<TextInput>(null);
+  const scanActionHandledRef = useRef(false);
+
+  useEffect(() => {
+    if (!initialCode) return;
+    setMode("join");
+    setInviteCode(initialCode);
+  }, [initialCode]);
+
+  useEffect(() => {
+    if (mode !== "join" || focusParam !== "code") return;
+    const timer = setTimeout(() => inviteCodeInputRef.current?.focus(), 350);
+    return () => clearTimeout(timer);
+  }, [focusParam, mode]);
 
   useEffect(() => {
     if (isSessionLoading) return;
@@ -177,19 +147,23 @@ export default function OnboardingScreen() {
       }),
     onSuccess: (result) => {
       if (result.status === "pending") {
-        setPendingRequest({
-          requestId: result.requestId,
-          teamName: result.teamName,
-        });
-      } else {
-        const team = result as Team;
-        setActiveTeamId(team.id);
-        queryClient.invalidateQueries({ queryKey: ["teams"] });
+        queryClient.invalidateQueries({ queryKey: ["join-requests-mine"] });
         if (isAddFlow && router.canGoBack()) {
           router.back();
+        } else if (router.canGoBack()) {
+          router.back();
         } else {
-          router.replace("/(app)/chat");
+          router.replace(NO_WORKSPACE_WELCOME_PATH);
         }
+        return;
+      }
+      const team = result as Team;
+      setActiveTeamId(team.id);
+      queryClient.invalidateQueries({ queryKey: ["teams"] });
+      if (isAddFlow && router.canGoBack()) {
+        router.back();
+      } else {
+        router.replace("/(app)/chat");
       }
     },
     onError: (err: unknown) => {
@@ -200,13 +174,32 @@ export default function OnboardingScreen() {
         setError("Too many requests right now. Please wait 20 seconds, then try again.");
         return;
       }
-      setError(rawMsg || "Invalid invite code. Please check and try again.");
+      if (/already a member/i.test(rawMsg)) {
+        setError("You're already in this workspace. Open the app to switch to it.");
+        return;
+      }
+      if (/request already pending/i.test(rawMsg)) {
+        queryClient.invalidateQueries({ queryKey: ["join-requests-mine"] });
+        if (router.canGoBack()) {
+          router.back();
+        } else {
+          router.replace(NO_WORKSPACE_WELCOME_PATH);
+        }
+        return;
+      }
+      if (/invalid invite code/i.test(rawMsg)) {
+        setError(
+          "No workspace found with that code. Ask your admin for the invite code from Team settings — not an email invite link.",
+        );
+        return;
+      }
+      setError(rawMsg || "Could not join right now. Please try again.");
     },
   });
 
   const handleBarcodeScan = ({ data }: { data: string }) => {
     if (scannedRef.current || joinMutation.isPending) return;
-    const match = data.match(/alenio:\/\/join\/([A-Z0-9]+)/i) ?? data.match(/^([A-Z0-9]{6,10})$/i);
+    const match = data.match(/alenio:\/\/join\/([A-Z0-9]+)/i) ?? data.match(/^([A-Z0-9]{6,12})$/i);
     if (!match) return;
     scannedRef.current = true;
     setScannerOpen(false);
@@ -215,52 +208,39 @@ export default function OnboardingScreen() {
 
   const openScanner = async () => {
     if (!cameraPermission?.granted) {
-      const result = await requestCameraPermission();
-      if (!result.granted) return;
+      Alert.alert(
+        "Camera access needed",
+        "Alenio uses your camera to scan workspace QR codes. You can also enter an invite code manually.",
+        [
+          { text: "Enter code manually", style: "cancel" },
+          {
+            text: "Continue",
+            onPress: async () => {
+              const result = await requestCameraPermission();
+              if (!result.granted) {
+                Alert.alert(
+                  "Camera permission denied",
+                  "Enable camera access in Settings, or enter your invite code manually.",
+                );
+                return;
+              }
+              scannedRef.current = false;
+              setScannerOpen(true);
+            },
+          },
+        ],
+      );
+      return;
     }
     scannedRef.current = false;
     setScannerOpen(true);
   };
 
-  // Poll for approval when in pending state
   useEffect(() => {
-    if (!pendingRequest) return;
-
-    const checkStatus = async () => {
-      try {
-        const requests = await api.get<MineRequest[]>("/api/join-requests/mine");
-        const approved = requests.find((r) => r.status === "approved");
-        if (approved) {
-          setActiveTeamId(approved.team.id);
-          queryClient.invalidateQueries({ queryKey: ["teams"] });
-          router.replace("/(app)/chat");
-        }
-      } catch {
-        // silently ignore polling errors
-      }
-    };
-
-    const interval = setInterval(checkStatus, 5000);
-    return () => clearInterval(interval);
-  }, [pendingRequest, setActiveTeamId, queryClient]);
-
-  const handleCheckStatus = async () => {
-    if (!pendingRequest) return;
-    setIsPolling(true);
-    try {
-      const requests = await api.get<MineRequest[]>("/api/join-requests/mine");
-      const approved = requests.find((r) => r.status === "approved");
-      if (approved) {
-        setActiveTeamId(approved.team.id);
-        queryClient.invalidateQueries({ queryKey: ["teams"] });
-        router.replace("/(app)/chat");
-      }
-    } catch {
-      // ignore
-    } finally {
-      setIsPolling(false);
-    }
-  };
+    if (mode !== "join" || actionParam !== "scan" || scanActionHandledRef.current) return;
+    scanActionHandledRef.current = true;
+    void openScanner();
+  }, [actionParam, mode]);
 
   const isCoolingDown = Date.now() < cooldownUntilMs;
   const isLoading = createMutation.isPending || joinMutation.isPending || isCoolingDown;
@@ -296,94 +276,51 @@ export default function OnboardingScreen() {
       router.back();
       return;
     }
-    router.replace("/(app)/chat");
+    router.replace(NO_WORKSPACE_WELCOME_PATH);
   };
 
-  const modalBody = pendingRequest ? (
-    <>
-      <View style={{ padding: 16, alignItems: "center" }}>
-        <View
-          style={{
-            width: 48,
-            height: 48,
-            borderRadius: 10,
-            backgroundColor: "#FFFBEB",
-            borderWidth: 1,
-            borderColor: "#FDE68A",
-            alignItems: "center",
-            justifyContent: "center",
-            marginBottom: 14,
-          }}
-        >
-          <Clock size={22} color="#D97706" />
-        </View>
-        <Text style={{ fontSize: 16, fontWeight: "700", color: UI.text, textAlign: "center" }}>Request sent</Text>
-        <Text style={{ fontSize: 13, color: UI.muted, textAlign: "center", marginTop: 8, lineHeight: 19 }}>
-          Your request to join{" "}
-          <Text style={{ fontWeight: "600", color: UI.subtext }}>{pendingRequest.teamName}</Text> is pending review.
-        </Text>
-      </View>
-      <View
-        style={{
-          flexDirection: "row",
-          justifyContent: "flex-end",
-          gap: 10,
-          paddingHorizontal: 16,
-          paddingVertical: 12,
-          borderTopWidth: 1,
-          borderTopColor: "#EEF2F6",
-        }}
-      >
-        <Pressable
-          onPress={() => {
-            setPendingRequest(null);
-            setInviteCode("");
-            setError(null);
-          }}
-          style={{
-            minWidth: 72,
-            borderWidth: 1,
-            borderColor: "#CBD5E1",
-            borderRadius: 10,
-            paddingHorizontal: 14,
-            paddingVertical: 10,
-            alignItems: "center",
-            backgroundColor: "#FFFFFF",
-          }}
-          testID="cancel-pending-button"
-        >
-          <Text style={{ fontSize: 14, fontWeight: "600", color: "#334155" }}>Cancel</Text>
-        </Pressable>
-        <Pressable
-          onPress={handleCheckStatus}
-          disabled={isPolling}
-          style={{
-            minWidth: 120,
-            backgroundColor: UI.accent,
-            borderRadius: 10,
-            paddingHorizontal: 16,
-            paddingVertical: 10,
-            alignItems: "center",
-          }}
-          testID="check-status-button"
-        >
-          {isPolling ? (
-            <ActivityIndicator color="white" />
-          ) : (
-            <Text style={{ fontSize: 14, fontWeight: "600", color: "#FFFFFF" }}>Check status</Text>
-          )}
-        </Pressable>
-      </View>
-    </>
-  ) : (
-    <>
-      <View style={{ padding: 16 }}>
-        <Text style={{ fontSize: 13, color: UI.muted, lineHeight: 19, marginBottom: 14 }}>
-          {mode === "create"
-            ? "Create a new workspace for your team."
-            : "Enter an invite code or scan a QR code to join."}
-        </Text>
+  const isModeLocked = modeParam === "join" || modeParam === "create";
 
+  const sheetTitle =
+    isAddFlow ? "Add workplace" : mode === "create" ? "Create a workplace" : "Join a workspace";
+  const sheetSubtitle =
+    mode === "create" ? "Set up a new team space" : "Connect with your organization";
+
+  const sheetFooter = (
+    <>
+      <TouchableOpacity
+        onPress={handleSubmit}
+        disabled={isLoading}
+        style={[alenioSheetStyles.primaryButton, isLoading ? alenioSheetStyles.primaryButtonDisabled : null]}
+        testID="submit-button"
+        activeOpacity={0.92}
+      >
+        {createMutation.isPending || joinMutation.isPending ? (
+          <ActivityIndicator color="white" />
+        ) : isCoolingDown ? (
+          <Text style={alenioSheetStyles.primaryButtonText}>
+            Wait {Math.max(1, Math.ceil((cooldownUntilMs - Date.now()) / 1000))}s
+          </Text>
+        ) : (
+          <Text style={alenioSheetStyles.primaryButtonText}>
+            {mode === "create" ? "Create workplace" : "Join workspace"}
+          </Text>
+        )}
+      </TouchableOpacity>
+      <TouchableOpacity
+        onPress={handleClose}
+        style={alenioSheetStyles.cancelButton}
+        testID="onboarding-cancel"
+        activeOpacity={0.8}
+      >
+        <Text style={alenioSheetStyles.cancelButtonText}>Cancel</Text>
+      </TouchableOpacity>
+    </>
+  );
+
+  const modalBody = (
+    <>
+      {!isModeLocked ? (
         <ModeToggle
           mode={mode}
           onChange={(next) => {
@@ -391,219 +328,110 @@ export default function OnboardingScreen() {
             setError(null);
           }}
         />
+      ) : null}
 
-        {mode === "create" ? (
-          <>
-            <FieldLabel>Workspace name</FieldLabel>
-            <TextInput
-              style={fieldInputStyle}
-              placeholder="e.g. Engineering, Marketing"
-              placeholderTextColor="#94A3B8"
-              value={teamName}
-              onChangeText={(t) => {
-                setTeamName(t);
-                setError(null);
-              }}
-              returnKeyType="done"
-              onSubmitEditing={handleSubmit}
-              testID="team-name-input"
-            />
-          </>
-        ) : (
-          <>
+      {mode === "create" ? (
+        <AlenioSheetCard>
+          <View style={alenioSheetStyles.optionRow}>
+            <AlenioSheetIcon>
+              <Building2 size={22} color="white" />
+            </AlenioSheetIcon>
+            <View style={{ flex: 1 }}>
+              <Text style={alenioSheetStyles.optionTitle}>New workplace</Text>
+              <Text style={alenioSheetStyles.optionSubtitle}>
+                Create a team space for your organization.
+              </Text>
+            </View>
+          </View>
+          <FieldLabel>Workplace name</FieldLabel>
+          <TextInput
+            style={alenioSheetStyles.fieldInput}
+            placeholder="e.g. Engineering, Marketing"
+            placeholderTextColor="#94A3B8"
+            value={teamName}
+            onChangeText={(t) => {
+              setTeamName(t);
+              setError(null);
+            }}
+            returnKeyType="done"
+            onSubmitEditing={handleSubmit}
+            testID="team-name-input"
+          />
+        </AlenioSheetCard>
+      ) : (
+        <>
+          <AlenioSheetCard tint="purple">
+            <View style={alenioSheetStyles.optionRow}>
+              <AlenioSheetIcon color="#7C3AED">
+                <Users size={22} color="white" />
+              </AlenioSheetIcon>
+              <View style={{ flex: 1 }}>
+                <Text style={alenioSheetStyles.optionTitle}>Join with invite code</Text>
+                <Text style={alenioSheetStyles.optionSubtitle}>
+                  Enter the code shared by your team admin.
+                </Text>
+              </View>
+            </View>
             <FieldLabel>Invite code</FieldLabel>
             <TextInput
-              style={[fieldInputStyle, { letterSpacing: 2 }]}
-              placeholder="e.g. ABC123"
+              ref={inviteCodeInputRef}
+              style={[alenioSheetStyles.fieldInput, styles.codeInput]}
+              placeholder="Enter invite code"
               placeholderTextColor="#94A3B8"
               autoCapitalize="characters"
+              autoCorrect={false}
+              autoComplete="off"
+              textContentType="oneTimeCode"
               value={inviteCode}
               onChangeText={(t) => {
-                setInviteCode(t.toUpperCase());
+                setInviteCode(t.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, INVITE_CODE_MAX_LENGTH));
                 setError(null);
               }}
               returnKeyType="done"
               onSubmitEditing={handleSubmit}
-              maxLength={6}
+              maxLength={INVITE_CODE_MAX_LENGTH}
               testID="invite-code-input"
             />
+          </AlenioSheetCard>
 
-            <View style={{ flexDirection: "row", alignItems: "center", marginVertical: 14 }}>
-              <View style={{ flex: 1, height: 1, backgroundColor: UI.border }} />
-              <Text style={{ fontSize: 11, fontWeight: "600", color: "#94A3B8", marginHorizontal: 10 }}>OR</Text>
-              <View style={{ flex: 1, height: 1, backgroundColor: UI.border }} />
-            </View>
+          <TouchableOpacity onPress={openScanner} activeOpacity={0.92} testID="scan-qr-button">
+            <AlenioSheetCard>
+              <View style={alenioSheetStyles.optionRow}>
+                <AlenioSheetIcon>
+                  <ScanLine size={22} color="white" />
+                </AlenioSheetIcon>
+                <View style={{ flex: 1 }}>
+                  <Text style={alenioSheetStyles.optionTitle}>Scan QR code</Text>
+                  <Text style={alenioSheetStyles.optionSubtitle}>
+                    Point at your team QR code to join automatically.
+                  </Text>
+                </View>
+              </View>
+            </AlenioSheetCard>
+          </TouchableOpacity>
+        </>
+      )}
 
-            <Pressable
-              onPress={openScanner}
-              style={{
-                borderWidth: 1,
-                borderColor: UI.border,
-                backgroundColor: "#F8FAFC",
-                borderRadius: 10,
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 8,
-                paddingVertical: 11,
-              }}
-              testID="scan-qr-button"
-            >
-              <ScanLine size={16} color="#475569" />
-              <Text style={{ fontSize: 14, fontWeight: "600", color: "#334155" }}>Scan QR code</Text>
-            </Pressable>
-          </>
-        )}
-
-        {error ? (
-          <View
-            style={{
-              backgroundColor: UI.errorBg,
-              borderRadius: 10,
-              padding: 10,
-              marginTop: 12,
-              borderWidth: 1,
-              borderColor: UI.errorBorder,
-            }}
-          >
-            <Text style={{ fontSize: 13, color: UI.errorText, lineHeight: 18 }}>{error}</Text>
-          </View>
-        ) : null}
-      </View>
-
-      <View
-        style={{
-          flexDirection: "row",
-          justifyContent: "flex-end",
-          gap: 10,
-          paddingHorizontal: 16,
-          paddingVertical: 12,
-          borderTopWidth: 1,
-          borderTopColor: "#EEF2F6",
-        }}
-      >
-        <Pressable
-          onPress={handleClose}
-          style={{
-            minWidth: 72,
-            borderWidth: 1,
-            borderColor: "#CBD5E1",
-            borderRadius: 10,
-            paddingHorizontal: 14,
-            paddingVertical: 10,
-            alignItems: "center",
-            backgroundColor: "#FFFFFF",
-          }}
-          testID="onboarding-cancel"
-        >
-          <Text style={{ fontSize: 14, fontWeight: "600", color: "#334155" }}>Cancel</Text>
-        </Pressable>
-        <Pressable
-          onPress={handleSubmit}
-          disabled={isLoading}
-          style={{
-            minWidth: mode === "create" ? 120 : 96,
-            backgroundColor: UI.accent,
-            borderRadius: 10,
-            paddingHorizontal: 16,
-            paddingVertical: 10,
-            alignItems: "center",
-            opacity: isLoading ? 0.7 : 1,
-          }}
-          testID="submit-button"
-        >
-          {createMutation.isPending || joinMutation.isPending ? (
-            <ActivityIndicator color="white" />
-          ) : isCoolingDown ? (
-            <Text style={{ fontSize: 14, fontWeight: "600", color: "#FFFFFF" }}>
-              Wait {Math.max(1, Math.ceil((cooldownUntilMs - Date.now()) / 1000))}s
-            </Text>
-          ) : (
-            <Text style={{ fontSize: 14, fontWeight: "600", color: "#FFFFFF" }}>
-              {mode === "create" ? "Create" : "Join"}
-            </Text>
-          )}
-        </Pressable>
-      </View>
+      {error ? (
+        <View style={alenioSheetStyles.errorBox}>
+          <Text style={alenioSheetStyles.errorText}>{error}</Text>
+        </View>
+      ) : null}
     </>
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: "transparent" }} testID="onboarding-screen">
-      <Pressable
-        style={{
-          flex: 1,
-          backgroundColor: "rgba(15, 23, 42, 0.4)",
-          justifyContent: "center",
-          paddingHorizontal: 20,
-          paddingTop: insets.top + 16,
-          paddingBottom: insets.bottom + 16,
-        }}
-        onPress={handleClose}
+    <>
+      <AlenioBottomSheet
+        asScreen
+        title={sheetTitle}
+        subtitle={sheetSubtitle}
+        onClose={handleClose}
+        footer={sheetFooter}
+        testID="onboarding-screen"
       >
-        <SafeKeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
-          <Pressable onPress={(e) => e.stopPropagation?.()}>
-            <View
-              style={{
-                backgroundColor: "#FFFFFF",
-                borderRadius: 12,
-                borderWidth: 1,
-                borderColor: UI.border,
-                overflow: "hidden",
-                width: "100%",
-                maxWidth: 420,
-                alignSelf: "center",
-                shadowColor: "#0F172A",
-                shadowOpacity: 0.16,
-                shadowRadius: 20,
-                shadowOffset: { width: 0, height: 10 },
-                elevation: 8,
-              }}
-            >
-              <View
-                style={{
-                  paddingHorizontal: 16,
-                  paddingTop: 14,
-                  paddingBottom: 12,
-                  borderBottomWidth: 1,
-                  borderBottomColor: UI.border,
-                  backgroundColor: "#F8FAFC",
-                }}
-              >
-                <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text style={{ fontSize: 17, fontWeight: "700", color: UI.text }}>
-                      {isAddFlow ? "Add workspace" : "Set up workspace"}
-                    </Text>
-                    <Text style={{ fontSize: 13, color: UI.muted, marginTop: 2 }}>
-                      Create or join a workspace
-                    </Text>
-                  </View>
-                  <Pressable
-                    onPress={handleClose}
-                    hitSlop={12}
-                    testID="onboarding-close"
-                    style={{
-                      width: 32,
-                      height: 32,
-                      borderRadius: 16,
-                      backgroundColor: "#EEF2F6",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    <X size={18} color={UI.muted} />
-                  </Pressable>
-                </View>
-              </View>
-
-              <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} bounces={false}>
-                {modalBody}
-              </ScrollView>
-            </View>
-          </Pressable>
-        </SafeKeyboardAvoidingView>
-      </Pressable>
+        {modalBody}
+      </AlenioBottomSheet>
 
       {/* QR Scanner Modal — unchanged */}
       <Modal visible={scannerOpen} animationType="slide" onRequestClose={() => { setScannerOpen(false); scannedRef.current = false; }}>
@@ -636,7 +464,7 @@ export default function OnboardingScreen() {
                   {[{ top: 0, left: 0 }, { top: 0, right: 0 }, { bottom: 0, left: 0 }, { bottom: 0, right: 0 }].map((pos, i) => (
                     <View key={i} style={{
                       position: "absolute", width: 36, height: 36,
-                      borderColor: "#7C3AED", borderWidth: 3,
+                      borderColor: WELCOME_UI.primary, borderWidth: 3,
                       borderTopWidth: (pos as any).bottom !== undefined ? 0 : 3,
                       borderBottomWidth: (pos as any).top !== undefined ? 0 : 3,
                       borderLeftWidth: (pos as any).right !== undefined ? 0 : 3,
@@ -646,7 +474,7 @@ export default function OnboardingScreen() {
                   ))}
                   {joinMutation.isPending ? (
                     <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, alignItems: "center", justifyContent: "center" }}>
-                      <ActivityIndicator color="#7C3AED" size="large" />
+                      <ActivityIndicator color={WELCOME_UI.primary} size="large" />
                     </View>
                   ) : null}
                 </View>
@@ -673,12 +501,51 @@ export default function OnboardingScreen() {
                   <Text style={{ fontSize: 12, color: "rgba(255,255,255,0.7)", textAlign: "center", marginTop: 4 }}>
                     You&apos;ll join automatically when it&apos;s detected
                   </Text>
+                  <Pressable
+                    onPress={() => { setScannerOpen(false); scannedRef.current = false; }}
+                    style={{ marginTop: 12, paddingVertical: 6 }}
+                    testID="scanner-enter-code-manually"
+                  >
+                    <Text style={{ fontSize: 13, fontWeight: "600", color: "#C4B5FD" }}>Enter code manually</Text>
+                  </Pressable>
                 </View>
               </View>
             </View>
           </CameraView>
         </View>
       </Modal>
-    </View>
+    </>
   );
 }
+
+const styles = StyleSheet.create({
+  modeToggle: {
+    flexDirection: "row",
+    backgroundColor: WELCOME_UI.pageBg,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: WELCOME_UI.border,
+    padding: 3,
+  },
+  modeOption: {
+    flex: 1,
+    paddingVertical: 7,
+    alignItems: "center",
+    borderRadius: 8,
+  },
+  modeOptionActive: {
+    backgroundColor: WELCOME_UI.primary,
+  },
+  modeOptionText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: WELCOME_UI.body,
+  },
+  modeOptionTextActive: {
+    color: "#FFFFFF",
+  },
+  codeInput: {
+    letterSpacing: 1.5,
+    fontWeight: "600",
+  },
+});

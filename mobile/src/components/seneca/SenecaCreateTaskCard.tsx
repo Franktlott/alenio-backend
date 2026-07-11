@@ -17,6 +17,7 @@ import type { SenecaCreateTaskProposal } from "@/lib/seneca-api";
 import { api } from "@/lib/api/api";
 import { ME_QUERY_KEY } from "@/lib/auth/me-query";
 import { calendarDueIso, resolveTimeZone } from "@/lib/timezone";
+import { invalidateTaskCaches } from "@/lib/invalidate-task-caches";
 import type { TaskPriority } from "@/lib/types";
 
 type Props = {
@@ -88,8 +89,7 @@ export function SenecaCreateTaskCard({ teamId, proposal, onSaved, onDismiss }: P
       });
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["tasks", teamId] });
-      void queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      invalidateTaskCaches(queryClient, teamId);
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       const duePart = dueDate ? ` due ${formatDueDate(dueDate)}` : "";
       const summary =

@@ -1117,6 +1117,8 @@ setInterval(runCleanup, 60 * 60 * 1000);
 // Re-schedule any pending meeting reminders after server restart
 initMeetingReminders();
 
+import { handleRealtimeUpgrade, realtimeWebsocket } from "./lib/realtime-ws";
+
 const port = Number(process.env.PORT) || 3000;
 
 console.log(
@@ -1125,9 +1127,18 @@ console.log(
     : `⚠️ Seneca disabled — OPENAI_API_KEY missing or invalid (present=${senecaDiagnostics().present}, length=${senecaDiagnostics().length}, openAiRelatedEnvKeyNames=${JSON.stringify(senecaDiagnostics().openAiRelatedEnvKeyNames)}, railwayService=${senecaDiagnostics().railwayService ?? "n/a"})`,
 );
 
+console.log("✅ Realtime messaging WebSocket enabled at /api/realtime");
+
 export default {
   port,
   hostname: "0.0.0.0",
-  fetch: app.fetch,
   maxRequestBodySize: 50 * 1024 * 1024,
+  async fetch(req: Request, server: { upgrade: (req: Request, options: { data: import("./lib/realtime-hub").RealtimeSocketData }) => boolean }) {
+    const url = new URL(req.url);
+    if (url.pathname === "/api/realtime") {
+      return handleRealtimeUpgrade(req, server);
+    }
+    return app.fetch(req);
+  },
+  websocket: realtimeWebsocket,
 };

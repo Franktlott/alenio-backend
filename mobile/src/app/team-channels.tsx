@@ -6,7 +6,6 @@ import {
   Pressable,
   Modal,
   ActivityIndicator,
-  Image,
   Platform,
   TextInput,
   RefreshControl,
@@ -14,7 +13,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { LinearGradient } from "expo-linear-gradient";
-import { MessageCircle, Hash, ChevronLeft, Plus } from "lucide-react-native";
+import { Hash, ChevronLeft, Plus } from "lucide-react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { toast } from "burnt";
@@ -23,7 +22,8 @@ import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
 import { useUnreadStore } from "@/lib/state/unread-store";
 import type { Team } from "@/lib/types";
-import { resolveUserImageUrl } from "@/lib/user-avatar";
+import { UserAvatar } from "@/components/UserAvatar";
+import { WorkspaceTeamAvatar } from "@/components/WorkspaceTeamUI";
 import { SafeKeyboardAvoidingView } from "@/lib/safe-keyboard-controller";
 
 const TOPIC_COLORS = ["#4361EE", "#7C3AED", "#10B981", "#F59E0B", "#EF4444", "#EC4899"];
@@ -58,25 +58,18 @@ function AvatarStack({ members }: { members: { image: string | null; name: strin
   return (
     <View style={{ flexDirection: "row" }}>
       {shown.map((m, i) => (
-        <View
-          key={i}
+        <UserAvatar
+          key={`${m.name ?? "u"}-${i}`}
+          user={m}
+          size={24}
+          radius={12}
           style={{
-            width: 28, height: 28, borderRadius: 14,
-            backgroundColor: "#4361EE",
-            borderWidth: 2, borderColor: "white",
-            marginLeft: i === 0 ? 0 : -8,
-            alignItems: "center", justifyContent: "center",
-            overflow: "hidden", zIndex: shown.length - i,
+            marginLeft: i === 0 ? 0 : -7,
+            borderWidth: 1.5,
+            borderColor: "white",
+            zIndex: shown.length - i,
           }}
-        >
-          {m.image ? (
-            <Image source={{ uri: m.image }} style={{ width: 28, height: 28 }} />
-          ) : (
-            <Text style={{ color: "white", fontSize: 11, fontWeight: "700" }}>
-              {m.name?.[0]?.toUpperCase() ?? "?"}
-            </Text>
-          )}
-        </View>
+        />
       ))}
     </View>
   );
@@ -136,12 +129,14 @@ export default function TeamChannelsScreen() {
   const memberCount = members.length;
   const topThreeMembers = members.slice(0, 3).map((m) => ({ image: m.user.image ?? null, name: m.user.name ?? null }));
   const lastGeneralMessage = teamGeneralMessages[0];
-  const teamPhotoUrl = resolveUserImageUrl(teamDetail?.image);
   const displayTeamName = teamName || teamDetail?.name || "Workspace";
 
   // Determine if the current user is owner/admin of the team
   const currentMember = members.find((m) => m.user.id === session?.user?.id);
-  const canManageChannels = currentMember?.role === "owner" || currentMember?.role === "admin";
+  const canManageChannels =
+    currentMember?.role === "owner" ||
+    currentMember?.role === "team_leader" ||
+    currentMember?.role === "admin";
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -200,7 +195,14 @@ export default function TeamChannelsScreen() {
           >
             <ChevronLeft size={20} color="white" />
           </Pressable>
-          <Text style={{ color: "white", fontSize: 18, fontWeight: "800", flex: 1 }}>{teamName || "Team"}</Text>
+          <Text
+            style={{ color: "white", fontSize: 18, fontWeight: "800", flex: 1, letterSpacing: -0.3 }}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.7}
+          >
+            {teamName || "Team"}
+          </Text>
         </View>
       </LinearGradient>
 
@@ -210,60 +212,49 @@ export default function TeamChannelsScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" />}
       >
         {/* Team Chat section */}
-        <View style={{ marginHorizontal: 16, marginTop: 20, marginBottom: 10 }}>
-          <Text style={{ fontSize: 20, fontWeight: "700", color: "#0F172A" }}>Team Chat</Text>
-          <Text style={{ fontSize: 13, color: "#6B7280", marginTop: 2 }}>{displayTeamName}</Text>
+        <View style={{ marginHorizontal: 16, marginTop: 14, marginBottom: 8 }}>
+          <Text style={{ fontSize: 17, fontWeight: "700", color: "#0F172A" }}>Team Chat</Text>
+          <Text style={{ fontSize: 12, color: "#6B7280", marginTop: 1 }}>{displayTeamName}</Text>
         </View>
 
         <Pressable
           testID="team-channels-team-chat-button"
           onPress={() => router.push({ pathname: "/team-chat", params: { teamId, teamName: teamName ?? "" } })}
-          style={{ marginHorizontal: 16, marginBottom: 10, backgroundColor: "white", borderRadius: 20, overflow: "hidden", shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 2 }}
+          style={{ marginHorizontal: 16, marginBottom: 8, backgroundColor: "white", borderRadius: 16, overflow: "hidden", shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 5, shadowOffset: { width: 0, height: 1 }, elevation: 1 }}
         >
-          <View style={{ height: 3, backgroundColor: "#4361EE" }} />
-          <View style={{ flexDirection: "row", alignItems: "center", padding: 16, gap: 12 }}>
-            {teamPhotoUrl ? (
-              <Image
-                source={{ uri: teamPhotoUrl }}
-                style={{ width: 48, height: 48, borderRadius: 14, borderWidth: 2, borderColor: "#E2E8F0" }}
-                resizeMode="cover"
-              />
-            ) : (
-              <View style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: "#EEF2FF", alignItems: "center", justifyContent: "center" }}>
-                <MessageCircle size={22} color="#4361EE" />
-              </View>
-            )}
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 16, fontWeight: "700", color: "#0F172A" }}>Team Chat</Text>
-              <Text style={{ fontSize: 13, color: "#6B7280", marginTop: 1 }}>Primary team space</Text>
+          <View style={{ height: 2, backgroundColor: "#4361EE" }} />
+          <View style={{ flexDirection: "row", alignItems: "center", paddingVertical: 11, paddingHorizontal: 12, gap: 10 }}>
+            <WorkspaceTeamAvatar
+              team={{ name: displayTeamName, image: teamDetail?.image ?? null }}
+              size={40}
+              radius={12}
+            />
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={{ fontSize: 15, fontWeight: "700", color: "#0F172A" }}>Team Chat</Text>
+              <Text style={{ fontSize: 12, color: "#6B7280", marginTop: 1 }} numberOfLines={1}>
+                {memberCount} {memberCount === 1 ? "member" : "members"}
+                {" · "}
+                {lastGeneralMessage
+                  ? `Last: ${formatTime(lastGeneralMessage.createdAt)}`
+                  : "No activity yet"}
+              </Text>
             </View>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
               {teamChatUnreadCount > 0 ? (
-                <View style={{ backgroundColor: "#EF4444", borderRadius: 10, minWidth: 20, height: 20, alignItems: "center", justifyContent: "center", paddingHorizontal: 6 }}>
-                  <Text style={{ color: "white", fontSize: 11, fontWeight: "700" }}>{teamChatUnreadCount}</Text>
+                <View style={{ backgroundColor: "#EF4444", borderRadius: 9, minWidth: 18, height: 18, alignItems: "center", justifyContent: "center", paddingHorizontal: 5 }}>
+                  <Text style={{ color: "white", fontSize: 10, fontWeight: "700" }}>{teamChatUnreadCount}</Text>
                 </View>
               ) : null}
               {topThreeMembers.length > 0 ? <AvatarStack members={topThreeMembers} /> : null}
             </View>
           </View>
-          <View style={{ height: 1, backgroundColor: "#F1F5F9", marginHorizontal: 16 }} />
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 16, paddingHorizontal: 16, paddingVertical: 10 }}>
-            <Text style={{ fontSize: 12, color: "#6B7280" }}>
-              {memberCount} {memberCount === 1 ? "member" : "members"}
-            </Text>
-            <Text style={{ fontSize: 12, color: "#6B7280" }}>
-              {lastGeneralMessage
-                ? `Last: ${formatTime(lastGeneralMessage.createdAt)}`
-                : "No activity yet"}
-            </Text>
-          </View>
         </Pressable>
 
         {/* Channels section header */}
-        <View style={{ marginHorizontal: 16, marginTop: 28, marginBottom: 10, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+        <View style={{ marginHorizontal: 16, marginTop: 18, marginBottom: 8, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
           <View>
-            <Text style={{ fontSize: 20, fontWeight: "700", color: "#0F172A" }}>Channels</Text>
-            <Text style={{ fontSize: 13, color: "#6B7280", marginTop: 2 }}>
+            <Text style={{ fontSize: 17, fontWeight: "700", color: "#0F172A" }}>Channels</Text>
+            <Text style={{ fontSize: 12, color: "#6B7280", marginTop: 1 }}>
               {topics.length} {topics.length === 1 ? "active space" : "active spaces"}
             </Text>
           </View>
@@ -271,21 +262,21 @@ export default function TeamChannelsScreen() {
             <Pressable
               testID="create-channel-button"
               onPress={() => setShowCreateChannel(true)}
-              style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#EEF2FF", alignItems: "center", justifyContent: "center" }}
+              style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "#EEF2FF", alignItems: "center", justifyContent: "center" }}
             >
-              <Plus size={18} color="#4361EE" />
+              <Plus size={16} color="#4361EE" />
             </Pressable>
           ) : null}
         </View>
 
         {/* Channel list */}
         {topicsLoading ? (
-          <View style={{ paddingVertical: 24, alignItems: "center" }}>
+          <View style={{ paddingVertical: 20, alignItems: "center" }}>
             <ActivityIndicator color="#4361EE" />
           </View>
         ) : topics.length === 0 ? (
-          <View style={{ marginHorizontal: 16, backgroundColor: "white", borderRadius: 20, padding: 24, alignItems: "center" }}>
-            <Text style={{ color: "#94A3B8", fontSize: 14 }}>No channels yet</Text>
+          <View style={{ marginHorizontal: 16, backgroundColor: "white", borderRadius: 16, padding: 18, alignItems: "center" }}>
+            <Text style={{ color: "#94A3B8", fontSize: 13 }}>No channels yet</Text>
           </View>
         ) : (
           topics.map((topic) => {
@@ -298,31 +289,38 @@ export default function TeamChannelsScreen() {
                 key={topic.id}
                 testID={`channel-card-${topic.id}`}
                 onPress={() => router.push({ pathname: "/team-chat", params: { teamId, topicId: topic.id, topicName: topic.name, teamName: teamName ?? "" } })}
-                onLongPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setActionTopic(topic); }}
-                style={{ marginHorizontal: 16, marginBottom: 10, backgroundColor: "white", borderRadius: 20, padding: 16, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 6, shadowOffset: { width: 0, height: 1 }, elevation: 1 }}
+                onLongPress={
+                  canManageChannels
+                    ? () => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                        setActionTopic(topic);
+                      }
+                    : undefined
+                }
+                style={{ marginHorizontal: 16, marginBottom: 8, backgroundColor: "white", borderRadius: 16, paddingVertical: 11, paddingHorizontal: 12, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 5, shadowOffset: { width: 0, height: 1 }, elevation: 1 }}
               >
-                <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 12 }}>
-                  <View style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: topic.color + "22", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                  <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: topic.color + "22", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                     {isHash ? (
-                      <Hash size={20} color={topic.color} />
+                      <Hash size={17} color={topic.color} />
                     ) : (
-                      <Text style={{ fontSize: 18, fontWeight: "700", color: topic.color }}>{firstLetter}</Text>
+                      <Text style={{ fontSize: 15, fontWeight: "700", color: topic.color }}>{firstLetter}</Text>
                     )}
                   </View>
-                  <View style={{ flex: 1 }}>
-                    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                      <Text style={{ fontSize: 16, fontWeight: "700", color: "#0F172A" }}>{topic.name}</Text>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                      <Text style={{ fontSize: 15, fontWeight: "700", color: "#0F172A", flexShrink: 1 }} numberOfLines={1}>{topic.name}</Text>
                       {topic.description ? (
-                        <View style={{ backgroundColor: "#F1F5F9", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}>
-                          <Text style={{ fontSize: 11, fontWeight: "600", color: "#64748B" }}>{topic.description}</Text>
+                        <View style={{ backgroundColor: "#F1F5F9", borderRadius: 7, paddingHorizontal: 7, paddingVertical: 2, maxWidth: "42%" }}>
+                          <Text style={{ fontSize: 10, fontWeight: "600", color: "#64748B" }} numberOfLines={1}>{topic.description}</Text>
                         </View>
                       ) : unread > 0 ? (
-                        <View style={{ backgroundColor: "#EF4444", borderRadius: 10, minWidth: 20, height: 20, alignItems: "center", justifyContent: "center", paddingHorizontal: 6 }}>
-                          <Text style={{ color: "white", fontSize: 11, fontWeight: "700" }}>{unread}</Text>
+                        <View style={{ backgroundColor: "#EF4444", borderRadius: 9, minWidth: 18, height: 18, alignItems: "center", justifyContent: "center", paddingHorizontal: 5 }}>
+                          <Text style={{ color: "white", fontSize: 10, fontWeight: "700" }}>{unread}</Text>
                         </View>
                       ) : null}
                     </View>
-                    <Text style={{ fontSize: 13, color: "#6B7280", marginTop: 4 }} numberOfLines={1}>
+                    <Text style={{ fontSize: 12, color: "#6B7280", marginTop: 2 }} numberOfLines={1}>
                       {topic.lastMessage
                         ? `${topic.lastMessage.sender.name ?? "Someone"}: ${topic.lastMessage.content ?? "Attachment"}`
                         : "No posts yet"}
@@ -336,7 +334,7 @@ export default function TeamChannelsScreen() {
       </ScrollView>
 
       {/* Channel action sheet */}
-      <Modal visible={!!actionTopic} transparent animationType="slide" onRequestClose={() => setActionTopic(null)}>
+      <Modal visible={!!actionTopic && canManageChannels} transparent animationType="slide" onRequestClose={() => setActionTopic(null)}>
         <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }} onPress={() => setActionTopic(null)}>
           <Pressable onPress={(e) => e.stopPropagation()}>
             <View style={{ backgroundColor: "white", borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 36 }}>
@@ -375,7 +373,7 @@ export default function TeamChannelsScreen() {
       </Modal>
 
       {/* Edit channel modal */}
-      <Modal visible={!!editTopic} transparent animationType="slide" onRequestClose={() => setEditTopic(null)}>
+      <Modal visible={!!editTopic && canManageChannels} transparent animationType="slide" onRequestClose={() => setEditTopic(null)}>
         <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }} onPress={() => setEditTopic(null)}>
           <SafeKeyboardAvoidingView>
             <Pressable onPress={(e) => e.stopPropagation()}>
@@ -419,7 +417,7 @@ export default function TeamChannelsScreen() {
       </Modal>
 
       {/* Delete channel confirm modal */}
-      <Modal visible={!!deleteTopic} transparent animationType="fade" onRequestClose={() => setDeleteTopic(null)}>
+      <Modal visible={!!deleteTopic && canManageChannels} transparent animationType="fade" onRequestClose={() => setDeleteTopic(null)}>
         <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)", alignItems: "center", justifyContent: "center", paddingHorizontal: 32 }} onPress={() => setDeleteTopic(null)}>
           <Pressable onPress={(e) => e.stopPropagation()} style={{ width: "100%", backgroundColor: "white", borderRadius: 20, overflow: "hidden" }}>
             <View style={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 16, alignItems: "center" }}>

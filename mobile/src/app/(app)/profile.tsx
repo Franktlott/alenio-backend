@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -19,13 +19,20 @@ import * as Notifications from "expo-notifications";
 import Constants from "expo-constants";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { Camera, LogOut, Pencil, X, Trash2, Bell, Check, Crown, MessageSquare, Globe } from "lucide-react-native";
+import { Camera, LogOut, Pencil, X, Trash2, Bell, Check, Crown, MessageSquare, Globe, AlertTriangle, ShieldAlert, ChevronRight, Lock, Shield } from "lucide-react-native";
 import { notificationPreferencesSummary } from "@/components/NotificationPreferencesPanel";
 import { COMMON_TIMEZONES, formatTimeZoneLabel, getBrowserTimeZone, resolveTimeZone } from "@/lib/timezone";
 import { authClient, agentDebugLog, clearAccessToken, getAuthHeaders } from "@/lib/auth/auth-client";
-import { SESSION_QUERY_KEY, markSessionSignedOut, useSession, clearMobileAuthCaches } from "@/lib/auth/use-session";
+import {
+  SESSION_QUERY_KEY,
+  markSessionSignedOut,
+  useSession,
+  clearMobileAuthCaches,
+  refreshMeInAuthCaches,
+  useMobileAuthReady,
+} from "@/lib/auth/use-session";
 import { clearNotifDebugLog, getNotifDebugLog, getNotifStatus, registerForPushNotificationsAsync } from "@/lib/notifications";
-import { router, useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { useMutation, useQuery, useQueryClient, useQueries } from "@tanstack/react-query";
 import { api } from "@/lib/api/api";
 import { readJsonSafe } from "@/lib/api/api";
@@ -39,6 +46,7 @@ import { useSwitchWorkspace } from "@/hooks/use-switch-workspace";
 import { applyTeamRemovedFromAccount } from "@/lib/workspace-switch";
 import { toast } from "burnt";
 import { ACCOUNT_HUB_TITLE } from "@/lib/plan-access-copy";
+import { tabBarClearance } from "@/lib/tab-bar";
 import type { Team } from "@/lib/types";
 import { SafeKeyboardAvoidingView } from "@/lib/safe-keyboard-controller";
 import {
@@ -51,9 +59,8 @@ import {
 } from "@/components/profile/ProfileEnterpriseUI";
 import { ProfileWorkspaceList } from "@/components/profile/ProfileWorkspaceList";
 import { OutlookCalendarCard } from "@/components/profile/OutlookCalendarCard";
+import { AppTabHeader } from "@/components/AppTabHeader";
 import { formatOutlookUserError } from "@/lib/outlook-calendar-errors";
-
-const DEMO_EMAIL = "demo@alenio.app";
 
 type JoinRequestItem = {
   id: string;
@@ -62,11 +69,22 @@ type JoinRequestItem = {
   user: { id: string; name: string; email: string; image: string | null };
 };
 
+type MyJoinRequest = {
+  id: string;
+  status: string;
+  createdAt: string;
+  team: { id: string; name: string; image: string | null };
+};
+
 type NotifPrefs = {
+  isAdmin?: boolean;
   notifMessages: boolean;
   notifTaskAssigned: boolean;
   notifTaskDue: boolean;
   notifMeetings: boolean;
+  notifAdminUsers?: boolean;
+  notifAdminWorkspaces?: boolean;
+  notifAdminBilling?: boolean;
   notifTone: string;
   hasToken: boolean;
 };
@@ -75,12 +93,12 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const { outlook, message } = useLocalSearchParams<{ outlook?: string; message?: string }>();
   const { data: session } = useSession();
+  const { data: authReady } = useMobileAuthReady();
   const queryClient = useQueryClient();
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
   const setActiveTeamId = useTeamStore((s) => s.setActiveTeamId);
   const { switchWorkspace } = useSwitchWorkspace();
   const user = session?.user;
-  const isDemo = user?.email === DEMO_EMAIL;
 
   useEffect(() => {
     if (outlook === "connected") {
@@ -140,6 +158,13 @@ export default function ProfileScreen() {
     enabled: !!user,
   });
 
+  useFocusEffect(
+    useCallback(() => {
+      if (!user) return;
+      void refreshMeInAuthCaches(queryClient);
+    }, [queryClient, user])
+  );
+
   useEffect(() => {
     if (!meProfile?.id || meProfile.timezone) return;
     const browserTz = getBrowserTimeZone();
@@ -179,9 +204,9 @@ export default function ProfileScreen() {
   const isOwnerOfAnyTeam = teams.some((t) => (t as Team & { role?: string }).role === "owner");
   const activeTeam = teams.find((t) => t.id === activeTeamId) as (Team & { role?: string }) | undefined;
   const canManageActiveTeam =
-    !!activeTeam && ["owner", "team_leader"].includes(activeTeam.role ?? "") && !isDemo;
+    !!activeTeam && ["owner", "team_leader"].includes(activeTeam.role ?? "");
   const canLeaveActiveTeam =
-    !!activeTeam && !canManageActiveTeam && !isDemo;
+    !!activeTeam && !canManageActiveTeam;
 
   const { data: ownerTeamSubscription } = useQuery({
     queryKey: ["subscription", activeTeamId],
@@ -194,6 +219,13 @@ export default function ProfileScreen() {
     queryKey: ["join-requests", editingTeam?.id],
     queryFn: () => api.get<JoinRequestItem[]>(`/api/teams/${editingTeam!.id}/join-requests`),
     enabled: !!editingTeam && ["owner", "team_leader"].includes((editingTeam as Team & { role?: string }).role ?? ""),
+  });
+
+  // Join requests the current user has sent (waiting for approval)
+  const { data: myPendingJoinRequests = [] } = useQuery({
+    queryKey: ["join-requests-mine"],
+    queryFn: () => api.get<MyJoinRequest[]>("/api/join-requests/mine"),
+    refetchInterval: 15000,
   });
 
   // Fetch join request counts for all owned teams (for badges)
@@ -228,6 +260,16 @@ export default function ProfileScreen() {
       api.post(`/api/teams/${teamId}/join-requests/${requestId}/reject`, {}),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["join-requests", editingTeam?.id] });
+    },
+  });
+
+  const cancelMyJoinRequestMutation = useMutation({
+    mutationFn: (requestId: string) => api.delete(`/api/join-requests/${requestId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["join-requests-mine"] });
+    },
+    onError: (err: Error) => {
+      Alert.alert("Could not withdraw request", err.message || "Something went wrong. Try again.");
     },
   });
 
@@ -564,7 +606,7 @@ export default function ProfileScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await queryClient.invalidateQueries({ queryKey: ME_QUERY_KEY });
+    await refreshMeInAuthCaches(queryClient);
     await queryClient.invalidateQueries({ queryKey: SESSION_QUERY_KEY });
     await queryClient.invalidateQueries({ queryKey: ["teams"] });
     await queryClient.invalidateQueries({ queryKey: ["notification-preferences"] });
@@ -574,18 +616,10 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#F1F5F9" }} edges={[]} testID="profile-screen">
-      {/* Header */}
-      <LinearGradient
-        colors={["#4361EE", "#7C3AED"]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-        style={{ paddingTop: insets.top + 12, paddingHorizontal: 16, paddingBottom: 16 }}
-      >
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-          <Text style={{ color: "white", fontSize: 20, fontWeight: "800", flex: 1 }}>Profile</Text>
-          <View style={{ position: "absolute", left: 0, right: 0, alignItems: "center" }}>
-            <Image source={require("@/assets/alenio-logo-white.png")} style={{ height: 30, width: 104, resizeMode: "contain" }} />
-          </View>
+      <AppTabHeader
+        topInset={insets.top}
+        testID="profile-header"
+        rightAction={
           <Pressable
             onPress={() => setShowSignOutConfirm(true)}
             style={{ width: 36, height: 36, alignItems: "center", justifyContent: "center" }}
@@ -593,61 +627,35 @@ export default function ProfileScreen() {
           >
             <LogOut size={20} color="rgba(255,255,255,0.85)" />
           </Pressable>
-        </View>
-      </LinearGradient>
+        }
+      />
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 88 }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" colors={["#4361EE"]} />}>
-        {/* Brand header — bundled, always available offline */}
-        <View style={{ height: 160, overflow: "hidden" }}>
-          <Image
-            source={require("@/assets/profile-header.png")}
-            style={{ width: "100%", height: 160 }}
-            resizeMode="cover"
-          />
-          <LinearGradient
-            colors={["transparent", "rgba(241,245,249,0.95)"]}
-            style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 70 }}
-          />
-        </View>
+      <View style={{ flex: 1, minHeight: 0 }}>
+        {/* Profile hero — fixed */}
+        <View style={{ flexShrink: 0 }}>
+          <View style={{ height: 160, overflow: "hidden" }}>
+            <Image
+              source={require("@/assets/profile-header.png")}
+              style={{ width: "100%", height: 160 }}
+              resizeMode="cover"
+            />
+            <LinearGradient
+              colors={["transparent", "rgba(241,245,249,0.95)"]}
+              style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 70 }}
+            />
+          </View>
 
-        {/* Avatar + name hero */}
-        <View style={{ alignItems: "center", paddingBottom: 24, paddingHorizontal: 16 }}>
-          {/* Avatar — pulled up to overlap the banner */}
-          <TouchableOpacity
-            onPress={handlePhotoPress}
-            disabled={uploadMutation.isPending || isDemo}
-            style={{ marginTop: -64, marginBottom: 16 }}
-            testID="avatar-upload-button"
-          >
-            <View
-              className="w-32 h-32 rounded-full overflow-hidden bg-indigo-100"
-              style={{ borderWidth: 3, borderColor: "#F8FAFC", position: "relative" }}
+          <View style={{ alignItems: "center", paddingBottom: 24, paddingHorizontal: 16 }}>
+            <TouchableOpacity
+              onPress={handlePhotoPress}
+              disabled={uploadMutation.isPending}
+              style={{ marginTop: -64, marginBottom: 16 }}
+              testID="avatar-upload-button"
             >
               <View
-                style={{
-                  position: "absolute",
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-                pointerEvents="none"
+                className="w-32 h-32 rounded-full overflow-hidden bg-indigo-100"
+                style={{ borderWidth: 3, borderColor: "#F8FAFC", position: "relative" }}
               >
-                <Text className="text-indigo-600 text-4xl font-bold">{avatarInitial}</Text>
-              </View>
-              {showAvatarImage ? (
-                <Image
-                  key={avatarUri}
-                  source={{ uri: avatarUri }}
-                  style={{ position: "absolute", top: 0, left: 0, width: 128, height: 128 }}
-                  resizeMode="cover"
-                  onError={() => setAvatarFailedUri(avatarUri)}
-                  testID="profile-avatar-image"
-                />
-              ) : null}
-              {uploadMutation.isPending ? (
                 <View
                   style={{
                     position: "absolute",
@@ -655,27 +663,59 @@ export default function ProfileScreen() {
                     left: 0,
                     right: 0,
                     bottom: 0,
-                    backgroundColor: "rgba(255,255,255,0.55)",
                     alignItems: "center",
                     justifyContent: "center",
                   }}
+                  pointerEvents="none"
                 >
-                  <ActivityIndicator color="#4361EE" testID="upload-loading-indicator" />
+                  <Text className="text-indigo-600 text-4xl font-bold">{avatarInitial}</Text>
                 </View>
-              ) : null}
-            </View>
-            {!isDemo ? (
+                {showAvatarImage ? (
+                  <Image
+                    key={avatarUri}
+                    source={{ uri: avatarUri }}
+                    style={{ position: "absolute", top: 0, left: 0, width: 128, height: 128 }}
+                    resizeMode="cover"
+                    onError={() => setAvatarFailedUri(avatarUri)}
+                    testID="profile-avatar-image"
+                  />
+                ) : null}
+                {uploadMutation.isPending ? (
+                  <View
+                    style={{
+                      position: "absolute",
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      backgroundColor: "rgba(255,255,255,0.55)",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <ActivityIndicator color="#4361EE" testID="upload-loading-indicator" />
+                  </View>
+                ) : null}
+              </View>
               <View className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-indigo-600 items-center justify-center border-2 border-white">
                 <Camera size={15} color="white" />
               </View>
-            ) : null}
-          </TouchableOpacity>
+            </TouchableOpacity>
 
-          <Text style={{ fontSize: 18, fontWeight: "700", color: nameColor, marginBottom: 2 }}>{displayName}</Text>
-          <Text style={{ fontSize: 13, color: emailColor }}>{displayEmail}</Text>
+            <Text style={{ fontSize: 18, fontWeight: "700", color: nameColor, marginBottom: 2 }}>{displayName}</Text>
+            <Text style={{ fontSize: 13, color: emailColor }}>{displayEmail}</Text>
+          </View>
         </View>
 
-        <ProfileContent>
+        {/* Settings sections — only this area scrolls */}
+        <ScrollView
+          style={{ flex: 1, minHeight: 0 }}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: tabBarClearance(insets.bottom) }}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" colors={["#4361EE"]} />}
+          keyboardShouldPersistTaps="handled"
+        >
+          <ProfileContent>
           {/* Workspaces */}
           <ProfileSection
             title="Workspaces"
@@ -691,13 +731,13 @@ export default function ProfileScreen() {
                     : undefined
             }
             action={
-              !isDemo && !teamsLoading && teams.length > 0 ? (
+              !teamsLoading && teams.length > 0 ? (
                 <ProfileToolbarButton
                   label="Add"
                   onPress={() =>
                     router.push({
                       pathname: "/onboarding",
-                      params: { intent: "add", mode: "create" },
+                      params: { intent: "add" },
                     })
                   }
                   testID="create-join-team-button"
@@ -709,8 +749,10 @@ export default function ProfileScreen() {
               teams={teams as (Team & { role?: string })[]}
               activeTeamId={activeTeamId}
               teamsLoading={teamsLoading}
-              isDemo={isDemo}
               pendingCountMap={pendingCountMap}
+              pendingJoinRequests={myPendingJoinRequests}
+              cancelingRequestId={cancelMyJoinRequestMutation.isPending ? cancelMyJoinRequestMutation.variables ?? null : null}
+              onCancelPendingRequest={(requestId) => cancelMyJoinRequestMutation.mutate(requestId)}
               onSelectTeam={(teamId) => void switchWorkspace(teamId)}
               onManageActive={
                 canManageActiveTeam && activeTeam ? () => openEditModal(activeTeam) : undefined
@@ -721,7 +763,7 @@ export default function ProfileScreen() {
               onAddWorkspace={() =>
                 router.push({
                   pathname: "/onboarding",
-                  params: { intent: "add", mode: "create" },
+                  params: { intent: "add" },
                 })
               }
             />
@@ -730,6 +772,23 @@ export default function ProfileScreen() {
           {/* Account */}
           <ProfileSection title="Account">
             <ProfileCard>
+              {(meProfile?.isAdmin === true || authReady?.me?.isAdmin === true) ? (
+                <>
+                  <ProfileMenuRow
+                    icon={Shield}
+                    title="Alenio Admin"
+                    subtitle="Platform stats, users, and workspaces"
+                    onPress={() => {
+                      void (async () => {
+                        await refreshMeInAuthCaches(queryClient);
+                        router.push("/(admin)/(tabs)");
+                      })();
+                    }}
+                    testID="alenio-admin-row"
+                  />
+                  <ProfileDivider inset />
+                </>
+              ) : null}
               <ProfileMenuRow
                 icon={Crown}
                 title={ACCOUNT_HUB_TITLE}
@@ -858,23 +917,17 @@ export default function ProfileScreen() {
                 onPress={() => router.push("/terms-of-service")}
                 testID="terms-of-service-link"
               />
-              {!isDemo ? (
-                <>
-                  <ProfileDivider />
-                  <ProfileMenuRow
-                    title="Account deletion"
-                    subtitle="Permanently remove your account and data"
-                    onPress={() => setDeleteStep(1)}
-                    testID="account-deletion-link"
-                  />
-                </>
-              ) : null}
+              <ProfileDivider />
+              <ProfileMenuRow
+                title="Account deletion"
+                subtitle="Permanently remove your account and data"
+                onPress={() => setDeleteStep(1)}
+                testID="account-deletion-link"
+              />
             </ProfileCard>
-            {!isDemo ? (
-              <Text style={{ fontSize: 11, color: "#94A3B8", textAlign: "center", marginTop: 10 }}>
-                v{Constants.expoConfig?.version ?? "—"}
-              </Text>
-            ) : null}
+            <Text style={{ fontSize: 11, color: "#94A3B8", textAlign: "center", marginTop: 10 }}>
+              v{Constants.expoConfig?.version ?? "—"}
+            </Text>
           </ProfileSection>
 
           {/* Sign out */}
@@ -924,6 +977,7 @@ export default function ProfileScreen() {
           </Text>
         </View>) : null}
       </ScrollView>
+      </View>
 
       {/* Team edit / delete modal */}
       <Modal visible={!!editingTeam} transparent animationType="slide" onRequestClose={closeEditModal}>
@@ -1175,72 +1229,108 @@ export default function ProfileScreen() {
 
       {/* Delete Account Modal */}
       <Modal visible={deleteStep > 0} transparent animationType="slide" onRequestClose={closeDeleteModal}>
-        <Pressable className="flex-1 bg-black/40 justify-end" onPress={closeDeleteModal}>
+        <Pressable className="flex-1 bg-black/50 justify-end" onPress={closeDeleteModal}>
           <SafeKeyboardAvoidingView>
             <Pressable onPress={(e) => e.stopPropagation()}>
-              <View className="bg-white dark:bg-slate-800 rounded-t-3xl px-5 pt-6 pb-10">
+              <View className="bg-white dark:bg-slate-900 rounded-t-2xl overflow-hidden">
+                <View className="items-center pt-3 pb-1">
+                  <View className="w-10 h-1 rounded-full bg-slate-200 dark:bg-slate-700" />
+                </View>
+
                 {/* Step 1: Impact */}
                 {deleteStep === 1 && (
-                  <>
-                    <View className="flex-row items-center justify-between mb-5">
-                      <Text className="text-xl font-bold text-slate-900 dark:text-white">Delete Account?</Text>
-                      <TouchableOpacity onPress={closeDeleteModal}>
-                        <X size={22} color="#94A3B8" />
+                  <View className="px-5 pt-3 pb-10">
+                    <View className="flex-row items-start justify-between mb-1">
+                      <View className="flex-1 pr-4">
+                        <Text className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Account settings</Text>
+                        <Text className="text-xl font-bold text-slate-900 dark:text-white mt-1">Delete account</Text>
+                        <Text className="text-sm text-slate-500 mt-1 leading-5">
+                          Review what happens and resolve any blockers before continuing.
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        onPress={closeDeleteModal}
+                        className="w-9 h-9 rounded-lg bg-slate-100 dark:bg-slate-800 items-center justify-center"
+                      >
+                        <X size={18} color="#64748B" />
                       </TouchableOpacity>
                     </View>
-                    <View className="bg-red-50 rounded-2xl p-4 mb-4" style={{ gap: 12 }}>
-                      {[
-                        "You'll be removed from all your teams",
-                        "All your messages will be deleted",
-                        "Your task history will be removed",
-                        "This action cannot be undone",
-                      ].map((item) => (
-                        <View key={item} className="flex-row items-start" style={{ gap: 10 }}>
-                          <X size={16} color="#EF4444" style={{ marginTop: 1 }} />
-                          <Text className="flex-1 text-sm text-slate-700">{item}</Text>
-                        </View>
-                      ))}
+
+                    <View className="mt-5 rounded-xl border border-red-200 bg-red-50/70 overflow-hidden">
+                      <View className="flex-row items-center px-4 py-3 border-b border-red-100" style={{ gap: 8 }}>
+                        <AlertTriangle size={16} color="#DC2626" />
+                        <Text className="text-sm font-semibold text-red-800">Permanent removal</Text>
+                      </View>
+                      <View className="px-4 py-3" style={{ gap: 10 }}>
+                        {[
+                          "You'll be removed from all your teams",
+                          "All your messages will be deleted",
+                          "Your task history will be removed",
+                          "This action cannot be undone",
+                        ].map((item) => (
+                          <View key={item} className="flex-row items-start" style={{ gap: 10 }}>
+                            <View className="w-1.5 h-1.5 rounded-full bg-red-400 mt-2" />
+                            <Text className="flex-1 text-sm text-slate-700 leading-5">{item}</Text>
+                          </View>
+                        ))}
+                      </View>
                     </View>
+
                     {deletionReadinessLoading ? (
-                      <View className="items-center py-4 mb-4">
+                      <View className="items-center py-6 mt-4 rounded-xl border border-slate-200 bg-slate-50">
                         <ActivityIndicator color="#64748B" />
                         <Text className="text-sm text-slate-500 mt-2">Checking workspaces and billing…</Text>
                       </View>
                     ) : null}
+
                     {!deletionReadinessLoading && deleteBlockers.length > 0 ? (
-                      <View className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-4" style={{ gap: 10 }}>
-                        <Text className="text-sm font-semibold text-amber-900">Resolve these before deleting</Text>
-                        {deleteBlockers.map((issue) => (
-                          <View key={`${issue.code}-${issue.teamId}`} style={{ gap: 8 }}>
-                            <Text className="text-sm text-amber-900 leading-5">{issue.message}</Text>
-                            {issue.code === "active_web_billing" ? (
-                              <TouchableOpacity
-                                onPress={() => {
-                                  closeDeleteModal();
-                                  router.push({ pathname: "/account-hub", params: { teamId: issue.teamId } });
-                                }}
-                                className="self-start rounded-lg bg-white border border-amber-200 px-3 py-2"
-                              >
-                                <Text className="text-sm font-semibold text-[#4361EE]">Open {ACCOUNT_HUB_TITLE}</Text>
-                              </TouchableOpacity>
-                            ) : null}
-                            {issue.code === "multi_member_owner" ? (
-                              <TouchableOpacity
-                                onPress={() => {
-                                  closeDeleteModal();
-                                  router.push("/(app)/team");
-                                }}
-                                className="self-start rounded-lg bg-white border border-amber-200 px-3 py-2"
-                              >
-                                <Text className="text-sm font-semibold text-[#4361EE]">Go to Team</Text>
-                              </TouchableOpacity>
-                            ) : null}
-                          </View>
-                        ))}
+                      <View className="mt-4 rounded-xl border border-amber-200 bg-amber-50/60 overflow-hidden">
+                        <View className="flex-row items-center px-4 py-3 border-b border-amber-100" style={{ gap: 8 }}>
+                          <ShieldAlert size={16} color="#B45309" />
+                          <Text className="text-sm font-semibold text-amber-900">Action required</Text>
+                        </View>
+                        <View className="p-3" style={{ gap: 10 }}>
+                          {deleteBlockers.map((issue) => (
+                            <View
+                              key={`${issue.code}-${issue.teamId}`}
+                              className="rounded-lg border border-amber-100 bg-white px-3 py-3"
+                              style={{ gap: 10 }}
+                            >
+                              <Text className="text-sm text-slate-700 leading-5">{issue.message}</Text>
+                              {issue.code === "active_web_billing" || issue.code === "mobile_store_billing" ? (
+                                <TouchableOpacity
+                                  onPress={() => {
+                                    closeDeleteModal();
+                                    router.push({ pathname: "/account-hub", params: { teamId: issue.teamId } });
+                                  }}
+                                  className="self-start flex-row items-center rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5"
+                                  style={{ gap: 6 }}
+                                >
+                                  <Text className="text-sm font-semibold text-[#4361EE]">Open {ACCOUNT_HUB_TITLE}</Text>
+                                  <ChevronRight size={14} color="#4361EE" />
+                                </TouchableOpacity>
+                              ) : null}
+                              {issue.code === "multi_member_owner" ? (
+                                <TouchableOpacity
+                                  onPress={() => {
+                                    closeDeleteModal();
+                                    router.push("/(app)/team");
+                                  }}
+                                  className="self-start flex-row items-center rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5"
+                                  style={{ gap: 6 }}
+                                >
+                                  <Text className="text-sm font-semibold text-[#4361EE]">Go to Team</Text>
+                                  <ChevronRight size={14} color="#4361EE" />
+                                </TouchableOpacity>
+                              ) : null}
+                            </View>
+                          ))}
+                        </View>
                       </View>
                     ) : null}
+
                     {!deletionReadinessLoading && deleteWarnings.length > 0 ? (
-                      <View className="bg-slate-50 border border-slate-200 rounded-2xl p-4 mb-4" style={{ gap: 8 }}>
+                      <View className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3" style={{ gap: 8 }}>
                         <Text className="text-sm font-semibold text-slate-700">Before you continue</Text>
                         {deleteWarnings.map((issue) => (
                           <Text key={`${issue.code}-${issue.teamId}`} className="text-sm text-slate-600 leading-5">
@@ -1249,42 +1339,70 @@ export default function ProfileScreen() {
                         ))}
                       </View>
                     ) : null}
+
+                    {!deletionReadinessLoading && !canContinueDelete ? (
+                      <Text className="text-xs text-slate-500 text-center mt-4 leading-4">
+                        Complete the required steps above to enable account deletion.
+                      </Text>
+                    ) : null}
+
                     <TouchableOpacity
                       onPress={() => {
                         if (!canContinueDelete) return;
                         setDeleteStep(2);
                       }}
                       disabled={deletionReadinessLoading || !canContinueDelete}
-                      className="rounded-2xl py-4 items-center mb-3 bg-slate-100"
-                      style={{ opacity: deletionReadinessLoading || !canContinueDelete ? 0.45 : 1 }}
+                      className={`rounded-xl py-4 items-center mt-5 mb-2 ${
+                        deletionReadinessLoading || !canContinueDelete ? "bg-slate-100" : "bg-slate-900"
+                      }`}
                       testID="delete-continue-step1"
                     >
-                      <Text className="font-semibold text-slate-700 text-base">Continue</Text>
+                      <Text
+                        className={`font-semibold text-base ${
+                          deletionReadinessLoading || !canContinueDelete ? "text-slate-400" : "text-white"
+                        }`}
+                      >
+                        Continue
+                      </Text>
                     </TouchableOpacity>
                     <TouchableOpacity onPress={closeDeleteModal} className="py-3 items-center">
-                      <Text className="text-slate-400 font-medium">Cancel</Text>
+                      <Text className="text-slate-500 font-medium">Cancel</Text>
                     </TouchableOpacity>
-                  </>
+                  </View>
                 )}
+
                 {/* Step 2: Password + confirm deletion */}
                 {deleteStep === 2 && (
-                  <>
-                    <View className="flex-row items-center justify-between mb-2">
-                      <Text className="text-xl font-bold text-slate-900 dark:text-white">Confirm with your password</Text>
-                      <TouchableOpacity onPress={closeDeleteModal}>
-                        <X size={22} color="#94A3B8" />
+                  <View className="px-5 pt-3 pb-10">
+                    <View className="flex-row items-start justify-between mb-1">
+                      <View className="flex-1 pr-4">
+                        <Text className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Final confirmation</Text>
+                        <Text className="text-xl font-bold text-slate-900 dark:text-white mt-1">Verify your identity</Text>
+                        <Text className="text-sm text-slate-500 mt-1 leading-5">
+                          Enter your password to permanently delete this account.
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        onPress={closeDeleteModal}
+                        className="w-9 h-9 rounded-lg bg-slate-100 dark:bg-slate-800 items-center justify-center"
+                      >
+                        <X size={18} color="#64748B" />
                       </TouchableOpacity>
                     </View>
-                    <View className="bg-red-50 rounded-2xl p-4 mb-4">
-                      <Text className="text-sm text-red-700 text-center leading-5">
-                        This will permanently delete your account and all associated data. There is no way to recover it.
+
+                    <View className="mt-5 rounded-xl border border-red-200 bg-red-50/70 px-4 py-3 flex-row items-start" style={{ gap: 10 }}>
+                      <AlertTriangle size={16} color="#DC2626" style={{ marginTop: 2 }} />
+                      <Text className="flex-1 text-sm text-red-800 leading-5">
+                        This permanently deletes your account and all associated data. Recovery is not possible.
                       </Text>
                     </View>
-                    <Text className="text-sm text-slate-500 mb-2">Enter your account password to confirm</Text>
-                    <View className="flex-row items-center bg-slate-50 rounded-xl px-4 border border-slate-200 mb-2">
+
+                    <Text className="text-sm font-semibold text-slate-700 mt-5 mb-2">Account password</Text>
+                    <View className="flex-row items-center bg-white rounded-xl px-4 border border-slate-200 mb-2">
+                      <Lock size={16} color="#94A3B8" />
                       <TextInput
-                        className="flex-1 py-3 text-base text-slate-900"
-                        placeholder="Password"
+                        className="flex-1 py-3.5 px-3 text-base text-slate-900"
+                        placeholder="Enter your password"
                         placeholderTextColor="#94A3B8"
                         secureTextEntry={!deletePasswordVisible}
                         value={deletePassword}
@@ -1293,10 +1411,11 @@ export default function ProfileScreen() {
                         testID="delete-password-input"
                       />
                       <TouchableOpacity onPress={() => setDeletePasswordVisible((v) => !v)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                        <Text className="text-slate-400 text-sm">{deletePasswordVisible ? "Hide" : "Show"}</Text>
+                        <Text className="text-slate-500 text-sm font-medium">{deletePasswordVisible ? "Hide" : "Show"}</Text>
                       </TouchableOpacity>
                     </View>
-                    {deleteError ? <Text className="text-red-500 text-xs mb-3 ml-1">{deleteError}</Text> : <View className="mb-3" />}
+                    {deleteError ? <Text className="text-red-600 text-xs mb-3 ml-1">{deleteError}</Text> : <View className="mb-3" />}
+
                     <TouchableOpacity
                       onPress={() => {
                         if (!deletePassword.trim()) {
@@ -1306,14 +1425,14 @@ export default function ProfileScreen() {
                         deleteAccountMutation.mutate();
                       }}
                       disabled={deleteAccountMutation.isPending || !deletePassword.trim()}
-                      className="rounded-2xl py-4 items-center mb-3 bg-red-500"
-                      style={{ opacity: deletePassword.trim() ? 1 : 0.5 }}
+                      className="rounded-xl py-4 items-center mt-2 mb-2 bg-red-600"
+                      style={{ opacity: deletePassword.trim() ? 1 : 0.45 }}
                       testID="confirm-delete-account"
                     >
                       {deleteAccountMutation.isPending ? (
                         <ActivityIndicator color="white" />
                       ) : (
-                        <Text className="font-bold text-white text-base">Delete My Account</Text>
+                        <Text className="font-semibold text-white text-base">Delete my account</Text>
                       )}
                     </TouchableOpacity>
                     <TouchableOpacity
@@ -1324,9 +1443,9 @@ export default function ProfileScreen() {
                       }}
                       className="py-3 items-center"
                     >
-                      <Text className="text-slate-400 font-medium">Back</Text>
+                      <Text className="text-slate-500 font-medium">Back</Text>
                     </TouchableOpacity>
-                  </>
+                  </View>
                 )}
               </View>
             </Pressable>

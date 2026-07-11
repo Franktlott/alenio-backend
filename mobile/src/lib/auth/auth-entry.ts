@@ -1,21 +1,24 @@
 import { InteractionManager } from "react-native";
 import { router } from "expo-router";
+import type { QueryClient } from "@tanstack/react-query";
 import { agentDebugLog } from "@/lib/auth/auth-client";
+import { resolveAuthenticatedDestination } from "@/lib/no-workspace-routing";
 
 /** Authenticated home route after session + `/api/me` are ready. */
-export function mobileHomeHref(isAdmin: boolean) {
-  return isAdmin ? "/(admin)" : "/(app)/chat";
+export function mobileHomeHref(_isAdmin: boolean) {
+  // Platform admins use the regular app; open Admin from Profile when needed.
+  return "/(app)/chat";
 }
 
 /** Navigate after Stack.Protected mounts the authenticated stack (never call from render). */
-export function navigateToMobileHomeWithRetry(isAdmin: boolean) {
-  const destination = mobileHomeHref(isAdmin);
+export function navigateToMobileHomeWithRetry(isAdmin: boolean, queryClient?: QueryClient) {
   let cancelled = false;
   const timers: ReturnType<typeof setTimeout>[] = [];
 
-  const attempt = (label: string) => {
+  const attempt = async (label: string) => {
     if (cancelled) return;
     try {
+      const destination = await resolveAuthenticatedDestination(isAdmin, queryClient);
       router.replace(destination);
       agentDebugLog("nav attempt", {
         runId: "auth-simplify-v4",
@@ -29,13 +32,12 @@ export function navigateToMobileHomeWithRetry(isAdmin: boolean) {
   };
 
   InteractionManager.runAfterInteractions(() => {
-    attempt("afterInteractions");
+    void attempt("afterInteractions");
   });
 
-  attempt("immediate");
-  // Short retry window only — long retries were yanking users off other screens.
+  void attempt("immediate");
   for (const ms of [150, 600]) {
-    timers.push(setTimeout(() => attempt(`t+${ms}`), ms));
+    timers.push(setTimeout(() => void attempt(`t+${ms}`), ms));
   }
 
   return () => {

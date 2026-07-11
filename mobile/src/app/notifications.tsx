@@ -12,47 +12,42 @@ export default function NotificationsScreen() {
     <View style={{ flex: 1, backgroundColor: "#F1F5F9" }} testID="notifications-screen">
       <View
         style={{
-          paddingTop: insets.top + 8,
+          paddingTop: insets.top + 4,
           paddingHorizontal: 16,
-          paddingBottom: 16,
+          paddingBottom: 12,
           backgroundColor: "#FFFFFF",
           borderBottomWidth: 1,
           borderBottomColor: "#E2E8F0",
         }}
       >
-        <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 12 }}>
+        <View style={{ flexDirection: "row", alignItems: "center" }}>
           <Pressable
             onPress={() => router.back()}
+            hitSlop={8}
             style={{
-              width: 40,
-              height: 40,
+              width: 36,
+              height: 36,
               alignItems: "center",
               justifyContent: "center",
-              marginLeft: -8,
+              marginLeft: -6,
               marginRight: 4,
             }}
             testID="notifications-back-button"
           >
-            <ArrowLeft size={22} color="#0F172A" />
+            <ArrowLeft size={20} color="#0F172A" strokeWidth={2.25} />
           </Pressable>
-          <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 11, fontWeight: "700", letterSpacing: 1.2, color: "#64748B", textTransform: "uppercase" }}>
-              Preferences
-            </Text>
-            <Text style={{ fontSize: 22, fontWeight: "700", color: "#0F172A", marginTop: 2 }}>Notifications</Text>
-          </View>
+          <Text style={{ fontSize: 17, fontWeight: "700", color: "#0F172A", letterSpacing: -0.2 }}>
+            Notifications
+          </Text>
         </View>
-        <Text style={{ fontSize: 14, color: "#64748B", lineHeight: 20, paddingLeft: 44 }}>
-          Configure workspace alerts, delivery categories, and notification tone for this device.
-        </Text>
       </View>
 
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{
           paddingHorizontal: 16,
-          paddingTop: 20,
-          paddingBottom: insets.bottom + 32,
+          paddingTop: 14,
+          paddingBottom: insets.bottom + 24,
         }}
       >
         <NotificationPreferencesPanel />

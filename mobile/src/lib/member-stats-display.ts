@@ -1,4 +1,5 @@
 import type { MemberStandardsCompliance, WorkplaceStandards } from "./workplace-standards";
+import { NO_INITIAL_CHECK_IN_LABEL } from "./workplace-standards";
 
 export type FollowUpTasksDisplay = {
   label: string;
@@ -70,10 +71,19 @@ export function calendarDaysSinceDate(iso: string): number {
 }
 
 export function formatDaysSinceCheckIn(days: number | null | undefined): string {
-  if (days == null) return "No check-in yet";
+  if (days == null) return "None";
   if (days === 0) return "Today";
-  if (days === 1) return "1 day ago";
-  return `${days} days ago`;
+  if (days === 1) return "Yesterday";
+  return `${days}d ago`;
+}
+
+/** Roster status copy aligned with team member list mockup. */
+export function formatMemberRosterStatusLabel(label: string): string {
+  if (label === NO_INITIAL_CHECK_IN_LABEL) return "Not complete";
+  if (label === "Check-in due soon") return "Due soon";
+  if (label === "Overdue check-in") return "Overdue";
+  if (label === "Needs active goals") return "Not complete";
+  return label;
 }
 
 /** Roster KPI for overdue check-in follow-ups only; hidden when none are overdue. */
