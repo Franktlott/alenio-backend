@@ -33,9 +33,20 @@ export async function createPlatformUser(input: {
   const created = await createEmailPasswordUser(email, password, name);
   if (!created) return { ok: false as const, code: "AUTH_FAILED" as const };
 
+  // Prefer the Neon Auth user id so login sync binds to this same row (and keeps isAdmin).
+  let authId: string | null = null;
+  try {
+    const rows = await prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT id FROM neon_auth."user" WHERE email = ${email} LIMIT 1
+    `;
+    authId = rows[0]?.id ?? null;
+  } catch (err) {
+    console.warn("[admin-platform] neon_auth lookup failed:", err);
+  }
+
   const user = await prisma.user.create({
     data: {
-      id: crypto.randomUUID(),
+      id: authId ?? crypto.randomUUID(),
       email,
       name,
       emailVerified: true,

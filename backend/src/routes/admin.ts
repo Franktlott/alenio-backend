@@ -166,21 +166,56 @@ adminRouter.get("/api/tasks", async (c) => {
   return c.json({ data: tasks });
 });
 
-// Promote a user to admin (or demote)
+// Promote a user to admin (or demote). Also promotes a Neon-auth-id row when it differs
+// from a legacy email-keyed row so production sessions keep seeing isAdmin.
 adminRouter.post("/api/promote-user", async (c) => {
   const { email, isAdmin } = await c.req.json();
   if (!email) return c.json({ error: "Email required" }, 400);
+  const normalized = String(email).trim().toLowerCase();
+  const nextAdmin = isAdmin !== false;
 
-  const user = await prisma.user.findUnique({ where: { email: email.trim().toLowerCase() } });
-  if (!user) return c.json({ error: "User not found" }, 404);
+  const byEmail = await prisma.user.findUnique({ where: { email: normalized } });
+  let authId: string | null = null;
+  try {
+    const rows = await prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT id FROM neon_auth."user" WHERE lower(email) = ${normalized} LIMIT 1
+    `;
+    authId = rows[0]?.id ?? null;
+  } catch (err) {
+    console.warn("[admin] neon_auth lookup failed during promote:", err);
+  }
 
-  const updated = await prisma.user.update({
-    where: { id: user.id },
-    data: { isAdmin: isAdmin !== false },
-    select: { id: true, name: true, email: true, isAdmin: true },
+  const byAuthId = authId
+    ? await prisma.user.findUnique({ where: { id: authId } })
+    : null;
+
+  if (!byEmail && !byAuthId) return c.json({ error: "User not found" }, 404);
+
+  const ids = new Set<string>();
+  if (byEmail) ids.add(byEmail.id);
+  if (byAuthId) ids.add(byAuthId.id);
+
+  const updatedRows = [];
+  for (const id of ids) {
+    const row = id === byEmail?.id ? byEmail : byAuthId;
+    const data: { isAdmin: boolean; email?: string } = { isAdmin: nextAdmin };
+    // Only rewrite email when this row already owns it (or no other row does).
+    if (row && row.email !== normalized && (!byEmail || byEmail.id === id)) {
+      data.email = normalized;
+    }
+    updatedRows.push(
+      await prisma.user.update({
+        where: { id },
+        data,
+        select: { id: true, name: true, email: true, isAdmin: true },
+      }),
+    );
+  }
+
+  return c.json({
+    data: updatedRows.find((u) => u.id === authId) ?? updatedRows[0],
+    repaired: updatedRows,
   });
-
-  return c.json({ data: updated });
 });
 
 // Serve the admin dashboard HTML

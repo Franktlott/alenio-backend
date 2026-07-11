@@ -14,69 +14,138 @@ function logSyncFailure(message: string, err: unknown) {
   console.error(`[ensure-app-user] ${message}`, err);
 }
 
+function normalizeEmail(email: string | null | undefined): string | null {
+  const trimmed = email?.trim() ?? "";
+  if (!trimmed) return null;
+  return trimmed.toLowerCase();
+}
+
 /**
  * Ensures a Prisma `User` row exists for the given Neon Auth identity (id, email, name, image).
  * Idempotent: safe to call on every authenticated request.
+ *
+ * Also repairs a common split-identity case: an older admin/bootstrap row keyed by email
+ * while a later Neon-id row is what sessions bind to. Admin flags are merged onto the
+ * Neon-id row so platform admin UI keeps working.
  */
 export async function syncAppUserFromNeonAuth(authUser: AppUser): Promise<{
   user: SyncedAppUser;
   matchedBy: SyncMatchedBy;
 } | null> {
-  const sessionEmail = authUser.email?.trim() ?? null;
+  const sessionEmail = normalizeEmail(authUser.email);
   let matchedBy: SyncMatchedBy | "none" = "none";
   let user: SyncedAppUser | null = null;
 
   try {
-    user = await prisma.user.findUnique({
+    const byId = await prisma.user.findUnique({
       where: { id: authUser.id },
-      select: { id: true, email: true, name: true, image: true },
+      select: { id: true, email: true, name: true, image: true, isAdmin: true },
     });
-    if (user) {
+
+    const byEmail = sessionEmail
+      ? await prisma.user.findFirst({
+          where: { email: { equals: sessionEmail, mode: "insensitive" } },
+          select: { id: true, email: true, name: true, image: true, isAdmin: true },
+        })
+      : null;
+
+    if (byId) {
       matchedBy = "auth_user_id";
-      if (sessionEmail && user.email !== sessionEmail) {
+      user = {
+        id: byId.id,
+        email: byId.email,
+        name: byId.name,
+        image: byId.image,
+      };
+
+      const updates: {
+        email?: string;
+        name?: string;
+        image?: string | null;
+        isAdmin?: boolean;
+      } = {};
+
+      if (sessionEmail && byId.email !== sessionEmail) {
+        // Avoid clobbering another account's unique email; only rewrite when free or ours.
+        if (!byEmail || byEmail.id === byId.id) {
+          updates.email = sessionEmail;
+        }
+      }
+      if (authUser.name && authUser.name !== byId.name) {
+        updates.name = authUser.name;
+      }
+      if (authUser.image !== undefined && authUser.image !== byId.image) {
+        updates.image = authUser.image ?? null;
+      }
+      // Merge platform admin from a legacy email-keyed row onto the Neon-id session row.
+      if (!byId.isAdmin && byEmail && byEmail.id !== byId.id && byEmail.isAdmin) {
+        updates.isAdmin = true;
+        console.warn(
+          `[ensure-app-user] merged isAdmin from legacy email row ${byEmail.id} onto neon-id row ${byId.id}`,
+        );
+      }
+
+      if (Object.keys(updates).length > 0) {
         user = await prisma.user.update({
-          where: { id: user.id },
-          data: {
-            email: sessionEmail,
-            name: authUser.name ?? user.name ?? sessionEmail.split("@")[0] ?? "User",
-            image: authUser.image ?? user.image ?? undefined,
-          },
+          where: { id: byId.id },
+          data: updates,
+          select: { id: true, email: true, name: true, image: true },
+        });
+      }
+    } else if (byEmail) {
+      matchedBy = "email";
+      user = {
+        id: byEmail.id,
+        email: byEmail.email,
+        name: byEmail.name,
+        image: byEmail.image,
+      };
+      // Keep profile fields fresh even when bound via email.
+      const updates: { name?: string; image?: string | null } = {};
+      if (authUser.name && authUser.name !== byEmail.name) updates.name = authUser.name;
+      if (authUser.image !== undefined && authUser.image !== byEmail.image) {
+        updates.image = authUser.image ?? null;
+      }
+      if (Object.keys(updates).length > 0) {
+        user = await prisma.user.update({
+          where: { id: byEmail.id },
+          data: updates,
           select: { id: true, email: true, name: true, image: true },
         });
       }
     } else if (sessionEmail) {
-      const byEmail = await prisma.user.findUnique({
-        where: { email: sessionEmail },
-        select: { id: true, email: true, name: true, image: true },
-      });
-      if (byEmail) {
-        matchedBy = "email";
-        user = byEmail;
-      } else {
-        try {
-          user = await prisma.user.create({
-            data: {
-              id: authUser.id,
-              email: sessionEmail,
-              name: authUser.name ?? sessionEmail.split("@")[0] ?? "User",
-              image: authUser.image ?? undefined,
-              emailVerified: true,
-            },
+      try {
+        user = await prisma.user.create({
+          data: {
+            id: authUser.id,
+            email: sessionEmail,
+            name: authUser.name ?? sessionEmail.split("@")[0] ?? "User",
+            image: authUser.image ?? undefined,
+            emailVerified: true,
+          },
+          select: { id: true, email: true, name: true, image: true },
+        });
+        matchedBy = "created";
+      } catch (err) {
+        const code = (err as { code?: string } | null)?.code;
+        if (code === "P2002") {
+          // Race: email or id inserted concurrently. Prefer auth id, then email.
+          user = await prisma.user.findUnique({
+            where: { id: authUser.id },
             select: { id: true, email: true, name: true, image: true },
           });
-          matchedBy = "created";
-        } catch (err) {
-          const code = (err as { code?: string } | null)?.code;
-          if (code === "P2002") {
-            user = await prisma.user.findUnique({
-              where: { email: sessionEmail },
+          if (user) {
+            matchedBy = "auth_user_id";
+          } else {
+            user = await prisma.user.findFirst({
+              where: { email: { equals: sessionEmail, mode: "insensitive" } },
               select: { id: true, email: true, name: true, image: true },
             });
             matchedBy = user ? "email" : "none";
-          } else {
-            logSyncFailure(`failed to create user row for Neon auth id=${authUser.id}`, err);
-            return null;
           }
+        } else {
+          logSyncFailure(`failed to create user row for Neon auth id=${authUser.id}`, err);
+          return null;
         }
       }
     } else {
