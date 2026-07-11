@@ -57,6 +57,19 @@ calendarConnectionsRouter.get("/microsoft/start", async (c) => {
 
   const platformRaw = c.req.query("platform") === "mobile" ? "mobile" : "web";
   const platform = platformRaw as OAuthPlatform;
+
+  // Drop any cached Microsoft tokens/events before reconnect so old elevated
+  // grants (e.g. Calendars.ReadWrite) cannot be reused silently.
+  const deleted = await prisma.calendarConnection.deleteMany({
+    where: { userId: user.id, provider: "microsoft" },
+  });
+  if (deleted.count > 0) {
+    console.info(
+      "[microsoft-oauth] cleared cached microsoft connection before authorize",
+      JSON.stringify({ userId: user.id, deletedConnections: deleted.count }),
+    );
+  }
+
   const state = createMicrosoftOAuthState(user.id, platform);
   const url = buildMicrosoftAuthorizeUrl(state);
   return c.json({ data: { url } });

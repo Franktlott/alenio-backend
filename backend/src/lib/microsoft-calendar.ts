@@ -10,9 +10,41 @@ export type MicrosoftOAuthState = {
   nonce: string;
 };
 
-const MICROSOFT_AUTH_BASE = "https://login.microsoftonline.com/common/oauth2/v2.0";
+/** Microsoft identity platform v2 (multi-tenant / personal accounts). */
+export const MICROSOFT_AUTH_AUTHORITY = "https://login.microsoftonline.com/common/oauth2/v2.0";
+export const MICROSOFT_AUTHORIZE_URL = `${MICROSOFT_AUTH_AUTHORITY}/authorize`;
+export const MICROSOFT_TOKEN_URL = `${MICROSOFT_AUTH_AUTHORITY}/token`;
+
 const GRAPH_BASE = "https://graph.microsoft.com/v1.0";
-const SCOPES = ["offline_access", "Calendars.Read", "User.Read", "openid", "profile"].join(" ");
+
+/**
+ * Minimum delegated Microsoft Graph / OIDC scopes for read-only Outlook calendar sync.
+ * Do not add write, shared, directory, mail, or application permissions.
+ */
+export const MICROSOFT_CALENDAR_SCOPES = [
+  "openid",
+  "profile",
+  "email",
+  "offline_access",
+  "User.Read",
+  "Calendars.Read",
+] as const;
+
+export const MICROSOFT_CALENDAR_SCOPE_STRING = MICROSOFT_CALENDAR_SCOPES.join(" ");
+
+/** Permissions we must never request or accept for this integration. */
+const FORBIDDEN_SCOPE_FRAGMENTS = [
+  "Calendars.ReadWrite",
+  "Calendars.Read.Shared",
+  "Calendars.ReadWrite.Shared",
+  "User.Read.All",
+  "Directory.Read.All",
+  "Mail.Read",
+  "Group.Read.All",
+  "Files.Read",
+  "Files.ReadWrite",
+  ".ReadWrite",
+] as const;
 
 function stateSecret(): string {
   return env.CALENDAR_TOKEN_ENCRYPTION_KEY?.trim() || `${env.BACKEND_URL}:microsoft-oauth-state`;
@@ -63,17 +95,73 @@ export function createMicrosoftOAuthState(userId: string, platform: OAuthPlatfor
   });
 }
 
+function normalizeScopeToken(scope: string): string {
+  const trimmed = scope.trim();
+  if (!trimmed) return "";
+  // Graph sometimes returns full resource URIs.
+  const graphPrefix = "https://graph.microsoft.com/";
+  if (trimmed.startsWith(graphPrefix)) {
+    return trimmed.slice(graphPrefix.length);
+  }
+  return trimmed;
+}
+
+export function parseGrantedScopes(scopeString?: string | null): string[] {
+  if (!scopeString?.trim()) return [];
+  return scopeString
+    .split(/\s+/)
+    .map(normalizeScopeToken)
+    .filter(Boolean);
+}
+
+/** Reject tokens that include elevated / write Graph permissions. */
+export function assertDelegatedReadOnlyScopes(grantedScopeString?: string | null): void {
+  const granted = parseGrantedScopes(grantedScopeString);
+  if (granted.length === 0) return;
+
+  const forbidden = granted.filter((scope) =>
+    FORBIDDEN_SCOPE_FRAGMENTS.some((fragment) => scope === fragment || scope.includes(fragment)),
+  );
+  if (forbidden.length > 0) {
+    throw new Error(
+      `Microsoft returned unexpected permissions (${forbidden.join(", ")}). Disconnect and reconnect with read-only calendar access.`,
+    );
+  }
+}
+
+export type MicrosoftAuthorizeDebugInfo = {
+  authorityUrl: string;
+  authorizationUrl: string;
+  clientId: string;
+  redirectUri: string;
+  requestedScopes: readonly string[];
+};
+
 export function buildMicrosoftAuthorizeUrl(state: string): string {
+  const clientId = env.MICROSOFT_CALENDAR_CLIENT_ID!.trim();
+  const redirectUri = microsoftRedirectUri();
   const params = new URLSearchParams({
-    client_id: env.MICROSOFT_CALENDAR_CLIENT_ID!.trim(),
+    client_id: clientId,
     response_type: "code",
-    redirect_uri: microsoftRedirectUri(),
+    redirect_uri: redirectUri,
     response_mode: "query",
-    scope: SCOPES,
+    scope: MICROSOFT_CALENDAR_SCOPE_STRING,
     state,
-    prompt: "select_account",
+    // Force consent so previously granted write scopes are not silently reused.
+    prompt: "consent",
   });
-  return `${MICROSOFT_AUTH_BASE}/authorize?${params.toString()}`;
+  const authorizationUrl = `${MICROSOFT_AUTHORIZE_URL}?${params.toString()}`;
+
+  const debugInfo: MicrosoftAuthorizeDebugInfo = {
+    authorityUrl: MICROSOFT_AUTH_AUTHORITY,
+    authorizationUrl,
+    clientId,
+    redirectUri,
+    requestedScopes: [...MICROSOFT_CALENDAR_SCOPES],
+  };
+  console.info("[microsoft-oauth] authorize redirect", JSON.stringify(debugInfo));
+
+  return authorizationUrl;
 }
 
 type TokenResponse = {
@@ -84,6 +172,20 @@ type TokenResponse = {
   token_type?: string;
 };
 
+async function postMicrosoftToken(body: URLSearchParams): Promise<TokenResponse> {
+  const res = await fetch(MICROSOFT_TOKEN_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body,
+  });
+  const json = (await res.json()) as TokenResponse & { error?: string; error_description?: string };
+  if (!res.ok || !json.access_token) {
+    throw new Error(json.error_description || json.error || "Microsoft token request failed");
+  }
+  assertDelegatedReadOnlyScopes(json.scope);
+  return json;
+}
+
 export async function exchangeMicrosoftCode(code: string): Promise<TokenResponse> {
   const body = new URLSearchParams({
     client_id: env.MICROSOFT_CALENDAR_CLIENT_ID!.trim(),
@@ -91,20 +193,17 @@ export async function exchangeMicrosoftCode(code: string): Promise<TokenResponse
     grant_type: "authorization_code",
     code,
     redirect_uri: microsoftRedirectUri(),
+    scope: MICROSOFT_CALENDAR_SCOPE_STRING,
   });
-  const res = await fetch(`${MICROSOFT_AUTH_BASE}/token`, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body,
-  });
-  const json = (await res.json()) as TokenResponse & { error?: string; error_description?: string };
-  if (!res.ok || !json.access_token) {
-    throw new Error(json.error_description || json.error || "Microsoft token exchange failed");
-  }
-  if (!json.refresh_token) {
+  const tokens = await postMicrosoftToken(body);
+  if (!tokens.refresh_token) {
     throw new Error("Microsoft did not return a refresh token. Try disconnecting and reconnecting.");
   }
-  return json;
+  console.info(
+    "[microsoft-oauth] token exchange granted scopes",
+    JSON.stringify({ grantedScopes: parseGrantedScopes(tokens.scope), requestedScopes: [...MICROSOFT_CALENDAR_SCOPES] }),
+  );
+  return tokens;
 }
 
 export async function refreshMicrosoftAccessToken(refreshToken: string): Promise<TokenResponse> {
@@ -114,19 +213,12 @@ export async function refreshMicrosoftAccessToken(refreshToken: string): Promise
     grant_type: "refresh_token",
     refresh_token: refreshToken,
     redirect_uri: microsoftRedirectUri(),
+    scope: MICROSOFT_CALENDAR_SCOPE_STRING,
   });
-  const res = await fetch(`${MICROSOFT_AUTH_BASE}/token`, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body,
-  });
-  const json = (await res.json()) as TokenResponse & { error?: string; error_description?: string };
-  if (!res.ok || !json.access_token) {
-    throw new Error(json.error_description || json.error || "Microsoft token refresh failed");
-  }
-  return json;
+  return postMicrosoftToken(body);
 }
 
+/** GET-only Graph helper — no write methods exist in this module. */
 async function graphGet<T>(accessToken: string, path: string): Promise<T> {
   const res = await fetch(`${GRAPH_BASE}${path}`, {
     headers: { Authorization: `Bearer ${accessToken}` },
