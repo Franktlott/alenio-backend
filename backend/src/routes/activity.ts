@@ -137,4 +137,35 @@ activityRouter.post(
   }
 );
 
+activityRouter.delete("/:teamId/activity/:activityId", async (c) => {
+  const user = c.get("user")!;
+  const { teamId, activityId } = c.req.param();
+
+  const membership = await prisma.teamMember.findUnique({
+    where: { userId_teamId: { userId: user.id, teamId } },
+  });
+  if (!membership) {
+    return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
+  }
+
+  const activity = await prisma.teamActivity.findFirst({
+    where: { id: activityId, teamId },
+  });
+  if (!activity) {
+    return c.json({ error: { message: "Activity not found", code: "NOT_FOUND" } }, 404);
+  }
+  if (activity.type !== "celebration") {
+    return c.json({ error: { message: "Only celebrations can be deleted", code: "FORBIDDEN" } }, 403);
+  }
+
+  const isCreator = activity.userId === user.id;
+  const isOwnerOrAdmin = ["owner", "admin"].includes(membership.role);
+  if (!isCreator && !isOwnerOrAdmin) {
+    return c.json({ error: { message: "Forbidden", code: "FORBIDDEN" } }, 403);
+  }
+
+  await prisma.teamActivity.delete({ where: { id: activityId } });
+  return c.body(null, 204);
+});
+
 export { activityRouter };
