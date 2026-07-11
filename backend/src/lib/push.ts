@@ -210,9 +210,11 @@ export async function sendPushToUsers(
   }
 
   const TONE_MAP: Record<string, { channelId: string; sound: string }> = {
-    bell:   { channelId: "alenio_bell",   sound: "bell.wav" },
-    chime:  { channelId: "alenio_chime",  sound: "chime.wav" },
-    alert:  { channelId: "alenio_alert",  sound: "alert.wav" },
+    default: { channelId: "alenio_main", sound: "default" },
+    synth: { channelId: "alenio_main", sound: "default" },
+    bell: { channelId: "alenio_bell", sound: "bell.wav" },
+    chime: { channelId: "alenio_chime", sound: "chime.wav" },
+    alert: { channelId: "alenio_alert", sound: "alert.wav" },
     silent: { channelId: "alenio_silent", sound: "none" },
   };
   const DEFAULT_TONE = { channelId: "alenio_main", sound: "default" };
@@ -220,7 +222,8 @@ export async function sendPushToUsers(
   const messages: PushPayload[] = users
     .filter((u) => u.pushToken?.startsWith("ExponentPushToken") || u.pushToken?.startsWith("ExpoPushToken"))
     .map((u) => {
-      const { channelId, sound } = TONE_MAP[u.notifTone ?? ""] ?? DEFAULT_TONE;
+      const toneKey = (u.notifTone ?? "default").trim().toLowerCase();
+      const { channelId, sound } = TONE_MAP[toneKey] ?? DEFAULT_TONE;
       console.log(`[push] user tone: "${u.notifTone ?? "null"}" → channelId: "${channelId}", sound: "${sound}"`);
       return { token: u.pushToken!, title, body, data, sound, channelId, image: notifImageUrl };
     });

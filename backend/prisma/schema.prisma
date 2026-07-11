@@ -45,7 +45,7 @@ model User {
   notifAdminWorkspaces  Boolean @default(true)
   /** Platform admin push: paid / canceled / past_due subscriptions */
   notifAdminBilling     Boolean @default(true)
-  notifTone         String  @default("synth")
+  notifTone         String  @default("default")
   timezone          String?
   isAdmin           Boolean @default(false)
   joinRequests  JoinRequest[]

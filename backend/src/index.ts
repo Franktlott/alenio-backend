@@ -894,9 +894,12 @@ app.get("/api/notification-preferences", async (c) => {
     },
   });
   const { pushToken, ...rest } = prefs ?? {};
+  const notifTone =
+    rest.notifTone === "synth" || !rest.notifTone ? "default" : rest.notifTone;
   return c.json({
     data: {
       ...rest,
+      notifTone,
       hasToken: !!pushToken,
       // Non-admins never see admin toggles; omit sensitive defaults from client if not admin
       ...(rest?.isAdmin
@@ -926,6 +929,16 @@ app.patch("/api/notification-preferences", async (c) => {
     notifTone,
   } = body;
 
+  const allowedTones = new Set(["default", "bell", "chime", "alert", "silent"]);
+  let nextTone: string | undefined;
+  if (notifTone !== undefined) {
+    const normalized = String(notifTone).trim().toLowerCase();
+    if (!allowedTones.has(normalized)) {
+      return c.json({ error: { message: "Invalid alert tone", code: "INVALID" } }, 400);
+    }
+    nextTone = normalized;
+  }
+
   const me = await prisma.user.findUnique({
     where: { id: user.id },
     select: { isAdmin: true },
@@ -939,7 +952,7 @@ app.patch("/api/notification-preferences", async (c) => {
       ...(notifTaskAssigned !== undefined ? { notifTaskAssigned } : {}),
       ...(notifTaskDue !== undefined ? { notifTaskDue } : {}),
       ...(notifMeetings !== undefined ? { notifMeetings } : {}),
-      ...(notifTone !== undefined ? { notifTone } : {}),
+      ...(nextTone !== undefined ? { notifTone: nextTone } : {}),
       ...(isAdmin && notifAdminUsers !== undefined ? { notifAdminUsers } : {}),
       ...(isAdmin && notifAdminWorkspaces !== undefined ? { notifAdminWorkspaces } : {}),
       ...(isAdmin && notifAdminBilling !== undefined ? { notifAdminBilling } : {}),
@@ -956,9 +969,12 @@ app.patch("/api/notification-preferences", async (c) => {
       notifTone: true,
     },
   });
+  const responseTone =
+    updated.notifTone === "synth" || !updated.notifTone ? "default" : updated.notifTone;
   return c.json({
     data: {
       ...updated,
+      notifTone: responseTone,
       ...(updated.isAdmin
         ? {}
         : {
