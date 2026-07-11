@@ -56,6 +56,7 @@ model User {
   externalCalendarEvents ExternalCalendarEvent[]
   activities    TeamActivity[]
   createdTopics Topic[] @relation("TopicCreator")
+  topicMemberships TopicMember[]
   activityReactions TeamActivityReaction[]
   pollsCreated  Poll[]     @relation("PollCreatedBy")
   pollVotes     PollVote[] @relation("PollVoteUser")
@@ -474,18 +475,52 @@ model MessageReaction {
 }
 
 model Topic {
-  id          String    @id @default(cuid())
-  name        String
-  description String?
-  color       String    @default("#4361EE")
-  teamId      String
-  createdById String
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  team        Team      @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  createdBy   User      @relation("TopicCreator", fields: [createdById], references: [id])
-  messages    Message[]
-  polls       Poll[]
+  id                      String        @id @default(cuid())
+  name                    String
+  description             String?
+  color                   String        @default("#4361EE")
+  /** Optional space photo URL */
+  image                   String?
+  /** UI icon key: leadership | overnight | food_safety | recognition | hash | users | ... */
+  icon                    String        @default("hash")
+  privacy                 TopicPrivacy  @default(open)
+  autoAddWorkspaceMembers Boolean       @default(true)
+  archivedAt              DateTime?
+  teamId                  String
+  createdById             String
+  createdAt               DateTime      @default(now())
+  updatedAt               DateTime      @updatedAt
+  team                    Team          @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  createdBy               User          @relation("TopicCreator", fields: [createdById], references: [id])
+  messages                Message[]
+  polls                   Poll[]
+  members                 TopicMember[]
+
+  @@index([teamId, archivedAt])
+}
+
+enum TopicPrivacy {
+  open
+  private
+}
+
+model TopicMember {
+  id        String          @id @default(cuid())
+  topicId   String
+  userId    String
+  role      TopicMemberRole @default(member)
+  joinedAt  DateTime        @default(now())
+  topic     Topic           @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([topicId, userId])
+  @@index([userId])
+}
+
+enum TopicMemberRole {
+  owner
+  admin
+  member
 }
 
 model Conversation {

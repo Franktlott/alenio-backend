@@ -60,6 +60,7 @@ import { ensureSubscriptionCancelSchema } from "./lib/ensure-subscription-cancel
 import { ensureConversationTeamSchema } from "./lib/ensure-conversation-team-schema";
 import { ensureGroupParticipantRolesSchema } from "./lib/ensure-group-participant-roles-schema";
 import { ensureCalendarConnectionSchema } from "./lib/ensure-calendar-connection-schema";
+import { ensureTopicImageSchema } from "./lib/ensure-topic-image-schema";
 import { calendarConnectionsRouter } from "./routes/calendar-connections";
 import { developmentGoalsRouter } from "./routes/development-goals";
 import { senecaRouter } from "./routes/seneca";
@@ -80,7 +81,7 @@ if (!isProduction) {
 /** Dev safety net + prod fallback when preDeploy db push missed a table. */
 const startupSchemaReady = Promise.all([
   ...(isProduction
-    ? [ensureGoLoginSchema(prisma), ensureWorkplaceAlertsSchema(prisma), ensureGoFrontendSettingsSchema(prisma), ensureGoLeaderPinSchema(prisma), ensureWorkspaceModulesSchema(prisma), ensureSubscriptionCancelSchema(prisma), ensureConversationTeamSchema(prisma), ensureGroupParticipantRolesSchema(prisma), ensureCalendarOneOnOneSchema(prisma)]
+    ? [ensureGoLoginSchema(prisma), ensureWorkplaceAlertsSchema(prisma), ensureGoFrontendSettingsSchema(prisma), ensureGoLeaderPinSchema(prisma), ensureWorkspaceModulesSchema(prisma), ensureSubscriptionCancelSchema(prisma), ensureConversationTeamSchema(prisma), ensureGroupParticipantRolesSchema(prisma), ensureCalendarOneOnOneSchema(prisma), ensureTopicImageSchema(prisma)]
     : [
         ensureOneOnOneSchema(prisma),
         ensureDevelopmentPlanSchema(prisma),
@@ -99,6 +100,7 @@ const startupSchemaReady = Promise.all([
         ensureSubscriptionCancelSchema(prisma),
         ensureConversationTeamSchema(prisma),
         ensureGroupParticipantRolesSchema(prisma),
+        ensureTopicImageSchema(prisma),
       ]),
 ]);
 

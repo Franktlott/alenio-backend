@@ -19,6 +19,20 @@ async function getMembership(userId: string, teamId: string) {
   });
 }
 
+async function assertTopicAccess(userId: string, teamId: string, topicId: string | null | undefined) {
+  if (!topicId) return true;
+  const topic = await prisma.topic.findFirst({
+    where: { id: topicId, teamId, archivedAt: null },
+    select: { id: true, privacy: true },
+  });
+  if (!topic) return false;
+  if (topic.privacy === "open") return true;
+  const membership = await prisma.topicMember.findUnique({
+    where: { topicId_userId: { topicId, userId } },
+  });
+  return !!membership;
+}
+
 // GET /api/teams/:teamId/messages - paginated history, oldest first within each page
 messagesRouter.get("/", async (c) => {
   const user = c.get("user")!;
@@ -39,6 +53,10 @@ messagesRouter.get("/", async (c) => {
   if (topicIdParam === "general") {
     topicFilter = { topicId: null };
   } else if (topicIdParam !== undefined) {
+    const allowed = await assertTopicAccess(user.id, teamId, topicIdParam);
+    if (!allowed) {
+      return c.json({ error: { message: "Space not found", code: "NOT_FOUND" } }, 404);
+    }
     topicFilter = { topicId: topicIdParam };
   }
 
@@ -81,7 +99,7 @@ messagesRouter.get("/", async (c) => {
 
   const hasMore = messages.length > take;
   const page = messages.slice(0, take).reverse();
-  const nextCursor = hasMore && page.length > 0 ? page[0].id : null;
+  const nextCursor = hasMore && page.length > 0 ? page[0]?.id ?? null : null;
 
   return c.json({ data: { messages: page, hasMore, nextCursor } });
 });
@@ -102,6 +120,13 @@ messagesRouter.post("/", async (c) => {
 
   if (!content?.trim() && !mediaUrl) {
     return c.json({ error: { message: "Content or media is required", code: "VALIDATION_ERROR" } }, 400);
+  }
+
+  if (topicId) {
+    const allowed = await assertTopicAccess(user.id, teamId, topicId);
+    if (!allowed) {
+      return c.json({ error: { message: "Space not found", code: "NOT_FOUND" } }, 404);
+    }
   }
 
   const message = await prisma.message.create({
