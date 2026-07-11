@@ -61,6 +61,7 @@ import { ensureConversationTeamSchema } from "./lib/ensure-conversation-team-sch
 import { ensureGroupParticipantRolesSchema } from "./lib/ensure-group-participant-roles-schema";
 import { ensureCalendarConnectionSchema } from "./lib/ensure-calendar-connection-schema";
 import { ensureTopicImageSchema } from "./lib/ensure-topic-image-schema";
+import { ensureNotificationPreferencesSchema } from "./lib/ensure-notification-preferences-schema";
 import { calendarConnectionsRouter } from "./routes/calendar-connections";
 import { developmentGoalsRouter } from "./routes/development-goals";
 import { senecaRouter } from "./routes/seneca";
@@ -81,7 +82,7 @@ if (!isProduction) {
 /** Dev safety net + prod fallback when preDeploy db push missed a table. */
 const startupSchemaReady = Promise.all([
   ...(isProduction
-    ? [ensureGoLoginSchema(prisma), ensureWorkplaceAlertsSchema(prisma), ensureGoFrontendSettingsSchema(prisma), ensureGoLeaderPinSchema(prisma), ensureWorkspaceModulesSchema(prisma), ensureSubscriptionCancelSchema(prisma), ensureConversationTeamSchema(prisma), ensureGroupParticipantRolesSchema(prisma), ensureCalendarOneOnOneSchema(prisma), ensureTopicImageSchema(prisma)]
+    ? [ensureGoLoginSchema(prisma), ensureWorkplaceAlertsSchema(prisma), ensureGoFrontendSettingsSchema(prisma), ensureGoLeaderPinSchema(prisma), ensureWorkspaceModulesSchema(prisma), ensureSubscriptionCancelSchema(prisma), ensureConversationTeamSchema(prisma), ensureGroupParticipantRolesSchema(prisma), ensureCalendarOneOnOneSchema(prisma), ensureTopicImageSchema(prisma), ensureNotificationPreferencesSchema(prisma)]
     : [
         ensureOneOnOneSchema(prisma),
         ensureDevelopmentPlanSchema(prisma),
@@ -101,6 +102,7 @@ const startupSchemaReady = Promise.all([
         ensureConversationTeamSchema(prisma),
         ensureGroupParticipantRolesSchema(prisma),
         ensureTopicImageSchema(prisma),
+        ensureNotificationPreferencesSchema(prisma),
       ]),
 ]);
 
@@ -874,41 +876,71 @@ app.post("/api/push-test", async (c) => {
   }
 });
 
-// Get notification preferences
+// Get notification preferences (alert categories + tone). Does not modify push tokens.
 app.get("/api/notification-preferences", async (c) => {
   const user = c.get("user");
   if (!user) return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
-  const prefs = await prisma.user.findUnique({
+
+  // Resolve admin flag first so Platform admin UI can render even if preference columns fail.
+  const adminRow = await prisma.user.findUnique({
     where: { id: user.id },
-    select: {
-      isAdmin: true,
-      notifMessages: true,
-      notifTaskAssigned: true,
-      notifTaskDue: true,
-      notifMeetings: true,
-      notifAdminUsers: true,
-      notifAdminWorkspaces: true,
-      notifAdminBilling: true,
-      notifTone: true,
-      pushToken: true,
-    },
+    select: { isAdmin: true },
   });
-  const { pushToken, ...rest } = prefs ?? {};
+  const isAdmin = adminRow?.isAdmin === true;
+
+  let prefs: {
+    isAdmin: boolean;
+    notifMessages: boolean;
+    notifTaskAssigned: boolean;
+    notifTaskDue: boolean;
+    notifMeetings: boolean;
+    notifAdminUsers: boolean;
+    notifAdminWorkspaces: boolean;
+    notifAdminBilling: boolean;
+    notifTone: string;
+    pushToken: string | null;
+  } | null = null;
+
+  try {
+    prefs = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: {
+        isAdmin: true,
+        notifMessages: true,
+        notifTaskAssigned: true,
+        notifTaskDue: true,
+        notifMeetings: true,
+        notifAdminUsers: true,
+        notifAdminWorkspaces: true,
+        notifAdminBilling: true,
+        notifTone: true,
+        pushToken: true,
+      },
+    });
+  } catch (err) {
+    console.error("[notification-preferences] preference select failed:", err);
+  }
+
+  const notifToneRaw = prefs?.notifTone;
   const notifTone =
-    rest.notifTone === "synth" || !rest.notifTone ? "default" : rest.notifTone;
+    notifToneRaw === "synth" || !notifToneRaw ? "default" : notifToneRaw;
+
   return c.json({
     data: {
-      ...rest,
+      isAdmin,
+      notifMessages: prefs?.notifMessages ?? true,
+      notifTaskAssigned: prefs?.notifTaskAssigned ?? true,
+      notifTaskDue: prefs?.notifTaskDue ?? true,
+      notifMeetings: prefs?.notifMeetings ?? true,
       notifTone,
-      hasToken: !!pushToken,
-      // Non-admins never see admin toggles; omit sensitive defaults from client if not admin
-      ...(rest?.isAdmin
-        ? {}
-        : {
-            notifAdminUsers: undefined,
-            notifAdminWorkspaces: undefined,
-            notifAdminBilling: undefined,
-          }),
+      hasToken: !!prefs?.pushToken,
+      ...(isAdmin
+        ? {
+            notifAdminUsers: prefs?.notifAdminUsers ?? true,
+            notifAdminWorkspaces: prefs?.notifAdminWorkspaces ?? true,
+            notifAdminBilling: prefs?.notifAdminBilling ?? true,
+          }
+        : {}),
     },
   });
 });
@@ -973,15 +1005,19 @@ app.patch("/api/notification-preferences", async (c) => {
     updated.notifTone === "synth" || !updated.notifTone ? "default" : updated.notifTone;
   return c.json({
     data: {
-      ...updated,
+      isAdmin,
+      notifMessages: updated.notifMessages,
+      notifTaskAssigned: updated.notifTaskAssigned,
+      notifTaskDue: updated.notifTaskDue,
+      notifMeetings: updated.notifMeetings,
       notifTone: responseTone,
-      ...(updated.isAdmin
-        ? {}
-        : {
-            notifAdminUsers: undefined,
-            notifAdminWorkspaces: undefined,
-            notifAdminBilling: undefined,
-          }),
+      ...(isAdmin
+        ? {
+            notifAdminUsers: updated.notifAdminUsers,
+            notifAdminWorkspaces: updated.notifAdminWorkspaces,
+            notifAdminBilling: updated.notifAdminBilling,
+          }
+        : {}),
     },
   });
 });
