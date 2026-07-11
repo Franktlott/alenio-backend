@@ -13,6 +13,7 @@ import {
 import { adminGuard } from "../middleware/admin-guard";
 import { prisma } from "../prisma";
 import { auth } from "../auth";
+import { getAdminWeeklyUsage } from "../lib/admin-usage-weeks";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -214,9 +215,7 @@ adminApiRouter.get("/stats", async (c) => {
 
   alerts.sort((a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime());
   const recentAlerts = alerts.slice(0, 40);
-  const alertsToday = recentAlerts.filter(
-    (a) => Date.now() - new Date(a.occurredAt).getTime() < 24 * 60 * 60 * 1000,
-  ).length;
+  const weeklyUsage = await getAdminWeeklyUsage(prisma, 8);
 
   return c.json({
     data: {
@@ -231,7 +230,7 @@ adminApiRouter.get("/stats", async (c) => {
       checkInsThisWeek,
       developmentGoals,
       activeGoals,
-      alertsToday,
+      weeklyUsage,
       recentUsers: recentUsers.map((user) => ({
         ...user,
         createdAt: user.createdAt.toISOString(),
