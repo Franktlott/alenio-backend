@@ -3,7 +3,7 @@ import { prisma } from "../prisma";
 import { auth } from "../auth";
 import { authGuard } from "../middleware/auth-guard";
 import { sendPushToUsers } from "../lib/push";
-import { publishTeamMessageCreated, publishUserInboxUpdated } from "../lib/realtime-hub";
+import { publishTeamMessageCreated, publishUserInboxUpdated, publishTeamPinUpdated } from "../lib/realtime-hub";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -32,6 +32,179 @@ async function assertTopicAccess(userId: string, teamId: string, topicId: string
   });
   return !!membership;
 }
+
+function normalizeTopicKey(topicIdParam: string | undefined): string | null {
+  if (!topicIdParam || topicIdParam === "general") return null;
+  return topicIdParam;
+}
+
+type PinSummaryMessage = {
+  id: string;
+  content: string | null;
+  mediaType: string | null;
+  sender: { id: string; name: string | null; image: string | null };
+};
+
+function toPinnedSummary(
+  message: PinSummaryMessage | null | undefined,
+  pinnedAt: Date | null | undefined,
+  pinnedBy: { id: string; name: string | null } | null | undefined,
+) {
+  if (!message || !pinnedAt || !pinnedBy) return null;
+  return {
+    messageId: message.id,
+    content: message.content,
+    mediaType: message.mediaType as "image" | "video" | null,
+    sender: {
+      id: message.sender.id,
+      name: message.sender.name,
+      image: message.sender.image,
+    },
+    pinnedAt: pinnedAt.toISOString(),
+    pinnedBy: { id: pinnedBy.id, name: pinnedBy.name },
+  };
+}
+
+const pinMessageSelect = {
+  id: true,
+  content: true,
+  mediaType: true,
+  sender: { select: { id: true, name: true, image: true } },
+} as const;
+
+// GET /api/teams/:teamId/messages/pin
+messagesRouter.get("/pin", async (c) => {
+  const user = c.get("user")!;
+  const teamId = c.req.param("teamId") as string;
+  const topicId = normalizeTopicKey(c.req.query("topicId"));
+
+  const membership = await getMembership(user.id, teamId);
+  if (!membership) {
+    return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
+  }
+  if (topicId) {
+    const allowed = await assertTopicAccess(user.id, teamId, topicId);
+    if (!allowed) {
+      return c.json({ error: { message: "Space not found", code: "NOT_FOUND" } }, 404);
+    }
+  }
+
+  if (topicId) {
+    const topic = await prisma.topic.findFirst({
+      where: { id: topicId, teamId },
+      select: {
+        pinnedAt: true,
+        pinnedMessage: { select: pinMessageSelect },
+        pinnedBy: { select: { id: true, name: true } },
+      },
+    });
+    return c.json({ data: toPinnedSummary(topic?.pinnedMessage, topic?.pinnedAt, topic?.pinnedBy) });
+  }
+
+  const team = await prisma.team.findUnique({
+    where: { id: teamId },
+    select: {
+      pinnedAt: true,
+      pinnedMessage: { select: pinMessageSelect },
+      pinnedBy: { select: { id: true, name: true } },
+    },
+  });
+  return c.json({ data: toPinnedSummary(team?.pinnedMessage, team?.pinnedAt, team?.pinnedBy) });
+});
+
+// PUT /api/teams/:teamId/messages/pin
+messagesRouter.put("/pin", async (c) => {
+  const user = c.get("user")!;
+  const teamId = c.req.param("teamId") as string;
+  const body = await c.req.json<{ messageId?: string; topicId?: string | null }>();
+  const messageId = body.messageId?.trim();
+  const topicId = normalizeTopicKey(body.topicId ?? c.req.query("topicId") ?? undefined);
+
+  if (!messageId) {
+    return c.json({ error: { message: "messageId required", code: "BAD_REQUEST" } }, 400);
+  }
+
+  const membership = await getMembership(user.id, teamId);
+  if (!membership) {
+    return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
+  }
+  if (topicId) {
+    const allowed = await assertTopicAccess(user.id, teamId, topicId);
+    if (!allowed) {
+      return c.json({ error: { message: "Space not found", code: "NOT_FOUND" } }, 404);
+    }
+  }
+
+  const message = await prisma.message.findFirst({
+    where: {
+      id: messageId,
+      teamId,
+      topicId: topicId,
+    },
+    select: pinMessageSelect,
+  });
+  if (!message) {
+    return c.json({ error: { message: "Message not found", code: "NOT_FOUND" } }, 404);
+  }
+
+  const now = new Date();
+  if (topicId) {
+    await prisma.topic.update({
+      where: { id: topicId },
+      data: {
+        pinnedMessageId: messageId,
+        pinnedAt: now,
+        pinnedById: user.id,
+      },
+    });
+  } else {
+    await prisma.team.update({
+      where: { id: teamId },
+      data: {
+        pinnedMessageId: messageId,
+        pinnedAt: now,
+        pinnedById: user.id,
+      },
+    });
+  }
+
+  const summary = toPinnedSummary(message, now, { id: user.id, name: user.name ?? null });
+  publishTeamPinUpdated({ teamId, topicId, pinnedMessage: summary });
+  return c.json({ data: summary });
+});
+
+// DELETE /api/teams/:teamId/messages/pin
+messagesRouter.delete("/pin", async (c) => {
+  const user = c.get("user")!;
+  const teamId = c.req.param("teamId") as string;
+  const topicId = normalizeTopicKey(c.req.query("topicId"));
+
+  const membership = await getMembership(user.id, teamId);
+  if (!membership) {
+    return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
+  }
+  if (topicId) {
+    const allowed = await assertTopicAccess(user.id, teamId, topicId);
+    if (!allowed) {
+      return c.json({ error: { message: "Space not found", code: "NOT_FOUND" } }, 404);
+    }
+  }
+
+  if (topicId) {
+    await prisma.topic.update({
+      where: { id: topicId },
+      data: { pinnedMessageId: null, pinnedAt: null, pinnedById: null },
+    });
+  } else {
+    await prisma.team.update({
+      where: { id: teamId },
+      data: { pinnedMessageId: null, pinnedAt: null, pinnedById: null },
+    });
+  }
+
+  publishTeamPinUpdated({ teamId, topicId, pinnedMessage: null });
+  return c.body(null, 204);
+});
 
 // GET /api/teams/:teamId/messages - paginated history, oldest first within each page
 messagesRouter.get("/", async (c) => {
@@ -336,7 +509,21 @@ messagesRouter.delete("/:messageId", async (c) => {
     return c.json({ error: { message: "Forbidden", code: "FORBIDDEN" } }, 403);
   }
 
+  const topicId = message.topicId ?? null;
+  const pinCleared = topicId
+    ? await prisma.topic.updateMany({
+        where: { id: topicId, pinnedMessageId: messageId },
+        data: { pinnedMessageId: null, pinnedAt: null, pinnedById: null },
+      })
+    : await prisma.team.updateMany({
+        where: { id: teamId, pinnedMessageId: messageId },
+        data: { pinnedMessageId: null, pinnedAt: null, pinnedById: null },
+      });
+
   await prisma.message.delete({ where: { id: messageId } });
+  if (pinCleared.count > 0) {
+    publishTeamPinUpdated({ teamId, topicId, pinnedMessage: null });
+  }
   return c.body(null, 204);
 });
 

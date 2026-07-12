@@ -300,7 +300,7 @@ export function SenecaCreateTaskCard({ teamId, proposal, onSaved, onDismiss }: P
                 <DateTimePicker
                   value={dueDate ?? new Date()}
                   mode="date"
-                  display="spinner"
+                  display="inline"
                   onChange={(_e, date) => {
                     if (date) {
                       const next = new Date(date);
@@ -308,6 +308,7 @@ export function SenecaCreateTaskCard({ teamId, proposal, onSaved, onDismiss }: P
                       setDueDate(next);
                     }
                   }}
+                  style={{ alignSelf: "center" }}
                 />
               </View>
             </Pressable>

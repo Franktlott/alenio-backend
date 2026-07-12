@@ -103,6 +103,7 @@ export default function ProfileScreen() {
   useEffect(() => {
     if (outlook === "connected") {
       toast({ title: "Outlook connected", preset: "done" });
+      void queryClient.invalidateQueries({ queryKey: ["calendar-connections"] });
       void queryClient.invalidateQueries({ queryKey: ["external-calendar-events"] });
       router.setParams({ outlook: undefined, message: undefined });
     } else if (outlook === "error") {

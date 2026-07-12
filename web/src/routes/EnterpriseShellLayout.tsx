@@ -121,7 +121,7 @@ export function EnterpriseShellLayout() {
     setShellLoadErr(null);
   }, [syncTimeZoneIfNeeded]);
 
-  /** Refetch teams when the selected workspace id changes (not when the same id gets a new `teams` array). */
+  /** Soft-refresh team list after a workspace change — never block the UI overlay on this. */
   const lastTeamRefreshForSelectedIdRef = useRef<string | null>(null);
   useEffect(() => {
     if (teams === null) return;
@@ -135,14 +135,9 @@ export function EnterpriseShellLayout() {
     }
     if (lastTeamRefreshForSelectedIdRef.current === selectedTeamId) return;
     lastTeamRefreshForSelectedIdRef.current = selectedTeamId;
-    let cancelled = false;
-    setWorkspaceMainLoading(true);
-    void refreshMeAndTeams().finally(() => {
-      if (!cancelled) setWorkspaceMainLoading(false);
+    void refreshMeAndTeams().catch(() => {
+      /* keep current shell state on soft-refresh failure */
     });
-    return () => {
-      cancelled = true;
-    };
   }, [selectedTeamId, teams, refreshMeAndTeams]);
 
   /** Once per navigation onto /billing — avoids refresh+setTeams thrashing layout redirects. */

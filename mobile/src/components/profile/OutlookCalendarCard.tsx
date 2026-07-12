@@ -10,11 +10,13 @@ import {
   type MicrosoftOutlookCalendarOption,
 } from "@/lib/outlook-calendar-api";
 import { formatOutlookUserError } from "@/lib/outlook-calendar-errors";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "burnt";
-import { ActivityIndicator, Alert, Linking, Modal, Pressable, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, Alert, AppState, Linking, Modal, Pressable, ScrollView, Text, View } from "react-native";
 import { ProfileCard, ProfileDivider, ProfileMenuRow } from "./ProfileEnterpriseUI";
 import { Calendar, Check, X } from "lucide-react-native";
+
+export const CALENDAR_CONNECTIONS_QUERY_KEY = ["calendar-connections"] as const;
 
 function OutlookInlineNotice({ message }: { message: string }) {
   return (
@@ -38,27 +40,23 @@ function OutlookInlineNotice({ message }: { message: string }) {
 
 export function OutlookCalendarCard() {
   const queryClient = useQueryClient();
-  const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [configured, setConfigured] = useState(false);
-  const [connection, setConnection] = useState<CalendarConnectionSummary | null>(null);
   const [calendarModalOpen, setCalendarModalOpen] = useState(false);
   const [calendars, setCalendars] = useState<MicrosoftOutlookCalendarOption[]>([]);
   const [calendarsLoading, setCalendarsLoading] = useState(false);
 
-  const load = async () => {
-    setLoading(true);
-    try {
-      const data = await fetchCalendarConnections();
-      setConfigured(data.configured);
-      setConnection(data.connections.find((c) => c.provider === "microsoft") ?? null);
-    } catch {
-      setConfigured(false);
-      setConnection(null);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const {
+    data,
+    isLoading: loading,
+    refetch,
+  } = useQuery({
+    queryKey: CALENDAR_CONNECTIONS_QUERY_KEY,
+    queryFn: fetchCalendarConnections,
+    staleTime: 0,
+  });
+
+  const configured = data?.configured ?? false;
+  const connection = data?.connections.find((c) => c.provider === "microsoft") ?? null;
 
   const loadCalendars = useCallback(async () => {
     setCalendarsLoading(true);
@@ -73,14 +71,31 @@ export function OutlookCalendarCard() {
     }
   }, []);
 
+  // After Microsoft OAuth, the app returns from the browser — refetch immediately.
   useEffect(() => {
-    void load();
-  }, []);
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") {
+        void queryClient.invalidateQueries({ queryKey: CALENDAR_CONNECTIONS_QUERY_KEY });
+        void queryClient.invalidateQueries({ queryKey: ["external-calendar-events"] });
+      }
+    });
+    return () => sub.remove();
+  }, [queryClient]);
 
   useEffect(() => {
     if (!calendarModalOpen || !connection?.connected) return;
     void loadCalendars();
   }, [calendarModalOpen, connection?.connected, loadCalendars]);
+
+  const setConnectionOptimistic = (updated: CalendarConnectionSummary) => {
+    queryClient.setQueryData(CALENDAR_CONNECTIONS_QUERY_KEY, (prev: typeof data) => {
+      if (!prev) {
+        return { configured: true, connections: [updated] };
+      }
+      const others = prev.connections.filter((c) => c.provider !== "microsoft");
+      return { ...prev, connections: [...others, updated] };
+    });
+  };
 
   const connect = async () => {
     setBusy(true);
@@ -102,7 +117,7 @@ export function OutlookCalendarCard() {
     setBusy(true);
     try {
       const updated = await updateMicrosoftOutlookCalendar(calendar.id, calendar.name);
-      setConnection(updated);
+      setConnectionOptimistic(updated);
       await queryClient.invalidateQueries({ queryKey: ["external-calendar-events"] });
       setCalendarModalOpen(false);
       toast({ title: "Calendar updated", preset: "done" });
@@ -131,7 +146,7 @@ export function OutlookCalendarCard() {
             setBusy(true);
             try {
               const updated = await syncMicrosoftCalendar();
-              setConnection(updated);
+              setConnectionOptimistic(updated);
               await queryClient.invalidateQueries({ queryKey: ["external-calendar-events"] });
               toast({ title: "Outlook synced", preset: "done" });
             } catch (e) {
@@ -156,7 +171,7 @@ export function OutlookCalendarCard() {
                   setBusy(true);
                   try {
                     await disconnectMicrosoftCalendar();
-                    await load();
+                    await refetch();
                     await queryClient.invalidateQueries({ queryKey: ["external-calendar-events"] });
                     toast({ title: "Outlook disconnected", preset: "done" });
                   } catch (e) {

@@ -44,7 +44,7 @@ type MessageActionSheetProps = {
   children: React.ReactNode;
 };
 
-const ALENIO_GRADIENT = ["#4361EE", "#7C3AED"] as const;
+const ALENIO_GRADIENT = ["#EEF2FF", "#E0E7FF"] as const;
 const REACTION_PILL_HEIGHT = 56;
 const ACTION_CARD_WIDTH = 236;
 const ACTION_ROW_MIN_HEIGHT = 48;
@@ -64,13 +64,13 @@ function ReactionEmoji({
   active: boolean;
   selected: boolean;
 }) {
-  const scale = useSharedValue(selected ? 1.32 : 1);
+  const scale = useSharedValue(selected ? 1.28 : 1);
 
   useEffect(() => {
-    scale.value = withSpring(active ? 1.72 : selected ? 1.32 : 1, {
-      damping: 13,
-      stiffness: 320,
-      mass: 0.55,
+    scale.value = withSpring(active ? 1.55 : selected ? 1.28 : 1, {
+      damping: 14,
+      stiffness: 340,
+      mass: 0.5,
     });
   }, [active, scale, selected]);
 
@@ -79,9 +79,15 @@ function ReactionEmoji({
   }));
 
   return (
-    <View style={[styles.emojiButton, selected ? styles.emojiButtonSelected : null]}>
+    <View
+      style={[
+        styles.emojiButton,
+        selected ? styles.emojiButtonSelected : null,
+        active ? styles.emojiButtonActive : null,
+      ]}
+    >
       <Animated.View style={[styles.emojiInner, animatedStyle]}>
-        <Text style={[styles.emojiText, selected ? styles.emojiTextSelected : null]}>{emoji}</Text>
+        <Text style={[styles.emojiText, selected || active ? styles.emojiTextSelected : null]}>{emoji}</Text>
       </Animated.View>
     </View>
   );
@@ -284,7 +290,6 @@ export function MessageActionSheet({
           end={{ x: 1, y: 1 }}
           style={StyleSheet.absoluteFillObject}
         />
-        <View pointerEvents="none" style={[StyleSheet.absoluteFillObject, styles.alenioTint]} />
 
         <View pointerEvents="box-none" style={StyleSheet.absoluteFillObject}>
           <View
@@ -305,6 +310,16 @@ export function MessageActionSheet({
                 <Pressable
                   key={emoji}
                   onPress={() => handleReaction(emoji)}
+                  onHoverIn={() => {
+                    setHoveredEmoji(emoji);
+                    lastHoveredRef.current = emoji;
+                  }}
+                  onHoverOut={() => {
+                    setHoveredEmoji((current) => (current === emoji ? null : current));
+                    if (lastHoveredRef.current === emoji) {
+                      lastHoveredRef.current = null;
+                    }
+                  }}
                   onPressIn={() => {
                     setHoveredEmoji(emoji);
                     lastHoveredRef.current = emoji;
@@ -316,8 +331,8 @@ export function MessageActionSheet({
                       lastHoveredRef.current = null;
                     }
                   }}
-                  style={styles.emojiPressable}
-                  hitSlop={4}
+                  style={[styles.emojiPressable, active ? styles.emojiPressableActive : null]}
+                  hitSlop={6}
                   accessibilityRole="button"
                   accessibilityLabel={
                     selected
@@ -413,10 +428,7 @@ export function MessageActionSheet({
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: "#4361EE",
-  },
-  alenioTint: {
-    backgroundColor: "rgba(67, 97, 238, 0.82)",
+    backgroundColor: "#EEF2FF",
   },
   reactionPill: {
     position: "absolute",
@@ -427,6 +439,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     paddingHorizontal: 8,
     paddingVertical: 4,
+    overflow: "visible",
     shadowColor: "#0F172A",
     shadowOpacity: 0.18,
     shadowRadius: 16,
@@ -436,15 +449,25 @@ const styles = StyleSheet.create({
   },
   emojiPressable: {
     borderRadius: 22,
+    overflow: "visible",
+    zIndex: 1,
+  },
+  emojiPressableActive: {
+    zIndex: 4,
   },
   emojiButton: {
     width: EMOJI_HIT_WIDTH,
     height: REACTION_PILL_HEIGHT - 4,
     alignItems: "center",
     justifyContent: "center",
+    overflow: "visible",
   },
   emojiButtonSelected: {
     backgroundColor: "rgba(67, 97, 238, 0.14)",
+    borderRadius: 22,
+  },
+  emojiButtonActive: {
+    backgroundColor: "rgba(67, 97, 238, 0.1)",
     borderRadius: 22,
   },
   emojiInner: {
@@ -455,7 +478,7 @@ const styles = StyleSheet.create({
     fontSize: 24,
   },
   emojiTextSelected: {
-    fontSize: 30,
+    fontSize: 28,
   },
   actionCard: {
     position: "absolute",

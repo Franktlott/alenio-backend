@@ -8,6 +8,11 @@ import {
   Linking,
   useWindowDimensions,
 } from "react-native";
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+} from "react-native-reanimated";
 import { MediaViewer } from "@/components/MediaViewer";
 import { Play } from "lucide-react-native";
 import * as VideoThumbnails from "expo-video-thumbnails";
@@ -19,15 +24,120 @@ import { getBackendUrl } from "@/lib/backend-url";
 import { getAuthHeaders } from "@/lib/auth/auth-client";
 import { UserAvatar } from "@/components/UserAvatar";
 
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
+const MEDIA_PRESS_SPRING = { damping: 18, stiffness: 280, mass: 0.6 };
+
+/** Messenger-style slight enlarge while pressing a chat photo/video thumb. */
+function MediaThumbPressable({
+  onPress,
+  onLongPress,
+  delayLongPress = 400,
+  children,
+  style,
+  testID,
+}: {
+  onPress: () => void;
+  onLongPress?: () => void;
+  delayLongPress?: number;
+  children: React.ReactNode;
+  style?: object;
+  testID?: string;
+}) {
+  const scale = useSharedValue(1);
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  return (
+    <AnimatedPressable
+      testID={testID}
+      onPress={onPress}
+      onLongPress={onLongPress}
+      delayLongPress={delayLongPress}
+      onPressIn={() => {
+        scale.value = withSpring(1.045, MEDIA_PRESS_SPRING);
+      }}
+      onPressOut={() => {
+        scale.value = withSpring(1, MEDIA_PRESS_SPRING);
+      }}
+      style={[style, animatedStyle]}
+    >
+      {children}
+    </AnimatedPressable>
+  );
+}
+
 const URL_REGEX = /https?:\/\/[^\s<>"{}|\\^`[\]]+/gi;
 
 function extractFirstUrl(text: string): string | null {
   return text.match(URL_REGEX)?.[0] ?? null;
 }
 
-type OgData = { title: string | null; image: string | null; domain: string | null; url: string };
+function parseYouTubeVideoId(raw: string): string | null {
+  try {
+    const url = new URL(raw);
+    const host = url.hostname.replace(/^www\./, "").toLowerCase();
+    if (host === "youtu.be") {
+      const id = url.pathname.split("/").filter(Boolean)[0] ?? "";
+      return /^[\w-]{6,}$/.test(id) ? id : null;
+    }
+    if (host === "youtube.com" || host === "m.youtube.com" || host === "music.youtube.com") {
+      const v = url.searchParams.get("v");
+      if (v && /^[\w-]{6,}$/.test(v)) return v;
+      const m = url.pathname.match(/\/(?:embed|shorts|live)\/([\w-]{6,})/);
+      return m?.[1] ?? null;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
 
-function LinkPreview({ url, isOwn }: { url: string; isOwn: boolean }) {
+/** Remove the previewed URL from message text when a rich preview is shown. */
+function stripPreviewUrl(text: string, url: string): string {
+  const idx = text.indexOf(url);
+  const without =
+    idx >= 0 ? `${text.slice(0, idx)} ${text.slice(idx + url.length)}` : text;
+  return without
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n[ \t]+/g, "\n")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function domainFromUrl(raw: string): string {
+  try {
+    return new URL(raw).hostname.replace(/^www\./, "");
+  } catch {
+    return "Link";
+  }
+}
+
+type OgData = {
+  title: string | null;
+  image: string | null;
+  favicon?: string | null;
+  description?: string | null;
+  domain: string | null;
+  url: string;
+  provider?: string;
+  videoId?: string;
+};
+
+function LinkPreview({
+  url,
+  isOwn,
+  compact,
+}: {
+  url: string;
+  isOwn: boolean;
+  /** When true, card sits inside the bubble (no extra top margin). */
+  compact?: boolean;
+}) {
+  const youtubeId = parseYouTubeVideoId(url);
+  const fallbackDomain = domainFromUrl(url);
   const { data } = useQuery<OgData>({
     queryKey: ["og-preview", url],
     queryFn: async () => {
@@ -40,36 +150,143 @@ function LinkPreview({ url, isOwn }: { url: string; isOwn: boolean }) {
       return json?.data as OgData;
     },
     staleTime: Infinity,
-    retry: false,
+    retry: 1,
   });
 
-  if (!data || (!data.title && !data.image)) return null;
+  const isYouTube = Boolean(youtubeId || data?.provider === "youtube");
+  const videoId = data?.videoId || youtubeId;
+  const image =
+    data?.image ||
+    (videoId ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg` : null);
+  const domain = data?.domain || (isYouTube ? "youtube.com" : fallbackDomain);
+  const favicon =
+    data?.favicon ||
+    (domain
+      ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=128`
+      : null);
+  const title =
+    data?.title && data.title !== url
+      ? data.title
+      : isYouTube
+        ? "YouTube video"
+        : data?.title || fallbackDomain;
+  const description =
+    !isYouTube && data?.description && data.description !== title ? data.description : null;
+
+  const cardWidth = isYouTube || image ? 260 : 240;
+  const imageHeight = isYouTube ? 146 : 120;
+  const [logoFailed, setLogoFailed] = useState(false);
 
   return (
     <Pressable
       onPress={() => Linking.openURL(url)}
       style={{
-        marginTop: 6,
-        borderRadius: 12,
+        marginTop: compact ? 0 : 6,
+        borderRadius: compact ? 0 : 12,
         overflow: "hidden",
         backgroundColor: isOwn ? "#E0E7FF" : "#F8FAFC",
-        borderWidth: 1,
+        borderWidth: compact ? 0 : 1,
         borderColor: isOwn ? "#C7D2FE" : "#E2E8F0",
-        width: 220,
+        width: cardWidth,
       }}
+      accessibilityRole="link"
+      accessibilityLabel={isYouTube ? `Open YouTube video: ${title}` : `Open link: ${title}`}
     >
-      {data.image ? (
-        <Image source={{ uri: data.image }} style={{ width: 220, height: 120 }} resizeMode="cover" />
+      {image ? (
+        <View style={{ width: cardWidth, height: imageHeight, backgroundColor: "#0F172A" }}>
+          <Image source={{ uri: image }} style={{ width: cardWidth, height: imageHeight }} resizeMode="cover" />
+          {isYouTube ? (
+            <View
+              pointerEvents="none"
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <View
+                style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: 24,
+                  backgroundColor: "rgba(15, 23, 42, 0.72)",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Play size={22} color="#FFFFFF" fill="#FFFFFF" />
+              </View>
+            </View>
+          ) : null}
+        </View>
       ) : null}
-      <View style={{ padding: 10, gap: 2 }}>
-        {data.title ? (
-          <Text style={{ fontSize: 13, fontWeight: "600", color: "#0F172A" }} numberOfLines={2}>
-            {data.title}
+      <View
+        style={{
+          padding: 10,
+          gap: 4,
+          flexDirection: !image && !isYouTube ? "row" : "column",
+          alignItems: !image && !isYouTube ? "center" : "stretch",
+        }}
+      >
+        {!image && !isYouTube ? (
+          <View
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: 10,
+              backgroundColor: isOwn ? "#EEF2FF" : "#FFFFFF",
+              borderWidth: 1,
+              borderColor: isOwn ? "#C7D2FE" : "#E2E8F0",
+              alignItems: "center",
+              justifyContent: "center",
+              overflow: "hidden",
+              flexShrink: 0,
+            }}
+          >
+            {favicon && !logoFailed ? (
+              <Image
+                source={{ uri: favicon }}
+                style={{ width: 28, height: 28 }}
+                resizeMode="contain"
+                onError={() => setLogoFailed(true)}
+              />
+            ) : (
+              <Text style={{ fontSize: 16, fontWeight: "800", color: "#4361EE" }}>
+                {(domain?.[0] ?? "L").toUpperCase()}
+              </Text>
+            )}
+          </View>
+        ) : null}
+        <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+          {image && !isYouTube && favicon && !logoFailed ? (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 2 }}>
+              <Image
+                source={{ uri: favicon }}
+                style={{ width: 14, height: 14, borderRadius: 3 }}
+                resizeMode="contain"
+                onError={() => setLogoFailed(true)}
+              />
+              <Text style={{ fontSize: 11, color: "#64748B", fontWeight: "600" }} numberOfLines={1}>
+                {domain}
+              </Text>
+            </View>
+          ) : null}
+          <Text style={{ fontSize: 13, fontWeight: "700", color: "#0F172A" }} numberOfLines={2}>
+            {title}
           </Text>
-        ) : null}
-        {data.domain ? (
-          <Text style={{ fontSize: 11, color: "#64748B" }}>{data.domain}</Text>
-        ) : null}
+          {description ? (
+            <Text style={{ fontSize: 11, color: "#64748B", lineHeight: 15 }} numberOfLines={2}>
+              {description}
+            </Text>
+          ) : null}
+          <Text style={{ fontSize: 11, color: "#64748B", fontWeight: "500" }}>
+            {isYouTube ? "Tap to watch on YouTube" : `Tap to open · ${domain}`}
+          </Text>
+        </View>
       </View>
     </Pressable>
   );
@@ -102,6 +319,8 @@ interface ChatMessageProps {
   hideBubble?: boolean;
   variant?: "default" | "overlay";
   anchorHeight?: number;
+  /** Brief highlight after jumping to a pinned message. */
+  highlighted?: boolean;
 }
 
 function groupReactions(reactions: MessageReaction[]) {
@@ -139,55 +358,65 @@ export function ChatMessage({
   hideBubble = false,
   variant = "default",
   anchorHeight,
+  highlighted = false,
 }: ChatMessageProps) {
   const grouped = groupReactions(reactions);
   const hasReactions = grouped.length > 0;
   const [viewerVisible, setViewerVisible] = useState(false);
   const [videoThumb, setVideoThumb] = useState<string | null>(null);
   const { width: screenWidth } = useWindowDimensions();
+  /** Stable bubble media width — avoid subpixel churn when layout settles. */
   const IMG_WIDTH = Math.min(Math.round(screenWidth * 0.62), 280);
   const MAX_IMG_HEIGHT = 320;
-  const overlayTextBlockHeight = (content ? 36 : 0) + (replyTo ? 52 : 0);
-  const anchoredImageHeight =
-    anchorHeight && mediaUrl && mediaType === "image"
-      ? Math.min(MAX_IMG_HEIGHT, Math.max(IMG_WIDTH, anchorHeight - overlayTextBlockHeight))
+  /** Fixed 16:9 frame so videos don’t jump when the thumb loads or the menu opens. */
+  const VIDEO_HEIGHT = Math.round((IMG_WIDTH * 9) / 16);
+  /** Fixed 4:3 cover frame so photos don’t jump after measuring. */
+  const PHOTO_HEIGHT = Math.round((IMG_WIDTH * 3) / 4);
+  const firstUrl = content ? extractFirstUrl(content) : null;
+  const displayContent = firstUrl && content ? stripPreviewUrl(content, firstUrl) : content;
+  const showText = Boolean(displayContent?.trim());
+  const linkPreviewCompact = Boolean(firstUrl) && !showText && !mediaUrl && !replyTo;
+  const overlayTextBlockHeight = (showText ? 36 : 0) + (replyTo ? 52 : 0);
+  const anchoredMediaHeight =
+    anchorHeight && mediaUrl
+      ? Math.min(MAX_IMG_HEIGHT, Math.max(PHOTO_HEIGHT, anchorHeight - overlayTextBlockHeight))
       : null;
-  const [imgHeight, setImgHeight] = useState<number>(anchoredImageHeight ?? IMG_WIDTH);
+  const imageFrameHeight =
+    mediaType === "image" && anchoredMediaHeight ? anchoredMediaHeight : PHOTO_HEIGHT;
+  const videoFrameHeight =
+    mediaType === "video" && anchoredMediaHeight ? anchoredMediaHeight : VIDEO_HEIGHT;
 
   useEffect(() => {
-    if (anchoredImageHeight) {
-      setImgHeight(anchoredImageHeight);
+    if (mediaType !== "video" || !mediaUrl) {
+      setVideoThumb(null);
       return;
     }
-    if (mediaType === "image" && mediaUrl) {
-      Image.getSize(
-        mediaUrl,
-        (w, h) => {
-          if (w > 0) {
-            const scaled = Math.round((h / w) * IMG_WIDTH);
-            setImgHeight(Math.min(scaled, MAX_IMG_HEIGHT));
-          }
-        },
-        () => {}
-      );
-    }
-  }, [IMG_WIDTH, anchoredImageHeight, mediaUrl, mediaType]);
-
-  useEffect(() => {
-    if (mediaType === "video" && mediaUrl) {
-      VideoThumbnails.getThumbnailAsync(mediaUrl, { time: 0 })
-        .then((r) => setVideoThumb(r.uri))
-        .catch(() => setVideoThumb(null));
-    }
+    let cancelled = false;
+    VideoThumbnails.getThumbnailAsync(mediaUrl, { time: 0 })
+      .then((r) => {
+        if (!cancelled) setVideoThumb(r.uri);
+      })
+      .catch(() => {
+        if (!cancelled) setVideoThumb(null);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [mediaUrl, mediaType]);
 
   const bubbleStyle = {
-    backgroundColor: isOwn ? "#EEF2FF" : "#F1F5F9",
+    backgroundColor: highlighted
+      ? isOwn
+        ? "#C7D2FE"
+        : "#DBEAFE"
+      : isOwn
+        ? "#EEF2FF"
+        : "#F1F5F9",
     shadowColor: "#000",
-    shadowOpacity: 0.06,
-    shadowRadius: 3,
+    shadowOpacity: highlighted ? 0.12 : 0.06,
+    shadowRadius: highlighted ? 6 : 3,
     shadowOffset: { width: 0, height: 1 },
-    elevation: 1,
+    elevation: highlighted ? 3 : 1,
   } as const;
 
   const bubbleBody = (
@@ -229,11 +458,12 @@ export function ChatMessage({
       ) : null}
 
       {mediaUrl ? (
-        interactive && variant === "default" ? (
-          <Pressable
+        variant === "default" ? (
+          <MediaThumbPressable
             onPress={() => setViewerVisible(true)}
-            className="overflow-hidden"
-            style={{ maxWidth: IMG_WIDTH }}
+            onLongPress={onLongPress}
+            delayLongPress={400}
+            style={{ maxWidth: IMG_WIDTH, overflow: "hidden", borderRadius: 12 }}
             testID="media-thumbnail"
           >
             {mediaType === "video" ? (
@@ -241,14 +471,14 @@ export function ChatMessage({
                 style={{
                   position: "relative",
                   width: IMG_WIDTH,
-                  height: Math.round(IMG_WIDTH * 0.72),
+                  height: videoFrameHeight,
                   backgroundColor: "#0F172A",
                 }}
               >
                 {videoThumb ? (
                   <Image
                     source={{ uri: videoThumb }}
-                    style={{ width: IMG_WIDTH, height: Math.round(IMG_WIDTH * 0.72) }}
+                    style={{ width: IMG_WIDTH, height: videoFrameHeight }}
                     resizeMode="cover"
                   />
                 ) : null}
@@ -271,26 +501,26 @@ export function ChatMessage({
             ) : (
               <Image
                 source={{ uri: mediaUrl }}
-                style={{ width: IMG_WIDTH, height: imgHeight }}
+                style={{ width: IMG_WIDTH, height: imageFrameHeight }}
                 resizeMode="cover"
               />
             )}
-          </Pressable>
+          </MediaThumbPressable>
         ) : (
-          <View className="overflow-hidden" style={{ maxWidth: IMG_WIDTH }}>
+          <View className="overflow-hidden" style={{ maxWidth: IMG_WIDTH, borderRadius: 12 }}>
             {mediaType === "video" ? (
               <View
                 style={{
                   position: "relative",
                   width: IMG_WIDTH,
-                  height: Math.round(IMG_WIDTH * 0.72),
+                  height: videoFrameHeight,
                   backgroundColor: "#0F172A",
                 }}
               >
                 {videoThumb ? (
                   <Image
                     source={{ uri: videoThumb }}
-                    style={{ width: IMG_WIDTH, height: Math.round(IMG_WIDTH * 0.72) }}
+                    style={{ width: IMG_WIDTH, height: videoFrameHeight }}
                     resizeMode="cover"
                   />
                 ) : null}
@@ -313,7 +543,7 @@ export function ChatMessage({
             ) : (
               <Image
                 source={{ uri: mediaUrl }}
-                style={{ width: IMG_WIDTH, height: imgHeight }}
+                style={{ width: IMG_WIDTH, height: imageFrameHeight }}
                 resizeMode="cover"
               />
             )}
@@ -321,18 +551,20 @@ export function ChatMessage({
         )
       ) : null}
 
-      {content ? (
+      {showText ? (
         <Text
-          className={`text-sm leading-5 px-4 ${replyTo || mediaUrl ? "pt-1.5 pb-2.5" : "py-2.5"} text-slate-900`}
+          className={`text-sm leading-5 px-4 ${replyTo || mediaUrl || firstUrl ? "pt-1.5 pb-2.5" : "py-2.5"} text-slate-900`}
         >
           {renderMentionText(
-            content,
+            displayContent!,
             currentUserId,
             { color: "#0F172A", fontSize: 14, lineHeight: 20 },
             isOwn
           )}
         </Text>
       ) : null}
+
+      {firstUrl ? <LinkPreview url={firstUrl} isOwn={isOwn} compact={linkPreviewCompact} /> : null}
     </>
   );
 
@@ -368,7 +600,18 @@ export function ChatMessage({
       )}
 
       <View className={`max-w-[75%] ${isOwn ? "items-end" : "items-start"}`}>
-        {!isOwn && <Text className="text-xs text-slate-500 dark:text-slate-400 mb-1 ml-1">{senderName}</Text>}
+        <View
+          className={`flex-row items-center mb-1 mx-1 gap-2 ${isOwn ? "justify-end" : "justify-start"}`}
+          style={{ maxWidth: "100%" }}
+        >
+          {!isOwn ? (
+            <Text className="text-xs text-slate-500 dark:text-slate-400 flex-shrink" numberOfLines={1}>
+              {senderName}
+            </Text>
+          ) : null}
+          <Text className="text-xs text-slate-400 flex-shrink-0">{formatTime(createdAt)}</Text>
+          {editedAt ? <Text className="text-xs text-slate-400 flex-shrink-0">· edited</Text> : null}
+        </View>
 
         <View
           style={{
@@ -448,17 +691,6 @@ export function ChatMessage({
           ) : null}
         </View>
 
-        {content
-          ? (() => {
-              const url = extractFirstUrl(content);
-              return url ? <LinkPreview url={url} isOwn={isOwn} /> : null;
-            })()
-          : null}
-
-        <View className={`flex-row items-center mt-1 mx-1 gap-1 ${isOwn ? "justify-end" : "justify-start"}`}>
-          <Text className="text-xs text-slate-400">{formatTime(createdAt)}</Text>
-          {editedAt ? <Text className="text-xs text-slate-400">· edited</Text> : null}
-        </View>
       </View>
 
       {isOwn ? (

@@ -1,5 +1,6 @@
-import React, { forwardRef } from "react";
+import React, { forwardRef, useEffect, useState } from "react";
 import {
+  Keyboard,
   KeyboardAvoidingView as RNKeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -51,23 +52,55 @@ function rnKeyboardAvoidingBehavior(
   return "padding";
 }
 
+/** True while the software keyboard is visible (for composer safe-area padding). */
+export function useSafeKeyboardVisible() {
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const showSub = Keyboard.addListener(showEvent, () => setVisible(true));
+    const hideSub = Keyboard.addListener(hideEvent, () => setVisible(false));
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+  return visible;
+}
+
 export const SafeKeyboardAvoidingView = forwardRef(function SafeKeyboardAvoidingView(
-  { behavior = "padding", enabled, ...rest }: SafeKeyboardAvoidingViewProps,
+  {
+    behavior = "padding",
+    enabled,
+    automaticOffset,
+    keyboardVerticalOffset,
+    ...rest
+  }: SafeKeyboardAvoidingViewProps,
   ref: React.ForwardedRef<View>,
 ) {
   if (!LINKED) {
+    // RN KAV has no automaticOffset; keep any manual offset the caller passed (Expo Go).
     return (
       <RNKeyboardAvoidingView
         ref={ref as never}
         behavior={rnKeyboardAvoidingBehavior(behavior)}
         enabled={enabled}
+        keyboardVerticalOffset={keyboardVerticalOffset}
         {...rest}
       />
     );
   }
   const { KeyboardAvoidingView: LibKAV } =
     require("react-native-keyboard-controller") as typeof import("react-native-keyboard-controller");
-  const libProps = { behavior, enabled, ...rest } as LibKeyboardAvoidingViewProps;
+  // With automaticOffset, RN-style header compensation is harmful (becomes additive gap).
+  const libOffset = automaticOffset ? 0 : keyboardVerticalOffset;
+  const libProps = {
+    behavior,
+    enabled,
+    automaticOffset,
+    keyboardVerticalOffset: libOffset,
+    ...rest,
+  } as LibKeyboardAvoidingViewProps;
   return <LibKAV ref={ref as never} {...libProps} />;
 });
 

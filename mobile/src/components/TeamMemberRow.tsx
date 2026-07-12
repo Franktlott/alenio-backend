@@ -11,6 +11,9 @@ const AVATAR_SIZE = 32;
 
 export function getTeamMemberRowLayout(screenWidth: number) {
   const compact = screenWidth < STANDARD_PHONE_MIN_WIDTH;
+  const metricsCheckInWidth = compact ? 40 : 42;
+  const metricsGoalsWidth = compact ? 34 : 36;
+  const metricsStatusWidth = compact ? 72 : 76;
   return {
     compact,
     avatarSize: AVATAR_SIZE,
@@ -20,8 +23,12 @@ export function getTeamMemberRowLayout(screenWidth: number) {
     avatarGap: 6,
     metricsTabInset: 0,
     metricsTopGap: 1,
-    metricsRowWidth: compact ? 156 : 168,
-    metricsColumnWidth: compact ? 48 : 52,
+    metricsCheckInWidth,
+    metricsGoalsWidth,
+    metricsStatusWidth,
+    metricsRowWidth: metricsCheckInWidth + metricsGoalsWidth + metricsStatusWidth,
+    // kept for skeleton / older call sites that expect equal columns
+    metricsColumnWidth: compact ? 44 : 46,
     borderRadius: 11,
   };
 }
@@ -75,10 +82,10 @@ function IdentityBlock({
   const displayName = isCurrentUser ? `${name} (you)` : name;
 
   return (
-    <View style={{ minWidth: 0 }}>
+    <View style={{ minWidth: 0, flexGrow: 1, flexShrink: 1, paddingRight: 4 }}>
       <Text
         style={{ fontSize: nameFontSize, fontWeight: "700", color: "#111827", lineHeight: 16 }}
-        numberOfLines={1}
+        numberOfLines={2}
         ellipsizeMode="tail"
       >
         {displayName}
@@ -151,11 +158,12 @@ function StatusColumn({ badge, width }: { badge: StandardsBadgeDisplay | null; w
         style={{
           marginTop: 1,
           height: 16,
-          paddingHorizontal: 6,
+          paddingHorizontal: 7,
           borderRadius: 8,
           backgroundColor: colors.bg,
           alignItems: "center",
           justifyContent: "center",
+          alignSelf: "center",
         }}
       >
         <Text style={{ fontSize: 8, fontWeight: "700", color: colors.text, lineHeight: 10 }}>
@@ -172,14 +180,18 @@ function MetricsRow({
   statusBadge,
   topGap,
   rowWidth,
-  columnWidth,
+  checkInWidth,
+  goalsWidth,
+  statusWidth,
 }: {
   checkInValue: string;
   goalsValue: string;
   statusBadge: StandardsBadgeDisplay | null;
   topGap: number;
   rowWidth: number;
-  columnWidth: number;
+  checkInWidth: number;
+  goalsWidth: number;
+  statusWidth: number;
 }) {
   return (
     <View
@@ -194,9 +206,9 @@ function MetricsRow({
         flexShrink: 0,
       }}
     >
-      <MetricColumn label="Check-in" value={checkInValue} width={columnWidth} />
-      <MetricColumn label="Goals" value={goalsValue} width={columnWidth} />
-      <StatusColumn badge={statusBadge} width={columnWidth} />
+      <MetricColumn label="Check-in" value={checkInValue} width={checkInWidth} />
+      <MetricColumn label="Goals" value={goalsValue} width={goalsWidth} />
+      <StatusColumn badge={statusBadge} width={statusWidth} />
     </View>
   );
 }
@@ -292,7 +304,9 @@ export function TeamMemberRow({
             statusBadge={statusBadge}
             topGap={0}
             rowWidth={layout.metricsRowWidth}
-            columnWidth={layout.metricsColumnWidth}
+            checkInWidth={layout.metricsCheckInWidth}
+            goalsWidth={layout.metricsGoalsWidth}
+            statusWidth={layout.metricsStatusWidth}
           />
         ) : showMetrics ? (
           <PrivateMetricsRow topGap={0} />

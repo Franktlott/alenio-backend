@@ -43,18 +43,25 @@ export function ProfileSection({
   title,
   subtitle,
   action,
+  titleAccessory,
   children,
+  style,
 }: {
   title: string;
   subtitle?: string;
   action?: React.ReactNode;
+  titleAccessory?: React.ReactNode;
   children: React.ReactNode;
+  style?: ViewStyle;
 }) {
   return (
-    <View>
-      <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 8, gap: 12 }}>
-        <View style={{ flex: 1 }}>
-          <Text style={PROFILE_UI.sectionLabel}>{title}</Text>
+    <View style={style}>
+      <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 8, gap: 12, flexShrink: 0 }}>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+            <Text style={PROFILE_UI.sectionLabel}>{title}</Text>
+            {titleAccessory}
+          </View>
           {subtitle ? (
             <Text style={{ fontSize: 12, color: "#64748B", marginTop: 4, lineHeight: 17 }}>{subtitle}</Text>
           ) : null}

@@ -1,5 +1,4 @@
 import { Tabs, router } from "expo-router";
-import { BlurView } from "expo-blur";
 import { CheckSquare, Users, User, MessageCircle, Activity } from "lucide-react-native";
 import { View, Text, Pressable, StyleSheet, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -15,7 +14,7 @@ import { useQuery, useQueryClient, useQueries } from "@tanstack/react-query";
 import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
 import { useTeamStore } from "@/lib/state/team-store";
-import { useUnreadStore } from "@/lib/state/unread-store";
+import { useUnreadStore, buildDmLastReadMap } from "@/lib/state/unread-store";
 import { useSubscriptionStore } from "@/lib/state/subscription-store";
 import { useTaskStore } from "@/lib/state/task-store";
 import { useEffect, useMemo } from "react";
@@ -65,7 +64,7 @@ function FixedTabBar({ state, navigation }: any) {
   });
 
   const dmUnreadLastReadIds = useMemo(
-    () => Object.fromEntries(conversations.map((conv) => [conv.id, lastReadIds[conv.id] ?? ""])),
+    () => buildDmLastReadMap(conversations, lastReadIds),
     [conversations, lastReadIds]
   );
   const { data: dmUnreadCounts = {} } = useQuery({
@@ -233,9 +232,6 @@ function FixedTabBar({ state, navigation }: any) {
 
   return (
     <View style={tabBarStyles.container} pointerEvents="box-none">
-      <BlurView intensity={16} tint="light" style={StyleSheet.absoluteFill} />
-      <View style={tabBarStyles.overlay} />
-      <View style={tabBarStyles.divider} />
       <View style={tabBarStyles.row}>
         {visibleRoutes.map((route: any) => {
           const isFocused = activeRouteName === route.name;
@@ -299,7 +295,7 @@ function FixedTabBar({ state, navigation }: any) {
           );
         })}
       </View>
-      <View style={{ height: insets.bottom }} />
+      <View style={{ height: insets.bottom, backgroundColor: "#FFFFFF" }} />
     </View>
   );
 }
@@ -310,20 +306,17 @@ const tabBarStyles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    overflow: "hidden",
-  },
-  overlay: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: "rgba(255, 255, 255, 0.94)",
-  },
-  divider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: TAB_BAR_DIVIDER_COLOR,
+    backgroundColor: "#FFFFFF",
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: TAB_BAR_DIVIDER_COLOR,
+    zIndex: 100,
+    elevation: 100,
   },
   row: {
     height: TAB_BAR_HEIGHT,
     flexDirection: "row",
     alignItems: "center",
+    backgroundColor: "#FFFFFF",
   },
   tab: {
     flex: 1,

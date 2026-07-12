@@ -6,7 +6,6 @@ import {
   Pressable,
   ScrollView,
   TextInput,
-  ActivityIndicator,
   StyleSheet,
   Keyboard,
   type NativeScrollEvent,
@@ -30,6 +29,29 @@ import { SenecaCreateTaskCard } from "./SenecaCreateTaskCard";
 import { quickActionNavigate } from "@/lib/seneca-navigation";
 import { useTeamStore } from "@/lib/state/team-store";
 import { SafeKeyboardAvoidingView } from "@/lib/safe-keyboard-controller";
+
+function ThinkingDots() {
+  const [step, setStep] = useState(0);
+
+  useEffect(() => {
+    const id = setInterval(() => setStep((s) => (s + 1) % 3), 380);
+    return () => clearInterval(id);
+  }, []);
+
+  return (
+    <View style={styles.thinkingRow} testID="seneca-thinking" accessibilityLabel="Thinking">
+      <View style={styles.thinkingDots}>
+        {[0, 1, 2].map((i) => (
+          <View
+            key={i}
+            style={[styles.thinkingDot, { opacity: step === i ? 1 : 0.28 }]}
+          />
+        ))}
+      </View>
+      <Text style={styles.thinkingText}>Thinking</Text>
+    </View>
+  );
+}
 
 type Props = {
   open: boolean;
@@ -315,7 +337,7 @@ export function SenecaAssistantSheet({ open, onClose, teamId: teamIdProp }: Prop
           <View style={styles.headerBar}>
             <View style={styles.header}>
               <View style={styles.headerIconWrap}>
-                <SenecaIcon size={28} />
+                <SenecaIcon size={32} />
               </View>
               <View style={styles.headerText}>
                 <View style={styles.headerTitleRow}>
@@ -469,10 +491,7 @@ export function SenecaAssistantSheet({ open, onClose, teamId: teamIdProp }: Prop
                       <SenecaIcon size={20} />
                       <Text style={styles.senecaBlockName}>Seneca</Text>
                     </View>
-                    <View style={styles.thinkingRow} testID="seneca-thinking">
-                      <ActivityIndicator size="small" color={COLORS.brand} />
-                      <Text style={styles.thinkingText}>Analyzing your request…</Text>
-                    </View>
+                    <ThinkingDots />
                   </View>
                 </View>
               ) : null}
@@ -524,12 +543,13 @@ const styles = StyleSheet.create({
   headerIconWrap: {
     width: 44,
     height: 44,
-    borderRadius: 12,
-    backgroundColor: COLORS.brandSoft,
+    borderRadius: 22,
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: COLORS.brandBorder,
+    borderColor: "#E2E8F0",
     alignItems: "center",
     justifyContent: "center",
+    overflow: "hidden",
   },
   headerIconBtn: {
     width: 36,
@@ -673,11 +693,12 @@ const styles = StyleSheet.create({
   welcomeIconWrap: {
     width: 44,
     height: 44,
-    borderRadius: 12,
+    borderRadius: 22,
     backgroundColor: COLORS.brandSoft,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 4,
+    overflow: "hidden",
   },
   welcomeEyebrow: {
     fontSize: 11,
@@ -792,6 +813,17 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
+  },
+  thinkingDots: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+  },
+  thinkingDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: COLORS.brand,
   },
   thinkingText: {
     fontSize: 14,

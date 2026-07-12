@@ -25,6 +25,9 @@ model User {
   directMessages DirectMessage[]
   messageReactions MessageReaction[]
   directMessageReactions DirectMessageReaction[]
+  teamMessagePins Team[] @relation("TeamMessagePinner")
+  topicMessagePins Topic[] @relation("TopicMessagePinner")
+  conversationMessagePins Conversation[] @relation("ConversationMessagePinner")
   templatesCreated TaskTemplate[] @relation("TemplateCreator")
   oneOnOneTemplatesCreated OneOnOneTemplate[] @relation("OneOnOneTemplateCreator")
   oneOnOneMeetingsCreated OneOnOneMeeting[] @relation("OneOnOneMeetingCreator")
@@ -140,6 +143,12 @@ model Team {
   conversations Conversation[]
   workspaceModules WorkspaceModule[]
   moduleTestSessions ModuleTestSession[]
+  /** Pinned message for general Team Chat (topicId null). */
+  pinnedMessageId String?
+  pinnedMessage   Message?  @relation("TeamPinnedMessage", fields: [pinnedMessageId], references: [id], onDelete: SetNull)
+  pinnedAt        DateTime?
+  pinnedById      String?
+  pinnedBy        User?     @relation("TeamMessagePinner", fields: [pinnedById], references: [id], onDelete: SetNull)
 }
 
 /// Per-workspace lifecycle + operating mode for an Alenio module.
@@ -457,6 +466,8 @@ model Message {
   topic            Topic?   @relation(fields: [topicId], references: [id], onDelete: SetNull)
   mentionedUserIds String   @default("[]")
   editedAt         DateTime?
+  pinnedInTeams    Team[]   @relation("TeamPinnedMessage")
+  pinnedInTopics   Topic[]  @relation("TopicPinnedMessage")
 
   @@index([teamId, createdAt])
   @@index([topicId, createdAt])
@@ -495,6 +506,11 @@ model Topic {
   messages                Message[]
   polls                   Poll[]
   members                 TopicMember[]
+  pinnedMessageId         String?
+  pinnedMessage           Message?  @relation("TopicPinnedMessage", fields: [pinnedMessageId], references: [id], onDelete: SetNull)
+  pinnedAt                DateTime?
+  pinnedById              String?
+  pinnedBy                User?     @relation("TopicMessagePinner", fields: [pinnedById], references: [id], onDelete: SetNull)
 
   @@index([teamId, archivedAt])
 }
@@ -534,6 +550,11 @@ model Conversation {
   updatedAt    DateTime                  @updatedAt
   participants ConversationParticipant[]
   messages     DirectMessage[]
+  pinnedDirectMessageId String?
+  pinnedDirectMessage   DirectMessage? @relation("ConversationPinnedMessage", fields: [pinnedDirectMessageId], references: [id], onDelete: SetNull)
+  pinnedAt              DateTime?
+  pinnedById            String?
+  pinnedBy              User?          @relation("ConversationMessagePinner", fields: [pinnedById], references: [id], onDelete: SetNull)
 
   @@index([teamId])
 }
@@ -571,6 +592,7 @@ model DirectMessage {
   replies        DirectMessage[] @relation("DMReplies")
   reactions      DirectMessageReaction[]
   mentionedUserIds String     @default("[]")
+  pinnedInConversations Conversation[] @relation("ConversationPinnedMessage")
 
   @@index([conversationId, createdAt])
   @@index([senderId])

@@ -3,7 +3,7 @@ import { prisma } from "../prisma";
 import { auth } from "../auth";
 import { authGuard } from "../middleware/auth-guard";
 import { sendPushToUsers } from "../lib/push";
-import { publishDmMessageCreated, publishUserInboxUpdated } from "../lib/realtime-hub";
+import { publishDmMessageCreated, publishUserInboxUpdated, publishDmPinUpdated } from "../lib/realtime-hub";
 import { env } from "../env";
 import {
   assertParticipantsShareWorkspaceWithCreator,
@@ -284,6 +284,125 @@ dmsRouter.post("/create-group", async (c) => {
   }, 201);
 });
 
+// GET /api/dms/:conversationId/messages/pin
+dmsRouter.get("/:conversationId/messages/pin", async (c) => {
+  const user = c.get("user")!;
+  const { conversationId } = c.req.param();
+
+  const participant = await prisma.conversationParticipant.findUnique({
+    where: { conversationId_userId: { conversationId, userId: user.id } },
+  });
+  if (!participant) return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
+
+  const conversation = await prisma.conversation.findUnique({
+    where: { id: conversationId },
+    select: {
+      pinnedAt: true,
+      pinnedDirectMessage: {
+        select: {
+          id: true,
+          content: true,
+          mediaType: true,
+          sender: { select: { id: true, name: true, image: true } },
+        },
+      },
+      pinnedBy: { select: { id: true, name: true } },
+    },
+  });
+
+  const message = conversation?.pinnedDirectMessage;
+  if (!message || !conversation?.pinnedAt || !conversation.pinnedBy) {
+    return c.json({ data: null });
+  }
+
+  return c.json({
+    data: {
+      messageId: message.id,
+      content: message.content,
+      mediaType: message.mediaType as "image" | "video" | null,
+      sender: {
+        id: message.sender.id,
+        name: message.sender.name,
+        image: message.sender.image,
+      },
+      pinnedAt: conversation.pinnedAt.toISOString(),
+      pinnedBy: { id: conversation.pinnedBy.id, name: conversation.pinnedBy.name },
+    },
+  });
+});
+
+// PUT /api/dms/:conversationId/messages/pin
+dmsRouter.put("/:conversationId/messages/pin", async (c) => {
+  const user = c.get("user")!;
+  const { conversationId } = c.req.param();
+  const body = await c.req.json<{ messageId?: string }>();
+  const messageId = body.messageId?.trim();
+  if (!messageId) {
+    return c.json({ error: { message: "messageId required", code: "BAD_REQUEST" } }, 400);
+  }
+
+  const participant = await prisma.conversationParticipant.findUnique({
+    where: { conversationId_userId: { conversationId, userId: user.id } },
+  });
+  if (!participant) return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
+
+  const message = await prisma.directMessage.findFirst({
+    where: { id: messageId, conversationId },
+    select: {
+      id: true,
+      content: true,
+      mediaType: true,
+      sender: { select: { id: true, name: true, image: true } },
+    },
+  });
+  if (!message) {
+    return c.json({ error: { message: "Message not found", code: "NOT_FOUND" } }, 404);
+  }
+
+  const now = new Date();
+  await prisma.conversation.update({
+    where: { id: conversationId },
+    data: {
+      pinnedDirectMessageId: messageId,
+      pinnedAt: now,
+      pinnedById: user.id,
+    },
+  });
+
+  const summary = {
+    messageId: message.id,
+    content: message.content,
+    mediaType: message.mediaType as "image" | "video" | null,
+    sender: {
+      id: message.sender.id,
+      name: message.sender.name,
+      image: message.sender.image,
+    },
+    pinnedAt: now.toISOString(),
+    pinnedBy: { id: user.id, name: user.name ?? null },
+  };
+  publishDmPinUpdated({ conversationId, pinnedMessage: summary });
+  return c.json({ data: summary });
+});
+
+// DELETE /api/dms/:conversationId/messages/pin
+dmsRouter.delete("/:conversationId/messages/pin", async (c) => {
+  const user = c.get("user")!;
+  const { conversationId } = c.req.param();
+
+  const participant = await prisma.conversationParticipant.findUnique({
+    where: { conversationId_userId: { conversationId, userId: user.id } },
+  });
+  if (!participant) return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
+
+  await prisma.conversation.update({
+    where: { id: conversationId },
+    data: { pinnedDirectMessageId: null, pinnedAt: null, pinnedById: null },
+  });
+  publishDmPinUpdated({ conversationId, pinnedMessage: null });
+  return new Response(null, { status: 204 });
+});
+
 // GET /api/dms/:conversationId/messages
 dmsRouter.get("/:conversationId/messages", async (c) => {
   const user = c.get("user")!;
@@ -533,7 +652,15 @@ dmsRouter.delete("/:conversationId/messages/:messageId", async (c) => {
     return c.json({ error: { message: "Cannot delete someone else's message", code: "FORBIDDEN" } }, 403);
   }
 
+  const pinCleared = await prisma.conversation.updateMany({
+    where: { id: conversationId, pinnedDirectMessageId: messageId },
+    data: { pinnedDirectMessageId: null, pinnedAt: null, pinnedById: null },
+  });
+
   await prisma.directMessage.delete({ where: { id: messageId } });
+  if (pinCleared.count > 0) {
+    publishDmPinUpdated({ conversationId, pinnedMessage: null });
+  }
   return new Response(null, { status: 204 });
 });
 

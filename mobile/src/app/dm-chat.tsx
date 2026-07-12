@@ -12,10 +12,10 @@ import {
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { usePaginatedDmMessages } from "@/lib/chat-message-pagination";
+import { usePaginatedDmMessages, flattenMessagePages } from "@/lib/chat-message-pagination";
 import { useChatListScroll } from "@/hooks/use-chat-scroll";
 import { LinearGradient } from "expo-linear-gradient";
-import { ArrowLeft, Send, Paperclip, X, Users, Video, Trash2, Download, Reply, Copy, Camera, ImageIcon, MoreVertical, LogOut, UserPlus, UserMinus, Crown, Shield } from "lucide-react-native";
+import { ArrowLeft, Send, Paperclip, X, Users, Video, Trash2, Download, Reply, Copy, Camera, ImageIcon, MoreVertical, LogOut, UserPlus, UserMinus, Crown, Shield, Pin } from "lucide-react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
@@ -25,9 +25,13 @@ import { ChatMessage } from "@/components/ChatMessage";
 import { MessageActionSheet, type MessageAnchorLayout } from "@/components/MessageActionSheet";
 import { MessageLongPressRow } from "@/components/MessageLongPressRow";
 import { ImageSendPreview } from "@/components/ImageSendPreview";
+import { PinnedMessageBar } from "@/components/PinnedMessageBar";
 import { MentionPicker } from "@/components/MentionPicker";
-import type { DirectMessage, MessageReaction, Conversation, GroupParticipantRole } from "@/lib/types";
+import type { DirectMessage, MessageReaction, Conversation, GroupParticipantRole, PinnedMessageSummary } from "@/lib/types";
 import * as Clipboard from "expo-clipboard";
+import type { InfiniteData } from "@tanstack/react-query";
+import type { MessagePage } from "@/lib/chat-message-pagination";
+import { realtimeClient } from "@/lib/realtime-client";
 import ReanimatedSwipeable from "react-native-gesture-handler/ReanimatedSwipeable";
 import Reanimated, {
   useAnimatedStyle,
@@ -44,7 +48,7 @@ import { useUnreadStore } from "@/lib/state/unread-store";
 import * as Haptics from "expo-haptics";
 import { toast } from "burnt";
 import { useMention } from "@/lib/useMention";
-import { SafeKeyboardAvoidingView } from "@/lib/safe-keyboard-controller";
+import { SafeKeyboardAvoidingView, useSafeKeyboardVisible } from "@/lib/safe-keyboard-controller";
 import { dmOtherParticipant, resolveUserImageUrl, userInitials } from "@/lib/user-avatar";
 import { UserAvatar } from "@/components/UserAvatar";
 import { groupWorkspaceLabel } from "@/lib/group-workspace-label";
@@ -69,7 +73,7 @@ function DmChatEmptyState({
   }, [float]);
 
   const illustrationStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: interpolate(float.value, [0, 1], [0, -7]) }],
+    transform: [{ translateY: interpolate(float.value, [0, 1], [0, -4]) }],
   }));
 
   const displayName = user.name?.trim() || (isGroup ? "this group" : "your teammate");
@@ -82,13 +86,15 @@ function DmChatEmptyState({
         alignItems: "center",
         justifyContent: "center",
         paddingHorizontal: 28,
+        paddingTop: 16,
         paddingBottom: 24,
+        overflow: "hidden",
       }}
     >
-      <Reanimated.View style={[{ marginBottom: 4 }, illustrationStyle]}>
+      <Reanimated.View style={[{ marginBottom: 4, marginTop: 4 }, illustrationStyle]}>
         <Image
           source={require("@/assets/dm-empty-start.png")}
-          style={{ width: 180, height: 180 }}
+          style={{ width: 160, height: 160 }}
           resizeMode="contain"
           accessibilityIgnoresInvertColors
         />
@@ -196,9 +202,13 @@ function formatDateLabel(dateStr: string) {
 type MessageItem = DirectMessage | { type: "date"; label: string; id: string };
 
 function buildMessageList(messages: DirectMessage[]): MessageItem[] {
+  const sorted = [...messages].sort((a, b) => {
+    const diff = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    return diff !== 0 ? diff : a.id.localeCompare(b.id);
+  });
   const items: MessageItem[] = [];
   let lastDate = "";
-  for (const msg of messages) {
+  for (const msg of sorted) {
     const label = formatDateLabel(msg.createdAt);
     if (label !== lastDate) {
       items.push({ type: "date", label, id: `date-${msg.id}` });
@@ -219,6 +229,7 @@ export default function DMChatScreen() {
   const isGroup = isGroupParam === "true";
   const { data: session } = useSession();
   const insets = useSafeAreaInsets();
+  const keyboardVisible = useSafeKeyboardVisible();
   const queryClient = useQueryClient();
   const [input, setInput] = useState("");
   const [replyTo, setReplyTo] = useState<DirectMessage | null>(null);
@@ -232,6 +243,8 @@ export default function DMChatScreen() {
   const [mediaPreview, setMediaPreview] = useState<{ uri: string; mimeType: string; filename: string } | null>(null);
   const [uploading, setUploading] = useState(false);
   const [showMediaPicker, setShowMediaPicker] = useState(false);
+  const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
+  const [jumpingToPin, setJumpingToPin] = useState(false);
   const currentUserId = session?.user?.id ?? "";
   const markAsRead = useUnreadStore((s) => s.markAsRead);
   const prevMsgCountRef = useRef<number>(0);
@@ -283,16 +296,94 @@ export default function DMChatScreen() {
   } = usePaginatedDmMessages<DirectMessage>(conversationId);
 
   const items = useMemo(() => buildMessageList(messages), [messages]);
+  const listData = useMemo(() => [...items].reverse(), [items]);
 
   const {
     listRef: flatListRef,
     handleScroll,
     handleContentSizeChange,
-    handleListLayout,
-    handleScrollToIndexFailed,
     followLatestIfNearBottom,
-    initialScrollIndex,
-  } = useChatListScroll(conversationId, items.length);
+    scrollToIndex,
+    handleScrollToIndexFailed,
+    contentContainerStyle,
+    maintainVisibleContentPosition,
+    readyForOlderLoad,
+  } = useChatListScroll(conversationId, listData.length);
+
+  const pinQueryKey = ["pinned-message", "dm", conversationId] as const;
+  const { data: pinnedMessage = null } = useQuery<PinnedMessageSummary | null>({
+    queryKey: [...pinQueryKey],
+    queryFn: () =>
+      api.get<PinnedMessageSummary | null>(`/api/dms/${conversationId}/messages/pin`),
+    enabled: !!conversationId,
+  });
+
+  useEffect(() => {
+    if (!conversationId) return;
+    const off = realtimeClient.onPinUpdated((event) => {
+      if (event.channel !== "dm" || event.conversationId !== conversationId) return;
+      queryClient.setQueryData([...pinQueryKey], event.pinnedMessage ?? null);
+    });
+    return () => {
+      off();
+    };
+  }, [conversationId, queryClient]);
+
+  const pinMutation = useMutation({
+    mutationFn: (messageId: string) =>
+      api.put<PinnedMessageSummary>(`/api/dms/${conversationId}/messages/pin`, { messageId }),
+    onSuccess: (data) => {
+      queryClient.setQueryData([...pinQueryKey], data);
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    },
+  });
+
+  const unpinMutation = useMutation({
+    mutationFn: () => api.delete(`/api/dms/${conversationId}/messages/pin`),
+    onSuccess: () => {
+      queryClient.setQueryData([...pinQueryKey], null);
+    },
+  });
+
+  const jumpToPinnedMessage = useCallback(async () => {
+    if (!pinnedMessage?.messageId || jumpingToPin) return;
+    setJumpingToPin(true);
+    try {
+      let guard = 0;
+      let pages =
+        queryClient.getQueryData<InfiniteData<MessagePage<DirectMessage>>>([
+          "dm-messages",
+          conversationId,
+        ])?.pages ?? [];
+      let loaded = flattenMessagePages<DirectMessage>(pages);
+      while (!loaded.some((m) => m.id === pinnedMessage.messageId) && guard < 40) {
+        guard += 1;
+        const result = await fetchNextPage();
+        pages = result.data?.pages ?? pages;
+        loaded = flattenMessagePages<DirectMessage>(pages);
+        if (!result.hasNextPage) break;
+      }
+      const nextList = [...buildMessageList(loaded)].reverse();
+      const index = nextList.findIndex(
+        (item) => !("type" in item) && (item as DirectMessage).id === pinnedMessage.messageId,
+      );
+      if (index < 0) return;
+      requestAnimationFrame(() => {
+        scrollToIndex(index, true);
+        setHighlightedMessageId(pinnedMessage.messageId);
+        setTimeout(() => setHighlightedMessageId(null), 1800);
+      });
+    } finally {
+      setJumpingToPin(false);
+    }
+  }, [
+    pinnedMessage?.messageId,
+    jumpingToPin,
+    queryClient,
+    conversationId,
+    fetchNextPage,
+    scrollToIndex,
+  ]);
 
   const sendMutation = useMutation({
     mutationFn: (payload: { content?: string; mediaUrl?: string; mediaType?: string; replyToId?: string; mentionedUserIds?: string[] }) =>
@@ -425,10 +516,11 @@ export default function DMChatScreen() {
   }, []);
 
   const handleLoadOlder = useCallback(() => {
+    if (!readyForOlderLoad) return;
     if (hasNextPage && !isFetchingNextPage) {
       void fetchNextPage();
     }
-  }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
+  }, [fetchNextPage, hasNextPage, isFetchingNextPage, readyForOlderLoad]);
 
   useEffect(() => {
     lastMessageIdRef.current = null;
@@ -440,7 +532,8 @@ export default function DMChatScreen() {
     const prevId = lastMessageIdRef.current;
     lastMessageIdRef.current = lastMsg.id;
     if (prevId !== lastMsg.id) {
-      followLatestIfNearBottom(true);
+      followLatestIfNearBottom(false);
+      setTimeout(() => followLatestIfNearBottom(false), 40);
     }
   }, [messages, followLatestIfNearBottom]);
 
@@ -448,8 +541,9 @@ export default function DMChatScreen() {
     if (messages.length > 0) {
       const lastMsg = messages[messages.length - 1];
       markAsRead(conversationId, lastMsg.id);
+      void queryClient.invalidateQueries({ queryKey: ["dm-unread-counts"] });
     }
-  }, [messages, conversationId, markAsRead]);
+  }, [messages, conversationId, markAsRead, queryClient]);
 
   useEffect(() => {
     if (!messages) return;
@@ -458,7 +552,12 @@ export default function DMChatScreen() {
 
   return (
     <SafeAreaView testID="dm-chat-screen" className="flex-1 bg-slate-50 dark:bg-slate-900" edges={["top"]}>
-      <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+      <LinearGradient
+        colors={["#4361EE", "#7C3AED"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={{ zIndex: 2, elevation: 4 }}
+      >
         <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 14, flexDirection: "row", alignItems: "center" }}>
           <TouchableOpacity onPress={() => router.back()} className="mr-3" testID="back-button">
             <ArrowLeft size={22} color="white" />
@@ -503,6 +602,19 @@ export default function DMChatScreen() {
           <Image source={require("@/assets/alenio-icon.png")} style={{ width: 30, height: 30, borderRadius: 6 }} />
         </View>
       </LinearGradient>
+
+      {pinnedMessage ? (
+        <PinnedMessageBar
+          pinned={pinnedMessage}
+          onPress={() => {
+            void jumpToPinnedMessage();
+          }}
+          onLongPress={() => {
+            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            unpinMutation.mutate();
+          }}
+        />
+      ) : null}
 
       {/* Media picker sheet */}
       <Modal visible={showMediaPicker} transparent animationType="slide" onRequestClose={() => setShowMediaPicker(false)}>
@@ -776,6 +888,8 @@ export default function DMChatScreen() {
 
       <SafeKeyboardAvoidingView
         className="flex-1"
+        automaticOffset
+        // Expo Go (RN KAV) still needs header compensation; native path zeros this when automaticOffset is on.
         keyboardVerticalOffset={Platform.OS === "ios" ? insets.top + 64 : 0}
       >
         {isLoading ? (
@@ -785,31 +899,34 @@ export default function DMChatScreen() {
         ) : messages.length === 0 ? (
           <DmChatEmptyState user={headerUser} isGroup={isGroup} />
         ) : (
-          <FlatList
-            key={conversationId}
-            ref={flatListRef}
-            style={{ flex: 1 }}
-            testID="dm-chat-message-list"
-            data={items}
-            keyExtractor={(item) => ("type" in item ? item.id : item.id)}
-            contentContainerStyle={{ paddingVertical: 12, paddingHorizontal: 12 }}
-            showsVerticalScrollIndicator={false}
-            initialScrollIndex={initialScrollIndex}
-            onScrollToIndexFailed={handleScrollToIndexFailed}
-            onLayout={handleListLayout}
-            onScroll={handleScroll}
-            scrollEventThrottle={16}
-            onContentSizeChange={handleContentSizeChange}
-            onStartReached={handleLoadOlder}
-            onStartReachedThreshold={0.15}
-            ListHeaderComponent={
-              isFetchingNextPage ? (
-                <View style={{ paddingVertical: 12, alignItems: "center" }}>
-                  <ActivityIndicator color="#4361EE" size="small" />
-                </View>
-              ) : null
-            }
-            renderItem={({ item }) => {
+          <View style={{ flex: 1, overflow: "hidden" }}>
+            <FlatList
+              key={conversationId}
+              ref={flatListRef}
+              style={{ flex: 1 }}
+              testID="dm-chat-message-list"
+              data={listData}
+              inverted
+              keyExtractor={(item) => ("type" in item ? item.id : item.id)}
+              contentContainerStyle={contentContainerStyle}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="interactive"
+              onScroll={handleScroll}
+              scrollEventThrottle={16}
+              onContentSizeChange={handleContentSizeChange}
+              onEndReached={handleLoadOlder}
+              onEndReachedThreshold={0.2}
+              onScrollToIndexFailed={handleScrollToIndexFailed}
+              maintainVisibleContentPosition={maintainVisibleContentPosition}
+              ListFooterComponent={
+                isFetchingNextPage ? (
+                  <View style={{ paddingVertical: 12, alignItems: "center" }}>
+                    <ActivityIndicator color="#4361EE" size="small" />
+                  </View>
+                ) : null
+              }
+              renderItem={({ item }) => {
               if ("type" in item && item.type === "date") {
                 return (
                   <View className="items-center my-3">
@@ -851,12 +968,14 @@ export default function DMChatScreen() {
                       interactive={false}
                       onReactionTap={(reactions) => setReactionView(reactions)}
                       hideBubble={messageMenu?.message.id === msg.id}
+                      highlighted={highlightedMessageId === msg.id}
                     />
                   </MessageLongPressRow>
                 </ReanimatedSwipeable>
               );
             }}
           />
+          </View>
         )}
 
         {/* Mention picker */}
@@ -891,13 +1010,16 @@ export default function DMChatScreen() {
           </View>
         ) : null}
 
-        {/* Input bar */}
+        {/* Input bar — solid sibling below the clipped list so messages can never draw underneath */}
         <View
           testID="dm-chat-input-bar"
           className="flex-row items-end px-3 bg-white dark:bg-slate-800 border-t border-slate-100 dark:border-slate-700"
           style={{
             paddingTop: 8,
-            paddingBottom: insets.bottom + 8,
+            // Drop home-indicator inset while keyboard is open — KAV already lifts to the keyboard.
+            paddingBottom: keyboardVisible ? 8 : insets.bottom + 8,
+            zIndex: 2,
+            elevation: 4,
           }}
         >
           <TouchableOpacity
@@ -975,6 +1097,19 @@ export default function DMChatScreen() {
             hidden: !messageMenu?.message.content,
             onPress: () => {
               if (messageMenu?.message.content) void Clipboard.setStringAsync(messageMenu.message.content);
+            },
+          },
+          {
+            id: "pin",
+            label: pinnedMessage?.messageId === messageMenu?.message.id ? "Unpin" : "Pin",
+            icon: Pin,
+            onPress: () => {
+              if (!messageMenu) return;
+              if (pinnedMessage?.messageId === messageMenu.message.id) {
+                unpinMutation.mutate();
+              } else {
+                pinMutation.mutate(messageMenu.message.id);
+              }
             },
           },
           {

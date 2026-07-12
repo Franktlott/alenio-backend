@@ -13,16 +13,15 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { LinearGradient } from "expo-linear-gradient";
-import { MessageCircle, Users, Lock, Plus, ChevronRight } from "lucide-react-native";
+import { MessageCircle, Users, Lock, Plus } from "lucide-react-native";
 import { router } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
 import { toast } from "burnt";
-import { fetchLatestTeamMessagePreview } from "@/lib/chat-message-pagination";
 import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
 import { useTeamStore } from "@/lib/state/team-store";
-import { useUnreadStore } from "@/lib/state/unread-store";
+import { useUnreadStore, buildDmLastReadMap, getDmUnreadCount } from "@/lib/state/unread-store";
 import type { Conversation, Team } from "@/lib/types";
 import { NoWorkspaceRedirect } from "@/components/NoWorkspaceRedirect";
 import { useSubscriptionStore } from "@/lib/state/subscription-store";
@@ -34,9 +33,179 @@ import { WorkspaceTeamAvatar } from "@/components/WorkspaceTeamUI";
 import { groupWorkspaceLabel } from "@/lib/group-workspace-label";
 import { AppTabHeader } from "@/components/AppTabHeader";
 import { AddMemberModal } from "@/components/AddMemberModal";
+import { SpacesSection } from "@/components/SpacesSection";
 import { inviteMemberByEmail } from "@/lib/team-invites-api";
 
 const PINNED_DMS_KEY = "pinned_dms";
+const MAX_DM_PINS = 4; // Team Chat always takes 1 of 5 top pin slots
+
+const cardStyle = {
+  marginHorizontal: 14,
+  marginBottom: 8,
+  backgroundColor: "white",
+  borderRadius: 12,
+  paddingVertical: 12,
+  paddingHorizontal: 14,
+  borderWidth: 1,
+  borderColor: "#E8ECF1",
+  shadowColor: "#0F172A",
+  shadowOpacity: 0.04,
+  shadowRadius: 6,
+  shadowOffset: { width: 0, height: 2 },
+  elevation: 1,
+} as const;
+
+const AVATAR = 40;
+const PIN_AVATAR = 48;
+const PIN_SLOT_WIDTH = 60;
+
+function SectionHeader({
+  title,
+  subtitle,
+  right,
+}: {
+  title: string;
+  subtitle: string;
+  right?: React.ReactNode;
+}) {
+  return (
+    <View
+      style={{
+        marginHorizontal: 14,
+        marginTop: 4,
+        marginBottom: 6,
+        flexDirection: "row",
+        alignItems: "flex-end",
+        justifyContent: "space-between",
+        gap: 12,
+      }}
+    >
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text
+          style={{
+            fontSize: 11,
+            fontWeight: "700",
+            color: "#64748B",
+            letterSpacing: 0.8,
+            textTransform: "uppercase",
+            marginBottom: 2,
+          }}
+        >
+          {title}
+        </Text>
+        <Text style={{ fontSize: 12, color: "#94A3B8", lineHeight: 16 }} numberOfLines={1}>
+          {subtitle}
+        </Text>
+      </View>
+      {right}
+    </View>
+  );
+}
+
+function ChatEmptyState({
+  image,
+  title,
+  titleAccent,
+  body,
+  primaryLabel,
+  onPrimary,
+  primaryIcon,
+  secondaryLabel,
+  onSecondary,
+  testID,
+  compact = false,
+}: {
+  image: number;
+  title: string;
+  titleAccent: string;
+  body: string;
+  primaryLabel?: string;
+  onPrimary?: () => void;
+  primaryIcon?: React.ReactNode;
+  secondaryLabel?: string;
+  onSecondary?: () => void;
+  testID?: string;
+  compact?: boolean;
+}) {
+  const imageSize = compact ? 72 : 96;
+  return (
+    <View
+      testID={testID}
+      style={[
+        cardStyle,
+        {
+          alignItems: "center",
+          paddingVertical: compact ? 12 : 14,
+          paddingHorizontal: 14,
+          marginBottom: compact ? 4 : 8,
+          backgroundColor: "#FFFFFF",
+        },
+      ]}
+    >
+      <Image
+        source={image}
+        style={{ width: imageSize, height: imageSize, marginBottom: 4 }}
+        resizeMode="contain"
+        accessibilityIgnoresInvertColors
+      />
+      <Text
+        style={{
+          fontSize: compact ? 15 : 16,
+          fontWeight: "800",
+          color: "#0F172A",
+          textAlign: "center",
+          letterSpacing: -0.3,
+          lineHeight: compact ? 20 : 22,
+          marginBottom: 4,
+          maxWidth: 300,
+        }}
+      >
+        {title} <Text style={{ color: "#7C3AED" }}>{titleAccent}</Text>
+      </Text>
+      <Text
+        style={{
+          fontSize: 12,
+          color: "#64748B",
+          textAlign: "center",
+          lineHeight: 17,
+          maxWidth: 300,
+          marginBottom: primaryLabel || secondaryLabel ? 10 : 0,
+        }}
+        numberOfLines={2}
+      >
+        {body}
+      </Text>
+      {primaryLabel && onPrimary ? (
+        <Pressable
+          onPress={onPrimary}
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 6,
+            backgroundColor: "#4361EE",
+            borderRadius: 10,
+            paddingHorizontal: 16,
+            paddingVertical: 9,
+            width: "100%",
+            maxWidth: 260,
+            marginBottom: secondaryLabel ? 6 : 0,
+          }}
+          accessibilityRole="button"
+          accessibilityLabel={primaryLabel}
+        >
+          {primaryIcon}
+          <Text style={{ color: "#FFFFFF", fontSize: 13, fontWeight: "700" }}>{primaryLabel}</Text>
+        </Pressable>
+      ) : null}
+      {secondaryLabel && onSecondary ? (
+        <Pressable onPress={onSecondary} accessibilityRole="button" accessibilityLabel={secondaryLabel} style={{ paddingVertical: 2 }}>
+          <Text style={{ color: "#4361EE", fontSize: 12, fontWeight: "600" }}>{secondaryLabel}</Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
 
 function formatTime(dateStr: string) {
   const d = new Date(dateStr);
@@ -46,28 +215,6 @@ function formatTime(dateStr: string) {
   if (diffDays === 1) return "Yesterday";
   if (diffDays < 7) return d.toLocaleDateString("en-US", { weekday: "short" });
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-}
-
-function AvatarStack({ members }: { members: { image: string | null; name: string | null }[] }) {
-  const shown = members.slice(0, 3);
-  return (
-    <View style={{ flexDirection: "row" }}>
-      {shown.map((m, i) => (
-        <UserAvatar
-          key={`${m.name ?? "u"}-${i}`}
-          user={m}
-          size={28}
-          radius={14}
-          style={{
-            marginLeft: i === 0 ? 0 : -8,
-            borderWidth: 2,
-            borderColor: "white",
-            zIndex: shown.length - i,
-          }}
-        />
-      ))}
-    </View>
-  );
 }
 
 export default function ChatScreen() {
@@ -80,22 +227,51 @@ export default function ChatScreen() {
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [pinnedDmIds, setPinnedDmIds] = useState<string[]>([]);
+  const [pinnedIds, setPinnedIds] = useState<string[]>([]);
+  const [pinsReady, setPinsReady] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
     AsyncStorage.getItem(PINNED_DMS_KEY).then((val) => {
+      if (cancelled) return;
       if (val) {
         try {
           const parsed = JSON.parse(val);
-          if (Array.isArray(parsed)) setPinnedDmIds(parsed);
+          if (Array.isArray(parsed)) {
+            setPinnedIds(
+              parsed
+                .filter((id): id is string => typeof id === "string" && !id.startsWith("team:"))
+                .slice(0, MAX_DM_PINS)
+            );
+          }
         } catch (_) {}
       }
+      setPinsReady(true);
     });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
-    AsyncStorage.setItem(PINNED_DMS_KEY, JSON.stringify(pinnedDmIds));
-  }, [pinnedDmIds]);
+    if (!pinsReady) return;
+    AsyncStorage.setItem(PINNED_DMS_KEY, JSON.stringify(pinnedIds));
+  }, [pinnedIds, pinsReady]);
+
+  const togglePin = async (id: string) => {
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (pinnedIds.includes(id)) {
+      setPinnedIds((prev) => prev.filter((x) => x !== id));
+      toast({ title: "Unpinned", preset: "done" });
+      return;
+    }
+    if (pinnedIds.length >= MAX_DM_PINS) {
+      toast({ title: "Maximum 5 pins reached", preset: "error" });
+      return;
+    }
+    setPinnedIds((prev) => [id, ...prev.filter((x) => x !== id)].slice(0, MAX_DM_PINS));
+    toast({ title: "Pinned to top", preset: "done" });
+  };
 
   const plan = useSubscriptionStore((s) => s.plan);
   const isPaid = plan === "team";
@@ -104,13 +280,6 @@ export default function ChatScreen() {
     queryKey: ["team", activeTeamId],
     queryFn: () => api.get<Team>(`/api/teams/${activeTeamId}`),
     enabled: !!activeTeamId,
-  });
-
-  const { data: teamGeneralMessages = [] } = useQuery({
-    queryKey: ["messages", activeTeamId, "general", "preview"],
-    queryFn: () => fetchLatestTeamMessagePreview(activeTeamId!),
-    enabled: !!activeTeamId,
-    refetchInterval: 10000,
   });
 
   const lastReadIds = useUnreadStore((s) => s.lastReadIds);
@@ -133,9 +302,7 @@ export default function ChatScreen() {
     refetchInterval: 5000,
   });
 
-  const dmLastReadIds = Object.fromEntries(
-    conversations.map((c) => [`conv:${c.id}`, lastReadIds[`conv:${c.id}`] ?? ""])
-  );
+  const dmLastReadIds = buildDmLastReadMap(conversations, lastReadIds);
   const { data: dmUnreadCounts = {} } = useQuery({
     queryKey: ["dm-unread-counts", dmLastReadIds],
     queryFn: () => api.post<Record<string, number>>("/api/dms/unread-counts", { lastReadIds: dmLastReadIds }),
@@ -148,6 +315,7 @@ export default function ChatScreen() {
     setRefreshing(true);
     await queryClient.invalidateQueries({ queryKey: ["dms"] });
     await queryClient.invalidateQueries({ queryKey: ["team", activeTeamId] });
+    await queryClient.invalidateQueries({ queryKey: ["topics", activeTeamId] });
     setRefreshing(false);
   };
 
@@ -174,11 +342,21 @@ export default function ChatScreen() {
   }
 
   const members = teamDetail?.members ?? [];
-  const memberCount = members.length;
-  const topThreeMembers = members.slice(0, 3).map((m) => ({ image: m.user.image ?? null, name: m.user.name ?? null }));
-  const lastGeneralMessage = teamGeneralMessages[0];
   const myRole = members.find((m) => m.userId === session?.user?.id || m.user.id === session?.user?.id)?.role ?? (teamDetail as Team & { role?: string } | undefined)?.role;
   const canInviteMembers = myRole === "owner" || myRole === "team_leader" || myRole === "admin";
+
+  const avatarUser = (
+    user: { id?: string; name?: string | null; email?: string | null; image?: string | null } | null | undefined,
+  ) => {
+    if (!user) return null;
+    const fromTeam = user.id
+      ? members.find((m) => m.user.id === user.id || m.userId === user.id)?.user
+      : null;
+    return {
+      ...user,
+      image: resolveUserImageUrl(user.image) ?? resolveUserImageUrl(fromTeam?.image) ?? user.image ?? fromTeam?.image ?? null,
+    };
+  };
 
   const openInviteTeamMembers = () => {
     if (canInviteMembers) {
@@ -190,8 +368,283 @@ export default function ChatScreen() {
     router.push("/(app)/team");
   };
 
+  const openTeamChat = () => {
+    router.push({
+      pathname: "/team-chat",
+      params: { teamId: activeTeamId, teamName: teamDetail?.name ?? "" },
+    });
+  };
+
+  const sortedUnpinnedDms = [...conversations]
+    .filter((c) => !pinnedIds.includes(c.id))
+    .sort((a, b) => {
+      const aTime = a.lastMessage?.createdAt ?? a.updatedAt;
+      const bTime = b.lastMessage?.createdAt ?? b.updatedAt;
+      return new Date(bTime).getTime() - new Date(aTime).getTime();
+    });
+
+  const pinnedConversations = pinnedIds
+    .map((id) => conversations.find((c) => c.id === id))
+    .filter((c): c is Conversation => !!c)
+    .slice(0, MAX_DM_PINS);
+
+  const canManageSpaces =
+    myRole === "owner" || myRole === "team_leader" || myRole === "admin";
+
+  const spacesBlock = (
+    <SpacesSection
+      teamId={activeTeamId}
+      teamName={teamDetail?.name ?? ""}
+      canManage={canManageSpaces}
+      cardStyle={cardStyle}
+      compactEmpty
+      fillHeight
+    />
+  );
+
+  const shortLabel = (name: string) => {
+    const first = name.trim().split(/\s+/)[0] || name;
+    return first.length > 9 ? `${first.slice(0, 8)}…` : first;
+  };
+
+  const openDm = (conv: Conversation) => {
+    const isGroup = conv.isGroup;
+    const otherUser = !isGroup ? avatarUser(dmOtherParticipant(conv, session?.user?.id ?? "")) : null;
+    const displayName = isGroup
+      ? (conv.name ?? conv.participants?.map((p) => p.name ?? "").filter(Boolean).join(", ") ?? "Group")
+      : (otherUser?.name?.trim() || otherUser?.email?.trim() || "Direct Message");
+    router.push({
+      pathname: "/dm-chat",
+      params: {
+        conversationId: conv.id,
+        recipientName: displayName,
+        recipientImage: resolveUserImageUrl(otherUser?.image) ?? "",
+        isGroup: isGroup ? "true" : "false",
+      },
+    });
+  };
+
+  const renderPinBadge = (count: number) =>
+    count > 0 ? (
+      <View
+        style={{
+          position: "absolute",
+          top: -2,
+          right: -2,
+          backgroundColor: "#EF4444",
+          borderRadius: 9,
+          minWidth: 18,
+          height: 18,
+          alignItems: "center",
+          justifyContent: "center",
+          paddingHorizontal: 4,
+          borderWidth: 2,
+          borderColor: "#F8F9FC",
+        }}
+      >
+        <Text style={{ color: "white", fontSize: 10, fontWeight: "700" }}>{count > 99 ? "99+" : count}</Text>
+      </View>
+    ) : null;
+
+  const renderPinnedRow = () => (
+    <View
+      testID="pinned-conversations-row"
+      style={{
+        paddingTop: 8,
+        paddingBottom: 6,
+        paddingHorizontal: 6,
+        flexShrink: 0,
+        borderBottomWidth: 1,
+        borderBottomColor: "#E8ECF1",
+        backgroundColor: "#F8F9FC",
+      }}
+    >
+      <Text
+        style={{
+          fontSize: 10,
+          fontWeight: "700",
+          color: "#94A3B8",
+          letterSpacing: 0.7,
+          textTransform: "uppercase",
+          textAlign: "center",
+          marginBottom: 6,
+        }}
+      >
+        Pinned
+      </Text>
+      <View
+        style={{
+          flexDirection: "row",
+          justifyContent: "center",
+          alignItems: "flex-start",
+          gap: 14,
+          paddingHorizontal: 8,
+        }}
+      >
+        <Pressable
+          key="pin-team"
+          testID="pinned-team-chat"
+          onPress={openTeamChat}
+          style={{ width: PIN_SLOT_WIDTH, alignItems: "center" }}
+          accessibilityRole="button"
+          accessibilityLabel="Team Chat"
+        >
+          <View style={{ width: PIN_AVATAR, height: PIN_AVATAR }}>
+            <WorkspaceTeamAvatar
+              team={{ name: teamDetail?.name ?? "Workspace", image: teamDetail?.image ?? null }}
+              size={PIN_AVATAR}
+              radius={PIN_AVATAR / 2}
+              backgroundColor="#EEF2FF"
+              textColor="#4361EE"
+              borderColor="#E0E7FF"
+            />
+            {renderPinBadge(teamChatUnreadCount)}
+          </View>
+          <Text style={{ marginTop: 4, fontSize: 11, fontWeight: "600", color: "#0F172A", textAlign: "center" }} numberOfLines={1}>
+            Team
+          </Text>
+        </Pressable>
+
+        {pinnedConversations.map((conv) => {
+          const unread = getDmUnreadCount(dmUnreadCounts, conv.id);
+          const isGroup = conv.isGroup;
+          const otherUser = !isGroup ? avatarUser(dmOtherParticipant(conv, session?.user?.id ?? "")) : null;
+          const displayName = isGroup
+            ? (conv.name ?? conv.participants?.map((p) => p.name ?? "").filter(Boolean).join(", ") ?? "Group")
+            : (otherUser?.name?.trim() || otherUser?.email?.trim() || "Chat");
+
+          return (
+            <Pressable
+              key={`pin-${conv.id}`}
+              testID={`pinned-dm-${conv.id}`}
+              onPress={() => openDm(conv)}
+              onLongPress={() => togglePin(conv.id)}
+              delayLongPress={350}
+              style={{ width: PIN_SLOT_WIDTH, alignItems: "center" }}
+              accessibilityRole="button"
+              accessibilityLabel={`${displayName}. Long press to unpin.`}
+            >
+              <View style={{ width: PIN_AVATAR, height: PIN_AVATAR }}>
+                {isGroup ? (
+                  <View
+                    style={{
+                      width: PIN_AVATAR,
+                      height: PIN_AVATAR,
+                      borderRadius: PIN_AVATAR / 2,
+                      backgroundColor: "#F5F3FF",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Users size={24} color="#7C3AED" />
+                  </View>
+                ) : otherUser ? (
+                  <UserAvatar
+                    user={otherUser}
+                    size={PIN_AVATAR}
+                    radius={PIN_AVATAR / 2}
+                    backgroundColor="#EEF2FF"
+                    textColor="#4361EE"
+                    fontSize={20}
+                  />
+                ) : (
+                  <View
+                    style={{
+                      width: PIN_AVATAR,
+                      height: PIN_AVATAR,
+                      borderRadius: PIN_AVATAR / 2,
+                      backgroundColor: "#EEF2FF",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <MessageCircle size={22} color="#4361EE" />
+                  </View>
+                )}
+                {renderPinBadge(unread)}
+              </View>
+              <Text style={{ marginTop: 4, fontSize: 11, fontWeight: "600", color: "#0F172A", textAlign: "center" }} numberOfLines={1}>
+                {shortLabel(displayName)}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+
+  const renderDmCard = (conv: Conversation) => {
+    const unreadCount = getDmUnreadCount(dmUnreadCounts, conv.id);
+    const isGroup = conv.isGroup;
+    const otherUser = !isGroup ? avatarUser(dmOtherParticipant(conv, session?.user?.id ?? "")) : null;
+    const displayName = isGroup
+      ? (conv.name ?? conv.participants?.map((p) => p.name ?? "").filter(Boolean).join(", ") ?? "Group")
+      : (otherUser?.name?.trim() || otherUser?.email?.trim() || "Direct Message");
+    const groupWorkspace = isGroup ? groupWorkspaceLabel(conv.workspaceContext) : null;
+    const lastMsg = conv.lastMessage;
+    const timeStr = lastMsg ? formatTime(lastMsg.createdAt) : (conv.updatedAt ? formatTime(conv.updatedAt) : "");
+
+    return (
+      <Pressable
+        key={conv.id}
+        testID={`dm-card-${conv.id}`}
+        onPress={() => openDm(conv)}
+        onLongPress={() => togglePin(conv.id)}
+        delayLongPress={350}
+        style={cardStyle}
+      >
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+          {isGroup ? (
+            <View style={{ width: AVATAR, height: AVATAR, borderRadius: 12, backgroundColor: "#F5F3FF", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <Users size={18} color="#7C3AED" />
+            </View>
+          ) : otherUser ? (
+            <UserAvatar
+              user={otherUser}
+              size={AVATAR}
+              radius={12}
+              backgroundColor="#EEF2FF"
+              textColor="#4361EE"
+              fontSize={15}
+            />
+          ) : (
+            <View style={{ width: AVATAR, height: AVATAR, borderRadius: 12, backgroundColor: "#EEF2FF", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <MessageCircle size={18} color="#4361EE" />
+            </View>
+          )}
+
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 2 }}>
+              <Text style={{ fontSize: 14, fontWeight: "700", color: "#0F172A", flex: 1 }} numberOfLines={1}>{displayName}</Text>
+              <Text style={{ fontSize: 10, color: "#94A3B8", marginLeft: 8, flexShrink: 0 }}>{timeStr}</Text>
+            </View>
+            {groupWorkspace ? (
+              <Text style={{ fontSize: 10, fontWeight: "600", color: "#6366F1", marginBottom: 2 }} numberOfLines={1}>
+                {groupWorkspace}
+              </Text>
+            ) : null}
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+              <Text style={{ fontSize: 12, color: "#6B7280", flex: 1 }} numberOfLines={1}>
+                {lastMsg
+                  ? `${lastMsg.sender.id === session?.user?.id ? "You" : (lastMsg.sender.name?.trim().split(/\s+/)[0] || "Someone")}: ${
+                      lastMsg.content?.trim() || "Attachment"
+                    }`
+                  : "No messages yet"}
+              </Text>
+              {unreadCount > 0 ? (
+                <View style={{ backgroundColor: "#EF4444", borderRadius: 9, minWidth: 18, height: 18, alignItems: "center", justifyContent: "center", paddingHorizontal: 5, marginLeft: 8, flexShrink: 0 }}>
+                  <Text style={{ color: "white", fontSize: 10, fontWeight: "700" }}>{unreadCount}</Text>
+                </View>
+              ) : null}
+            </View>
+          </View>
+        </View>
+      </Pressable>
+    );
+  };
+
   return (
-    <SafeAreaView testID="chat-screen" style={{ flex: 1, backgroundColor: "#F2F3F7" }} edges={[]}>
+    <SafeAreaView testID="chat-screen" style={{ flex: 1, backgroundColor: "#F8F9FC" }} edges={[]}>
       <AppTabHeader
         topInset={insets.top}
         testID="chat-header"
@@ -210,263 +663,56 @@ export default function ChatScreen() {
       />
 
       <View style={{ flex: 1, minHeight: 0, paddingBottom: tabBarClearance(insets.bottom, 8) }}>
-        {/* Current workspace — fixed */}
-        <Pressable
-          testID="team-chat-button"
-          onPress={() => router.push({ pathname: "/team-channels", params: { teamId: activeTeamId, teamName: teamDetail?.name ?? "" } })}
-          accessibilityRole="button"
-          accessibilityLabel="Open Team Chat"
-          style={{
-            marginHorizontal: 16,
-            marginTop: 20,
-            borderRadius: 20,
-            overflow: "hidden",
-            shadowColor: "#4361EE",
-            shadowOpacity: 0.3,
-            shadowRadius: 12,
-            shadowOffset: { width: 0, height: 4 },
-            elevation: 5,
-            flexShrink: 0,
-          }}
-        >
-          <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ padding: 16 }}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-              <WorkspaceTeamAvatar
-                team={{ name: teamDetail?.name ?? "Workspace", image: teamDetail?.image ?? null }}
-                size={48}
-                backgroundColor="rgba(255,255,255,0.18)"
-                textColor="#FFFFFF"
-                borderColor="rgba(255,255,255,0.3)"
-                radius={14}
-              />
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={{ fontSize: 12, color: "rgba(255,255,255,0.75)", fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.6 }}>
-                  Team Chat
-                </Text>
-                <Text style={{ fontSize: 16, fontWeight: "700", color: "white", marginTop: 2 }} numberOfLines={1}>
-                  {teamDetail?.name ?? "Workspace"}
-                </Text>
-              </View>
-              {topThreeMembers.length > 0 ? <AvatarStack members={topThreeMembers} /> : null}
-              {teamChatUnreadCount > 0 ? (
-                <View style={{ backgroundColor: "#EF4444", borderRadius: 10, minWidth: 20, height: 20, alignItems: "center", justifyContent: "center", paddingHorizontal: 6 }}>
-                  <Text style={{ color: "white", fontSize: 11, fontWeight: "700" }}>{teamChatUnreadCount}</Text>
-                </View>
-              ) : null}
-            </View>
-            <View style={{ height: 1, backgroundColor: "rgba(255,255,255,0.15)", marginTop: 14, marginBottom: 10 }} />
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-              <Text style={{ fontSize: 12, color: "rgba(255,255,255,0.7)", flex: 1 }} numberOfLines={1}>
-                {memberCount} {memberCount === 1 ? "member" : "members"}
-                {" · "}
-                {lastGeneralMessage
-                  ? `Last activity: ${formatTime(lastGeneralMessage.createdAt)}`
-                  : "No activity yet"}
-              </Text>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 5, flexShrink: 0 }}>
-                <MessageCircle size={14} color="rgba(255,255,255,0.95)" strokeWidth={2.4} />
-                <Text style={{ color: "white", fontSize: 13, fontWeight: "700" }}>Open</Text>
-                <ChevronRight size={15} color="rgba(255,255,255,0.9)" strokeWidth={2.5} />
-              </View>
-            </View>
-          </LinearGradient>
-        </Pressable>
+        {renderPinnedRow()}
 
-        {/* Messages section header — fixed */}
-        <View style={{ marginHorizontal: 16, marginTop: 16, marginBottom: 6, flexDirection: "row", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
-          <View>
-            <Text style={{ fontSize: 18, fontWeight: "700", color: "#0F172A" }}>Messages</Text>
-            <Text style={{ fontSize: 12, color: "#6B7280", marginTop: 1 }}>Direct & group conversations</Text>
-          </View>
+        {/* Messages panel — larger share of screen */}
+        <View style={{ flex: 3, minHeight: 0, flexBasis: 0 }}>
+          <SectionHeader
+            title="Messages"
+            subtitle={
+              conversationsLoading
+                ? "Loading conversations…"
+                : conversations.length === 0
+                  ? "Direct & group conversations"
+                  : `${conversations.length} conversation${conversations.length === 1 ? "" : "s"}`
+            }
+          />
+          <ScrollView
+            style={{ flex: 1, minHeight: 0 }}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: 6, flexGrow: conversations.length === 0 ? 1 : undefined }}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" />}
+            keyboardShouldPersistTaps="handled"
+            nestedScrollEnabled
+          >
+            {conversationsLoading ? (
+              <View style={{ paddingVertical: 24, alignItems: "center" }}>
+                <ActivityIndicator color="#4361EE" />
+              </View>
+            ) : conversations.length === 0 ? (
+              <ChatEmptyState
+                testID="conversations-empty-state"
+                compact
+                image={require("@/assets/dm-empty-start.png")}
+                title="Start with"
+                titleAccent="one conversation."
+                body="Message a teammate privately, or open Team Chat from the pin above."
+                primaryLabel="New message"
+                primaryIcon={<MessageCircle size={15} color="#FFFFFF" strokeWidth={2.4} />}
+                onPrimary={() => setShowAddModal(true)}
+                secondaryLabel={canInviteMembers ? "Invite a teammate" : undefined}
+                onSecondary={canInviteMembers ? openInviteTeamMembers : undefined}
+              />
+            ) : (
+              sortedUnpinnedDms.map((conv) => renderDmCard(conv))
+            )}
+          </ScrollView>
         </View>
 
-        {/* Conversations list — only this area scrolls (disabled when empty so CTAs stay visible) */}
-        <ScrollView
-          style={{ flex: 1, minHeight: 0 }}
-          showsVerticalScrollIndicator={false}
-          scrollEnabled={conversationsLoading || conversations.length > 0}
-          contentContainerStyle={{ paddingBottom: conversations.length === 0 ? 8 : 16, flexGrow: 1 }}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" />}
-          keyboardShouldPersistTaps="handled"
-        >
-          {conversationsLoading ? (
-            <View style={{ paddingVertical: 24, alignItems: "center" }}>
-              <ActivityIndicator color="#4361EE" />
-            </View>
-          ) : conversations.length === 0 ? (
-            <View
-              style={{
-                flex: 1,
-                alignItems: "center",
-                justifyContent: "center",
-                paddingHorizontal: 20,
-                paddingTop: 4,
-                paddingBottom: 8,
-              }}
-              testID="conversations-empty-state"
-            >
-              <Image
-                source={require("@/assets/messages-empty-team.png")}
-                style={{ width: "100%", maxWidth: 260, height: 132, marginBottom: 10 }}
-                resizeMode="contain"
-                accessibilityIgnoresInvertColors
-              />
-              <Text
-                style={{
-                  fontSize: 17,
-                  fontWeight: "800",
-                  color: "#0F172A",
-                  textAlign: "center",
-                  letterSpacing: -0.3,
-                  lineHeight: 23,
-                  marginBottom: 6,
-                  maxWidth: 300,
-                }}
-              >
-                Every great team starts with{"\n"}
-                <Text style={{ color: "#7C3AED" }}>one conversation.</Text>
-              </Text>
-              <Text
-                style={{
-                  fontSize: 12.5,
-                  color: "#64748B",
-                  textAlign: "center",
-                  lineHeight: 18,
-                  maxWidth: 290,
-                  marginBottom: 14,
-                }}
-              >
-                Keep questions, updates, wins, and decisions in one place so your team always stays connected.
-              </Text>
-              <Pressable
-                onPress={() =>
-                  router.push({
-                    pathname: "/team-channels",
-                    params: { teamId: activeTeamId, teamName: teamDetail?.name ?? "" },
-                  })
-                }
-                style={{
-                  width: "100%",
-                  maxWidth: 300,
-                  borderRadius: 12,
-                  overflow: "hidden",
-                  marginBottom: 10,
-                  shadowColor: "#4361EE",
-                  shadowOpacity: 0.22,
-                  shadowRadius: 8,
-                  shadowOffset: { width: 0, height: 3 },
-                  elevation: 3,
-                }}
-                testID="empty-start-team-chat"
-                accessibilityRole="button"
-                accessibilityLabel="Start Team Chat"
-              >
-                <LinearGradient
-                  colors={["#4361EE", "#7C3AED"]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: 7,
-                    paddingVertical: 12,
-                    paddingHorizontal: 16,
-                  }}
-                >
-                  <MessageCircle size={16} color="#FFFFFF" strokeWidth={2.4} />
-                  <Text style={{ color: "#FFFFFF", fontSize: 14, fontWeight: "700" }}>Start Team Chat</Text>
-                </LinearGradient>
-              </Pressable>
-              <Pressable
-                onPress={openInviteTeamMembers}
-                style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 4 }}
-                testID="empty-invite-team-members"
-                accessibilityRole="button"
-                accessibilityLabel="Invite Team Members"
-              >
-                <Users size={14} color="#4361EE" strokeWidth={2.3} />
-                <Text style={{ color: "#4361EE", fontSize: 13, fontWeight: "600" }}>Invite Team Members</Text>
-              </Pressable>
-            </View>
-          ) : (
-            conversations.map((conv) => {
-              const unreadCount = dmUnreadCounts[`conv:${conv.id}`] ?? 0;
-              const isGroup = conv.isGroup;
-              const otherUser = !isGroup ? dmOtherParticipant(conv, session?.user?.id ?? "") : null;
-              const displayName = isGroup
-                ? (conv.name ?? conv.participants?.map((p) => p.name ?? "").filter(Boolean).join(", ") ?? "Group")
-                : (otherUser?.name?.trim() || otherUser?.email?.trim() || "Direct Message");
-              const groupWorkspace = isGroup ? groupWorkspaceLabel(conv.workspaceContext) : null;
-              const lastMsg = conv.lastMessage;
-              const timeStr = lastMsg ? formatTime(lastMsg.createdAt) : (conv.updatedAt ? formatTime(conv.updatedAt) : "");
-
-              return (
-                <Pressable
-                  key={conv.id}
-                  testID={`dm-card-${conv.id}`}
-                  onPress={() =>
-                    router.push({
-                      pathname: "/dm-chat",
-                      params: {
-                        conversationId: conv.id,
-                        recipientName: displayName,
-                        recipientImage: resolveUserImageUrl(otherUser?.image) ?? "",
-                        isGroup: isGroup ? "true" : "false",
-                      },
-                    })
-                  }
-                  style={{ marginHorizontal: 16, marginBottom: 10, backgroundColor: "white", borderRadius: 20, padding: 14, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 6, shadowOffset: { width: 0, height: 1 }, elevation: 1 }}
-                >
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-                    {isGroup ? (
-                      <View style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: "#F5F3FF", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                        <Users size={22} color="#7C3AED" />
-                      </View>
-                    ) : otherUser ? (
-                      <UserAvatar
-                        user={otherUser}
-                        size={48}
-                        radius={14}
-                        backgroundColor="#EEF2FF"
-                        textColor="#4361EE"
-                        fontSize={18}
-                      />
-                    ) : (
-                      <View style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: "#EEF2FF", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                        <MessageCircle size={22} color="#4361EE" />
-                      </View>
-                    )}
-
-                    <View style={{ flex: 1 }}>
-                      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 3 }}>
-                        <Text style={{ fontSize: 15, fontWeight: "700", color: "#0F172A", flex: 1 }} numberOfLines={1}>{displayName}</Text>
-                        <Text style={{ fontSize: 11, color: "#94A3B8", marginLeft: 8, flexShrink: 0 }}>{timeStr}</Text>
-                      </View>
-                      {groupWorkspace ? (
-                        <Text style={{ fontSize: 11, fontWeight: "600", color: "#6366F1", marginBottom: 3 }} numberOfLines={1}>
-                          {groupWorkspace}
-                        </Text>
-                      ) : null}
-                      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                        <Text style={{ fontSize: 13, color: "#6B7280", flex: 1 }} numberOfLines={1}>
-                          {lastMsg
-                            ? (lastMsg.sender.id === session?.user?.id ? `You: ${lastMsg.content}` : lastMsg.content ?? "Attachment")
-                            : "No messages yet"}
-                        </Text>
-                        {unreadCount > 0 ? (
-                          <View style={{ backgroundColor: "#EF4444", borderRadius: 10, minWidth: 20, height: 20, alignItems: "center", justifyContent: "center", paddingHorizontal: 6, marginLeft: 8, flexShrink: 0 }}>
-                            <Text style={{ color: "white", fontSize: 11, fontWeight: "700" }}>{unreadCount}</Text>
-                          </View>
-                        ) : null}
-                      </View>
-                    </View>
-                  </View>
-                </Pressable>
-              );
-            })
-          )}
-        </ScrollView>
+        {/* Spaces panel — smaller share; empty card fills to bottom */}
+        <View style={{ flex: 2, minHeight: 0, flexBasis: 0, borderTopWidth: 1, borderTopColor: "#E8ECF1" }}>
+          {spacesBlock}
+        </View>
       </View>
 
       {/* Add / New Conversation modal */}

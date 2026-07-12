@@ -100,6 +100,15 @@ function WorkspaceRowContent({
   );
 }
 
+function workspaceSubtitle(team: TeamWithRole, isActive: boolean) {
+  const role = formatTeamRole(team.role);
+  const code = team.inviteCode?.trim();
+  const parts = [role];
+  if (isActive) parts.push("Current");
+  if (code) parts.push(`Code ${code}`);
+  return parts.join(" · ");
+}
+
 function ActiveWorkspaceRow({
   team,
   pendingCount,
@@ -144,7 +153,7 @@ function ActiveWorkspaceRow({
         team={team}
         isActive
         title={team.name}
-        subtitle={`${formatTeamRole(team.role)} · Current`}
+        subtitle={workspaceSubtitle(team, true)}
         pendingCount={pendingCount}
         trailing={trailing}
       />
@@ -400,7 +409,7 @@ export function ProfileWorkspaceList({
                                 team={team}
                                 isActive={isActive}
                                 title={team.name}
-                                subtitle={`${formatTeamRole(team.role)}${isActive ? " · Current" : ""}`}
+                                subtitle={workspaceSubtitle(team, isActive)}
                                 pendingCount={pending}
                                 trailing={
                                   isActive ? (

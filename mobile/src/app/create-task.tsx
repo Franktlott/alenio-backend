@@ -489,7 +489,7 @@ export default function CreateTaskScreen() {
                 <View className="flex-1 justify-end">
                   <View className="bg-white dark:bg-slate-900 rounded-t-3xl" style={{ shadowColor: "#000", shadowOpacity: 0.15, shadowRadius: 20 }}>
                     <View className="flex-row items-center justify-between px-5 pt-4 pb-2">
-                      <TouchableOpacity onPress={() => { setShowDatePicker(false); setDueDate(null); }}>
+                      <TouchableOpacity onPress={() => setShowDatePicker(false)}>
                         <Text className="text-slate-500 text-base">Cancel</Text>
                       </TouchableOpacity>
                       <Text className="text-base font-semibold text-slate-900 dark:text-white">Due Date</Text>
@@ -500,13 +500,33 @@ export default function CreateTaskScreen() {
                     <DateTimePicker
                       value={dueDate ?? new Date()}
                       mode="date"
-                      display="spinner"
+                      display="inline"
                       minimumDate={isRegularMember ? new Date() : undefined}
                       onChange={(_e, date) => { if (date) { date.setHours(23, 59, 59, 0); setDueDate(date); setError(null); } }}
                       testID="date-time-picker"
-                      style={{ height: 200 }}
+                      style={{ alignSelf: "center", marginHorizontal: 8 }}
                     />
-                    <View style={{ height: 20 }} />
+                    <TouchableOpacity
+                      onPress={() => {
+                        setDueDate(null);
+                        setShowDatePicker(false);
+                      }}
+                      style={{
+                        marginHorizontal: 20,
+                        marginTop: 4,
+                        marginBottom: 8,
+                        paddingVertical: 12,
+                        borderRadius: 12,
+                        backgroundColor: "#F8FAFC",
+                        borderWidth: 1,
+                        borderColor: "#E2E8F0",
+                        alignItems: "center",
+                      }}
+                      testID="clear-due-date-sheet-button"
+                    >
+                      <Text style={{ fontSize: 14, fontWeight: "600", color: "#EF4444" }}>Clear date</Text>
+                    </TouchableOpacity>
+                    <View style={{ height: 8 }} />
                   </View>
                 </View>
               </Modal>

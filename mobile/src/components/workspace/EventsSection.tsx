@@ -1,20 +1,21 @@
 import type { ReactElement } from "react";
 import { View, Text, Pressable, ScrollView, Image, useWindowDimensions, type RefreshControlProps } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   Clock,
   Users,
   Video,
   UserRound,
   ClipboardList,
-  MoreVertical,
   Plus,
 } from "lucide-react-native";
-import type { CalendarEvent } from "@/lib/types";
+import type { CalendarEvent, Task } from "@/lib/types";
 import type { USFederalHoliday } from "@/lib/us-federal-holidays";
 import {
   eventShowsScheduledTime,
   formatEventTimeRange,
 } from "@/lib/format-event-time";
+import { tabBarClearance } from "@/lib/tab-bar";
 import { WS } from "./workspace-ui";
 
 const EVENT_CARD_HEIGHT = 44;
@@ -27,20 +28,20 @@ type EventRow = {
   subtitle: string;
   accentColor: string;
   badge: string;
-  badgeTone: "meeting" | "oneOnOne" | "task" | "holiday" | "routine";
+  badgeTone: "meeting" | "oneOnOne" | "task" | "holiday" | "routine" | "outlook";
   timeLabel: string;
-  kind: "holiday" | "event";
+  kind: "holiday" | "event" | "task";
   isVideoMeeting?: boolean;
   isOneOnOne?: boolean;
   canManage?: boolean;
   onLongPress?: () => void;
   onPress?: () => void;
-  onMenu?: () => void;
 };
 
 type Props = {
   dayEvents: CalendarEvent[];
   dayHolidays: USFederalHoliday[];
+  dayTasks?: Task[];
   selectedDayIso?: string | null;
   variant?: "carousel" | "dayList";
   fillRemaining?: boolean;
@@ -49,7 +50,8 @@ type Props = {
   canManageEvent?: (event: CalendarEvent) => boolean;
   onEventLongPress?: (event: CalendarEvent) => void;
   onEventPress?: (event: CalendarEvent) => void;
-  onEventMenu?: (event: CalendarEvent) => void;
+  onTaskPress?: (task: Task) => void;
+  onTaskLongPress?: (task: Task) => void;
   onAddEvent?: () => void;
 };
 
@@ -63,6 +65,8 @@ function badgeColors(tone: EventRow["badgeTone"]) {
       return { bg: "#FEF2F2", text: "#B91C1C" };
     case "routine":
       return { bg: "#F5F3FF", text: "#6D28D9" };
+    case "outlook":
+      return { bg: "#F1F5F9", text: "#64748B" };
     default:
       return { bg: "#EEF2FF", text: "#4361EE" };
   }
@@ -129,12 +133,12 @@ function CompactEventCard({
 function DayListEventCard({ row }: { row: EventRow }) {
   const Icon = row.kind === "holiday"
     ? Clock
-    : row.isOneOnOne
-      ? UserRound
-      : row.isVideoMeeting
-        ? Video
-        : row.badgeTone === "task"
-          ? ClipboardList
+    : row.kind === "task" || row.badgeTone === "task"
+      ? ClipboardList
+      : row.isOneOnOne
+        ? UserRound
+        : row.isVideoMeeting
+          ? Video
           : Users;
   const iconBg =
     row.kind === "holiday"
@@ -193,20 +197,6 @@ function DayListEventCard({ row }: { row: EventRow }) {
         </Text>
       </View>
       <EventBadge label={row.badge} tone={row.badgeTone} />
-      {row.canManage && row.onMenu ? (
-        <Pressable
-          onPress={(e) => {
-            e?.stopPropagation?.();
-            row.onMenu?.();
-          }}
-          hitSlop={8}
-          style={{ marginLeft: 6, padding: 2 }}
-          accessibilityRole="button"
-          accessibilityLabel="Event actions"
-        >
-          <MoreVertical size={16} color="#64748B" />
-        </Pressable>
-      ) : null}
     </Pressable>
   );
 }
@@ -220,53 +210,94 @@ function softIconBg(hex: string): string {
 function buildEventRows(
   dayHolidays: USFederalHoliday[],
   dayEvents: CalendarEvent[],
+  dayTasks: Task[],
   onEventLongPress?: (event: CalendarEvent) => void,
   onEventPress?: (event: CalendarEvent) => void,
-  onEventMenu?: (event: CalendarEvent) => void,
   canManageEvent?: (event: CalendarEvent) => boolean,
+  onTaskPress?: (task: Task) => void,
+  onTaskLongPress?: (task: Task) => void,
 ): EventRow[] {
-  return [
-    ...dayHolidays.map((h) => ({
-      key: `holiday-${h.name}`,
-      title: h.name,
-      subtitle: "Federal Holiday",
-      accentColor: "#EF4444",
-      badge: "Holiday",
-      badgeTone: "holiday" as const,
-      timeLabel: "All day",
-      kind: "holiday" as const,
+  const holidayRows: EventRow[] = dayHolidays.map((h) => ({
+    key: `holiday-${h.name}`,
+    title: h.name,
+    subtitle: "Federal Holiday",
+    accentColor: "#EF4444",
+    badge: "Holiday",
+    badgeTone: "holiday" as const,
+    timeLabel: "All day",
+    kind: "holiday" as const,
+    canManage: false,
+  }));
+
+  const eventRows: EventRow[] = dayEvents.map((ev) => {
+    const timed = eventShowsScheduledTime(ev);
+    const isExternal = ev.isExternal === true;
+    const isOneOnOne = !isExternal && ev.isOneOnOne === true;
+    const badge = isExternal ? "Outlook" : isOneOnOne ? "1:1" : ev.isVideoMeeting ? "Meeting" : "Event";
+    const badgeTone = isExternal
+      ? ("outlook" as const)
+      : isOneOnOne
+        ? ("oneOnOne" as const)
+        : ("meeting" as const);
+    const timeLabel = timed ? formatEventTimeRange(ev.startDate, ev.endDate).split("–")[0]?.trim() || "All day" : "All day";
+    const canManage = isExternal ? false : canManageEvent ? canManageEvent(ev) : true;
+    return {
+      key: ev.id,
+      title: ev.title,
+      subtitle: isExternal
+        ? "Private · Outlook"
+        : ev.description?.trim() || (ev.isVideoMeeting ? "Video meeting" : isOneOnOne ? "Check-in" : "Calendar event"),
+      accentColor: isExternal ? "#94A3B8" : ev.color,
+      badge,
+      badgeTone,
+      timeLabel,
+      kind: "event" as const,
+      isVideoMeeting: ev.isVideoMeeting,
+      isOneOnOne,
+      canManage,
+      onLongPress: canManage && onEventLongPress ? () => onEventLongPress(ev) : undefined,
+      onPress: isExternal ? undefined : onEventPress ? () => onEventPress(ev) : undefined,
+    };
+  });
+
+  const taskRows: EventRow[] = dayTasks.map((task) => {
+    const assigneeNames = (task.assignments ?? [])
+      .map((a) => a.user?.name?.trim() || a.user?.email)
+      .filter(Boolean)
+      .slice(0, 2);
+    const more = (task.assignments?.length ?? 0) > 2 ? ` +${(task.assignments?.length ?? 0) - 2}` : "";
+    const subtitle =
+      task.status === "done"
+        ? "Completed"
+        : assigneeNames.length > 0
+          ? `${assigneeNames.join(", ")}${more}`
+          : "Task";
+    const due = task.dueDate ? new Date(task.dueDate) : null;
+    const timeLabel = due
+      ? due.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
+      : "Task";
+    return {
+      key: `task-${task.id}`,
+      title: task.title,
+      subtitle,
+      accentColor: task.status === "done" ? "#94A3B8" : "#F59E0B",
+      badge: "Task",
+      badgeTone: "task" as const,
+      timeLabel,
+      kind: "task" as const,
       canManage: false,
-    })),
-    ...dayEvents.map((ev) => {
-      const timed = eventShowsScheduledTime(ev);
-      const isOneOnOne = ev.isOneOnOne === true;
-      const badge = isOneOnOne ? "1:1" : ev.isVideoMeeting ? "Meeting" : "Event";
-      const badgeTone = isOneOnOne ? ("oneOnOne" as const) : ("meeting" as const);
-      const timeLabel = timed ? formatEventTimeRange(ev.startDate, ev.endDate).split("–")[0]?.trim() || "All day" : "All day";
-      const canManage = canManageEvent ? canManageEvent(ev) : true;
-      return {
-        key: ev.id,
-        title: ev.title,
-        subtitle: ev.description?.trim() || (ev.isVideoMeeting ? "Video meeting" : isOneOnOne ? "Check-in" : "Calendar event"),
-        accentColor: ev.color,
-        badge,
-        badgeTone,
-        timeLabel,
-        kind: "event" as const,
-        isVideoMeeting: ev.isVideoMeeting,
-        isOneOnOne,
-        canManage,
-        onLongPress: canManage && onEventLongPress ? () => onEventLongPress(ev) : undefined,
-        onPress: onEventPress ? () => onEventPress(ev) : undefined,
-        onMenu: canManage && onEventMenu ? () => onEventMenu(ev) : undefined,
-      };
-    }),
-  ];
+      onPress: onTaskPress ? () => onTaskPress(task) : undefined,
+      onLongPress: onTaskLongPress ? () => onTaskLongPress(task) : undefined,
+    };
+  });
+
+  return [...holidayRows, ...eventRows, ...taskRows];
 }
 
 export function EventsSection({
   dayEvents,
   dayHolidays,
+  dayTasks = [],
   selectedDayIso,
   variant = "carousel",
   fillRemaining = false,
@@ -275,13 +306,26 @@ export function EventsSection({
   canManageEvent,
   onEventLongPress,
   onEventPress,
-  onEventMenu,
+  onTaskPress,
+  onTaskLongPress,
   onAddEvent,
 }: Props) {
+  const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
   const contentWidth = screenWidth - SECTION_HORIZONTAL_PADDING * 2;
-  const rows = buildEventRows(dayHolidays, dayEvents, onEventLongPress, onEventPress, onEventMenu, canManageEvent);
+  const rows = buildEventRows(
+    dayHolidays,
+    dayEvents,
+    variant === "dayList" ? dayTasks : [],
+    onEventLongPress,
+    onEventPress,
+    canManageEvent,
+    onTaskPress,
+    onTaskLongPress,
+  );
   const cardWidth = rows.length <= 1 ? contentWidth : Math.round(contentWidth * 0.78);
+  const eventCount = dayHolidays.length + dayEvents.length;
+  const taskCount = variant === "dayList" ? dayTasks.length : 0;
 
   if (variant === "dayList") {
     const dayLabel = selectedDayIso
@@ -292,14 +336,22 @@ export function EventsSection({
           year: "numeric",
         })
       : "Select a day";
-    const countLabel = `${rows.length} event${rows.length === 1 ? "" : "s"}`;
+    const countLabel =
+      eventCount === 0 && taskCount === 0
+        ? "0 items"
+        : [
+            eventCount > 0 ? `${eventCount} event${eventCount === 1 ? "" : "s"}` : null,
+            taskCount > 0 ? `${taskCount} task${taskCount === 1 ? "" : "s"}` : null,
+          ]
+            .filter(Boolean)
+            .join(" · ");
 
     return (
       <View
         style={{
           marginHorizontal: SECTION_HORIZONTAL_PADDING,
           marginTop: WS.sectionGap,
-          marginBottom: 4,
+          marginBottom: 0,
           flex: fillRemaining ? 1 : undefined,
           minHeight: fillRemaining ? 0 : undefined,
         }}
@@ -312,58 +364,53 @@ export function EventsSection({
         </View>
 
         {rows.length === 0 ? (
-          <ScrollView
-            style={{ flex: fillRemaining ? 1 : undefined }}
-            showsVerticalScrollIndicator={false}
-            refreshControl={refreshControl}
-            contentContainerStyle={{
-              flexGrow: 1,
-              paddingBottom: listPaddingBottom,
-              justifyContent: fillRemaining ? "center" : undefined,
-            }}
+          <View
+            style={{ flex: 1, minHeight: 0, marginBottom: tabBarClearance(insets.bottom, 8) }}
+            testID="calendar-day-empty-wrap"
           >
             <View
               style={{
+                flex: 1,
                 alignItems: "center",
+                justifyContent: "center",
                 backgroundColor: WS.surface,
-                borderRadius: 16,
+                borderRadius: 14,
                 borderWidth: 1,
                 borderColor: WS.cardBorder,
-                paddingHorizontal: 24,
-                paddingTop: 28,
-                paddingBottom: 24,
+                paddingHorizontal: 20,
+                paddingVertical: 28,
               }}
               testID="calendar-day-empty-state"
             >
               <Image
                 source={require("@/assets/calendar-empty-day.png")}
-                style={{ width: 148, height: 148, marginBottom: 10 }}
+                style={{ width: 96, height: 96, marginBottom: 10 }}
                 resizeMode="contain"
                 accessibilityIgnoresInvertColors
               />
               <Text
                 style={{
-                  fontSize: 18,
+                  fontSize: 17,
                   fontWeight: "800",
                   color: WS.ink,
                   textAlign: "center",
                   letterSpacing: -0.2,
-                  marginBottom: 8,
+                  marginBottom: 6,
                 }}
               >
-                No events scheduled
+                Nothing scheduled
               </Text>
               <Text
                 style={{
-                  fontSize: 14,
+                  fontSize: 13,
                   color: WS.muted,
                   textAlign: "center",
-                  lineHeight: 20,
+                  lineHeight: 18,
                   maxWidth: 280,
-                  marginBottom: onAddEvent ? 20 : 0,
+                  marginBottom: onAddEvent ? 16 : 0,
                 }}
               >
-                Looks like you have an open day. Tap “+ Add Event” to get started.
+                No events or tasks for this day. Tap “+ Add” to get started.
               </Text>
               {onAddEvent ? (
                 <Pressable
@@ -372,23 +419,23 @@ export function EventsSection({
                     flexDirection: "row",
                     alignItems: "center",
                     justifyContent: "center",
-                    gap: 6,
+                    gap: 5,
                     backgroundColor: WS.accent,
-                    borderRadius: 12,
-                    paddingHorizontal: 18,
-                    paddingVertical: 12,
-                    minWidth: 160,
+                    borderRadius: 10,
+                    paddingHorizontal: 16,
+                    paddingVertical: 11,
+                    minWidth: 148,
                   }}
                   testID="calendar-empty-add-event"
                   accessibilityRole="button"
-                  accessibilityLabel="Add Event"
+                  accessibilityLabel="Add"
                 >
-                  <Plus size={16} color="#FFFFFF" strokeWidth={2.5} />
-                  <Text style={{ color: "#FFFFFF", fontSize: 14, fontWeight: "700" }}>Add Event</Text>
+                  <Plus size={15} color="#FFFFFF" strokeWidth={2.5} />
+                  <Text style={{ color: "#FFFFFF", fontSize: 14, fontWeight: "700" }}>Add</Text>
                 </Pressable>
               ) : null}
             </View>
-          </ScrollView>
+          </View>
         ) : (
           <ScrollView
             style={{ flex: fillRemaining ? 1 : undefined }}

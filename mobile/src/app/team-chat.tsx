@@ -13,10 +13,10 @@ import {
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { usePaginatedTeamMessages } from "@/lib/chat-message-pagination";
+import { usePaginatedTeamMessages, flattenMessagePages } from "@/lib/chat-message-pagination";
 import { useChatListScroll } from "@/hooks/use-chat-scroll";
 import { LinearGradient } from "expo-linear-gradient";
-import { ArrowLeft, Send, Paperclip, X, Video, Camera, ImageIcon, BarChart2, Reply, Copy, Pencil, Trash2 } from "lucide-react-native";
+import { ArrowLeft, Send, Paperclip, X, Video, Camera, ImageIcon, BarChart2, Reply, Copy, Pencil, Trash2, Pin } from "lucide-react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { api } from "@/lib/api/api";
 import { useSession } from "@/lib/auth/use-session";
@@ -27,13 +27,19 @@ import { ChatMessage } from "@/components/ChatMessage";
 import { MessageActionSheet, type MessageAnchorLayout } from "@/components/MessageActionSheet";
 import { MessageLongPressRow } from "@/components/MessageLongPressRow";
 import { ImageSendPreview } from "@/components/ImageSendPreview";
+import { PinnedMessageBar } from "@/components/PinnedMessageBar";
 import { MentionPicker } from "@/components/MentionPicker";
-import type { Message, Team, MessageReaction } from "@/lib/types";
+import type { Message, Team, MessageReaction, PinnedMessageSummary } from "@/lib/types";
 import { useMention } from "@/lib/useMention";
-import { SafeKeyboardAvoidingView } from "@/lib/safe-keyboard-controller";
+import { SafeKeyboardAvoidingView, useSafeKeyboardVisible } from "@/lib/safe-keyboard-controller";
 import { WorkspaceTeamAvatar } from "@/components/WorkspaceTeamUI";
+import { SpaceAvatar } from "@/components/SpaceAvatar";
+import type { SpaceTopic } from "@/components/SpacesSection";
+import { realtimeClient } from "@/lib/realtime-client";
 import * as Clipboard from "expo-clipboard";
-
+import * as Haptics from "expo-haptics";
+import type { InfiniteData } from "@tanstack/react-query";
+import type { MessagePage } from "@/lib/chat-message-pagination";
 function formatDateLabel(dateStr: string) {
   const d = new Date(dateStr);
   const today = new Date();
@@ -215,9 +221,16 @@ function PollCard({
 }
 
 export default function TeamChatScreen() {
-  const { teamId, teamName, topicId, topicName } = useLocalSearchParams<{ teamId: string; teamName: string; topicId?: string; topicName?: string }>();
+  const { teamId, teamName, topicId, topicName, topicImage } = useLocalSearchParams<{
+    teamId: string;
+    teamName: string;
+    topicId?: string;
+    topicName?: string;
+    topicImage?: string;
+  }>();
   const { data: session } = useSession();
   const insets = useSafeAreaInsets();
+  const keyboardVisible = useSafeKeyboardVisible();
   const queryClient = useQueryClient();
   const [input, setInput] = useState("");
   const [replyTo, setReplyTo] = useState<Message | null>(null);
@@ -236,6 +249,8 @@ export default function TeamChatScreen() {
   const [pollAllowLeaderDelete, setPollAllowLeaderDelete] = useState<boolean>(true);
   const [confirmDeletePollId, setConfirmDeletePollId] = useState<string | null>(null);
   const [confirmEndPollId, setConfirmEndPollId] = useState<string | null>(null);
+  const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
+  const [jumpingToPin, setJumpingToPin] = useState(false);
   const currentUserId = session?.user?.id ?? "";
   const prevMsgCountRef = useRef<number>(0);
   const lastMessageIdRef = useRef<string | null>(null);
@@ -264,16 +279,104 @@ export default function TeamChatScreen() {
   });
 
   const items = useMemo(() => buildChatList(messages, polls), [messages, polls]);
+  const listData = useMemo(() => [...items].reverse(), [items]);
 
   const {
     listRef: flatListRef,
     handleScroll,
     handleContentSizeChange,
-    handleListLayout,
-    handleScrollToIndexFailed,
     followLatestIfNearBottom,
-    initialScrollIndex,
-  } = useChatListScroll(threadKey, items.length);
+    scrollToIndex,
+    handleScrollToIndexFailed,
+    contentContainerStyle,
+    maintainVisibleContentPosition,
+    readyForOlderLoad,
+  } = useChatListScroll(threadKey, listData.length);
+
+  const pinQueryKey = ["pinned-message", "team", teamId, topicKey] as const;
+  const { data: pinnedMessage = null } = useQuery<PinnedMessageSummary | null>({
+    queryKey: [...pinQueryKey],
+    queryFn: () =>
+      api.get<PinnedMessageSummary | null>(
+        `/api/teams/${teamId}/messages/pin?topicId=${encodeURIComponent(topicKey)}`,
+      ),
+    enabled: !!teamId,
+  });
+
+  useEffect(() => {
+    if (!teamId) return;
+    const off = realtimeClient.onPinUpdated((event) => {
+      if (event.channel !== "team" || event.teamId !== teamId) return;
+      const eventTopic = event.topicId ?? "general";
+      if (eventTopic !== topicKey) return;
+      queryClient.setQueryData([...pinQueryKey], event.pinnedMessage ?? null);
+    });
+    return () => {
+      off();
+    };
+  }, [teamId, topicKey, queryClient]);
+
+  const pinMutation = useMutation({
+    mutationFn: (messageId: string) =>
+      api.put<PinnedMessageSummary>(`/api/teams/${teamId}/messages/pin`, {
+        messageId,
+        topicId: topicId ?? null,
+      }),
+    onSuccess: (data) => {
+      queryClient.setQueryData([...pinQueryKey], data);
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    },
+  });
+
+  const unpinMutation = useMutation({
+    mutationFn: () =>
+      api.delete(`/api/teams/${teamId}/messages/pin?topicId=${encodeURIComponent(topicKey)}`),
+    onSuccess: () => {
+      queryClient.setQueryData([...pinQueryKey], null);
+    },
+  });
+
+  const jumpToPinnedMessage = useCallback(async () => {
+    if (!pinnedMessage?.messageId || jumpingToPin) return;
+    setJumpingToPin(true);
+    try {
+      let guard = 0;
+      let pages =
+        queryClient.getQueryData<InfiniteData<MessagePage<Message>>>(["messages", teamId, topicKey])
+          ?.pages ?? [];
+      let loaded = flattenMessagePages<Message>(pages);
+      while (!loaded.some((m) => m.id === pinnedMessage.messageId) && guard < 40) {
+        guard += 1;
+        const result = await fetchNextPage();
+        if (!result.hasNextPage && !result.data) break;
+        pages = result.data?.pages ?? pages;
+        loaded = flattenMessagePages<Message>(pages);
+        if (!result.hasNextPage) break;
+      }
+      const nextList = [...buildChatList(loaded, polls)].reverse();
+      const index = nextList.findIndex(
+        (item) => !("type" in item) && !("_isPoll" in item) && (item as Message).id === pinnedMessage.messageId,
+      );
+      if (index < 0) return;
+      // Allow FlatList to render newly fetched pages before scrolling.
+      requestAnimationFrame(() => {
+        scrollToIndex(index, true);
+        setHighlightedMessageId(pinnedMessage.messageId);
+        setTimeout(() => setHighlightedMessageId(null), 1800);
+      });
+    } finally {
+      setJumpingToPin(false);
+    }
+  }, [
+    pinnedMessage?.messageId,
+    jumpingToPin,
+    queryClient,
+    teamId,
+    topicKey,
+    fetchNextPage,
+    polls,
+    scrollToIndex,
+  ]);
 
   const { data: team } = useQuery({
     queryKey: ["team", teamId],
@@ -281,6 +384,18 @@ export default function TeamChatScreen() {
     enabled: !!teamId,
   });
   const currentUserRole = team?.members?.find((m) => m.userId === currentUserId)?.role;
+
+  const { data: topics = [] } = useQuery<SpaceTopic[]>({
+    queryKey: ["topics", teamId],
+    queryFn: () => api.get<SpaceTopic[]>(`/api/teams/${teamId}/topics`),
+    enabled: !!teamId && !!topicId,
+  });
+  const activeTopic = topicId ? topics.find((t) => t.id === topicId) : undefined;
+  const paramTopicImage = Array.isArray(topicImage) ? topicImage[0] : topicImage;
+  const spaceImage = activeTopic?.image ?? (paramTopicImage?.trim() ? paramTopicImage : null);
+  const spaceName = activeTopic?.name ?? (Array.isArray(topicName) ? topicName[0] : topicName) ?? "Space";
+  const spaceColor = activeTopic?.color ?? "#4361EE";
+  const isSpaceChat = !!topicId;
 
   const sendMutation = useMutation({
     mutationFn: (payload: { content?: string; mediaUrl?: string; mediaType?: string; replyToId?: string; topicId?: string; mentionedUserIds?: string[] }) =>
@@ -408,10 +523,11 @@ export default function TeamChatScreen() {
   }, []);
 
   const handleLoadOlder = useCallback(() => {
+    if (!readyForOlderLoad) return;
     if (hasNextPage && !isFetchingNextPage) {
       void fetchNextPage();
     }
-  }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
+  }, [fetchNextPage, hasNextPage, isFetchingNextPage, readyForOlderLoad]);
 
   useEffect(() => {
     lastMessageIdRef.current = null;
@@ -423,7 +539,8 @@ export default function TeamChatScreen() {
     const prevId = lastMessageIdRef.current;
     lastMessageIdRef.current = lastMsg.id;
     if (prevId !== lastMsg.id) {
-      followLatestIfNearBottom(true);
+      followLatestIfNearBottom(false);
+      setTimeout(() => followLatestIfNearBottom(false), 40);
     }
   }, [messages, followLatestIfNearBottom]);
 
@@ -449,14 +566,24 @@ export default function TeamChatScreen() {
             <ArrowLeft size={22} color="white" />
           </TouchableOpacity>
           <View style={{ marginRight: 12 }}>
-            <WorkspaceTeamAvatar
-              team={{ name: headerTeamName, image: team?.image ?? null }}
-              size={36}
-              radius={18}
-              backgroundColor="rgba(255,255,255,0.2)"
-              textColor="#FFFFFF"
-              borderColor="transparent"
-            />
+            {isSpaceChat ? (
+              <SpaceAvatar
+                name={spaceName}
+                image={spaceImage}
+                color={spaceColor}
+                size={36}
+                radius={18}
+              />
+            ) : (
+              <WorkspaceTeamAvatar
+                team={{ name: headerTeamName, image: team?.image ?? null }}
+                size={36}
+                radius={18}
+                backgroundColor="rgba(255,255,255,0.2)"
+                textColor="#FFFFFF"
+                borderColor="transparent"
+              />
+            )}
           </View>
           <View className="flex-1">
             <Text
@@ -489,6 +616,19 @@ export default function TeamChatScreen() {
           <Image source={require("@/assets/alenio-icon.png")} style={{ width: 30, height: 30, borderRadius: 6 }} />
         </View>
       </LinearGradient>
+
+      {pinnedMessage ? (
+        <PinnedMessageBar
+          pinned={pinnedMessage}
+          onPress={() => {
+            void jumpToPinnedMessage();
+          }}
+          onLongPress={() => {
+            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            unpinMutation.mutate();
+          }}
+        />
+      ) : null}
 
       {/* Media picker sheet */}
       <Modal visible={showMediaPicker} transparent animationType="slide" onRequestClose={() => setShowMediaPicker(false)}>
@@ -909,6 +1049,8 @@ export default function TeamChatScreen() {
 
       <SafeKeyboardAvoidingView
         className="flex-1"
+        automaticOffset
+        // Expo Go (RN KAV) still needs header compensation; native path zeros this when automaticOffset is on.
         keyboardVerticalOffset={Platform.OS === "ios" ? insets.top + 64 : 0}
       >
         {isLoading ? (
@@ -922,31 +1064,34 @@ export default function TeamChatScreen() {
             <Text className="text-slate-400 text-sm mt-1 text-center">Be the first to say something!</Text>
           </View>
         ) : (
-          <FlatList
-            key={threadKey}
-            ref={flatListRef}
-            style={{ flex: 1 }}
-            testID="team-chat-message-list"
-            data={items}
-            keyExtractor={(item) => ("type" in item ? item.id : item.id)}
-            contentContainerStyle={{ paddingVertical: 12, paddingHorizontal: 12 }}
-            showsVerticalScrollIndicator={false}
-            initialScrollIndex={initialScrollIndex}
-            onScrollToIndexFailed={handleScrollToIndexFailed}
-            onLayout={handleListLayout}
-            onScroll={handleScroll}
-            scrollEventThrottle={16}
-            onContentSizeChange={handleContentSizeChange}
-            onStartReached={handleLoadOlder}
-            onStartReachedThreshold={0.15}
-            ListHeaderComponent={
-              isFetchingNextPage ? (
-                <View style={{ paddingVertical: 12, alignItems: "center" }}>
-                  <ActivityIndicator color="#4361EE" size="small" />
-                </View>
-              ) : null
-            }
-            renderItem={({ item }) => {
+          <View style={{ flex: 1, overflow: "hidden" }}>
+            <FlatList
+              key={threadKey}
+              ref={flatListRef}
+              style={{ flex: 1 }}
+              testID="team-chat-message-list"
+              data={listData}
+              inverted
+              keyExtractor={(item) => ("type" in item ? item.id : item.id)}
+              contentContainerStyle={contentContainerStyle}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="interactive"
+              onScroll={handleScroll}
+              scrollEventThrottle={16}
+              onContentSizeChange={handleContentSizeChange}
+              onEndReached={handleLoadOlder}
+              onEndReachedThreshold={0.2}
+              onScrollToIndexFailed={handleScrollToIndexFailed}
+              maintainVisibleContentPosition={maintainVisibleContentPosition}
+              ListFooterComponent={
+                isFetchingNextPage ? (
+                  <View style={{ paddingVertical: 12, alignItems: "center" }}>
+                    <ActivityIndicator color="#4361EE" size="small" />
+                  </View>
+                ) : null
+              }
+              renderItem={({ item }) => {
               if ("type" in item && (item as any).type === "date") {
                 return (
                   <View className="items-center my-3">
@@ -997,11 +1142,13 @@ export default function TeamChatScreen() {
                     interactive={false}
                     onReactionTap={(reactions) => setReactionView(reactions)}
                     hideBubble={messageMenu?.message.id === msg.id}
+                    highlighted={highlightedMessageId === msg.id}
                   />
                 </MessageLongPressRow>
               );
             }}
-          />
+            />
+          </View>
         )}
 
         {/* Mention picker */}
@@ -1044,7 +1191,8 @@ export default function TeamChatScreen() {
           className="flex-row items-end px-3 bg-white dark:bg-slate-800 border-t border-slate-100 dark:border-slate-700"
           style={{
             paddingTop: 8,
-            paddingBottom: insets.bottom + 8,
+            // Drop home-indicator inset while keyboard is open — KAV already lifts to the keyboard.
+            paddingBottom: keyboardVisible ? 8 : insets.bottom + 8,
           }}
         >
           <TouchableOpacity
@@ -1122,6 +1270,19 @@ export default function TeamChatScreen() {
             hidden: !messageMenu?.message.content,
             onPress: () => {
               if (messageMenu?.message.content) void Clipboard.setStringAsync(messageMenu.message.content);
+            },
+          },
+          {
+            id: "pin",
+            label: pinnedMessage?.messageId === messageMenu?.message.id ? "Unpin" : "Pin",
+            icon: Pin,
+            onPress: () => {
+              if (!messageMenu) return;
+              if (pinnedMessage?.messageId === messageMenu.message.id) {
+                unpinMutation.mutate();
+              } else {
+                pinMutation.mutate(messageMenu.message.id);
+              }
             },
           },
           {

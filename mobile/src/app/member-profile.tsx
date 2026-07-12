@@ -10,6 +10,7 @@ import {
   Modal,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -35,11 +36,11 @@ import {
   ProfileDivider,
   ProfileSection,
 } from "@/components/profile/ProfileEnterpriseUI";
+import { DevelopmentToolsLockedCard } from "@/components/DevelopmentToolsLockedCard";
 
 const PROFILE_TABS = ["Overview", "Growth", "Check-In"] as const;
 const FORMER_MEMBER_TABS = ["Check-In"] as const;
 const PAGE_BG = "#F3F5FC";
-const PAGE_HEADER_BG = "#FAFBFF";
 const PAGE_BORDER = "#E0E7FF";
 const TAB_TRACK_BG = "#E8ECFA";
 type ProfileTab = (typeof PROFILE_TABS)[number] | (typeof FORMER_MEMBER_TABS)[number];
@@ -306,63 +307,59 @@ export default function MemberProfileScreen() {
     : (visibleTabs[0] ?? "Overview");
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: PAGE_BG }} edges={["top", "bottom"]}>
-      <View
+    <SafeAreaView style={{ flex: 1, backgroundColor: PAGE_BG }} edges={["bottom"]}>
+      <LinearGradient
+        colors={["#4361EE", "#7C3AED"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
         style={{
-          flexDirection: "row",
-          alignItems: "center",
+          paddingTop: insets.top + 10,
+          paddingBottom: 12,
           paddingHorizontal: 12,
-          paddingVertical: 10,
-          gap: 8,
-          backgroundColor: PAGE_HEADER_BG,
-          borderBottomWidth: 1,
-          borderBottomColor: PAGE_BORDER,
         }}
       >
-        <Pressable
-          onPress={() => router.back()}
-          style={{
-            width: 36,
-            height: 36,
-            borderRadius: 10,
-            backgroundColor: "white",
-            alignItems: "center",
-            justifyContent: "center",
-            borderWidth: 1,
-            borderColor: PAGE_BORDER,
-          }}
-          testID="member-profile-back"
-        >
-          <ArrowLeft size={18} color="#4361EE" />
-        </Pressable>
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={{ fontSize: 11, fontWeight: "600", color: "#64748B", textTransform: "uppercase", letterSpacing: 0.6 }}>
-            {isFormerMember ? "Former member" : "Team member"}
-          </Text>
-          <Text style={{ fontSize: 16, fontWeight: "700", color: "#0F172A" }} numberOfLines={1}>
-            {displayName}
-            {isSelf ? " (you)" : ""}
-          </Text>
-        </View>
-        {canManage ? (
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
           <Pressable
-            onPress={() => setManageOpen(true)}
+            onPress={() => router.back()}
             style={{
               width: 36,
               height: 36,
               borderRadius: 10,
-              backgroundColor: "white",
+              backgroundColor: "rgba(255,255,255,0.2)",
               alignItems: "center",
               justifyContent: "center",
-              borderWidth: 1,
-              borderColor: PAGE_BORDER,
             }}
-            testID="member-profile-manage"
+            testID="member-profile-back"
           >
-            <MoreVertical size={18} color="#64748B" />
+            <ArrowLeft size={18} color="#FFFFFF" />
           </Pressable>
-        ) : null}
-      </View>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={{ fontSize: 11, fontWeight: "600", color: "rgba(255,255,255,0.75)", textTransform: "uppercase", letterSpacing: 0.6 }}>
+              {isFormerMember ? "Former member" : "Team member"}
+            </Text>
+            <Text style={{ fontSize: 16, fontWeight: "700", color: "#FFFFFF" }} numberOfLines={1}>
+              {displayName}
+              {isSelf ? " (you)" : ""}
+            </Text>
+          </View>
+          {canManage ? (
+            <Pressable
+              onPress={() => setManageOpen(true)}
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 10,
+                backgroundColor: "rgba(255,255,255,0.2)",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+              testID="member-profile-manage"
+            >
+              <MoreVertical size={18} color="#FFFFFF" />
+            </Pressable>
+          ) : null}
+        </View>
+      </LinearGradient>
 
       <View style={{ flex: 1, paddingTop: 12 }}>
         <View style={{ paddingHorizontal: 12, paddingBottom: 10 }}>
@@ -493,10 +490,12 @@ export default function MemberProfileScreen() {
         </View>
 
         {visibleTabs.length === 0 ? (
-          <View style={{ flex: 1, paddingHorizontal: 24, alignItems: "center", justifyContent: "center" }}>
-            <Text style={{ color: "#64748B", textAlign: "center", lineHeight: 22 }}>
-              Check-in history for former members requires Team access.
-            </Text>
+          <View style={{ flex: 1, paddingBottom: Math.max(12, insets.bottom) }}>
+            <DevelopmentToolsLockedCard isOwner={myRole === "owner"} teamId={teamId} compact />
+          </View>
+        ) : !isPaid ? (
+          <View style={{ flex: 1, paddingBottom: Math.max(12, insets.bottom) }}>
+            <DevelopmentToolsLockedCard isOwner={myRole === "owner"} teamId={teamId} compact />
           </View>
         ) : activeTabSafe === "Overview" ? (
           <View style={{ flex: 1, paddingHorizontal: 12, paddingBottom: Math.max(12, insets.bottom) }}>

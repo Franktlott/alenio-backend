@@ -8,8 +8,9 @@ import {
   Platform,
   Switch,
   ScrollView,
+  useWindowDimensions,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { SafeKeyboardAwareScrollView as KeyboardAwareScrollView } from "@/lib/safe-keyboard-controller";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -452,25 +453,37 @@ export default function PlanOneOnOneScreen() {
 
       {Platform.OS === "ios" ? (
         <>
-          <Modal visible={showStartPicker} transparent animationType="slide">
-            <Pressable style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.4)" }} onPress={() => setShowStartPicker(false)}>
-              <Pressable onPress={(e) => e.stopPropagation?.()}>
-                <View style={{ backgroundColor: "white", paddingBottom: 24 }}>
-                  <DateTimePicker
-                    value={eventStart}
-                    mode="date"
-                    display="spinner"
-                    onChange={(_e, date) => {
-                      if (date) {
-                        const next = new Date(eventStart);
-                        next.setFullYear(date.getFullYear(), date.getMonth(), date.getDate());
-                        setEventStart(next);
-                      }
-                    }}
-                  />
+          <Modal visible={showStartPicker} transparent animationType="slide" onRequestClose={() => setShowStartPicker(false)}>
+            <View style={{ flex: 1, justifyContent: "flex-end" }}>
+              <Pressable
+                style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.4)" }}
+                onPress={() => setShowStartPicker(false)}
+              />
+              <View style={{ backgroundColor: "white", borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 24 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 }}>
+                  <Pressable onPress={() => setShowStartPicker(false)}>
+                    <Text style={{ color: "#64748B", fontSize: 15 }}>Cancel</Text>
+                  </Pressable>
+                  <Text style={{ fontSize: 15, fontWeight: "700", color: "#0F172A" }}>Date</Text>
+                  <Pressable onPress={() => setShowStartPicker(false)}>
+                    <Text style={{ color: "#4361EE", fontSize: 15, fontWeight: "700" }}>Done</Text>
+                  </Pressable>
                 </View>
-              </Pressable>
-            </Pressable>
+                <DateTimePicker
+                  value={eventStart}
+                  mode="date"
+                  display="inline"
+                  onChange={(_e, date) => {
+                    if (date) {
+                      const next = new Date(eventStart);
+                      next.setFullYear(date.getFullYear(), date.getMonth(), date.getDate());
+                      setEventStart(next);
+                    }
+                  }}
+                  style={{ alignSelf: "center", marginHorizontal: 8 }}
+                />
+              </View>
+            </View>
           </Modal>
           <Modal visible={showStartTimePicker} transparent animationType="slide">
             <Pressable style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.4)" }} onPress={() => setShowStartTimePicker(false)}>
@@ -499,6 +512,7 @@ export default function PlanOneOnOneScreen() {
             <DateTimePicker
               value={eventStart}
               mode="date"
+              display="calendar"
               onChange={(_e, date) => {
                 setShowStartPicker(false);
                 if (date) {
@@ -542,35 +556,62 @@ function MemberPickerModal({
   onClose: () => void;
   onSelect: (userId: string) => void;
 }) {
+  const insets = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
+  const sheetMaxHeight = Math.round(windowHeight * 0.7);
+  const listMaxHeight = Math.max(220, sheetMaxHeight - 64 - Math.max(insets.bottom, 12));
+
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "flex-end" }} onPress={onClose}>
         <Pressable onPress={(e) => e.stopPropagation?.()}>
-          <View style={{ backgroundColor: "white", borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: "70%" }}>
+          <View
+            style={{
+              backgroundColor: "white",
+              borderTopLeftRadius: 20,
+              borderTopRightRadius: 20,
+              maxHeight: sheetMaxHeight,
+              paddingBottom: Math.max(insets.bottom, 12),
+            }}
+          >
             <View style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: "#F1F5F9" }}>
               <Text style={{ fontSize: 16, fontWeight: "700", color: "#0F172A" }}>Choose team member</Text>
             </View>
-            <ScrollView>
-              {members.map((member) => {
-                const active = member.userId === selectedUserId;
-                return (
-                  <Pressable
-                    key={member.userId}
-                    onPress={() => onSelect(member.userId)}
-                    style={{
-                      paddingHorizontal: 16,
-                      paddingVertical: 14,
-                      borderBottomWidth: 1,
-                      borderBottomColor: "#F8FAFC",
-                      backgroundColor: active ? "#F5F3FF" : "white",
-                    }}
-                  >
-                    <Text style={{ fontSize: 15, fontWeight: active ? "700" : "500", color: "#0F172A" }}>
-                      {member.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
+            <ScrollView
+              style={{ maxHeight: listMaxHeight }}
+              contentContainerStyle={{ paddingBottom: 8 }}
+              showsVerticalScrollIndicator
+              bounces
+              keyboardShouldPersistTaps="handled"
+            >
+              {members.length === 0 ? (
+                <View style={{ paddingHorizontal: 16, paddingVertical: 28, alignItems: "center" }}>
+                  <Text style={{ fontSize: 14, color: "#94A3B8", textAlign: "center" }}>
+                    No other team members available.
+                  </Text>
+                </View>
+              ) : (
+                members.map((member) => {
+                  const active = member.userId === selectedUserId;
+                  return (
+                    <Pressable
+                      key={member.userId}
+                      onPress={() => onSelect(member.userId)}
+                      style={{
+                        paddingHorizontal: 16,
+                        paddingVertical: 14,
+                        borderBottomWidth: 1,
+                        borderBottomColor: "#F8FAFC",
+                        backgroundColor: active ? "#F5F3FF" : "white",
+                      }}
+                    >
+                      <Text style={{ fontSize: 15, fontWeight: active ? "700" : "500", color: "#0F172A" }}>
+                        {member.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })
+              )}
             </ScrollView>
           </View>
         </Pressable>
@@ -592,15 +633,34 @@ function TemplatePickerModal({
   onClose: () => void;
   onSelect: (templateId: string) => void;
 }) {
+  const insets = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
+  const sheetMaxHeight = Math.round(windowHeight * 0.7);
+  const listMaxHeight = Math.max(220, sheetMaxHeight - 64 - Math.max(insets.bottom, 12));
+
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "flex-end" }} onPress={onClose}>
         <Pressable onPress={(e) => e.stopPropagation?.()}>
-          <View style={{ backgroundColor: "white", borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: "70%" }}>
+          <View
+            style={{
+              backgroundColor: "white",
+              borderTopLeftRadius: 20,
+              borderTopRightRadius: 20,
+              maxHeight: sheetMaxHeight,
+              paddingBottom: Math.max(insets.bottom, 12),
+            }}
+          >
             <View style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: "#F1F5F9" }}>
               <Text style={{ fontSize: 16, fontWeight: "700", color: "#0F172A" }}>Check-in template</Text>
             </View>
-            <ScrollView>
+            <ScrollView
+              style={{ maxHeight: listMaxHeight }}
+              contentContainerStyle={{ paddingBottom: 8 }}
+              showsVerticalScrollIndicator
+              bounces
+              keyboardShouldPersistTaps="handled"
+            >
               <Pressable
                 onPress={() => onSelect("")}
                 style={{

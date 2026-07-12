@@ -43,6 +43,11 @@ import {
 } from "@/lib/workplace-standards";
 import { StandardsStatusKey } from "@/components/StandardsStatusKey";
 import { TeamMemberRow, TeamMemberRowSkeleton, teamMemberListBottomPadding, TEAM_MEMBER_ROW_GAP } from "@/components/TeamMemberRow";
+import {
+  ProfileCard,
+  ProfileSection,
+  ProfileToolbarButton,
+} from "@/components/profile/ProfileEnterpriseUI";
 import { useTeamStore } from "@/lib/state/team-store";
 import { useSession } from "@/lib/auth/use-session";
 import QRCode from "react-native-qrcode-svg";
@@ -65,7 +70,7 @@ import {
   type TeamInvite,
 } from "@/lib/team-invites-api";
 import { useSubscriptionStore } from "@/lib/state/subscription-store";
-import { tabBarClearance } from "@/lib/tab-bar";
+import { tabBarClearance, workspaceTaskRightInset } from "@/lib/tab-bar";
 import Svg, { Path, Circle, Line, Text as SvgText, Polyline } from "react-native-svg";
 
 type JoinRequest = {
@@ -1008,250 +1013,239 @@ export default function TeamScreen() {
         ) : null}
 
 
-        {/* ── 4. TEAM MEMBERS CARD ──────────────────────────────────── */}
+        {/* ── 4. TEAM MEMBERS (Workspaces-style section + card) ───── */}
         <View
           style={{
             flex: 1,
             minHeight: 0,
-            marginHorizontal: 12,
-            marginTop: 8,
+            marginHorizontal: 16,
+            marginTop: 12,
             marginBottom: 4,
-            borderRadius: 20,
-            backgroundColor: "white",
-            shadowColor: "#000",
-            shadowOpacity: 0.05,
-            shadowRadius: 8,
-            shadowOffset: { width: 0, height: 2 },
-            elevation: 2,
           }}
         >
-          {/* Header row */}
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
-              paddingHorizontal: 14,
-              paddingTop: 10,
-              paddingBottom: 8,
-              gap: 8,
-              zIndex: 2,
-            }}
-          >
-            <View style={{ flexShrink: 1, minWidth: 0, paddingRight: 4 }}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                <Text numberOfLines={1} style={{ fontSize: 16, fontWeight: "800", color: "#0F172A" }}>
-                  Team Members
-                </Text>
-                {isPaid ? <StandardsStatusKey iconSize={16} /> : null}
-              </View>
-            </View>
-            {isOwnerOrLeader ? (
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  flexShrink: 0,
-                }}
-              >
-                {pendingApprovalCount > 0 ? (
-                  <Pressable
-                    onPress={() => setJoinRequestsOpen(true)}
-                    hitSlop={8}
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      marginRight: 6,
-                      backgroundColor: "#4338CA",
-                      paddingHorizontal: 10,
-                      paddingVertical: 7,
-                      borderRadius: 8,
-                      minHeight: 32,
-                    }}
-                    testID="pending-join-requests-chip"
-                    accessibilityRole="button"
-                    accessibilityLabel={`${pendingApprovalCount} pending approval${pendingApprovalCount !== 1 ? "s" : ""}, tap to review`}
-                  >
-                    <UserPlus size={13} color="#FFFFFF" />
-                    <Text style={{ marginLeft: 4, fontSize: 12, fontWeight: "800", color: "#FFFFFF" }}>
-                      {pendingApprovalCount === 1 ? "1 request" : `${pendingApprovalCount} requests`}
-                    </Text>
-                  </Pressable>
-                ) : null}
-                <PendingInvitesChip count={pendingInvites.length} onPress={() => setPendingInvitesOpen(true)} />
-                <Pressable
-                  onPress={() => {
-                    setAddMemberError(null);
-                    setAddMemberOpen(true);
-                  }}
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    marginLeft: pendingApprovalCount > 0 || pendingInvites.length > 0 ? 6 : 0,
-                    backgroundColor: "#FFFFFF",
-                    borderWidth: 1,
-                    borderColor: "#C7D2FE",
-                    paddingHorizontal: 10,
-                    paddingVertical: 7,
-                    borderRadius: 8,
-                    minHeight: 32,
-                  }}
-                  testID="add-member-button"
-                >
-                  <UserPlus size={13} color="#4361EE" />
-                  <Text style={{ marginLeft: 4, fontSize: 12, fontWeight: "700", color: "#4361EE" }}>Add</Text>
-                </Pressable>
-              </View>
-            ) : null}
-          </View>
-
-          {/* Member cards (scrollable) */}
-          <ScrollView
-            ref={membersListRef}
-            style={{ flex: 1, overflow: "hidden", borderBottomLeftRadius: 20, borderBottomRightRadius: 20 }}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={{
-              paddingHorizontal: 10,
-              paddingBottom: teamMemberListBottomPadding(formerMembers.length > 0),
-              gap: TEAM_MEMBER_ROW_GAP,
-            }}
-            refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" colors={["#4361EE"]} />
+          <ProfileSection
+            style={{ flex: 1, minHeight: 0 }}
+            title="Team Members"
+            titleAccessory={isPaid ? <StandardsStatusKey iconSize={12} /> : undefined}
+            subtitle={
+              isPaid
+                ? "Tap a member to view their profile and standards."
+                : "Tap a member to view their profile."
             }
-            testID="members-list"
-          >
-          {showMemberSkeletons ? (
-            Array.from({ length: 4 }, (_, index) => (
-              <TeamMemberRowSkeleton key={`member-skeleton-${index}`} paid={isPaid} />
-            ))
-          ) : (
-          sortedMembers.map((item: TeamMember) => {
-            const stats = memberStats?.[item.userId];
-            const compliance = stats?.standardsCompliance;
-            const complianceBadges = compliance
-              ? memberStandardsBadges(compliance, stats?.daysSinceLastOneOnOne)
-              : [];
-            const primaryBadge = complianceBadges[0] ?? null;
-            const isCurrentUser = item.userId === myId;
-            const hasProfilePermission = canViewMemberProfile(item.userId, item.role);
-            const canOpenProfile = hasProfilePermission;
-            const canOpenManagement = !isPaid && canManageMember(item.userId, item.role);
-            const isPressable = canOpenProfile || canOpenManagement;
-
-            return (
-              <TeamMemberRow
-                key={item.id}
-                name={item.user.name ?? "Member"}
-                role={item.role}
-                image={item.user.image}
-                isCurrentUser={isCurrentUser}
-                showMetrics={isPaid}
-                hasProfilePermission={hasProfilePermission}
-                checkInValue={formatDaysSinceCheckIn(stats?.daysSinceLastOneOnOne)}
-                goalsValue={compliance?.goalsDisplay ?? "—"}
-                statusBadge={primaryBadge}
-                onPress={
-                  isPressable
-                    ? () =>
-                        router.push({
-                          pathname: "/member-profile",
-                          params: { teamId: activeTeamId ?? "", memberUserId: item.userId },
-                        })
-                    : undefined
-                }
-                testID={`member-row-${item.userId}`}
-              />
-            );
-          })
-          )}
-
-          {!showMemberSkeletons && sortedMembers.length === 0 ? (
-            <View style={{ paddingVertical: 32, alignItems: "center" }}>
-              <Text style={{ fontSize: 13, color: "#94A3B8" }}>No members yet</Text>
-            </View>
-          ) : null}
-
-          {isOwnerOrLeader && formerMembers.length > 0 ? (
-            <View
-              style={{
-                marginTop: 14,
-                paddingTop: 10,
-                borderTopWidth: 1,
-                borderTopColor: "#F1F5F9",
-              }}
-            >
-              <Pressable
-                onPress={toggleFormerMembers}
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  paddingVertical: 4,
-                }}
-                testID="former-members-toggle"
-              >
-                <Text style={{ fontSize: 10, color: "#CBD5E1" }}>
-                  Former members ({formerMembers.length})
-                </Text>
-                <ChevronDown
-                  size={14}
-                  color="#CBD5E1"
-                  style={{ transform: [{ rotate: formerMembersOpen ? "180deg" : "0deg" }] }}
-                />
-              </Pressable>
-              {formerMembersOpen ? (
-                <View style={{ marginTop: 4, paddingBottom: 2 }}>
-                  {formerMembers.map((former, index) => (
+            action={
+              isOwnerOrLeader ? (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                  {pendingApprovalCount > 0 ? (
                     <Pressable
-                      key={former.userId}
-                      onPress={() =>
-                        router.push({
-                          pathname: "/member-profile",
-                          params: { teamId: activeTeamId ?? "", memberUserId: former.userId },
-                        })
-                      }
+                      onPress={() => setJoinRequestsOpen(true)}
+                      hitSlop={8}
                       style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        backgroundColor: "#4338CA",
+                        paddingHorizontal: 10,
                         paddingVertical: 6,
-                        borderTopWidth: index === 0 ? 0 : 1,
-                        borderTopColor: "#F8FAFC",
+                        borderRadius: 8,
+                        minHeight: 28,
                       }}
-                      testID={`former-member-row-${former.userId}`}
+                      testID="pending-join-requests-chip"
+                      accessibilityRole="button"
+                      accessibilityLabel={`${pendingApprovalCount} pending approval${pendingApprovalCount !== 1 ? "s" : ""}, tap to review`}
                     >
-                      <Text style={{ fontSize: 12, color: "#94A3B8" }} numberOfLines={1}>
-                        {former.user.name ?? former.user.email ?? "Member"}
-                        <Text style={{ color: "#CBD5E1" }}> · archived check-ins</Text>
+                      <UserPlus size={12} color="#FFFFFF" />
+                      <Text style={{ marginLeft: 4, fontSize: 11, fontWeight: "800", color: "#FFFFFF" }}>
+                        {pendingApprovalCount === 1 ? "1 request" : `${pendingApprovalCount} requests`}
                       </Text>
                     </Pressable>
-                  ))}
+                  ) : null}
+                  <PendingInvitesChip count={pendingInvites.length} onPress={() => setPendingInvitesOpen(true)} />
+                  <ProfileToolbarButton
+                    label="Add"
+                    onPress={() => {
+                      setAddMemberError(null);
+                      setAddMemberOpen(true);
+                    }}
+                    testID="add-member-button"
+                  />
                 </View>
-              ) : null}
-            </View>
-          ) : null}
-          </ScrollView>
+              ) : undefined
+            }
+          >
+            <ProfileCard style={{ flex: 1, minHeight: 120 }}>
+              <ScrollView
+                ref={membersListRef}
+                style={{ flex: 1 }}
+                nestedScrollEnabled
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{
+                  paddingHorizontal: 10,
+                  paddingTop: 10,
+                  paddingBottom: teamMemberListBottomPadding(formerMembers.length > 0),
+                  gap: TEAM_MEMBER_ROW_GAP,
+                }}
+                refreshControl={
+                  <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" colors={["#4361EE"]} />
+                }
+                testID="members-list"
+              >
+                {showMemberSkeletons ? (
+                  Array.from({ length: 4 }, (_, index) => (
+                    <TeamMemberRowSkeleton key={`member-skeleton-${index}`} paid={isPaid} />
+                  ))
+                ) : (
+                  sortedMembers.map((item: TeamMember) => {
+                    const stats = memberStats?.[item.userId];
+                    const compliance = stats?.standardsCompliance;
+                    const complianceBadges = compliance
+                      ? memberStandardsBadges(compliance, stats?.daysSinceLastOneOnOne)
+                      : [];
+                    const primaryBadge = complianceBadges[0] ?? null;
+                    const isCurrentUser = item.userId === myId;
+                    const hasProfilePermission = canViewMemberProfile(item.userId, item.role);
+                    const canOpenProfile = hasProfilePermission;
+                    const canOpenManagement = !isPaid && canManageMember(item.userId, item.role);
+                    const isPressable = canOpenProfile || canOpenManagement;
+
+                    return (
+                      <TeamMemberRow
+                        key={item.id}
+                        name={item.user.name ?? "Member"}
+                        role={item.role}
+                        image={item.user.image}
+                        isCurrentUser={isCurrentUser}
+                        showMetrics={isPaid}
+                        hasProfilePermission={hasProfilePermission}
+                        checkInValue={formatDaysSinceCheckIn(stats?.daysSinceLastOneOnOne)}
+                        goalsValue={compliance?.goalsDisplay ?? "—"}
+                        statusBadge={primaryBadge}
+                        onPress={
+                          isPressable
+                            ? () =>
+                                router.push({
+                                  pathname: "/member-profile",
+                                  params: { teamId: activeTeamId ?? "", memberUserId: item.userId },
+                                })
+                            : undefined
+                        }
+                        testID={`member-row-${item.userId}`}
+                      />
+                    );
+                  })
+                )}
+
+                {!showMemberSkeletons && sortedMembers.length === 0 ? (
+                  <View style={{ paddingVertical: 32, alignItems: "center", paddingHorizontal: 16 }}>
+                    <Text style={{ fontSize: 13, color: "#94A3B8" }}>No members yet</Text>
+                  </View>
+                ) : null}
+
+                {isOwnerOrLeader && formerMembers.length > 0 ? (
+                  <View
+                    style={{
+                      marginTop: 14,
+                      paddingTop: 10,
+                      borderTopWidth: 1,
+                      borderTopColor: "#F1F5F9",
+                    }}
+                  >
+                    <Pressable
+                      onPress={toggleFormerMembers}
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        paddingVertical: 4,
+                      }}
+                      testID="former-members-toggle"
+                    >
+                      <Text style={{ fontSize: 10, color: "#CBD5E1" }}>
+                        Former members ({formerMembers.length})
+                      </Text>
+                      <ChevronDown
+                        size={14}
+                        color="#CBD5E1"
+                        style={{ transform: [{ rotate: formerMembersOpen ? "180deg" : "0deg" }] }}
+                      />
+                    </Pressable>
+                    {formerMembersOpen ? (
+                      <View style={{ marginTop: 4, paddingBottom: 2 }}>
+                        {formerMembers.map((former, index) => (
+                          <Pressable
+                            key={former.userId}
+                            onPress={() =>
+                              router.push({
+                                pathname: "/member-profile",
+                                params: { teamId: activeTeamId ?? "", memberUserId: former.userId },
+                              })
+                            }
+                            style={{
+                              paddingVertical: 6,
+                              borderTopWidth: index === 0 ? 0 : 1,
+                              borderTopColor: "#F8FAFC",
+                            }}
+                            testID={`former-member-row-${former.userId}`}
+                          >
+                            <Text style={{ fontSize: 12, color: "#94A3B8" }} numberOfLines={1}>
+                              {former.user.name ?? former.user.email ?? "Member"}
+                              <Text style={{ color: "#CBD5E1" }}> · archived check-ins</Text>
+                            </Text>
+                          </Pressable>
+                        ))}
+                      </View>
+                    ) : null}
+                  </View>
+                ) : null}
+              </ScrollView>
+            </ProfileCard>
+          </ProfileSection>
         </View>
 
         {isPaid && isOwnerOrLeader ? (
           <View
             style={{
-              marginHorizontal: 12,
-              marginTop: 4,
+              marginLeft: 16,
+              marginRight: workspaceTaskRightInset() + 12,
+              marginTop: 8,
               flexShrink: 0,
-              backgroundColor: "#EEF2FF",
-              paddingHorizontal: 14,
-              paddingVertical: 12,
+              backgroundColor: "#FFFFFF",
+              paddingHorizontal: 12,
+              paddingVertical: 10,
               flexDirection: "row",
               alignItems: "center",
-              gap: 8,
-              borderRadius: 14,
+              gap: 10,
+              borderRadius: 8,
               borderWidth: 1,
-              borderColor: "#BFDBFE",
+              borderColor: "#E2E8F0",
             }}
           >
-            <Crown size={14} color="#4361EE" />
-            <Text style={{ fontSize: 12, color: "#4361EE", fontWeight: "600", flex: 1 }}>
+            <View
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: 6,
+                backgroundColor: "#F8FAFC",
+                borderWidth: 1,
+                borderColor: "#E2E8F0",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Crown size={13} color="#475569" strokeWidth={2} />
+            </View>
+            <Text
+              style={{
+                fontSize: 12,
+                color: "#475569",
+                fontWeight: "500",
+                flex: 1,
+                textAlign: "center",
+                lineHeight: 16,
+              }}
+              numberOfLines={2}
+            >
               Tap a member to view their profile, growth plan, and check-in history.
             </Text>
-            <ChevronRight size={16} color="#4361EE" />
+            <ChevronRight size={15} color="#94A3B8" strokeWidth={2} />
           </View>
         ) : isPaid ? (
           <View
@@ -1259,33 +1253,52 @@ export default function TeamScreen() {
               marginHorizontal: 12,
               marginTop: 4,
               flexShrink: 0,
-              backgroundColor: "#F8FAFC",
-              paddingHorizontal: 14,
-              paddingVertical: 12,
-              borderRadius: 14,
+              backgroundColor: "#FFFFFF",
+              paddingHorizontal: 12,
+              paddingVertical: 10,
+              borderRadius: 8,
               borderWidth: 1,
               borderColor: "#E2E8F0",
             }}
           >
-            <Text style={{ fontSize: 12, color: "#64748B", fontWeight: "600" }}>
+            <Text
+              style={{
+                fontSize: 12,
+                color: "#475569",
+                fontWeight: "500",
+                textAlign: "center",
+                lineHeight: 16,
+              }}
+              numberOfLines={2}
+            >
               Tap your name to view your profile, growth plan, and check-in history.
             </Text>
           </View>
         ) : !isPaid && isOwnerOrLeader ? (
           <View
             style={{
-              marginHorizontal: 12,
+              marginLeft: 12,
+              marginRight: workspaceTaskRightInset() + 12,
               marginTop: 4,
               flexShrink: 0,
-              backgroundColor: "#F8FAFC",
-              paddingHorizontal: 14,
-              paddingVertical: 12,
-              borderRadius: 14,
+              backgroundColor: "#FFFFFF",
+              paddingHorizontal: 12,
+              paddingVertical: 10,
+              borderRadius: 8,
               borderWidth: 1,
               borderColor: "#E2E8F0",
             }}
           >
-            <Text style={{ fontSize: 12, color: "#64748B", fontWeight: "600" }}>
+            <Text
+              style={{
+                fontSize: 12,
+                color: "#475569",
+                fontWeight: "500",
+                textAlign: "center",
+                lineHeight: 16,
+              }}
+              numberOfLines={2}
+            >
               Tap a member to change their role or remove them from the workplace.
             </Text>
           </View>
@@ -1295,16 +1308,25 @@ export default function TeamScreen() {
               marginHorizontal: 12,
               marginTop: 4,
               flexShrink: 0,
-              backgroundColor: "#F8FAFC",
-              paddingHorizontal: 14,
-              paddingVertical: 12,
-              borderRadius: 14,
+              backgroundColor: "#FFFFFF",
+              paddingHorizontal: 12,
+              paddingVertical: 10,
+              borderRadius: 8,
               borderWidth: 1,
               borderColor: "#E2E8F0",
             }}
           >
-            <Text style={{ fontSize: 12, color: "#64748B", fontWeight: "600" }}>
-              Team access is required to view growth plans and check-in history. Open Workplace Access to upgrade.
+            <Text
+              style={{
+                fontSize: 12,
+                color: "#475569",
+                fontWeight: "500",
+                textAlign: "center",
+                lineHeight: 16,
+              }}
+              numberOfLines={2}
+            >
+              Tap a member to open their profile. Development tools require Team access.
             </Text>
           </View>
         ) : null}

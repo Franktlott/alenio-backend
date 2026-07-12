@@ -34,7 +34,27 @@ export type InboxUpdatedEvent = {
   conversationId?: string;
 };
 
-export type RealtimeEvent = TeamMessageCreatedEvent | DmMessageCreatedEvent | InboxUpdatedEvent;
+export type TeamPinUpdatedEvent = {
+  type: "pin.updated";
+  channel: "team";
+  teamId: string;
+  topicId: string | null;
+  pinnedMessage: unknown | null;
+};
+
+export type DmPinUpdatedEvent = {
+  type: "pin.updated";
+  channel: "dm";
+  conversationId: string;
+  pinnedMessage: unknown | null;
+};
+
+export type RealtimeEvent =
+  | TeamMessageCreatedEvent
+  | DmMessageCreatedEvent
+  | InboxUpdatedEvent
+  | TeamPinUpdatedEvent
+  | DmPinUpdatedEvent;
 
 const rooms = new Map<string, Set<RealtimeSocket>>();
 
@@ -153,4 +173,36 @@ export function publishUserInboxUpdated(
       userRealtimeKey(userId),
     );
   }
+}
+
+export function publishTeamPinUpdated(input: {
+  teamId: string;
+  topicId: string | null;
+  pinnedMessage: unknown | null;
+}) {
+  publishRealtime(
+    {
+      type: "pin.updated",
+      channel: "team",
+      teamId: input.teamId,
+      topicId: input.topicId,
+      pinnedMessage: input.pinnedMessage,
+    },
+    teamRealtimeKey(input.teamId, input.topicId),
+  );
+}
+
+export function publishDmPinUpdated(input: {
+  conversationId: string;
+  pinnedMessage: unknown | null;
+}) {
+  publishRealtime(
+    {
+      type: "pin.updated",
+      channel: "dm",
+      conversationId: input.conversationId,
+      pinnedMessage: input.pinnedMessage,
+    },
+    dmRealtimeKey(input.conversationId),
+  );
 }

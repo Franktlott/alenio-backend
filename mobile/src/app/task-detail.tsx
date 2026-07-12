@@ -10,9 +10,11 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams } from "expo-router";
 import { ArrowLeft, Trash2, RefreshCw, UserPlus, X, Check, Plus, Square, CheckSquare, Pencil } from "lucide-react-native";
@@ -31,7 +33,13 @@ import {
 import { isRecurringTask, type RecurrenceScope } from "@/lib/recurring-task";
 import { invalidateTaskCaches } from "@/lib/invalidate-task-caches";
 import { isTaskOverdue } from "@/lib/seneca-task-display";
-import { formatTaskDueDateLabel, resolveTimeZone } from "@/lib/timezone";
+import { calendarDueIso, formatTaskDueDateLabel, resolveTimeZone } from "@/lib/timezone";
+
+function sameCalendarDay(a: Date | null, b: Date | null): boolean {
+  if (!a && !b) return true;
+  if (!a || !b) return false;
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
 
 const PRIORITY_COLORS: Record<string, string> = {
   urgent: "#EF4444",
@@ -56,6 +64,8 @@ export default function TaskDetailScreen() {
   const [isEditMode, setIsEditMode] = useState(false);
   const [draftTitle, setDraftTitle] = useState<string>("");
   const [draftPriority, setDraftPriority] = useState<string>("");
+  const [draftDueDate, setDraftDueDate] = useState<Date | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [feedbackContext, setFeedbackContext] = useState<OneOnOneAssociateFeedbackContext | null>(null);
   const [feedbackContextLoading, setFeedbackContextLoading] = useState(false);
   const [feedbackCompletionActive, setFeedbackCompletionActive] = useState(false);
@@ -171,14 +181,28 @@ export default function TaskDetailScreen() {
   const showFocusedFeedbackTask = isFeedbackTask && isFeedbackAssignee;
   const isCreator = !!currentUserId && task?.creator?.id === currentUserId;
   const isOwnerOrLeader = team?.role === "owner" || team?.role === "team_leader" || team?.role === "admin";
+  const isRegularMember = !isOwnerOrLeader;
   const canEdit = (isCreator || isOwnerOrLeader) && !isCompleted;
   const canComplete = !isCompleted && !isFeedbackTask && (isSelfAssigned || canEdit || isCreator);
   const isEditable = canEdit && isEditMode;
 
   const taskIsRecurring = !!task && isRecurringTask(task);
+  const originalDueDate = task?.dueDate ? new Date(task.dueDate) : null;
+
+  const beginEdit = () => {
+    if (!task) return;
+    setDraftTitle(task.title);
+    setDraftPriority(task.priority);
+    setDraftDueDate(task.dueDate ? new Date(task.dueDate) : null);
+    setShowDatePicker(false);
+    setIsEditMode(true);
+  };
 
   const seriesFieldsChanged = () =>
-    !!task && (draftTitle.trim() !== task.title.trim() || draftPriority !== task.priority);
+    !!task &&
+    (draftTitle.trim() !== task.title.trim() ||
+      draftPriority !== task.priority ||
+      !sameCalendarDay(draftDueDate, originalDueDate));
 
   const handleMarkComplete = () => {
     if (!task) return;
@@ -203,11 +227,13 @@ export default function TaskDetailScreen() {
       {
         title: draftTitle.trim() || task.title,
         priority: draftPriority as Task["priority"],
+        dueDate: draftDueDate ? calendarDueIso(draftDueDate, userTimeZone) : null,
         ...(scope === "series" ? { scope: "series" } : {}),
       },
       {
         onSuccess: () => {
           setIsEditMode(false);
+          setShowDatePicker(false);
           setRecurringScopeMode(null);
         },
       },
@@ -216,9 +242,7 @@ export default function TaskDetailScreen() {
 
   useEffect(() => {
     if (task && startEdit === "1" && canEdit) {
-      setDraftTitle(task.title);
-      setDraftPriority(task.priority);
-      setIsEditMode(true);
+      beginEdit();
     }
   }, [task?.id, startEdit]);
 
@@ -226,6 +250,7 @@ export default function TaskDetailScreen() {
     if (isEditMode && task) {
       setDraftTitle(task.title);
       setDraftPriority(task.priority);
+      setDraftDueDate(task.dueDate ? new Date(task.dueDate) : null);
     }
   }, [isEditMode]);
 
@@ -313,7 +338,10 @@ export default function TaskDetailScreen() {
             {canEdit && isEditMode ? (
               <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
                 <TouchableOpacity
-                  onPress={() => setIsEditMode(false)}
+                  onPress={() => {
+                    setIsEditMode(false);
+                    setShowDatePicker(false);
+                  }}
                   testID="cancel-edit-button"
                 >
                   <Text style={{ color: "rgba(255,255,255,0.7)", fontSize: 14, fontWeight: "500" }}>Cancel</Text>
@@ -338,11 +366,7 @@ export default function TaskDetailScreen() {
               </View>
             ) : null}
             {canEdit && !isEditMode && !showFocusedFeedbackTask ? (
-              <TouchableOpacity onPress={() => {
-                setDraftTitle(task.title);
-                setDraftPriority(task.priority);
-                setIsEditMode(true);
-              }} testID="enter-edit-button">
+              <TouchableOpacity onPress={beginEdit} testID="enter-edit-button">
                 <Pencil size={18} color="white" />
               </TouchableOpacity>
             ) : null}
@@ -369,7 +393,13 @@ export default function TaskDetailScreen() {
         className="flex-1 px-4"
         showsVerticalScrollIndicator={false}
         style={showFocusedFeedbackTask ? { backgroundColor: "#F8FAFC" } : undefined}
-        contentContainerStyle={showFocusedFeedbackTask ? { paddingBottom: 32, flexGrow: 1 } : undefined}
+        contentContainerStyle={
+          showFocusedFeedbackTask
+            ? isCompleted
+              ? { flexGrow: 1, justifyContent: "center", paddingVertical: 32 }
+              : { paddingBottom: 32, flexGrow: 1 }
+            : undefined
+        }
       >
         {/* Priority indicator */}
         {!showFocusedFeedbackTask ? (
@@ -492,28 +522,90 @@ export default function TaskDetailScreen() {
           />
         ) : null}
 
-        {/* Completed banner */}
-        {isCompleted ? (
-          <View className="flex-row items-center bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl px-4 py-3 mb-4" style={{ gap: 8 }}>
-            <Text style={{ fontSize: 16 }}>{isFeedbackTask ? "✓" : "🔒"}</Text>
-            <Text className="flex-1 text-sm text-emerald-700 dark:text-emerald-400">
-              {isFeedbackTask
-                ? "This check-in follow-up is complete."
-                : "Task is completed. Recall it to make edits."}
-            </Text>
-            {!isFeedbackTask ? (
-              <TouchableOpacity
-                onPress={() => setShowRecallConfirm(true)}
-                disabled={updateMutation.isPending}
-                className="px-3 py-1 rounded-full bg-emerald-600"
+        {/* Completed state */}
+        {isCompleted && isFeedbackTask ? (
+          <View
+            style={{
+              alignItems: "center",
+              justifyContent: "center",
+              paddingHorizontal: 28,
+              paddingVertical: 24,
+            }}
+            testID="feedback-follow-up-complete"
+          >
+            <View
+              style={{
+                width: 64,
+                height: 64,
+                borderRadius: 32,
+                backgroundColor: "#FFFFFF",
+                borderWidth: 1,
+                borderColor: "#E2E8F0",
+                alignItems: "center",
+                justifyContent: "center",
+                marginBottom: 20,
+                shadowColor: "#0F172A",
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.06,
+                shadowRadius: 8,
+                elevation: 2,
+              }}
+            >
+              <View
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 20,
+                  backgroundColor: "#ECFDF5",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
               >
-                {updateMutation.isPending ? (
-                  <ActivityIndicator size="small" color="white" />
-                ) : (
-                  <Text className="text-xs font-semibold text-white">Recall</Text>
-                )}
-              </TouchableOpacity>
-            ) : null}
+                <Check size={22} color="#059669" strokeWidth={2.5} />
+              </View>
+            </View>
+            <Text
+              style={{
+                fontSize: 20,
+                fontWeight: "700",
+                color: "#0F172A",
+                textAlign: "center",
+                letterSpacing: -0.3,
+                marginBottom: 8,
+              }}
+            >
+              Follow-up complete
+            </Text>
+            <Text
+              style={{
+                fontSize: 15,
+                fontWeight: "500",
+                color: "#64748B",
+                textAlign: "center",
+                lineHeight: 22,
+                maxWidth: 280,
+              }}
+            >
+              This check-in follow-up is complete.
+            </Text>
+          </View>
+        ) : isCompleted ? (
+          <View className="flex-row items-center bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl px-4 py-3 mb-4" style={{ gap: 8 }}>
+            <Text style={{ fontSize: 16 }}>🔒</Text>
+            <Text className="flex-1 text-sm text-emerald-700 dark:text-emerald-400">
+              Task is completed. Recall it to make edits.
+            </Text>
+            <TouchableOpacity
+              onPress={() => setShowRecallConfirm(true)}
+              disabled={updateMutation.isPending}
+              className="px-3 py-1 rounded-full bg-emerald-600"
+            >
+              {updateMutation.isPending ? (
+                <ActivityIndicator size="small" color="white" />
+              ) : (
+                <Text className="text-xs font-semibold text-white">Recall</Text>
+              )}
+            </TouchableOpacity>
           </View>
         ) : null}
 
@@ -729,8 +821,120 @@ export default function TaskDetailScreen() {
         </View>
         ) : null}
 
-        {/* Due date chip (active tasks) */}
-        {!showFocusedFeedbackTask && task.dueDate && !isCompleted ? (() => {
+        {/* Due date */}
+        {!showFocusedFeedbackTask && isEditMode ? (
+          <View className="mb-4">
+            <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748B", marginBottom: 8 }}>Due date</Text>
+            <TouchableOpacity
+              onPress={() => setShowDatePicker(true)}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                paddingHorizontal: 14,
+                paddingVertical: 12,
+                borderRadius: 12,
+                borderWidth: 1.5,
+                borderColor: draftDueDate ? "#4361EE" : "#E2E8F0",
+                backgroundColor: draftDueDate ? "#4361EE0D" : "#F8FAFC",
+              }}
+              testID="edit-due-date-button"
+            >
+              <Text style={{ fontSize: 16, marginRight: 10 }}>📅</Text>
+              <Text style={{ flex: 1, fontSize: 14, fontWeight: "600", color: draftDueDate ? "#4361EE" : "#94A3B8" }}>
+                {draftDueDate
+                  ? draftDueDate.toLocaleDateString("en-US", {
+                      weekday: "short",
+                      month: "long",
+                      day: "numeric",
+                      year: "numeric",
+                    })
+                  : "Select a due date"}
+              </Text>
+              {draftDueDate ? (
+                <TouchableOpacity
+                  onPress={() => setDraftDueDate(null)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  testID="clear-due-date-button"
+                >
+                  <Text style={{ color: "#94A3B8", fontSize: 15 }}>✕</Text>
+                </TouchableOpacity>
+              ) : (
+                <Text style={{ color: "#94A3B8" }}>›</Text>
+              )}
+            </TouchableOpacity>
+
+            {Platform.OS === "ios" ? (
+              <Modal visible={showDatePicker} transparent animationType="slide" onRequestClose={() => setShowDatePicker(false)}>
+                <View style={{ flex: 1, justifyContent: "flex-end" }}>
+                  <Pressable
+                    style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(15,23,42,0.35)" }}
+                    onPress={() => setShowDatePicker(false)}
+                  />
+                  <View style={{ backgroundColor: "white", borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: Math.max(insets.bottom, 16) }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 }}>
+                      <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+                        <Text style={{ color: "#64748B", fontSize: 15 }}>Cancel</Text>
+                      </TouchableOpacity>
+                      <Text style={{ fontSize: 15, fontWeight: "700", color: "#0F172A" }}>Due Date</Text>
+                      <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+                        <Text style={{ color: "#4361EE", fontSize: 15, fontWeight: "700" }}>Done</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <DateTimePicker
+                      value={draftDueDate ?? new Date()}
+                      mode="date"
+                      display="inline"
+                      minimumDate={isRegularMember ? new Date() : undefined}
+                      onChange={(_e, date) => {
+                        if (!date) return;
+                        const next = new Date(date);
+                        next.setHours(23, 59, 59, 0);
+                        setDraftDueDate(next);
+                      }}
+                      testID="edit-date-time-picker"
+                      style={{ alignSelf: "center", marginHorizontal: 8 }}
+                    />
+                    <TouchableOpacity
+                      onPress={() => {
+                        setDraftDueDate(null);
+                        setShowDatePicker(false);
+                      }}
+                      style={{
+                        marginHorizontal: 20,
+                        marginTop: 4,
+                        marginBottom: 4,
+                        paddingVertical: 12,
+                        borderRadius: 12,
+                        backgroundColor: "#F8FAFC",
+                        borderWidth: 1,
+                        borderColor: "#E2E8F0",
+                        alignItems: "center",
+                      }}
+                      testID="clear-due-date-sheet-button"
+                    >
+                      <Text style={{ fontSize: 14, fontWeight: "600", color: "#EF4444" }}>Clear date</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </Modal>
+            ) : showDatePicker ? (
+              <DateTimePicker
+                value={draftDueDate ?? new Date()}
+                mode="date"
+                display="calendar"
+                minimumDate={isRegularMember ? new Date() : undefined}
+                onChange={(_e, date) => {
+                  setShowDatePicker(false);
+                  if (!date) return;
+                  const next = new Date(date);
+                  next.setHours(23, 59, 59, 0);
+                  setDraftDueDate(next);
+                }}
+                testID="edit-date-time-picker"
+              />
+            ) : null}
+          </View>
+        ) : !showFocusedFeedbackTask && task.dueDate && !isCompleted ? (() => {
           const overdue = isTaskOverdue(task);
           const dueLabel = formatTaskDueDateLabel(task.dueDate, userTimeZone);
           const dueToday =

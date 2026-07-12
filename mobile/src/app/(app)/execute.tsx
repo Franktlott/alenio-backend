@@ -14,7 +14,6 @@ import {
   Platform,
   Switch,
   Alert,
-  ActionSheetIOS,
   Dimensions,
 } from "react-native";
 
@@ -24,7 +23,7 @@ const MEETING_ASSIGNEE_SHEET_MAX_HEIGHT = Math.round(SCREEN_HEIGHT * 0.62);
 const MEETING_DURATION_SHEET_MAX_HEIGHT = Math.round(SCREEN_HEIGHT * 0.55);
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams, Redirect, useFocusEffect } from "expo-router";
-import { Plus, User, Users, ChevronLeft, ChevronRight, ChevronDown, X, CalendarDays, CheckSquare, Calendar, Check, UserRound, Video, VideoOff, Clock, Lock, Globe, Trash2 } from "lucide-react-native";
+import { Plus, User, Users, ChevronLeft, ChevronRight, ChevronDown, X, CalendarDays, CheckSquare, Calendar, Check, UserRound, Video, VideoOff, Clock, Lock, Globe, Trash2, Pencil, RefreshCw } from "lucide-react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -48,6 +47,12 @@ import { TaskFilterBar } from "@/components/workspace/TaskFilterBar";
 import { TaskListCard } from "@/components/workspace/TaskListCard";
 import { MemberTasksEmptyState } from "@/components/workspace/MemberTasksEmptyState";
 import {
+  AlenioBottomSheet,
+  AlenioSheetCard,
+  AlenioSheetOption,
+  alenioSheetStyles,
+} from "@/components/AlenioBottomSheet";
+import {
   DEFAULT_WORKSPACE_FILTERS,
   type FilterPicker,
   type TaskStatusTab,
@@ -65,6 +70,11 @@ import {
 } from "@/components/workspace/workspace-utils";
 import { SafeKeyboardAvoidingView } from "@/lib/safe-keyboard-controller";
 import { getUSHolidays, type USFederalHoliday } from "@/lib/us-federal-holidays";
+import { eventCalendarDayRange } from "@/lib/calendar-grid";
+import {
+  fetchExternalCalendarEvents,
+  type ExternalCalendarEventItem,
+} from "@/lib/outlook-calendar-api";
 import {
   VIDEO_MEETING_DURATION_OPTIONS,
   durationMinutesFromRange,
@@ -72,6 +82,8 @@ import {
   formatVideoMeetingEndPreview,
   videoMeetingEndFromDuration,
 } from "@/lib/video-meeting-duration";
+
+const EXTERNAL_BUSY_COLOR = "#94A3B8";
 
 export default function TasksScreen() {
   const insets = useSafeAreaInsets();
@@ -85,6 +97,8 @@ export default function TasksScreen() {
 
   const [confirmCompleteTask, setConfirmCompleteTask] = useState<Task | null>(null);
   const [actionMenuTask, setActionMenuTask] = useState<Task | null>(null);
+  const [actionMenuEvent, setActionMenuEvent] = useState<CalendarEvent | null>(null);
+  const [confirmDeleteActionEvent, setConfirmDeleteActionEvent] = useState(false);
   const [reassignTask, setReassignTask] = useState<Task | null>(null);
   const [confirmReassign, setConfirmReassign] = useState<{ task: Task; newUserId: string; newUserName: string } | null>(null);
   const [subtaskBlockMessage, setSubtaskBlockMessage] = useState<string | null>(null);
@@ -170,6 +184,7 @@ export default function TasksScreen() {
     setNextCursor(null);
     invalidateTaskCaches(queryClient, activeTeamId);
     await queryClient.invalidateQueries({ queryKey: ["calendar-events", activeTeamId] });
+    await queryClient.invalidateQueries({ queryKey: ["external-calendar-events"] });
     await queryClient.invalidateQueries({ queryKey: ["upcoming-video-meetings"] });
     setRefreshing(false);
   };
@@ -228,6 +243,7 @@ export default function TasksScreen() {
 
   const canManageEvent = useCallback(
     (ev: CalendarEvent) => {
+      if (ev.isExternal) return false;
       const creatorId = ev.createdById ?? ev.createdBy?.id;
       if (!session?.user?.id) return false;
       if (isCalendarManager) return true;
@@ -332,6 +348,46 @@ export default function TasksScreen() {
     refetchInterval: workspacePollInterval,
     refetchIntervalInBackground: false,
   });
+
+  const workspaceCalendarRange = React.useMemo(() => {
+    const firstOfMonth = new Date(calendarYear, calendarMonth, 1);
+    const lastOfMonth = new Date(calendarYear, calendarMonth + 1, 0);
+    const startPad = new Date(firstOfMonth);
+    startPad.setDate(startPad.getDate() - 7);
+    const endPad = new Date(lastOfMonth);
+    endPad.setDate(endPad.getDate() + 7);
+    return {
+      start: startOfDay(startPad).toISOString(),
+      end: new Date(endPad.getFullYear(), endPad.getMonth(), endPad.getDate(), 23, 59, 59, 999).toISOString(),
+    };
+  }, [calendarYear, calendarMonth]);
+
+  const { data: externalBusyEvents = [] } = useQuery({
+    queryKey: ["external-calendar-events", workspaceCalendarRange.start, workspaceCalendarRange.end],
+    queryFn: () => fetchExternalCalendarEvents(workspaceCalendarRange.start, workspaceCalendarRange.end),
+    enabled: !!session?.user?.id && !!workspaceCalendarRange.start && hasTaskAccess,
+    staleTime: 15 * 60 * 1000,
+    refetchInterval: 15 * 60 * 1000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
+  });
+
+  const calendarEventsWithOutlook = React.useMemo((): CalendarEvent[] => {
+    const teamEvents = calendarEvents.filter((e) => !e.isHidden);
+    const outlookEvents: CalendarEvent[] = externalBusyEvents.map((event: ExternalCalendarEventItem) => ({
+      id: `ext-${event.id}`,
+      title: event.title?.trim() || "Untitled event",
+      description: "Private · Outlook",
+      startDate: event.startDate,
+      endDate: event.endDate,
+      allDay: event.allDay,
+      color: EXTERNAL_BUSY_COLOR,
+      teamId: "",
+      createdAt: event.startDate,
+      isExternal: true,
+    }));
+    return [...teamEvents, ...outlookEvents];
+  }, [calendarEvents, externalBusyEvents]);
 
   const { data: taskCount = 0 } = useQuery({
     queryKey: ["tasks-count", activeTeamId],
@@ -553,26 +609,8 @@ export default function TasksScreen() {
       openEventDetails(ev);
       return;
     }
-    if (Platform.OS === "ios") {
-      ActionSheetIOS.showActionSheetWithOptions(
-        {
-          options: ["Edit", "Delete", "Cancel"],
-          destructiveButtonIndex: 1,
-          cancelButtonIndex: 2,
-          userInterfaceStyle: "light",
-        },
-        (buttonIndex) => {
-          if (buttonIndex === 0) openEditEventModal(ev);
-          if (buttonIndex === 1) confirmAndDeleteEvent(ev);
-        },
-      );
-      return;
-    }
-    Alert.alert(ev.title, undefined, [
-      { text: "Edit", onPress: () => openEditEventModal(ev) },
-      { text: "Delete", style: "destructive", onPress: () => confirmAndDeleteEvent(ev) },
-      { text: "Cancel", style: "cancel" },
-    ]);
+    setConfirmDeleteActionEvent(false);
+    setActionMenuEvent(ev);
   };
 
   const handleSaveEvent = () => {
@@ -717,11 +755,10 @@ export default function TasksScreen() {
     (calendarYear === today.getFullYear() && calendarMonth === today.getMonth()
       ? toLocalIso(today)
       : toLocalIso(new Date(calendarYear, calendarMonth, 1)));
-  const dayEvents = calendarEvents.filter((ev) => {
-    const evStart = startOfDay(new Date(ev.startDate));
-    const evEnd = ev.endDate ? startOfDay(new Date(ev.endDate)) : evStart;
+  const dayEvents = calendarEventsWithOutlook.filter((ev) => {
+    const { start: evStart, end: evEnd } = eventCalendarDayRange(ev);
     const [ty, tm, td] = targetIso.split("-").map(Number);
-    const target = new Date(ty, tm - 1, td);
+    const target = new Date(ty!, tm! - 1, td!);
     return evStart <= target && target <= evEnd;
   });
 
@@ -729,6 +766,22 @@ export default function TasksScreen() {
     const [ty, tm, td] = targetIso.split("-").map(Number);
     return isSameDay(h.date, new Date(ty, tm - 1, td));
   });
+
+  const dayTasks = React.useMemo(() => {
+    const byId = new Map<string, Task>();
+    for (const task of [...(activeTasksData?.tasks ?? []), ...(completedTasksData?.tasks ?? [])]) {
+      if (!task.dueDate) continue;
+      if (toLocalIso(new Date(task.dueDate)) !== targetIso) continue;
+      byId.set(task.id, task);
+    }
+    return [...byId.values()].sort((a, b) => {
+      if (a.status === "done" && b.status !== "done") return 1;
+      if (a.status !== "done" && b.status === "done") return -1;
+      const aTime = a.dueDate ? new Date(a.dueDate).getTime() : 0;
+      const bTime = b.dueDate ? new Date(b.dueDate).getTime() : 0;
+      return aTime - bTime || a.title.localeCompare(b.title);
+    });
+  }, [activeTasksData?.tasks, completedTasksData?.tasks, targetIso]);
 
   const calendarTasks = rawTasks;
 
@@ -781,14 +834,8 @@ export default function TasksScreen() {
       <WorkspaceHeader
         topInset={insets.top}
         showAdd={!!activeTeamId}
-        addLabel={workspaceMode === "calendar" ? "Add Event" : "Add"}
-        onAddPress={() => {
-          if (workspaceMode === "calendar") {
-            openEventModal();
-            return;
-          }
-          setShowAddModal(true);
-        }}
+        addLabel="Add"
+        onAddPress={() => setShowAddModal(true)}
         addTestID="workspace-header-add-button"
       />
 
@@ -805,7 +852,7 @@ export default function TasksScreen() {
             <View style={{ flexShrink: 0 }}>
               <CalendarCard
                 tasks={calendarTasks}
-                events={calendarEvents}
+                events={calendarEventsWithOutlook}
                 holidays={holidays}
                 selectedDay={selectedDay}
                 onSelectDay={handleSelectDay}
@@ -818,14 +865,21 @@ export default function TasksScreen() {
             <EventsSection
               dayEvents={dayEvents}
               dayHolidays={dayHolidays}
+              dayTasks={dayTasks}
               selectedDayIso={targetIso}
               variant="dayList"
               fillRemaining
               canManageEvent={canManageEvent}
               onEventLongPress={openEventActions}
               onEventPress={openEventDetails}
-              onEventMenu={openEventActions}
-              onAddEvent={openEventModal}
+              onTaskPress={(task) =>
+                router.push({ pathname: "/task-detail", params: { taskId: task.id, teamId: activeTeamId! } })
+              }
+              onTaskLongPress={(task) => {
+                if (!canManageTaskMenu(task)) return;
+                setActionMenuTask(task);
+              }}
+              onAddEvent={() => setShowAddModal(true)}
               listPaddingBottom={workspaceTaskClearance(insets.bottom)}
               refreshControl={
                 <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4361EE" colors={["#4361EE"]} />
@@ -888,6 +942,7 @@ export default function TasksScreen() {
                   paddingTop: 4,
                   paddingBottom: workspaceTaskClearance(insets.bottom),
                   flexGrow: 1,
+                  justifyContent: visibleTasks.length === 0 && !showTasksLoading ? "center" : undefined,
                 }}
               >
                 <TaskListCard
@@ -903,17 +958,26 @@ export default function TasksScreen() {
                   }}
                   emptyTitle={
                     filters.statusTab === "completed"
-                      ? filters.dueDate === "calendar_day"
-                        ? "No completed tasks for this day"
-                        : "No completed tasks"
+                      ? "Nothing completed"
                       : filters.dueDate === "calendar_day"
-                        ? "No active tasks for this day"
-                        : "No active tasks"
+                        ? "No active tasks"
+                        : "You're all"
+                  }
+                  emptyAccentTitle={
+                    filters.statusTab === "completed"
+                      ? filters.dueDate === "calendar_day"
+                        ? "for this day."
+                        : "yet."
+                      : filters.dueDate === "calendar_day"
+                        ? "for this day."
+                        : "caught up."
                   }
                   emptySubtitle={
                     filters.dueDate === "calendar_day" && selectedDay
                       ? "Try viewing upcoming tasks or adjust your filters."
-                      : "You're all caught up for the current filters."
+                      : filters.statusTab === "completed"
+                        ? "Completed work will show up here."
+                        : "No active tasks for the current filters."
                   }
                   emptyActionLabel={filters.dueDate === "calendar_day" ? "View upcoming tasks" : undefined}
                   onEmptyAction={
@@ -1037,227 +1101,304 @@ export default function TasksScreen() {
       ) : null}
 
       {/* Task action menu */}
-      <Modal visible={!!actionMenuTask} transparent animationType="fade" onRequestClose={() => setActionMenuTask(null)}>
-        <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" }} onPress={() => setActionMenuTask(null)}>
-          <Pressable onPress={(e) => e.stopPropagation()} style={{ backgroundColor: "white", borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 36, paddingTop: 8 }}>
-            <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: "#E2E8F0", alignSelf: "center", marginBottom: 16 }} />
-            <Text style={{ fontSize: 13, fontWeight: "600", color: "#94A3B8", paddingHorizontal: 20, marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 }} numberOfLines={1}>
-              {actionMenuTask?.title}
+      <AlenioBottomSheet
+        visible={!!actionMenuTask}
+        title={actionMenuTask?.title ?? "Task"}
+        subtitle="Choose an action"
+        onClose={() => setActionMenuTask(null)}
+        testID="task-action-sheet"
+        footer={
+          <TouchableOpacity
+            onPress={() => setActionMenuTask(null)}
+            style={alenioSheetStyles.cancelButton}
+            activeOpacity={0.8}
+          >
+            <Text style={alenioSheetStyles.cancelButtonText}>Cancel</Text>
+          </TouchableOpacity>
+        }
+      >
+        {actionMenuTask && canManageTaskMenu(actionMenuTask) ? (
+          <AlenioSheetOption
+            icon={<Pencil size={20} color="white" strokeWidth={2.25} />}
+            title="Edit"
+            subtitle="Change title, due date, priority, and more"
+            onPress={() => {
+              const task = actionMenuTask;
+              setActionMenuTask(null);
+              router.push({ pathname: "/task-detail", params: { taskId: task.id, teamId: activeTeamId!, startEdit: "1" } });
+            }}
+            testID="task-action-edit"
+          />
+        ) : null}
+        {isOwnerOrLeader && actionMenuTask?.status !== "done" && (actionMenuTask?.assignments.length ?? 0) > 0 ? (
+          <AlenioSheetOption
+            icon={<RefreshCw size={20} color="white" strokeWidth={2.25} />}
+            iconColor="#7C3AED"
+            title="Reassign"
+            subtitle="Move this task to another teammate"
+            onPress={() => {
+              const t = actionMenuTask!;
+              setActionMenuTask(null);
+              setReassignTask(t);
+            }}
+            testID="task-action-reassign"
+          />
+        ) : null}
+      </AlenioBottomSheet>
+
+      {/* Event action menu */}
+      <AlenioBottomSheet
+        visible={!!actionMenuEvent}
+        title={actionMenuEvent?.title ?? "Event"}
+        subtitle={
+          confirmDeleteActionEvent
+            ? "This cannot be undone"
+            : actionMenuEvent?.isVideoMeeting
+              ? "Virtual meeting options"
+              : "Calendar event options"
+        }
+        onClose={() => {
+          setActionMenuEvent(null);
+          setConfirmDeleteActionEvent(false);
+        }}
+        testID="event-action-sheet"
+        footer={
+          <TouchableOpacity
+            onPress={() => {
+              setActionMenuEvent(null);
+              setConfirmDeleteActionEvent(false);
+            }}
+            style={alenioSheetStyles.cancelButton}
+            activeOpacity={0.8}
+          >
+            <Text style={alenioSheetStyles.cancelButtonText}>Cancel</Text>
+          </TouchableOpacity>
+        }
+      >
+        {confirmDeleteActionEvent && actionMenuEvent ? (
+          <AlenioSheetCard tint="danger">
+            <Text style={{ fontSize: 14, fontWeight: "700", color: "#991B1B", textAlign: "center" }}>
+              Delete this {actionMenuEvent.isVideoMeeting ? "meeting" : "event"}?
             </Text>
-            {/* Edit — creators and leaders only */}
-            {actionMenuTask && canManageTaskMenu(actionMenuTask) ? (
-              <Pressable
-                onPress={() => {
-                  setActionMenuTask(null);
-                  router.push({ pathname: "/task-detail", params: { taskId: actionMenuTask.id, teamId: activeTeamId!, startEdit: "1" } });
-                }}
-                style={{ flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: 20, paddingVertical: 16 }}
-                testID="task-action-edit"
-              >
-                <Text style={{ fontSize: 20 }}>✏️</Text>
-                <Text style={{ fontSize: 16, fontWeight: "500", color: "#0F172A" }}>Edit</Text>
-              </Pressable>
-            ) : null}
-            {/* Reassign — owners/leaders only, undone tasks with assignees */}
-            {isOwnerOrLeader && actionMenuTask?.status !== "done" && (actionMenuTask?.assignments.length ?? 0) > 0 ? (
-              <Pressable
-                onPress={() => {
-                  const t = actionMenuTask!;
-                  setActionMenuTask(null);
-                  setReassignTask(t);
-                }}
-                style={{ flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: 20, paddingVertical: 16 }}
-              >
-                <Text style={{ fontSize: 20 }}>🔄</Text>
-                <Text style={{ fontSize: 16, fontWeight: "500", color: "#0F172A" }}>Reassign</Text>
-              </Pressable>
-            ) : null}
-            {/* Cancel */}
-            <Pressable
-              onPress={() => setActionMenuTask(null)}
-              style={{ marginHorizontal: 20, marginTop: 8, paddingVertical: 14, borderRadius: 12, alignItems: "center", backgroundColor: "#F1F5F9" }}
+            <Text style={{ fontSize: 12, color: "#B91C1C", textAlign: "center", lineHeight: 16 }}>
+              "{actionMenuEvent.title}" will be removed permanently.
+            </Text>
+            <TouchableOpacity
+              onPress={() => {
+                const ev = actionMenuEvent;
+                setActionMenuEvent(null);
+                setConfirmDeleteActionEvent(false);
+                deleteEventMutation.mutate(ev.id);
+              }}
+              style={[alenioSheetStyles.primaryButton, { backgroundColor: "#EF4444" }]}
+              activeOpacity={0.92}
+              testID="event-action-confirm-delete"
             >
-              <Text style={{ fontSize: 15, fontWeight: "600", color: "#64748B" }}>Cancel</Text>
-            </Pressable>
-          </Pressable>
-        </Pressable>
-      </Modal>
+              {deleteEventMutation.isPending ? (
+                <ActivityIndicator color="white" />
+              ) : (
+                <Text style={alenioSheetStyles.primaryButtonText}>Delete</Text>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setConfirmDeleteActionEvent(false)}
+              style={alenioSheetStyles.cancelButton}
+              activeOpacity={0.8}
+            >
+              <Text style={alenioSheetStyles.cancelButtonText}>Keep it</Text>
+            </TouchableOpacity>
+          </AlenioSheetCard>
+        ) : (
+          <>
+            <AlenioSheetOption
+              icon={<Pencil size={20} color="white" strokeWidth={2.25} />}
+              title="Edit"
+              subtitle="Update details, time, and visibility"
+              onPress={() => {
+                const ev = actionMenuEvent!;
+                setActionMenuEvent(null);
+                openEditEventModal(ev);
+              }}
+              testID="event-action-edit"
+            />
+            <AlenioSheetOption
+              icon={<Trash2 size={20} color="white" strokeWidth={2.25} />}
+              title="Delete"
+              subtitle="Remove this from the calendar"
+              destructive
+              onPress={() => setConfirmDeleteActionEvent(true)}
+              testID="event-action-delete"
+            />
+          </>
+        )}
+      </AlenioBottomSheet>
 
       {/* Reassign task modal */}
-      <Modal visible={!!reassignTask} transparent animationType="slide" onRequestClose={() => setReassignTask(null)}>
-        <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }} onPress={() => setReassignTask(null)}>
-          <Pressable onPress={(e) => e.stopPropagation()} style={{ backgroundColor: "white", borderTopLeftRadius: 24, borderTopRightRadius: 24, width: "100%", paddingBottom: 32, maxHeight: "75%" }}>
-            <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: "#E2E8F0", alignSelf: "center", marginTop: 12, marginBottom: 16 }} />
-            <View style={{ paddingHorizontal: 20, marginBottom: 16 }}>
-              <Text style={{ fontSize: 17, fontWeight: "700", color: "#0F172A", marginBottom: 4 }}>Reassign Task</Text>
-              <Text style={{ fontSize: 13, color: "#64748B" }} numberOfLines={1}>"{reassignTask?.title}"</Text>
-              {reassignTask?.assignments[0]?.user ? (
-                <View style={{ flexDirection: "row", alignItems: "center", marginTop: 8, backgroundColor: "#F8FAFC", borderRadius: 10, padding: 10, gap: 8 }}>
-                  <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: "#E0E7FF", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-                    {reassignTask.assignments[0].user.image ? (
-                      <Image source={{ uri: reassignTask.assignments[0].user.image }} style={{ width: 28, height: 28 }} />
-                    ) : (
-                      <Text style={{ fontSize: 11, fontWeight: "700", color: "#4361EE" }}>{reassignTask.assignments[0].user.name?.[0]?.toUpperCase() ?? "?"}</Text>
-                    )}
-                  </View>
-                  <Text style={{ fontSize: 13, color: "#64748B" }}>Currently: <Text style={{ fontWeight: "600", color: "#0F172A" }}>{reassignTask.assignments[0].user.name}</Text></Text>
-                </View>
-              ) : null}
-            </View>
-            <Text style={{ fontSize: 12, fontWeight: "600", color: "#94A3B8", paddingHorizontal: 20, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 }}>Select new assignee</Text>
-            <ScrollView style={{ maxHeight: 320 }} contentContainerStyle={{ paddingHorizontal: 20, gap: 6 }}>
-              {(teamData?.members ?? [])
-                .filter((m) => !reassignTask?.assignments.some((a) => a.userId === m.userId))
-                .map((member) => (
-                  <Pressable
-                    key={member.userId}
-                    onPress={() => {
-                      if (!reassignTask) return;
-                      setConfirmReassign({ task: reassignTask, newUserId: member.userId, newUserName: member.user?.name ?? "this person" });
-                      setReassignTask(null);
-                    }}
-                    style={{ flexDirection: "row", alignItems: "center", gap: 12, padding: 12, borderRadius: 12, backgroundColor: "#F8FAFC" }}
-                    testID="reassign-member-row"
-                  >
-                    <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#E0E7FF", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-                      {member.user?.image ? (
-                        <Image source={{ uri: member.user.image }} style={{ width: 36, height: 36 }} />
-                      ) : (
-                        <Text style={{ fontSize: 14, fontWeight: "700", color: "#4361EE" }}>{member.user?.name?.[0]?.toUpperCase() ?? "?"}</Text>
-                      )}
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 14, fontWeight: "600", color: "#0F172A" }}>{member.user?.name}</Text>
-                      <Text style={{ fontSize: 12, color: "#94A3B8", textTransform: "capitalize" }}>{member.role.replace("_", " ")}</Text>
-                    </View>
-                    {reassignMutation.isPending ? null : (
-                      <View style={{ width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: "#CBD5E1" }} />
-                    )}
-                  </Pressable>
-                ))}
-            </ScrollView>
-            <Pressable
-              onPress={() => setReassignTask(null)}
-              style={{ marginHorizontal: 20, marginTop: 12, paddingVertical: 14, borderRadius: 12, alignItems: "center", backgroundColor: "#F1F5F9" }}
-              testID="reassign-cancel"
-            >
-              <Text style={{ fontSize: 15, fontWeight: "600", color: "#64748B" }}>Cancel</Text>
-            </Pressable>
-          </Pressable>
-        </Pressable>
-      </Modal>
+      <AlenioBottomSheet
+        visible={!!reassignTask}
+        title="Reassign task"
+        subtitle={reassignTask ? `"${reassignTask.title}"` : "Pick a new teammate"}
+        onClose={() => setReassignTask(null)}
+        testID="reassign-sheet"
+        footer={
+          <TouchableOpacity
+            onPress={() => setReassignTask(null)}
+            style={alenioSheetStyles.cancelButton}
+            activeOpacity={0.8}
+            testID="reassign-cancel"
+          >
+            <Text style={alenioSheetStyles.cancelButtonText}>Cancel</Text>
+          </TouchableOpacity>
+        }
+      >
+        {reassignTask?.assignments[0]?.user ? (
+          <AlenioSheetCard tint="slate">
+            <Text style={{ fontSize: 12, color: "#64748B" }}>
+              Currently assigned to{" "}
+              <Text style={{ fontWeight: "700", color: "#0F172A" }}>{reassignTask.assignments[0].user.name}</Text>
+            </Text>
+          </AlenioSheetCard>
+        ) : null}
+        {(teamData?.members ?? [])
+          .filter((m) => !reassignTask?.assignments.some((a) => a.userId === m.userId))
+          .map((member) => (
+            <AlenioSheetOption
+              key={member.userId}
+              icon={
+                member.user?.image ? (
+                  <Image source={{ uri: member.user.image }} style={{ width: 44, height: 44, borderRadius: 22 }} />
+                ) : (
+                  <Text style={{ fontSize: 16, fontWeight: "700", color: "white" }}>
+                    {member.user?.name?.[0]?.toUpperCase() ?? "?"}
+                  </Text>
+                )
+              }
+              title={member.user?.name ?? "Team member"}
+              subtitle={member.role.replace("_", " ")}
+              onPress={() => {
+                if (!reassignTask) return;
+                setConfirmReassign({
+                  task: reassignTask,
+                  newUserId: member.userId,
+                  newUserName: member.user?.name ?? "this person",
+                });
+                setReassignTask(null);
+              }}
+              testID="reassign-member-row"
+            />
+          ))}
+      </AlenioBottomSheet>
 
       {/* Reassign confirmation modal */}
-      <Modal visible={!!confirmReassign} transparent animationType="fade" onRequestClose={() => setConfirmReassign(null)}>
-        <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.55)", justifyContent: "center", alignItems: "center", paddingHorizontal: 24 }} onPress={() => setConfirmReassign(null)}>
-          <Pressable onPress={(e) => e.stopPropagation()} style={{ backgroundColor: "white", borderRadius: 20, width: "100%", padding: 24 }}>
-            <Text style={{ fontSize: 17, fontWeight: "700", color: "#0F172A", marginBottom: 6 }}>Reassign Task?</Text>
-            <Text style={{ fontSize: 14, color: "#64748B", marginBottom: 4 }} numberOfLines={2}>
-              {`"${confirmReassign?.task.title}"`}
-            </Text>
-            <Text style={{ fontSize: 14, color: "#64748B", marginBottom: 20 }}>
-              {"Will be reassigned to "}
-              <Text style={{ fontWeight: "700", color: "#0F172A" }}>{confirmReassign?.newUserName}</Text>
-              {"."}
-            </Text>
-            <View style={{ flexDirection: "row", gap: 10 }}>
-              <Pressable
-                onPress={() => setConfirmReassign(null)}
-                style={{ flex: 1, paddingVertical: 13, borderRadius: 12, alignItems: "center", backgroundColor: "#F1F5F9" }}
-                testID="reassign-confirm-cancel"
-              >
-                <Text style={{ fontSize: 15, fontWeight: "600", color: "#64748B" }}>Cancel</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => {
-                  if (!confirmReassign) return;
-                  reassignMutation.mutate({ task: confirmReassign.task, newUserId: confirmReassign.newUserId });
-                  setConfirmReassign(null);
-                  setReassignTask(null);
-                }}
-                style={{ flex: 1, paddingVertical: 13, borderRadius: 12, alignItems: "center", backgroundColor: "#4361EE" }}
-                testID="reassign-confirm-submit"
-              >
-                <Text style={{ fontSize: 15, fontWeight: "600", color: "white" }}>Reassign</Text>
-              </Pressable>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
+      <AlenioBottomSheet
+        visible={!!confirmReassign}
+        title="Reassign task?"
+        subtitle="Confirm the new assignee"
+        onClose={() => setConfirmReassign(null)}
+        testID="reassign-confirm-sheet"
+        footer={
+          <TouchableOpacity
+            onPress={() => setConfirmReassign(null)}
+            style={alenioSheetStyles.cancelButton}
+            activeOpacity={0.8}
+            testID="reassign-confirm-cancel"
+          >
+            <Text style={alenioSheetStyles.cancelButtonText}>Cancel</Text>
+          </TouchableOpacity>
+        }
+      >
+        <AlenioSheetCard>
+          <Text style={{ fontSize: 14, color: "#64748B", lineHeight: 20, textAlign: "center" }}>
+            Move <Text style={{ fontWeight: "700", color: "#0F172A" }}>"{confirmReassign?.task.title}"</Text> to{" "}
+            <Text style={{ fontWeight: "700", color: "#0F172A" }}>{confirmReassign?.newUserName}</Text>?
+          </Text>
+          <TouchableOpacity
+            onPress={() => {
+              if (!confirmReassign) return;
+              reassignMutation.mutate({ task: confirmReassign.task, newUserId: confirmReassign.newUserId });
+              setConfirmReassign(null);
+              setReassignTask(null);
+            }}
+            style={alenioSheetStyles.primaryButton}
+            activeOpacity={0.92}
+            testID="reassign-confirm-submit"
+          >
+            <Text style={alenioSheetStyles.primaryButtonText}>Reassign</Text>
+          </TouchableOpacity>
+        </AlenioSheetCard>
+      </AlenioBottomSheet>
 
       {/* Add choice modal */}
-      <Modal visible={showAddModal} transparent animationType="fade" onRequestClose={() => setShowAddModal(false)}>
-        <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }} onPress={() => setShowAddModal(false)}>
-          <Pressable onPress={(e) => e.stopPropagation()} style={{ backgroundColor: "white", borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, gap: 12 }}>
-            <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: "#E2E8F0", alignSelf: "center", marginBottom: 8 }} />
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 4 }}>
-              <Image source={require("@/assets/alenio-icon.png")} style={{ width: 32, height: 32, borderRadius: 8 }} />
-              <Text style={{ fontSize: 17, fontWeight: "700", color: "#0F172A" }}>What would you like to add?</Text>
-            </View>
-            {isOwnerOrLeader ? (
-              <Pressable
-                onPress={() => { setShowAddModal(false); openEventModal(); }}
-                style={{ flexDirection: "row", alignItems: "center", gap: 14, backgroundColor: "#F5F3FF", borderRadius: 16, padding: 16 }}
-              >
-                <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: "#7C3AED", alignItems: "center", justifyContent: "center" }}>
-                  <CalendarDays size={22} color="white" />
-                </View>
-                <View>
-                  <Text style={{ fontSize: 15, fontWeight: "700", color: "#0F172A" }}>Team calendar event</Text>
-                  <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 2 }}>Add a public event for the whole team</Text>
-                </View>
-              </Pressable>
-            ) : (
-              <Pressable
-                onPress={() => { setShowAddModal(false); openPersonalEventModal(); }}
-                style={{ flexDirection: "row", alignItems: "center", gap: 14, backgroundColor: "#F8FAFC", borderRadius: 16, padding: 16 }}
-              >
-                <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: "#64748B", alignItems: "center", justifyContent: "center" }}>
-                  <CalendarDays size={22} color="white" />
-                </View>
-                <View>
-                  <Text style={{ fontSize: 15, fontWeight: "700", color: "#0F172A" }}>Calendar event</Text>
-                  <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 2 }}>Add a private or public event</Text>
-                </View>
-              </Pressable>
-            )}
-            {isOwnerOrLeader ? (
-              <Pressable
-                onPress={() => { setShowAddModal(false); openMeetingModal(); }}
-                style={{ flexDirection: "row", alignItems: "center", gap: 14, backgroundColor: "#EEF2FF", borderRadius: 16, padding: 16 }}
-              >
-                <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: "#4361EE", alignItems: "center", justifyContent: "center" }}>
-                  <Video size={22} color="white" />
-                </View>
-                <View>
-                  <Text style={{ fontSize: 15, fontWeight: "700", color: "#0F172A" }}>Virtual Meeting</Text>
-                  <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 2 }}>Create a meeting with video call link</Text>
-                </View>
-              </Pressable>
-            ) : null}
-            {!isRegularMember ? (
-            <Pressable
-              onPress={() => { setShowAddModal(false); router.push({ pathname: "/create-task", params: { teamId: activeTeamId!, initialDueDate: selectedDay ?? toLocalIso(new Date()) } }); }}
-              style={{ flexDirection: "row", alignItems: "center", gap: 14, backgroundColor: "#EEF2FF", borderRadius: 16, padding: 16 }}
-            >
-              <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: "#4361EE", alignItems: "center", justifyContent: "center" }}>
-                <CheckSquare size={22} color="white" />
-              </View>
-              <View>
-                <Text style={{ fontSize: 15, fontWeight: "700", color: "#0F172A" }}>Task</Text>
-                <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 2 }}>Create a new task for the team</Text>
-              </View>
-            </Pressable>
-            ) : null}
-            <View style={{ height: 16 }} />
-          </Pressable>
-        </Pressable>
-      </Modal>
+      <AlenioBottomSheet
+        visible={showAddModal}
+        title="What would you like to add?"
+        subtitle="Create something for this workspace"
+        onClose={() => setShowAddModal(false)}
+        testID="workspace-add-sheet"
+        footer={
+          <TouchableOpacity
+            onPress={() => setShowAddModal(false)}
+            style={alenioSheetStyles.cancelButton}
+            activeOpacity={0.8}
+          >
+            <Text style={alenioSheetStyles.cancelButtonText}>Cancel</Text>
+          </TouchableOpacity>
+        }
+      >
+        {isOwnerOrLeader ? (
+          <AlenioSheetOption
+            icon={<CalendarDays size={22} color="white" />}
+            iconColor="#7C3AED"
+            title="Team calendar event"
+            subtitle="Add a public event for the whole team"
+            onPress={() => {
+              setShowAddModal(false);
+              openEventModal();
+            }}
+          />
+        ) : (
+          <AlenioSheetOption
+            icon={<CalendarDays size={22} color="white" />}
+            iconColor="#64748B"
+            title="Calendar event"
+            subtitle="Add a private or public event"
+            onPress={() => {
+              setShowAddModal(false);
+              openPersonalEventModal();
+            }}
+          />
+        )}
+        {isOwnerOrLeader ? (
+          <AlenioSheetOption
+            icon={<Video size={22} color="white" />}
+            title="Virtual meeting"
+            subtitle="Create a meeting with a video call link"
+            onPress={() => {
+              setShowAddModal(false);
+              openMeetingModal();
+            }}
+          />
+        ) : null}
+        {!isRegularMember ? (
+          <AlenioSheetOption
+            icon={<CheckSquare size={22} color="white" />}
+            title="Task"
+            subtitle="Create a new task for the team"
+            onPress={() => {
+              setShowAddModal(false);
+              router.push({
+                pathname: "/create-task",
+                params: { teamId: activeTeamId!, initialDueDate: selectedDay ?? toLocalIso(new Date()) },
+              });
+            }}
+          />
+        ) : null}
+      </AlenioBottomSheet>
 
       {/* New / Edit Event Modal */}
-      <Modal visible={showEventModal} transparent animationType="slide" onRequestClose={() => { setShowEventModal(false); setEditingEvent(null); setEventModalReadOnly(false); setConfirmDeleteEvent(false); }}>
+      <Modal visible={showEventModal} transparent animationType="slide" onRequestClose={() => { setShowEventModal(false); setEditingEvent(null); setEventModalReadOnly(false); setConfirmDeleteEvent(false); setShowMeetingAssigneeDropdown(false); setShowDurationPicker(false); }}>
         <SafeKeyboardAvoidingView style={{ flex: 1, justifyContent: "flex-end" }}>
-          <Pressable style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.5)" }} onPress={() => { setShowEventModal(false); setEditingEvent(null); setEventModalReadOnly(false); setConfirmDeleteEvent(false); }} />
+          <Pressable style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.5)" }} onPress={() => { setShowEventModal(false); setEditingEvent(null); setEventModalReadOnly(false); setConfirmDeleteEvent(false); setShowMeetingAssigneeDropdown(false); setShowDurationPicker(false); }} />
           <Pressable
             style={{
               backgroundColor: "white",
@@ -1298,7 +1439,7 @@ export default function TasksScreen() {
                     <Trash2 size={15} color="#DC2626" strokeWidth={2.25} />
                   </Pressable>
                 ) : null}
-                <Pressable onPress={() => { setShowEventModal(false); setEditingEvent(null); setEventModalReadOnly(false); setConfirmDeleteEvent(false); }} style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "#F1F5F9", alignItems: "center", justifyContent: "center" }}>
+                <Pressable onPress={() => { setShowEventModal(false); setEditingEvent(null); setEventModalReadOnly(false); setConfirmDeleteEvent(false); setShowMeetingAssigneeDropdown(false); setShowDurationPicker(false); }} style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "#F1F5F9", alignItems: "center", justifyContent: "center" }}>
                   <X size={16} color="#64748B" />
                 </Pressable>
               </View>
@@ -1636,178 +1777,204 @@ export default function TasksScreen() {
               )}
             </ScrollView>
           </Pressable>
-        </SafeKeyboardAvoidingView>
-      </Modal>
 
-      <Modal
-        visible={showMeetingAssigneeDropdown}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowMeetingAssigneeDropdown(false)}
-      >
-        <Pressable
-          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.35)", justifyContent: "flex-end" }}
-          onPress={() => setShowMeetingAssigneeDropdown(false)}
-        >
-          <Pressable onPress={(e) => e.stopPropagation()}>
+          {/* Attendee / duration pickers as overlays inside the event modal (nested Modals break taps on iOS). */}
+          {showMeetingAssigneeDropdown ? (
             <View
               style={{
-                backgroundColor: "white",
-                borderTopLeftRadius: 20,
-                borderTopRightRadius: 20,
-                maxHeight: MEETING_ASSIGNEE_SHEET_MAX_HEIGHT,
-                paddingBottom: insets.bottom + 12,
-                overflow: "hidden",
+                position: "absolute",
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                justifyContent: "flex-end",
+                zIndex: 30,
               }}
             >
-              <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: "#E2E8F0", alignSelf: "center", marginTop: 10, marginBottom: 14 }} />
-              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, marginBottom: 8 }}>
-                <Text style={{ fontSize: 17, fontWeight: "700", color: "#0F172A" }}>Assign members</Text>
-                <Pressable
-                  onPress={() => setShowMeetingAssigneeDropdown(false)}
-                  style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "#F1F5F9", alignItems: "center", justifyContent: "center" }}
-                >
-                  <X size={16} color="#64748B" />
-                </Pressable>
-              </View>
-              <Text style={{ fontSize: 12, color: "#94A3B8", paddingHorizontal: 20, marginBottom: 12, lineHeight: 18 }}>
-                Choose who can see this private meeting. Select all to include everyone on the team.
-              </Text>
               <Pressable
-                onPress={toggleAllMeetingAssignees}
+                style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.35)" }}
+                onPress={() => setShowMeetingAssigneeDropdown(false)}
+              />
+              <View
                 style={{
-                  marginHorizontal: 20,
-                  marginBottom: 8,
-                  paddingHorizontal: 12,
-                  paddingVertical: 11,
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  borderRadius: 12,
-                  backgroundColor: "#F8FAFC",
-                  borderWidth: 1,
-                  borderColor: "#E2E8F0",
+                  backgroundColor: "white",
+                  borderTopLeftRadius: 20,
+                  borderTopRightRadius: 20,
+                  height: MEETING_ASSIGNEE_SHEET_MAX_HEIGHT,
+                  paddingBottom: insets.bottom + 12,
                 }}
               >
-                <Text style={{ fontSize: 13, color: "#4361EE", fontWeight: "700" }}>
-                  {allMeetingAssigneesSelected ? "Deselect all" : "Select all"}
+                <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: "#E2E8F0", alignSelf: "center", marginTop: 10, marginBottom: 14 }} />
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, marginBottom: 8 }}>
+                  <Text style={{ fontSize: 17, fontWeight: "700", color: "#0F172A" }}>Assign members</Text>
+                  <Pressable
+                    onPress={() => setShowMeetingAssigneeDropdown(false)}
+                    style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "#F1F5F9", alignItems: "center", justifyContent: "center" }}
+                  >
+                    <X size={16} color="#64748B" />
+                  </Pressable>
+                </View>
+                <Text style={{ fontSize: 12, color: "#94A3B8", paddingHorizontal: 20, marginBottom: 12, lineHeight: 18 }}>
+                  Choose who can see this private meeting. Select all to include everyone on the team.
                 </Text>
-                {allMeetingAssigneesSelected ? <Check size={16} color="#4361EE" /> : null}
-              </Pressable>
-              <ScrollView
-                style={{ maxHeight: MEETING_ASSIGNEE_SHEET_MAX_HEIGHT - 210 }}
-                contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 8 }}
-                showsVerticalScrollIndicator
-                keyboardShouldPersistTaps="handled"
+                <TouchableOpacity
+                  onPress={toggleAllMeetingAssignees}
+                  activeOpacity={0.7}
+                  style={{
+                    marginHorizontal: 20,
+                    marginBottom: 8,
+                    paddingHorizontal: 12,
+                    paddingVertical: 11,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    borderRadius: 12,
+                    backgroundColor: "#F8FAFC",
+                    borderWidth: 1,
+                    borderColor: "#E2E8F0",
+                  }}
+                >
+                  <Text style={{ fontSize: 13, color: "#4361EE", fontWeight: "700" }}>
+                    {allMeetingAssigneesSelected ? "Deselect all" : "Select all"}
+                  </Text>
+                  {allMeetingAssigneesSelected ? <Check size={16} color="#4361EE" /> : null}
+                </TouchableOpacity>
+                <ScrollView
+                  style={{ flex: 1, minHeight: 0 }}
+                  contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 8 }}
+                  showsVerticalScrollIndicator
+                  keyboardShouldPersistTaps="handled"
+                  nestedScrollEnabled
+                  bounces
+                >
+                  {meetingAssigneeOptions.length === 0 ? (
+                    <View style={{ paddingVertical: 24, alignItems: "center" }}>
+                      <Text style={{ fontSize: 14, color: "#94A3B8", textAlign: "center" }}>No team members found.</Text>
+                    </View>
+                  ) : (
+                    meetingAssigneeOptions.map((member, idx) => {
+                      const selected = meetingAssigneeIds.includes(member.userId);
+                      const label = member.user.name?.trim() || member.user.email || "Team member";
+                      return (
+                        <TouchableOpacity
+                          key={member.userId}
+                          activeOpacity={0.7}
+                          onPress={() =>
+                            setMeetingAssigneeIds((prev) =>
+                              prev.includes(member.userId)
+                                ? prev.filter((id) => id !== member.userId)
+                                : [...prev, member.userId],
+                            )
+                          }
+                          style={{
+                            paddingVertical: 12,
+                            flexDirection: "row",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            borderBottomWidth: idx === meetingAssigneeOptions.length - 1 ? 0 : 1,
+                            borderBottomColor: "#F1F5F9",
+                          }}
+                        >
+                          <Text style={{ fontSize: 15, color: "#334155", fontWeight: selected ? "700" : "500", flex: 1 }} numberOfLines={1}>
+                            {label}
+                          </Text>
+                          {selected ? <Check size={16} color="#4361EE" /> : <View style={{ width: 16, height: 16 }} />}
+                        </TouchableOpacity>
+                      );
+                    })
+                  )}
+                </ScrollView>
+                <TouchableOpacity
+                  onPress={() => setShowMeetingAssigneeDropdown(false)}
+                  activeOpacity={0.85}
+                  style={{
+                    marginHorizontal: 20,
+                    marginTop: 8,
+                    backgroundColor: "#4361EE",
+                    borderRadius: 14,
+                    paddingVertical: 14,
+                    alignItems: "center",
+                  }}
+                >
+                  <Text style={{ color: "white", fontSize: 15, fontWeight: "700" }}>Done</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : null}
+
+          {showDurationPicker ? (
+            <View
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                justifyContent: "flex-end",
+                zIndex: 30,
+              }}
+            >
+              <Pressable
+                style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.35)" }}
+                onPress={() => setShowDurationPicker(false)}
+              />
+              <View
+                style={{
+                  backgroundColor: "white",
+                  borderTopLeftRadius: 20,
+                  borderTopRightRadius: 20,
+                  maxHeight: MEETING_DURATION_SHEET_MAX_HEIGHT,
+                  paddingBottom: insets.bottom + 12,
+                }}
               >
-                {meetingAssigneeOptions.map((member, idx) => {
-                  const selected = meetingAssigneeIds.includes(member.userId);
-                  return (
-                    <Pressable
-                      key={member.userId}
-                      onPress={() =>
-                        setMeetingAssigneeIds((prev) =>
-                          prev.includes(member.userId)
-                            ? prev.filter((id) => id !== member.userId)
-                            : [...prev, member.userId],
-                        )
-                      }
+                <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: "#E2E8F0", alignSelf: "center", marginTop: 10, marginBottom: 14 }} />
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, marginBottom: 8 }}>
+                  <Text style={{ fontSize: 17, fontWeight: "700", color: "#0F172A" }}>Duration</Text>
+                  <Pressable
+                    onPress={() => setShowDurationPicker(false)}
+                    style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "#F1F5F9", alignItems: "center", justifyContent: "center" }}
+                  >
+                    <X size={16} color="#64748B" />
+                  </Pressable>
+                </View>
+                <ScrollView
+                  style={{ maxHeight: MEETING_DURATION_SHEET_MAX_HEIGHT - 120 }}
+                  contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 8 }}
+                  showsVerticalScrollIndicator
+                  keyboardShouldPersistTaps="handled"
+                  nestedScrollEnabled
+                >
+                  {VIDEO_MEETING_DURATION_OPTIONS.map((minutes, idx) => (
+                    <TouchableOpacity
+                      key={minutes}
+                      activeOpacity={0.7}
+                      onPress={() => {
+                        setMeetingDurationMinutes(minutes);
+                        setShowDurationPicker(false);
+                      }}
                       style={{
-                        paddingVertical: 12,
+                        paddingVertical: 14,
                         flexDirection: "row",
                         alignItems: "center",
                         justifyContent: "space-between",
-                        borderBottomWidth: idx === meetingAssigneeOptions.length - 1 ? 0 : 1,
+                        borderBottomWidth: idx === VIDEO_MEETING_DURATION_OPTIONS.length - 1 ? 0 : 1,
                         borderBottomColor: "#F1F5F9",
+                        backgroundColor: meetingDurationMinutes === minutes ? "#EEF2FF" : "transparent",
+                        borderRadius: meetingDurationMinutes === minutes ? 10 : 0,
+                        paddingHorizontal: meetingDurationMinutes === minutes ? 12 : 0,
                       }}
                     >
-                      <Text style={{ fontSize: 15, color: "#334155", fontWeight: selected ? "700" : "500" }}>
-                        {member.user.name}
+                      <Text style={{ fontSize: 15, fontWeight: meetingDurationMinutes === minutes ? "700" : "500", color: meetingDurationMinutes === minutes ? "#4361EE" : "#0F172A" }}>
+                        {formatVideoMeetingDuration(minutes)}
                       </Text>
-                      {selected ? <Check size={16} color="#4361EE" /> : <View style={{ width: 16, height: 16 }} />}
-                    </Pressable>
-                  );
-                })}
-              </ScrollView>
-              <TouchableOpacity
-                onPress={() => setShowMeetingAssigneeDropdown(false)}
-                style={{
-                  marginHorizontal: 20,
-                  marginTop: 8,
-                  backgroundColor: "#4361EE",
-                  borderRadius: 14,
-                  paddingVertical: 14,
-                  alignItems: "center",
-                }}
-              >
-                <Text style={{ color: "white", fontSize: 15, fontWeight: "700" }}>Done</Text>
-              </TouchableOpacity>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
-
-      <Modal visible={showDurationPicker} transparent animationType="slide" onRequestClose={() => setShowDurationPicker(false)}>
-        <Pressable
-          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.35)", justifyContent: "flex-end" }}
-          onPress={() => setShowDurationPicker(false)}
-        >
-          <Pressable onPress={(e) => e.stopPropagation()}>
-            <View
-              style={{
-                backgroundColor: "white",
-                borderTopLeftRadius: 20,
-                borderTopRightRadius: 20,
-                maxHeight: MEETING_DURATION_SHEET_MAX_HEIGHT,
-                paddingBottom: insets.bottom + 12,
-                overflow: "hidden",
-              }}
-            >
-              <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: "#E2E8F0", alignSelf: "center", marginTop: 10, marginBottom: 14 }} />
-              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, marginBottom: 8 }}>
-                <Text style={{ fontSize: 17, fontWeight: "700", color: "#0F172A" }}>Duration</Text>
-                <Pressable
-                  onPress={() => setShowDurationPicker(false)}
-                  style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "#F1F5F9", alignItems: "center", justifyContent: "center" }}
-                >
-                  <X size={16} color="#64748B" />
-                </Pressable>
+                      {meetingDurationMinutes === minutes ? <Check size={16} color="#4361EE" /> : null}
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
               </View>
-              <ScrollView
-                style={{ maxHeight: MEETING_DURATION_SHEET_MAX_HEIGHT - 120 }}
-                contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 8 }}
-                showsVerticalScrollIndicator
-                keyboardShouldPersistTaps="handled"
-              >
-                {VIDEO_MEETING_DURATION_OPTIONS.map((minutes, idx) => (
-                  <Pressable
-                    key={minutes}
-                    onPress={() => {
-                      setMeetingDurationMinutes(minutes);
-                      setShowDurationPicker(false);
-                    }}
-                    style={{
-                      paddingVertical: 14,
-                      flexDirection: "row",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      borderBottomWidth: idx === VIDEO_MEETING_DURATION_OPTIONS.length - 1 ? 0 : 1,
-                      borderBottomColor: "#F1F5F9",
-                      backgroundColor: meetingDurationMinutes === minutes ? "#EEF2FF" : "transparent",
-                      borderRadius: meetingDurationMinutes === minutes ? 10 : 0,
-                      paddingHorizontal: meetingDurationMinutes === minutes ? 12 : 0,
-                    }}
-                  >
-                    <Text style={{ fontSize: 15, fontWeight: meetingDurationMinutes === minutes ? "700" : "500", color: meetingDurationMinutes === minutes ? "#4361EE" : "#0F172A" }}>
-                      {formatVideoMeetingDuration(minutes)}
-                    </Text>
-                    {meetingDurationMinutes === minutes ? <Check size={16} color="#4361EE" /> : null}
-                  </Pressable>
-                ))}
-              </ScrollView>
             </View>
-          </Pressable>
-        </Pressable>
+          ) : null}
+        </SafeKeyboardAvoidingView>
       </Modal>
 
       {/* Milestone Celebration Modal */}

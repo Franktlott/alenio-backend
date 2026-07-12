@@ -2,7 +2,8 @@ import { View, Text, ScrollView, ActivityIndicator, RefreshControl } from "react
 import { useQueryClient } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Bell } from "lucide-react-native";
-import { AdminHeader, AdminAlertRow, MetricsGroup, openAdminAlert } from "@/components/admin/AdminUI";
+import { AdminHeader, AdminAlertRow, openAdminAlert } from "@/components/admin/AdminUI";
+import { AdminUsageLineChart } from "@/components/admin/AdminUsageLineChart";
 import { useAdminStats } from "@/lib/admin/admin-api";
 import { tabBarClearance } from "@/lib/tab-bar";
 
@@ -12,16 +13,9 @@ export default function AdminActivityTab() {
   const { data: stats, isLoading } = useAdminStats();
   const alerts = stats?.recentAlerts ?? [];
 
-  const weekRows = [
-    { label: "New users", value: stats?.usersThisWeek ?? 0 },
-    { label: "New workspaces", value: stats?.teamsThisWeek ?? 0 },
-    { label: "Check-ins this week", value: stats?.checkInsThisWeek ?? 0 },
-    { label: "Alerts today", value: stats?.alertsToday ?? 0 },
-  ];
-
   return (
     <View className="flex-1 bg-[#F8FAFC]">
-      <AdminHeader title="Activity" subtitle="Alerts for users, workplaces, and billing" />
+      <AdminHeader title="Activity" subtitle="Usage trends and platform alerts" />
 
       <ScrollView
         className="flex-1 px-4 pt-5"
@@ -35,7 +29,7 @@ export default function AdminActivityTab() {
           />
         }
       >
-        <MetricsGroup title="This week" rows={weekRows} loading={isLoading} />
+        <AdminUsageLineChart data={stats?.weeklyUsage} loading={isLoading} />
 
         <Text className="text-slate-400 text-xs font-semibold uppercase tracking-wide mb-3 px-0.5">
           Recent alerts

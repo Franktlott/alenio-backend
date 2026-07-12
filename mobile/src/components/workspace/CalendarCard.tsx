@@ -5,6 +5,7 @@ import type { CalendarEvent, Task } from "@/lib/types";
 import type { USFederalHoliday } from "@/lib/us-federal-holidays";
 import { isSameDay, startOfDay, toLocalIso } from "./workspace-utils";
 import { WS } from "./workspace-ui";
+import { CalendarIconKey } from "./CalendarIconKey";
 
 const DAY_LABELS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 const MONTH_NAMES = [
@@ -155,9 +156,12 @@ export function CalendarCard({
       }}
     >
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6, minHeight: 26 }}>
-        <Text style={{ fontSize: WS.title + 2, fontWeight: WS.titleWeight, color: WS.ink, letterSpacing: -0.2 }}>
-          {MONTH_NAMES[viewMonth]} {viewYear}
-        </Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexShrink: 1 }}>
+          <Text style={{ fontSize: WS.title + 2, fontWeight: WS.titleWeight, color: WS.ink, letterSpacing: -0.2 }}>
+            {MONTH_NAMES[viewMonth]} {viewYear}
+          </Text>
+          <CalendarIconKey iconSize={12} />
+        </View>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
           <TouchableOpacity
             onPress={() => (viewMonth === 0 ? onViewMonthChange(viewYear - 1, 11) : onViewMonthChange(viewYear, viewMonth - 1))}

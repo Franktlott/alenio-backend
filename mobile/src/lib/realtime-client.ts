@@ -26,6 +26,21 @@ export type RealtimeInboxUpdatedEvent = {
   conversationId?: string;
 };
 
+export type RealtimeTeamPinEvent = {
+  type: "pin.updated";
+  channel: "team";
+  teamId: string;
+  topicId: string | null;
+  pinnedMessage: unknown | null;
+};
+
+export type RealtimeDmPinEvent = {
+  type: "pin.updated";
+  channel: "dm";
+  conversationId: string;
+  pinnedMessage: unknown | null;
+};
+
 export type RealtimeServerEvent =
   | { type: "ready"; userId: string }
   | { type: "pong" }
@@ -33,10 +48,13 @@ export type RealtimeServerEvent =
   | { type: "unsubscribed"; channels: string[] }
   | RealtimeTeamMessageEvent
   | RealtimeDmMessageEvent
-  | RealtimeInboxUpdatedEvent;
+  | RealtimeInboxUpdatedEvent
+  | RealtimeTeamPinEvent
+  | RealtimeDmPinEvent;
 
 type MessageHandler = (event: RealtimeTeamMessageEvent | RealtimeDmMessageEvent) => void;
 type InboxHandler = (event: RealtimeInboxUpdatedEvent) => void;
+type PinHandler = (event: RealtimeTeamPinEvent | RealtimeDmPinEvent) => void;
 type StatusHandler = (connected: boolean) => void;
 
 function toWsUrl(token: string): string {
@@ -69,6 +87,7 @@ class RealtimeClient {
   private appStateSub: NativeEventSubscription | null = null;
   private messageHandlers = new Set<MessageHandler>();
   private inboxHandlers = new Set<InboxHandler>();
+  private pinHandlers = new Set<PinHandler>();
   private statusHandlers = new Set<StatusHandler>();
 
   isConnected() {
@@ -83,6 +102,11 @@ class RealtimeClient {
   onInboxUpdated(handler: InboxHandler) {
     this.inboxHandlers.add(handler);
     return () => this.inboxHandlers.delete(handler);
+  }
+
+  onPinUpdated(handler: PinHandler) {
+    this.pinHandlers.add(handler);
+    return () => this.pinHandlers.delete(handler);
   }
 
   onStatus(handler: StatusHandler) {
@@ -163,6 +187,8 @@ class RealtimeClient {
             for (const handler of this.messageHandlers) handler(data);
           } else if (data.type === "inbox.updated") {
             for (const handler of this.inboxHandlers) handler(data);
+          } else if (data.type === "pin.updated") {
+            for (const handler of this.pinHandlers) handler(data);
           }
         } catch {
           // ignore malformed frames

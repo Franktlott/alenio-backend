@@ -293,7 +293,6 @@ function RootLayoutNav() {
             <Stack.Screen name="task-detail" />
             <Stack.Screen name="member-profile" />
             <Stack.Screen name="team-chat" />
-            <Stack.Screen name="team-channels" />
             <Stack.Screen name="dm-chat" />
             <Stack.Screen
               name="video-call"

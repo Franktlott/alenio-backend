@@ -43,6 +43,28 @@ export type AdminAlert = {
   entityKind: "user" | "team" | "subscription" | null;
 };
 
+export type AdminUsageMetricKey =
+  | "users"
+  | "workspaces"
+  | "checkIns"
+  | "messages"
+  | "tasks";
+
+export type AdminUsageWeekPoint = {
+  weekStart: string;
+  label: string;
+  users: number;
+  workspaces: number;
+  checkIns: number;
+  messages: number;
+  tasks: number;
+};
+
+export type AdminWeeklyUsage = {
+  weeks: AdminUsageWeekPoint[];
+  metrics: { key: AdminUsageMetricKey; label: string }[];
+};
+
 export type AdminStats = {
   users: number;
   teams: number;
@@ -55,7 +77,7 @@ export type AdminStats = {
   checkInsThisWeek: number;
   developmentGoals: number;
   activeGoals: number;
-  alertsToday?: number;
+  weeklyUsage?: AdminWeeklyUsage;
   recentUsers: RecentUser[];
   recentAlerts?: AdminAlert[];
 };

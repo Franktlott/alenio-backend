@@ -4,6 +4,7 @@ import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Bell } from "lucide-react-native";
 import { AdminHeader, AdminAlertRow, MetricsGroup, openAdminAlert } from "@/components/admin/AdminUI";
+import { AdminUsageLineChart } from "@/components/admin/AdminUsageLineChart";
 import { useAdminStats } from "@/lib/admin/admin-api";
 import { tabBarClearance } from "@/lib/tab-bar";
 
@@ -20,12 +21,6 @@ export default function AdminDashboardTab() {
     { label: "Paid workspaces", value: stats?.activeSubscriptions ?? 0, testId: "stat-paid" },
     { label: "Tasks", value: stats?.tasks ?? 0, testId: "stat-tasks" },
     { label: "Messages", value: stats?.messages ?? 0, testId: "stat-messages" },
-  ];
-  const weekRows = [
-    { label: "New users", value: stats?.usersThisWeek ?? 0, testId: "stat-users-week" },
-    { label: "New workspaces", value: stats?.teamsThisWeek ?? 0, testId: "stat-teams-week" },
-    { label: "Check-ins", value: stats?.checkInsThisWeek ?? 0, testId: "stat-checkins-week" },
-    { label: "Alerts today", value: stats?.alertsToday ?? 0, testId: "stat-alerts-today" },
   ];
 
   return (
@@ -45,8 +40,8 @@ export default function AdminDashboardTab() {
         }
       >
         <View className="px-4 pt-5">
+          <AdminUsageLineChart data={stats?.weeklyUsage} loading={isLoading} />
           <MetricsGroup title="Platform overview" rows={platformRows} loading={isLoading} />
-          <MetricsGroup title="This week" rows={weekRows} loading={isLoading} />
         </View>
 
         <View className="px-4 pt-2 pb-4">

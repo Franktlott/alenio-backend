@@ -36,7 +36,8 @@ type Props = {
   showActivityExecuteNav: boolean;
 };
 
-const WORKSPACE_OVERLAY_MIN_MS = 800;
+const WORKSPACE_OVERLAY_MIN_MS = 220;
+const WORKSPACE_OVERLAY_MAX_MS = 1200;
 
 function IconChat() {
   return (
@@ -179,35 +180,48 @@ export function EnterpriseLayout({
   }, [clearPendingHideTimer]);
 
   const handleWorkspaceSelectChange = (teamId: string) => {
-    switchEnterpriseWorkspace(teamId, onTeamChange);
+    if (teamId === selectedTeamId) return;
     beginWorkspaceSwitchOverlay();
-    onTeamChange(teamId);
+    switchEnterpriseWorkspace(teamId, onTeamChange);
   };
 
   useEffect(() => {
     const prev = prevSelectedTeamIdRef.current;
     prevSelectedTeamIdRef.current = selectedTeamId;
     if (!selectedTeamId || prev === selectedTeamId || prev === "") return;
+    // Sidebar/profile already started the overlay; only catch switches that didn't.
+    if (showWorkspaceOverlay || sidebarWorkspaceSwitch) return;
     if (!isRecentFooterEnterpriseWorkspaceSelect()) return;
     beginWorkspaceSwitchOverlay();
-  }, [selectedTeamId, beginWorkspaceSwitchOverlay]);
+  }, [selectedTeamId, beginWorkspaceSwitchOverlay, showWorkspaceOverlay, sidebarWorkspaceSwitch]);
 
   useEffect(() => {
     if (!sidebarWorkspaceSwitch) return;
 
-    if (workspaceOverlayLoading) {
-      clearPendingHideTimer();
-      return;
-    }
-
-    const started = overlayStartedAtRef.current;
-    if (started == null) {
+    // Hard cap so a stuck page loading flag can't leave the overlay up forever.
+    const started = overlayStartedAtRef.current ?? Date.now();
+    const maxRemaining = WORKSPACE_OVERLAY_MAX_MS - (Date.now() - started);
+    if (maxRemaining <= 0) {
       endSidebarWorkspaceSwitchSession();
       return;
     }
 
+    if (workspaceOverlayLoading) {
+      clearPendingHideTimer();
+      const id = window.setTimeout(() => {
+        endSidebarWorkspaceSwitchSession();
+      }, maxRemaining);
+      hideOverlayTimerRef.current = id;
+      return () => {
+        clearTimeout(id);
+      };
+    }
+
     const elapsed = Date.now() - started;
-    const remaining = WORKSPACE_OVERLAY_MIN_MS - elapsed;
+    const remaining = Math.min(
+      Math.max(WORKSPACE_OVERLAY_MIN_MS - elapsed, 0),
+      maxRemaining,
+    );
 
     if (remaining <= 0) {
       endSidebarWorkspaceSwitchSession();
@@ -218,7 +232,6 @@ export function EnterpriseLayout({
       endSidebarWorkspaceSwitchSession();
     }, remaining);
     hideOverlayTimerRef.current = id;
-
     return () => {
       clearTimeout(id);
     };

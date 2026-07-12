@@ -37,7 +37,9 @@ export function normalizeMessagePage<T>(raw: unknown): MessagePage<T> {
   return { messages: [], hasMore: false, nextCursor: null };
 }
 
-export function flattenMessagePages<T extends { id: string }>(pages: unknown[] | undefined): T[] {
+export function flattenMessagePages<T extends { id: string; createdAt?: string }>(
+  pages: unknown[] | undefined,
+): T[] {
   if (!pages?.length) return [];
   const seen = new Set<string>();
   const result: T[] = [];
@@ -49,7 +51,13 @@ export function flattenMessagePages<T extends { id: string }>(pages: unknown[] |
       result.push(msg);
     }
   }
-  return result;
+  // Match web: oldest → newest so FlatList shows new messages at the bottom.
+  return result.sort((a, b) => {
+    const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+    const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+    const diff = aTime - bTime;
+    return diff !== 0 ? diff : a.id.localeCompare(b.id);
+  });
 }
 
 function teamMessagesUrl(teamId: string, topicKey: string, before?: string) {
@@ -64,7 +72,7 @@ function dmMessagesUrl(conversationId: string, before?: string) {
   return `/api/dms/${conversationId}/messages?${params.toString()}`;
 }
 
-function appendMessageToPages<T extends { id: string }>(
+function appendMessageToPages<T extends { id: string; createdAt?: string }>(
   old: InfiniteData<MessagePage<T>> | undefined,
   message: T,
 ): InfiniteData<MessagePage<T>> | undefined {
@@ -73,7 +81,12 @@ function appendMessageToPages<T extends { id: string }>(
   if (first.messages.some((m) => m.id === message.id)) return old;
   const nextFirst: MessagePage<T> = {
     ...first,
-    messages: [...first.messages, message],
+    messages: [...first.messages, message].sort((a, b) => {
+      const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      const diff = aTime - bTime;
+      return diff !== 0 ? diff : a.id.localeCompare(b.id);
+    }),
   };
   return { ...old, pages: [nextFirst, ...old.pages.slice(1)] };
 }
@@ -218,8 +231,16 @@ export function usePaginatedDmMessages<T extends { id: string }>(conversationId:
 
 export async function fetchLatestTeamMessagePreview(teamId: string) {
   const params = new URLSearchParams({ topicId: "general", limit: "1" });
-  const page = normalizeMessagePage<{ id: string }>(
-    await api.get<MessagePage<{ id: string }>>(`/api/teams/${teamId}/messages?${params.toString()}`),
+  type PreviewMessage = {
+    id: string;
+    content?: string | null;
+    mediaUrl?: string | null;
+    createdAt: string;
+    senderId?: string;
+    sender?: { id: string; name: string | null };
+  };
+  const page = normalizeMessagePage<PreviewMessage>(
+    await api.get<MessagePage<PreviewMessage>>(`/api/teams/${teamId}/messages?${params.toString()}`),
   );
   return page.messages;
 }

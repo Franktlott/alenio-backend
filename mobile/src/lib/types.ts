@@ -116,6 +116,16 @@ export interface DirectMessage {
   sender: User;
 }
 
+/** One pinned message per Team Chat, Space, or DM conversation. */
+export interface PinnedMessageSummary {
+  messageId: string;
+  content?: string | null;
+  mediaType?: "image" | "video" | null;
+  sender: { id: string; name: string | null; image?: string | null };
+  pinnedAt: string;
+  pinnedBy: { id: string; name: string | null };
+}
+
 export type GroupWorkspaceContext = {
   label: string;
   workspaces: Array<{ id: string; name: string }>;
@@ -192,6 +202,9 @@ export interface CalendarEvent {
   createdBy?: { id: string; name: string; image?: string | null };
   isHidden?: boolean;
   isVideoMeeting?: boolean;
+  isOneOnOne?: boolean;
+  /** Outlook / external busy block — read-only */
+  isExternal?: boolean;
   approvalStatus?: "pending" | "approved" | "rejected";
   assigneeIds?: string[];
 }

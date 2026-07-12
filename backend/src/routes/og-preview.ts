@@ -138,6 +138,7 @@ ogPreviewRouter.get("/", async (c) => {
       redirect: "follow",
     });
     const html = await res.text();
+    const finalUrl = new URL(res.url || safeUrl.toString());
 
     const getMeta = (prop: string): string | null => {
       const m =
@@ -146,13 +147,56 @@ ogPreviewRouter.get("/", async (c) => {
       return m?.[1]?.trim() ?? null;
     };
 
+    const resolveUrl = (href: string | null): string | null => {
+      if (!href) return null;
+      try {
+        return new URL(href, finalUrl).toString();
+      } catch {
+        return null;
+      }
+    };
+
+    const getLinkHref = (...rels: string[]): string | null => {
+      for (const rel of rels) {
+        const m =
+          html.match(
+            new RegExp(
+              `<link[^>]+rel=["'][^"']*${rel}[^"']*["'][^>]+href=["']([^"'<>]+)["']`,
+              "i",
+            ),
+          ) ??
+          html.match(
+            new RegExp(
+              `<link[^>]+href=["']([^"'<>]+)["'][^>]+rel=["'][^"']*${rel}[^"']*["']`,
+              "i",
+            ),
+          );
+        const resolved = resolveUrl(m?.[1]?.trim() ?? null);
+        if (resolved) return resolved;
+      }
+      return null;
+    };
+
     const title =
       getMeta("og:title") ?? html.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1]?.trim() ?? null;
-    const image = getMeta("og:image") ?? getMeta("twitter:image") ?? null;
+    const image = resolveUrl(getMeta("og:image") ?? getMeta("twitter:image"));
     const description = getMeta("og:description") ?? getMeta("description") ?? null;
-    const domain = safeUrl.hostname.replace(/^www\./, "");
+    const domain = finalUrl.hostname.replace(/^www\./, "");
+    const favicon =
+      getLinkHref("apple-touch-icon", "icon", "shortcut icon") ??
+      resolveUrl("/favicon.ico") ??
+      `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=128`;
 
-    return c.json({ data: { title, image, description, domain, url: safeUrl.toString() } });
+    return c.json({
+      data: {
+        title,
+        image,
+        favicon,
+        description,
+        domain,
+        url: finalUrl.toString(),
+      },
+    });
   } catch {
     return c.json({ error: { message: "Failed to fetch preview", code: "FETCH_ERROR" } }, 400);
   }

@@ -20,7 +20,7 @@ export function MemberTasksEmptyState() {
       testID="member-tasks-empty-state"
     >
       <Image
-        source={require("@/assets/tasks-empty-member-v2.png")}
+        source={require("@/assets/tasks-empty-member-v4.png")}
         style={{ width: 220, height: 220, marginBottom: 8 }}
         resizeMode="contain"
         accessibilityIgnoresInvertColors

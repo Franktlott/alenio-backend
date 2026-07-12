@@ -1,102 +1,116 @@
-import { useCallback, useEffect, useRef } from "react";
-import type { FlatList, LayoutChangeEvent, NativeScrollEvent, NativeSyntheticEvent } from "react-native";
+import { useCallback, useEffect, useMemo, useRef } from "react";
+import type { FlatList, NativeScrollEvent, NativeSyntheticEvent, StyleProp, ViewStyle } from "react-native";
 
-export function useChatListScroll(resetKey: string, itemCount: number) {
+const NEAR_LATEST_PX = 120;
+
+/**
+ * Messenger-style inverted chat list.
+ * Pass messages newest-first with FlatList `inverted={true}`.
+ * The list lives in a clipped flex region above the composer, so rows never draw under the footer.
+ *
+ * Inverted padding: paddingTop = space above the composer (visual bottom).
+ *
+ * `autoscrollToTopThreshold` is required with inverted lists: without it,
+ * maintainVisibleContentPosition keeps older rows pinned and new messages
+ * land under the composer instead of shifting the thread up.
+ */
+export function useChatListScroll(resetKey: string, _itemCount: number) {
   const listRef = useRef<FlatList>(null);
-  const isNearBottomRef = useRef(true);
-  const shouldStickToBottomRef = useRef(true);
-  const needsInitialScrollRef = useRef(true);
-  const contentHeightRef = useRef(0);
-  const layoutHeightRef = useRef(0);
+  const stickToLatestRef = useRef(true);
+  const pendingScrollIndexRef = useRef<number | null>(null);
 
   useEffect(() => {
-    shouldStickToBottomRef.current = true;
-    isNearBottomRef.current = true;
-    needsInitialScrollRef.current = true;
-    contentHeightRef.current = 0;
-    layoutHeightRef.current = 0;
+    stickToLatestRef.current = true;
+    pendingScrollIndexRef.current = null;
   }, [resetKey]);
 
-  const scrollToBottom = useCallback(
-    (animated = false) => {
-      if (itemCount <= 0 || !listRef.current) return;
-      const lastIndex = itemCount - 1;
-      const maxOffset = Math.max(0, contentHeightRef.current - layoutHeightRef.current);
-
-      if (maxOffset > 0) {
-        listRef.current.scrollToOffset({ offset: maxOffset, animated });
-      }
-      listRef.current.scrollToIndex({ index: lastIndex, animated, viewPosition: 1 });
-    },
-    [itemCount],
-  );
-
-  const tryScrollToBottom = useCallback(
-    (animated = false) => {
-      if (!shouldStickToBottomRef.current && !needsInitialScrollRef.current) return;
-      if (layoutHeightRef.current <= 0 || contentHeightRef.current <= 0) return;
-      scrollToBottom(animated);
-    },
-    [scrollToBottom],
-  );
+  const scrollToLatest = useCallback((animated = false) => {
+    const list = listRef.current;
+    if (!list) return;
+    list.scrollToOffset({ offset: 0, animated });
+  }, []);
 
   const handleScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
-    const distanceFromBottom = contentSize.height - layoutMeasurement.height - contentOffset.y;
-    isNearBottomRef.current = distanceFromBottom < 100;
-    if (distanceFromBottom < 80) {
-      needsInitialScrollRef.current = false;
+    stickToLatestRef.current = event.nativeEvent.contentOffset.y < NEAR_LATEST_PX;
+  }, []);
+
+  const handleContentSizeChange = useCallback(() => {
+    if (stickToLatestRef.current) {
+      scrollToLatest(false);
     }
-    if (!isNearBottomRef.current) {
-      shouldStickToBottomRef.current = false;
+  }, [scrollToLatest]);
+
+  const followLatestIfNearBottom = useCallback(
+    (animated = true) => {
+      if (!stickToLatestRef.current) return;
+      scrollToLatest(animated);
+      requestAnimationFrame(() => {
+        scrollToLatest(false);
+        requestAnimationFrame(() => scrollToLatest(false));
+      });
+    },
+    [scrollToLatest],
+  );
+
+  const scrollToIndex = useCallback((index: number, animated = true) => {
+    const list = listRef.current;
+    if (!list || index < 0) return false;
+    stickToLatestRef.current = false;
+    pendingScrollIndexRef.current = index;
+    try {
+      list.scrollToIndex({ index, animated, viewPosition: 0.35 });
+      return true;
+    } catch {
+      return false;
     }
   }, []);
 
-  const handleContentSizeChange = useCallback(
-    (_width: number, height: number) => {
-      contentHeightRef.current = height;
-      tryScrollToBottom(false);
-    },
-    [tryScrollToBottom],
-  );
-
-  const handleListLayout = useCallback(
-    (event: LayoutChangeEvent) => {
-      layoutHeightRef.current = event.nativeEvent.layout.height;
-      tryScrollToBottom(false);
-    },
-    [tryScrollToBottom],
-  );
-
   const handleScrollToIndexFailed = useCallback(
-    (info: { index: number; averageItemLength: number; highestMeasuredFrameIndex: number }) => {
-      const estimatedOffset = Math.max(0, info.averageItemLength * info.index);
-      listRef.current?.scrollToOffset({ offset: estimatedOffset, animated: false });
-      requestAnimationFrame(() => {
-        listRef.current?.scrollToIndex({ index: info.index, animated: false, viewPosition: 1 });
+    (info: { index: number; highestMeasuredFrameIndex: number; averageItemLength: number }) => {
+      const list = listRef.current;
+      if (!list) return;
+      const approx = Math.max(1, info.averageItemLength || 120);
+      list.scrollToOffset({
+        offset: Math.max(0, info.index * approx),
+        animated: false,
       });
+      const target = pendingScrollIndexRef.current ?? info.index;
+      setTimeout(() => {
+        try {
+          listRef.current?.scrollToIndex({ index: target, animated: true, viewPosition: 0.35 });
+        } catch {
+          // Layout still settling; ignore.
+        }
+      }, 80);
     },
     [],
   );
 
-  const followLatestIfNearBottom = useCallback(
-    (animated = true) => {
-      if (shouldStickToBottomRef.current || isNearBottomRef.current) {
-        scrollToBottom(animated);
-      }
-    },
-    [scrollToBottom],
-  );
+  const contentContainerStyle: StyleProp<ViewStyle> = {
+    flexGrow: 1,
+    // Inverted: paddingTop clears space above the composer so the newest row is never clipped.
+    paddingTop: 16,
+    paddingBottom: 10,
+    paddingHorizontal: 12,
+  };
 
-  const initialScrollIndex = itemCount > 0 ? itemCount - 1 : undefined;
+  const maintainVisibleContentPosition = useMemo(
+    () => ({
+      minIndexForVisible: 0,
+      autoscrollToTopThreshold: NEAR_LATEST_PX,
+    }),
+    [],
+  );
 
   return {
     listRef,
     handleScroll,
     handleContentSizeChange,
-    handleListLayout,
-    handleScrollToIndexFailed,
     followLatestIfNearBottom,
-    initialScrollIndex,
+    scrollToIndex,
+    handleScrollToIndexFailed,
+    contentContainerStyle,
+    maintainVisibleContentPosition,
+    readyForOlderLoad: true,
   };
 }

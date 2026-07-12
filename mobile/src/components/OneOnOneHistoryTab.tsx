@@ -15,7 +15,7 @@ import {
 import { toast } from "burnt";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Plus, X, ChevronLeft, MoreVertical, Check, CalendarCheck, PlayCircle, Calendar, Trash2, Printer, Download, Pencil } from "lucide-react-native";
+import { Plus, X, ChevronLeft, Check, CalendarCheck, PlayCircle, Calendar, Trash2, Printer, Download, Pencil } from "lucide-react-native";
 import { api } from "@/lib/api/api";
 import { invalidateTaskCaches } from "@/lib/invalidate-task-caches";
 import { bottomSheetMenu } from "@/lib/bottom-sheet-menu-styles";
@@ -125,10 +125,12 @@ function formatScheduledOneOnOneWhen(event: PlannedOneOnOneEvent): string {
 const PLANNED_ONE_ON_ONE_VISIBLE_ROWS = 2;
 const PLANNED_ONE_ON_ONE_ROW_HEIGHT = 56;
 const PLANNED_ONE_ON_ONE_ROW_GAP = 8;
-const PLANNED_ONE_ON_ONE_LIST_HEIGHT =
-  PLANNED_ONE_ON_ONE_VISIBLE_ROWS * PLANNED_ONE_ON_ONE_ROW_HEIGHT +
-  (PLANNED_ONE_ON_ONE_VISIBLE_ROWS - 1) * PLANNED_ONE_ON_ONE_ROW_GAP +
-  16;
+
+function plannedOneOnOneListHeight(count: number): number {
+  const visible = Math.min(Math.max(count, 0), PLANNED_ONE_ON_ONE_VISIBLE_ROWS);
+  if (visible === 0) return 0;
+  return visible * PLANNED_ONE_ON_ONE_ROW_HEIGHT + (visible - 1) * PLANNED_ONE_ON_ONE_ROW_GAP;
+}
 
 function meetingToFillTemplate(meeting: OneOnOneMeeting): OneOnOneTemplate {
   return {
@@ -587,18 +589,6 @@ export function OneOnOneHistoryTab({
             {memberSubtitle}
           </Text>
         </View>
-        {canCreate ? (
-          <Pressable
-            onPress={(e) => {
-              e.stopPropagation?.();
-              openPlannedEventMenu(event);
-            }}
-            hitSlop={8}
-            testID={`planned-one-on-one-menu-${event.id}`}
-          >
-            <MoreVertical size={16} color="#64748B" />
-          </Pressable>
-        ) : null}
       </View>
     );
 
@@ -625,6 +615,8 @@ export function OneOnOneHistoryTab({
     return (
       <Pressable
         onPress={() => void startPlannedOneOnOne(event)}
+        onLongPress={() => openPlannedEventMenu(event)}
+        delayLongPress={400}
         style={{
           backgroundColor: "white",
           borderRadius: 10,
@@ -1699,11 +1691,7 @@ export function OneOnOneHistoryTab({
           </Text>
           <View
             style={{
-              height: PLANNED_ONE_ON_ONE_LIST_HEIGHT,
-              borderRadius: 10,
-              borderWidth: 1,
-              borderColor: "#E2E8F0",
-              backgroundColor: "#FAFBFC",
+              height: plannedOneOnOneListHeight(upcomingPlanned.length),
               overflow: "hidden",
             }}
             testID="planned-one-on-one-list"
@@ -1717,7 +1705,6 @@ export function OneOnOneHistoryTab({
               scrollEnabled={upcomingPlanned.length > PLANNED_ONE_ON_ONE_VISIBLE_ROWS}
               showsVerticalScrollIndicator={upcomingPlanned.length > PLANNED_ONE_ON_ONE_VISIBLE_ROWS}
               keyboardShouldPersistTaps="handled"
-              contentContainerStyle={{ padding: 8 }}
               ItemSeparatorComponent={() => <View style={{ height: PLANNED_ONE_ON_ONE_ROW_GAP }} />}
             />
           </View>
@@ -1791,6 +1778,8 @@ export function OneOnOneHistoryTab({
                   <Pressable
                     key={meeting.id}
                     onPress={() => setPreviewMeeting(meeting)}
+                    onLongPress={canModify ? () => openHistoryMeetingMenu(meeting) : undefined}
+                    delayLongPress={400}
                     style={{
                       flexDirection: "row",
                       borderTopWidth: index === 0 ? 0 : 1,
@@ -1836,18 +1825,6 @@ export function OneOnOneHistoryTab({
                             {statusLabel}
                           </Text>
                         </View>
-                        {canModify ? (
-                          <Pressable
-                            onPress={(e) => {
-                              e.stopPropagation?.();
-                              openHistoryMeetingMenu(meeting);
-                            }}
-                            hitSlop={8}
-                            style={{ paddingTop: 1 }}
-                          >
-                            <MoreVertical size={16} color="#94A3B8" />
-                          </Pressable>
-                        ) : null}
                       </View>
                     </View>
                   </Pressable>
