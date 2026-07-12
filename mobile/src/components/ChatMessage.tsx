@@ -130,11 +130,13 @@ function LinkPreview({
   url,
   isOwn,
   compact,
+  onLongPress,
 }: {
   url: string;
   isOwn: boolean;
   /** When true, card sits inside the bubble (no extra top margin). */
   compact?: boolean;
+  onLongPress?: () => void;
 }) {
   const youtubeId = parseYouTubeVideoId(url);
   const fallbackDomain = domainFromUrl(url);
@@ -180,6 +182,8 @@ function LinkPreview({
   return (
     <Pressable
       onPress={() => Linking.openURL(url)}
+      onLongPress={onLongPress}
+      delayLongPress={400}
       style={{
         marginTop: compact ? 0 : 6,
         borderRadius: compact ? 0 : 12,
@@ -483,6 +487,7 @@ export function ChatMessage({
                   />
                 ) : null}
                 <View
+                  pointerEvents="none"
                   style={{
                     position: "absolute",
                     top: 0,
@@ -525,6 +530,7 @@ export function ChatMessage({
                   />
                 ) : null}
                 <View
+                  pointerEvents="none"
                   style={{
                     position: "absolute",
                     top: 0,
@@ -564,7 +570,9 @@ export function ChatMessage({
         </Text>
       ) : null}
 
-      {firstUrl ? <LinkPreview url={firstUrl} isOwn={isOwn} compact={linkPreviewCompact} /> : null}
+      {firstUrl ? (
+        <LinkPreview url={firstUrl} isOwn={isOwn} compact={linkPreviewCompact} onLongPress={onLongPress} />
+      ) : null}
     </>
   );
 

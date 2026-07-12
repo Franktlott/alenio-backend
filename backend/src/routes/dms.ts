@@ -4,6 +4,7 @@ import { auth } from "../auth";
 import { authGuard } from "../middleware/auth-guard";
 import { sendPushToUsers } from "../lib/push";
 import { publishDmMessageCreated, publishUserInboxUpdated, publishDmPinUpdated } from "../lib/realtime-hub";
+import { MAX_CHAT_PINS } from "../lib/ensure-pinned-message-schema";
 import { env } from "../env";
 import {
   assertParticipantsShareWorkspaceWithCreator,
@@ -294,11 +295,11 @@ dmsRouter.get("/:conversationId/messages/pin", async (c) => {
   });
   if (!participant) return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
 
-  const conversation = await prisma.conversation.findUnique({
-    where: { id: conversationId },
-    select: {
-      pinnedAt: true,
-      pinnedDirectMessage: {
+  const pins = await prisma.conversationPin.findMany({
+    where: { conversationId },
+    orderBy: [{ sortOrder: "asc" }, { pinnedAt: "asc" }],
+    include: {
+      directMessage: {
         select: {
           id: true,
           content: true,
@@ -308,26 +309,18 @@ dmsRouter.get("/:conversationId/messages/pin", async (c) => {
       },
       pinnedBy: { select: { id: true, name: true } },
     },
+    take: MAX_CHAT_PINS,
   });
 
-  const message = conversation?.pinnedDirectMessage;
-  if (!message || !conversation?.pinnedAt || !conversation.pinnedBy) {
-    return c.json({ data: null });
-  }
-
   return c.json({
-    data: {
-      messageId: message.id,
-      content: message.content,
-      mediaType: message.mediaType as "image" | "video" | null,
-      sender: {
-        id: message.sender.id,
-        name: message.sender.name,
-        image: message.sender.image,
-      },
-      pinnedAt: conversation.pinnedAt.toISOString(),
-      pinnedBy: { id: conversation.pinnedBy.id, name: conversation.pinnedBy.name },
-    },
+    data: pins.map((pin) => ({
+      messageId: pin.directMessage.id,
+      content: pin.directMessage.content,
+      mediaType: pin.directMessage.mediaType as "image" | "video" | null,
+      sender: pin.directMessage.sender,
+      pinnedAt: pin.pinnedAt.toISOString(),
+      pinnedBy: pin.pinnedBy,
+    })),
   });
 });
 
@@ -359,48 +352,114 @@ dmsRouter.put("/:conversationId/messages/pin", async (c) => {
     return c.json({ error: { message: "Message not found", code: "NOT_FOUND" } }, 404);
   }
 
-  const now = new Date();
-  await prisma.conversation.update({
-    where: { id: conversationId },
-    data: {
-      pinnedDirectMessageId: messageId,
-      pinnedAt: now,
-      pinnedById: user.id,
+  const existing = await prisma.conversationPin.findUnique({
+    where: {
+      conversationId_directMessageId: { conversationId, directMessageId: messageId },
     },
   });
+  if (!existing) {
+    const count = await prisma.conversationPin.count({ where: { conversationId } });
+    if (count >= MAX_CHAT_PINS) {
+      return c.json(
+        { error: { message: `You can pin up to ${MAX_CHAT_PINS} messages`, code: "PIN_LIMIT" } },
+        400,
+      );
+    }
+    await prisma.conversationPin.create({
+      data: {
+        conversationId,
+        directMessageId: messageId,
+        pinnedById: user.id,
+        sortOrder: count,
+      },
+    });
+  }
 
-  const summary = {
-    messageId: message.id,
-    content: message.content,
-    mediaType: message.mediaType as "image" | "video" | null,
-    sender: {
-      id: message.sender.id,
-      name: message.sender.name,
-      image: message.sender.image,
+  const pins = await prisma.conversationPin.findMany({
+    where: { conversationId },
+    orderBy: [{ sortOrder: "asc" }, { pinnedAt: "asc" }],
+    include: {
+      directMessage: {
+        select: {
+          id: true,
+          content: true,
+          mediaType: true,
+          sender: { select: { id: true, name: true, image: true } },
+        },
+      },
+      pinnedBy: { select: { id: true, name: true } },
     },
-    pinnedAt: now.toISOString(),
-    pinnedBy: { id: user.id, name: user.name ?? null },
-  };
-  publishDmPinUpdated({ conversationId, pinnedMessage: summary });
-  return c.json({ data: summary });
+    take: MAX_CHAT_PINS,
+  });
+  const summaries = pins.map((pin) => ({
+    messageId: pin.directMessage.id,
+    content: pin.directMessage.content,
+    mediaType: pin.directMessage.mediaType as "image" | "video" | null,
+    sender: pin.directMessage.sender,
+    pinnedAt: pin.pinnedAt.toISOString(),
+    pinnedBy: pin.pinnedBy,
+  }));
+  publishDmPinUpdated({ conversationId, pinnedMessages: summaries });
+  return c.json({ data: summaries });
 });
 
-// DELETE /api/dms/:conversationId/messages/pin
+// DELETE /api/dms/:conversationId/messages/pin?messageId=
 dmsRouter.delete("/:conversationId/messages/pin", async (c) => {
   const user = c.get("user")!;
   const { conversationId } = c.req.param();
+  const messageId = c.req.query("messageId")?.trim();
+  if (!messageId) {
+    return c.json({ error: { message: "messageId required", code: "BAD_REQUEST" } }, 400);
+  }
 
   const participant = await prisma.conversationParticipant.findUnique({
     where: { conversationId_userId: { conversationId, userId: user.id } },
   });
   if (!participant) return c.json({ error: { message: "Not found", code: "NOT_FOUND" } }, 404);
 
-  await prisma.conversation.update({
-    where: { id: conversationId },
-    data: { pinnedDirectMessageId: null, pinnedAt: null, pinnedById: null },
+  await prisma.conversationPin.deleteMany({
+    where: { conversationId, directMessageId: messageId },
   });
-  publishDmPinUpdated({ conversationId, pinnedMessage: null });
-  return new Response(null, { status: 204 });
+
+  const remaining = await prisma.conversationPin.findMany({
+    where: { conversationId },
+    orderBy: [{ sortOrder: "asc" }, { pinnedAt: "asc" }],
+  });
+  await Promise.all(
+    remaining.map((pin, index) =>
+      prisma.conversationPin.update({
+        where: { id: pin.id },
+        data: { sortOrder: index },
+      }),
+    ),
+  );
+
+  const pins = await prisma.conversationPin.findMany({
+    where: { conversationId },
+    orderBy: [{ sortOrder: "asc" }, { pinnedAt: "asc" }],
+    include: {
+      directMessage: {
+        select: {
+          id: true,
+          content: true,
+          mediaType: true,
+          sender: { select: { id: true, name: true, image: true } },
+        },
+      },
+      pinnedBy: { select: { id: true, name: true } },
+    },
+    take: MAX_CHAT_PINS,
+  });
+  const summaries = pins.map((pin) => ({
+    messageId: pin.directMessage.id,
+    content: pin.directMessage.content,
+    mediaType: pin.directMessage.mediaType as "image" | "video" | null,
+    sender: pin.directMessage.sender,
+    pinnedAt: pin.pinnedAt.toISOString(),
+    pinnedBy: pin.pinnedBy,
+  }));
+  publishDmPinUpdated({ conversationId, pinnedMessages: summaries });
+  return c.json({ data: summaries });
 });
 
 // GET /api/dms/:conversationId/messages
@@ -652,14 +711,39 @@ dmsRouter.delete("/:conversationId/messages/:messageId", async (c) => {
     return c.json({ error: { message: "Cannot delete someone else's message", code: "FORBIDDEN" } }, 403);
   }
 
-  const pinCleared = await prisma.conversation.updateMany({
-    where: { id: conversationId, pinnedDirectMessageId: messageId },
-    data: { pinnedDirectMessageId: null, pinnedAt: null, pinnedById: null },
+  const pinCleared = await prisma.conversationPin.deleteMany({
+    where: { conversationId, directMessageId: messageId },
   });
 
   await prisma.directMessage.delete({ where: { id: messageId } });
   if (pinCleared.count > 0) {
-    publishDmPinUpdated({ conversationId, pinnedMessage: null });
+    const pins = await prisma.conversationPin.findMany({
+      where: { conversationId },
+      orderBy: [{ sortOrder: "asc" }, { pinnedAt: "asc" }],
+      include: {
+        directMessage: {
+          select: {
+            id: true,
+            content: true,
+            mediaType: true,
+            sender: { select: { id: true, name: true, image: true } },
+          },
+        },
+        pinnedBy: { select: { id: true, name: true } },
+      },
+      take: MAX_CHAT_PINS,
+    });
+    publishDmPinUpdated({
+      conversationId,
+      pinnedMessages: pins.map((pin) => ({
+        messageId: pin.directMessage.id,
+        content: pin.directMessage.content,
+        mediaType: pin.directMessage.mediaType,
+        sender: pin.directMessage.sender,
+        pinnedAt: pin.pinnedAt.toISOString(),
+        pinnedBy: pin.pinnedBy,
+      })),
+    });
   }
   return new Response(null, { status: 204 });
 });

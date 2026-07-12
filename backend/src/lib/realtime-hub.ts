@@ -39,14 +39,14 @@ export type TeamPinUpdatedEvent = {
   channel: "team";
   teamId: string;
   topicId: string | null;
-  pinnedMessage: unknown | null;
+  pinnedMessages: unknown[];
 };
 
 export type DmPinUpdatedEvent = {
   type: "pin.updated";
   channel: "dm";
   conversationId: string;
-  pinnedMessage: unknown | null;
+  pinnedMessages: unknown[];
 };
 
 export type RealtimeEvent =
@@ -178,7 +178,7 @@ export function publishUserInboxUpdated(
 export function publishTeamPinUpdated(input: {
   teamId: string;
   topicId: string | null;
-  pinnedMessage: unknown | null;
+  pinnedMessages: unknown[];
 }) {
   publishRealtime(
     {
@@ -186,7 +186,7 @@ export function publishTeamPinUpdated(input: {
       channel: "team",
       teamId: input.teamId,
       topicId: input.topicId,
-      pinnedMessage: input.pinnedMessage,
+      pinnedMessages: input.pinnedMessages,
     },
     teamRealtimeKey(input.teamId, input.topicId),
   );
@@ -194,14 +194,14 @@ export function publishTeamPinUpdated(input: {
 
 export function publishDmPinUpdated(input: {
   conversationId: string;
-  pinnedMessage: unknown | null;
+  pinnedMessages: unknown[];
 }) {
   publishRealtime(
     {
       type: "pin.updated",
       channel: "dm",
       conversationId: input.conversationId,
-      pinnedMessage: input.pinnedMessage,
+      pinnedMessages: input.pinnedMessages,
     },
     dmRealtimeKey(input.conversationId),
   );

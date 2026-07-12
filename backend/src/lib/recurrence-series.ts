@@ -24,25 +24,41 @@ export type RecurrenceInput = {
 type TaskWithRule = Task & { recurrenceRule?: RecurrenceRule | null };
 
 export const RECURRENCE_STEP_INTERVAL = 1;
+/** Fallback when type is unknown. Prefer maxOccurrencesForType. */
 export const RECURRENCE_MAX_OCCURRENCES = 52;
+export const RECURRENCE_MAX_BY_TYPE: Record<string, number> = {
+  daily: 365,
+  weekly: 52,
+  monthly: 12,
+};
 const RECURRENCE_SPAWN_CHUNK = 25;
 
-export function normalizeOccurrenceCount(raw?: number | null): number {
-  const n = Math.floor(raw ?? 1);
-  return Math.min(RECURRENCE_MAX_OCCURRENCES, Math.max(1, n));
+export function maxOccurrencesForType(type?: string | null): number {
+  if (type && Object.prototype.hasOwnProperty.call(RECURRENCE_MAX_BY_TYPE, type)) {
+    return RECURRENCE_MAX_BY_TYPE[type]!;
+  }
+  return RECURRENCE_MAX_OCCURRENCES;
+}
+
+export function normalizeOccurrenceCount(raw?: number | null, type?: string | null): number {
+  const n = Math.floor(Number(raw ?? 1));
+  const safe = Number.isFinite(n) ? n : 1;
+  return Math.min(maxOccurrencesForType(type), Math.max(1, safe));
 }
 
 export function resolveRecurrenceOccurrenceCount(
-  recurrence: Pick<RecurrenceInput, "occurrenceCount" | "interval">,
+  recurrence: Pick<RecurrenceInput, "occurrenceCount" | "interval" | "type">,
 ): number {
-  return normalizeOccurrenceCount(recurrence.occurrenceCount ?? recurrence.interval);
+  return normalizeOccurrenceCount(recurrence.occurrenceCount ?? recurrence.interval, recurrence.type);
 }
 
-export function seriesOccurrenceCount(series: Pick<RecurrenceSeries, "occurrenceCount" | "interval">): number {
+export function seriesOccurrenceCount(
+  series: Pick<RecurrenceSeries, "occurrenceCount" | "interval" | "type">,
+): number {
   if (series.occurrenceCount != null && series.occurrenceCount > 0) {
-    return normalizeOccurrenceCount(series.occurrenceCount);
+    return normalizeOccurrenceCount(series.occurrenceCount, series.type);
   }
-  return normalizeOccurrenceCount(series.interval);
+  return normalizeOccurrenceCount(series.interval, series.type);
 }
 
 export function dueDayKey(date: Date, timeZone?: string | null): string {
@@ -189,7 +205,7 @@ export function listRecurrenceDueDatesForCount(
   dayOfMonth?: number | null,
   timeZone: string = DEFAULT_TIMEZONE,
 ): Date[] {
-  const total = normalizeOccurrenceCount(occurrenceCount);
+  const total = normalizeOccurrenceCount(occurrenceCount, type);
   const maxFuture = Math.max(0, total - 1);
   const anchor = alignRecurringAnchorDueDate(type, anchorDue, daysOfWeek, dayOfMonth, timeZone);
   const dates: Date[] = [];

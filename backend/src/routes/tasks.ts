@@ -270,10 +270,11 @@ tasksRouter.get("/", async (c) => {
   const membership = await getMembership(user.id, teamId);
   if (!membership) return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
 
-  const { status, priority, assigneeId, creatorId, myTasks, cursor, dueYear, dueMonth, completedYear, completedMonth } =
+  const { status, priority, assigneeId, creatorId, myTasks, cursor, dueYear, dueMonth, completedYear, completedMonth, recurrenceSeriesId } =
     c.req.query();
   const rawLimit = Number(c.req.query("limit") ?? 50);
-  const limit = Math.min(isNaN(rawLimit) || rawLimit < 1 ? 50 : rawLimit, 200);
+  const maxLimit = recurrenceSeriesId ? 400 : 200;
+  const limit = Math.min(isNaN(rawLimit) || rawLimit < 1 ? 50 : rawLimit, maxLimit);
 
   const resolvedAssigneeId = assigneeId === "me" ? user.id : assigneeId;
 
@@ -284,7 +285,7 @@ tasksRouter.get("/", async (c) => {
   };
 
   const monthFilters: Record<string, unknown>[] = [];
-  if (dueYear && dueMonth !== undefined) {
+  if (!recurrenceSeriesId && dueYear && dueMonth !== undefined) {
     const y = parseInt(dueYear, 10);
     const m = parseInt(dueMonth, 10);
     if (!Number.isNaN(y) && !Number.isNaN(m)) {
@@ -299,7 +300,7 @@ tasksRouter.get("/", async (c) => {
       });
     }
   }
-  if (completedYear && completedMonth !== undefined) {
+  if (!recurrenceSeriesId && completedYear && completedMonth !== undefined) {
     const y = parseInt(completedYear, 10);
     const m = parseInt(completedMonth, 10);
     if (!Number.isNaN(y) && !Number.isNaN(m)) {
@@ -310,24 +311,39 @@ tasksRouter.get("/", async (c) => {
 
   const activeOnly = c.req.query("activeOnly") === "true";
 
-  if (!cursor || activeOnly) {
+  if (!cursor || activeOnly || recurrenceSeriesId) {
     await materializeRecurringTasksForTeam(prisma, teamId);
+  }
+
+  if (recurrenceSeriesId) {
+    const series = await prisma.recurrenceSeries.findFirst({
+      where: { id: recurrenceSeriesId, teamId },
+      select: { id: true },
+    });
+    if (!series) {
+      return c.json({ error: { message: "Recurrence series not found", code: "NOT_FOUND" } }, 404);
+    }
   }
 
   const tasks = await prisma.task.findMany({
     where: {
       teamId,
-      ...(status ? { status } : activeOnly ? { status: { not: "done" } } : {}),
+      ...(recurrenceSeriesId ? { recurrenceSeriesId } : {}),
+      ...(status
+        ? { status }
+        : !recurrenceSeriesId && activeOnly
+          ? { status: { not: "done" } }
+          : {}),
       ...(priority ? { priority } : {}),
-      ...(myTasks === "true" ? {
+      ...(!recurrenceSeriesId && myTasks === "true" ? {
         OR: [
           { assignments: { some: { userId: user.id } } },
           { creatorId: user.id, assignments: { none: {} } },
         ],
       } : {}),
-      ...(resolvedAssigneeId ? { assignments: { some: { userId: resolvedAssigneeId } } } : {}),
+      ...(!recurrenceSeriesId && resolvedAssigneeId ? { assignments: { some: { userId: resolvedAssigneeId } } } : {}),
       // "me" is a shorthand that resolves to the authenticated user's ID
-      ...(creatorId ? { creatorId: creatorId === "me" ? user.id : creatorId } : {}),
+      ...(!recurrenceSeriesId && creatorId ? { creatorId: creatorId === "me" ? user.id : creatorId } : {}),
       ...(monthFilters.length ? { AND: monthFilters } : {}),
     },
     include: {
@@ -350,7 +366,7 @@ tasksRouter.get("/", async (c) => {
         },
       },
     },
-    orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
+    orderBy: [{ dueDate: "asc" }, { createdAt: "asc" }],
     take: limit,
     ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
   });

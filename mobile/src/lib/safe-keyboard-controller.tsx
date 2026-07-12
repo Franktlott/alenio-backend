@@ -68,6 +68,30 @@ export function useSafeKeyboardVisible() {
   return visible;
 }
 
+/**
+ * Keeps a composer/footer stuck to the top of the keyboard.
+ * Falls back to a plain View in Expo Go (pair with SafeKeyboardAvoidingView instead).
+ */
+export function SafeKeyboardStickyView({
+  children,
+  style,
+  offset,
+}: {
+  children: React.ReactNode;
+  style?: object;
+  offset?: { closed?: number; opened?: number };
+}) {
+  if (!LINKED) {
+    return <View style={style}>{children}</View>;
+  }
+  const { KeyboardStickyView } = require("react-native-keyboard-controller") as typeof import("react-native-keyboard-controller");
+  return (
+    <KeyboardStickyView style={style} offset={offset}>
+      {children}
+    </KeyboardStickyView>
+  );
+}
+
 export const SafeKeyboardAvoidingView = forwardRef(function SafeKeyboardAvoidingView(
   {
     behavior = "padding",

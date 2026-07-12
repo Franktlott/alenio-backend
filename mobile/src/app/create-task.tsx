@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -13,8 +13,8 @@ import {
   Dimensions,
   Pressable,
   ScrollView,
+  Keyboard,
 } from "react-native";
-import { SafeKeyboardAvoidingView } from "@/lib/safe-keyboard-controller";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -25,7 +25,7 @@ import { api } from "@/lib/api/api";
 import { uploadFile } from "@/lib/upload";
 import { useSession } from "@/lib/auth/use-session";
 import type { Task, TaskPriority, RecurrenceType, Team, TeamMember, TaskTemplate } from "@/lib/types";
-import { recurrenceCountHint, recurrenceDurationUnit } from "@/lib/recurring-task";
+import { clampRecurrenceCount, maxRecurrenceCount, recurrenceCountHint, recurrenceDurationUnit } from "@/lib/recurring-task";
 import { ME_QUERY_KEY } from "@/lib/auth/me-query";
 import { calendarDueIso, resolveTimeZone } from "@/lib/timezone";
 import { invalidateTaskCaches } from "@/lib/invalidate-task-caches";
@@ -52,6 +52,27 @@ export default function CreateTaskScreen() {
   const queryClient = useQueryClient();
   const { data: session } = useSession();
   const insets = useSafeAreaInsets();
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const onShow = Keyboard.addListener(showEvent, (event) => {
+      setKeyboardHeight(event.endCoordinates?.height ?? 0);
+    });
+    const onHide = Keyboard.addListener(hideEvent, () => setKeyboardHeight(0));
+    return () => {
+      onShow.remove();
+      onHide.remove();
+    };
+  }, []);
+
+  /** Keep the sheet inside the visible area above the keyboard so the header stays on-screen. */
+  const sheetMaxHeight = Math.min(
+    CREATE_TASK_SHEET_MAX_HEIGHT,
+    Math.max(320, SCREEN_HEIGHT - keyboardHeight - Math.max(insets.top, 8)),
+  );
+  const scrollMaxHeight = Math.max(180, sheetMaxHeight - 78);
 
   const { data: meProfile } = useQuery({
     queryKey: ME_QUERY_KEY,
@@ -189,7 +210,7 @@ export default function CreateTaskScreen() {
         subtasks: subtaskTitles.map((s, i) => ({ title: s, order: i })),
         isRecurring,
         recurrenceType: isRecurring ? recurrenceType : undefined,
-        recurrenceInterval: isRecurring ? parseInt(recurrenceCount) || 1 : undefined,
+        recurrenceInterval: isRecurring ? clampRecurrenceCount(recurrenceCount, recurrenceType) : undefined,
         recurrenceDaysOfWeek: isRecurring && recurrenceType === "weekly" && selectedDayOfWeek !== null
           ? String(selectedDayOfWeek)
           : undefined,
@@ -246,7 +267,7 @@ export default function CreateTaskScreen() {
       recurrence: isRecurring
         ? {
             type: recurrenceType,
-            occurrenceCount: parseInt(recurrenceCount) || 1,
+            occurrenceCount: clampRecurrenceCount(recurrenceCount, recurrenceType),
             daysOfWeek: recurrenceType === "weekly" && selectedDayOfWeek !== null
               ? String(selectedDayOfWeek)
               : undefined,
@@ -350,19 +371,19 @@ export default function CreateTaskScreen() {
         onPress={() => router.back()}
         testID="create-task-backdrop"
       />
-      <SafeKeyboardAvoidingView style={{ justifyContent: "flex-end" }}>
-        <Pressable
+      <View style={{ justifyContent: "flex-end", marginBottom: keyboardHeight }}>
+        <View
           style={{
             backgroundColor: "white",
             borderTopLeftRadius: 24,
             borderTopRightRadius: 24,
-            maxHeight: CREATE_TASK_SHEET_MAX_HEIGHT,
+            maxHeight: sheetMaxHeight,
+            width: "100%",
             overflow: "hidden",
           }}
-          onPress={(e) => e.stopPropagation()}
         >
           <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: "#E2E8F0", alignSelf: "center", marginTop: 8, marginBottom: 12 }} />
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, marginBottom: 16 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, marginBottom: 12 }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1 }}>
               <Image source={require("@/assets/alenio-icon.png")} style={{ width: 28, height: 28, borderRadius: 7 }} />
               <Text style={{ fontSize: 17, fontWeight: "700", color: "#0F172A" }}>New Task</Text>
@@ -387,10 +408,16 @@ export default function CreateTaskScreen() {
           </View>
 
           <ScrollView
-            style={{ maxHeight: CREATE_TASK_SHEET_MAX_HEIGHT - 88 }}
-            contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: insets.bottom + 24 }}
+            style={{ maxHeight: scrollMaxHeight }}
+            contentContainerStyle={{
+              paddingHorizontal: 16,
+              paddingBottom: (keyboardHeight > 0 ? 16 : insets.bottom + 24),
+            }}
             showsVerticalScrollIndicator
             keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="interactive"
+            nestedScrollEnabled
+            bounces
           >
           {/* Title */}
           <TextInput
@@ -573,7 +600,10 @@ export default function CreateTaskScreen() {
                     return (
                       <TouchableOpacity
                         key={r.value}
-                        onPress={() => setRecurrenceType(r.value)}
+                        onPress={() => {
+                          setRecurrenceType(r.value);
+                          setRecurrenceCount(String(clampRecurrenceCount(recurrenceCount, r.value)));
+                        }}
                         className="px-3 py-1.5 rounded-full border"
                         style={{
                           backgroundColor: selected ? "#4361EE20" : "#F1F5F9",
@@ -591,13 +621,18 @@ export default function CreateTaskScreen() {
                 <View className="flex-row items-center" style={{ gap: 8 }}>
                   <Text className="text-sm text-slate-500">Repeat for</Text>
                   <TextInput
-                    className="w-12 text-center bg-slate-100 dark:bg-slate-800 rounded-lg py-1.5 text-slate-900 dark:text-white font-semibold"
+                    className="w-14 text-center bg-slate-100 dark:bg-slate-800 rounded-lg py-1.5 text-slate-900 dark:text-white font-semibold"
                     value={recurrenceCount}
-                    onChangeText={(t) =>
-                      setRecurrenceCount(t.replace(/[^0-9]/g, ""))
-                    }
+                    onChangeText={(t) => {
+                      const digits = t.replace(/[^0-9]/g, "");
+                      if (digits === "") {
+                        setRecurrenceCount("");
+                        return;
+                      }
+                      setRecurrenceCount(String(clampRecurrenceCount(digits, recurrenceType)));
+                    }}
                     keyboardType="numeric"
-                    maxLength={2}
+                    maxLength={String(maxRecurrenceCount(recurrenceType)).length}
                     testID="interval-input"
                   />
                   <Text className="text-sm text-slate-500">
@@ -819,8 +854,8 @@ export default function CreateTaskScreen() {
             )}
           </TouchableOpacity>
           </ScrollView>
-        </Pressable>
-      </SafeKeyboardAvoidingView>
+        </View>
+      </View>
 
       <Modal visible={showAssigneePicker} transparent animationType="slide" onRequestClose={() => setShowAssigneePicker(false)}>
         <Pressable

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { formatRecurrenceRuleSummary, recurrenceCountHint, recurrenceDurationUnit } from "../../lib/recurring-task";
+import { clampRecurrenceCount, formatRecurrenceRuleSummary, maxRecurrenceCount, recurrenceCountHint, recurrenceDurationUnit } from "../../lib/recurring-task";
 
 const RECURRENCE_TYPES = [
   { label: "Daily", value: "daily" },
@@ -39,7 +39,7 @@ export function TaskRecurrenceSetupModal({ open, initial, onCancel, onSave }: Pr
 
   if (!open) return null;
 
-  const count = parseInt(occurrenceCount, 10) || 1;
+  const count = clampRecurrenceCount(occurrenceCount, type);
   const preview = formatRecurrenceRuleSummary({
     type,
     occurrenceCount: count,
@@ -77,7 +77,10 @@ export function TaskRecurrenceSetupModal({ open, initial, onCancel, onSave }: Pr
                 key={r.value}
                 type="button"
                 className={`enterprise-workspace-recurrence-type${type === r.value ? " enterprise-workspace-recurrence-type--active" : ""}`}
-                onClick={() => setType(r.value)}
+                onClick={() => {
+                  setType(r.value);
+                  setOccurrenceCount(String(clampRecurrenceCount(occurrenceCount, r.value)));
+                }}
               >
                 {r.label}
               </button>
@@ -90,9 +93,16 @@ export function TaskRecurrenceSetupModal({ open, initial, onCancel, onSave }: Pr
               className="auth-input enterprise-workspace-recurrence-interval"
               type="number"
               min={1}
-              max={52}
+              max={maxRecurrenceCount(type)}
               value={occurrenceCount}
-              onChange={(e) => setOccurrenceCount(e.target.value)}
+              onChange={(e) => {
+                const raw = e.target.value;
+                if (raw === "") {
+                  setOccurrenceCount("");
+                  return;
+                }
+                setOccurrenceCount(String(clampRecurrenceCount(raw, type)));
+              }}
             />
             <span>{recurrenceDurationUnit(type)}</span>
           </label>

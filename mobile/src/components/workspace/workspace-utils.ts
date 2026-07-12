@@ -87,15 +87,17 @@ export function buildWorkspaceTasksPath(
     cursor?: string;
   },
 ): string {
-  const params = new URLSearchParams({ limit: "200" });
+  // Active: load all open tasks (not just the viewed month) so recurring series stay visible.
+  // Completed: keep month scoping for history browsing.
+  const params = new URLSearchParams({
+    limit: opts.statusTab === "completed" ? "200" : "500",
+  });
   if (opts.statusTab === "completed") {
     params.set("completedYear", String(opts.calendarYear));
     params.set("completedMonth", String(opts.calendarMonth));
     params.set("status", "done");
   } else {
     params.set("activeOnly", "true");
-    params.set("dueYear", String(opts.calendarYear));
-    params.set("dueMonth", String(opts.calendarMonth));
   }
 
   if (opts.assignedTo === "me") {

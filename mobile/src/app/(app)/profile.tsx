@@ -5,7 +5,6 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Image,
-  ActionSheetIOS,
   Platform,
   TextInput,
   ScrollView,
@@ -19,7 +18,7 @@ import * as Notifications from "expo-notifications";
 import Constants from "expo-constants";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { Camera, LogOut, Pencil, X, Trash2, Bell, Check, Crown, MessageSquare, Globe, AlertTriangle, ShieldAlert, ChevronRight, Lock, Shield } from "lucide-react-native";
+import { Camera, ImageIcon, LogOut, Pencil, X, Trash2, Bell, Check, Crown, MessageSquare, Globe, AlertTriangle, ShieldAlert, ChevronRight, Lock, Shield } from "lucide-react-native";
 import { notificationPreferencesSummary } from "@/components/NotificationPreferencesPanel";
 import { COMMON_TIMEZONES, formatTimeZoneLabel, getBrowserTimeZone, resolveTimeZone } from "@/lib/timezone";
 import { authClient, agentDebugLog, clearAccessToken, getAuthHeaders } from "@/lib/auth/auth-client";
@@ -120,6 +119,7 @@ export default function ProfileScreen() {
   /** URI whose load genuinely failed (not cancelled). RN may fire onError when a prior load is aborted on uri change. */
   const [avatarFailedUri, setAvatarFailedUri] = useState<string | null>(null);
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
+  const [showPhotoPicker, setShowPhotoPicker] = useState(false);
 
   // Delete account state
   const [deleteStep, setDeleteStep] = useState<0 | 1 | 2>(0);
@@ -363,21 +363,13 @@ export default function ProfileScreen() {
   });
 
   const handlePhotoPress = () => {
-    if (Platform.OS === "ios") {
-      ActionSheetIOS.showActionSheetWithOptions(
-        { options: ["Cancel", "Choose from library", "Take photo"], cancelButtonIndex: 0 },
-        (index) => {
-          if (index === 1) uploadMutation.mutate("library");
-          if (index === 2) uploadMutation.mutate("camera");
-        },
-      );
-      return;
-    }
-    Alert.alert("Profile photo", undefined, [
-      { text: "Cancel", style: "cancel" },
-      { text: "Choose from library", onPress: () => uploadMutation.mutate("library") },
-      { text: "Take photo", onPress: () => uploadMutation.mutate("camera") },
-    ]);
+    if (uploadMutation.isPending) return;
+    setShowPhotoPicker(true);
+  };
+
+  const pickProfilePhoto = (source: "library" | "camera") => {
+    setShowPhotoPicker(false);
+    setTimeout(() => uploadMutation.mutate(source), 280);
   };
 
   const openEditModal = (team: Team) => {
@@ -1163,6 +1155,132 @@ export default function ProfileScreen() {
       </Modal>
 
       {/* Leave team confirmation modal */}
+      <Modal
+        visible={showPhotoPicker}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowPhotoPicker(false)}
+      >
+        <Pressable
+          style={{ flex: 1, backgroundColor: "rgba(15, 23, 42, 0.45)", justifyContent: "flex-end" }}
+          onPress={() => setShowPhotoPicker(false)}
+          accessibilityLabel="Dismiss"
+        >
+          <Pressable onPress={(e) => e.stopPropagation?.()}>
+            <View
+              style={{
+                backgroundColor: "#FFFFFF",
+                marginHorizontal: 12,
+                marginBottom: Math.max(insets.bottom, 12) + 8,
+                borderRadius: 20,
+                overflow: "hidden",
+                borderWidth: 1,
+                borderColor: "#E2E8F0",
+                shadowColor: "#0F172A",
+                shadowOpacity: 0.12,
+                shadowRadius: 16,
+                shadowOffset: { width: 0, height: 8 },
+                elevation: 8,
+              }}
+            >
+              <View style={{ alignItems: "center", paddingTop: 10, paddingBottom: 6 }}>
+                <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: "#E2E8F0" }} />
+              </View>
+              <Text
+                style={{
+                  fontSize: 13,
+                  fontWeight: "700",
+                  color: "#64748B",
+                  letterSpacing: 0.4,
+                  textTransform: "uppercase",
+                  paddingHorizontal: 20,
+                  paddingBottom: 8,
+                }}
+              >
+                Profile photo
+              </Text>
+              <Pressable
+                testID="profile-photo-library"
+                onPress={() => pickProfilePhoto("library")}
+                style={({ pressed }) => ({
+                  flexDirection: "row",
+                  alignItems: "center",
+                  paddingHorizontal: 20,
+                  paddingVertical: 14,
+                  gap: 14,
+                  backgroundColor: pressed ? "#F8FAFC" : "#FFFFFF",
+                  borderTopWidth: 1,
+                  borderTopColor: "#F1F5F9",
+                })}
+              >
+                <View
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 12,
+                    backgroundColor: "#EEF2FF",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <ImageIcon size={20} color="#4361EE" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 16, fontWeight: "600", color: "#0F172A" }}>Choose from library</Text>
+                  <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 2 }}>Pick an existing photo</Text>
+                </View>
+              </Pressable>
+              <Pressable
+                testID="profile-photo-camera"
+                onPress={() => pickProfilePhoto("camera")}
+                style={({ pressed }) => ({
+                  flexDirection: "row",
+                  alignItems: "center",
+                  paddingHorizontal: 20,
+                  paddingVertical: 14,
+                  gap: 14,
+                  backgroundColor: pressed ? "#F8FAFC" : "#FFFFFF",
+                  borderTopWidth: 1,
+                  borderTopColor: "#F1F5F9",
+                })}
+              >
+                <View
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 12,
+                    backgroundColor: "#EEF2FF",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Camera size={20} color="#4361EE" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 16, fontWeight: "600", color: "#0F172A" }}>Take photo</Text>
+                  <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 2 }}>Use your camera</Text>
+                </View>
+              </Pressable>
+              <Pressable
+                testID="profile-photo-cancel"
+                onPress={() => setShowPhotoPicker(false)}
+                style={({ pressed }) => ({
+                  marginHorizontal: 16,
+                  marginTop: 10,
+                  marginBottom: 14,
+                  borderRadius: 12,
+                  paddingVertical: 13,
+                  alignItems: "center",
+                  backgroundColor: pressed ? "#E2E8F0" : "#F1F5F9",
+                })}
+              >
+                <Text style={{ fontSize: 15, fontWeight: "700", color: "#64748B" }}>Cancel</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
       <Modal visible={showSignOutConfirm} transparent animationType="fade" onRequestClose={() => setShowSignOutConfirm(false)}>
         <Pressable className="flex-1 bg-black/40 items-center justify-center px-6" onPress={() => setShowSignOutConfirm(false)}>
           <Pressable onPress={(e) => e.stopPropagation()}>

@@ -25,9 +25,8 @@ model User {
   directMessages DirectMessage[]
   messageReactions MessageReaction[]
   directMessageReactions DirectMessageReaction[]
-  teamMessagePins Team[] @relation("TeamMessagePinner")
-  topicMessagePins Topic[] @relation("TopicMessagePinner")
-  conversationMessagePins Conversation[] @relation("ConversationMessagePinner")
+  teamChatPins TeamChatPin[] @relation("TeamChatPinPinner")
+  conversationPins ConversationPin[] @relation("ConversationPinPinner")
   templatesCreated TaskTemplate[] @relation("TemplateCreator")
   oneOnOneTemplatesCreated OneOnOneTemplate[] @relation("OneOnOneTemplateCreator")
   oneOnOneMeetingsCreated OneOnOneMeeting[] @relation("OneOnOneMeetingCreator")
@@ -143,12 +142,7 @@ model Team {
   conversations Conversation[]
   workspaceModules WorkspaceModule[]
   moduleTestSessions ModuleTestSession[]
-  /** Pinned message for general Team Chat (topicId null). */
-  pinnedMessageId String?
-  pinnedMessage   Message?  @relation("TeamPinnedMessage", fields: [pinnedMessageId], references: [id], onDelete: SetNull)
-  pinnedAt        DateTime?
-  pinnedById      String?
-  pinnedBy        User?     @relation("TeamMessagePinner", fields: [pinnedById], references: [id], onDelete: SetNull)
+  chatPins TeamChatPin[]
 }
 
 /// Per-workspace lifecycle + operating mode for an Alenio module.
@@ -466,8 +460,7 @@ model Message {
   topic            Topic?   @relation(fields: [topicId], references: [id], onDelete: SetNull)
   mentionedUserIds String   @default("[]")
   editedAt         DateTime?
-  pinnedInTeams    Team[]   @relation("TeamPinnedMessage")
-  pinnedInTopics   Topic[]  @relation("TopicPinnedMessage")
+  chatPins         TeamChatPin[]
 
   @@index([teamId, createdAt])
   @@index([topicId, createdAt])
@@ -506,11 +499,6 @@ model Topic {
   messages                Message[]
   polls                   Poll[]
   members                 TopicMember[]
-  pinnedMessageId         String?
-  pinnedMessage           Message?  @relation("TopicPinnedMessage", fields: [pinnedMessageId], references: [id], onDelete: SetNull)
-  pinnedAt                DateTime?
-  pinnedById              String?
-  pinnedBy                User?     @relation("TopicMessagePinner", fields: [pinnedById], references: [id], onDelete: SetNull)
 
   @@index([teamId, archivedAt])
 }
@@ -550,11 +538,7 @@ model Conversation {
   updatedAt    DateTime                  @updatedAt
   participants ConversationParticipant[]
   messages     DirectMessage[]
-  pinnedDirectMessageId String?
-  pinnedDirectMessage   DirectMessage? @relation("ConversationPinnedMessage", fields: [pinnedDirectMessageId], references: [id], onDelete: SetNull)
-  pinnedAt              DateTime?
-  pinnedById            String?
-  pinnedBy              User?          @relation("ConversationMessagePinner", fields: [pinnedById], references: [id], onDelete: SetNull)
+  pins         ConversationPin[]
 
   @@index([teamId])
 }
@@ -592,10 +576,43 @@ model DirectMessage {
   replies        DirectMessage[] @relation("DMReplies")
   reactions      DirectMessageReaction[]
   mentionedUserIds String     @default("[]")
-  pinnedInConversations Conversation[] @relation("ConversationPinnedMessage")
+  pins ConversationPin[]
 
   @@index([conversationId, createdAt])
   @@index([senderId])
+}
+
+/** Up to 5 pinned messages per Team Chat channel or Space. channelKey is "general" or a topic id. */
+model TeamChatPin {
+  id         String   @id @default(cuid())
+  teamId     String
+  channelKey String
+  messageId  String
+  pinnedAt   DateTime @default(now())
+  pinnedById String
+  sortOrder  Int      @default(0)
+  team       Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  message    Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  pinnedBy   User     @relation("TeamChatPinPinner", fields: [pinnedById], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, channelKey, messageId])
+  @@index([teamId, channelKey, sortOrder])
+}
+
+/** Up to 5 pinned messages per DM / group conversation. */
+model ConversationPin {
+  id              String        @id @default(cuid())
+  conversationId  String
+  directMessageId String
+  pinnedAt        DateTime      @default(now())
+  pinnedById      String
+  sortOrder       Int           @default(0)
+  conversation    Conversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  directMessage   DirectMessage @relation(fields: [directMessageId], references: [id], onDelete: Cascade)
+  pinnedBy        User          @relation("ConversationPinPinner", fields: [pinnedById], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, directMessageId])
+  @@index([conversationId, sortOrder])
 }
 
 model DirectMessageReaction {

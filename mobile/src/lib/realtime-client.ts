@@ -31,14 +31,14 @@ export type RealtimeTeamPinEvent = {
   channel: "team";
   teamId: string;
   topicId: string | null;
-  pinnedMessage: unknown | null;
+  pinnedMessages: unknown[];
 };
 
 export type RealtimeDmPinEvent = {
   type: "pin.updated";
   channel: "dm";
   conversationId: string;
-  pinnedMessage: unknown | null;
+  pinnedMessages: unknown[];
 };
 
 export type RealtimeServerEvent =

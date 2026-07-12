@@ -7,7 +7,9 @@ export function invalidateTaskCaches(queryClient: QueryClient, teamId?: string |
     void queryClient.invalidateQueries({ queryKey: ["tasks-count", teamId] });
     void queryClient.invalidateQueries({ queryKey: ["team-overview-tasks", teamId] });
     void queryClient.invalidateQueries({ queryKey: ["member-stats", teamId] });
+    void queryClient.invalidateQueries({ queryKey: ["series-tasks", teamId] });
   }
   void queryClient.invalidateQueries({ queryKey: ["tasks"] });
   void queryClient.invalidateQueries({ queryKey: ["tasks-count"] });
+  void queryClient.invalidateQueries({ queryKey: ["series-tasks"] });
 }

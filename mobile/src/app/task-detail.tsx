@@ -187,7 +187,19 @@ export default function TaskDetailScreen() {
   const isEditable = canEdit && isEditMode;
 
   const taskIsRecurring = !!task && isRecurringTask(task);
+  const seriesId = task?.recurrenceSeriesId ?? null;
   const originalDueDate = task?.dueDate ? new Date(task.dueDate) : null;
+
+  const { data: seriesTasksData, isPending: seriesTasksPending } = useQuery({
+    queryKey: ["series-tasks", teamId, seriesId],
+    queryFn: () =>
+      api.get<{ tasks: Task[]; nextCursor: string | null }>(
+        `/api/teams/${teamId}/tasks?recurrenceSeriesId=${encodeURIComponent(seriesId!)}&limit=400`,
+      ),
+    enabled: !!teamId && !!seriesId,
+  });
+  const seriesTasks = seriesTasksData?.tasks ?? [];
+  const seriesCompletedCount = seriesTasks.filter((t) => t.status === "done").length;
 
   const beginEdit = () => {
     if (!task) return;
@@ -819,6 +831,93 @@ export default function TaskDetailScreen() {
             <Text className="text-sm text-slate-400 italic">No one assigned yet</Text>
           )}
         </View>
+        ) : null}
+
+        {/* Recurring series chain */}
+        {!showFocusedFeedbackTask && seriesId ? (
+          <View className="mb-4" testID="recurring-series-chain">
+            <Text className="text-sm font-semibold text-slate-500 mb-2">
+              Series
+              {seriesTasks.length > 0
+                ? ` (${seriesCompletedCount}/${seriesTasks.length})`
+                : ""}
+            </Text>
+            {seriesTasksPending && seriesTasks.length === 0 ? (
+              <ActivityIndicator color="#4361EE" style={{ alignSelf: "flex-start", marginVertical: 8 }} />
+            ) : seriesTasks.length === 0 ? (
+              <Text className="text-sm text-slate-400 italic">No tasks in this series</Text>
+            ) : (
+              <View
+                style={{
+                  borderRadius: 14,
+                  borderWidth: 1,
+                  borderColor: "#E2E8F0",
+                  overflow: "hidden",
+                  backgroundColor: "#F8FAFC",
+                }}
+              >
+                {seriesTasks.map((item, index) => {
+                  const done = item.status === "done";
+                  const isCurrent = item.id === taskId;
+                  return (
+                    <TouchableOpacity
+                      key={item.id}
+                      disabled={isCurrent}
+                      onPress={() =>
+                        router.replace({
+                          pathname: "/task-detail",
+                          params: { taskId: item.id, teamId: teamId! },
+                        })
+                      }
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        paddingHorizontal: 12,
+                        paddingVertical: 11,
+                        gap: 10,
+                        backgroundColor: isCurrent ? "#EEF2FF" : "transparent",
+                        borderTopWidth: index === 0 ? 0 : 1,
+                        borderTopColor: "#E2E8F0",
+                      }}
+                      testID={`series-task-${item.id}`}
+                    >
+                      <View
+                        style={{
+                          width: 28,
+                          height: 28,
+                          borderRadius: 14,
+                          alignItems: "center",
+                          justifyContent: "center",
+                          backgroundColor: done ? "#D1FAE5" : "#FEE2E2",
+                        }}
+                      >
+                        {done ? (
+                          <Check size={16} color="#10B981" strokeWidth={2.5} />
+                        ) : (
+                          <X size={16} color="#EF4444" strokeWidth={2.5} />
+                        )}
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text
+                          style={{
+                            fontSize: 14,
+                            fontWeight: isCurrent ? "700" : "500",
+                            color: "#0F172A",
+                          }}
+                        >
+                          {formatTaskDueDateLabel(item.dueDate, userTimeZone)}
+                        </Text>
+                        <Text style={{ fontSize: 11, color: "#64748B", marginTop: 1 }}>
+                          {done ? "Completed" : "Not completed"}
+                          {isCurrent ? " · This task" : ""}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
+          </View>
         ) : null}
 
         {/* Due date */}

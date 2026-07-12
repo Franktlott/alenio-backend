@@ -293,15 +293,18 @@ export default function TeamChatScreen() {
     readyForOlderLoad,
   } = useChatListScroll(threadKey, listData.length);
 
-  const pinQueryKey = ["pinned-message", "team", teamId, topicKey] as const;
-  const { data: pinnedMessage = null } = useQuery<PinnedMessageSummary | null>({
+  const pinQueryKey = ["pinned-messages", "team", teamId, topicKey] as const;
+  const { data: pinnedMessages = [] } = useQuery<PinnedMessageSummary[]>({
     queryKey: [...pinQueryKey],
-    queryFn: () =>
-      api.get<PinnedMessageSummary | null>(
+    queryFn: async () => {
+      const data = await api.get<PinnedMessageSummary[] | null>(
         `/api/teams/${teamId}/messages/pin?topicId=${encodeURIComponent(topicKey)}`,
-      ),
+      );
+      return Array.isArray(data) ? data : [];
+    },
     enabled: !!teamId,
   });
+  const pinnedIds = useMemo(() => new Set(pinnedMessages.map((p) => p.messageId)), [pinnedMessages]);
 
   useEffect(() => {
     if (!teamId) return;
@@ -309,7 +312,10 @@ export default function TeamChatScreen() {
       if (event.channel !== "team" || event.teamId !== teamId) return;
       const eventTopic = event.topicId ?? "general";
       if (eventTopic !== topicKey) return;
-      queryClient.setQueryData([...pinQueryKey], event.pinnedMessage ?? null);
+      queryClient.setQueryData(
+        [...pinQueryKey],
+        Array.isArray(event.pinnedMessages) ? event.pinnedMessages : [],
+      );
     });
     return () => {
       off();
@@ -318,65 +324,60 @@ export default function TeamChatScreen() {
 
   const pinMutation = useMutation({
     mutationFn: (messageId: string) =>
-      api.put<PinnedMessageSummary>(`/api/teams/${teamId}/messages/pin`, {
+      api.put<PinnedMessageSummary[]>(`/api/teams/${teamId}/messages/pin`, {
         messageId,
         topicId: topicId ?? null,
       }),
     onSuccess: (data) => {
-      queryClient.setQueryData([...pinQueryKey], data);
+      queryClient.setQueryData([...pinQueryKey], Array.isArray(data) ? data : []);
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     },
   });
 
   const unpinMutation = useMutation({
-    mutationFn: () =>
-      api.delete(`/api/teams/${teamId}/messages/pin?topicId=${encodeURIComponent(topicKey)}`),
-    onSuccess: () => {
-      queryClient.setQueryData([...pinQueryKey], null);
+    mutationFn: (messageId: string) =>
+      api.delete<PinnedMessageSummary[]>(
+        `/api/teams/${teamId}/messages/pin?topicId=${encodeURIComponent(topicKey)}&messageId=${encodeURIComponent(messageId)}`,
+      ),
+    onSuccess: (data) => {
+      queryClient.setQueryData([...pinQueryKey], Array.isArray(data) ? data : []);
     },
   });
 
-  const jumpToPinnedMessage = useCallback(async () => {
-    if (!pinnedMessage?.messageId || jumpingToPin) return;
-    setJumpingToPin(true);
-    try {
-      let guard = 0;
-      let pages =
-        queryClient.getQueryData<InfiniteData<MessagePage<Message>>>(["messages", teamId, topicKey])
-          ?.pages ?? [];
-      let loaded = flattenMessagePages<Message>(pages);
-      while (!loaded.some((m) => m.id === pinnedMessage.messageId) && guard < 40) {
-        guard += 1;
-        const result = await fetchNextPage();
-        if (!result.hasNextPage && !result.data) break;
-        pages = result.data?.pages ?? pages;
-        loaded = flattenMessagePages<Message>(pages);
-        if (!result.hasNextPage) break;
+  const jumpToPinnedMessage = useCallback(
+    async (messageId: string) => {
+      if (!messageId || jumpingToPin) return;
+      setJumpingToPin(true);
+      try {
+        let guard = 0;
+        let pages =
+          queryClient.getQueryData<InfiniteData<MessagePage<Message>>>(["messages", teamId, topicKey])
+            ?.pages ?? [];
+        let loaded = flattenMessagePages<Message>(pages);
+        while (!loaded.some((m) => m.id === messageId) && guard < 40) {
+          guard += 1;
+          const result = await fetchNextPage();
+          if (!result.hasNextPage && !result.data) break;
+          pages = result.data?.pages ?? pages;
+          loaded = flattenMessagePages<Message>(pages);
+          if (!result.hasNextPage) break;
+        }
+        const nextList = [...buildChatList(loaded, polls)].reverse();
+        const index = nextList.findIndex(
+          (item) => !("type" in item) && !("_isPoll" in item) && (item as Message).id === messageId,
+        );
+        if (index < 0) return;
+        requestAnimationFrame(() => {
+          scrollToIndex(index, true);
+          setHighlightedMessageId(messageId);
+          setTimeout(() => setHighlightedMessageId(null), 1800);
+        });
+      } finally {
+        setJumpingToPin(false);
       }
-      const nextList = [...buildChatList(loaded, polls)].reverse();
-      const index = nextList.findIndex(
-        (item) => !("type" in item) && !("_isPoll" in item) && (item as Message).id === pinnedMessage.messageId,
-      );
-      if (index < 0) return;
-      // Allow FlatList to render newly fetched pages before scrolling.
-      requestAnimationFrame(() => {
-        scrollToIndex(index, true);
-        setHighlightedMessageId(pinnedMessage.messageId);
-        setTimeout(() => setHighlightedMessageId(null), 1800);
-      });
-    } finally {
-      setJumpingToPin(false);
-    }
-  }, [
-    pinnedMessage?.messageId,
-    jumpingToPin,
-    queryClient,
-    teamId,
-    topicKey,
-    fetchNextPage,
-    polls,
-    scrollToIndex,
-  ]);
+    },
+    [jumpingToPin, queryClient, teamId, topicKey, fetchNextPage, polls, scrollToIndex],
+  );
 
   const { data: team } = useQuery({
     queryKey: ["team", teamId],
@@ -617,15 +618,15 @@ export default function TeamChatScreen() {
         </View>
       </LinearGradient>
 
-      {pinnedMessage ? (
+      {pinnedMessages.length > 0 ? (
         <PinnedMessageBar
-          pinned={pinnedMessage}
-          onPress={() => {
-            void jumpToPinnedMessage();
+          pins={pinnedMessages}
+          onPressPin={(pin) => {
+            void jumpToPinnedMessage(pin.messageId);
           }}
-          onLongPress={() => {
+          onLongPressPin={(pin) => {
             void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            unpinMutation.mutate();
+            unpinMutation.mutate(pin.messageId);
           }}
         />
       ) : null}
@@ -1049,9 +1050,8 @@ export default function TeamChatScreen() {
 
       <SafeKeyboardAvoidingView
         className="flex-1"
-        automaticOffset
-        // Expo Go (RN KAV) still needs header compensation; native path zeros this when automaticOffset is on.
-        keyboardVerticalOffset={Platform.OS === "ios" ? insets.top + 64 : 0}
+        // Header sits above this view — avoid additive automaticOffset under-lift on iOS.
+        keyboardVerticalOffset={Platform.OS === "ios" ? 8 : 0}
       >
         {isLoading ? (
           <View testID="team-chat-loading" className="flex-1 items-center justify-center">
@@ -1075,7 +1075,7 @@ export default function TeamChatScreen() {
               keyExtractor={(item) => ("type" in item ? item.id : item.id)}
               contentContainerStyle={contentContainerStyle}
               showsVerticalScrollIndicator={false}
-              keyboardShouldPersistTaps="handled"
+              keyboardShouldPersistTaps="always"
               keyboardDismissMode="interactive"
               onScroll={handleScroll}
               scrollEventThrottle={16}
@@ -1191,8 +1191,10 @@ export default function TeamChatScreen() {
           className="flex-row items-end px-3 bg-white dark:bg-slate-800 border-t border-slate-100 dark:border-slate-700"
           style={{
             paddingTop: 8,
-            // Drop home-indicator inset while keyboard is open — KAV already lifts to the keyboard.
-            paddingBottom: keyboardVisible ? 8 : insets.bottom + 8,
+            // Extra space while keyboard is open so Send clears the suggestion bar.
+            paddingBottom: keyboardVisible ? 16 : insets.bottom + 8,
+            zIndex: 2,
+            elevation: 6,
           }}
         >
           <TouchableOpacity
@@ -1214,12 +1216,14 @@ export default function TeamChatScreen() {
             }}
             multiline
             maxLength={2000}
+            blurOnSubmit={false}
             style={{ maxHeight: 120 }}
           />
           <TouchableOpacity
             testID="team-chat-send-button"
             onPress={handleSend}
             disabled={!input.trim() || sendMutation.isPending || uploading}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             className="w-10 h-10 rounded-full items-center justify-center"
             style={{ backgroundColor: input.trim() ? "#4361EE" : "#E2E8F0" }}
           >
@@ -1274,12 +1278,16 @@ export default function TeamChatScreen() {
           },
           {
             id: "pin",
-            label: pinnedMessage?.messageId === messageMenu?.message.id ? "Unpin" : "Pin",
+            label: messageMenu && pinnedIds.has(messageMenu.message.id) ? "Unpin" : "Pin",
             icon: Pin,
+            hidden:
+              !!messageMenu &&
+              !pinnedIds.has(messageMenu.message.id) &&
+              pinnedMessages.length >= 5,
             onPress: () => {
               if (!messageMenu) return;
-              if (pinnedMessage?.messageId === messageMenu.message.id) {
-                unpinMutation.mutate();
+              if (pinnedIds.has(messageMenu.message.id)) {
+                unpinMutation.mutate(messageMenu.message.id);
               } else {
                 pinMutation.mutate(messageMenu.message.id);
               }

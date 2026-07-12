@@ -4,6 +4,7 @@ import { auth } from "../auth";
 import { authGuard } from "../middleware/auth-guard";
 import { sendPushToUsers } from "../lib/push";
 import { publishTeamMessageCreated, publishUserInboxUpdated, publishTeamPinUpdated } from "../lib/realtime-hub";
+import { MAX_CHAT_PINS } from "../lib/ensure-pinned-message-schema";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -38,6 +39,10 @@ function normalizeTopicKey(topicIdParam: string | undefined): string | null {
   return topicIdParam;
 }
 
+function channelKeyFromTopicId(topicId: string | null): string {
+  return topicId ?? "general";
+}
+
 type PinSummaryMessage = {
   id: string;
   content: string | null;
@@ -46,11 +51,10 @@ type PinSummaryMessage = {
 };
 
 function toPinnedSummary(
-  message: PinSummaryMessage | null | undefined,
-  pinnedAt: Date | null | undefined,
-  pinnedBy: { id: string; name: string | null } | null | undefined,
+  message: PinSummaryMessage,
+  pinnedAt: Date,
+  pinnedBy: { id: string; name: string | null },
 ) {
-  if (!message || !pinnedAt || !pinnedBy) return null;
   return {
     messageId: message.id,
     content: message.content,
@@ -72,6 +76,20 @@ const pinMessageSelect = {
   sender: { select: { id: true, name: true, image: true } },
 } as const;
 
+async function listTeamPins(teamId: string, topicId: string | null) {
+  const channelKey = channelKeyFromTopicId(topicId);
+  const pins = await prisma.teamChatPin.findMany({
+    where: { teamId, channelKey },
+    orderBy: [{ sortOrder: "asc" }, { pinnedAt: "asc" }],
+    include: {
+      message: { select: pinMessageSelect },
+      pinnedBy: { select: { id: true, name: true } },
+    },
+    take: MAX_CHAT_PINS,
+  });
+  return pins.map((pin) => toPinnedSummary(pin.message, pin.pinnedAt, pin.pinnedBy));
+}
+
 // GET /api/teams/:teamId/messages/pin
 messagesRouter.get("/pin", async (c) => {
   const user = c.get("user")!;
@@ -89,27 +107,7 @@ messagesRouter.get("/pin", async (c) => {
     }
   }
 
-  if (topicId) {
-    const topic = await prisma.topic.findFirst({
-      where: { id: topicId, teamId },
-      select: {
-        pinnedAt: true,
-        pinnedMessage: { select: pinMessageSelect },
-        pinnedBy: { select: { id: true, name: true } },
-      },
-    });
-    return c.json({ data: toPinnedSummary(topic?.pinnedMessage, topic?.pinnedAt, topic?.pinnedBy) });
-  }
-
-  const team = await prisma.team.findUnique({
-    where: { id: teamId },
-    select: {
-      pinnedAt: true,
-      pinnedMessage: { select: pinMessageSelect },
-      pinnedBy: { select: { id: true, name: true } },
-    },
-  });
-  return c.json({ data: toPinnedSummary(team?.pinnedMessage, team?.pinnedAt, team?.pinnedBy) });
+  return c.json({ data: await listTeamPins(teamId, topicId) });
 });
 
 // PUT /api/teams/:teamId/messages/pin
@@ -118,7 +116,11 @@ messagesRouter.put("/pin", async (c) => {
   const teamId = c.req.param("teamId") as string;
   const body = await c.req.json<{ messageId?: string; topicId?: string | null }>();
   const messageId = body.messageId?.trim();
-  const topicId = normalizeTopicKey(body.topicId ?? c.req.query("topicId") ?? undefined);
+  const topicId = normalizeTopicKey(
+    body.topicId === null || body.topicId === undefined
+      ? c.req.query("topicId") ?? undefined
+      : body.topicId,
+  );
 
   if (!messageId) {
     return c.json({ error: { message: "messageId required", code: "BAD_REQUEST" } }, 400);
@@ -147,37 +149,46 @@ messagesRouter.put("/pin", async (c) => {
     return c.json({ error: { message: "Message not found", code: "NOT_FOUND" } }, 404);
   }
 
-  const now = new Date();
-  if (topicId) {
-    await prisma.topic.update({
-      where: { id: topicId },
+  const channelKey = channelKeyFromTopicId(topicId);
+  const existing = await prisma.teamChatPin.findUnique({
+    where: {
+      teamId_channelKey_messageId: { teamId, channelKey, messageId },
+    },
+  });
+  if (!existing) {
+    const count = await prisma.teamChatPin.count({ where: { teamId, channelKey } });
+    if (count >= MAX_CHAT_PINS) {
+      return c.json(
+        { error: { message: `You can pin up to ${MAX_CHAT_PINS} messages`, code: "PIN_LIMIT" } },
+        400,
+      );
+    }
+    await prisma.teamChatPin.create({
       data: {
-        pinnedMessageId: messageId,
-        pinnedAt: now,
+        teamId,
+        channelKey,
+        messageId,
         pinnedById: user.id,
-      },
-    });
-  } else {
-    await prisma.team.update({
-      where: { id: teamId },
-      data: {
-        pinnedMessageId: messageId,
-        pinnedAt: now,
-        pinnedById: user.id,
+        sortOrder: count,
       },
     });
   }
 
-  const summary = toPinnedSummary(message, now, { id: user.id, name: user.name ?? null });
-  publishTeamPinUpdated({ teamId, topicId, pinnedMessage: summary });
-  return c.json({ data: summary });
+  const pins = await listTeamPins(teamId, topicId);
+  publishTeamPinUpdated({ teamId, topicId, pinnedMessages: pins });
+  return c.json({ data: pins });
 });
 
-// DELETE /api/teams/:teamId/messages/pin
+// DELETE /api/teams/:teamId/messages/pin?messageId=
 messagesRouter.delete("/pin", async (c) => {
   const user = c.get("user")!;
   const teamId = c.req.param("teamId") as string;
   const topicId = normalizeTopicKey(c.req.query("topicId"));
+  const messageId = c.req.query("messageId")?.trim();
+
+  if (!messageId) {
+    return c.json({ error: { message: "messageId required", code: "BAD_REQUEST" } }, 400);
+  }
 
   const membership = await getMembership(user.id, teamId);
   if (!membership) {
@@ -190,20 +201,27 @@ messagesRouter.delete("/pin", async (c) => {
     }
   }
 
-  if (topicId) {
-    await prisma.topic.update({
-      where: { id: topicId },
-      data: { pinnedMessageId: null, pinnedAt: null, pinnedById: null },
-    });
-  } else {
-    await prisma.team.update({
-      where: { id: teamId },
-      data: { pinnedMessageId: null, pinnedAt: null, pinnedById: null },
-    });
-  }
+  const channelKey = channelKeyFromTopicId(topicId);
+  await prisma.teamChatPin.deleteMany({
+    where: { teamId, channelKey, messageId },
+  });
 
-  publishTeamPinUpdated({ teamId, topicId, pinnedMessage: null });
-  return c.body(null, 204);
+  const remaining = await prisma.teamChatPin.findMany({
+    where: { teamId, channelKey },
+    orderBy: [{ sortOrder: "asc" }, { pinnedAt: "asc" }],
+  });
+  await Promise.all(
+    remaining.map((pin, index) =>
+      prisma.teamChatPin.update({
+        where: { id: pin.id },
+        data: { sortOrder: index },
+      }),
+    ),
+  );
+
+  const pins = await listTeamPins(teamId, topicId);
+  publishTeamPinUpdated({ teamId, topicId, pinnedMessages: pins });
+  return c.json({ data: pins });
 });
 
 // GET /api/teams/:teamId/messages - paginated history, oldest first within each page
@@ -510,19 +528,41 @@ messagesRouter.delete("/:messageId", async (c) => {
   }
 
   const topicId = message.topicId ?? null;
-  const pinCleared = topicId
-    ? await prisma.topic.updateMany({
-        where: { id: topicId, pinnedMessageId: messageId },
-        data: { pinnedMessageId: null, pinnedAt: null, pinnedById: null },
-      })
-    : await prisma.team.updateMany({
-        where: { id: teamId, pinnedMessageId: messageId },
-        data: { pinnedMessageId: null, pinnedAt: null, pinnedById: null },
-      });
+  const channelKey = topicId ?? "general";
+  const pinCleared = await prisma.teamChatPin.deleteMany({
+    where: { teamId, channelKey, messageId },
+  });
 
   await prisma.message.delete({ where: { id: messageId } });
   if (pinCleared.count > 0) {
-    publishTeamPinUpdated({ teamId, topicId, pinnedMessage: null });
+    const pins = await prisma.teamChatPin.findMany({
+      where: { teamId, channelKey },
+      orderBy: [{ sortOrder: "asc" }, { pinnedAt: "asc" }],
+      include: {
+        message: {
+          select: {
+            id: true,
+            content: true,
+            mediaType: true,
+            sender: { select: { id: true, name: true, image: true } },
+          },
+        },
+        pinnedBy: { select: { id: true, name: true } },
+      },
+      take: 5,
+    });
+    publishTeamPinUpdated({
+      teamId,
+      topicId,
+      pinnedMessages: pins.map((pin) => ({
+        messageId: pin.message.id,
+        content: pin.message.content,
+        mediaType: pin.message.mediaType,
+        sender: pin.message.sender,
+        pinnedAt: pin.pinnedAt.toISOString(),
+        pinnedBy: pin.pinnedBy,
+      })),
+    });
   }
   return c.body(null, 204);
 });

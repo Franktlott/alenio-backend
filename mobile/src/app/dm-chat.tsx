@@ -310,19 +310,27 @@ export default function DMChatScreen() {
     readyForOlderLoad,
   } = useChatListScroll(conversationId, listData.length);
 
-  const pinQueryKey = ["pinned-message", "dm", conversationId] as const;
-  const { data: pinnedMessage = null } = useQuery<PinnedMessageSummary | null>({
+  const pinQueryKey = ["pinned-messages", "dm", conversationId] as const;
+  const { data: pinnedMessages = [] } = useQuery<PinnedMessageSummary[]>({
     queryKey: [...pinQueryKey],
-    queryFn: () =>
-      api.get<PinnedMessageSummary | null>(`/api/dms/${conversationId}/messages/pin`),
+    queryFn: async () => {
+      const data = await api.get<PinnedMessageSummary[] | null>(
+        `/api/dms/${conversationId}/messages/pin`,
+      );
+      return Array.isArray(data) ? data : [];
+    },
     enabled: !!conversationId,
   });
+  const pinnedIds = useMemo(() => new Set(pinnedMessages.map((p) => p.messageId)), [pinnedMessages]);
 
   useEffect(() => {
     if (!conversationId) return;
     const off = realtimeClient.onPinUpdated((event) => {
       if (event.channel !== "dm" || event.conversationId !== conversationId) return;
-      queryClient.setQueryData([...pinQueryKey], event.pinnedMessage ?? null);
+      queryClient.setQueryData(
+        [...pinQueryKey],
+        Array.isArray(event.pinnedMessages) ? event.pinnedMessages : [],
+      );
     });
     return () => {
       off();
@@ -331,59 +339,58 @@ export default function DMChatScreen() {
 
   const pinMutation = useMutation({
     mutationFn: (messageId: string) =>
-      api.put<PinnedMessageSummary>(`/api/dms/${conversationId}/messages/pin`, { messageId }),
+      api.put<PinnedMessageSummary[]>(`/api/dms/${conversationId}/messages/pin`, { messageId }),
     onSuccess: (data) => {
-      queryClient.setQueryData([...pinQueryKey], data);
+      queryClient.setQueryData([...pinQueryKey], Array.isArray(data) ? data : []);
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     },
   });
 
   const unpinMutation = useMutation({
-    mutationFn: () => api.delete(`/api/dms/${conversationId}/messages/pin`),
-    onSuccess: () => {
-      queryClient.setQueryData([...pinQueryKey], null);
+    mutationFn: (messageId: string) =>
+      api.delete<PinnedMessageSummary[]>(
+        `/api/dms/${conversationId}/messages/pin?messageId=${encodeURIComponent(messageId)}`,
+      ),
+    onSuccess: (data) => {
+      queryClient.setQueryData([...pinQueryKey], Array.isArray(data) ? data : []);
     },
   });
 
-  const jumpToPinnedMessage = useCallback(async () => {
-    if (!pinnedMessage?.messageId || jumpingToPin) return;
-    setJumpingToPin(true);
-    try {
-      let guard = 0;
-      let pages =
-        queryClient.getQueryData<InfiniteData<MessagePage<DirectMessage>>>([
-          "dm-messages",
-          conversationId,
-        ])?.pages ?? [];
-      let loaded = flattenMessagePages<DirectMessage>(pages);
-      while (!loaded.some((m) => m.id === pinnedMessage.messageId) && guard < 40) {
-        guard += 1;
-        const result = await fetchNextPage();
-        pages = result.data?.pages ?? pages;
-        loaded = flattenMessagePages<DirectMessage>(pages);
-        if (!result.hasNextPage) break;
+  const jumpToPinnedMessage = useCallback(
+    async (messageId: string) => {
+      if (!messageId || jumpingToPin) return;
+      setJumpingToPin(true);
+      try {
+        let guard = 0;
+        let pages =
+          queryClient.getQueryData<InfiniteData<MessagePage<DirectMessage>>>([
+            "dm-messages",
+            conversationId,
+          ])?.pages ?? [];
+        let loaded = flattenMessagePages<DirectMessage>(pages);
+        while (!loaded.some((m) => m.id === messageId) && guard < 40) {
+          guard += 1;
+          const result = await fetchNextPage();
+          pages = result.data?.pages ?? pages;
+          loaded = flattenMessagePages<DirectMessage>(pages);
+          if (!result.hasNextPage) break;
+        }
+        const nextList = [...buildMessageList(loaded)].reverse();
+        const index = nextList.findIndex(
+          (item) => !("type" in item) && (item as DirectMessage).id === messageId,
+        );
+        if (index < 0) return;
+        requestAnimationFrame(() => {
+          scrollToIndex(index, true);
+          setHighlightedMessageId(messageId);
+          setTimeout(() => setHighlightedMessageId(null), 1800);
+        });
+      } finally {
+        setJumpingToPin(false);
       }
-      const nextList = [...buildMessageList(loaded)].reverse();
-      const index = nextList.findIndex(
-        (item) => !("type" in item) && (item as DirectMessage).id === pinnedMessage.messageId,
-      );
-      if (index < 0) return;
-      requestAnimationFrame(() => {
-        scrollToIndex(index, true);
-        setHighlightedMessageId(pinnedMessage.messageId);
-        setTimeout(() => setHighlightedMessageId(null), 1800);
-      });
-    } finally {
-      setJumpingToPin(false);
-    }
-  }, [
-    pinnedMessage?.messageId,
-    jumpingToPin,
-    queryClient,
-    conversationId,
-    fetchNextPage,
-    scrollToIndex,
-  ]);
+    },
+    [jumpingToPin, queryClient, conversationId, fetchNextPage, scrollToIndex],
+  );
 
   const sendMutation = useMutation({
     mutationFn: (payload: { content?: string; mediaUrl?: string; mediaType?: string; replyToId?: string; mentionedUserIds?: string[] }) =>
@@ -603,15 +610,15 @@ export default function DMChatScreen() {
         </View>
       </LinearGradient>
 
-      {pinnedMessage ? (
+      {pinnedMessages.length > 0 ? (
         <PinnedMessageBar
-          pinned={pinnedMessage}
-          onPress={() => {
-            void jumpToPinnedMessage();
+          pins={pinnedMessages}
+          onPressPin={(pin) => {
+            void jumpToPinnedMessage(pin.messageId);
           }}
-          onLongPress={() => {
+          onLongPressPin={(pin) => {
             void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            unpinMutation.mutate();
+            unpinMutation.mutate(pin.messageId);
           }}
         />
       ) : null}
@@ -888,9 +895,8 @@ export default function DMChatScreen() {
 
       <SafeKeyboardAvoidingView
         className="flex-1"
-        automaticOffset
-        // Expo Go (RN KAV) still needs header compensation; native path zeros this when automaticOffset is on.
-        keyboardVerticalOffset={Platform.OS === "ios" ? insets.top + 64 : 0}
+        // Header sits above this view — avoid additive automaticOffset under-lift on iOS.
+        keyboardVerticalOffset={Platform.OS === "ios" ? 8 : 0}
       >
         {isLoading ? (
           <View testID="dm-chat-loading" className="flex-1 items-center justify-center">
@@ -910,7 +916,7 @@ export default function DMChatScreen() {
               keyExtractor={(item) => ("type" in item ? item.id : item.id)}
               contentContainerStyle={contentContainerStyle}
               showsVerticalScrollIndicator={false}
-              keyboardShouldPersistTaps="handled"
+              keyboardShouldPersistTaps="always"
               keyboardDismissMode="interactive"
               onScroll={handleScroll}
               scrollEventThrottle={16}
@@ -1016,10 +1022,10 @@ export default function DMChatScreen() {
           className="flex-row items-end px-3 bg-white dark:bg-slate-800 border-t border-slate-100 dark:border-slate-700"
           style={{
             paddingTop: 8,
-            // Drop home-indicator inset while keyboard is open — KAV already lifts to the keyboard.
-            paddingBottom: keyboardVisible ? 8 : insets.bottom + 8,
+            // Extra space while keyboard is open so Send clears the suggestion bar.
+            paddingBottom: keyboardVisible ? 16 : insets.bottom + 8,
             zIndex: 2,
-            elevation: 4,
+            elevation: 6,
           }}
         >
           <TouchableOpacity
@@ -1041,12 +1047,14 @@ export default function DMChatScreen() {
             }}
             multiline
             maxLength={2000}
+            blurOnSubmit={false}
             style={{ maxHeight: 120 }}
           />
           <TouchableOpacity
             testID="dm-chat-send-button"
             onPress={handleSend}
             disabled={!input.trim() || sendMutation.isPending || uploading}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             className="w-10 h-10 rounded-full items-center justify-center"
             style={{ backgroundColor: input.trim() ? "#4361EE" : "#E2E8F0" }}
           >
@@ -1101,12 +1109,16 @@ export default function DMChatScreen() {
           },
           {
             id: "pin",
-            label: pinnedMessage?.messageId === messageMenu?.message.id ? "Unpin" : "Pin",
+            label: messageMenu && pinnedIds.has(messageMenu.message.id) ? "Unpin" : "Pin",
             icon: Pin,
+            hidden:
+              !!messageMenu &&
+              !pinnedIds.has(messageMenu.message.id) &&
+              pinnedMessages.length >= 5,
             onPress: () => {
               if (!messageMenu) return;
-              if (pinnedMessage?.messageId === messageMenu.message.id) {
-                unpinMutation.mutate();
+              if (pinnedIds.has(messageMenu.message.id)) {
+                unpinMutation.mutate(messageMenu.message.id);
               } else {
                 pinMutation.mutate(messageMenu.message.id);
               }

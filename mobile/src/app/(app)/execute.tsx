@@ -192,14 +192,10 @@ export default function TasksScreen() {
   const handleLoadMore = async () => {
     if (!activeTeamId || !nextCursor || loadingMore) return;
     setLoadingMore(true);
-    const queryKey = [
-      "tasks",
-      activeTeamId,
-      assignedToQueryKey(filters.assignedTo),
-      calendarYear,
-      calendarMonth,
-      filters.statusTab,
-    ] as const;
+    const queryKey =
+      filters.statusTab === "completed"
+        ? (["tasks", activeTeamId, assignedToQueryKey(filters.assignedTo), calendarYear, calendarMonth, "completed"] as const)
+        : (["tasks", activeTeamId, assignedToQueryKey(filters.assignedTo), "active"] as const);
     try {
       const result = await api.get<{ tasks: Task[]; nextCursor: string | null }>(
         buildWorkspaceTasksPath(activeTeamId, {
@@ -281,7 +277,7 @@ export default function TasksScreen() {
     error: activeLoadError,
     refetch: refetchActiveTasks,
   } = useQuery({
-    queryKey: ["tasks", activeTeamId, assignedToQueryKey(filters.assignedTo), calendarYear, calendarMonth, "active"],
+    queryKey: ["tasks", activeTeamId, assignedToQueryKey(filters.assignedTo), "active"],
     queryFn: async () =>
       api.get<{ tasks: Task[]; nextCursor: string | null }>(
         buildWorkspaceTasksPath(activeTeamId!, {
