@@ -216,31 +216,15 @@ async function createAuthServer(): Promise<AuthServer | null> {
               return;
             }
             const resend = new Resend(env.RESEND_API_KEY);
-            const subject =
-              type === "email-verification"
-                ? "Verify your Alenio email"
-                : type === "forget-password"
-                  ? "Reset your Alenio password"
-                  : "Your Alenio sign-in code";
-            const intro =
-              type === "email-verification"
-                ? "Use this code to verify your email:"
-                : type === "forget-password"
-                  ? "Use this code to reset your password:"
-                  : "Use this code to sign in:";
+            const { buildAuthOtpEmail } = await import("./auth-otp-email");
+            const mail = buildAuthOtpEmail({ type, otp, toEmail: email });
 
             const { data, error } = await resend.emails.send({
               from: env.FROM_EMAIL,
               to: email,
-              subject,
-              html: `
-              <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:420px;margin:0 auto;padding:24px">
-                <h2 style="color:#4361EE;margin:0 0 12px">Alenio</h2>
-                <p style="color:#334155;line-height:1.5">${intro}</p>
-                <p style="font-size:28px;font-weight:700;letter-spacing:4px;color:#0F172A;margin:20px 0">${otp}</p>
-                <p style="color:#64748B;font-size:13px">This code expires shortly. If you did not request it, you can ignore this email.</p>
-              </div>
-            `,
+              subject: mail.subject,
+              html: mail.html,
+              text: mail.text,
             });
             if (error) {
               console.error("[better-auth] Resend OTP error:", JSON.stringify(error));
