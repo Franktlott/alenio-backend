@@ -52,6 +52,7 @@ export function LoginPage() {
     e.preventDefault();
     if (loading) return;
     setError(null);
+    setHint(null);
     const emailNorm = email.trim().toLowerCase();
     if (!emailNorm) {
       setError("Enter your work email.");
