@@ -70,8 +70,11 @@ function collectTrustedOrigins(): string[] {
   return [...origins];
 }
 
-export const isAuthServerEnabled =
-  Boolean(env.BETTER_AUTH_SECRET?.trim()) && isPostgresUrl(env.DATABASE_URL);
+export const isAuthServerEnabled = (() => {
+  const secret = env.BETTER_AUTH_SECRET?.trim() ?? "";
+  if (secret.length < 32) return false;
+  return isPostgresUrl(env.DATABASE_URL);
+})();
 
 let authServerPromise: Promise<AuthServer | null> | null = null;
 

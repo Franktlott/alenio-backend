@@ -35,7 +35,6 @@ import { feedbackRouter } from "./routes/feedback";
 import { sendPushNotificationsStrict } from "./lib/push";
 import { getDatabasePublicSummary } from "./lib/database-public-summary";
 import { syncAppUserFromNeonAuth } from "./lib/ensure-app-user";
-import { isAuthServerEnabled, loadAuthServer } from "./lib/better-auth";
 import { deleteAppUserCompletely } from "./lib/delete-app-user";
 import { assertAccountDeletionAllowed, getAccountDeletionReadiness } from "./lib/account-deletion-readiness";
 import {
@@ -132,8 +131,11 @@ function buildHealthPayload() {
     senecaDiagnostics: senecaDiagnostics(),
     /** Compare with EXPO_PUBLIC_NEON_AUTH_URL from the app — hostnames must be the same Neon Auth project. */
     neonAuthHostname: authProjectHint,
-    /** True when BETTER_AUTH_SECRET is set and DATABASE_URL is Postgres (`/api/auth/*` mounted). */
-    betterAuthEnabled: isAuthServerEnabled,
+    /**
+     * Better Auth Phase 1 flag. Healthchecks use this Railway service URL (/health), not alenio.com.
+     * Mount is registered after listen via dynamic import so auth package issues cannot block boot.
+     */
+    betterAuthEnabled: false,
   };
 }
 
@@ -309,30 +311,6 @@ app.post("/api/auth/sync-user", (c) => {
     matchedBy: debug?.matchedBy ?? null,
   });
 });
-
-/** Self-hosted Better Auth (Phase 1). Exact `/api/auth/sync-user` is registered above and takes priority. */
-app.on(["POST", "GET"], "/api/auth/**", async (c) => {
-  const authServer = await loadAuthServer();
-  if (!authServer) {
-    return c.json(
-      {
-        error: {
-          message: "Better Auth is not enabled on this server",
-          code: "BETTER_AUTH_DISABLED",
-        },
-      },
-      503,
-    );
-  }
-  return authServer.handler(c.req.raw);
-});
-if (isAuthServerEnabled) {
-  console.log("[better-auth] /api/auth/** ready (lazy init on first request, neon_auth schema)");
-} else {
-  console.log(
-    "[better-auth] Not enabled — set BETTER_AUTH_SECRET (32+ chars) and a Postgres DATABASE_URL to enable.",
-  );
-}
 
 // Email verified success page
 app.get("/email-verified", (c) => {
@@ -1214,6 +1192,18 @@ console.log(
 );
 
 console.log("✅ Realtime messaging WebSocket enabled at /api/realtime");
+
+/** Mount Better Auth after boot so Railway /health is never blocked by auth package init. */
+void import("./lib/register-better-auth")
+  .then(({ registerBetterAuthRoutes }) => registerBetterAuthRoutes(app))
+  .then((enabled) => {
+    if (enabled) {
+      console.log("[better-auth] ready");
+    }
+  })
+  .catch((err) => {
+    console.error("[better-auth] deferred mount failed:", err);
+  });
 
 export default {
   port,
