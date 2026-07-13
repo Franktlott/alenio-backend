@@ -34,6 +34,7 @@ import { ogPreviewRouter } from "./routes/og-preview";
 import { feedbackRouter } from "./routes/feedback";
 import { sendPushNotificationsStrict } from "./lib/push";
 import { getDatabasePublicSummary } from "./lib/database-public-summary";
+import { isBetterAuthMounted } from "./lib/better-auth-status";
 import { syncAppUserFromNeonAuth } from "./lib/ensure-app-user";
 import { deleteAppUserCompletely } from "./lib/delete-app-user";
 import { assertAccountDeletionAllowed, getAccountDeletionReadiness } from "./lib/account-deletion-readiness";
@@ -131,11 +132,10 @@ function buildHealthPayload() {
     senecaDiagnostics: senecaDiagnostics(),
     /** Compare with EXPO_PUBLIC_NEON_AUTH_URL from the app — hostnames must be the same Neon Auth project. */
     neonAuthHostname: authProjectHint,
-    /**
-     * Better Auth Phase 1 flag. Healthchecks use this Railway service URL (/health), not alenio.com.
-     * Mount is registered after listen via dynamic import so auth package issues cannot block boot.
-     */
-    betterAuthEnabled: false,
+    /** Secret present (32+ chars) — Better Auth can turn on after boot. */
+    betterAuthConfigured: (env.BETTER_AUTH_SECRET?.trim().length ?? 0) >= 32,
+    /** Routes mounted successfully after deferred init. */
+    betterAuthEnabled: isBetterAuthMounted(),
   };
 }
 

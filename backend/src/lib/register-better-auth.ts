@@ -4,22 +4,26 @@
  */
 import type { Hono } from "hono";
 import { isAuthServerEnabled, loadAuthServer } from "./better-auth";
+import { setBetterAuthMounted } from "./better-auth-status";
 
 export async function registerBetterAuthRoutes(app: Hono): Promise<boolean> {
   if (!isAuthServerEnabled) {
     console.log(
       "[better-auth] Not enabled — set BETTER_AUTH_SECRET (32+ chars) and a Postgres DATABASE_URL to enable.",
     );
+    setBetterAuthMounted(false);
     return false;
   }
 
   const authServer = await loadAuthServer();
   if (!authServer) {
     console.error("[better-auth] Enabled in env but failed to initialize; routes not mounted.");
+    setBetterAuthMounted(false);
     return false;
   }
 
   app.on(["POST", "GET"], "/api/auth/**", (c) => authServer.handler(c.req.raw));
+  setBetterAuthMounted(true);
   console.log("[better-auth] Mounted /api/auth/** (neon_auth schema)");
   return true;
 }
