@@ -131,38 +131,88 @@ export function ChatMessageActionSheet({
         aria-label="Message actions"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="chat-message-sheet-emojis">
-          {CHAT_REACTION_EMOJIS.map((emoji) => {
-            const isMine = emoji === myReaction;
-            return (
-              <button
-                key={emoji}
-                type="button"
-                className={`chat-message-sheet-emoji${isMine ? " chat-message-sheet-emoji--active" : ""}`}
-                disabled={saving}
-                onClick={() => onReact(emoji)}
-                aria-label={`React with ${emoji}`}
-              >
-                {emoji}
-              </button>
-            );
-          })}
+        <header className="chat-message-sheet-head">
+          <p className="chat-message-sheet-eyebrow">Message</p>
+          <h3 className="chat-message-sheet-title">Quick actions</h3>
+        </header>
+
+        <section className="chat-message-sheet-react" aria-label="Add reaction">
+          <p className="chat-message-sheet-section-label">React</p>
+          <div className="chat-message-sheet-emojis">
+            {CHAT_REACTION_EMOJIS.map((emoji) => {
+              const isMine = emoji === myReaction;
+              return (
+                <button
+                  key={emoji}
+                  type="button"
+                  className={`chat-message-sheet-emoji${isMine ? " chat-message-sheet-emoji--active" : ""}`}
+                  disabled={saving}
+                  onClick={() => onReact(emoji)}
+                  aria-label={`React with ${emoji}`}
+                >
+                  {emoji}
+                </button>
+              );
+            })}
+          </div>
+        </section>
+
+        <div className="chat-message-sheet-actions">
+          {myReaction ? (
+            <button
+              type="button"
+              className="chat-message-sheet-action"
+              disabled={saving}
+              onClick={onRemoveReaction}
+            >
+              <span className="chat-message-sheet-action-icon" aria-hidden>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="9" />
+                  <path d="M8 12h8" />
+                </svg>
+              </span>
+              <span className="chat-message-sheet-action-copy">
+                <strong>Remove reaction</strong>
+                <em>Clear your emoji on this message</em>
+              </span>
+            </button>
+          ) : null}
+          {canEdit ? (
+            <button type="button" className="chat-message-sheet-action" disabled={saving} onClick={onEdit}>
+              <span className="chat-message-sheet-action-icon" aria-hidden>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M12 20h9" />
+                  <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                </svg>
+              </span>
+              <span className="chat-message-sheet-action-copy">
+                <strong>Edit message</strong>
+                <em>Update what you wrote</em>
+              </span>
+            </button>
+          ) : null}
+          {canDelete ? (
+            <button
+              type="button"
+              className="chat-message-sheet-action chat-message-sheet-action--danger"
+              disabled={saving}
+              onClick={onDelete}
+            >
+              <span className="chat-message-sheet-action-icon" aria-hidden>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M3 6h18" />
+                  <path d="M8 6V4h8v2" />
+                  <path d="M19 6l-1 14H6L5 6" />
+                </svg>
+              </span>
+              <span className="chat-message-sheet-action-copy">
+                <strong>Delete message</strong>
+                <em>Remove it from this conversation</em>
+              </span>
+            </button>
+          ) : null}
         </div>
-        {myReaction ? (
-          <button type="button" className="chat-message-sheet-action chat-message-sheet-action--danger" disabled={saving} onClick={onRemoveReaction}>
-            Remove reaction
-          </button>
-        ) : null}
-        {canEdit ? (
-          <button type="button" className="chat-message-sheet-action" disabled={saving} onClick={onEdit}>
-            Edit message
-          </button>
-        ) : null}
-        {canDelete ? (
-          <button type="button" className="chat-message-sheet-action chat-message-sheet-action--danger" disabled={saving} onClick={onDelete}>
-            Delete message
-          </button>
-        ) : null}
+
         <button type="button" className="chat-message-sheet-cancel" onClick={onClose}>
           Cancel
         </button>
