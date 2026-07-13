@@ -24,12 +24,12 @@ const envSchema = z.object({
   /** Comma-separated browser origins allowed for CORS (e.g. Firebase Hosting https://your-app.web.app). Localhost is always allowed. */
   CORS_ALLOWED_ORIGINS: z.string().optional(),
   // Build marker for quick deploy verification
-  BACKEND_BUILD_MARKER: z.string().optional().default("backend-marker-2026-07-13-email-health"),
+  BACKEND_BUILD_MARKER: z.string().optional().default("backend-marker-2026-07-13-email-otp-logging"),
   // Admin Dashboard
   ADMIN_PASSWORD: z.string().optional().default("admin123"),
   // Email (Resend)
   RESEND_API_KEY: z.string().optional(),
-  FROM_EMAIL: z.string().optional().default("noreply@alenio.com"),
+  FROM_EMAIL: z.string().optional().default("Alenio <noreply@alenio.com>"),
   // Mobile app deep link scheme (e.g. "alenio")
   APP_SCHEME: z.string().optional().default("alenio"),
   /** Optional: linked from team invite emails */

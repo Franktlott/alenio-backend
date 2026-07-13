@@ -56,7 +56,10 @@ export function VerifyResetCodePage() {
             <br />
             <span>Enter the reset code.</span>
           </h1>
-          <p className="auth-v2-hero-copy">We sent a code to verify it is you before you choose a new password.</p>
+          <p className="auth-v2-hero-copy">
+            If an Alenio password account exists for that email, the code is in your inbox (and sometimes spam).
+            Microsoft-only accounts should sign in with Microsoft instead.
+          </p>
         </div>
       </section>
       <main className="auth-v2-main">
@@ -65,7 +68,7 @@ export function VerifyResetCodePage() {
             <p className="auth-v2-eyebrow">Verify code</p>
             <h2 className="auth-heading">Enter reset code</h2>
             <p className="auth-sub">
-              Code sent to <strong>{email}</strong>
+              If we found an account for <strong>{email}</strong>, check that inbox (and spam) for the code.
             </p>
           </div>
           <form onSubmit={onSubmit}>

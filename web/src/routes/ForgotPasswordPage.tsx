@@ -54,7 +54,10 @@ export function ForgotPasswordPage() {
           <div className="auth-v2-card-head">
             <p className="auth-v2-eyebrow">Forgot password</p>
             <h2 className="auth-heading">Request a reset code</h2>
-            <p className="auth-sub">Enter your email and we will send a code to reset your password.</p>
+            <p className="auth-sub">
+              Enter the email for your Alenio password account. If that account exists, we email a code. Microsoft-only
+              accounts should use Continue with Microsoft on the sign-in page instead.
+            </p>
           </div>
           <form onSubmit={onSubmit}>
             <label className="auth-label" htmlFor="forgot-email">

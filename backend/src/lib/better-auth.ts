@@ -223,7 +223,7 @@ async function createAuthServer(): Promise<AuthServer | null> {
                   ? "Use this code to reset your password:"
                   : "Use this code to sign in:";
 
-            const { error } = await resend.emails.send({
+            const { data, error } = await resend.emails.send({
               from: env.FROM_EMAIL,
               to: email,
               subject,
@@ -244,6 +244,14 @@ async function createAuthServer(): Promise<AuthServer | null> {
                   : "Email send failed. Check FROM_EMAIL / Resend domain.",
               );
             }
+            console.log(
+              "[better-auth] Resend OTP sent",
+              type,
+              "to=",
+              email,
+              "id=",
+              data?.id ?? "unknown",
+            );
           },
         }),
       ],
