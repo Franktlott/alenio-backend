@@ -10284,7 +10284,7 @@ a.go-dash-alert-item {
 }
 
 .enterprise-team-stat-row--three {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: 1fr;
 }
 
 .enterprise-team-stat-card--standards .enterprise-team-stat-icon--standards {
@@ -10296,8 +10296,8 @@ a.go-dash-alert-item {
   background: #fff;
   border: 1px solid #e2e8f0;
   border-radius: 10px;
-  padding: 0.7rem 0.75rem;
-  min-height: 4rem;
+  padding: 0.55rem 0.7rem;
+  min-height: 0;
   display: flex;
   align-items: center;
   gap: 0.55rem;
@@ -10374,24 +10374,24 @@ a.go-dash-alert-item {
 
 .enterprise-team-stat-title {
   display: block;
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
   font-weight: 600;
   color: #0f172a;
   line-height: 1.25;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: unset;
 }
 
 .enterprise-team-stat-sub {
   display: block;
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   font-weight: 500;
   color: #64748b;
   line-height: 1.25;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: unset;
 }
 
 .enterprise-team-stat-copy--templates {
@@ -13984,8 +13984,8 @@ a.go-dash-alert-item {
   }
 
   .enterprise-team-stat-card {
-    padding: 0.85rem 0.9rem;
-    min-height: 4.35rem;
+    padding: 0.65rem 0.8rem;
+    min-height: 0;
   }
 
   .enterprise-team-stat-title {
