@@ -9886,7 +9886,12 @@ a.go-dash-alert-item {
 }
 
 .enterprise-team-page-shell {
+  background: #f4f6f8;
   overflow: hidden;
+}
+
+.enterprise-team-split {
+  background: transparent;
 }
 
 .enterprise-team-page {
@@ -12280,8 +12285,8 @@ a.go-dash-alert-item {
 }
 
 .enterprise-team-roster-card--list.enterprise-team-roster-card--selected {
-  background: #eef2ff;
-  border-color: rgba(67, 97, 238, 0.18);
+  background: #e8f1fb;
+  border-color: rgba(8, 117, 225, 0.22);
 }
 
 .enterprise-team-roster-role-line {
@@ -12578,6 +12583,407 @@ a.go-dash-alert-item {
 
   .enterprise-team-profile-metrics {
     grid-template-columns: 1fr;
+  }
+}
+
+/* ── Workday-style member profile ─────────────────────────────────────────── */
+.enterprise-team-split-detail:has(.enterprise-team-profile--wd) {
+  background: #eef1f4;
+  border-radius: 10px;
+  border: 1px solid #d8dee6;
+  overflow: hidden;
+}
+
+.enterprise-team-profile--wd {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  gap: 0;
+  padding: 0;
+  background: #eef1f4;
+}
+
+.enterprise-team-profile--wd .enterprise-team-profile-back {
+  margin: 0.65rem 0.85rem 0;
+}
+
+.enterprise-team-profile-wd-layout {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 0;
+}
+
+.enterprise-team-profile-rail {
+  background: #fff;
+  border-right: 1px solid #d8dee6;
+  padding: 1.35rem 1rem 1rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.enterprise-team-profile-rail-identity {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.enterprise-team-profile-avatar--wd {
+  width: 96px;
+  height: 96px;
+  font-size: 1.65rem;
+  font-weight: 600;
+  color: #1e3a5f;
+  background: #dbe7f5;
+  border: 1px solid #c5d4e8;
+  margin-bottom: 0.85rem;
+}
+
+.enterprise-team-profile-avatar--wd img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.enterprise-team-profile-rail-name {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #1a2332;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+
+.enterprise-team-profile-rail-title {
+  margin: 0.2rem 0 0;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: #5b6b7c;
+}
+
+.enterprise-team-profile-actions-btn {
+  margin-top: 0.85rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 5.5rem;
+  padding: 0.35rem 1rem;
+  border-radius: 999px;
+  border: 1px solid #b8c4d4;
+  background: #fff;
+  color: #1a2332;
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.enterprise-team-profile-actions-btn:hover {
+  border-color: #0875e1;
+  color: #0875e1;
+}
+
+.enterprise-team-profile-rail-quick {
+  display: flex;
+  justify-content: center;
+  gap: 1.25rem;
+  margin-top: 1rem;
+  width: 100%;
+}
+
+.enterprise-team-profile-rail-quick-item {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: #0875e1;
+  text-decoration: none;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.enterprise-team-profile-rail-quick-item--static {
+  color: #5b6b7c;
+  cursor: default;
+}
+
+.enterprise-team-profile-rail-quick-icon {
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 999px;
+  border: 1px solid #c5d4e8;
+  background: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: inherit;
+}
+
+.enterprise-team-profile-rail-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding-top: 0.25rem;
+  border-top: 1px solid #e6ebf0;
+}
+
+.enterprise-team-profile-rail-nav-item {
+  border: none;
+  background: transparent;
+  text-align: left;
+  border-radius: 6px;
+  padding: 0.5rem 0.7rem;
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: #1a2332;
+  cursor: pointer;
+}
+
+.enterprise-team-profile-rail-nav-item:hover:not(:disabled) {
+  background: #f3f6f9;
+}
+
+.enterprise-team-profile-rail-nav-item.is-active {
+  background: #dceaf8;
+  color: #0b4f8a;
+  font-weight: 600;
+}
+
+.enterprise-team-profile-rail-nav-item.is-soon,
+.enterprise-team-profile-rail-nav-item:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
+.enterprise-team-profile-wd-main {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 0.85rem 0.95rem 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.enterprise-team-profile-wd-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  background: #fff;
+  border: 1px solid #d8dee6;
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(26, 35, 50, 0.04);
+}
+
+.enterprise-team-profile-wd-summary-cell {
+  padding: 0.85rem 1rem;
+  border-right: 1px solid #e6ebf0;
+  min-width: 0;
+}
+
+.enterprise-team-profile-wd-summary-cell:last-child {
+  border-right: none;
+}
+
+.enterprise-team-profile-wd-summary-label {
+  display: block;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: #5b6b7c;
+  margin-bottom: 0.4rem;
+}
+
+.enterprise-team-profile-wd-summary-value {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: #1a2332;
+  line-height: 1.35;
+}
+
+.enterprise-team-profile-wd-summary-icon {
+  color: #5b6b7c;
+  flex-shrink: 0;
+  margin-top: 0.05rem;
+}
+
+.enterprise-team-profile-wd-linkish {
+  color: #0875e1;
+  font-weight: 600;
+}
+
+.enterprise-team-profile-wd-summary-muted {
+  color: #5b6b7c;
+  font-weight: 500;
+}
+
+.enterprise-team-profile-wd-details {
+  background: #fff;
+  border: 1px solid #d8dee6;
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(26, 35, 50, 0.04);
+  padding: 1rem 1.1rem 1.15rem;
+}
+
+.enterprise-team-profile-wd-details-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  gap: 1.5rem;
+}
+
+.enterprise-team-profile-wd-details-title {
+  margin: 0 0 0.75rem;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: #1a2332;
+}
+
+.enterprise-team-profile-wd-kv {
+  margin: 0;
+  display: grid;
+  gap: 0.55rem 1rem;
+}
+
+.enterprise-team-profile-wd-kv > div {
+  display: grid;
+  grid-template-columns: 7.5rem minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: baseline;
+}
+
+.enterprise-team-profile-wd-kv dt {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #5b6b7c;
+}
+
+.enterprise-team-profile-wd-kv dd {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: #1a2332;
+}
+
+.enterprise-team-profile-wd-contact {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.enterprise-team-profile-wd-contact-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  color: #0875e1;
+  text-decoration: none;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.enterprise-team-profile-wd-contact-row:hover {
+  text-decoration: underline;
+}
+
+.enterprise-team-profile-wd-body {
+  min-width: 0;
+}
+
+.enterprise-team-profile--wd .enterprise-profile-overview {
+  gap: 0.75rem;
+}
+
+.enterprise-team-profile--wd .enterprise-overview-panel {
+  border-radius: 8px;
+  border-color: #d8dee6;
+  box-shadow: 0 1px 2px rgba(26, 35, 50, 0.04);
+  padding: 0.95rem 1.05rem;
+}
+
+.enterprise-team-profile--wd .enterprise-overview-kicker {
+  color: #5b6b7c;
+  letter-spacing: 0.04em;
+}
+
+.enterprise-team-profile--wd .enterprise-overview-kicker--accent {
+  color: #0875e1;
+}
+
+.enterprise-team-profile--wd .enterprise-overview-panel-title {
+  color: #1a2332;
+  font-size: 0.9375rem;
+}
+
+.enterprise-team-profile--wd .enterprise-overview-metric-card {
+  border-radius: 8px;
+  border-color: #e1e7ee;
+  box-shadow: none;
+  background: #f7f9fb;
+}
+
+.enterprise-team-profile--wd .enterprise-overview-metric-icon {
+  background: #e8f1fb;
+  color: #0875e1;
+  border-radius: 8px;
+}
+
+.enterprise-team-profile--wd .enterprise-overview-metric-label {
+  color: #5b6b7c;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 600;
+}
+
+@media (max-width: 1100px) {
+  .enterprise-team-profile-wd-layout {
+    grid-template-columns: 200px minmax(0, 1fr);
+  }
+
+  .enterprise-team-profile-wd-details-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 900px) {
+  .enterprise-team-profile-wd-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .enterprise-team-profile-rail {
+    border-right: none;
+    border-bottom: 1px solid #d8dee6;
+  }
+
+  .enterprise-team-profile-rail-nav {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .enterprise-team-profile-wd-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .enterprise-team-profile-wd-summary-cell {
+    border-right: none;
+    border-bottom: 1px solid #e6ebf0;
+  }
+
+  .enterprise-team-profile-wd-summary-cell:last-child {
+    border-bottom: none;
   }
 }
 
