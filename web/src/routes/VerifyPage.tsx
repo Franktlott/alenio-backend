@@ -8,7 +8,9 @@ import {
 } from "../lib/auth-client";
 import { formatAuthFlowError } from "../lib/auth-errors";
 import { finishPostAuthNavigation, setPendingInviteToken } from "../lib/invite-auth";
+import { clearPendingSignUp } from "../lib/pending-signup";
 import { tryFinishSignUpAfterVerify } from "../lib/signup-recovery";
+import { setStoredToken } from "../lib/token";
 import { consumeVerifyHint } from "../lib/verify-redirect";
 
 const OTP_MIN = 6;
@@ -65,14 +67,22 @@ export function VerifyPage() {
       }
       setAccessTokenFromAuthData(result ?? null);
       setAccessTokenFromAuthData(result.data ?? null);
+      // Better Auth returns { status, token, user } when autoSignInAfterVerification is on.
+      const verifyPayload = (result?.data ?? result) as { token?: string | null } | null;
+      const verifyToken = typeof verifyPayload?.token === "string" ? verifyPayload.token.trim() : "";
+      if (verifyToken) setStoredToken(verifyToken);
+
       let sessionReady = await ensureWebSessionAndToken();
       if (!sessionReady) {
         sessionReady = await tryFinishSignUpAfterVerify(email);
       }
       if (!sessionReady) {
-        setError("Verified, but session did not start. Try signing in, then open Chat from the sidebar.");
+        clearPendingSignUp();
+        // Email is verified — send them to sign-in instead of leaving them stuck here.
+        window.location.href = `/login?email=${encodeURIComponent(email)}&verified=1`;
         return;
       }
+      clearPendingSignUp();
       await syncBackendUser();
       const dest = await finishPostAuthNavigation();
       window.location.href = dest;

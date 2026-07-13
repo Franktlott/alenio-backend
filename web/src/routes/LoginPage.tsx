@@ -18,6 +18,7 @@ import { signInWithMicrosoft } from "../lib/microsoft-auth";
 export function LoginPage() {
   const [params] = useSearchParams();
   const reason = params.get("reason");
+  const verified = params.get("verified") === "1";
   const inviteToken = (params.get("invite") ?? "").trim();
   const emailFromInvite = (params.get("email") ?? "").trim().toLowerCase();
   const [email, setEmail] = useState(emailFromInvite);
@@ -26,6 +27,9 @@ export function LoginPage() {
   const [microsoftLoading, setMicrosoftLoading] = useState(false);
   const [error, setError] = useState<string | null>(
     reason === "session" ? "Your session expired. Sign in again." : null,
+  );
+  const [hint, setHint] = useState<string | null>(
+    verified ? "Email verified. Sign in with your password to continue." : null,
   );
 
   useEffect(() => {
@@ -189,6 +193,11 @@ export function LoginPage() {
           {error ? (
             <p className="auth-error" data-testid="login-error">
               {error}
+            </p>
+          ) : null}
+          {hint ? (
+            <p className="auth-hint" data-testid="login-verified-hint">
+              {hint}
             </p>
           ) : null}
           <button type="submit" className="auth-btn-primary" disabled={loading || microsoftLoading} data-testid="login-submit">

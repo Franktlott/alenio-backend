@@ -158,6 +158,10 @@ async function createAuthServer(): Promise<AuthServer | null> {
         enabled: true,
         requireEmailVerification: true,
       },
+      // After OTP verify, create a session + return bearer token (SPA cannot rely on cookies cross-origin).
+      emailVerification: {
+        autoSignInAfterVerification: true,
+      },
       account: {
         accountLinking: {
           enabled: true,
@@ -197,6 +201,8 @@ async function createAuthServer(): Promise<AuthServer | null> {
       plugins: [
         bearer(),
         emailOTP({
+          overrideDefaultEmailVerification: true,
+          sendVerificationOnSignUp: true,
           async sendVerificationOTP({ email, otp, type }) {
             if (!env.RESEND_API_KEY) {
               console.warn(
