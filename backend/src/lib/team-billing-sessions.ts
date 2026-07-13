@@ -1,15 +1,23 @@
 import { prisma } from "../prisma";
 import { getTeamSubscription } from "../routes/subscription";
 import {
+  applySubscriptionFromStripeSubscription,
   billingReturnBaseUrl,
+  dbPlanForCheckoutPlan,
   ensureStripeCustomerIdForTeam,
   getStripeClient,
-  isStripeCheckoutConfigured,
+  isStripeCheckoutPlanConfigured,
   isStripePortalConfigured,
+  stripeCustomerIdOfSubscription,
+  stripePriceIdForCheckoutPlan,
+  type StripeCheckoutPlan,
 } from "./stripe-billing";
-import { env } from "../env";
 
 type BillingError = { message: string; code: string };
+export type BillingCheckoutResult =
+  | { url: string }
+  | { upgraded: true }
+  | { error: BillingError; status: number };
 type BillingResult = { url: string } | { error: BillingError; status: number };
 
 async function assertOwnerMembership(userId: string, teamId: string): Promise<BillingError | null> {
@@ -25,15 +33,65 @@ async function assertOwnerMembership(userId: string, teamId: string): Promise<Bi
   return null;
 }
 
+function isPaidPlan(plan: string): boolean {
+  return plan === "team" || plan === "pro" || plan === "operations";
+}
+
+function normalizeDbPlan(plan: string): "free" | "team" | "operations" {
+  const p = plan.trim().toLowerCase();
+  if (p === "operations") return "operations";
+  if (p === "team" || p === "pro") return "team";
+  return "free";
+}
+
+async function upgradeExistingStripeSubscription(opts: {
+  teamId: string;
+  stripeSubscriptionId: string;
+  priceId: string;
+  dbPlan: "team" | "operations";
+}): Promise<BillingCheckoutResult> {
+  const stripe = getStripeClient()!;
+  const subscription = await stripe.subscriptions.retrieve(opts.stripeSubscriptionId, {
+    expand: ["items.data"],
+  });
+  const item = subscription.items.data[0];
+  if (!item?.id) {
+    return {
+      error: { message: "Could not find the current subscription item to upgrade.", code: "STRIPE_ERROR" },
+      status: 502,
+    };
+  }
+
+  const updated = await stripe.subscriptions.update(opts.stripeSubscriptionId, {
+    items: [{ id: item.id, price: opts.priceId }],
+    proration_behavior: "create_prorations",
+    metadata: {
+      ...subscription.metadata,
+      team_id: opts.teamId,
+      plan: opts.dbPlan,
+    },
+  });
+
+  const customerId = stripeCustomerIdOfSubscription(updated);
+  await applySubscriptionFromStripeSubscription(opts.teamId, customerId, updated);
+  return { upgraded: true };
+}
+
 export async function createTeamCheckoutSession(opts: {
   teamId: string;
   userId: string;
   userEmail?: string | null;
-}): Promise<BillingResult> {
-  if (!isStripeCheckoutConfigured()) {
+  /** Defaults to Pro (`team` in DB). */
+  plan?: StripeCheckoutPlan;
+}): Promise<BillingCheckoutResult> {
+  const checkoutPlan: StripeCheckoutPlan = opts.plan === "operations" ? "operations" : "pro";
+  if (!isStripeCheckoutPlanConfigured(checkoutPlan)) {
     return {
       error: {
-        message: "Checkout is not available right now. Try again later or use the web dashboard.",
+        message:
+          checkoutPlan === "operations"
+            ? "Operations checkout is not available right now. Try again later or contact support."
+            : "Checkout is not available right now. Try again later or use the web dashboard.",
         code: "NOT_CONFIGURED",
       },
       status: 503,
@@ -44,23 +102,32 @@ export async function createTeamCheckoutSession(opts: {
   if (ownerErr) return { error: ownerErr, status: ownerErr.code === "FORBIDDEN" ? 403 : 400 };
 
   const subRow = await getTeamSubscription(opts.teamId);
-  if (
-    subRow.stripeSubscriptionId &&
-    ["active", "trialing", "past_due", "incomplete", "paused"].includes(subRow.status)
-  ) {
-    return {
-      error: {
-        message: "This workplace already has an active subscription. Use Update payment instead.",
-        code: "ALREADY_SUBSCRIBED",
-      },
-      status: 409,
-    };
+  const targetDbPlan = dbPlanForCheckoutPlan(checkoutPlan);
+  const currentDbPlan = normalizeDbPlan(subRow.plan);
+  const priceId = stripePriceIdForCheckoutPlan(checkoutPlan)!;
+  const activeStripe =
+    !!subRow.stripeSubscriptionId?.trim() &&
+    ["active", "trialing", "past_due", "incomplete", "paused"].includes(subRow.status);
+
+  if (activeStripe) {
+    if (currentDbPlan === targetDbPlan) {
+      return {
+        error: {
+          message: "This workplace already has this plan. Use Manage billing to update payment.",
+          code: "ALREADY_SUBSCRIBED",
+        },
+        status: 409,
+      };
+    }
+    return upgradeExistingStripeSubscription({
+      teamId: opts.teamId,
+      stripeSubscriptionId: subRow.stripeSubscriptionId!.trim(),
+      priceId,
+      dbPlan: targetDbPlan,
+    });
   }
-  if (
-    (subRow.plan === "team" || subRow.plan === "pro") &&
-    subRow.status === "active" &&
-    !subRow.stripeSubscriptionId
-  ) {
+
+  if (isPaidPlan(subRow.plan) && subRow.status === "active" && !subRow.stripeSubscriptionId) {
     return {
       error: {
         message: "This workplace subscription is managed elsewhere. Contact support if you need help.",
@@ -71,7 +138,6 @@ export async function createTeamCheckoutSession(opts: {
   }
 
   const stripe = getStripeClient()!;
-  const priceId = env.STRIPE_TEAM_PRICE_ID!.trim();
   const base = billingReturnBaseUrl()!;
 
   const checkout = await stripe.checkout.sessions.create({
@@ -85,11 +151,13 @@ export async function createTeamCheckoutSession(opts: {
     metadata: {
       team_id: opts.teamId,
       user_id: opts.userId,
+      plan: targetDbPlan,
     },
     subscription_data: {
       metadata: {
         team_id: opts.teamId,
         user_id: opts.userId,
+        plan: targetDbPlan,
       },
     },
   });
@@ -124,7 +192,7 @@ export async function createTeamPortalSession(opts: {
   if (!customerId) {
     return {
       error: {
-        message: "No billing profile for this workplace yet. Upgrade to Team first.",
+        message: "No billing profile for this workplace yet. Upgrade to Pro first.",
         code: "NO_CUSTOMER",
       },
       status: 400,

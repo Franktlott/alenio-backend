@@ -58,22 +58,27 @@ mobileBillingRouter.get("/workspaces", async (c) => {
   return c.json({ data: { workspaces: rows } });
 });
 
-/** POST /api/billing/checkout-session — owner: Stripe Checkout for Team upgrade */
+/** POST /api/billing/checkout-session — owner: Stripe Checkout for Pro or Operations */
 mobileBillingRouter.post("/checkout-session", async (c) => {
   const user = c.get("user")!;
-  const body = (await c.req.json().catch(() => ({}))) as { teamId?: string };
+  const body = (await c.req.json().catch(() => ({}))) as { teamId?: string; plan?: string };
   const teamId = typeof body.teamId === "string" ? body.teamId.trim() : "";
   if (!teamId) {
     return c.json({ error: { message: "teamId is required", code: "VALIDATION_ERROR" } }, 400);
   }
+  const plan = body.plan === "operations" ? "operations" : "pro";
 
   const result = await createTeamCheckoutSession({
     teamId,
     userId: user.id,
     userEmail: user.email,
+    plan,
   });
   if ("error" in result) {
     return c.json({ error: result.error }, result.status);
+  }
+  if ("upgraded" in result) {
+    return c.json({ data: { upgraded: true as const } });
   }
   return c.json({ data: { url: result.url } });
 });

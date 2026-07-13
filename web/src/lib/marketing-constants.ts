@@ -94,7 +94,7 @@ export const ENTERPRISE_PLAN_TAGLINE = "For multi-location operators that need r
 export const ENTERPRISE_PLAN_PRICE = "Custom";
 export const ENTERPRISE_PLAN_PERIOD = "tailored to your organization";
 export const ENTERPRISE_PLAN_FEATURES = [
-  "Everything in Team",
+  "Everything in Operations",
   "Multi-workspace administration",
   "Dedicated onboarding & rollout",
   "Priority support with SLA",

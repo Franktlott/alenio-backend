@@ -19930,7 +19930,7 @@ body:has(.seneca-checkin-header-wrap) .seneca-floating-launcher {
   grid-column: 1;
   grid-row: 1;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.875rem;
 }
 
@@ -20054,6 +20054,12 @@ body:has(.seneca-checkin-header-wrap) .seneca-floating-launcher {
   cursor: pointer;
   border: none;
   transition: background 0.15s ease, opacity 0.15s ease;
+  box-sizing: border-box;
+  text-align: center;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .enterprise-billing-plan-cta:disabled {
@@ -20233,7 +20239,7 @@ body:has(.seneca-checkin-header-wrap) .seneca-floating-launcher {
 
 .enterprise-billing-compare-head {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 72px 72px;
+  grid-template-columns: minmax(0, 1fr) 56px 56px 56px;
   gap: 0.5rem;
   padding: 0.625rem 1rem;
   border-bottom: 1px solid #e2e8f0;
@@ -20267,7 +20273,7 @@ body:has(.seneca-checkin-header-wrap) .seneca-floating-launcher {
 
 .enterprise-billing-compare-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 72px 72px;
+  grid-template-columns: minmax(0, 1fr) 56px 56px 56px;
   gap: 0.5rem;
   padding: 0.4375rem 1rem;
   border-bottom: 1px solid #f1f5f9;
@@ -20339,6 +20345,12 @@ body:has(.seneca-checkin-header-wrap) .seneca-floating-launcher {
     grid-column: 1;
     grid-row: 3;
     max-height: 280px;
+  }
+}
+
+@media (max-width: 900px) {
+  .enterprise-billing-plans {
+    grid-template-columns: 1fr;
   }
 }
 

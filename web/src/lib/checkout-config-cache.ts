@@ -3,6 +3,7 @@ import { fetchWebCheckoutConfig } from "./api";
 export type WebCheckoutConfig = {
   configured: boolean;
   missingKeys: string[];
+  plans?: { pro: boolean; operations: boolean };
 };
 
 let cache: WebCheckoutConfig | null = null;
@@ -22,7 +23,11 @@ export function loadWebCheckoutConfig(): Promise<WebCheckoutConfig> {
         return data;
       })
       .catch(() => {
-        const fallback: WebCheckoutConfig = { configured: false, missingKeys: [] };
+        const fallback: WebCheckoutConfig = {
+          configured: false,
+          missingKeys: [],
+          plans: { pro: false, operations: false },
+        };
         cache = fallback;
         return fallback;
       })

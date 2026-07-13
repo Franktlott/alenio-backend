@@ -296,7 +296,7 @@ model TeamSubscription {
   id                   String    @id @default(cuid())
   teamId               String    @unique
   team                 Team      @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  plan                 String    @default("free")   // "free" | "pro"
+  plan                 String    @default("free")   // "free" | "team" | "operations" ("pro" legacy → team)
   status               String    @default("active") // "active" | "canceled" | "past_due"
   stripeCustomerId     String?
   stripeSubscriptionId String?

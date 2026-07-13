@@ -59,7 +59,7 @@ export function rowFromTeamAndSubscription(team: TeamListRow, sub: SubscriptionR
       cancelAtPeriodEnd: sub.cancelAtPeriodEnd === true,
       billingProvider,
       hasStripeCustomer: isStripe,
-      hasStripeSubscription: isStripe && (sub.plan === "team" || sub.plan === "pro"),
+      hasStripeSubscription: isStripe && (sub.plan === "team" || sub.plan === "pro" || sub.plan === "operations"),
     },
   };
 }
@@ -100,7 +100,7 @@ export function workspaceSubscriptionLine(
   if (sub.currentPeriodEnd) {
     return `Renews ${formatDate(sub.currentPeriodEnd)}`;
   }
-  return "Team plan active";
+  return "Pro plan active";
 }
 
 /** Load workplaces via existing mobile APIs (same as profile / tabs). */
@@ -194,17 +194,24 @@ export async function openWorkspaceBilling(
 
 export function tierFromPlan(plan: string | null | undefined): "free" | "team" {
   const p = (plan ?? "free").trim().toLowerCase();
-  if (p === "team" || p === "pro") return "team";
+  if (p === "team" || p === "pro" || p === "operations") return "team";
   return "free";
 }
 
 export function planStatusLabel(plan: string, status: string): string {
+  const p = (plan ?? "free").trim().toLowerCase();
+  if (p === "operations") {
+    if (status === "past_due") return "Operations — payment issue";
+    if (status === "trialing") return "Operations — trial";
+    if (status === "canceled") return "Operations — canceled";
+    return "Operations plan active";
+  }
   const tier = tierFromPlan(plan);
   if (tier === "team") {
-    if (status === "past_due") return "Team — payment issue";
-    if (status === "trialing") return "Team — trial";
-    if (status === "canceled") return "Team — canceled";
-    return "Team plan active";
+    if (status === "past_due") return "Pro — payment issue";
+    if (status === "trialing") return "Pro — trial";
+    if (status === "canceled") return "Pro — canceled";
+    return "Pro plan active";
   }
   return "Free plan";
 }

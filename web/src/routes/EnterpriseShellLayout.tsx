@@ -205,6 +205,11 @@ export function EnterpriseShellLayout() {
     teams === null ||
     !effectiveTeamId ||
     teams.find((t) => t.id === effectiveTeamId)?.hasTeamFeatures !== false;
+  /** Alenio Go only on Operations — missing flag means hidden (safer default). */
+  const showGoNav =
+    teams !== null &&
+    !!effectiveTeamId &&
+    teams.find((t) => t.id === effectiveTeamId)?.hasGoFeatures === true;
 
   /** Phone browsers should use the native app unless the user chose web explicitly. */
   useLayoutEffect(() => {
@@ -212,7 +217,7 @@ export function EnterpriseShellLayout() {
     navigate("/get-app", { replace: true });
   }, [navigate]);
 
-  /** Plan / billing is owner-only; Activity / Workspace require Team plan. Runs in layout effect so URL settles before paint (avoids replaceState thrash with Chat sync). */
+  /** Plan / billing is owner-only; Workspace requires Pro+; Go requires Operations. */
   useLayoutEffect(() => {
     if (teams === null) return;
     const path = location.pathname;
@@ -222,14 +227,15 @@ export function EnterpriseShellLayout() {
       }
       return;
     }
-    const isTeamGatedShellRoute =
-      path.startsWith("/dashboard") ||
-      path.startsWith("/go") ||
-      path.startsWith("/tasks/new");
+    if (path.startsWith("/go") && !showGoNav && path !== "/chat") {
+      navigate(showActivityExecuteNav ? "/dashboard" : "/chat", { replace: true });
+      return;
+    }
+    const isTeamGatedShellRoute = path.startsWith("/dashboard") || path.startsWith("/tasks/new");
     if (isTeamGatedShellRoute && !showActivityExecuteNav && path !== "/chat") {
       navigate("/chat", { replace: true });
     }
-  }, [teams, location.pathname, workspaceOwner, showActivityExecuteNav, effectiveTeamId, navigate]);
+  }, [teams, location.pathname, workspaceOwner, showActivityExecuteNav, showGoNav, effectiveTeamId, navigate]);
 
   const contextValue = useMemo<EnterpriseShellContextValue>(
     () => ({
@@ -286,6 +292,7 @@ export function EnterpriseShellLayout() {
         workspaceOverlayLoading={workspaceMainLoading}
         showPlanNav={workspaceOwner}
         showActivityExecuteNav={showActivityExecuteNav}
+        showGoNav={showGoNav}
       >
         {teams === null ? (
           <div className="enterprise-tab-shell">

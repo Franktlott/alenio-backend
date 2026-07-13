@@ -409,7 +409,7 @@ async function fetchTeamContext(teamId: string) {
     memberStats: stats?.stats ?? null,
     workplaceStandards: mergeWorkplaceStandards(stats?.workplaceStandards ?? detail.workplaceStandards),
     overviewTasks: Array.isArray(tasks) ? tasks : [],
-    isPaid: plan === "team" || plan === "pro",
+    isPaid: plan === "team" || plan === "pro" || plan === "operations",
     incoming: manageJoin ? joinList : [],
     pendingInvites: manageJoin ? inviteList : [],
     pendingCalendarEvents: manageJoin ? calendarPending : [],

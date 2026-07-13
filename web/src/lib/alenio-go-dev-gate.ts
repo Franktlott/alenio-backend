@@ -1,5 +1,5 @@
-/** Flip to false when Alenio Go is ready for general access. */
-export const ALENIO_GO_DEV_GATE_ENABLED = true;
+/** Flip to false when Alenio Go is ready for general access. Disabled — Go is gated by Operations plan. */
+export const ALENIO_GO_DEV_GATE_ENABLED = false;
 
 export const ALENIO_GO_DEV_CODE = "Lotttechnologies2026";
 

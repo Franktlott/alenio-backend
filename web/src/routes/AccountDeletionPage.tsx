@@ -99,7 +99,7 @@ export function AccountDeletionPage() {
         <Section title="What we may keep">
           <ul>
             <li>
-              <strong>Billing:</strong> If your workspace has an active Team plan, cancel or transfer billing in Plan
+              <strong>Billing:</strong> If your workspace has an active Pro plan, cancel or transfer billing in Plan
               &amp; Access (or the web billing dashboard) before deleting your account if you are the workspace owner.
               Account deletion does not automatically refund past charges.
             </li>

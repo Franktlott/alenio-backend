@@ -2,7 +2,7 @@
 
 export function hasTeamPlan(sub?: { plan?: string | null } | null): boolean {
   const plan = (sub?.plan ?? "free").trim().toLowerCase();
-  return plan === "team" || plan === "pro";
+  return plan === "team" || plan === "pro" || plan === "operations";
 }
 
 /** Use live subscription when loaded; otherwise fall back to persisted workspace plan. */
@@ -43,21 +43,21 @@ export const WEB_PLAN_MANAGEMENT_BODY =
 export const OPEN_WEB_DASHBOARD_LABEL = "Open Web Dashboard";
 
 export function ownerFreePlanMessage(): string {
-  return "Team features require an active Team subscription for this workplace. Enable Team on the web using the account that owns this workplace.";
+  return "Pro features require an active Pro subscription for this workplace. Enable Pro on the web using the account that owns this workplace.";
 }
 
 export function memberFreePlanMessage(): string {
-  return "Ask your workplace owner to enable Team for this workplace.";
+  return "Ask your workplace owner to enable Pro for this workplace.";
 }
 
 export function teamActiveMessage(isOwner: boolean): string {
   if (isOwner) {
-    return "You own this workplace's Team plan. Premium features are unlocked for all members.";
+    return "You own this workplace's Pro plan. Premium features are unlocked for all members.";
   }
-  return "You are a Team plan member. Premium features are unlocked for all members in this workplace.";
+  return "You are a Pro plan member. Premium features are unlocked for all members in this workplace.";
 }
 
-export const PAYWALL_TITLE = "Team plan required";
+export const PAYWALL_TITLE = "Pro plan required";
 
 export const PAYWALL_BODY =
-  "Group chats are included with the Team plan. View what is included in Workplace Access.";
+  "Group chats are included with the Pro plan. View what is included in Workplace Access.";

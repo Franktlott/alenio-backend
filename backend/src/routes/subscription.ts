@@ -23,7 +23,7 @@ export function billingProviderFromSubscription(sub: {
 }): "stripe" | "mobile_store" | "none" {
   if (sub.stripeSubscriptionId?.trim()) return "stripe";
   if (
-    (sub.plan === "team" || sub.plan === "pro") &&
+    (sub.plan === "team" || sub.plan === "pro" || sub.plan === "operations") &&
     sub.status === "active" &&
     !sub.stripeSubscriptionId?.trim()
   ) {
@@ -47,12 +47,22 @@ export async function getTeamSubscription(teamId: string) {
   return sub;
 }
 
-/** Team-gated product areas (tasks, activity, etc.) — aligned with web billing “team tier”. */
+const PAID_ACTIVE_STATUSES = ["active", "trialing", "past_due", "incomplete", "paused"] as const;
+
+/** Pro + Operations unlock tasks, activity, workspace (Operations also unlocks Go). */
 export function teamSubscriptionRowHasTeamFeatures(sub: { plan: string; status: string } | null | undefined): boolean {
   const plan = (sub?.plan ?? "free").trim().toLowerCase();
   const status = (sub?.status ?? "active").trim().toLowerCase();
-  if (!["team", "pro"].includes(plan)) return false;
-  return ["active", "trialing", "past_due", "incomplete", "paused"].includes(status);
+  if (!["team", "pro", "operations"].includes(plan)) return false;
+  return (PAID_ACTIVE_STATUSES as readonly string[]).includes(status);
+}
+
+/** Alenio Go — Operations plan only. */
+export function teamSubscriptionRowHasGoFeatures(sub: { plan: string; status: string } | null | undefined): boolean {
+  const plan = (sub?.plan ?? "free").trim().toLowerCase();
+  const status = (sub?.status ?? "active").trim().toLowerCase();
+  if (plan !== "operations") return false;
+  return (PAID_ACTIVE_STATUSES as readonly string[]).includes(status);
 }
 
 // GET /api/teams/:teamId/subscription
@@ -95,7 +105,10 @@ subscriptionRouter.get("/", async (c) => {
 
 export const PLAN_PRICING: Record<string, { price: number; memberLimit: number }> = {
   free: { price: 0, memberLimit: 10 },
-  team: { price: 19, memberLimit: 25 },
+  /** Display/API alias — Stripe checkout still uses the Team price ID until remapped. */
+  team: { price: 39.99, memberLimit: 25 },
+  pro: { price: 39.99, memberLimit: 25 },
+  operations: { price: 69.99, memberLimit: 50 },
 };
 
 // GET /api/teams/:teamId/subscription/health — owner-only Stripe/DB diagnostic
@@ -134,13 +147,19 @@ subscriptionRouter.get("/health", async (c) => {
 subscriptionRouter.post("/checkout-session", async (c) => {
   const user = c.get("user")!;
   const teamId = c.req.param("teamId") as string;
+  const body = (await c.req.json().catch(() => ({}))) as { plan?: string };
+  const plan = body.plan === "operations" ? "operations" : "pro";
   const result = await createTeamCheckoutSession({
     teamId,
     userId: user.id,
     userEmail: user.email,
+    plan,
   });
   if ("error" in result) {
     return c.json({ error: result.error }, result.status);
+  }
+  if ("upgraded" in result) {
+    return c.json({ data: { upgraded: true as const } });
   }
   return c.json({ data: { url: result.url } });
 });

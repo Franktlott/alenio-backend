@@ -64,12 +64,13 @@ export async function handleStripeWebhook(c: Context): Promise<Response> {
       }
       case "customer.subscription.updated":
       case "customer.subscription.deleted": {
-        const subscription = event.data.object as Stripe.Subscription;
-        const teamId = subscription.metadata?.team_id?.trim();
+        const raw = event.data.object as Stripe.Subscription;
+        const teamId = raw.metadata?.team_id?.trim();
         if (!teamId) {
-          console.warn("[stripe/webhook] subscription event missing metadata.team_id", subscription.id);
+          console.warn(`[stripe/webhook] ${event.type} missing metadata.team_id`, raw.id);
           break;
         }
+        const subscription = await stripe.subscriptions.retrieve(raw.id, { expand: ["items.data"] });
         const customerId = stripeCustomerIdOfSubscription(subscription);
         await applySubscriptionFromStripeSubscription(teamId, customerId, subscription);
         break;

@@ -8,7 +8,10 @@ export function generateGoHubToken(): string {
 
 export async function teamHasGoPlan(teamId: string): Promise<boolean> {
   const subscription = await getTeamSubscription(teamId);
-  return subscription.plan === "team" || subscription.plan === "pro";
+  const plan = (subscription.plan ?? "free").trim().toLowerCase();
+  const status = (subscription.status ?? "active").trim().toLowerCase();
+  if (plan !== "operations") return false;
+  return ["active", "trialing", "past_due", "incomplete", "paused"].includes(status);
 }
 
 export async function ensureTeamGoHubToken(teamId: string): Promise<string> {

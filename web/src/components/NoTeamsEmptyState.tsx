@@ -44,6 +44,7 @@ export function NoTeamsEmptyState({ onRefreshWorkspaces }: Props) {
       ...team,
       role: team.role ?? "owner",
       hasTeamFeatures: team.hasTeamFeatures ?? false,
+      hasGoFeatures: team.hasGoFeatures ?? false,
     };
     setTeams((prev) => {
       const list = prev ?? [];

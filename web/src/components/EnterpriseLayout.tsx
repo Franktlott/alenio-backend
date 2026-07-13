@@ -34,6 +34,8 @@ type Props = {
   showPlanNav: boolean;
   /** When false, Activity and Workspace are hidden (workspace on Free plan). */
   showActivityExecuteNav: boolean;
+  /** When false, Alenio Go is hidden (requires Operations plan). */
+  showGoNav?: boolean;
 };
 
 const WORKSPACE_OVERLAY_MIN_MS = 220;
@@ -133,6 +135,7 @@ export function EnterpriseLayout({
   workspaceOverlayLoading = false,
   showPlanNav,
   showActivityExecuteNav,
+  showGoNav = false,
 }: Props) {
   const [showWorkspaceOverlay, setShowWorkspaceOverlay] = useState(false);
   /** User changed workspace (sidebar or profile); until cleared, `workspaceOverlayLoading` controls how long the overlay may stay up. */
@@ -287,7 +290,7 @@ export function EnterpriseLayout({
           {showActivityExecuteNav ? (
             <NavItem to="/dashboard" navId="execute" activeNav={activeNav} icon={<IconWorkspace />} label="Workspace" />
           ) : null}
-          {showActivityExecuteNav ? (
+          {showGoNav ? (
             <NavItem
               to="/go"
               navId="go"

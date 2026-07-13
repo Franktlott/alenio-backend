@@ -3,7 +3,7 @@ import { deleteAppUserCompletely } from "./delete-app-user";
 import { isPrismaUniqueOnName, normalizeTeamName } from "./team-name";
 import { prisma } from "../prisma";
 
-const VALID_PLANS = new Set(["free", "team", "pro"]);
+const VALID_PLANS = new Set(["free", "team", "pro", "operations"]);
 const VALID_STATUSES = new Set(["active", "canceled", "past_due", "trialing"]);
 
 function normalizeEmail(email: string): string {
@@ -201,7 +201,7 @@ export async function updateTeamSubscription(
     },
     update: {
       ...(normalizedPlan ? { plan: normalizedPlan } : {}),
-      ...(status ? { status } : {}),
+      ...(status ? { status: status } : {}),
     },
     include: { team: { select: { name: true } } },
   });

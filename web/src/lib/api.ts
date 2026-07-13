@@ -191,8 +191,10 @@ export type WebTeamRow = {
   role: string;
   inviteCode?: string | null;
   _count: { members: number; tasks: number };
-  /** Team plan (tasks, activity, execute) — from GET /web/api/teams; absent on older clients means unknown. */
+  /** Pro/Operations workspace features (tasks, activity) — from GET /web/api/teams; absent on older clients means unknown. */
   hasTeamFeatures?: boolean;
+  /** Alenio Go — Operations plan only. */
+  hasGoFeatures?: boolean;
 };
 
 export type WebTeamSubscription = {
@@ -740,8 +742,10 @@ export async function fetchWebTeamSubscription(teamId: string): Promise<WebTeamS
   }
 }
 
-export function postWebBillingCheckout(teamId: string) {
-  return apiPostJson<{ data: { url: string } }>("/web/api/billing/checkout-session", { teamId }).then((r) => r.data);
+export function postWebBillingCheckout(teamId: string, plan: "pro" | "operations" = "pro") {
+  return apiPostJson<{
+    data: { url?: string; upgraded?: boolean; subscription?: WebTeamSubscription };
+  }>("/web/api/billing/checkout-session", { teamId, plan }).then((r) => r.data);
 }
 
 export function postWebBillingPortal(teamId: string) {
@@ -760,9 +764,13 @@ export function postWebBillingReconcile(teamId: string) {
 }
 
 export function fetchWebCheckoutConfig() {
-  return apiGetJson<{ data: { configured: boolean; missingKeys: string[] } }>("/web/api/billing/checkout-config").then(
-    (r) => r.data,
-  );
+  return apiGetJson<{
+    data: {
+      configured: boolean;
+      missingKeys: string[];
+      plans?: { pro: boolean; operations: boolean };
+    };
+  }>("/web/api/billing/checkout-config").then((r) => r.data);
 }
 
 export function fetchTeamMessages(teamId: string, topicId: string) {

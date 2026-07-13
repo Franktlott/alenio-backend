@@ -21,9 +21,52 @@ export function billingReturnBaseUrl(): string | null {
   return u || null;
 }
 
-/** Checkout requires a recurring price ID; portal and webhooks only need the Stripe client (+ return URL for portal). */
+/** Checkout requires at least one recurring price ID; portal and webhooks only need the Stripe client (+ return URL for portal). */
 export function isStripeCheckoutConfigured(): boolean {
-  return !!(getStripeClient() && env.STRIPE_TEAM_PRICE_ID?.trim() && billingReturnBaseUrl());
+  return !!(
+    getStripeClient() &&
+    billingReturnBaseUrl() &&
+    (env.STRIPE_TEAM_PRICE_ID?.trim() || env.STRIPE_OPERATIONS_PRICE_ID?.trim())
+  );
+}
+
+export type StripeCheckoutPlan = "pro" | "operations";
+
+export function stripePriceIdForCheckoutPlan(plan: StripeCheckoutPlan): string | null {
+  if (plan === "operations") return env.STRIPE_OPERATIONS_PRICE_ID?.trim() || null;
+  return env.STRIPE_TEAM_PRICE_ID?.trim() || null;
+}
+
+export function isStripeCheckoutPlanConfigured(plan: StripeCheckoutPlan): boolean {
+  return !!(getStripeClient() && billingReturnBaseUrl() && stripePriceIdForCheckoutPlan(plan));
+}
+
+/** Persist Pro as `team` (legacy DB value); Operations as `operations`. */
+export function dbPlanForCheckoutPlan(plan: StripeCheckoutPlan): "team" | "operations" {
+  return plan === "operations" ? "operations" : "team";
+}
+
+export function planFromStripePriceId(priceId: string | null | undefined): "team" | "operations" {
+  const id = priceId?.trim() ?? "";
+  const ops = env.STRIPE_OPERATIONS_PRICE_ID?.trim();
+  if (ops && id && id === ops) return "operations";
+  return "team";
+}
+
+export function planFromStripeSubscription(subscription: Stripe.Subscription): "team" | "operations" {
+  const meta = subscription.metadata?.plan?.trim().toLowerCase();
+  if (meta === "operations") return "operations";
+  if (meta === "team" || meta === "pro") return "team";
+
+  for (const item of subscription.items?.data ?? []) {
+    const price = item.price;
+    const priceId = typeof price === "string" ? price : price?.id;
+    if (priceId) {
+      const mapped = planFromStripePriceId(priceId);
+      if (mapped === "operations") return "operations";
+    }
+  }
+  return "team";
 }
 
 export function isStripePortalConfigured(): boolean {
@@ -76,15 +119,15 @@ export async function applySubscriptionFromStripeSubscription(
   let cancelAtPeriodEnd = false;
 
   if (stripeStatus === "active" || stripeStatus === "trialing") {
-    plan = "team";
+    plan = planFromStripeSubscription(subscription);
     status = "active";
     cancelAtPeriodEnd = isStripeSubscriptionCanceling(subscription);
   } else if (stripeStatus === "past_due") {
-    plan = "team";
+    plan = planFromStripeSubscription(subscription);
     status = "past_due";
   } else if (stripeStatus === "incomplete" || stripeStatus === "paused") {
     // Checkout often lands here briefly before `active`; persist Stripe ids so the app + webhooks can converge.
-    plan = "team";
+    plan = planFromStripeSubscription(subscription);
     status = stripeStatus;
   } else if (
     stripeStatus === "canceled" ||

@@ -23,12 +23,12 @@ export function PricingPage() {
               <strong>Free</strong> includes activity, chat, and team members for every workspace.
             </li>
             <li>
-              <strong>Team</strong> unlocks tasks, Seneca AI coaching, check-ins, development plans, calendar, Outlook
-              sync, metrics, and the full workspace on web and mobile.
+              <strong>Pro</strong> unlocks tasks, Seneca AI coaching, check-ins, development plans, calendar, Outlook
+              sync, metrics, and core workspace features on web and mobile — $39.99 per workspace / month.
             </li>
             <li>
-              <strong>Enterprise</strong> adds rollout support, SLAs, and security documentation for multi-location
-              operators — contact us for custom pricing.
+              <strong>Operations</strong> includes everything in Pro plus Alenio Go (checklists, temperature checks,
+              briefings, walks, and execution tools) — $69.99 per workspace / month.
             </li>
             <li>Subscriptions are billed per workspace on the web. Only the workspace owner can upgrade or manage billing.</li>
           </ul>

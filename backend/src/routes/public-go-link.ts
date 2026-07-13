@@ -44,7 +44,7 @@ publicGoLinkRouter.post("/link", zValidator("json", linkBodySchema), async (c) =
       return c.json(
         {
           error: {
-            message: "Alenio Go requires a Team plan for this workspace",
+            message: "Alenio Go requires an Operations plan for this workspace",
             code: "PLAN_REQUIRED",
           },
         },

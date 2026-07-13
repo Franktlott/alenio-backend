@@ -12,13 +12,20 @@ import {
 import { loadWebCheckoutConfig, peekWebCheckoutConfig, type WebCheckoutConfig } from "../lib/checkout-config-cache";
 import {
   BILLING_COMPARE_FEATURES,
+  FREE_BEST_FOR,
   FREE_INCLUDED,
-  TEAM_PRICE_AMOUNT,
-  TEAM_PRICE_PERIOD,
+  OPERATIONS_BEST_FOR,
+  OPERATIONS_FEATURES,
+  OPERATIONS_PRICE_AMOUNT,
+  OPERATIONS_PRICE_PERIOD,
+  PRO_BEST_FOR,
+  PRO_PRICE_AMOUNT,
+  PRO_PRICE_PERIOD,
 } from "../lib/plan-catalog";
 
 function planLabel(plan: string): string {
-  if (plan === "team" || plan === "pro") return "Team";
+  if (plan === "operations") return "Operations";
+  if (plan === "team" || plan === "pro") return "Pro";
   return "Free";
 }
 
@@ -35,7 +42,7 @@ function subscriptionLine(sub: WebTeamSubscription, stripeActive: boolean): stri
   }
   if (
     sub.currentPeriodEnd &&
-    (sub.plan === "team" || sub.plan === "pro") &&
+    (sub.plan === "team" || sub.plan === "pro" || sub.plan === "operations") &&
     ["active", "trialing", "past_due"].includes(sub.status)
   ) {
     return `Renews ${formatRenewalDate(sub.currentPeriodEnd)}`;
@@ -70,7 +77,7 @@ function CompareIcon({ included }: { included: boolean }) {
 
 export function BillingPage() {
   const [params, setParams] = useSearchParams();
-  const { me, teams, selectedTeamId } = useEnterpriseShell();
+  const { me, teams, selectedTeamId, refreshMeAndTeams } = useEnterpriseShell();
   const [actionErr, setActionErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [checkoutCfg, setCheckoutCfg] = useState<WebCheckoutConfig | null>(() => peekWebCheckoutConfig());
@@ -167,7 +174,7 @@ export function BillingPage() {
     ["active", "trialing", "past_due", "incomplete", "paused"].includes(sub.status);
   const mobileManaged =
     !!sub &&
-    (sub.plan === "team" || sub.plan === "pro") &&
+    (sub.plan === "team" || sub.plan === "pro" || sub.plan === "operations") &&
     sub.status === "active" &&
     !sub.stripeSubscriptionId;
 
@@ -175,18 +182,31 @@ export function BillingPage() {
   const canOpenStripePortal =
     !!sub?.stripeCustomerId?.trim() || !!sub?.stripeSubscriptionId?.trim();
 
-  const onSubscribe = useCallback(async () => {
-    if (!selectedTeamId || !isOwner) return;
-    setBusy(true);
-    setActionErr(null);
-    try {
-      const { url } = await postWebBillingCheckout(selectedTeamId);
-      window.location.href = url;
-    } catch (e) {
-      setActionErr(e instanceof Error ? e.message : "Checkout failed.");
-      setBusy(false);
-    }
-  }, [selectedTeamId, isOwner]);
+  const onSubscribe = useCallback(
+    async (plan: "pro" | "operations") => {
+      if (!selectedTeamId || !isOwner) return;
+      setBusy(true);
+      setActionErr(null);
+      try {
+        const result = await postWebBillingCheckout(selectedTeamId, plan);
+        if (result.upgraded) {
+          await Promise.all([subQuery.refetch(), refreshMeAndTeams?.()].filter(Boolean));
+          setBusy(false);
+          return;
+        }
+        if (result.url) {
+          window.location.href = result.url;
+          return;
+        }
+        setActionErr("Checkout did not return a URL.");
+        setBusy(false);
+      } catch (e) {
+        setActionErr(e instanceof Error ? e.message : "Checkout failed.");
+        setBusy(false);
+      }
+    },
+    [selectedTeamId, isOwner, subQuery, refreshMeAndTeams],
+  );
 
   const onPortal = useCallback(async () => {
     if (!selectedTeamId || !isOwner) return;
@@ -206,7 +226,7 @@ export function BillingPage() {
     if (subscribe !== "1") return;
     if (!teams?.length || !selectedTeamId || !isOwner || showPlanLoading || subErr || sub === null) return;
     if (checkoutCfgLoading || checkoutCfg === null) return;
-    if (!checkoutCfg.configured) {
+    if (!checkoutCfg.configured || checkoutCfg.plans?.pro === false) {
       setParams(
         (prev) => {
           const n = new URLSearchParams(prev);
@@ -230,7 +250,7 @@ export function BillingPage() {
     }
     if (autoCheckoutStarted.current) return;
     autoCheckoutStarted.current = true;
-    void onSubscribe();
+    void onSubscribe("pro");
   }, [
     teams,
     selectedTeamId,
@@ -245,14 +265,34 @@ export function BillingPage() {
     onSubscribe,
     checkoutCfg,
     checkoutCfgLoading,
+    showPlanLoading,
   ]);
 
-  const isActiveTeamPlan =
+  const paidActive =
     !!sub &&
-    (sub.plan === "team" || sub.plan === "pro") &&
+    (sub.plan === "team" || sub.plan === "pro" || sub.plan === "operations") &&
     ["active", "trialing", "past_due", "incomplete", "paused"].includes(sub.status);
-  const currentPlanTier: "free" | "team" = isActiveTeamPlan ? "team" : "free";
-  const showSubscribeCta = isOwner && !!sub && !stripeActive && !mobileManaged && currentPlanTier === "free";
+  const currentPlanTier: "free" | "pro" | "operations" = !paidActive
+    ? "free"
+    : sub!.plan === "operations"
+      ? "operations"
+      : "pro";
+
+  const proCheckoutReady = checkoutCfg?.plans?.pro !== false && !!checkoutCfg?.configured;
+  const operationsCheckoutReady = !!checkoutCfg?.plans?.operations;
+  const canCheckoutPro =
+    isOwner &&
+    !!sub &&
+    !mobileManaged &&
+    currentPlanTier === "free" &&
+    proCheckoutReady;
+  const canCheckoutOperations =
+    isOwner &&
+    !!sub &&
+    !mobileManaged &&
+    currentPlanTier !== "operations" &&
+    operationsCheckoutReady &&
+    (currentPlanTier === "free" || stripeActive);
   const showCheckoutNotConfigured =
     !checkoutCfgLoading &&
     !!checkoutCfg &&
@@ -262,7 +302,7 @@ export function BillingPage() {
     sub !== null &&
     currentPlanTier === "free";
 
-  const premiumCount = BILLING_COMPARE_FEATURES.filter((f) => !f.free).length;
+  const premiumCount = BILLING_COMPARE_FEATURES.filter((f) => f.pro && !f.free).length;
   const subLine = !showPlanLoading && sub ? subscriptionLine(sub, stripeActive) : null;
 
   if (me === undefined) {
@@ -333,7 +373,7 @@ export function BillingPage() {
                 <h2 id="billing-free-heading" className="enterprise-billing-plan-name">
                   Free
                 </h2>
-                <p className="enterprise-billing-plan-tagline">Perfect for teams getting started</p>
+                <p className="enterprise-billing-plan-tagline">{FREE_BEST_FOR}</p>
               </div>
               <p className="enterprise-billing-plan-price">
                 $0
@@ -349,28 +389,28 @@ export function BillingPage() {
                 className="enterprise-billing-plan-cta enterprise-billing-plan-cta--secondary"
                 disabled
               >
-                {currentPlanTier === "free" ? "Current plan" : "Included in Team"}
+                {currentPlanTier === "free" ? "Current plan" : "Included in Pro"}
               </button>
             </article>
 
             <article
-              className={`enterprise-billing-plan${currentPlanTier === "team" && sub && !subLoading ? " enterprise-billing-plan--current" : ""}`}
-              aria-labelledby="billing-team-heading"
+              className={`enterprise-billing-plan${currentPlanTier === "pro" && sub && !subLoading ? " enterprise-billing-plan--current" : ""}`}
+              aria-labelledby="billing-pro-heading"
             >
-              {currentPlanTier === "team" && sub && !showPlanLoading ? (
+              {currentPlanTier === "pro" && sub && !showPlanLoading ? (
                 <span className="enterprise-billing-plan-badge">Current</span>
               ) : (
                 <span className="enterprise-billing-plan-badge enterprise-billing-plan-badge--popular">Popular</span>
               )}
               <div className="enterprise-billing-plan-head">
-                <h2 id="billing-team-heading" className="enterprise-billing-plan-name">
-                  Team
+                <h2 id="billing-pro-heading" className="enterprise-billing-plan-name">
+                  Pro
                 </h2>
-                <p className="enterprise-billing-plan-tagline">For fast-moving teams that need execution</p>
+                <p className="enterprise-billing-plan-tagline">{PRO_BEST_FOR}</p>
               </div>
               <p className="enterprise-billing-plan-price enterprise-billing-plan-price--accent">
-                {TEAM_PRICE_AMOUNT}
-                <span>{TEAM_PRICE_PERIOD}</span>
+                {PRO_PRICE_AMOUNT}
+                <span>{PRO_PRICE_PERIOD}</span>
               </p>
               <ul className="enterprise-billing-plan-highlights">
                 <li>All Free features</li>
@@ -383,7 +423,70 @@ export function BillingPage() {
                   <code>WEB_PUBLIC_URL</code> for your Vite URL).
                 </div>
               ) : null}
-              {!showPlanLoading && sub && currentPlanTier === "team" ? (
+              {!showPlanLoading && sub && currentPlanTier === "pro" ? (
+                <button
+                  type="button"
+                  className="enterprise-billing-plan-cta enterprise-billing-plan-cta--current"
+                  disabled
+                >
+                  Current plan
+                </button>
+              ) : !showPlanLoading && sub && currentPlanTier === "operations" ? (
+                <button
+                  type="button"
+                  className="enterprise-billing-plan-cta enterprise-billing-plan-cta--secondary"
+                  disabled
+                >
+                  Included in Operations
+                </button>
+              ) : !showPlanLoading && sub ? (
+                <>
+                  <button
+                    type="button"
+                    className="enterprise-billing-plan-cta enterprise-billing-plan-cta--primary"
+                    disabled={
+                      busy ||
+                      !!subErr ||
+                      checkoutCfgLoading ||
+                      !canCheckoutPro ||
+                      (checkoutCfg !== null && !proCheckoutReady)
+                    }
+                    onClick={() => void onSubscribe("pro")}
+                  >
+                    {busy ? "Opening checkout…" : "Upgrade to Pro"}
+                  </button>
+                  <p className="enterprise-billing-plan-footnote">
+                    {isOwner ? "Cancel anytime · Secure checkout" : "Only the workspace owner can upgrade."}
+                  </p>
+                </>
+              ) : (
+                <p className="enterprise-billing-plan-footnote">{showPlanLoading ? "Loading…" : "—"}</p>
+              )}
+            </article>
+
+            <article
+              className={`enterprise-billing-plan${currentPlanTier === "operations" && sub && !showPlanLoading ? " enterprise-billing-plan--current" : ""}`}
+              aria-labelledby="billing-operations-heading"
+            >
+              {currentPlanTier === "operations" && sub && !showPlanLoading ? (
+                <span className="enterprise-billing-plan-badge">Current</span>
+              ) : null}
+              <div className="enterprise-billing-plan-head">
+                <h2 id="billing-operations-heading" className="enterprise-billing-plan-name">
+                  Operations
+                </h2>
+                <p className="enterprise-billing-plan-tagline">{OPERATIONS_BEST_FOR}</p>
+              </div>
+              <p className="enterprise-billing-plan-price">
+                {OPERATIONS_PRICE_AMOUNT}
+                <span>{OPERATIONS_PRICE_PERIOD}</span>
+              </p>
+              <ul className="enterprise-billing-plan-highlights">
+                {OPERATIONS_FEATURES.slice(0, 3).map((feature) => (
+                  <li key={feature}>{feature}</li>
+                ))}
+              </ul>
+              {!showPlanLoading && sub && currentPlanTier === "operations" ? (
                 <button
                   type="button"
                   className="enterprise-billing-plan-cta enterprise-billing-plan-cta--current"
@@ -393,28 +496,30 @@ export function BillingPage() {
                 </button>
               ) : !showPlanLoading && sub ? (
                 <>
-                  {showSubscribeCta ? (
-                    <button
-                      type="button"
-                      className="enterprise-billing-plan-cta enterprise-billing-plan-cta--primary"
-                      disabled={
-                        busy || !!subErr || checkoutCfgLoading || (checkoutCfg !== null && !checkoutCfg.configured)
-                      }
-                      onClick={onSubscribe}
-                    >
-                      {busy ? "Opening checkout…" : "Upgrade to Team"}
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      className="enterprise-billing-plan-cta enterprise-billing-plan-cta--secondary"
-                      disabled
-                    >
-                      Upgrade to Team
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    className="enterprise-billing-plan-cta enterprise-billing-plan-cta--primary"
+                    disabled={
+                      busy ||
+                      !!subErr ||
+                      checkoutCfgLoading ||
+                      !canCheckoutOperations ||
+                      (checkoutCfg !== null && !operationsCheckoutReady)
+                    }
+                    onClick={() => void onSubscribe("operations")}
+                  >
+                    {busy
+                      ? currentPlanTier === "pro"
+                        ? "Upgrading…"
+                        : "Opening checkout…"
+                      : currentPlanTier === "pro"
+                        ? "Upgrade to Operations"
+                        : "Start Operations"}
+                  </button>
                   <p className="enterprise-billing-plan-footnote">
-                    {isOwner ? "Cancel anytime · Secure checkout" : "Only the workspace owner can upgrade."}
+                    {operationsCheckoutReady
+                      ? "Includes Alenio Go · Secure checkout"
+                      : "Set STRIPE_OPERATIONS_PRICE_ID on the API to enable checkout."}
                   </p>
                 </>
               ) : (
@@ -455,9 +560,9 @@ export function BillingPage() {
                   </dl>
                   {mobileManaged ? (
                     <div className="enterprise-billing-mobile-notice">
-                      <p className="enterprise-billing-mobile-notice-title">Active Team plan</p>
+                      <p className="enterprise-billing-mobile-notice-title">Active Pro plan</p>
                       <p>
-                        This workspace has an active Team plan that is not managed through web Stripe billing. Cancel or
+                        This workspace has an active Pro plan that is not managed through web Stripe billing. Cancel or
                         change it in Plan & Access on mobile, or contact support if you need help.
                       </p>
                     </div>
@@ -487,7 +592,8 @@ export function BillingPage() {
             <div className="enterprise-billing-compare-head">
               <span>Feature</span>
               <span>Free</span>
-              <span>Team</span>
+              <span>Pro</span>
+              <span>Ops</span>
             </div>
             <div className="enterprise-billing-compare-body">
               {BILLING_COMPARE_FEATURES.map((row) => (
@@ -497,7 +603,10 @@ export function BillingPage() {
                     <CompareIcon included={row.free} />
                   </span>
                   <span className="enterprise-billing-compare-cell">
-                    <CompareIcon included />
+                    <CompareIcon included={row.pro} />
+                  </span>
+                  <span className="enterprise-billing-compare-cell">
+                    <CompareIcon included={row.operations} />
                   </span>
                 </div>
               ))}

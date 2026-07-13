@@ -13,7 +13,11 @@ import { checkInTemplateLibraryRouter } from "./check-in-template-library";
 import { oneOnOneMeetingsRouter } from "./one-on-one-meetings";
 import { developmentGoalsRouter } from "./development-goals";
 import { reconcileStripeForSubscriptionRead } from "../lib/stripe-billing";
-import { getTeamSubscription, teamSubscriptionRowHasTeamFeatures } from "./subscription";
+import {
+  getTeamSubscription,
+  teamSubscriptionRowHasGoFeatures,
+  teamSubscriptionRowHasTeamFeatures,
+} from "./subscription";
 import { webPrismaUserIdFromContext } from "../lib/web-prisma-user";
 import { createWorkspaceForAuthUser } from "../lib/create-workspace";
 import { isPrismaUniqueOnName, isTeamDisplayNameTaken } from "../lib/team-name";
@@ -131,6 +135,7 @@ webRouter.get("/api/teams", async (c) => {
         ...team,
         role: m.role,
         hasTeamFeatures: teamSubscriptionRowHasTeamFeatures(subByTeamId.get(team.id) ?? null),
+        hasGoFeatures: teamSubscriptionRowHasGoFeatures(subByTeamId.get(team.id) ?? null),
       };
     }),
   });

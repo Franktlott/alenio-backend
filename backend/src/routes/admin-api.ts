@@ -406,7 +406,7 @@ adminApiRouter.post(
       ownerEmail: z.string().email(),
       ownerName: z.string().trim().min(1).max(200),
       ownerPassword: z.string().min(8).max(128).optional(),
-      plan: z.enum(["free", "team", "pro"]).optional(),
+      plan: z.enum(["free", "team", "pro", "operations"]).optional(),
     }),
   ),
   async (c) => {
@@ -436,7 +436,7 @@ adminApiRouter.patch(
   zValidator(
     "json",
     z.object({
-      plan: z.enum(["free", "team", "pro"]).optional(),
+      plan: z.enum(["free", "team", "pro", "operations"]).optional(),
       status: z.enum(["active", "canceled", "past_due", "trialing"]).optional(),
     }),
   ),

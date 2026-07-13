@@ -37,11 +37,13 @@ const envSchema = z.object({
   ANDROID_PLAY_STORE_URL: z.string().optional(),
   // Daily.co video
   DAILY_API_KEY: z.string().optional(),
-  /** Optional: web Team checkout and customer portal (secret key and price id below) */
+  /** Optional: web Team/Pro checkout and customer portal (secret key and price id below) */
   STRIPE_SECRET_KEY: z.string().optional(),
   STRIPE_WEBHOOK_SECRET: z.string().optional(),
-  /** Recurring price ID for the Team plan (from your payment provider dashboard) */
+  /** Recurring price ID for the Pro plan (legacy name: Team) */
   STRIPE_TEAM_PRICE_ID: z.string().optional(),
+  /** Recurring price ID for the Operations plan (includes Alenio Go) */
+  STRIPE_OPERATIONS_PRICE_ID: z.string().optional(),
   /**
    * Public origin of the enterprise web app (no trailing slash), e.g. https://your-app.web.app
    * Used for Checkout / Portal return URLs. Local dev: http://127.0.0.1:5173

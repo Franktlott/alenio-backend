@@ -389,8 +389,9 @@ export default function AppLayout() {
       return;
     }
     if (subscription) {
-      const plan = subscription.plan === "pro" ? "team" : subscription.plan;
-      setPlan(plan === "team" ? "team" : "free");
+      const raw = (subscription.plan ?? "free").trim().toLowerCase();
+      const paid = raw === "team" || raw === "pro" || raw === "operations";
+      setPlan(paid ? "team" : "free");
     }
   }, [subscription, activeTeamId, setPlan]);
 

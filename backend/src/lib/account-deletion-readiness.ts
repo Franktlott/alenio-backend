@@ -28,7 +28,7 @@ function isActivePaidTeamPlan(sub: {
   cancelAtPeriodEnd?: boolean;
 }): boolean {
   const plan = (sub.plan ?? "free").trim().toLowerCase();
-  if (!["team", "pro"].includes(plan)) return false;
+  if (!["team", "pro", "operations"].includes(plan)) return false;
   const status = (sub.status ?? "active").trim().toLowerCase();
   if (!["active", "trialing", "past_due"].includes(status)) return false;
   if (sub.cancelAtPeriodEnd === true) return false;
@@ -75,7 +75,7 @@ export async function getAccountDeletionReadiness(userId: string): Promise<Accou
     if (paidActive && (billingProvider === "stripe" || billingProvider === "mobile_store")) {
       issues.push({
         code: billingProvider === "stripe" ? "active_web_billing" : "mobile_store_billing",
-        message: `Cancel the Team plan for "${teamName}" in Plan & Access (or the web billing dashboard) before deleting your account.`,
+        message: `Cancel the Pro plan for "${teamName}" in Plan & Access (or the web billing dashboard) before deleting your account.`,
         teamId,
         teamName,
         blocking: true,

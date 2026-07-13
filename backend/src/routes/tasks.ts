@@ -419,8 +419,8 @@ tasksRouter.post("/", async (c) => {
   if (!membership) return c.json({ error: { message: "Not a team member", code: "FORBIDDEN" } }, 403);
 
   const subscription = await getTeamSubscription(teamId);
-  if (!["team", "pro"].includes(subscription.plan)) {
-    return c.json({ error: { message: "Task manager requires Alenio Team or Pro", code: "SUBSCRIPTION_REQUIRED" } }, 403);
+  if (!["team", "pro", "operations"].includes(subscription.plan)) {
+    return c.json({ error: { message: "Task manager requires a Pro or Operations plan", code: "SUBSCRIPTION_REQUIRED" } }, 403);
   }
 
   const body = await c.req.json();
