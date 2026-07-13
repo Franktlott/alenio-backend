@@ -1,14 +1,23 @@
 import type { PrismaClient } from "@prisma/client";
 
+export type BetterAuthSchemaEnsureResult = {
+  ok: boolean;
+  steps: string[];
+  error?: string;
+  tables?: string[];
+};
+
 /**
  * Recreate Better Auth core tables in `neon_auth` when Neon Auth Console
  * disable ran with delete_data (schema wiped). Idempotent.
  *
  * UUID PKs + defaults match Neon Auth / our Better Auth `generateId: "uuid"` config.
  */
-export async function ensureBetterAuthSchema(prisma: PrismaClient): Promise<void> {
+export async function ensureBetterAuthSchema(prisma: PrismaClient): Promise<BetterAuthSchemaEnsureResult> {
+  const steps: string[] = [];
   try {
     await prisma.$executeRawUnsafe(`CREATE SCHEMA IF NOT EXISTS neon_auth`);
+    steps.push("schema");
 
     await prisma.$executeRawUnsafe(`
       CREATE TABLE IF NOT EXISTS neon_auth."user" (
@@ -25,9 +34,11 @@ export async function ensureBetterAuthSchema(prisma: PrismaClient): Promise<void
         "banExpires" TIMESTAMPTZ
       )
     `);
+    steps.push("user");
     await prisma.$executeRawUnsafe(`
       CREATE UNIQUE INDEX IF NOT EXISTS user_email_key ON neon_auth."user" (email)
     `);
+    steps.push("user_email_idx");
 
     await prisma.$executeRawUnsafe(`
       CREATE TABLE IF NOT EXISTS neon_auth.session (
@@ -43,9 +54,11 @@ export async function ensureBetterAuthSchema(prisma: PrismaClient): Promise<void
         "activeOrganizationId" TEXT
       )
     `);
+    steps.push("session");
     await prisma.$executeRawUnsafe(`
       CREATE UNIQUE INDEX IF NOT EXISTS session_token_key ON neon_auth.session (token)
     `);
+    steps.push("session_token_idx");
 
     await prisma.$executeRawUnsafe(`
       CREATE TABLE IF NOT EXISTS neon_auth.account (
@@ -64,6 +77,7 @@ export async function ensureBetterAuthSchema(prisma: PrismaClient): Promise<void
         "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
       )
     `);
+    steps.push("account");
 
     await prisma.$executeRawUnsafe(`
       CREATE TABLE IF NOT EXISTS neon_auth.verification (
@@ -75,6 +89,7 @@ export async function ensureBetterAuthSchema(prisma: PrismaClient): Promise<void
         "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
       )
     `);
+    steps.push("verification");
 
     await prisma.$executeRawUnsafe(`
       CREATE TABLE IF NOT EXISTS neon_auth.jwks (
@@ -85,10 +100,20 @@ export async function ensureBetterAuthSchema(prisma: PrismaClient): Promise<void
         "expiresAt" TIMESTAMPTZ
       )
     `);
+    steps.push("jwks");
 
-    console.log("[ensure-better-auth-schema] neon_auth core tables ready");
+    const tables = await prisma.$queryRaw<Array<{ table_name: string }>>`
+      SELECT table_name
+      FROM information_schema.tables
+      WHERE table_schema = 'neon_auth'
+      ORDER BY table_name
+    `;
+    const tableNames = tables.map((t) => t.table_name);
+    console.log("[ensure-better-auth-schema] ready:", tableNames.join(", ") || "(none)");
+    return { ok: tableNames.includes("user"), steps, tables: tableNames };
   } catch (err) {
-    console.error("[ensure-better-auth-schema] failed:", err);
-    throw err;
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("[ensure-better-auth-schema] failed:", message, err);
+    return { ok: false, steps, error: message };
   }
 }

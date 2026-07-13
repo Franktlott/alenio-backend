@@ -155,9 +155,11 @@ app.get("/health", (c) => c.json(buildHealthPayload()));
 
 /** Post-cutover diagnostics: neon_auth schema still readable after Neon Auth Console disable? */
 app.get("/api/auth-schema-check", async (c) => {
+  const ensure = await ensureBetterAuthSchema(prisma);
   const out: Record<string, unknown> = {
     buildMarker: env.BACKEND_BUILD_MARKER,
     betterAuthMounted: isBetterAuthMounted(),
+    ensure,
   };
   try {
     const tables = await prisma.$queryRaw<Array<{ table_name: string }>>`
