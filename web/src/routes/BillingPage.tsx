@@ -138,14 +138,9 @@ export function BillingPage() {
       return;
     }
     let cancelled = false;
-    const cached = peekWebCheckoutConfig();
-    if (cached) {
-      setCheckoutCfg(cached);
-      setCheckoutCfgLoading(false);
-    } else {
-      setCheckoutCfgLoading(true);
-    }
-    void loadWebCheckoutConfig()
+    setCheckoutCfgLoading(true);
+    // Always refetch on Billing so Operations readiness updates after Railway env/deploys.
+    void loadWebCheckoutConfig({ force: true })
       .then((d) => {
         if (!cancelled) setCheckoutCfg(d);
       })
@@ -155,7 +150,7 @@ export function BillingPage() {
     return () => {
       cancelled = true;
     };
-  }, [isOwner]);
+  }, [isOwner, selectedTeamId]);
 
   const clearBillingParam = useCallback(() => {
     setParams(

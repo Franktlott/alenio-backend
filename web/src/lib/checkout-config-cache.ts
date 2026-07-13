@@ -13,8 +13,13 @@ export function peekWebCheckoutConfig(): WebCheckoutConfig | null {
   return cache;
 }
 
-/** Server-wide Stripe checkout flags — cached for the session to avoid Plan tab flashes. */
-export function loadWebCheckoutConfig(): Promise<WebCheckoutConfig> {
+export function clearWebCheckoutConfigCache(): void {
+  cache = null;
+}
+
+/** Server-wide Stripe checkout flags — cached briefly to avoid Plan tab flashes. */
+export function loadWebCheckoutConfig(opts?: { force?: boolean }): Promise<WebCheckoutConfig> {
+  if (opts?.force) cache = null;
   if (cache) return Promise.resolve(cache);
   if (!inflight) {
     inflight = fetchWebCheckoutConfig()
