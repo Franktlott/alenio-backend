@@ -33,7 +33,7 @@ const envSchema = z.object({
   /** Comma-separated browser origins allowed for CORS (e.g. Firebase Hosting https://your-app.web.app). Localhost is always allowed. */
   CORS_ALLOWED_ORIGINS: z.string().optional(),
   // Build marker for quick deploy verification
-  BACKEND_BUILD_MARKER: z.string().optional().default("backend-marker-2026-07-12-better-auth-recreate-schema2"),
+  BACKEND_BUILD_MARKER: z.string().optional().default("backend-marker-2026-07-12-better-auth-microsoft"),
   // Admin Dashboard
   ADMIN_PASSWORD: z.string().optional().default("admin123"),
   // Email (Resend)
@@ -69,6 +69,13 @@ const envSchema = z.object({
   OPENAI_API_KEY: z.string().optional(),
   /** OpenAI model for Seneca (default gpt-4o-mini). */
   OPENAI_MODEL: z.string().optional().default("gpt-4o-mini"),
+  /**
+   * Microsoft Entra sign-in (Better Auth social). Separate from calendar OAuth below.
+   */
+  MICROSOFT_CLIENT_ID: z.string().optional(),
+  MICROSOFT_CLIENT_SECRET: z.string().optional(),
+  /** e.g. your tenant GUID, or `organizations` / `common`. */
+  MICROSOFT_TENANT_ID: z.string().optional().default("common"),
   /** Microsoft Outlook calendar sync (optional). */
   MICROSOFT_CALENDAR_CLIENT_ID: z.string().optional(),
   MICROSOFT_CALENDAR_CLIENT_SECRET: z.string().optional(),

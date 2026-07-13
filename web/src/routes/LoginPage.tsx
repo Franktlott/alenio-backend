@@ -13,6 +13,7 @@ import { finishPostAuthNavigation, setPendingInviteToken } from "../lib/invite-a
 import { isMobileBrowser } from "../lib/mobile-browser";
 import { isSessionTokenExpired, isSessionTokenUsable } from "../lib/token";
 import { goToEmailVerification, needsEmailVerification } from "../lib/verify-redirect";
+import { signInWithMicrosoft } from "../lib/microsoft-auth";
 
 export function LoginPage() {
   const [params] = useSearchParams();
@@ -22,6 +23,7 @@ export function LoginPage() {
   const [email, setEmail] = useState(emailFromInvite);
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [microsoftLoading, setMicrosoftLoading] = useState(false);
   const [error, setError] = useState<string | null>(
     reason === "session" ? "Your session expired. Sign in again." : null,
   );
@@ -108,6 +110,24 @@ export function LoginPage() {
     }
   };
 
+  const onMicrosoft = async () => {
+    if (loading || microsoftLoading) return;
+    setError(null);
+    setMicrosoftLoading(true);
+    try {
+      if (inviteToken) setPendingInviteToken(inviteToken);
+      const result = await signInWithMicrosoft();
+      if (result.error) {
+        setError(result.error.message ?? "Microsoft sign-in failed.");
+        setMicrosoftLoading(false);
+      }
+      // On success the browser redirects to Microsoft — leave loading state on.
+    } catch (err) {
+      setError(formatAuthFlowError(err));
+      setMicrosoftLoading(false);
+    }
+  };
+
   return (
     <div className="auth-v2-shell" data-testid="login-screen">
       <section className="auth-v2-hero">
@@ -171,10 +191,22 @@ export function LoginPage() {
               {error}
             </p>
           ) : null}
-          <button type="submit" className="auth-btn-primary" disabled={loading} data-testid="login-submit">
+          <button type="submit" className="auth-btn-primary" disabled={loading || microsoftLoading} data-testid="login-submit">
             {loading ? "Signing in…" : "Sign in"}
           </button>
           </form>
+          <div className="auth-v2-divider" aria-hidden="true">
+            <span>or</span>
+          </div>
+          <button
+            type="button"
+            className="auth-btn-secondary auth-btn-microsoft"
+            disabled={loading || microsoftLoading}
+            onClick={() => void onMicrosoft()}
+            data-testid="login-microsoft"
+          >
+            {microsoftLoading ? "Redirecting…" : "Continue with Microsoft"}
+          </button>
           <p className="auth-v2-footnote" style={{ marginTop: "0.75rem" }}>
             <Link to="/sign-up" className="auth-v2-inline-link" data-testid="login-sign-up-link">
               Create account

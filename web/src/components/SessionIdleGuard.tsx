@@ -16,6 +16,7 @@ const PUBLIC_PATHS = new Set([
   "/account-deletion",
   "/login",
   "/sign-up",
+  "/auth/callback",
   "/verify",
   "/forgot-password",
   "/reset-password",

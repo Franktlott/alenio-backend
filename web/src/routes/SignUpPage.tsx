@@ -21,6 +21,7 @@ import { isMobileBrowser } from "../lib/mobile-browser";
 import { goToEmailVerification } from "../lib/verify-redirect";
 import { setPendingSignUp } from "../lib/pending-signup";
 import { LEGAL_COMPANY_NAME, LEGAL_PARENT_COMPANY_NAME } from "../lib/legal-constants";
+import { signInWithMicrosoft } from "../lib/microsoft-auth";
 
 export function SignUpPage() {
   const [params] = useSearchParams();
@@ -30,6 +31,7 @@ export function SignUpPage() {
   const [email, setEmail] = useState(emailFromInvite);
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [microsoftLoading, setMicrosoftLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -175,6 +177,23 @@ export function SignUpPage() {
     }
   };
 
+  const onMicrosoft = async () => {
+    if (loading || microsoftLoading) return;
+    setError(null);
+    setMicrosoftLoading(true);
+    try {
+      if (inviteToken) setPendingInviteToken(inviteToken);
+      const result = await signInWithMicrosoft();
+      if (result.error) {
+        setError(result.error.message ?? "Microsoft sign-in failed.");
+        setMicrosoftLoading(false);
+      }
+    } catch (err) {
+      setError(formatAuthFlowError(err));
+      setMicrosoftLoading(false);
+    }
+  };
+
   return (
     <div className="auth-v2-shell" data-testid="sign-up-screen">
       <section className="auth-v2-hero">
@@ -264,10 +283,22 @@ export function SignUpPage() {
                 ) : null}
               </p>
             ) : null}
-            <button type="submit" className="auth-btn-primary" disabled={loading} data-testid="sign-up-submit">
+            <button type="submit" className="auth-btn-primary" disabled={loading || microsoftLoading} data-testid="sign-up-submit">
               {loading ? "Creating…" : "Create account"}
             </button>
           </form>
+          <div className="auth-v2-divider" aria-hidden="true">
+            <span>or</span>
+          </div>
+          <button
+            type="button"
+            className="auth-btn-secondary auth-btn-microsoft"
+            disabled={loading || microsoftLoading}
+            onClick={() => void onMicrosoft()}
+            data-testid="sign-up-microsoft"
+          >
+            {microsoftLoading ? "Redirecting…" : "Continue with Microsoft"}
+          </button>
           <p className="auth-v2-footnote" style={{ marginTop: "0.75rem" }}>
             By continuing, you agree to {LEGAL_COMPANY_NAME}&apos;s (parent company: {LEGAL_PARENT_COMPANY_NAME}){" "}
             <Link to="/terms" className="auth-v2-inline-link">

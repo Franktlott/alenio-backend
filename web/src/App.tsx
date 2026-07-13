@@ -21,6 +21,7 @@ import { ProfilePage } from "./routes/ProfilePage";
 import { ForgotPasswordPage } from "./routes/ForgotPasswordPage";
 import { LoginPage } from "./routes/LoginPage";
 import { SignUpPage } from "./routes/SignUpPage";
+import { AuthCallbackPage } from "./routes/AuthCallbackPage";
 import { ResetPasswordPage } from "./routes/ResetPasswordPage";
 import { VerifyPage } from "./routes/VerifyPage";
 import { VerifyResetCodePage } from "./routes/VerifyResetCodePage";
@@ -111,6 +112,7 @@ export default function App() {
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/sign-up" element={<SignUpPage />} />
+        <Route path="/auth/callback" element={<AuthCallbackPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password/verify" element={<VerifyResetCodePage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />

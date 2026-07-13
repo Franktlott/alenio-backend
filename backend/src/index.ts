@@ -132,6 +132,10 @@ function buildHealthPayload() {
     betterAuthEnabled: isBetterAuthMounted(),
     /** API accepts Better Auth bearer sessions only (Neon Auth fallback removed). */
     betterAuthSessionVerify: isBetterAuthMounted(),
+    /** Microsoft Entra social sign-in configured (MICROSOFT_CLIENT_ID + SECRET). */
+    microsoftSignInConfigured: !!(
+      env.MICROSOFT_CLIENT_ID?.trim() && env.MICROSOFT_CLIENT_SECRET?.trim()
+    ),
   };
 }
 

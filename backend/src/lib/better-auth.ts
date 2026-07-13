@@ -136,6 +136,10 @@ async function createAuthServer(): Promise<AuthServer | null> {
 
     const pool = createAuthPool(env.DATABASE_URL);
 
+    const microsoftClientId = env.MICROSOFT_CLIENT_ID?.trim() ?? "";
+    const microsoftClientSecret = env.MICROSOFT_CLIENT_SECRET?.trim() ?? "";
+    const microsoftEnabled = microsoftClientId.length > 0 && microsoftClientSecret.length > 0;
+
     const auth = betterAuth({
       appName: "Alenio",
       baseURL: env.BACKEND_URL.replace(/\/$/, ""),
@@ -152,6 +156,24 @@ async function createAuthServer(): Promise<AuthServer | null> {
         enabled: true,
         requireEmailVerification: true,
       },
+      account: {
+        accountLinking: {
+          enabled: true,
+          trustedProviders: microsoftEnabled ? ["microsoft"] : [],
+        },
+      },
+      socialProviders: microsoftEnabled
+        ? {
+            microsoft: {
+              clientId: microsoftClientId,
+              clientSecret: microsoftClientSecret,
+              tenantId: env.MICROSOFT_TENANT_ID?.trim() || "common",
+              prompt: "select_account",
+              // Entra can return huge base64 profile photos that break headers.
+              mapProfileToUser: () => ({ image: undefined }),
+            },
+          }
+        : {},
       plugins: [
         bearer(),
         emailOTP({
