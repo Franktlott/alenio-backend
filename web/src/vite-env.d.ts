@@ -3,12 +3,9 @@
 interface ImportMetaEnv {
   /** Local dev only: development | production */
   readonly VITE_API_TARGET?: string;
-  readonly VITE_DEV_NEON_AUTH_URL?: string;
   readonly VITE_DEV_BACKEND_URL?: string;
-  readonly VITE_PROD_NEON_AUTH_URL?: string;
   readonly VITE_PROD_BACKEND_URL?: string;
   /** Legacy fallback */
-  readonly VITE_NEON_AUTH_URL?: string;
   readonly VITE_BACKEND_URL?: string;
   /** Set to 1 with dev proxy so API calls use /api on the Vite host (iPad LAN testing). */
   readonly VITE_DEV_API_PROXY?: string;

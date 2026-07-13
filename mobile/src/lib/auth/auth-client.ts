@@ -1,29 +1,21 @@
-import { createAuthClient } from "@neondatabase/auth";
-import { BetterAuthVanillaAdapter } from "@neondatabase/auth/vanilla/adapters";
+/**
+ * Better Auth client for mobile (Phase 4).
+ * Auth base = EXPO_PUBLIC_BACKEND_URL → `/api/auth/*` (same as web).
+ */
+import { createAuthClient } from "better-auth/client";
+import { emailOTPClient } from "better-auth/client/plugins";
 import Constants from "expo-constants";
 import { fetch as expoFetch } from "expo/fetch";
 import * as Linking from "expo-linking";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getBackendUrl } from "../backend-url";
 
-const neonAuthUrl = process.env.EXPO_PUBLIC_NEON_AUTH_URL;
+const ACCESS_TOKEN_KEY = "alenio:access-token";
 
-if (!neonAuthUrl) {
-  throw new Error("Missing EXPO_PUBLIC_NEON_AUTH_URL");
-}
+let inMemoryAccessToken: string | null = null;
+let refreshInFlight: Promise<boolean> | null = null;
 
-const neonAuthOrigin = (() => {
-  try {
-    return new URL(neonAuthUrl.trim()).origin;
-  } catch {
-    return "";
-  }
-})();
-
-/**
- * Absolute HTTPS URL Better Auth accepts as callbackURL (trustedOrigins).
- * Custom schemes (alenio://, exp://) are rejected as "invalid callback url" unless added in Neon.
- */
+/** Absolute HTTPS URL Better Auth may accept as callbackURL (OAuth / email links). */
 export function getEmailAuthCallbackUrl(): string {
   const explicit = process.env.EXPO_PUBLIC_AUTH_CALLBACK_URL?.trim();
   if (explicit) {
@@ -40,10 +32,6 @@ export function getEmailAuthCallbackUrl(): string {
     /* fall through */
   }
 
-  if (neonAuthOrigin) {
-    return `${neonAuthOrigin}/`;
-  }
-
   const schemeConfig = Constants.expoConfig?.scheme;
   const scheme =
     typeof schemeConfig === "string"
@@ -54,64 +42,8 @@ export function getEmailAuthCallbackUrl(): string {
   return Linking.createURL("/", { scheme: scheme ?? "alenio" });
 }
 
-function nativeAuthFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
-  const headers = new Headers(init?.headers ?? undefined);
-  if (neonAuthOrigin && !headers.has("Origin")) {
-    headers.set("Origin", neonAuthOrigin);
-  }
-  if (neonAuthOrigin && !headers.has("Referer")) {
-    headers.set("Referer", `${neonAuthOrigin}/`);
-  }
-  // RN often cannot reliably send browser cookies/origin semantics.
-  // Use token-based session transport to avoid Better Auth cookie CSRF origin checks.
-  return (expoFetch as typeof fetch)(input, { ...init, headers, credentials: "omit" });
-}
-
-/** Neon Auth + Expo fetch; sets Origin so CSRF / callback checks succeed on native. */
-export const authClient = createAuthClient(neonAuthUrl, {
-  adapter: BetterAuthVanillaAdapter({
-    fetchOptions: {
-      headers: neonAuthOrigin
-        ? {
-            Origin: neonAuthOrigin,
-            Referer: `${neonAuthOrigin}/`,
-          }
-        : undefined,
-      customFetchImpl: nativeAuthFetch as typeof fetch,
-    },
-  }),
-});
-
-type SessionShape = {
-  session?: {
-    accessToken?: string;
-    access_token?: string;
-    token?: string;
-  } | null;
-};
-
-let inMemoryAccessToken: string | null = null;
-const ACCESS_TOKEN_KEY = "alenio:access-token";
-
-function pickSessionToken(data: SessionShape | null): string | null {
-  const session = data?.session;
-  return session?.accessToken ?? session?.access_token ?? session?.token ?? null;
-}
-
-export function setAccessToken(token: string | null | undefined) {
-  const normalized = token?.trim() ? token.trim() : null;
-  inMemoryAccessToken = normalized;
-  if (normalized) {
-    AsyncStorage.setItem(ACCESS_TOKEN_KEY, normalized).catch(() => {});
-  } else {
-    AsyncStorage.removeItem(ACCESS_TOKEN_KEY).catch(() => {});
-  }
-}
-
-export function clearAccessToken() {
-  inMemoryAccessToken = null;
-  refreshInFlight = null;
-  AsyncStorage.removeItem(ACCESS_TOKEN_KEY).catch(() => {});
+function looksLikeJwt(v: string): boolean {
+  return v.split(".").length === 3;
 }
 
 function jwtSubject(token: string): string | null {
@@ -137,6 +69,34 @@ function jwtSubPrefix(token: string | null | undefined): string | null {
   return sub ? sub.slice(0, 8) : null;
 }
 
+function decodeJwtExpMs(token: string): number | null {
+  try {
+    const parts = token.split(".");
+    if (parts.length !== 3) return null;
+    let base64 = parts[1]!.replace(/-/g, "+").replace(/_/g, "/");
+    const pad = base64.length % 4;
+    if (pad) base64 += "=".repeat(4 - pad);
+    let decoded: string;
+    if (typeof atob !== "undefined") decoded = atob(base64);
+    else if (typeof Buffer !== "undefined") decoded = Buffer.from(base64, "base64").toString("utf8");
+    else return null;
+    const payload = JSON.parse(decoded) as { exp?: number };
+    return typeof payload.exp === "number" ? payload.exp * 1000 : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Opaque Better Auth tokens are always "usable"; JWTs check exp. */
+export function isSessionTokenUsable(token: string | null | undefined): boolean {
+  const t = token?.trim() ?? "";
+  if (!t) return false;
+  if (!looksLikeJwt(t)) return true;
+  const expMs = decodeJwtExpMs(t);
+  if (!expMs) return true;
+  return Date.now() < expMs - 30_000;
+}
+
 function agentDebugLog(_message: string, _data: Record<string, unknown>) {
   // Intentionally no-op — debug instrumentation removed from production paths.
 }
@@ -152,7 +112,7 @@ function pickTokenFromUnknown(data: unknown): string | null {
     (typeof rec.access_token === "string" ? rec.access_token : null) ??
     (typeof rec.sessionToken === "string" ? rec.sessionToken : null) ??
     (typeof rec.bearerToken === "string" ? rec.bearerToken : null);
-  if (direct) return direct;
+  if (direct?.trim()) return direct.trim();
   const nestedSession = rec.session;
   if (nestedSession && typeof nestedSession === "object") {
     const s = nestedSession as Record<string, unknown>;
@@ -167,116 +127,13 @@ function pickTokenFromUnknown(data: unknown): string | null {
   return null;
 }
 
-function looksLikeJwt(v: string): boolean {
-  return v.split(".").length === 3;
-}
-
-/** JWT `exp` claim in ms, or null if missing / not a JWT payload. */
-function decodeJwtExpMs(token: string): number | null {
-  try {
-    const parts = token.split(".");
-    if (parts.length !== 3) return null;
-    let base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
-    const pad = base64.length % 4;
-    if (pad) base64 += "=".repeat(4 - pad);
-    let decoded: string;
-    if (typeof atob !== "undefined") {
-      decoded = atob(base64);
-    } else if (typeof Buffer !== "undefined") {
-      decoded = Buffer.from(base64, "base64").toString("utf8");
-    } else {
-      return null;
-    }
-    const payload = JSON.parse(decoded) as { exp?: number };
-    return typeof payload.exp === "number" ? payload.exp * 1000 : null;
-  } catch {
-    return null;
-  }
-}
-
-/** Refresh access token this many minutes before JWT expiry (consumer-app style stay logged in). */
-const REFRESH_BEFORE_EXPIRY_MS = 5 * 60 * 1000;
-/** Clock skew: treat JWT as expired this many ms before `exp`. */
-const JWT_EXPIRY_SKEW_MS = 30 * 1000;
-
-function shouldProactivelyRefreshJwt(token: string): boolean {
-  const expMs = decodeJwtExpMs(token);
-  if (!expMs) return false;
-  return expMs - REFRESH_BEFORE_EXPIRY_MS <= Date.now();
-}
-
-function isJwtExpiredBeyondGrace(token: string): boolean {
-  const expMs = decodeJwtExpMs(token);
-  if (!expMs) return false;
-  return Date.now() >= expMs - JWT_EXPIRY_SKEW_MS;
-}
-
-let refreshInFlight: Promise<boolean> | null = null;
-
-/**
- * Ask Neon Auth for an updated session/JWT using the current bearer (force network).
- * Call when a JWT is near expiry or after a 401, before signing the user out.
- */
-export async function refreshSessionTokens(): Promise<boolean> {
-  if (refreshInFlight) return refreshInFlight;
-
-  const run = async (): Promise<boolean> => {
-    try {
-      let bearer = inMemoryAccessToken?.trim() ?? null;
-      if (!bearer) {
-        try {
-          bearer = (await AsyncStorage.getItem(ACCESS_TOKEN_KEY))?.trim() ?? null;
-        } catch {
-          bearer = null;
-        }
-      }
-      if (!bearer) return false;
-
-      const forced = await authClient.getSession({
-        fetchOptions: {
-          headers: {
-            "X-Force-Fetch": "1",
-            Authorization: `Bearer ${bearer}`,
-          },
-        },
-      } as never);
-
-      const next =
-        setAccessTokenFromAuthData(forced?.data ?? null) ??
-        setAccessTokenFromAuthData(forced ?? null);
-      return !!next;
-    } catch {
-      return false;
-    }
-  };
-
-  refreshInFlight = run().finally(() => {
-    refreshInFlight = null;
-  });
-  return refreshInFlight;
-}
-
-/** When returning to the app, refresh if the access token expires within this window. */
-const FOREGROUND_REFRESH_WITHIN_MS = 12 * 60 * 1000;
-
-export async function ensureSessionFreshOnForeground(): Promise<void> {
-  try {
-    let token = inMemoryAccessToken?.trim() ?? null;
-    if (!token) token = (await AsyncStorage.getItem(ACCESS_TOKEN_KEY))?.trim() ?? null;
-    if (!token || !looksLikeJwt(token)) return;
-    const expMs = decodeJwtExpMs(token);
-    if (!expMs) return;
-    if (expMs - Date.now() > FOREGROUND_REFRESH_WITHIN_MS) return;
-    await refreshSessionTokens();
-  } catch {
-    /* ignore */
-  }
-}
-
 function deepFindToken(data: unknown, depth = 0): string | null {
   if (!data || depth > 5) return null;
   if (typeof data === "string") {
-    return looksLikeJwt(data) ? data : null;
+    const t = data.trim();
+    if (!t) return null;
+    // Prefer JWTs when deep-scanning strings; opaque tokens come from known keys.
+    return looksLikeJwt(t) ? t : null;
   }
   if (Array.isArray(data)) {
     for (const item of data) {
@@ -299,28 +156,187 @@ function deepFindToken(data: unknown, depth = 0): string | null {
   return null;
 }
 
+export function setAccessToken(token: string | null | undefined) {
+  const normalized = token?.trim() ? token.trim() : null;
+  inMemoryAccessToken = normalized;
+  if (normalized) {
+    AsyncStorage.setItem(ACCESS_TOKEN_KEY, normalized).catch(() => {});
+  } else {
+    AsyncStorage.removeItem(ACCESS_TOKEN_KEY).catch(() => {});
+  }
+}
+
+/** Drop cached Better Auth client so sign-out / re-login does not reuse stale session. */
+export function resetAuthClient() {
+  authClientInstance = null;
+}
+
+export function clearAccessToken() {
+  inMemoryAccessToken = null;
+  refreshInFlight = null;
+  resetAuthClient();
+  AsyncStorage.removeItem(ACCESS_TOKEN_KEY).catch(() => {});
+}
+
 export function setAccessTokenFromAuthData(data: unknown): string | null {
   const token = pickTokenFromUnknown(data) ?? deepFindToken(data);
   if (token) setAccessToken(token);
   return token;
 }
 
-async function getJwtTokenFromClient(): Promise<string | null> {
-  const client = authClient as unknown as {
-    getJWTToken?: () => Promise<unknown>;
-    getJwtToken?: () => Promise<unknown>;
+function syncTokenForClient(): string {
+  return inMemoryAccessToken?.trim() ?? "";
+}
+
+function createMobileAuthClient() {
+  return createAuthClient({
+    baseURL: getBackendUrl(),
+    plugins: [emailOTPClient()],
+    fetchOptions: {
+      credentials: "omit",
+      customFetchImpl: expoFetch as unknown as typeof fetch,
+      auth: {
+        type: "Bearer",
+        token: () => syncTokenForClient(),
+      },
+      onSuccess: (ctx) => {
+        const authToken = ctx.response.headers.get("set-auth-token");
+        if (authToken?.trim()) setAccessToken(authToken.trim());
+      },
+    },
+  });
+}
+
+type MobileAuthClient = ReturnType<typeof createMobileAuthClient>;
+
+let authClientInstance: MobileAuthClient | null = null;
+
+function getAuthClientInstance(): MobileAuthClient {
+  authClientInstance ??= createMobileAuthClient();
+  return authClientInstance;
+}
+
+/** Lazy Better Auth client pointed at Alenio backend `/api/auth`. */
+export const authClient: MobileAuthClient = new Proxy({} as MobileAuthClient, {
+  get(_target, prop, receiver) {
+    const client = getAuthClientInstance();
+    const value = Reflect.get(client as object, prop, receiver);
+    return typeof value === "function" ? (value as (...args: unknown[]) => unknown).bind(client) : value;
+  },
+});
+
+/** Password-reset + OTP — same shape web uses so screens stay stable. */
+export type AuthPasswordFlowClient = {
+  forgetPassword: {
+    emailOtp: (input: { email: string }) => Promise<{ error?: { message?: string } | null }>;
   };
+  emailOtp: {
+    checkVerificationOtp: (input: {
+      email: string;
+      otp: string;
+      type: "forget-password";
+    }) => Promise<{ error?: { message?: string } | null }>;
+    resetPassword: (input: {
+      email: string;
+      otp: string;
+      password: string;
+    }) => Promise<{ error?: { message?: string } | null }>;
+  };
+  resetPassword: (input: { newPassword: string; token: string }) => Promise<{ error?: { message?: string } | null }>;
+};
+
+export function getAuthPasswordFlowClient(): AuthPasswordFlowClient {
+  const client = getAuthClientInstance();
+  return {
+    forgetPassword: {
+      emailOtp: async ({ email }) => {
+        const result = await client.emailOtp.sendVerificationOtp({
+          email,
+          type: "forget-password",
+        });
+        return { error: result.error ? { message: result.error.message ?? "Could not send code." } : null };
+      },
+    },
+    emailOtp: {
+      checkVerificationOtp: async ({ email, otp, type }) => {
+        const result = await client.emailOtp.checkVerificationOtp({ email, otp, type });
+        return { error: result.error ? { message: result.error.message ?? "Invalid code." } : null };
+      },
+      resetPassword: async ({ email, otp, password }) => {
+        const result = await client.emailOtp.resetPassword({ email, otp, password });
+        return { error: result.error ? { message: result.error.message ?? "Could not reset password." } : null };
+      },
+    },
+    resetPassword: async ({ newPassword, token }) => {
+      const result = await client.resetPassword({ newPassword, token });
+      return { error: result.error ? { message: result.error.message ?? "Could not reset password." } : null };
+    },
+  };
+}
+
+/**
+ * Ask Better Auth for an updated session using the current bearer.
+ * Call after a 401 or when a JWT is near expiry.
+ */
+export async function refreshSessionTokens(): Promise<boolean> {
+  if (refreshInFlight) return refreshInFlight;
+
+  const run = async (): Promise<boolean> => {
+    try {
+      let bearer = inMemoryAccessToken?.trim() ?? null;
+      if (!bearer) {
+        try {
+          bearer = (await AsyncStorage.getItem(ACCESS_TOKEN_KEY))?.trim() ?? null;
+          if (bearer) inMemoryAccessToken = bearer;
+        } catch {
+          bearer = null;
+        }
+      }
+      if (!bearer) return false;
+
+      const forced = await getAuthClientInstance().getSession({
+        fetchOptions: {
+          headers: {
+            Authorization: `Bearer ${bearer}`,
+          },
+        },
+      });
+
+      const next =
+        setAccessTokenFromAuthData(forced?.data ?? null) ?? setAccessTokenFromAuthData(forced ?? null);
+      return !!next || isSessionTokenUsable(bearer);
+    } catch {
+      return false;
+    }
+  };
+
+  refreshInFlight = run().finally(() => {
+    refreshInFlight = null;
+  });
+  return refreshInFlight;
+}
+
+/** When returning to the app, refresh if a JWT expires soon (opaque tokens skip). */
+const FOREGROUND_REFRESH_WITHIN_MS = 12 * 60 * 1000;
+
+export async function ensureSessionFreshOnForeground(): Promise<void> {
   try {
-    const value = client.getJWTToken ? await client.getJWTToken() : client.getJwtToken ? await client.getJwtToken() : null;
-    if (typeof value === "string" && value.trim()) return value.trim();
-    const picked = pickTokenFromUnknown(value) ?? deepFindToken(value);
-    return picked ?? null;
+    let token = inMemoryAccessToken?.trim() ?? null;
+    if (!token) token = (await AsyncStorage.getItem(ACCESS_TOKEN_KEY))?.trim() ?? null;
+    if (!token) return;
+    if (!looksLikeJwt(token)) return;
+    const expMs = decodeJwtExpMs(token);
+    if (!expMs) return;
+    if (expMs - Date.now() > FOREGROUND_REFRESH_WITHIN_MS) return;
+    await refreshSessionTokens();
   } catch {
-    return null;
+    /* ignore */
   }
 }
 
-/** Obtain a JWT the backend bearer middleware accepts (Neon getJWTToken / refresh). */
+/**
+ * Obtain a bearer token the Alenio API accepts (Better Auth opaque session token).
+ */
 export async function resolveBackendBearerToken(options?: {
   fresh?: boolean;
   expectedUserId?: string;
@@ -330,171 +346,89 @@ export async function resolveBackendBearerToken(options?: {
 
   const accept = (token: string | null | undefined): string | null => {
     const normalized = token?.trim() ?? "";
-    if (!normalized || !looksLikeJwt(normalized)) return null;
-    if (expectedUserId) {
+    if (!normalized || !isSessionTokenUsable(normalized)) return null;
+    if (expectedUserId && looksLikeJwt(normalized)) {
       const sub = jwtSubject(normalized);
-      if (sub && sub !== expectedUserId) {
-        agentDebugLog("reject jwt user mismatch", {
-          runId: "account-switch-v2",
-          hypothesisId: "H6",
-          expectedPrefix: expectedUserId.slice(0, 8),
-          gotPrefix: sub.slice(0, 8),
-        });
-        return null;
-      }
+      if (sub && sub !== expectedUserId) return null;
     }
     return normalized;
   };
 
   if (!fresh) {
-    const cachedJwt = accept(await getJwtTokenFromClient());
-    if (cachedJwt) {
-      setAccessToken(cachedJwt);
-      return cachedJwt;
-    }
     const cached = accept(inMemoryAccessToken);
     if (cached) return cached;
   }
 
   await refreshSessionTokens();
-  const jwtAfterRefresh = accept(await getJwtTokenFromClient());
-  if (jwtAfterRefresh) {
-    setAccessToken(jwtAfterRefresh);
-    agentDebugLog("accepted jwt after refresh", {
-      runId: "account-switch-v2",
-      hypothesisId: "H6",
-      subPrefix: jwtSubPrefix(jwtAfterRefresh),
-    });
-    return jwtAfterRefresh;
-  }
+  const afterRefresh = accept(inMemoryAccessToken) ?? accept(await getAccessToken());
+  if (afterRefresh) return afterRefresh;
 
   try {
     const bearer = inMemoryAccessToken?.trim() ?? null;
-    const forced = await authClient.getSession({
+    const forced = await getAuthClientInstance().getSession({
       fetchOptions: {
         headers: {
-          "X-Force-Fetch": "1",
           ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}),
         },
       },
-    } as never);
+    });
     const fromSession =
       accept(setAccessTokenFromAuthData(forced?.data ?? null)) ??
-      accept(setAccessTokenFromAuthData(forced ?? null)) ??
-      accept(deepFindToken(forced));
-    if (fromSession) {
-      setAccessToken(fromSession);
-      agentDebugLog("accepted jwt from forced getSession", {
-        runId: "account-switch-v2",
-        hypothesisId: "H6",
-        subPrefix: jwtSubPrefix(fromSession),
-      });
-      return fromSession;
+      accept(setAccessTokenFromAuthData(forced ?? null));
+    if (fromSession) return fromSession;
+  } catch {
+    /* ignore */
+  }
+
+  return accept(await getAccessToken());
+}
+
+export async function getAccessToken(): Promise<string | null> {
+  if (inMemoryAccessToken?.trim()) {
+    const mem = inMemoryAccessToken.trim();
+    if (isSessionTokenUsable(mem)) {
+      if (looksLikeJwt(mem)) {
+        const expMs = decodeJwtExpMs(mem);
+        if (expMs && expMs - 5 * 60 * 1000 <= Date.now()) {
+          await refreshSessionTokens();
+          if (inMemoryAccessToken?.trim() && isSessionTokenUsable(inMemoryAccessToken)) {
+            return inMemoryAccessToken.trim();
+          }
+        }
+      }
+      return mem;
+    }
+  }
+
+  try {
+    const stored = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
+    if (stored?.trim()) {
+      inMemoryAccessToken = stored.trim();
+      if (isSessionTokenUsable(inMemoryAccessToken)) return inMemoryAccessToken;
     }
   } catch {
     /* ignore */
   }
 
-  const jwtRetry = accept(await getJwtTokenFromClient());
-  if (jwtRetry) {
-    setAccessToken(jwtRetry);
-    return jwtRetry;
-  }
-
-  const fallback = accept(await getAccessToken());
-  agentDebugLog("resolveBackendBearerToken exhausted", {
-    runId: "account-switch-v2",
-    hypothesisId: "H6",
-    fresh,
-    hasFallback: !!fallback,
-    subPrefix: jwtSubPrefix(fallback),
-  });
-  return fallback;
-}
-
-export async function getAccessToken(): Promise<string | null> {
-  async function loadFromStorage(): Promise<string | null> {
-    if (inMemoryAccessToken?.trim()) return inMemoryAccessToken.trim();
-    try {
-      const stored = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
-      if (stored?.trim()) {
-        inMemoryAccessToken = stored.trim();
-        return inMemoryAccessToken;
-      }
-    } catch {
-      // ignore storage read errors and continue
-    }
-    return null;
-  }
-
-  let token = await loadFromStorage();
-
-  if (token && looksLikeJwt(token)) {
-    if (shouldProactivelyRefreshJwt(token) || isJwtExpiredBeyondGrace(token)) {
-      await refreshSessionTokens();
-      token = await loadFromStorage();
-    }
-    if (token && (!looksLikeJwt(token) || !isJwtExpiredBeyondGrace(token))) {
-      return token.trim();
-    }
-  } else if (token?.trim()) {
-    const jwt = await getJwtTokenFromClient();
-    if (jwt?.trim() && looksLikeJwt(jwt.trim())) {
-      setAccessToken(jwt.trim());
-      return jwt.trim();
-    }
-    return token.trim();
-  }
-
-  token = await getJwtTokenFromClient();
-  if (token) {
-    setAccessToken(token);
-    return token;
-  }
-
-  token = null;
   try {
-    const result = await authClient.getSession();
-    const data = (result?.data ?? null) as SessionShape | null;
-    token =
-      pickSessionToken(data) ??
-      pickTokenFromUnknown(result?.data ?? null) ??
-      pickTokenFromUnknown(result ?? null);
-  } catch {
-    token = null;
-  }
-  if (token) {
-    setAccessToken(token);
-    return token;
-  }
-
-  // Fallback: bypass potential stale client cache and force a network read once.
-  try {
-    const forced = await authClient.getSession({
+    const bearer = inMemoryAccessToken?.trim() ?? null;
+    const result = await getAuthClientInstance().getSession({
       fetchOptions: {
-        headers: { "X-Force-Fetch": "1" },
+        headers: {
+          ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}),
+        },
       },
-    } as never);
-    token =
-      pickSessionToken((forced?.data ?? null) as SessionShape | null) ??
-      pickTokenFromUnknown(forced?.data ?? null) ??
-      pickTokenFromUnknown(forced ?? null);
+    });
+    const token =
+      setAccessTokenFromAuthData(result?.data ?? null) ?? setAccessTokenFromAuthData(result ?? null);
+    if (token && isSessionTokenUsable(token)) return token;
   } catch {
-    // ignore and return null below
+    /* ignore */
   }
 
-  if (token) {
-    setAccessToken(token);
-    return token;
-  }
-
-  token = await getJwtTokenFromClient();
-  if (token) {
-    setAccessToken(token);
-    return token;
-  }
-
-  return inMemoryAccessToken;
+  return inMemoryAccessToken?.trim() && isSessionTokenUsable(inMemoryAccessToken)
+    ? inMemoryAccessToken.trim()
+    : null;
 }
 
 export async function getAuthHeaders(): Promise<Record<string, string>> {
@@ -506,3 +440,12 @@ export function authHeadersFromToken(bearerToken?: string | null): Record<string
   const token = bearerToken?.trim();
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
+
+// Warm in-memory token from storage (non-blocking).
+AsyncStorage.getItem(ACCESS_TOKEN_KEY)
+  .then((stored) => {
+    if (stored?.trim() && !inMemoryAccessToken) {
+      inMemoryAccessToken = stored.trim();
+    }
+  })
+  .catch(() => {});

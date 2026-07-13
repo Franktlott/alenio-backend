@@ -14,7 +14,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { StatusBar } from "expo-status-bar";
 import { router } from "expo-router";
-import { authClient } from "@/lib/auth/auth-client";
+import { getAuthPasswordFlowClient } from "@/lib/auth/auth-client";
 import { formatAuthFlowError } from "@/lib/auth/auth-errors";
 
 export default function ForgotPassword() {
@@ -33,7 +33,7 @@ export default function ForgotPassword() {
 
     setLoading(true);
     try {
-      const result = await authClient.forgetPassword.emailOtp({
+      const result = await getAuthPasswordFlowClient().forgetPassword.emailOtp({
         email: email.trim().toLowerCase(),
       });
       if (!result.error) {

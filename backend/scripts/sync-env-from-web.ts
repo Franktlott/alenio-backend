@@ -1,5 +1,5 @@
 /**
- * Sync backend/.env URL fields from web/.env (single source of truth for dev/prod URLs).
+ * Sync backend/.env URL fields from web/.env (single source of truth for DB URLs).
  * Run: bun run sync-env
  */
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
@@ -8,7 +8,6 @@ import {
   loadWebEnvFile,
   resolveApiTarget,
   resolveDatabaseUrl,
-  resolveNeonAuthUrl,
   webEnvFilePath,
 } from "../src/lib/web-env";
 
@@ -32,10 +31,11 @@ function serializeBackendEnv(existing: Map<string, string>, updates: Record<stri
   for (const [key, value] of Object.entries(updates)) {
     if (value) merged.set(key, value);
   }
+  // Cutover: stop writing NEON_AUTH_URL into backend/.env
+  merged.delete("NEON_AUTH_URL");
 
   const lines: string[] = [
     "# Synced from web/.env via `bun run sync-env` — edit web/.env, then re-run sync.",
-    `NEON_AUTH_URL=${merged.get("NEON_AUTH_URL") ?? ""}`,
     `DATABASE_URL=${merged.get("DATABASE_URL") ?? "file:./dev.db"}`,
     `BACKEND_URL=${merged.get("BACKEND_URL") ?? "http://localhost:3000"}`,
     `PORT=${merged.get("PORT") ?? "3000"}`,
@@ -44,13 +44,13 @@ function serializeBackendEnv(existing: Map<string, string>, updates: Record<stri
   ];
 
   const syncedKeys = new Set([
-    "NEON_AUTH_URL",
     "DATABASE_URL",
     "BACKEND_URL",
     "PORT",
     "WEB_PUBLIC_URL",
     "DEV_DATABASE_URL",
     "PROD_DATABASE_URL",
+    "NEON_AUTH_URL",
   ]);
   for (const [key, value] of merged) {
     if (syncedKeys.has(key)) continue;
@@ -72,7 +72,6 @@ function main(): void {
   const target = resolveApiTarget(web, isProdRuntime);
 
   const updates: Record<string, string> = {
-    NEON_AUTH_URL: resolveNeonAuthUrl(web, isProdRuntime),
     BACKEND_URL: "http://localhost:3000",
     PORT: "3000",
     WEB_PUBLIC_URL: "http://127.0.0.1:5173",
@@ -94,7 +93,6 @@ function main(): void {
   writeFileSync(backendEnvPath, serializeBackendEnv(existing, updates), "utf8");
 
   console.log(`✅ backend/.env synced from web/.env (target: ${target})`);
-  console.log(`   NEON_AUTH_URL=${updates.NEON_AUTH_URL}`);
   if (dbUrl) {
     console.log(`   DATABASE_URL=(from web/.env ${target === "production" ? "PROD" : "DEV"}_DATABASE_URL)`);
   } else {

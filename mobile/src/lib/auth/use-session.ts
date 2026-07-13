@@ -34,11 +34,10 @@ export async function fetchAuthSession() {
     const result = await authClient.getSession({
       fetchOptions: {
         headers: {
-          "X-Force-Fetch": "1",
           ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}),
         },
       },
-    } as never);
+    });
     if (Date.now() < forceSignedOutUntil) {
       agentDebugLog("fetchAuthSession discard stale in-flight", {
         runId: "auth-simplify-v1",

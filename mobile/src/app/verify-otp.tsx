@@ -83,13 +83,12 @@ export default function VerifyOtp() {
       const sessionHeaders = async () => {
         const bearer = (await getAccessToken())?.trim() ?? null;
         return {
-          "X-Force-Fetch": "1",
           ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}),
         };
       };
       let sessionRes = await authClient.getSession({
         fetchOptions: { headers: await sessionHeaders() },
-      } as never);
+      });
 
       if (!sessionRes.data?.user) {
         const pending = getPendingSignUp();

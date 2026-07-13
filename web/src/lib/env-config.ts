@@ -23,15 +23,6 @@ export function resolveApiTarget(env: EnvRecord, isProdBuild: boolean): ApiTarge
   return "development";
 }
 
-export function resolveNeonAuthUrl(env: EnvRecord, isProdBuild: boolean): string {
-  const target = resolveApiTarget(env, isProdBuild);
-  const dev = trimUrl(typeof env.VITE_DEV_NEON_AUTH_URL === "string" ? env.VITE_DEV_NEON_AUTH_URL : undefined);
-  const prod = trimUrl(typeof env.VITE_PROD_NEON_AUTH_URL === "string" ? env.VITE_PROD_NEON_AUTH_URL : undefined);
-  const legacy = trimUrl(typeof env.VITE_NEON_AUTH_URL === "string" ? env.VITE_NEON_AUTH_URL : undefined);
-  if (target === "production") return prod || legacy;
-  return dev || legacy;
-}
-
 export function resolveBackendUrl(env: EnvRecord, isProdBuild: boolean): string {
   const target = resolveApiTarget(env, isProdBuild);
   const dev = trimUrl(typeof env.VITE_DEV_BACKEND_URL === "string" ? env.VITE_DEV_BACKEND_URL : undefined);
@@ -43,10 +34,6 @@ export function resolveBackendUrl(env: EnvRecord, isProdBuild: boolean): string 
 
 export function getActiveApiTarget(): ApiTarget {
   return resolveApiTarget(import.meta.env, import.meta.env.PROD);
-}
-
-export function getResolvedNeonAuthUrl(): string {
-  return resolveNeonAuthUrl(import.meta.env, import.meta.env.PROD);
 }
 
 /** Auth API base — Better Auth is mounted on the Alenio backend. */

@@ -1,3 +1,7 @@
+/**
+ * Apply DATABASE_URL from web/.env when present (local dev convenience).
+ * Railway/production deploys use platform env vars; this only runs when web/.env exists locally.
+ */
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -9,21 +13,12 @@ function trimUrl(v: string | undefined): string {
   return v?.trim().replace(/\/+$/, "") ?? "";
 }
 
-/** Which backend/auth pair is active (mirrors web/src/lib/env-config.ts). */
+/** Which backend DB pair is active (mirrors web/src/lib/env-config.ts). */
 export function resolveApiTarget(env: EnvRecord, isProdRuntime: boolean): ApiTarget {
   if (isProdRuntime) return "production";
   const t = env.VITE_API_TARGET?.trim().toLowerCase() ?? "";
   if (t === "production" || t === "prod") return "production";
   return "development";
-}
-
-export function resolveNeonAuthUrl(env: EnvRecord, isProdRuntime: boolean): string {
-  const target = resolveApiTarget(env, isProdRuntime);
-  const dev = trimUrl(env.VITE_DEV_NEON_AUTH_URL);
-  const prod = trimUrl(env.VITE_PROD_NEON_AUTH_URL);
-  const legacy = trimUrl(env.VITE_NEON_AUTH_URL);
-  if (target === "production") return prod || legacy;
-  return dev || legacy;
 }
 
 export function resolveDatabaseUrl(env: EnvRecord, isProdRuntime: boolean): string {
@@ -65,19 +60,11 @@ export function loadWebEnvFile(): EnvRecord | null {
   return parseDotEnv(readFileSync(path, "utf8"));
 }
 
-/**
- * Apply URL-related env from web/.env (same source as the web app).
- * Railway/production deploys use platform env vars; this only runs when web/.env exists locally.
- */
 export function applyEnvFromWeb(): void {
   const web = loadWebEnvFile();
   if (!web) return;
 
   const isProdRuntime = process.env.NODE_ENV === "production";
-  const authUrl = resolveNeonAuthUrl(web, isProdRuntime);
-  if (authUrl) {
-    process.env.NEON_AUTH_URL = authUrl;
-  }
 
   const dbUrl = resolveDatabaseUrl(web, isProdRuntime);
   if (dbUrl) {

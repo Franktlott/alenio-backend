@@ -1,6 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 import {
   authClient,
+  getAccessToken,
   resolveBackendBearerToken,
   setAccessTokenFromAuthData,
 } from "@/lib/auth/auth-client";
@@ -13,7 +14,7 @@ import { clearSignedOutMark } from "@/lib/auth/use-session";
 type SessionData = { user: unknown };
 
 /**
- * After Neon sign-in/sign-up returns a session payload, materialize a backend-ready JWT + session.
+ * After Better Auth sign-in/sign-up returns a session payload, materialize a backend-ready bearer + session.
  */
 export async function resolveSessionAfterAuth(
   result: { data?: { user?: unknown } | null } | null | undefined,
@@ -22,16 +23,16 @@ export async function resolveSessionAfterAuth(
   setAccessTokenFromAuthData(result?.data ?? null);
   let token =
     setAccessTokenFromAuthData(result?.data ?? null) ??
-    setAccessTokenFromAuthData(result ?? null);
+    setAccessTokenFromAuthData(result ?? null) ??
+    (await getAccessToken());
 
   const sessionRes = await authClient.getSession({
     fetchOptions: {
       headers: {
-        "X-Force-Fetch": "1",
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
     },
-  } as never);
+  });
   token =
     setAccessTokenFromAuthData(sessionRes ?? null) ??
     setAccessTokenFromAuthData(sessionRes.data ?? null) ??

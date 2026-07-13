@@ -215,45 +215,55 @@ After deploy, `/health` should show `"betterAuthSessionVerify": true`.
 
 ## Phase 4 — Mobile client
 
-**Owner:** Cursor · **Verify:** You on a device
+**Status: done & verified (2026-07-12)** — mobile login uses Better Auth on `{EXPO_PUBLIC_BACKEND_URL}/api/auth`.
 
-1. Add Better Auth; rewrite `mobile/src/lib/auth/auth-client.ts` to the backend auth base.  
-2. Keep AsyncStorage token helpers and `Authorization` headers.  
-3. Update `complete-auth-entry`, `use-session`, `sync-backend-user`, and auth error mapping.  
-4. Update sign-in / sign-up / OTP / forgot / reset screens so UX stays the same.  
-5. Remove `EXPO_PUBLIC_NEON_AUTH_URL` from `.env` and `eas.json`.  
+**Owner:** Cursor · **Verify:** You on a device ✓
+
+1. `better-auth@1.4.18` in `mobile/`; auth client no longer uses `@neondatabase/auth`.
+2. `mobile/src/lib/auth/auth-client.ts` points at the Alenio backend.
+3. AsyncStorage token helpers + `Authorization` headers kept; opaque bearer tokens supported.
+4. Sign-in / sign-up / OTP / forgot / reset screens keep the same UX.
+5. `EXPO_PUBLIC_NEON_AUTH_URL` removed from `.env` and `eas.json`.
 
 **Device checklist**
 
-- Fresh install → sign up → OTP → home with workspace  
-- Kill app → still signed in  
-- Sign out → APIs reject  
-- Forgot password → OTP → new password → sign in  
+- Fresh install → sign up → OTP → home with workspace
+- Kill app → still signed in
+- Sign out → APIs reject
+- Forgot password → OTP → new password → sign in
 - Existing data still visible (ID continuity)
+
+**You:** Sign in on device with the same email/password as web; confirm chats/workspaces load. ✓
 
 ---
 
 ## Phase 5 — Production cutover
 
-**Owner:** You · **Support:** Cursor on standby
+**Status: in progress (2026-07-12)** — code cut over; disable Neon Auth in Console.
 
-Execute in one sitting:
+**Owner:** You · **Support:** Cursor
 
-1. Deploy **backend** (Better Auth live).  
-2. Spot-check auth endpoints.  
-3. Deploy **web**.  
-4. Ship **mobile** (build or OTA).  
-5. Sign in yourself; confirm workspace data.  
-6. **Disable Neon Auth** in Neon Console.  
-7. Remove obsolete Neon Auth env vars once stable (~24–48h).
+Already done in code:
 
-**Expect:** one forced re-login (old Neon JWTs will not validate).  
-**If passwords fail:** use OTP reset; investigate hash compatibility on the branch before a second cutover.
+1. Backend session verify is **Better Auth only** (Neon JWT / hosted client removed).  
+2. `@neondatabase/auth` removed from backend + web + mobile.  
+3. `NEON_AUTH_URL` is optional on the API (safe to delete from Railway after Console disable).  
+4. Web + mobile clients already use `{BACKEND_URL}/api/auth`.
+
+**You — do this now in Neon Console**
+
+1. Open [Neon Console](https://console.neon.tech) → your production project.  
+2. Find **Auth** (Neon Auth) and **disable / turn off** the Auth integration.  
+   - Do **not** delete the Postgres database or the `neon_auth` schema — Better Auth still uses those tables.  
+3. Optionally remove Railway env var `NEON_AUTH_URL` (no longer required).  
+4. Spot-check: https://alenio.com/login and the mobile app still sign in.
+
+**Expect:** anyone still holding an old Neon JWT must sign in again (you already did this).
 
 ### Rollback
 
-1. Re-enable Neon Auth.  
-2. Redeploy the previous backend + clients that use `@neondatabase/auth`.  
+1. Re-enable Neon Auth in Neon Console.  
+2. Redeploy a previous backend that still had the Neon JWT fallback (git history).  
 3. Restore the DB branch only if a destructive migration was applied (avoid that).
 
 ---
@@ -281,11 +291,13 @@ Keep **calendar** OAuth (`MICROSOFT_CALENDAR_*` → `/api/calendar-connections/m
 
 ## Phase 7 — Cleanup
 
-- Remove `@neondatabase/auth` from backend, mobile, and web  
-- Delete dead JWKS / Neon client code  
-- Rename remaining `neon`-branded helpers  
-- Refresh `.env.example` files and any legal copy that names the provider  
-- Archive or update this runbook’s “Today” section  
+**Status: largely done with Phase 5 (2026-07-12)**
+
+- [x] Remove `@neondatabase/auth` from backend, mobile, and web  
+- [x] Delete dead JWKS / Neon client session path  
+- [x] Refresh `.env.example` files  
+- [ ] Optional later: rename helpers still branded `neon_auth` / `syncAppUserFromNeonAuth` (schema name can stay)  
+- [ ] After Console disable: delete `NEON_AUTH_URL` from Railway if still present  
 
 ---
 

@@ -116,12 +116,6 @@ function isFastPublicPath(path: string): boolean {
 }
 
 function buildHealthPayload() {
-  let authProjectHint: string | null = null;
-  try {
-    authProjectHint = new URL(env.NEON_AUTH_URL).hostname;
-  } catch {
-    authProjectHint = null;
-  }
   return {
     status: "ok",
     database: getDatabasePublicSummary(),
@@ -130,13 +124,11 @@ function buildHealthPayload() {
     storageConfigured: isFirebaseStorageConfigured(),
     senecaConfigured: senecaAvailable(),
     senecaDiagnostics: senecaDiagnostics(),
-    /** Compare with EXPO_PUBLIC_NEON_AUTH_URL from the app — hostnames must be the same Neon Auth project. */
-    neonAuthHostname: authProjectHint,
     /** Secret present (32+ chars) — Better Auth can turn on after boot. */
     betterAuthConfigured: (env.BETTER_AUTH_SECRET?.trim().length ?? 0) >= 32,
     /** Routes mounted successfully after deferred init. */
     betterAuthEnabled: isBetterAuthMounted(),
-    /** Phase 2: API accepts Better Auth bearer sessions (Neon fallback still active). */
+    /** API accepts Better Auth bearer sessions only (Neon Auth fallback removed). */
     betterAuthSessionVerify: isBetterAuthMounted(),
   };
 }

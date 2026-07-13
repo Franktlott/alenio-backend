@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { applyEnvFromWeb } from "./lib/web-env";
 
-/** Pull NEON_AUTH_URL / DATABASE_URL from web/.env when present (same URLs as the web app). */
+/** Pull DATABASE_URL from web/.env when present (same DB as the web app). */
 applyEnvFromWeb();
 
 /**
@@ -14,15 +14,18 @@ const envSchema = z.object({
   NODE_ENV: z.string().optional(),
   // Database
   DATABASE_URL: z.string().default("file:./dev.db"),
-  // Neon Auth (retire after Better Auth cutover)
-  NEON_AUTH_URL: z.string().url(),
+  /**
+   * Legacy Neon Auth hosted URL — optional after Better Auth cutover.
+   * Safe to remove from Railway once Neon Auth is disabled in Neon Console.
+   */
+  NEON_AUTH_URL: z.string().url().optional(),
   /** Optional: delete auth users via Neon Management API (see Neon Console → API keys, project/branch IDs). */
   NEON_API_KEY: z.string().optional(),
   NEON_PROJECT_ID: z.string().optional(),
   NEON_BRANCH_ID: z.string().optional(),
   /**
-   * Self-hosted Better Auth secret (32+ chars). When set with a Postgres DATABASE_URL,
-   * the API mounts `/api/auth/*` against the `neon_auth` schema after boot.
+   * Self-hosted Better Auth secret (32+ chars). Required in production for login.
+   * When set with a Postgres DATABASE_URL, the API mounts `/api/auth/*` against the `neon_auth` schema after boot.
    */
   BETTER_AUTH_SECRET: z.string().optional(),
   // Backend URL
@@ -30,7 +33,7 @@ const envSchema = z.object({
   /** Comma-separated browser origins allowed for CORS (e.g. Firebase Hosting https://your-app.web.app). Localhost is always allowed. */
   CORS_ALLOWED_ORIGINS: z.string().optional(),
   // Build marker for quick deploy verification
-  BACKEND_BUILD_MARKER: z.string().optional().default("backend-marker-2026-07-12-better-auth-uuid-ids"),
+  BACKEND_BUILD_MARKER: z.string().optional().default("backend-marker-2026-07-12-better-auth-cutover"),
   // Admin Dashboard
   ADMIN_PASSWORD: z.string().optional().default("admin123"),
   // Email (Resend)

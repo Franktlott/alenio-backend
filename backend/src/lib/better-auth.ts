@@ -22,6 +22,10 @@ export type AuthServer = {
   getSessionFromHeaders: (
     headers: Headers,
   ) => Promise<{ user: SessionUser; expiresAt: Date | null; token: string | null } | null>;
+  verifyEmailPassword: (email: string, password: string) => Promise<boolean>;
+  createEmailPasswordUser: (email: string, password: string, name: string) => Promise<boolean>;
+  sendEmailVerificationOtp: (email: string) => Promise<void>;
+  verifyEmailVerificationOtp: (email: string, otp: string) => Promise<void>;
 };
 
 function isPostgresUrl(url: string): boolean {
@@ -47,7 +51,7 @@ function createAuthPool(connectionString: string): Pool {
         }
         try {
           await client.query('SET search_path TO "neon_auth", public');
-          callback(null, client, done);
+          callback(undefined, client, done);
         } catch (setErr) {
           done();
           callback(setErr as Error, undefined as never, done);
@@ -210,7 +214,7 @@ async function createAuthServer(): Promise<AuthServer | null> {
           const session = await auth.api.getSession({ headers });
           const user = session?.user;
           const id = user?.id?.trim();
-          if (!id) return null;
+          if (!id || !user) return null;
           const expiresAtRaw = session?.session?.expiresAt;
           const expiresAt =
             expiresAtRaw == null
@@ -233,9 +237,51 @@ async function createAuthServer(): Promise<AuthServer | null> {
           return null;
         }
       },
+      async verifyEmailPassword(email: string, password: string) {
+        try {
+          await auth.api.signInEmail({
+            body: { email: email.trim().toLowerCase(), password },
+          });
+          return true;
+        } catch {
+          return false;
+        }
+      },
+      async createEmailPasswordUser(email: string, password: string, name: string) {
+        try {
+          await auth.api.signUpEmail({
+            body: {
+              email: email.trim().toLowerCase(),
+              password,
+              name: name.trim() || email.trim().toLowerCase(),
+            },
+          });
+          return true;
+        } catch (err) {
+          console.warn("[better-auth] signUpEmail failed:", err);
+          return false;
+        }
+      },
+      async sendEmailVerificationOtp(email: string) {
+        await auth.api.sendVerificationOTP({
+          body: {
+            email: email.trim().toLowerCase(),
+            type: "email-verification",
+          },
+        });
+      },
+      async verifyEmailVerificationOtp(email: string, otp: string) {
+        await auth.api.checkVerificationOTP({
+          body: {
+            email: email.trim().toLowerCase(),
+            otp,
+            type: "email-verification",
+          },
+        });
+      },
     };
   } catch (err) {
-    console.error("[better-auth] failed to initialize (API will keep using Neon Auth):", err);
+    console.error("[better-auth] failed to initialize:", err);
     return null;
   }
 }

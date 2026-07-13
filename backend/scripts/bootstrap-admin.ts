@@ -1,24 +1,20 @@
 /**
- * One-time bootstrap: create platform admin login (Neon Auth + Prisma isAdmin).
+ * One-time bootstrap: create platform admin login (Better Auth + Prisma isAdmin).
  * Usage: cd backend && bun run scripts/bootstrap-admin.ts
  */
 import { env } from "../src/env";
 import { prisma } from "../src/prisma";
 
-const EMAIL = (process.env.BOOTSTRAP_ADMIN_EMAIL ?? "admin@alenio.app").trim().toLowerCase();
+const EMAIL = (process.env.BOOTSTRAP_ADMIN_EMAIL ?? "admin@alenio.com").trim().toLowerCase();
 const PASSWORD = process.env.BOOTSTRAP_ADMIN_PASSWORD ?? "AlenioAdmin123!";
 const NAME = process.env.BOOTSTRAP_ADMIN_NAME ?? "Alenio Admin";
 const ORIGIN = (env.BACKEND_URL || "http://localhost:3000").replace(/\/$/, "");
-if (ORIGIN === "http://localhost") {
-  // Neon Auth rejects bare localhost without a port as Origin in some setups
-}
 
-async function neonPost(path: string, body: Record<string, unknown>) {
-  const base = env.NEON_AUTH_URL.replace(/\/$/, "");
+async function authPost(path: string, body: Record<string, unknown>) {
   const origin = ORIGIN.includes("localhost") && !ORIGIN.includes(":3000")
     ? "http://localhost:3000"
     : ORIGIN;
-  const res = await fetch(`${base}${path}`, {
+  const res = await fetch(`${ORIGIN}/api/auth${path}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -32,7 +28,7 @@ async function neonPost(path: string, body: Record<string, unknown>) {
 }
 
 async function main() {
-  const signUp = await neonPost("/sign-up/email", {
+  const signUp = await authPost("/sign-up/email", {
     email: EMAIL,
     password: PASSWORD,
     name: NAME,
@@ -40,8 +36,8 @@ async function main() {
   console.log("sign-up:", signUp.status, JSON.stringify(signUp.data)?.slice(0, 200));
 
   let authId: string | null =
-    signUp.data?.user?.id ??
-    signUp.data?.data?.user?.id ??
+    (signUp.data as { user?: { id?: string }; data?: { user?: { id?: string } } })?.user?.id ??
+    (signUp.data as { data?: { user?: { id?: string } } })?.data?.user?.id ??
     null;
 
   if (!authId) {
@@ -79,34 +75,16 @@ async function main() {
   const byEmail = await prisma.user.findUnique({ where: { email: EMAIL } });
 
   if (byId) {
-    await prisma.user.update({
-      where: { id: authId },
-      data: { isAdmin: true, emailVerified: true, name: NAME },
-    });
+    await prisma.user.update({ where: { id: authId }, data: { isAdmin: true, name: NAME } });
   } else if (byEmail) {
-    await prisma.user.update({
-      where: { email: EMAIL },
-      data: { isAdmin: true, emailVerified: true, name: NAME },
-    });
+    await prisma.user.update({ where: { email: EMAIL }, data: { isAdmin: true, name: NAME } });
   } else {
     await prisma.user.create({
-      data: {
-        id: authId,
-        email: EMAIL,
-        name: NAME,
-        emailVerified: true,
-        isAdmin: true,
-        updatedAt: new Date(),
-      },
+      data: { id: authId, email: EMAIL, name: NAME, isAdmin: true },
     });
   }
 
-  const signIn = await neonPost("/sign-in/email", { email: EMAIL, password: PASSWORD });
-  console.log("sign-in check:", signIn.status, signIn.ok ? "ok" : JSON.stringify(signIn.data));
-
-  console.log("\nInitial admin ready.");
-  console.log(`Email:    ${EMAIL}`);
-  console.log(`Password: ${PASSWORD}`);
+  console.log("✅ Admin ready:", EMAIL, "id=", authId);
 }
 
 main()
