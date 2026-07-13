@@ -12660,74 +12660,20 @@ a.go-dash-alert-item {
   letter-spacing: -0.01em;
 }
 
-.enterprise-team-profile-rail-title {
-  margin: 0.2rem 0 0;
-  font-size: 0.8125rem;
-  font-weight: 500;
-  color: #5b6b7c;
-}
-
-.enterprise-team-profile-actions-btn {
-  margin-top: 0.85rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 5.5rem;
-  padding: 0.35rem 1rem;
-  border-radius: 999px;
-  border: 1px solid #b8c4d4;
-  background: #fff;
-  color: #1a2332;
+.enterprise-team-profile-rail-manage {
+  margin-top: 0.65rem;
+  border: none;
+  background: none;
+  color: #0875e1;
   font: inherit;
   font-size: 0.8125rem;
   font-weight: 600;
-  text-decoration: none;
   cursor: pointer;
-}
-
-.enterprise-team-profile-actions-btn:hover {
-  border-color: #0875e1;
-  color: #0875e1;
-}
-
-.enterprise-team-profile-rail-quick {
-  display: flex;
-  justify-content: center;
-  gap: 1.25rem;
-  margin-top: 1rem;
-  width: 100%;
-}
-
-.enterprise-team-profile-rail-quick-item {
-  display: inline-flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.3rem;
-  font-size: 0.6875rem;
-  font-weight: 600;
-  color: #0875e1;
-  text-decoration: none;
-  background: none;
-  border: none;
   padding: 0;
-  cursor: pointer;
 }
 
-.enterprise-team-profile-rail-quick-item--static {
-  color: #5b6b7c;
-  cursor: default;
-}
-
-.enterprise-team-profile-rail-quick-icon {
-  width: 2.25rem;
-  height: 2.25rem;
-  border-radius: 999px;
-  border: 1px solid #c5d4e8;
-  background: #fff;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: inherit;
+.enterprise-team-profile-rail-manage:hover {
+  text-decoration: underline;
 }
 
 .enterprise-team-profile-rail-nav {

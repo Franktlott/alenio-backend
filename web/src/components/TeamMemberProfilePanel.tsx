@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
 import type { WebTeamMemberRow } from "../lib/api";
 import {
   frequencyToDays,
@@ -174,36 +173,11 @@ export function TeamMemberProfilePanel({
               {displayName}
               {isSelf ? " (You)" : ""}
             </h2>
-            <p className="enterprise-team-profile-rail-title">{roleLabel}</p>
-
-            {isSelf ? (
-              <Link to="/profile" className="enterprise-team-profile-actions-btn">
-                Actions
-              </Link>
-            ) : canManage ? (
-              <button type="button" className="enterprise-team-profile-actions-btn" onClick={onManage}>
-                Actions
+            {canManage && !isSelf ? (
+              <button type="button" className="enterprise-team-profile-rail-manage" onClick={onManage}>
+                Manage
               </button>
             ) : null}
-
-            <div className="enterprise-team-profile-rail-quick">
-              {email ? (
-                <a className="enterprise-team-profile-rail-quick-item" href={`mailto:${email}`}>
-                  <span className="enterprise-team-profile-rail-quick-icon" aria-hidden>
-                    <IconMail />
-                  </span>
-                  Email
-                </a>
-              ) : null}
-              {teamName ? (
-                <span className="enterprise-team-profile-rail-quick-item enterprise-team-profile-rail-quick-item--static">
-                  <span className="enterprise-team-profile-rail-quick-icon" aria-hidden>
-                    <IconOrg />
-                  </span>
-                  Team
-                </span>
-              ) : null}
-            </div>
           </div>
 
           {!isFormerMember ? (
