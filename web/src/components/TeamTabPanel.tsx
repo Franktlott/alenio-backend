@@ -527,6 +527,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
 
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
   const [memberSearch, setMemberSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState<"all" | "owner" | "team_leader" | "admin" | "member">("all");
   const [oneOneTemplatesOpen, setOneOneTemplatesOpen] = useState(false);
   const [workplaceStandardsOpen, setWorkplaceStandardsOpen] = useState(false);
   const [requiredTemplateTitle, setRequiredTemplateTitle] = useState<string | null>(
@@ -606,13 +607,14 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
 
   const filteredMembers = useMemo(() => {
     const q = memberSearch.trim().toLowerCase();
-    if (!q) return sortedMembers;
     return sortedMembers.filter((m) => {
+      if (roleFilter !== "all" && m.role !== roleFilter) return false;
+      if (!q) return true;
       const name = (m.user.name ?? "").toLowerCase();
       const email = (m.user.email ?? "").toLowerCase();
       return name.includes(q) || email.includes(q);
     });
-  }, [memberSearch, sortedMembers]);
+  }, [memberSearch, roleFilter, sortedMembers]);
 
   const selectedMember = useMemo(
     () => sortedMembers.find((m) => m.userId === selectedMemberId) ?? null,
@@ -944,10 +946,24 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
           <div className="enterprise-team-roster-section">
             <div className="enterprise-team-roster-panel">
               <div className="enterprise-team-roster-head">
-                <h2 className="enterprise-team-roster-title">Team members</h2>
-                <label className="enterprise-team-role-filter enterprise-team-role-filter--soon">
-                  <select disabled aria-label="Filter by role">
-                    <option>All roles</option>
+                <div className="enterprise-team-roster-head-copy">
+                  <h2 className="enterprise-team-roster-title">Team Members</h2>
+                  <span className="enterprise-team-roster-count">{filteredMembers.length}</span>
+                </div>
+                <label className="enterprise-team-role-filter">
+                  <span className="enterprise-sr-only">Filter by role</span>
+                  <select
+                    aria-label="Filter by role"
+                    value={roleFilter}
+                    onChange={(e) =>
+                      setRoleFilter(e.target.value as "all" | "owner" | "team_leader" | "admin" | "member")
+                    }
+                  >
+                    <option value="all">All roles</option>
+                    <option value="owner">Owner</option>
+                    <option value="team_leader">Team Leader</option>
+                    <option value="admin">Admin</option>
+                    <option value="member">Member</option>
                   </select>
                 </label>
               </div>
@@ -974,16 +990,8 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                 ) : null}
               </div>
 
-              <div className="enterprise-team-roster-table">
-                <div className="enterprise-team-roster-table-head" aria-hidden>
-                  <span>Member</span>
-                  <span title="Days since last published check-in">Last check-in</span>
-                  <span>Goals</span>
-                  <span>Overall</span>
-                  <span className="enterprise-team-roster-table-head-spacer" />
-                </div>
-
-                <ul className="enterprise-team-roster">
+              <div className="enterprise-team-roster-table enterprise-team-roster-table--list">
+                <ul className="enterprise-team-roster enterprise-team-roster--list">
                   {filteredMembers.map((m) => {
                     const isSelf = m.userId === myId;
                     const isSelected = m.userId === selectedMemberId;
@@ -994,79 +1002,38 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                     const daysSinceCheckIn = stats?.daysSinceLastOneOnOne;
                     const compliance = stats?.standardsCompliance;
                     const activeGoals = stats?.activeDevGoals ?? 0;
-                    const checkIn = statsReady
-                      ? rosterCheckInColumn(compliance, daysSinceCheckIn, workplaceStandards)
-                      : null;
-                    const goals = statsReady ? rosterGoalsColumn(workplaceStandards, activeGoals) : null;
                     const overall = statsReady
                       ? rosterOverallStatus(compliance, daysSinceCheckIn, workplaceStandards, activeGoals)
                       : null;
-                    const cardClass = `enterprise-team-roster-card${isSelected ? " enterprise-team-roster-card--selected" : ""}${isSelf ? " enterprise-team-roster-card--self" : ""}${!canView ? " enterprise-team-roster-card--static" : ""}`;
+                    const cardClass = `enterprise-team-roster-card enterprise-team-roster-card--list${isSelected ? " enterprise-team-roster-card--selected" : ""}${isSelf ? " enterprise-team-roster-card--self" : ""}${!canView ? " enterprise-team-roster-card--static" : ""}`;
                     const cardBody = (
                       <>
-                        <span className="enterprise-team-roster-col enterprise-team-roster-col--member">
-                          <span className="enterprise-team-roster-avatar">
-                            {m.user.image ? (
-                              <img src={m.user.image} alt={displayName} />
-                            ) : (
-                              (m.user.name?.[0] ?? m.user.email?.[0] ?? "?").toUpperCase()
-                            )}
-                          </span>
-                          <span className="enterprise-team-roster-member-copy">
-                            <span className="enterprise-team-roster-name">
-                              {displayName}
-                              {isSelf ? " (you)" : ""}
-                            </span>
-                            <span className={rolePillClass(m.role)}>{roleLabel(m.role)}</span>
-                          </span>
+                        <span className="enterprise-team-roster-avatar">
+                          {m.user.image ? (
+                            <img src={m.user.image} alt={displayName} />
+                          ) : (
+                            (m.user.name?.[0] ?? m.user.email?.[0] ?? "?").toUpperCase()
+                          )}
                         </span>
-
-                        {canView ? (
-                          <>
-                            <span className="enterprise-team-roster-col enterprise-team-roster-col--check-in">
-                              {checkIn ? (
-                                <RosterMetricCell tone={checkIn.tone} primary={checkIn.primary} secondary={checkIn.secondary} />
-                              ) : (
-                                <span className="enterprise-team-roster-metric-cell">…</span>
-                              )}
-                            </span>
-
-                            <span className="enterprise-team-roster-col enterprise-team-roster-col--goals">
-                              {goals ? (
-                                <RosterMetricCell tone={goals.tone} primary={goals.primary} icon="none" />
-                              ) : (
-                                <span className="enterprise-team-roster-metric-cell">…</span>
-                              )}
-                            </span>
-
-                            <span className="enterprise-team-roster-col enterprise-team-roster-col--overall">
-                              {overall ? (
-                                <span className={`enterprise-team-roster-overall enterprise-team-roster-overall--${overall.tone}`}>
-                                  <RosterOverallIcon tone={overall.tone} label={overall.label} />
-                                  <span>{overall.label}</span>
-                                </span>
-                              ) : (
-                                <span className="enterprise-team-roster-metric-cell">…</span>
-                              )}
-                            </span>
-
-                            <span className="enterprise-team-roster-chevron" aria-hidden>
-                              ›
-                            </span>
-                          </>
+                        <span className="enterprise-team-roster-member-copy">
+                          <span className="enterprise-team-roster-name">
+                            {displayName}
+                            {isSelf ? " (you)" : ""}
+                          </span>
+                          <span className="enterprise-team-roster-role-line">{roleLabel(m.role)}</span>
+                        </span>
+                        {canView && overall ? (
+                          <span
+                            className={`enterprise-team-roster-status-dot enterprise-team-roster-status-dot--${overall.tone}`}
+                            title={overall.label}
+                            aria-label={overall.label}
+                          />
+                        ) : canView ? (
+                          <span className="enterprise-team-roster-status-dot enterprise-team-roster-status-dot--muted" aria-hidden />
                         ) : (
-                          <>
-                            <span
-                              className="enterprise-team-roster-col enterprise-team-roster-col--locked-metrics"
-                              title="You don't have access to this member's activity"
-                              aria-label="Member activity locked"
-                            >
-                              <span className="enterprise-team-roster-lock">
-                                <IconLock />
-                              </span>
-                            </span>
-                            <span className="enterprise-team-roster-table-head-spacer" aria-hidden />
-                          </>
+                          <span className="enterprise-team-roster-lock" title="Locked" aria-label="Member activity locked">
+                            <IconLock />
+                          </span>
                         )}
                       </>
                     );
@@ -1093,8 +1060,17 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
 
                 {manageMembers && formerMembers.length > 0 ? (
                   <div className="enterprise-team-roster-former">
-                    <p className="enterprise-team-roster-former-title">Former members</p>
-                    <ul className="enterprise-team-roster enterprise-team-roster--former">
+                    <button
+                      type="button"
+                      className="enterprise-team-roster-archived-btn"
+                      onClick={() => {
+                        const first = formerMembers[0];
+                        if (first) setSelectedMemberId(first.userId);
+                      }}
+                    >
+                      View archived members ({formerMembers.length})
+                    </button>
+                    <ul className="enterprise-team-roster enterprise-team-roster--former enterprise-team-roster--list">
                       {formerMembers.map((former) => {
                         const isSelected = former.userId === selectedMemberId;
                         const displayName = former.user.name ?? former.user.email ?? "Member";
@@ -1102,26 +1078,20 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                           <li key={former.userId}>
                             <button
                               type="button"
-                              className={`enterprise-team-roster-card enterprise-team-roster-card--former${isSelected ? " enterprise-team-roster-card--selected" : ""}`}
+                              className={`enterprise-team-roster-card enterprise-team-roster-card--list enterprise-team-roster-card--former${isSelected ? " enterprise-team-roster-card--selected" : ""}`}
                               onClick={() => setSelectedMemberId(former.userId)}
                               data-testid={`team-roster-former-${former.userId}`}
                             >
-                              <span className="enterprise-team-roster-col enterprise-team-roster-col--member">
-                                <span className="enterprise-team-roster-avatar">
-                                  {former.user.image ? (
-                                    <img src={former.user.image} alt={displayName} />
-                                  ) : (
-                                    (former.user.name?.[0] ?? former.user.email?.[0] ?? "?").toUpperCase()
-                                  )}
-                                </span>
-                                <span className="enterprise-team-roster-member-copy">
-                                  <span className="enterprise-team-roster-name">{displayName}</span>
-                                  <span className="enterprise-team-roster-former-pill">Former member</span>
-                                </span>
+                              <span className="enterprise-team-roster-avatar">
+                                {former.user.image ? (
+                                  <img src={former.user.image} alt={displayName} />
+                                ) : (
+                                  (former.user.name?.[0] ?? former.user.email?.[0] ?? "?").toUpperCase()
+                                )}
                               </span>
-                              <span className="enterprise-team-roster-former-hint">View archived check-ins</span>
-                              <span className="enterprise-team-roster-chevron" aria-hidden>
-                                ›
+                              <span className="enterprise-team-roster-member-copy">
+                                <span className="enterprise-team-roster-name">{displayName}</span>
+                                <span className="enterprise-team-roster-role-line">Former member</span>
                               </span>
                             </button>
                           </li>
@@ -1132,7 +1102,17 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                 ) : null}
               </div>
 
-              <RosterStatusLegend />
+              <div className="enterprise-team-roster-dot-legend" aria-label="Status key">
+                <span>
+                  <i className="enterprise-team-roster-status-dot enterprise-team-roster-status-dot--ok" /> On Track
+                </span>
+                <span>
+                  <i className="enterprise-team-roster-status-dot enterprise-team-roster-status-dot--warn" /> Due Soon
+                </span>
+                <span>
+                  <i className="enterprise-team-roster-status-dot enterprise-team-roster-status-dot--bad" /> Overdue
+                </span>
+              </div>
             </div>
           </div>
         </aside>
@@ -1145,6 +1125,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
             <TeamMemberProfilePanel
               key={profileMember.userId}
               teamId={teamDetail.id}
+              teamName={teamDetail.name}
               member={profileMember}
               isSelf={profileMember.userId === myId}
               isFormerMember={isFormerMemberProfile}
@@ -1170,6 +1151,9 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
               }
               streak={isPaid ? memberStats?.[profileMember.userId]?.streak : undefined}
               overdueFollowUpTasks={memberStats?.[profileMember.userId]?.overdueFollowUpTasks}
+              activeTasks={memberStats?.[profileMember.userId]?.activeTasks}
+              completedTasks={memberStats?.[profileMember.userId]?.completedTasks}
+              activeDevGoals={memberStats?.[profileMember.userId]?.activeDevGoals}
               workplaceStandards={workplaceStandards}
               standardsCompliance={memberStats?.[profileMember.userId]?.standardsCompliance}
               daysSinceLastCheckIn={memberStats?.[profileMember.userId]?.daysSinceLastOneOnOne}

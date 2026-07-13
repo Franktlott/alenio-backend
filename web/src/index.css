@@ -9918,7 +9918,7 @@ a.go-dash-alert-item {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(300px, 0.95fr) minmax(360px, 1.35fr);
+  grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
   gap: 1rem;
   align-items: stretch;
 }
@@ -12177,6 +12177,383 @@ a.go-dash-alert-item {
 
 .enterprise-team-profile-body--check-in:not(:has(.enterprise-oneone-history--scrollable)) {
   overflow-y: auto;
+}
+
+.enterprise-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.enterprise-team-roster-head-copy {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.enterprise-team-roster-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.5rem;
+  height: 1.35rem;
+  padding: 0 0.4rem;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #4361ee;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.enterprise-team-role-filter select {
+  appearance: none;
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 8px;
+  background: #fff;
+  color: #334155;
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  padding: 0.4rem 1.75rem 0.4rem 0.65rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.55rem center;
+}
+
+.enterprise-team-roster-table--list .enterprise-team-roster-table-head {
+  display: none;
+}
+
+.enterprise-team-roster--list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.enterprise-team-roster-card--list {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 0.75rem;
+  align-items: center;
+  width: 100%;
+  text-align: left;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  padding: 0.65rem 0.7rem;
+  cursor: pointer;
+}
+
+.enterprise-team-roster-card--list:hover {
+  background: #f8fafc;
+}
+
+.enterprise-team-roster-card--list.enterprise-team-roster-card--selected {
+  background: #eef2ff;
+  border-color: rgba(67, 97, 238, 0.18);
+}
+
+.enterprise-team-roster-role-line {
+  display: block;
+  margin-top: 0.1rem;
+  font-size: 0.75rem;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.enterprise-team-roster-status-dot {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  background: #94a3b8;
+}
+
+.enterprise-team-roster-status-dot--ok {
+  background: #22c55e;
+}
+
+.enterprise-team-roster-status-dot--warn {
+  background: #f59e0b;
+}
+
+.enterprise-team-roster-status-dot--bad {
+  background: #ef4444;
+}
+
+.enterprise-team-roster-status-dot--muted {
+  background: #cbd5e1;
+}
+
+.enterprise-team-roster-archived-btn {
+  width: 100%;
+  margin: 0.75rem 0 0.5rem;
+  border: 1px dashed #cbd5e1;
+  border-radius: 10px;
+  background: #f8fafc;
+  color: #475569;
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  padding: 0.65rem 0.75rem;
+  cursor: pointer;
+}
+
+.enterprise-team-roster-archived-btn:hover {
+  border-color: #94a3b8;
+  color: #0f172a;
+}
+
+.enterprise-team-roster-dot-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem 1rem;
+  margin-top: 0.75rem;
+  padding: 0 0.15rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.enterprise-team-roster-dot-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.enterprise-team-roster-dot-legend i {
+  display: inline-block;
+}
+
+.enterprise-team-profile--v2 {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  height: 100%;
+  min-height: 0;
+  padding: 0.25rem 0.15rem 0.5rem;
+}
+
+.enterprise-team-profile-hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.15rem 1.2rem;
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.enterprise-team-profile-hero-main {
+  display: flex;
+  gap: 0.95rem;
+  min-width: 0;
+}
+
+.enterprise-team-profile-avatar--lg {
+  width: 4rem;
+  height: 4rem;
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.enterprise-team-profile-hero-copy {
+  min-width: 0;
+}
+
+.enterprise-team-profile-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1rem;
+  margin-top: 0.55rem;
+  color: #64748b;
+  font-size: 0.8125rem;
+}
+
+.enterprise-team-profile-meta-row em {
+  font-style: normal;
+  font-weight: 600;
+  color: #94a3b8;
+  margin-right: 0.3rem;
+}
+
+.enterprise-team-profile-hero-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-shrink: 0;
+}
+
+.enterprise-team-profile-edit-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 9px;
+  background: #fff;
+  color: #334155;
+  text-decoration: none;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  padding: 0.5rem 0.75rem;
+}
+
+.enterprise-team-profile-edit-btn:hover {
+  border-color: #cbd5e1;
+  color: #0f172a;
+}
+
+.enterprise-team-profile-metrics {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.enterprise-team-profile-metric {
+  display: flex;
+  gap: 0.65rem;
+  align-items: flex-start;
+  padding: 0.85rem 0.9rem;
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+}
+
+.enterprise-team-profile-metric-icon {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 9px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #eef2ff;
+  color: #4361ee;
+  flex-shrink: 0;
+}
+
+.enterprise-team-profile-metric-label {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: #94a3b8;
+  margin-bottom: 0.2rem;
+}
+
+.enterprise-team-profile-metric strong {
+  display: block;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1.2;
+}
+
+.enterprise-team-profile-metric-hint {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.enterprise-team-profile-workspace {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 168px minmax(0, 1fr);
+  gap: 0.85rem;
+}
+
+.enterprise-team-profile-sidenav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.35rem;
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 12px;
+  background: #fff;
+  height: fit-content;
+  position: sticky;
+  top: 0;
+}
+
+.enterprise-team-profile-sidenav-item {
+  border: none;
+  background: transparent;
+  text-align: left;
+  border-radius: 8px;
+  padding: 0.55rem 0.7rem;
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #475569;
+  cursor: pointer;
+}
+
+.enterprise-team-profile-sidenav-item:hover:not(:disabled) {
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+.enterprise-team-profile-sidenav-item.is-active {
+  background: #eef2ff;
+  color: #4361ee;
+}
+
+.enterprise-team-profile-sidenav-item.is-soon,
+.enterprise-team-profile-sidenav-item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.enterprise-team-profile-body--v2 {
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 12px;
+  background: #fff;
+  padding: 1rem;
+}
+
+@media (max-width: 1100px) {
+  .enterprise-team-profile-metrics {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .enterprise-team-profile-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .enterprise-team-profile-sidenav {
+    flex-direction: row;
+    flex-wrap: wrap;
+    position: static;
+  }
+
+  .enterprise-team-profile-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .enterprise-team-profile-hero {
+    flex-direction: column;
+  }
+
+  .enterprise-team-profile-metrics {
+    grid-template-columns: 1fr;
+  }
 }
 
 .enterprise-team-profile-tab-empty {
