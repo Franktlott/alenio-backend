@@ -840,7 +840,7 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                 <IconStatActions />
               </span>
               <span className="enterprise-team-stat-copy enterprise-team-stat-copy--stat">
-                <span className="enterprise-team-stat-title">Open actions</span>
+                <span className="enterprise-team-stat-title">Actions</span>
                 <span className="enterprise-team-stat-sub">{openActionCount} open</span>
               </span>
             </div>
@@ -849,13 +849,15 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                 type="button"
                 className="enterprise-team-stat-card enterprise-team-stat-card--templates enterprise-team-stat-card--action"
                 onClick={() => setOneOneTemplatesOpen(true)}
+                aria-label="Check-in templates"
+                title="Check-in templates"
               >
                 <span className="enterprise-team-stat-icon enterprise-team-stat-icon--templates" aria-hidden>
                   <IconTemplateOneOne />
                 </span>
                 <span className="enterprise-team-stat-copy enterprise-team-stat-copy--stat">
-                  <span className="enterprise-team-stat-title">Check-in templates</span>
-                  <span className="enterprise-team-stat-sub">Manage forms</span>
+                  <span className="enterprise-team-stat-title">Templates</span>
+                  <span className="enterprise-team-stat-sub">Check-ins</span>
                 </span>
               </button>
             ) : null}
@@ -864,13 +866,15 @@ export function TeamTabPanel({ teams, selectedTeamId, me, onTeamsRefresh, onWork
                 type="button"
                 className="enterprise-team-stat-card enterprise-team-stat-card--standards enterprise-team-stat-card--action"
                 onClick={() => setWorkplaceStandardsOpen(true)}
+                aria-label="Workplace Standards"
+                title="Workplace Standards"
               >
                 <span className="enterprise-team-stat-icon enterprise-team-stat-icon--standards" aria-hidden>
                   <IconWorkplaceStandards />
                 </span>
                 <span className="enterprise-team-stat-copy enterprise-team-stat-copy--stat">
-                  <span className="enterprise-team-stat-title">Workplace Standards</span>
-                  <span className="enterprise-team-stat-sub">Manage expectations</span>
+                  <span className="enterprise-team-stat-title">Standards</span>
+                  <span className="enterprise-team-stat-sub">Workplace</span>
                 </span>
               </button>
             ) : null}

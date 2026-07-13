@@ -10284,7 +10284,7 @@ a.go-dash-alert-item {
 }
 
 .enterprise-team-stat-row--three {
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .enterprise-team-stat-card--standards .enterprise-team-stat-icon--standards {
@@ -10296,13 +10296,22 @@ a.go-dash-alert-item {
   background: #fff;
   border: 1px solid #e2e8f0;
   border-radius: 10px;
-  padding: 0.55rem 0.7rem;
+  padding: 0.55rem 0.4rem;
   min-height: 0;
   display: flex;
   align-items: center;
   gap: 0.55rem;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
   min-width: 0;
+}
+
+.enterprise-team-stat-row--three .enterprise-team-stat-card {
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 0.35rem;
+  padding: 0.55rem 0.35rem;
 }
 
 .enterprise-team-stat-card--action {
@@ -10374,24 +10383,38 @@ a.go-dash-alert-item {
 
 .enterprise-team-stat-title {
   display: block;
-  font-size: 0.8125rem;
+  font-size: 0.6875rem;
   font-weight: 600;
   color: #0f172a;
-  line-height: 1.25;
+  line-height: 1.2;
   white-space: normal;
   overflow: visible;
   text-overflow: unset;
 }
 
+.enterprise-team-stat-row--three .enterprise-team-stat-title {
+  font-size: 0.6875rem;
+  font-weight: 700;
+}
+
 .enterprise-team-stat-sub {
   display: block;
-  font-size: 0.75rem;
+  font-size: 0.625rem;
   font-weight: 500;
   color: #64748b;
-  line-height: 1.25;
+  line-height: 1.2;
   white-space: normal;
   overflow: visible;
   text-overflow: unset;
+}
+
+.enterprise-team-stat-row--three .enterprise-team-stat-copy--stat {
+  align-items: center;
+  width: 100%;
+}
+
+.enterprise-team-stat-row--three .enterprise-team-stat-card--action {
+  text-align: center;
 }
 
 .enterprise-team-stat-copy--templates {
@@ -13984,18 +14007,26 @@ a.go-dash-alert-item {
   }
 
   .enterprise-team-stat-card {
-    padding: 0.65rem 0.8rem;
+    padding: 0.65rem 0.5rem;
     min-height: 0;
   }
 
+  .enterprise-team-stat-row--three .enterprise-team-stat-card {
+    padding: 0.65rem 0.4rem;
+  }
+
   .enterprise-team-stat-title {
-    font-size: 0.875rem;
+    font-size: 0.75rem;
+  }
+
+  .enterprise-team-stat-row--three .enterprise-team-stat-title {
+    font-size: 0.75rem;
   }
 
   .enterprise-team-stat-sub,
   .enterprise-team-stat-copy span,
   .enterprise-team-stat-copy--templates > span:not(.enterprise-team-stat-templates-title) {
-    font-size: 0.8125rem;
+    font-size: 0.6875rem;
   }
 
   .enterprise-team-stat-copy--templates .enterprise-team-stat-templates-title {
