@@ -28,6 +28,8 @@ import {
   extractAuthTokenFromCallbackUrl,
   signInWithMicrosoft,
 } from "@/lib/auth/microsoft-auth";
+import { navigateToMobileHomeWithRetry } from "@/lib/auth/auth-entry";
+import { AuthLoadingScreen, useAuthLoadingSequence } from "@/components/auth-loading";
 
 export default function SignUp() {
   const params = useLocalSearchParams<{ email?: string | string[]; inviteToken?: string | string[] }>();
@@ -45,8 +47,11 @@ export default function SignUp() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [microsoftLoading, setMicrosoftLoading] = useState(false);
+  const [bootstrapping, setBootstrapping] = useState(false);
+  const [bootstrapError, setBootstrapError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const queryClient = useQueryClient();
+  const { activeIndex, allDone, exiting, runWithAuth } = useAuthLoadingSequence();
 
   useEffect(() => {
     if (emailFromInvite) setEmail(emailFromInvite.trim().toLowerCase());
@@ -160,8 +165,9 @@ export default function SignUp() {
   };
 
   const handleMicrosoft = async () => {
-    if (loading || microsoftLoading) return;
+    if (loading || microsoftLoading || bootstrapping) return;
     setError(null);
+    setBootstrapError(null);
     setMicrosoftLoading(true);
     clearAccessToken();
     clearSignedOutMark();
@@ -177,17 +183,44 @@ export default function SignUp() {
         setError("Sign-in did not return a session. Please try again.");
         return;
       }
+      setMicrosoftLoading(false);
+      setBootstrapping(true);
       setAccessToken(token);
-      const completed = await completeMobileAuthEntry(queryClient, null);
+      const completed = await runWithAuth(() =>
+        completeMobileAuthEntry(queryClient, null, { navigate: false }),
+      );
       if (!completed.ok) {
-        setError(completed.error);
+        setBootstrapError(completed.error);
+        return;
       }
+      navigateToMobileHomeWithRetry(completed.me.isAdmin === true, queryClient);
     } catch (err) {
+      setBootstrapError(formatAuthFlowError(err));
       setError(formatAuthFlowError(err));
     } finally {
       setMicrosoftLoading(false);
     }
   };
+
+  if (bootstrapping) {
+    return (
+      <AuthLoadingScreen
+        activeIndex={activeIndex}
+        allDone={allDone}
+        exiting={exiting && !bootstrapError}
+        error={bootstrapError}
+        onBackToSignIn={() => {
+          setBootstrapping(false);
+          setBootstrapError(null);
+        }}
+        onRetry={() => {
+          setBootstrapping(false);
+          setBootstrapError(null);
+          void handleMicrosoft();
+        }}
+      />
+    );
+  }
 
   const header = (
     <LinearGradient colors={["#4361EE", "#7C3AED"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>

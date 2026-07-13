@@ -27,6 +27,8 @@ import {
   extractAuthTokenFromCallbackUrl,
   signInWithMicrosoft,
 } from "@/lib/auth/microsoft-auth";
+import { navigateToMobileHomeWithRetry } from "@/lib/auth/auth-entry";
+import { AuthLoadingScreen, useAuthLoadingSequence } from "@/components/auth-loading";
 
 export default function SignIn() {
   const params = useLocalSearchParams<{
@@ -47,9 +49,12 @@ export default function SignIn() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [microsoftLoading, setMicrosoftLoading] = useState(false);
+  const [bootstrapping, setBootstrapping] = useState(false);
+  const [bootstrapError, setBootstrapError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const signingInRef = useRef(false);
+  const { activeIndex, allDone, exiting, runWithAuth } = useAuthLoadingSequence();
 
   useEffect(() => {
     clearSignedOutMark();
@@ -155,8 +160,9 @@ export default function SignIn() {
   };
 
   const handleMicrosoft = async () => {
-    if (loading || microsoftLoading) return;
+    if (loading || microsoftLoading || bootstrapping) return;
     setError(null);
+    setBootstrapError(null);
     setMicrosoftLoading(true);
     signingInRef.current = true;
     clearAccessToken();
@@ -173,18 +179,45 @@ export default function SignIn() {
         setError("Sign-in did not return a session. Please try again.");
         return;
       }
+      setMicrosoftLoading(false);
+      setBootstrapping(true);
       setAccessToken(token);
-      const completed = await completeMobileAuthEntry(queryClient, null);
+      const completed = await runWithAuth(() =>
+        completeMobileAuthEntry(queryClient, null, { navigate: false }),
+      );
       if (!completed.ok) {
-        setError(completed.error);
+        setBootstrapError(completed.error);
+        return;
       }
+      navigateToMobileHomeWithRetry(completed.me.isAdmin === true, queryClient);
     } catch (err) {
+      setBootstrapError(formatAuthFlowError(err));
       setError(formatAuthFlowError(err));
     } finally {
       signingInRef.current = false;
       setMicrosoftLoading(false);
     }
   };
+
+  if (bootstrapping) {
+    return (
+      <AuthLoadingScreen
+        activeIndex={activeIndex}
+        allDone={allDone}
+        exiting={exiting && !bootstrapError}
+        error={bootstrapError}
+        onBackToSignIn={() => {
+          setBootstrapping(false);
+          setBootstrapError(null);
+        }}
+        onRetry={() => {
+          setBootstrapping(false);
+          setBootstrapError(null);
+          void handleMicrosoft();
+        }}
+      />
+    );
+  }
 
   return (
     <View className="flex-1 bg-white dark:bg-slate-900">

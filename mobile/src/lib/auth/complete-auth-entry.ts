@@ -70,11 +70,13 @@ export async function loadAndPrimeMobileAuth(
   return null;
 }
 
-/** Full post-auth entry: resolve session → prime → navigate home (includes invite redeem). */
+/** Full post-auth entry: resolve session → prime → optionally navigate home. */
 export async function completeMobileAuthEntry(
   queryClient: QueryClient,
   result: { data?: { user?: unknown } | null } | null | undefined,
+  options?: { navigate?: boolean },
 ): Promise<{ ok: true; me: MeUser } | { ok: false; error: string }> {
+  const shouldNavigate = options?.navigate !== false;
   const resolved = await resolveSessionAfterAuth(result);
   if (!resolved) {
     return { ok: false, error: "Sign-in did not establish a session. Please try again." };
@@ -83,6 +85,8 @@ export async function completeMobileAuthEntry(
   if (!me?.id) {
     return { ok: false, error: "Could not load your profile. Try signing in again." };
   }
-  navigateToMobileHomeWithRetry(me.isAdmin === true, queryClient);
+  if (shouldNavigate) {
+    navigateToMobileHomeWithRetry(me.isAdmin === true, queryClient);
+  }
   return { ok: true, me };
 }
