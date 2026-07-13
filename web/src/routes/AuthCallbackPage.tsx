@@ -15,7 +15,8 @@ const STEPS = [
   { id: "preparing_dashboard", title: "Preparing your dashboard", icon: "dashboard" },
 ] as const;
 
-const STEP_MS = 780;
+const STEP_MS = 1600;
+const EXIT_HOLD_MS = 700;
 
 function readAuthTokenFromHash(): string | null {
   try {
@@ -161,7 +162,7 @@ export function AuthCallbackPage() {
         if (cancelled) return;
         setAllDone(true);
         setExiting(true);
-        await new Promise((r) => setTimeout(r, 250));
+        await new Promise((r) => setTimeout(r, EXIT_HOLD_MS));
         if (cancelled) return;
         const dest = await finishPostAuthNavigation();
         if (!cancelled) window.location.href = dest;

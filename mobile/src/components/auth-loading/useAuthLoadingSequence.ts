@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AUTH_LOADING_STEPS } from "./types";
 
-const STEP_MS = 780;
+const STEP_MS = 1600;
+const EXIT_HOLD_MS = 700;
 
 /**
  * Drives the checklist sequence in parallel with real auth work.
@@ -46,7 +47,7 @@ export function useAuthLoadingSequence() {
       const [result] = await Promise.all([authWork(), stepsPromise]);
       setAllDone(true);
       setExiting(true);
-      await new Promise((r) => setTimeout(r, 250));
+      await new Promise((r) => setTimeout(r, EXIT_HOLD_MS));
       return result;
     },
     [clearTimers],

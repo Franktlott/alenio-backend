@@ -175,7 +175,19 @@ async function createAuthServer(): Promise<AuthServer | null> {
               tenantId: env.MICROSOFT_TENANT_ID?.trim() || "common",
               prompt: "select_account",
               // Entra can return huge base64 profile photos that break headers.
-              mapProfileToUser: () => ({ image: undefined }),
+              // Only strip image — keep name/email so public.User sync can provision the row.
+              mapProfileToUser: (profile: Record<string, unknown>) => {
+                const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : undefined);
+                return {
+                  name: str(profile.name) || str(profile.displayName) || undefined,
+                  email:
+                    str(profile.email) ||
+                    str(profile.mail) ||
+                    str(profile.userPrincipalName) ||
+                    undefined,
+                  image: undefined,
+                };
+              },
             },
           }
         : {},

@@ -15,7 +15,8 @@ import { developmentGoalsRouter } from "./development-goals";
 import { reconcileStripeForSubscriptionRead } from "../lib/stripe-billing";
 import { getTeamSubscription, teamSubscriptionRowHasTeamFeatures } from "./subscription";
 import { webPrismaUserIdFromContext } from "../lib/web-prisma-user";
-import { isPrismaUniqueOnName, isTeamDisplayNameTaken, normalizeTeamName } from "../lib/team-name";
+import { createWorkspaceForAuthUser } from "../lib/create-workspace";
+import { isPrismaUniqueOnName, isTeamDisplayNameTaken } from "../lib/team-name";
 import { validateVideoMeetingSchedule } from "../lib/video-meeting-duration";
 import {
   canApproveCalendarEvent,
@@ -92,6 +93,8 @@ webRouter.get("/api/me", async (c) => {
     where: { id: userId },
     select: { id: true, name: true, email: true, image: true, createdAt: true, timezone: true },
   });
+  // Do not return 200 + null — that lets the empty-workspace UI look "signed in" with a broken user row.
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
   return c.json({ data: user });
 });
 
@@ -135,54 +138,27 @@ webRouter.get("/api/teams", async (c) => {
 
 // ── API: create team ──────────────────────────────────────────────────────────
 webRouter.post("/api/teams", async (c) => {
-  if (!(await getWebSession(c))) return c.json({ error: "Unauthorized" }, 401);
-  const userId = webPrismaUserIdFromContext(c);
-  if (!userId) return c.json({ error: "Unauthorized" }, 401);
+  const session = await getWebSession(c);
+  if (!session) return c.json({ error: "Unauthorized" }, 401);
   const body = await c.req.json().catch(() => ({}));
   const { name } = body;
   if (!name || !name.trim()) return c.json({ error: { message: "Name is required" } }, 400);
-  const nameNorm = normalizeTeamName(name);
-  if (await isTeamDisplayNameTaken(nameNorm)) {
-    return c.json(
-      { error: { message: "A workspace with this name already exists. Pick a different name.", code: "TEAM_NAME_TAKEN" } },
-      409,
-    );
-  }
-  let inviteCode = Math.random().toString(36).slice(2, 10).toUpperCase();
-  while (await prisma.team.findUnique({ where: { inviteCode } })) {
-    inviteCode = Math.random().toString(36).slice(2, 10).toUpperCase();
-  }
-  let team;
-  try {
-    team = await prisma.team.create({
-      data: {
-        name: nameNorm,
-        inviteCode,
-        members: {
-          create: { userId: userId, role: "owner" },
-        },
-      },
-      select: { id: true, name: true, image: true, createdAt: true, _count: { select: { members: true, tasks: true } } },
-    });
-  } catch (err) {
-    if (isPrismaUniqueOnName(err)) {
-      return c.json(
-        { error: { message: "A workspace with this name already exists. Pick a different name.", code: "TEAM_NAME_TAKEN" } },
-        409,
-      );
-    }
-    throw err;
+
+  const result = await createWorkspaceForAuthUser({
+    authUser: session.user,
+    preferredUserId: webPrismaUserIdFromContext(c),
+    name,
+  });
+  if (!result.ok) {
+    return c.json({ error: { message: result.message, code: result.code } }, result.status);
   }
 
-  const owner = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { name: true },
-  });
+  const { team, ownerName } = result;
   const { notifyAdminsNewWorkspace } = await import("../lib/admin-push");
   void notifyAdminsNewWorkspace({
     id: team.id,
     name: team.name,
-    ownerName: owner?.name ?? null,
+    ownerName,
   }).catch((err) => console.warn("[web-app] admin workspace push failed", err));
 
   return c.json({ data: { ...team, role: "owner", hasTeamFeatures: false } });

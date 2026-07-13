@@ -139,6 +139,10 @@ function buildHealthPayload() {
     microsoftSignInConfigured: !!(
       env.MICROSOFT_CLIENT_ID?.trim() && env.MICROSOFT_CLIENT_SECRET?.trim()
     ),
+    /** Resend API key present — OTP, invites, and feedback emails can send. */
+    emailConfigured: !!(env.RESEND_API_KEY?.trim()),
+    /** Public From address used by Resend (domain must be verified in Resend). */
+    emailFrom: env.FROM_EMAIL?.trim() || "noreply@alenio.com",
   };
 }
 
@@ -240,6 +244,19 @@ app.use(
 
 // Logging
 app.use("*", logger());
+
+app.onError((err, c) => {
+  console.error("[hono] unhandled error", c.req.method, c.req.path, err);
+  return c.json(
+    {
+      error: {
+        message: "Something went wrong. Please try again.",
+        code: "INTERNAL_ERROR",
+      },
+    },
+    500,
+  );
+});
 
 async function waitForStartupSchema(c: { req: { path: string } }, next: () => Promise<void>) {
   if (isFastPublicPath(c.req.path)) {

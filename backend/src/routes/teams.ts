@@ -6,7 +6,7 @@ import { auth, verifyEmailPassword } from "../auth";
 import { authGuard } from "../middleware/auth-guard";
 import { sendPushToUsers } from "../lib/push";
 import { logActivity } from "../lib/activity";
-import { isPrismaUniqueOnName, isTeamDisplayNameTaken, normalizeTeamName } from "../lib/team-name";
+import { isPrismaUniqueOnName, isTeamDisplayNameTaken } from "../lib/team-name";
 import {
   parseWorkplaceStandards,
   parseWorkplaceStandardsPatch,
@@ -29,6 +29,7 @@ import {
   revokeLinkedGoDevice,
 } from "../lib/workplace-alerts";
 import { deleteWorkspaceCompletely } from "../lib/delete-workspace";
+import { createWorkspaceForAuthUser } from "../lib/create-workspace";
 import {
   canManageTeamRoster,
   cleanupWorkspaceMemberDeparture,
@@ -113,42 +114,17 @@ teamsRouter.post("/", async (c) => {
   if (!name?.trim()) {
     return c.json({ error: { message: "Team name is required", code: "VALIDATION_ERROR" } }, 400);
   }
-  const nameNorm = normalizeTeamName(name);
-  if (await isTeamDisplayNameTaken(nameNorm)) {
-    return c.json(
-      { error: { message: "A workspace with this name already exists. Pick a different name.", code: "TEAM_NAME_TAKEN" } },
-      409,
-    );
+
+  const result = await createWorkspaceForAuthUser({
+    authUser: user,
+    preferredUserId: user.id,
+    name,
+  });
+  if (!result.ok) {
+    return c.json({ error: { message: result.message, code: result.code } }, result.status);
   }
 
-  let inviteCode = generateInviteCode();
-  // Ensure uniqueness
-  while (await prisma.team.findUnique({ where: { inviteCode } })) {
-    inviteCode = generateInviteCode();
-  }
-
-  let team;
-  try {
-    team = await prisma.team.create({
-      data: {
-        name: nameNorm,
-        inviteCode,
-        members: {
-          create: { userId: user.id, role: "owner" },
-        },
-      },
-      include: { _count: { select: { members: true, tasks: true } } },
-    });
-  } catch (err) {
-    if (isPrismaUniqueOnName(err)) {
-      return c.json(
-        { error: { message: "A workspace with this name already exists. Pick a different name.", code: "TEAM_NAME_TAKEN" } },
-        409,
-      );
-    }
-    throw err;
-  }
-
+  const { team } = result;
   const { notifyAdminsNewWorkspace } = await import("../lib/admin-push");
   void notifyAdminsNewWorkspace({
     id: team.id,
